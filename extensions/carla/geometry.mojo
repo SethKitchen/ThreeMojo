@@ -407,8 +407,10 @@ struct RoadGeometry(Copyable, Movable):
         var step = d / Float64(pieces)
         var nodes = materialize[_GL_NODES]()
         var weights = materialize[_GL_WEIGHTS]()
-        var x = self.x
-        var y = self.y
+        # Accumulate displacement before adding the origin. Repeatedly
+        # rounding a large world origin would discard small quadrature terms.
+        var x = Float64(0.0)
+        var y = Float64(0.0)
         for piece in range(pieces):  # pragma: no branch
             var start = step * Float64(piece)
             for i in range(5):  # pragma: no branch
@@ -417,7 +419,7 @@ struct RoadGeometry(Copyable, Movable):
                 x += step * 0.5 * weights[i] * cos(theta)
                 y += step * 0.5 * weights[i] * sin(theta)
         return DirectedPoint(
-            x, y, 0.0, self.heading + d * (k0 + 0.5 * rate * d)
+            self.x + x, self.y + y, 0.0, self.heading + d * (k0 + 0.5 * rate * d)
         )
 
     def _derivative_at(self, distance: Float64) -> Tuple[Float64, Float64, Float64]:

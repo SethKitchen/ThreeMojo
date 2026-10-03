@@ -878,6 +878,14 @@ struct Road(Copyable, Movable):
         point.pitch = elevation.tangent(s)
         return point
 
+    def _lane_center(
+        self, section: Int, lane: Int, s: Float64
+    ) raises -> Array[Float64, 3]:
+        # Internal CARLA-frame center. Public transforms narrow only at their
+        # documented storage boundary; query predicates keep these coordinates.
+        var point = self._lane_point(section, lane, s)
+        return [point.x, -point.y, point.z]
+
     def _lane_distance_squared(
         self, section: Int, lane: Int, s: Float64, location: Vector3
     ) raises -> Float64:

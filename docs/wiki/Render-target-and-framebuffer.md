@@ -282,6 +282,8 @@ Each texture holds `attachment(0)` of each image: the light as the type stores i
 
 `Renderer.render_into_layer(target, layer, level, scene, assets, camera)` draws into one image. The renderer must be the size of that level. three.js has the same rule for its viewport, which you set by hand. `Renderer.render_cube_into(target, scene, assets, cube_camera)` draws the six faces of level zero, as three.js's `CubeCamera.update` does.
 
+These draws use each image's `samples`, independent of the renderer's `antialias`. For example, `cube_render_target(64, Color(0, 0, 0), FLOAT_TARGET, samples=4)` captures four samples per pixel and keeps their linear average, including HDR light. It does not apply the renderer's supersampling as a second pass. `render_cube` instead returns byte faces and uses the renderer setting. See [Cube capture sampling](Renderer#cube-capture-sampling).
+
 `from_equirectangular_texture` samples the panorama at `equirect_uv` of the direction through each pixel center. It uses the panorama's filter at full size, as `cube_from_equirectangular` does. three.js draws a box from the cube's center with the same shader.
 
 This port differs from three.js in four ways:

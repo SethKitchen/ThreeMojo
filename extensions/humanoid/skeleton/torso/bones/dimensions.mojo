@@ -54,7 +54,7 @@ from extensions.humanoid.skeleton.torso.sweep import (
     tube,
 )
 from math.vector3 import Vector3
-from std.math import cos, max, min, sin
+from std.math import cos, isfinite, max, min, sin
 from units.si import Length
 
 # The female template against the male one: narrower and shallower
@@ -213,6 +213,29 @@ struct TorsoFrame(ImplicitlyCopyable):
         self.head = head
         self.neck = neck
 
+    def validate(self) raises:
+        """Refuse non-finite or non-positive editable frame scales.
+
+        Raises:
+            Error: If a scale is not finite and positive, the anchor is
+                not finite, or the morph contains a non-finite value.
+        """
+        for value in [
+            self.stature,
+            self.wide,
+            self.deep,
+            self.shoulders,
+            self.chest,
+            self.head,
+            self.neck,
+        ]:  # pragma: no branch
+            if not isfinite(value) or value <= 0:
+                raise Error(
+                    "An anatomy frame scale must be finite and positive"
+                )
+        finite_point(self.anchor, "anchor", "anatomy frame")
+        self.morph.validate()
+
     def at(self, x: Float32, y: Float32, z: Float32) -> Vector3:
         """Return one point authored on the six-foot template.
 
@@ -349,11 +372,12 @@ struct TorsoDimensions(Copyable, Movable):
 
         Raises:
             Error: If sex or stature is refused, if a list does not hold
-                seventeen vertebrae, if a size is not positive, or if a
+                seventeen vertebrae, if a size is not finite and positive, or if a
                 landmark is not finite.
         """
         check_spec(self.stature, self.sex, RIGHT, "torso")
         check_genome(self.genome, "torso")
+        self.frame.validate()
         if (
             len(self.centers) != VERTEBRAE
             or len(self.widths) != VERTEBRAE
@@ -363,6 +387,13 @@ struct TorsoDimensions(Copyable, Movable):
             raise Error("A torso needs seventeen vertebrae, T1 to L5")
         for index in range(VERTEBRAE):  # pragma: no branch
             finite_point(self.centers[index], "vertebral body", "torso")
+            finite_point(
+                Vector3(
+                    self.widths[index], self.depths[index], self.heights[index]
+                ),
+                "vertebral size",
+                "torso",
+            )
             if not (
                 self.widths[index] > 0
                 and self.depths[index] > 0

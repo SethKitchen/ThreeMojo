@@ -15,13 +15,13 @@ where a waypoint is (`compute_transform`), what lies ahead of it (`next`,
 
 **The segment index.** The index starts with CARLA's heading and length
 partition. It splits again at record boundaries and until quarter-point
-chord errors are at most one millimeter. Queries interpolate road s by
-chord fraction and refine against the original centerline. Nearby
-candidates are checked in deterministic index order. Nonconvex cubic centers
-on line-reference records supply polynomial stationary candidates. Every
-non-affine interval then requires a bounded global distance certificate.
-An unresolved numerical interval raises instead of returning a partial minimum.
-Full-curve bounds, including evaluator branches, control candidate admission.
+chord errors are at most one millimeter. This prototype enumerates every
+matching segment in deterministic index order. A full rounded-center box
+can exclude a segment only when it is strictly farther than a known point.
+Each remaining candidate exports a bounded minimum-distance certificate. Candidate selection requires proved
+dominance; an overlapping result raises instead of selecting a sample.
+Strict waypoint classification covers every possible minimizing cell.
+Sound index admission remains separate work in #589.
 This corrects the
 upstream treatment of curved lane offsets and lane distance as road s.
 
@@ -47,7 +47,11 @@ and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 
 from extensions.carla.geo import GeoLocation, GeoProjection
 from extensions.carla.curve_interval import _Interval
-from extensions.carla.lane_refinement import _admission_roundoff, _chord_error, _refine_lane
+from extensions.carla.curve_distance import _finite_point, _wide_distance_upper, _wide_point_order
+from extensions.carla.lane_refinement import (
+    _LaneCertificate, _indexed_curve_lower, _chord_certificate, _lane_certificate_contains,
+    _lane_box_can_improve, _lane_certificate_dominates, _legacy_square, _midpoint, _next_resume_gap, _refine_lane_certificate, _resume_lane_certificate,
+)
 from extensions.carla.math import (
     distance_segment_to_point,
     make_unit_vector,
@@ -90,7 +94,7 @@ from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.bounds import Box3
 from math.vector3 import Vector3
 from std.hashlib import Hasher
-from std.math import ceil, floor, isfinite, sin, sqrt
+from std.math import ceil, floor, inf, isfinite, sin, sqrt
 from std.memory import bitcast
 from units.si import DEGREE, Angle, Length, METER
 
@@ -729,6 +733,7 @@ struct _Segment(ImplicitlyCopyable):
     var end: Vector3
     var first: Waypoint
     var second: Waypoint
+    var bounds: Tuple[_Interval, _Interval, _Interval]
 
 
 @fieldwise_init
@@ -924,7 +929,7 @@ struct Map(Movable):
 
         Raises:
             Error: If a lane's records are missing where the segments need
-                them.
+                them, or an index endpoint is not finite in Float32 storage.
         """
         self.roads = roads^
         self.junctions = junctions^
@@ -1280,9 +1285,11 @@ struct Map(Movable):
     ) raises -> Optional[Waypoint]:
         """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
 
-        The segment projection interpolates road s by its fraction.
-        Curved candidates are refined against the actual centerline.
-        Nearby segments are checked in deterministic index order.
+        All matching segments are considered in segment index order.
+        Certified full-center boxes can exclude strictly farther candidates.
+        Minimum-distance certificates select among the remaining candidates.
+        Overlaps resume retained cells within the original cumulative limits.
+        An overlap that cannot be resolved within those limits raises.
 
         Args:
             location: The point, in CARLA's frame.
@@ -1292,133 +1299,157 @@ struct Map(Movable):
             The waypoint, or None if the map has no lane of those types.
 
         Raises:
-            Error: If the mask is not valid.
+            Error: If the mask is not valid, a center is not finite, or
+                refinement exhausts its numerical or work limit, or candidate
+                minimum bounds overlap without a dominance proof.
         """
+        var found = self._closest_lane(location, lane_type)
+        if not Bool(found):
+            return None
+        return found.value()[0]
+
+    def _closest_lane(
+        self, location: Vector3, lane_type: LaneType
+    ) raises -> Optional[Tuple[Waypoint, Float64, Array[Float64, 3]]]:
+        var found = self._closest_lane_certificate(location, lane_type)
+        if not Bool(found):
+            return None
+        ref selected = found.value()
+        var query: Array[Float64, 3] = [Float64(location.x), Float64(location.y), Float64(location.z)]
+        return (selected[0], _legacy_square(selected[1].point, query), selected[1].point.copy())
+
+    def _closest_lane_certificate(
+        self, location: Vector3, lane_type: LaneType
+    ) raises -> Optional[Tuple[Waypoint, _LaneCertificate]]:
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
-        var found = self._tree.get_nearest_neighbours_with_filter(
-            location, _LaneTypeFilter(lane_type.value), 4
-        )
-        if len(found) == 0:
-            return None
-        # The projection fraction maps the chord to road s. Chord length
-        # does not: offsets, grades and curves change distance per unit s.
-        var best_index = found[0].start_value
-        var nearest = self._nearest_on_segment(best_index, location)
-        var best = nearest[0]
-        var best_distance = nearest[1]
-        var checked = 1
+        var query: Array[Float64, 3] = [Float64(location.x), Float64(location.y), Float64(location.z)]
+        _finite_point(query)
+        var indices = List[Int]()
+        var certificates = List[_LaneCertificate]()
+        var waypoints = List[Waypoint]()
+        var best = -1
         var count = 4
-        var candidates = found^
-        while True:
+        var checked = 0
+        var candidates = self._tree.get_nearest_neighbours_with_filter(
+            location, _LaneTypeFilter(lane_type.value), count
+        )
+        var best_radius = Float64(0.0)
+        var complete = False
+        while not complete:
             for i in range(checked, len(candidates)):
                 var index = candidates[i].start_value
                 ref segment = self._segments[index]
-                # Use the actual 3D Float64 key of the unchanged RTree.
-                # Quarter-point subdivision is not an admission certificate.
-                var chord_distance = sqrt(_segment_distance2(
-                    segment.start, segment.end, location
-                ))
-                var scale = max(self._endpoint_scale, Float64(max(
-                    abs(location.x), max(abs(location.y), abs(location.z))
-                )))
-                var margin = (_Interval.point(self._curve_deviation) +
-                    _Interval.point(_admission_roundoff(scale, self._curve_deviation))
-                ).high
-                if isfinite(margin) and chord_distance > sqrt(best_distance) + margin:
-                    return best
-                var nearest = self._nearest_on_segment(index, location)
-                var candidate = nearest[0]
-                var distance = nearest[1]
-                if distance < best_distance or (
-                    distance == best_distance and index < best_index
-                ):
-                    best = candidate
-                    best_distance = distance
-                    best_index = index
-            if len(candidates) < count:
-                return best
+                if best >= 0:
+                    # The frozen #589 key bound and global full-curve
+                    # deviation apply to this key and every later key.
+                    var lower = _indexed_curve_lower(
+                        _segment_distance2(segment.start, segment.end, location),
+                        self._curve_deviation,
+                    )
+                    if lower > best_radius:
+                        complete = True
+                        break
+                    if not _lane_box_can_improve(
+                        segment.bounds, location, certificates[best].point
+                    ):
+                        continue
+                var result = self._nearest_on_segment_certificate(index, location)
+                var improves = best < 0
+                if best >= 0:
+                    var order = _wide_point_order(result[1].point, certificates[best].point, query)
+                    improves = order < 0 or (order == 0 and index < indices[best])
+                if improves:
+                    best = len(indices)
+                    best_radius = _wide_distance_upper(result[1].point, query)
+                indices.append(index)
+                waypoints.append(result[0])
+                certificates.append(result[1].copy())
+            if complete or len(candidates) < count:
+                break
             checked = len(candidates)
             count *= 2
             candidates = self._tree.get_nearest_neighbours_with_filter(
                 location, _LaneTypeFilter(lane_type.value), count
             )
+        if best < 0:
+            return None
+        # Admission above is unchanged. Its strict exclusions remain valid
+        # as these retained candidates improve their stored incumbents.
+        var requested_gaps = List[Float64]()
+        var requested_scales = List[Float64]()
+        for certificate in certificates:
+            requested_gaps.append(inf[DType.float64]())
+            requested_scales.append(certificate.scale)
+        while True:
+            # A resumed candidate can change the best stored sample. Recheck
+            # all index-sensitive dominance relations after every refinement.
+            for i in range(len(indices)):
+                var order = _wide_point_order(certificates[i].point, certificates[best].point, query)
+                if order < 0 or (order == 0 and indices[i] < indices[best]):
+                    best = i
+            var target = -1
+            for i in range(len(indices)):
+                if i == best:
+                    continue
+                if _lane_certificate_dominates(
+                    certificates[best], indices[best], certificates[i], indices[i], query
+                ):
+                    continue
+                if certificates[best].exact_witness and certificates[i].exact_witness:
+                    raise Error("Exact lane witnesses have inconsistent dominance")
+                target = i
+                if not certificates[best].exact_witness:
+                    if certificates[i].exact_witness or certificates[best].nodes <= certificates[i].nodes:
+                        target = best
+                break
+            if target < 0:
+                return (waypoints[best], certificates[best].copy())
+            var request = _next_resume_gap(
+                certificates[target], requested_gaps[target], requested_scales[target]
+            )
+            requested_gaps[target] = request
+            requested_scales[target] = certificates[target].scale
+            self._resume_on_segment_certificate(
+                indices[target], location, certificates[target], request, requested_scales[target]
+            )
+            waypoints[target].s = certificates[target].s
+
+    def _resume_on_segment_certificate(
+        self, index: Int, location: Vector3, mut certificate: _LaneCertificate,
+        requested_gap: Float64, request_scale: Float64,
+    ) raises:
+        ref segment = self._segments[index]
+        var at = self._locate(segment.first)
+        _resume_lane_certificate(
+            self.roads[at[0]], at[1], at[2],
+            min(segment.first.s, segment.second.s), max(segment.first.s, segment.second.s),
+            location, certificate, requested_gap, request_scale,
+        )
 
     def _nearest_on_segment(
         self, index: Int, location: Vector3
-    ) raises -> Tuple[Waypoint, Float64]:
+    ) raises -> Tuple[Waypoint, Float64, Array[Float64, 3]]:
+        var result = self._nearest_on_segment_certificate(index, location)
+        var query: Array[Float64, 3] = [Float64(location.x), Float64(location.y), Float64(location.z)]
+        return (result[0], _legacy_square(result[1].point, query), result[1].point.copy())
+
+    def _nearest_on_segment_certificate(
+        self, index: Int, location: Vector3
+    ) raises -> Tuple[Waypoint, _LaneCertificate]:
         ref segment = self._segments[index]
-        var start = segment.first
-        var end = segment.second
-        var at = self._locate(start)
-        var one_point = self.roads[at[0]]._lane_point(at[1], at[2], start.s)
-        var two_point = self.roads[at[0]]._lane_point(at[1], at[2], end.s)
-        var dx = two_point.x - one_point.x
-        var dy = one_point.y - two_point.y
-        var dz = two_point.z - one_point.z
-        var norm = dx * dx + dy * dy + dz * dz
-        var fraction = 0.0
-        if norm > 0.0:
-            fraction = min(
-                max(
-                    (
-                        (Float64(location.x) - one_point.x) * dx
-                        + (Float64(location.y) + one_point.y) * dy
-                        + (Float64(location.z) - one_point.z) * dz
-                    )
-                    / norm,
-                    0.0,
-                ),
-                1.0,
-            )
-        var best = start
-        best.s += fraction * (end.s - start.s)
-        var best_distance = self.roads[at[0]]._lane_distance_squared(
-            at[1], at[2], best.s, location
+        var waypoint = segment.first
+        var at = self._locate(waypoint)
+        var low = min(segment.first.s, segment.second.s)
+        var high = max(segment.first.s, segment.second.s)
+        # The seed is not a proof. All evaluator work belongs to the bounded
+        # refiner; straight real geometry cannot bypass stored-point proof.
+        var result = _refine_lane_certificate(
+            self.roads[at[0]], at[1], at[2], low, high,
+            location, _midpoint(low, high), 0.0,
         )
-        if self.roads[at[0]].lane_is_straight(at[1]):
-            return (best, best_distance)
-        # Retain endpoints, including a minimum at a record or section edge.
-        var edge_index = 0
-        while edge_index < 2:
-            var edge = start if edge_index == 0 else end
-            var point = one_point if edge_index == 0 else two_point
-            edge_index += 1
-            var ex = point.x - Float64(location.x)
-            var ey = -point.y - Float64(location.y)
-            var ez = point.z - Float64(location.z)
-            var distance = ex * ex + ey * ey + ez * ez
-            if distance < best_distance:
-                best = edge
-                best_distance = distance
-        var low = min(start.s, end.s)
-        var high = max(start.s, end.s)
-        var derivative = self.roads[at[0]]._lane_distance_derivative(
-            at[1], at[2], low, high, location
-        )
-        if len(derivative) != 0:
-            if not _distance_is_convex(derivative):
-                var candidates = _polynomial_candidates(derivative)
-                var candidate_index = 0
-                while candidate_index < len(candidates):
-                    var t = candidates[candidate_index]
-                    candidate_index += 1
-                    var candidate = start
-                    candidate.s = low + t * (high - low)
-                    # Compare the original evaluator, not the polynomial fit.
-                    var distance = self.roads[at[0]]._lane_distance_squared(
-                        at[1], at[2], candidate.s, location
-                    )
-                    if distance < best_distance:
-                        best = candidate
-                        best_distance = distance
-        var resolved = _refine_lane(
-            self.roads[at[0]], at[1], at[2],
-            min(start.s, end.s), max(start.s, end.s),
-            location, best.s, best_distance,
-        )
-        best.s = resolved[0]
-        return (best, resolved[1])
+        waypoint.s = result.s
+        return (waypoint, result^)
 
     def waypoint(
         self, location: Vector3, lane_type: LaneType = LANE_DRIVING
@@ -1434,18 +1465,18 @@ struct Map(Movable):
             width of it in plan, or None.
 
         Raises:
-            Error: If the mask is not valid, or the lane has no width
-                record at the waypoint.
+            Error: If the mask is not valid, a center or width is not finite,
+                the width record is absent, refinement exhausts a limit, or
+                lane selection or strict cell classification is unresolved.
         """
-        var found = self.closest_waypoint_on_road(location, lane_type)
+        var found = self._closest_lane_certificate(location, lane_type)
         if not Bool(found):
             return None
-        var w = found.value()
-        var at = self.compute_transform(w).location
-        var dx = at.x - location.x
-        var dy = at.y - location.y
-        var dist = Float64(sqrt(dx * dx + dy * dy))
-        if dist < self.lane_width_meters(w) * 0.5:
+        ref selected = found.value()
+        var w = selected[0]
+        var at = self._locate(w)
+        var certificate = selected[1].copy()
+        if _lane_certificate_contains(self.roads[at[0]], at[1], at[2], location, certificate):
             return w
         return None
 
@@ -2580,10 +2611,16 @@ struct Map(Movable):
             self._subdivide_segment(middle, b, mid, second, depth + 1)
             return
         var lane_type = self.lane(first).type
+        # The index's numerical contract requires finite stored Float32
+        # endpoints. Refuse an unrepresentable index input rather than let
+        # infinity or NaN defeat node bounds. Wide center arithmetic remains.
+        var stored_start: Array[Float64, 3] = [Float64(a.location.x), Float64(a.location.y), Float64(a.location.z)]
+        var stored_end: Array[Float64, 3] = [Float64(b.location.x), Float64(b.location.y), Float64(b.location.z)]
+        _finite_point(stored_start)
+        _finite_point(stored_end)
         self._tree.insert_element(
             a.location, b.location, len(self._segments), lane_type.value
         )
-        self._segments.append(_Segment(a.location, b.location, first, second))
         var low = first.s
         var high = second.s
         var start = a.location
@@ -2593,10 +2630,11 @@ struct Map(Movable):
             high = first.s
             start = b.location
             end = a.location
-        var deviation = _chord_error(
+        var certificate = _chord_certificate(
             self.roads[at[0]], at[1], at[2], low, high, start, end
         )
-        self._curve_deviation = max(self._curve_deviation, deviation)
+        self._segments.append(_Segment(a.location, b.location, first, second, certificate[1]))
+        self._curve_deviation = max(self._curve_deviation, certificate[0])
         self._endpoint_scale = max(self._endpoint_scale, Float64(max(
             max(abs(start.x), max(abs(start.y), abs(start.z))),
             max(abs(end.x), max(abs(end.y), abs(end.z))),

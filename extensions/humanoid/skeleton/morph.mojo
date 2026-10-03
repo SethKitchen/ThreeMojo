@@ -55,7 +55,7 @@ from extensions.humanoid.genome import (
 )
 from extensions.humanoid.sex import MALE, Sex
 from math.vector3 import Vector3
-from std.math import cos, max, min, sin
+from std.math import cos, isfinite, max, min, sin
 
 # Where each feature sits on the template, in centimeters: x to the
 # right, y above the hip joint centers, z forward.
@@ -194,6 +194,43 @@ struct HeadMorph(ImplicitlyCopyable):
     var neck_length: Float32
     # The face shape genes, one per mode of the face model.
     var face_shapes: SIMD[DType.float32, FACE_SHAPES]
+
+    def validate(self) raises:
+        """Refuse non-finite edited expressions, including inactive ones.
+
+        Finite fantasy expressions remain permitted. This check does not
+        establish an anatomical range or absence of self-intersection.
+
+        Raises:
+            Error: If any scalar or face-shape expression is not finite.
+        """
+        for value in [
+            self.head_width,
+            self.head_length,
+            self.head_height,
+            self.jaw_width,
+            self.chin,
+            self.cheekbones,
+            self.brow_ridge,
+            self.brow_height,
+            self.brow_arch,
+            self.eye_size,
+            self.eye_spacing,
+            self.eye_tilt,
+            self.eye_depth,
+            self.nose_length,
+            self.nose_width,
+            self.nose_projection,
+            self.nose_bridge,
+            self.mouth_width,
+            self.lip_fullness,
+            self.neck_length,
+        ]:  # pragma: no branch
+            if not isfinite(value):
+                raise Error("A head morph expression must be finite")
+        for index in range(FACE_SHAPES):  # pragma: no branch
+            if not isfinite(self.face_shapes[index]):
+                raise Error("A head face-shape expression must be finite")
 
     def __init__(out self):
         """Make the identity morph of the template genome."""
