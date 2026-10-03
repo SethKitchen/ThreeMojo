@@ -16,7 +16,7 @@ from extensions.carla.actor import ActorId, GREEN, RED
 from extensions.carla.map import Map
 from extensions.carla.opendrive import load_opendrive
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
-from extensions.carla.road_info import LaneId, RoadId, SignalId
+from extensions.carla.road_info import LANE_SIDEWALK, LaneId, RoadId, SignalId
 from extensions.carla.traffic_sign import (
     TriggerBox,
     _shifted,
@@ -36,7 +36,7 @@ from std.testing import (
 from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 
-def _section(s: Int) -> String:
+def _section(s: Float64) -> String:
     return (
         '<laneSection s="'
         + String(s)
@@ -47,11 +47,11 @@ def _section(s: Int) -> String:
         + '<right><lane id="-1" type="driving">'
         + '<link><predecessor id="-1"/><successor id="-1"/></link>'
         + '<width sOffset="0" a="3.5" b="0" c="0" d="0"/>'
-        + '</lane></right></laneSection>'
+        + "</lane></right></laneSection>"
     )
 
 
-def _signal(lane: Int, s: Int, type: String) -> String:
+def _signal(lane: Int, s: Float64, type: String) -> String:
     return (
         '<signals><signal s="'
         + String(s)
@@ -68,19 +68,23 @@ def _signal(lane: Int, s: Int, type: String) -> String:
 
 
 def _road_map(
-    rule: String, lane: Int, s: Int, type: String = "1000001"
+    rule: String,
+    lane: Int,
+    s: Float64,
+    type: String = "1000001",
+    section_end: Float64 = 60.0,
 ) raises -> Map:
     return load_opendrive(
         '<OpenDRIVE><header revMajor="1" revMinor="4"/>'
         + '<road name="straight" length="120" id="1" junction="-1" rule="'
         + rule
         + '"><planView><geometry s="0" x="0" y="0" hdg="0" length="120">'
-        + '<line/></geometry></planView><lanes>'
+        + "<line/></geometry></planView><lanes>"
         + _section(0)
-        + _section(60)
-        + '</lanes>'
+        + _section(section_end)
+        + "</lanes>"
         + _signal(lane, s, type)
-        + '</road></OpenDRIVE>'
+        + "</road></OpenDRIVE>"
     )
 
 
@@ -99,14 +103,26 @@ def _offset_cases(rule: String, lane: Int, with_s: Bool) raises:
     # These numbers do not call the implementation to derive direction.
     var positions: List[Int] = [1, 50, 59, 60, 61, 90, 119]
     var against_positive: List[Float64] = [
-        0.00001, 47, 56, 60.00001, 60.00001, 87, 116
+        0.00001,
+        47,
+        56,
+        60.00001,
+        60.00001,
+        87,
+        116,
     ]
     var against_negative: List[Float64] = [
-        4, 53, 59.99999, 63, 64, 93, 119.99999
+        4,
+        53,
+        59.99999,
+        63,
+        64,
+        93,
+        119.99999,
     ]
     for i in range(len(positions)):
         var s = positions[i]
-        var map = _road_map(rule, lane, s)
+        var map = _road_map(rule, lane, Float64(s))
         var w = map.waypoint_xodr(
             RoadId(1), LaneId(lane), Length(Float32(s), METER)
         ).value()
@@ -148,6 +164,54 @@ def test_lht_negative_lane_offsets_and_section_clamps() raises:
     _offset_cases("LHT", -1, False)
 
 
+def test_short_sections_keep_offsets_inside_the_section() raises:
+    var rules: List[String] = ["RHT", "LHT"]
+    var lanes: List[Int] = [-1, 1]
+    var lengths: List[Float64] = [0.000001, 0.000005, 0.000015, 0.00002]
+    for rule in rules:
+        for lane in lanes:
+            for length in lengths:
+                var map = _road_map(rule, lane, length / 4, "1000001", length)
+                var w = map.waypoint_xodr(
+                    RoadId(1), LaneId(lane), Length(Float32(length / 4), METER)
+                ).value()
+                var shifted = _shifted(map, w, 3.0)
+                assert_almost_equal(shifted.s, length / 2, atol=1e-12)
+                assert_true(shifted.s > 0)
+                assert_true(shifted.s < length)
+                assert_equal(shifted.section_id, w.section_id)
+                var lights = traffic_light_boxes(map, SignalId("10"))
+                var signs = give_way_boxes(map, SignalId("10"))
+                var limits = speed_limit_boxes(map, SignalId("10"))
+                assert_equal(len(lights), 1)
+                assert_equal(len(signs.effect), 1)
+                assert_equal(len(limits), 1)
+                assert_almost_equal(
+                    Float64(lights[0].transform.location.x),
+                    length / 2,
+                    atol=1e-10,
+                )
+                assert_almost_equal(
+                    Float64(signs.effect[0].transform.location.x),
+                    length / 2,
+                    atol=1e-10,
+                )
+                assert_almost_equal(
+                    Float64(limits[0].transform.location.x),
+                    length / 2,
+                    atol=1e-10,
+                )
+
+
+def test_nondriving_lanes_receive_no_trigger_offsets() raises:
+    var map = _road_map("LHT", 1, 50)
+    var lane = map.roads[0].sections[0].lane_index(LaneId(1))
+    map.roads[0].sections[0].lanes[lane].type = LANE_SIDEWALK
+    assert_equal(len(traffic_light_boxes(map, SignalId("10"))), 0)
+    assert_equal(len(give_way_boxes(map, SignalId("10")).effect), 0)
+    assert_equal(len(speed_limit_boxes(map, SignalId("10"))), 0)
+
+
 def _pose(s: Float32, lane: Int, with_s: Bool) -> CarlaTransform:
     var yaw = Float32(0) if with_s else Float32(180)
     return CarlaTransform(
@@ -170,7 +234,12 @@ def _world_entries(rule: String, lane: Int, with_s: Bool) raises:
         var forward = Float32(1) if with_s else Float32(-1)
         if kind == 0:
             assert_equal(len(world.traffic_lights.lights), 1)
-            _box_at(world.traffic_lights.lights[0].boxes[0], lane, Float64(x), forward)
+            _box_at(
+                world.traffic_lights.lights[0].boxes[0],
+                lane,
+                Float64(x),
+                forward,
+            )
             world.freeze_all_traffic_lights(True)
             world.set_traffic_light_state(ActorId(2), RED)
         else:
@@ -243,20 +312,23 @@ def test_junction_offset_uses_resolved_predecessor_lane() raises:
     var map = load_opendrive(
         '<OpenDRIVE><header revMajor="1" revMinor="4"/>'
         + '<road id="1" length="60" junction="-1" rule="RHT">'
-        + '<link><successor elementType="road" elementId="2" contactPoint="start"/></link>'
+        + '<link><successor elementType="road" elementId="2"'
+        ' contactPoint="start"/></link>'
         + '<planView><geometry s="0" x="0" y="0" hdg="0" length="60">'
-        + '<line/></geometry></planView><lanes>'
+        + "<line/></geometry></planView><lanes>"
         + '<laneSection s="0"><center><lane id="0" type="none"/></center>'
         + '<right><lane id="-1" type="driving"><link><successor id="1"/></link>'
         + '<width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane>'
-        + '</right></laneSection></lanes></road>'
+        + "</right></laneSection></lanes></road>"
         + '<road id="2" length="20" junction="100" rule="LHT">'
-        + '<link><predecessor elementType="road" elementId="1" contactPoint="end"/></link>'
+        + '<link><predecessor elementType="road" elementId="1"'
+        ' contactPoint="end"/></link>'
         + '<planView><geometry s="0" x="60" y="-3.5" hdg="0" length="20">'
         + '<line/></geometry></planView><lanes><laneSection s="0"><left>'
         + '<lane id="1" type="driving"><link><predecessor id="-1"/></link>'
         + '<width sOffset="0" a="3.5" b="0" c="0" d="0"/></lane>'
-        + '</left><center><lane id="0" type="none"/></center></laneSection></lanes>'
+        + '</left><center><lane id="0"'
+        ' type="none"/></center></laneSection></lanes>'
         + _signal(1, 5, "206")
         + '</road><junction id="100" name="test"/></OpenDRIVE>'
     )

@@ -38,6 +38,8 @@ again 0.5 s after a failed check.
   gives s = 47 instead of 53. Right-hand offsets stay the same unless
   a junction predecessor changes the lane sign. Left-hand scenario
   replay can enter a trigger earlier.
+- A section shorter than twice the clamp margin uses its midpoint.
+  CARLA's fixed margin can move the box outside such a section.
 - CARLA finds a sign's references road by road in hash order. This port
   goes by road id.
 """
@@ -177,8 +179,9 @@ def _lane_bounds(map: Map, w: Waypoint) raises -> Tuple[Float64, Float64]:
 def _shifted(map: Map, w: Waypoint, distance: Float64) raises -> Waypoint:
     """Move a waypoint against a lane's traffic, clamped to its section."""
     var bounds = _lane_bounds(map, w)
-    var low = bounds[0] + _EPSILON
-    var high = bounds[0] + bounds[1] - _EPSILON
+    var margin = min(_EPSILON, bounds[1] * 0.5)
+    var low = bounds[0] + margin
+    var high = bounds[0] + bounds[1] - margin
     var s = w.s - distance if map.is_positive_direction(w) else w.s + distance
     var out = w
     out.s = min(max(s, low), high)
@@ -350,9 +353,7 @@ def give_way_boxes(map: Map, id: SignalId) raises -> SignBoxes:
                 var w = found.value()
                 if map.lane_type(w) != LANE_DRIVING:
                     continue
-                out.effect.append(
-                    _lane_box(map, _from_before_junction(map, w))
-                )
+                out.effect.append(_lane_box(map, _from_before_junction(map, w)))
                 for before in map.predecessors(w):
                     if not (before.road_id.value in predecessors):
                         predecessors.append(before.road_id.value)

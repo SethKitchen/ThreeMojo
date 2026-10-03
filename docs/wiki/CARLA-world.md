@@ -126,7 +126,7 @@ A vehicle that enters a box takes the light's state, and each change of the ligh
 
 The box center moves against the resolved lane's travel direction. Right-hand negative lanes and left-hand positive lanes travel with increasing s. Their offsets subtract from s. The other lanes add to s.
 
-A light, stop or yield box uses a 3 m offset. A speed-limit box uses its half size. Each center stays inside its lane section, at least 0.00001 m from either end. An offset does not cross a section boundary.
+A light, stop or yield box uses a 3 m offset. A speed-limit box uses its half size. Each center stays inside its lane section, at least 0.00001 m from either end. A section shorter than 0.00002 m uses its midpoint instead. An offset does not cross a section boundary.
 
 The direction belongs to the waypoint that receives the box. A junction reference can move the box to a predecessor with a different lane id or road rule.
 
@@ -189,7 +189,7 @@ The sun's angles are `Angle`s and the fog distance is a `Length`. The other fiel
 - Traffic lights, signs and the spectator cannot be destroyed. The children of a destroyed actor stay where they were.
 - An actor without a body reports zero velocity and zero acceleration.
 - A light with no OpenDRIVE controller reads as zero in CARLA, because CARLA does not tell its controller the group. Here that light reports its state.
-- CARLA `1360bb9` [offsets sign boxes by lane sign alone](https://github.com/carla-simulator/carla/blob/1360bb9/Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Traffic/TrafficLightComponent.cpp#L74-L84). This port uses the resolved lane direction. See [Trigger offset direction](#trigger-offset-direction).
+- CARLA `1360bb9` [offsets sign boxes by lane sign alone](https://github.com/carla-simulator/carla/blob/1360bb9/Unreal/CarlaUnreal/Plugins/Carla/Source/Carla/Traffic/TrafficLightComponent.cpp#L74-L84). This port uses the resolved lane direction and keeps centers inside short sections. See [Trigger offset direction](#trigger-offset-direction).
 - CARLA keeps the blueprints, groups and actors in hash maps. This port keeps them in a fixed order.
 - A walker's bones are data only. There is no skeleton, and each bone hangs from the walker's origin.
 - A hexadecimal float in an attribute reads as zero, where C reads it in full.
