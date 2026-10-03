@@ -1,0 +1,371 @@
+{
+  "observed_date": "2026-10-03",
+  "accepted_source_tree": "862a303ca40871b63e7f5a395afd03fefe2f62e5",
+  "scope": "Current verified compatibility. This does not recover the historical generation environment. Accepted artifacts and source table words are unchanged.",
+  "host": {
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "libc": "glibc 2.41",
+    "node_executable_sha256": "bc17c508ffeed0ec622934f9b7fa72f8e78da65350e63c3eceb56fa688aa5e12"
+  },
+  "commands": [
+    "python3 tools/fixture_runtime.py vtk --dependencies /workspace/shared/fixture-reference-proof/node_modules",
+    "python3 tools/fixture_runtime.py js_number --dependencies /workspace/shared/fixture-reference-proof/node_modules",
+    "python3 tools/fixture_runtime.py js_number --dependencies /workspace/shared/fixture-reference-proof/node_modules --diagnose-default-pow"
+  ],
+  "dependency_setup": "Reused previously installed three 0.180.0 and @xmldom/xmldom 0.9.12. No dependency download or install was required for these observations.",
+  "vtk": {
+    "family": "vtk",
+    "runtime": {
+      "node": "24.19.0",
+      "v8": "13.6.233.17-node.51",
+      "platform": "linux",
+      "arch": "x64",
+      "node_flags": []
+    },
+    "dependencies": {
+      "three": "0.180.0",
+      "@xmldom/xmldom": "0.9.12"
+    },
+    "generator_sha256": "92fae74eb0f12d2e5449cbada20c48719ff583cdaa6d699cec738787d89abab6",
+    "historical_environment_recovered": false,
+    "mode": "verify_accepted",
+    "artifacts": [
+      {
+        "path": "assets/vtk/appended.vtp",
+        "sha256": "98a8a7b98d7d72c85c2e3a09ad3566a87d6697fa0a6cef054827d45de53d6c29",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/ascii.vtk",
+        "sha256": "a985e711424a7b102a455245e0726e20f8bf3e74d20079117221cc5ffa1917b3",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/ascii.vtp",
+        "sha256": "64bd57fe8a1150e60048b2ca892be942354146f0f3837bd6acf64fc78dabd205",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/base64.vtp",
+        "sha256": "5915b1b1efabcead9b3e4b88a0a5aa14ad0570b0f759416777dc3302516571b8",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/binary.vtk",
+        "sha256": "e30789e259b6ab865386aa2ad27d683a121133972c39f1a086ff92f556caacc1",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/binary.vtp",
+        "sha256": "9fbe0969a5dfd939de986d5383918390a7d623008fc287c1942b5ebef1e81bdb",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/cells.vtk",
+        "sha256": "571a696a729c9ca0af0a22a1f87e06cdb4483b73ddc320199062642f9b93bec3",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/headers.vtp",
+        "sha256": "c6ebb9a9683f54d8249485613d3ab9b086895c6ef9c06a9b07ce1cc1c0bd990e",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/offsets.vtp",
+        "sha256": "0de3c52904932374227e433530d87195be0f384fde4a7124fdeaf17c19fb41dc",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/quirks.vtk",
+        "sha256": "19ab1e20125f98169d778b14bb88958cb53510f620df636d9c04f618d2f1bdcb",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/strips.vtp",
+        "sha256": "2e773ca17a0279dff6d7c7ef021d3f467a6a554c4508513dfe53ffa8164171e1",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/vtk.json",
+        "sha256": "4b6d2c0b878060071f52451f6cd03da69fd6eac91c0d51968ef1d893b5409b54",
+        "matches": true
+      },
+      {
+        "path": "assets/vtk/zlib.vtp",
+        "sha256": "e5edfd9efc7a8efc871873a5252020e040dc77fc474f32ef9b6a958fa1c4e50d",
+        "matches": true
+      }
+    ],
+    "matches": true
+  },
+  "srgb": {
+    "family": "js_number",
+    "runtime": {
+      "node": "24.19.0",
+      "v8": "13.6.233.17-node.51",
+      "platform": "linux",
+      "arch": "x64",
+      "node_flags": [
+        "--no-use-std-math-pow"
+      ]
+    },
+    "dependencies": {
+      "three": "0.180.0"
+    },
+    "generator_sha256": "43ff409c9e16aff3139ffa244444994ae31642a61be5aac47f8154c01a8eff41",
+    "historical_environment_recovered": false,
+    "mode": "verify_accepted",
+    "word_count": 256,
+    "accepted_words_sha256": "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b",
+    "generated_words_sha256": "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b",
+    "differences": [],
+    "not_regenerated": [
+      "assets/js_number/v8.json"
+    ],
+    "matches": true
+  },
+  "srgb_default_pow_diagnostic": {
+    "family": "js_number",
+    "runtime": {
+      "node": "24.19.0",
+      "v8": "13.6.233.17-node.51",
+      "platform": "linux",
+      "arch": "x64",
+      "node_flags": []
+    },
+    "dependencies": {
+      "three": "0.180.0"
+    },
+    "generator_sha256": "43ff409c9e16aff3139ffa244444994ae31642a61be5aac47f8154c01a8eff41",
+    "historical_environment_recovered": false,
+    "mode": "diagnostic_only",
+    "word_count": 256,
+    "accepted_words_sha256": "86d793b05db766373a4f83920a752c31a7042749ed6d9f7ca3af917841dc595b",
+    "generated_words_sha256": "a0245c66ce81ba498c02655ad0ab9ad8626d249c09d00bc7665daf6868006457",
+    "differences": [
+      {
+        "byte": 17,
+        "accepted": "0x3F76F5ADDB270744",
+        "generated": "0x3F76F5ADDB270745",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 18,
+        "accepted": "0x3F78C6A940063D0E",
+        "generated": "0x3F78C6A940063D0D",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 37,
+        "accepted": "0x3F92F1B8C19B1664",
+        "generated": "0x3F92F1B8C19B1663",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 42,
+        "accepted": "0x3F97B5841A0694E0",
+        "generated": "0x3F97B5841A0694DF",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 55,
+        "accepted": "0x3FA38F85FD147AE8",
+        "generated": "0x3FA38F85FD147AE7",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 57,
+        "accepted": "0x3FA4F2D63131D05C",
+        "generated": "0x3FA4F2D63131D05D",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 64,
+        "accepted": "0x3FAA3FFD8DF0D780",
+        "generated": "0x3FAA3FFD8DF0D781",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 65,
+        "accepted": "0x3FAB108CFC5C1258",
+        "generated": "0x3FAB108CFC5C1257",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 76,
+        "accepted": "0x3FB2806873116094",
+        "generated": "0x3FB2806873116095",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 79,
+        "accepted": "0x3FB404174393A6A4",
+        "generated": "0x3FB404174393A6A3",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 83,
+        "accepted": "0x3FB624E4EF7FE044",
+        "generated": "0x3FB624E4EF7FE045",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 105,
+        "accepted": "0x3FC214EA5FC3EA42",
+        "generated": "0x3FC214EA5FC3EA41",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 115,
+        "accepted": "0x3FC5F1C830659510",
+        "generated": "0x3FC5F1C83065950F",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 116,
+        "accepted": "0x3FC65AD89B7E6FBA",
+        "generated": "0x3FC65AD89B7E6FB9",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 118,
+        "accepted": "0x3FC73063D41B480A",
+        "generated": "0x3FC73063D41B4809",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 127,
+        "accepted": "0x3FCB2A60A120628A",
+        "generated": "0x3FCB2A60A120628B",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 128,
+        "accepted": "0x3FCBA1511E38879A",
+        "generated": "0x3FCBA1511E38879B",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 132,
+        "accepted": "0x3FCD88E3D11F297A",
+        "generated": "0x3FCD88E3D11F2979",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 147,
+        "accepted": "0x3FD2AC5ECDB690D4",
+        "generated": "0x3FD2AC5ECDB690D5",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 151,
+        "accepted": "0x3FD3CE56BDA554EE",
+        "generated": "0x3FD3CE56BDA554EF",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 162,
+        "accepted": "0x3FD71FA678BCABE0",
+        "generated": "0x3FD71FA678BCABDF",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 167,
+        "accepted": "0x3FD8BB42851216B6",
+        "generated": "0x3FD8BB42851216B7",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 183,
+        "accepted": "0x3FDE4E570C629998",
+        "generated": "0x3FDE4E570C629997",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 211,
+        "accepted": "0x3FE4D850A2A3C67E",
+        "generated": "0x3FE4D850A2A3C67D",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 216,
+        "accepted": "0x3FE5F95379F0D1CC",
+        "generated": "0x3FE5F95379F0D1CB",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 227,
+        "accepted": "0x3FE894B1B6F95624",
+        "generated": "0x3FE894B1B6F95625",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 229,
+        "accepted": "0x3FE912BDD8B87C74",
+        "generated": "0x3FE912BDD8B87C73",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 230,
+        "accepted": "0x3FE952500EE34032",
+        "generated": "0x3FE952500EE34031",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 234,
+        "accepted": "0x3FEA5442CA575DE0",
+        "generated": "0x3FEA5442CA575DDF",
+        "ulp_delta": -1,
+        "float32_unchanged": true
+      },
+      {
+        "byte": 242,
+        "accepted": "0x3FEC69DDBE14F360",
+        "generated": "0x3FEC69DDBE14F361",
+        "ulp_delta": 1,
+        "float32_unchanged": true
+      }
+    ],
+    "not_regenerated": [
+      "assets/js_number/v8.json"
+    ],
+    "matches": false
+  },
+  "v8_number_snapshot": {
+    "path": "assets/js_number/v8.json",
+    "sha256": "3818f7a49f6a5fad3ee9be3ce7a7d7721b402d5c301ecd7a19b0472d108ad091",
+    "status": "not_regenerated",
+    "historical_node_major": 22,
+    "historical_node_version": null,
+    "historical_v8_version": null,
+    "evidence": "The header in tests/test_js_number.mojo says node 22. The original generator and exact runtime are not recorded."
+  }
+}
