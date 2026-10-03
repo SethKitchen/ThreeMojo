@@ -588,9 +588,8 @@ def _share_faces(mut grid: _Grid):
             var owner = grid.slot_of[lt.block_index(oi, oj, ok)]
             if owner < 0 or owner == slot:
                 continue
-            var local = (
-                (bi * f + lx - oi * f)
-                + side * ((bj * f + ly - oj * f) + side * (bk * f + lz - ok * f))
+            var local = (bi * f + lx - oi * f) + side * (
+                (bj * f + ly - oj * f) + side * (bk * f + lz - ok * f)
             )
             grid.samples[slot * per + n] = grid.samples[owner * per + local]
 
@@ -782,10 +781,10 @@ def _facing(mesh: SurfaceMesh, a: Int, b: Int, c: Int) -> Float64:
 
 
 def _triangle(mut mesh: SurfaceMesh, a: Int, b: Int, c: Int):
-    var out = _facing(mesh, a, b, c) >= 0.0
+    var outward = _facing(mesh, a, b, c) >= 0.0
     mesh.indices.append(a)
-    mesh.indices.append(b if out else c)
-    mesh.indices.append(c if out else b)
+    mesh.indices.append(b if outward else c)
+    mesh.indices.append(c if outward else b)
 
 
 def _squared(mesh: SurfaceMesh, a: Int, b: Int) -> Float64:
