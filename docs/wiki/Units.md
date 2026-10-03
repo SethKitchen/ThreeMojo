@@ -111,6 +111,8 @@ Each case has expected error locations and messages in
 `tools/compile_fail_expectations.json`. An unexpected source error also fails.
 Review the case before you update an expectation. Do not accept new errors
 just to make the check pass.
+Use the explicit [regeneration workflow](How-to-run-the-checks#regenerate-negative-diagnostics)
+for selected cases. Normal checks never update the manifest.
 
 ## Clock
 
