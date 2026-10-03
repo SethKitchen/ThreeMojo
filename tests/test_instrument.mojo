@@ -10,6 +10,7 @@ from coverage.instrument import (
     split_conditions,
     _codepoint_count,
     _is_group,
+    _physical_lines,
     _separator_at,
     _statement_colon,
     _strip_comment,
@@ -402,6 +403,204 @@ def test_blank_and_comment_lines_do_not_close_a_loop_early() raises:
     var result = instrument(source, String("m"))
     # The closer must come after h(y), not before it.
     assert_true(result.text.find("h(y)") < result.text.find("_cov_loop_2 > 0)"))
+
+
+def test_loop_entry_uses_actual_body_width_after_comments() raises:
+    for width in [1, 2, 3, 4, 8]:
+        var parent = " " * width
+        var body = " " * (width * 2)
+        var source = (
+            "def f():\n"
+            + parent
+            + "for index in range(2):  # header\n"
+            + "\n# left comment\n"
+            + "                    # right comment\n"
+            + body
+            + "print(index)\n"
+        )
+        var result = instrument(source, "m")
+        assert_equal(result.lines, [2, 6])
+        assert_equal(result.branches, [2])
+        assert_equal(result.conditions, [0])
+        assert_true("\n" + body + "_cov_loop_2 += 1\n" in result.text)
+        assert_true("\n# left comment\n" in result.text)
+        assert_true("                    # right comment\n" in result.text)
+
+
+def test_multiline_loop_uses_body_not_header_continuation_indent() raises:
+    var source = String(
+        "def f():\n  for index in range(\n              2\n  ):\n"
+        "\n# note\n       print(index)\n"
+    )
+    var result = instrument(source, "m")
+    assert_equal(result.lines, [2, 7])
+    assert_equal(result.branches, [2])
+    assert_true(
+        "for index in range( 2 ):\n       _cov_loop_2 += 1\n" in result.text
+    )
+
+
+def test_loop_else_probe_precedes_its_body_and_keeps_header_adjacent() raises:
+    var source = String(
+        "def f():\n  for index in range(0):\n    print(index)\n"
+        "  else:  # empty\n\n# note\n       return 1\n"
+    )
+    var result = instrument(source, "m")
+    assert_equal(result.lines, [2, 3, 7])
+    assert_equal(result.branches, [2])
+    assert_true(
+        "    print(index)\n  else:  # empty\n"
+        '       _ = _cov_branch("m:2", _cov_loop_2 > 0)\n'
+        in result.text
+    )
+    assert_true(
+        '\n  _ = _cov_branch("m:2", _cov_loop_2 > 0)' not in result.text
+    )
+
+
+def test_loop_else_accepts_space_before_colon_without_a_line_probe() raises:
+    for header in [String("else : # spaced"), String("else\t: # tab")]:
+        var result = instrument(
+            "def f():\n  for index in range(0):\n    print(index)\n  "
+            + header
+            + "\n    return 1\n",
+            "m",
+        )
+        assert_equal(result.lines, [2, 3, 5])
+        assert_equal(result.branches, [2])
+        assert_true(
+            "    print(index)\n  "
+            + header
+            + '\n    _ = _cov_branch("m:2", _cov_loop_2 > 0)\n'
+            in result.text
+        )
+
+
+def test_physical_lines_preserve_tabs_and_crlf_source_identities() raises:
+    var source = String(
+        "def f():\r\n  for index in range(2):\r\n"
+        '    print("left\tright", index)\r\n'
+        "  else\t: # header\r\n    return 1\r\n"
+    )
+    var result = instrument(source, "m")
+    assert_equal(result.lines, [2, 3, 5])
+    assert_equal(result.branches, [2])
+    assert_true('    print("left\tright", index)\r\n' in result.text)
+    assert_true("  else\t: # header\r\n" in result.text)
+    assert_equal(instrument(String("\n\n"), "m").text, String("\n\n"))
+
+
+def test_physical_line_endings_and_unterminated_final_line() raises:
+    var lines = _physical_lines("one\ttwo\r\nthree\rfour\nlast")
+    assert_equal(len(lines), 4)
+    assert_equal(lines[0].text, String("one\ttwo"))
+    assert_equal(lines[0].ending, String("\r\n"))
+    assert_equal(lines[1].text, String("three"))
+    assert_equal(lines[1].ending, String("\r"))
+    assert_equal(lines[2].text, String("four"))
+    assert_equal(lines[2].ending, String("\n"))
+    assert_equal(lines[3].text, String("last"))
+    assert_equal(lines[3].ending, String("\n"))
+    assert_equal(len(_physical_lines(String(""))), 0)
+    assert_equal(len(_physical_lines(String("\r"))), 1)
+    assert_equal(len(_physical_lines(String("\n"))), 1)
+    var final = instrument("def f():\n  return 1", "m")
+    var terminated = instrument("def f():\n  return 1\n", "m")
+    assert_equal(final.text, terminated.text)
+    assert_equal(final.lines, [2])
+
+
+def test_multiline_loop_header_retains_literal_line_ending_bytes() raises:
+    for ending in [String("\n"), String("\r\n"), String("\r")]:
+        var literal = '"""left\tvalue' + ending + 'right"""'
+        var result = instrument(
+            "def f():"
+            + ending
+            + "  for index in range(String("
+            + literal
+            + ").byte_length()):"
+            + ending
+            + "    print(index)"
+            + ending,
+            "m",
+        )
+        assert_equal(result.lines, [2, 4])
+        assert_equal(result.branches, [2])
+        assert_true(literal in result.text)
+
+
+def test_comments_stop_at_each_supported_physical_line_ending() raises:
+    for ending in [String("\n"), String("\r\n"), String("\r")]:
+        var text = "if (a # comment" + ending + " and b):"
+        assert_equal(_statement_colon(text), _codepoint_count(text) - 1)
+        assert_equal(_strip_comment(text), "if (a " + ending + " and b):")
+
+
+def test_outer_loop_else_closes_inner_loop_before_its_header() raises:
+    var result = instrument(
+        String(
+            "def f():\n  for outer in range(2):\n"
+            "    for inner in range(2):\n      print(inner)\n"
+            "  else:\n    return 1\n"
+        ),
+        "m",
+    )
+    assert_equal(result.branches, [2, 3])
+    assert_true(
+        '    _ = _cov_branch("m:3", _cov_loop_3 > 0)\n'
+        '  else:\n    _ = _cov_branch("m:2", _cov_loop_2 > 0)\n'
+        in result.text
+    )
+
+
+def test_if_else_inside_loop_does_not_take_its_final_probe() raises:
+    var result = instrument(
+        String(
+            "def f():\n  for index in range(2):\n"
+            "    if index == 0:\n      continue\n"
+            "    else:\n      print(index)\n"
+        ),
+        "m",
+    )
+    assert_true(
+        '    else:\n      _cov_hit("m:6")\n      print(index)\n'
+        '  _ = _cov_branch("m:2", _cov_loop_2 > 0)\n'
+        in result.text
+    )
+
+
+def test_inline_loop_and_loop_else_bodies_fail_explicitly() raises:
+    for source in [
+        String("def f():\n  for index in range(2): print(index)\n"),
+        String("def f():\n  for index in range(\n      2\n  ): print(index)\n"),
+        String(
+            "def f():\n  for index in range(2): print(index) # pragma: no"
+            " branch\n"
+        ),
+        String(
+            "def f():\n  for index in range(2):\n    pass\n  else: return 1\n"
+        ),
+    ]:
+        var raised = False
+        try:
+            _ = instrument(source, "m")
+        except error:
+            raised = "does not support inline" in String(error)
+        assert_true(raised)
+
+
+def test_loop_with_no_indented_body_fails_explicitly() raises:
+    for source in [
+        String("def f():\n  for index in range(2):\n"),
+        String("def f():\n  for index in range(2):\n# comment\n\n  return 1\n"),
+        String("def f():\n  for index in range(2):\n    pass\n  else:\n"),
+    ]:
+        var raised = False
+        try:
+            _ = instrument(source, "m")
+        except error:
+            raised = "requires an indented body" in String(error)
+        assert_true(raised)
 
 
 def test_pragma_excludes_a_loop_from_branch_measurement() raises:

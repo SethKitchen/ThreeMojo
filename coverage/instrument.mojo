@@ -11,7 +11,13 @@ line number embedded in the probe id, so the instrumented copy is disposable
 and only ever lives under `coverage/build/`.
 """
 
-from coverage.scanner import Scanner, indent_of, _characters, _quoted_end
+from coverage.scanner import (
+    Scanner,
+    indent_of,
+    _characters,
+    _quoted_end,
+    _is_else_header,
+)
 
 # Decisions whose condition is wrapped so both outcomes become observable.
 comptime BRANCH_KEYWORDS = ["if ", "elif ", "while "]
@@ -41,6 +47,43 @@ struct _LoopCloser(Copyable, Movable):
     var indent: Int
     var id: String
     var flag: String
+
+
+@fieldwise_init
+struct _SourceLine(Copyable, Movable):
+    """One physical source line and its original LF, CRLF, or CR terminator."""
+
+    var text: String
+    var ending: String
+
+
+def _physical_lines(source: String) -> List[_SourceLine]:
+    """Split physical source lines without treating tabs as line breaks.
+
+    Mojo 1.1 splitlines() also splits tabs. Keep line terminators separately:
+    a CR or CRLF inside a multiline literal must retain its exact bytes.
+    An unterminated final statement gets a newline for any trailing probes.
+    """
+    var result = List[_SourceLine]()
+    var chars = _characters(source)
+    var line = String("")
+    var index = 0
+    while index < len(chars):
+        var cp = chars[index]
+        if cp == "\r" or cp == "\n":
+            var ending = cp.copy()
+            if cp == "\r" and index + 1 < len(chars):
+                if chars[index + 1] == "\n":
+                    ending += "\n"
+                    index += 1
+            result.append(_SourceLine(line^, ending^))
+            line = String("")
+        else:
+            line += cp
+        index += 1
+    if line != "":
+        result.append(_SourceLine(line^, String("\n")))
+    return result^
 
 
 struct Instrumented(Movable):
@@ -108,7 +151,11 @@ def _statement_colon(line: String) -> Int:
             index = end
             continue
         if cp == "#":
-            while index < len(chars) and chars[index] != "\n":
+            while (
+                index < len(chars)
+                and chars[index] != "\n"
+                and chars[index] != "\r"
+            ):
                 index += 1
             continue
         if cp == "(" or cp == "[" or cp == "{":
@@ -141,7 +188,11 @@ def _strip_comment(line: String) -> String:
             index = end
             continue
         if cp == "#":
-            while index < len(chars) and chars[index] != "\n":
+            while (
+                index < len(chars)
+                and chars[index] != "\n"
+                and chars[index] != "\r"
+            ):
                 index += 1
             continue
         out += cp
@@ -478,12 +529,39 @@ def _close_loops(
         )
 
 
+def _body_indent(
+    source_lines: List[_SourceLine], after: Int, header: String
+) raises -> Int:
+    """Find a block's actual indentation after its complete logical header.
+
+    Blank lines and comments do not establish a suite's indentation. Inspect
+    only the first statement, so indentation inside its literals cannot count.
+    Inline suites are not supported and must fail before probes are emitted.
+    """
+    var colon = _statement_colon(header)
+    var tail = _substring(header, colon + 1, _codepoint_count(header))
+    if String(_strip_comment(tail).strip()) != "":
+        raise Error("Coverage does not support inline loop or loop-else bodies")
+    for index in range(after, len(source_lines)):
+        var line = source_lines[index].text.copy()
+        var stripped = String(line.strip())
+        if stripped == "" or stripped.startswith("#"):
+            continue
+        var indent = indent_of(line)
+        if indent > indent_of(header):
+            return indent
+        break
+    raise Error("Coverage loop or loop-else requires an indented body")
+
+
 def _emit_loop(
     mut out: String,
     mut branches: List[Int],
     mut conditions: List[Int],
     mut closers: List[_LoopCloser],
     header: String,
+    ending: String,
+    body_indent: Int,
     number: Int,
     module: String,
     branch: String,
@@ -502,6 +580,8 @@ def _emit_loop(
         closers: Loops awaiting their trailing probe.
         header: The complete `for ...:` line, already comment-stripped if it
             was joined from several physical lines.
+        ending: The final header line's original line terminator.
+        body_indent: The actual indentation of the first body statement.
         number: The source line the header started on.
         module: Probe id prefix.
         branch: A branch-helper alias absent from the source.
@@ -513,12 +593,11 @@ def _emit_loop(
     conditions.append(0)
     var indent = indent_of(header)
     out += " " * indent + "var " + flag + " = 0\n"
-    out += header + "\n"
+    out += header + ending
     # Bumped on entry, so a body that returns still reports the sequence was
     # non-empty.
-    var body_indent = " " * (indent + 4)
-    out += body_indent + flag + " += 1\n"
-    out += body_indent + "_ = " + branch + '("' + id + '", True)\n'
+    out += " " * body_indent + flag + " += 1\n"
+    out += " " * body_indent + "_ = " + branch + '("' + id + '", True)\n'
     closers.append(_LoopCloser(indent, id, flag))
 
 
@@ -546,7 +625,8 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
     Raises:
         Error: If the module ID exceeds 480 UTF-8 bytes, or a complete
-            evaluation record would exceed 512 bytes including its newline.
+            evaluation record would exceed 512 bytes including its newline, or a
+            loop or loop-else body is inline or has no indented statement.
     """
     if module.byte_length() + 32 > 512:
         raise Error(
@@ -571,6 +651,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
     # decision would be dropped from the manifest entirely, quietly shrinking
     # the denominator instead of showing up as a gap.
     var pending = String("")
+    var pending_ending = String("\n")
     var pending_line = 0
     var pending_keyword = String("")
     # A `for` header can span lines too, and a pragma may sit on any of them,
@@ -582,8 +663,10 @@ def instrument(source: String, module: String) raises -> Instrumented:
     var pending_frame = -1
     var closers = List[_LoopCloser]()
 
-    for raw in source.splitlines():
-        var line = String(raw)
+    var source_lines = _physical_lines(source)
+    for raw in source_lines:
+        var line = raw.text.copy()
+        var ending = raw.ending.copy()
         number += 1
 
         # Ask before scanning: the line closing a docstring reports False
@@ -640,12 +723,16 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 or '"""' in line
                 or "'''" in line
             ):
-                pending += "\n" + line
+                pending += pending_ending + line
             else:
                 pending += " " + _strip_comment(String(line.strip()))
+            pending_ending = ending.copy()
             if _statement_colon(pending) >= 0:
+                var body_indent = 0
+                if pending_is_loop:
+                    body_indent = _body_indent(source_lines, number, pending)
                 if pending_excluded:
-                    out += pending + "\n"
+                    out += pending + ending
                 elif pending_is_loop:
                     _emit_loop(
                         out,
@@ -653,6 +740,8 @@ def instrument(source: String, module: String) raises -> Instrumented:
                         conditions,
                         closers,
                         pending,
+                        ending,
+                        body_indent,
                         pending_line,
                         module,
                         branch,
@@ -673,7 +762,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
                         conditions.append(joined.conditions)
                         if joined.conditions > 0:
                             used_frames.append(pending_frame)
-                    out += joined.text + "\n"
+                    out += joined.text + ending
                 pending = String("")
             continue
 
@@ -685,7 +774,29 @@ def instrument(source: String, module: String) raises -> Instrumented:
             and not String(line.strip()).startswith("#")
         )
         if significant:
-            _close_loops(out, closers, indent_of(line), branch)
+            var indent = indent_of(line)
+            var is_else = _is_else_header(line)
+            # Close nested loops before an else, but keep its own for header
+            # adjacent. Its empty-sequence probe belongs inside the else body:
+            # it must run even when that body returns or raises. A break skips
+            # this probe, but the loop entry has already reported True.
+            _close_loops(out, closers, indent + Int(is_else), branch)
+            if is_else and len(closers) > 0:
+                if closers[len(closers) - 1].indent == indent:
+                    var closer = closers.pop()
+                    var body_indent = _body_indent(source_lines, number, line)
+                    out += line + ending
+                    out += (
+                        " " * body_indent
+                        + "_ = "
+                        + branch
+                        + '("'
+                        + closer.id
+                        + '", '
+                        + closer.flag
+                        + " > 0)\n"
+                    )
+                    continue
 
         if executable:
             lines.append(number)
@@ -699,10 +810,12 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 # The header continues on the next line; decide about the
                 # pragma once all of it has been seen.
                 pending = _strip_comment(line)
+                pending_ending = ending.copy()
                 pending_line = number
                 pending_is_loop = True
                 pending_excluded = excluded
                 continue
+            var body_indent = _body_indent(source_lines, number, line)
             if not excluded:
                 _emit_loop(
                     out,
@@ -710,6 +823,8 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     conditions,
                     closers,
                     line,
+                    ending,
+                    body_indent,
                     number,
                     module,
                     branch,
@@ -726,6 +841,7 @@ def instrument(source: String, module: String) raises -> Instrumented:
                 if _statement_colon(line) < 0:
                     # The condition continues on the next line.
                     pending = _strip_comment(line)
+                    pending_ending = ending.copy()
                     pending_line = number
                     pending_keyword = keyword^
                     pending_frame = scanner.function_number()
@@ -748,11 +864,11 @@ def instrument(source: String, module: String) raises -> Instrumented:
                         used_frames.append(scanner.function_number())
                     emitted = wrapped.text.copy()
 
-        out += emitted + "\n"
+        out += emitted + ending
 
     # An unterminated header is emitted verbatim rather than silently dropped.
     if pending != "":
-        out += pending + "\n"
+        out += pending + pending_ending
 
     # Loops running to the end of the file still need their trailing probe.
     _close_loops(out, closers, 0, branch)
