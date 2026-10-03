@@ -445,3 +445,44 @@ The floor accepts every positive `Int`, including `Int.MAX`.
 `SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform. The core generator and Clearwater share one 32-bit step in `math/random.mojo`.
 
 For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.
+
+## Large-angle sine regressions
+
+`tests/test_sine.mojo` checks representable neighbors around large multiples of
+`pi/2` and the nearest-quadrant boundaries `(k + 1/2) * pi/2`.
+It tests both signs in nine exponent bands, from 13 through 126.
+Each target has two adjacent Float32 values below it and two above it.
+The 72 targets give 288 positive cases and 576 signed sine checks.
+
+`tools/reference_sine_phases.py` constructs the targets with Python Decimal.
+It computes pi with Machin's convergent arctangent series.
+An integer binary search selects the neighbors from exact Float32 values.
+A full-turn reduction and Taylor series compute each reference sine.
+
+The generator rounds references directly to Float32 with ties-to-even.
+It checks that 140-digit and 200-digit calculations give the same fixtures.
+It does not import the shared sine or its reduction constants.
+
+Run `python3 tools/reference_sine_phases.py --check` to check the saved fixtures.
+Use `--write` to replace the generated block after an intentional fixture change.
+
+The CPU test checks the nearest quadrant, the reduced remainder, and the sine.
+It compares the sine to both the saved high-precision reference and host libm.
+The sine tolerance stays at `2e-6`. The five-second test limit stays in effect.
+The ordinary Cody-Waite arithmetic does not change.
+
+For midpoint targets at exponent 23 and below, the inner neighbor pair isolates
+one nearest-quadrant increment. At higher exponents, one Float32 spacing can cross many quadrants.
+The targets can then share neighbors. The oracle checks the actual stored
+angles and their actual quadrants. It does not assign the target's phase to a
+rounded input.
+
+Every finite binary value is rational. A nonzero integer multiple of `pi/2`
+is irrational. A midpoint `(2*k + 1) * pi/4` is also irrational.
+An exact nonzero finite binary input therefore cannot equal either boundary.
+A rounded approximation to pi does not create an exact midpoint test.
+
+`test_shared_sine_large_angle_phase_neighbors_match_bits` in
+`tests/test_gpu.mojo` compares host and device sine bits for the same signed
+inputs. A GPU-target build checks compilation only. It does not establish that
+the test ran on a physical device. Use the device test result for that claim.

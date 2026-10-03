@@ -15035,6 +15035,41 @@ def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
                     )
 
 
+def test_shared_sine_large_angle_phase_neighbors_match_bits() raises:
+    from math.sine import sin_float32
+    from tests.test_sine import large_angle_phase_cases
+
+    if skipped_for_lack_of_a_gpu("shared sine large-angle phase neighbors"):
+        return
+    var inputs = List[Float32]()
+    for sample in large_angle_phase_cases():
+        var angle = bitcast[DType.float32](UInt32(sample[0]))
+        inputs.append(angle)
+        inputs.append(-angle)
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](3 * len(inputs))
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[_ScalarMathKernels.scalar_math_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(len(inputs)),
+        grid_dim=((len(inputs) + 31) // 32,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(len(inputs)):
+            assert_equal(
+                bitcast[DType.uint32](host[3 * at]),
+                bitcast[DType.uint32](sin_float32(inputs[at])),
+            )
+
+
 def norm_sample[
     dtype: DType
 ](value: SIMD[dtype, 1]) -> Array[SIMD[dtype, 1], 12]:
