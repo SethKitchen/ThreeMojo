@@ -720,6 +720,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
            $(OUT_DIR)/head.png \
            $(OUT_DIR)/water.png \
+           $(OUT_DIR)/animals.png \
+           $(OUT_DIR)/walk.png \
            $(OUT_DIR)/carla_towns.png \
            $(OUT_DIR)/game_humanoid.png \
            $(OUT_DIR)/hairstyles.png \
@@ -1353,6 +1355,20 @@ $(OUT_DIR)/integument.png: $(EXAMPLE_INPUTS_integument)
 $(OUT_DIR)/water.png: $(EXAMPLE_INPUTS_water) assets/pebbles.jpg
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Every procedural animal, one to a tile, turning.
+$(OUT_DIR)/animals.png: $(EXAMPLE_INPUTS_animals)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animals.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A wolf walks one stride, re-meshed in each pose.
+$(OUT_DIR)/walk.png: $(EXAMPLE_INPUTS_walk)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/walk.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 
