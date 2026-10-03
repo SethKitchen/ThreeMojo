@@ -218,6 +218,7 @@ Equal encoded images can share one packaged file.
 The standard-library identity checks run with `make test-tools`.
 The synthetic bake checks need only NumPy and Pillow. They use two small
 meshes and two colors. They need no CARLA release, server or GPU.
+
 Only mesh simplification is substituted. The tests use the real material
 reconstruction, texture conversion, bake rasterizers and GLB writer. They
 check the packed pixels, shared bakes and byte-identical repeated builds.
