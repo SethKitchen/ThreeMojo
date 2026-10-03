@@ -195,11 +195,23 @@ A named curve and a NURBS curve are each a `SpaceCurve`. The functions of `math/
 
 The arithmetic is in doubles, as in three.js. The sky and the trees take their random numbers from a `SeededRandom`. three.js's geometry first takes four numbers for its uuid. A geometry here has no uuid, so it does not take them.
 
+`math.space_curve.length3` and `normalized3` use the shared scalar norms in
+`Float64`. A finite nonzero direction remains valid when its squared norm
+underflows or overflows. This corrects three.js 0.180 range behavior. Ordinary
+inputs keep the reciprocal-multiply order used by existing fixtures. Zero
+components keep their signs, including the unused fourth component. Nonfinite
+inputs keep direct reciprocal-multiply behavior.
+
 ## Tube painter
 
 A `TubePainter` is a pen that draws tubes. `move_to` and `line_to` refuse a nonfinite position before changing the pen.
 
 `move_to` lifts the pen to a point. `line_to` draws a tube of ten sides from the pen to a point. `set_size` scales the radius, which is one centimeter at a size of one. `geometry()` returns what the pen drew, with `position`, `normal` and `color`. `update()` returns the vertices drawn since the last update.
+
+Only equal endpoints skip a stroke. A nonzero subnormal displacement still
+draws a stroke; a squared-length test can incorrectly erase it. This corrects
+the finite-range behavior of three.js 0.180. The stored mesh can still round
+coincident coordinates when a stroke is much smaller than its radius.
 
 three.js fills a buffer of a million vertices. Here the lists grow. Draw the geometry with a `STANDARD` material that reads the vertex colors, and turn frustum culling off, as three.js does.
 
