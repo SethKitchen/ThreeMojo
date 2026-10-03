@@ -5031,7 +5031,7 @@ struct Renderer(Movable):
     # target.
     var scissor: Rect
     var scissor_test: Bool
-    # Whether `render` and `render_array` draw the frame at twice the size
+    # Whether `render`, `render_array` and `render_cube` draw at twice the size
     # each way and average every four pixels into one: three.js's
     # `antialias`, by supersampling. Off by default, as there. See
     # `render.antialias` and `set_antialias`.
@@ -5240,8 +5240,9 @@ struct Renderer(Movable):
         a point's size and a line's thickness come out as asked, not
         smaller. See `render_scale`.
 
-        `render_into` and `render_array_into` draw into a target the caller
-        holds, at its size, and are not changed by this.
+        `render_into`, `render_array_into`, `render_into_layer` and
+        `render_cube_into` use the target's sample count instead. This
+        setting does not add samples to those draws.
 
         Args:
             enabled: Whether to supersample.
@@ -9293,6 +9294,8 @@ struct Renderer(Movable):
 
         The face owns its viewport and history, uses unit exposure with no
         tone mapping, and writes the usual sRGB image when resolved.
+        Sampling belongs to the caller: `render_cube` copies `antialias`,
+        while `render_cube_into` uses each target face's `samples`.
         Probe baking supplies its own grid and skips copying this one's.
         """
         var side = Renderer(size, size, self.workers)
@@ -9321,6 +9324,8 @@ struct Renderer(Movable):
         one's background, shading, workers, lighting resources and clipping,
         through `render`, so the scene's background and materials reach the
         faces. Shadow settings, material override and node time carry over.
+        This renderer's `antialias` applies to each face. The samples are
+        averaged in linear light before the sRGB byte image is made.
         The tone mapping is left off, as three.js turns it off around its
         update: the faces are light the main frame will map once, when a
         surface reflects them or the sky shows them.
@@ -9395,9 +9400,12 @@ struct Renderer(Movable):
 
         Each face is drawn by a renderer of the face's size with this
         one's scene settings, as `render_cube` draws them, into
-        `target.image(face, 0)`. The faces
-        keep the light as the target's type stores it. Call
-        `target.generate_mipmaps` to fill the levels below.
+        `target.image(face, 0)`. Each face's `samples` controls sampling,
+        as in `render_into`; this renderer's `antialias` does not apply.
+        Zero or one takes one sample; 4, 9 or 16 takes that many per pixel.
+        Samples are averaged once in linear light. The faces keep the light
+        as the target's type stores it. Use `FLOAT_TARGET` to keep HDR light.
+        Call `target.generate_mipmaps` to fill the levels below.
 
         Args:
             target: A cube target.
