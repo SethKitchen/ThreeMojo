@@ -884,6 +884,31 @@ def _texture_key(path: String, space: ColorSpace) -> String:
     return path + ("|srgb" if space == SRGB else "|linear")
 
 
+def _model_pivot(
+    var bounds: Box3, yaw: Angle, fit: Vector3
+) raises -> Tuple[Object3D, Float32]:
+    """Fit original model bounds without changing the cached template."""
+    var turned = Object3D()
+    turned.rotate_y(yaw)
+    bounds.apply_matrix4(turned.local_matrix())
+    var size = bounds.size()
+    var scale = min(
+        fit.x / max(size.x, Float32(1e-6)),
+        min(
+            fit.y / max(size.y, Float32(1e-6)),
+            fit.z / max(size.z, Float32(1e-6)),
+        ),
+    )
+    var center = bounds.center()
+    var pivot = Object3D()
+    pivot.rotate_y(yaw)
+    pivot.set_scale(scale, scale, scale)
+    pivot.set_position(
+        -center.x * scale, -bounds.min.y * scale, -center.z * scale
+    )
+    return (pivot^, scale)
+
+
 struct AssetRegistry(Movable):
     """A manifest read against a cache folder."""
 
@@ -1245,24 +1270,9 @@ struct AssetRegistry(Movable):
             var material = assets.materials.get(id)
             material.env_map = SCENE_ENVIRONMENT
             assets.materials.materials[id.value] = material
-        var turned = Object3D()
-        turned.rotate_y(entry.yaw)
-        bounds.apply_matrix4(turned.local_matrix())
-        var size = bounds.size()
-        var scale = min(
-            fit.x / max(size.x, Float32(1e-6)),
-            min(
-                fit.y / max(size.y, Float32(1e-6)),
-                fit.z / max(size.z, Float32(1e-6)),
-            ),
-        )
-        var center = bounds.center()
-        var pivot = Object3D()
-        pivot.rotate_y(entry.yaw)
-        pivot.set_scale(scale, scale, scale)
-        pivot.set_position(
-            -center.x * scale, -bounds.min.y * scale, -center.z * scale
-        )
+        var fitted = _model_pivot(bounds, entry.yaw, fit)
+        var pivot = fitted[0].copy()
+        var scale = fitted[1]
         var node = scene.attach(pivot^, parent)
         # A model has a mesh, so it has a node.
         for n in model.nodes:  # pragma: no branch
