@@ -76,6 +76,10 @@ def test_thelen_curves() raises:
     assert_almost_equal(passive_force_length(0.8), 0.0)
     assert_almost_equal(passive_force_length(1.0), 0.0)
     assert_almost_equal(passive_force_length(1.6), 1.0, atol=1e-12)
+    # Thelen's shape factor is five (Appendix, p. 75).
+    assert_almost_equal(
+        passive_force_length(1.3), (exp(2.5) - 1.0) / (exp(5.0) - 1.0)
+    )
     assert_almost_equal(force_velocity(-1.5), 0.0)
     assert_almost_equal(force_velocity(-1.0), 0.0)
     assert_almost_equal(force_velocity(0.0), 1.0)

@@ -5,13 +5,16 @@
 
 """Muscle bellies that bulge as they shorten.
 
-The surface response is a visual design model. In a pose, each muscle's
-fiber length is its path length less its rigid tendon's slack length.
-An ellipsoid belly shrinks by `f^w` on its nearest longitudinal axis and
-grows by `f^(-w/2)` on the other two axes. This preserves that primitive's
-volume. A round cone only widens across: its endpoints stay fixed, so
-its volume is not conserved. Overlapping unions need not keep their
-volume even when each ellipsoid does.
+The surface response is a visual design model. In a pose, the fibers
+reach along each muscle as far as its path length less its rigid
+tendon's slack length. They keep their thickness, `L0 sin a0`, as the
+static solve in `extensions/anatomy/muscle.mojo` does, so the fiber
+length is `sqrt(reach^2 + thickness^2)`. An ellipsoid belly shrinks by
+`f^w` on its nearest longitudinal axis and grows by `f^(-w/2)` on the
+other two axes. This preserves that primitive's volume. A round cone
+only widens across: its endpoints stay fixed, so its volume is not
+conserved. Overlapping unions need not keep their volume even when each
+ellipsoid does.
 
 `w`, the response seen through skin and fat, is 0.5: a `DESIGN` value.
 `f` is held to 0.6 to 1.4. These visual sculpts are not conserved tissue
@@ -28,7 +31,7 @@ from extensions.animals.rig import Pose
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import CONE, ELLIPSOID
 from extensions.sdf.vector import V3, Rigid, dot, length
-from std.math import pow
+from std.math import pow, sqrt
 
 # The share of a belly's change in shape that the surface shows.
 comptime BULGE_SHARE = 0.5
@@ -49,8 +52,11 @@ def fiber_ratio(muscle: AnimalMuscle, world: List[Rigid]) raises -> Float64:
     """
     muscle.arch.check()
     var unit = Float64(muscle.unit_length(world).value)
-    var fiber = unit - Float64(muscle.arch.tendon_slack.value)
-    var f = fiber / Float64(muscle.arch.fiber_length.value)
+    var reach = max(0.0, unit - Float64(muscle.arch.tendon_slack.value))
+    var h = muscle.arch.thickness()
+    var f = sqrt(reach * reach + h * h) / Float64(
+        muscle.arch.fiber_length.value
+    )
     return min(1.4, max(0.6, f))
 
 

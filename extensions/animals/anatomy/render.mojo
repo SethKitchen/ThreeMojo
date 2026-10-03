@@ -16,10 +16,14 @@ tissue colors with no noise and no baked light:
   shortens; each tendon a cone along the rest of its path, thick enough
   to carry `F0` at 50 MPa.
 
-The skeleton's radii are `DESIGN` shares of each bone's length: long
-bones keep one share because their length and diameter scale alike,
+Each bone's radius is a share of its length. A mammal's long bones take
+the measured mid-shaft share: half the diameter over the length of the
+femur 0.0385, the tibia 0.036, the humerus 0.0456 and the radius 0.0337,
+the mean of five cheetahs and three greyhounds (Hudson et al. 2011a,
+Table 1, p. 364; 2011b, Table 1, p. 377; `FROM_TEXT`). One share serves
+every size because a long bone's length and diameter scale alike,
 `M^0.35` and `M^0.36` (Alexander et al. 1979, `FROM_ABSTRACT`). The
-tendon stress is a `DESIGN` value.
+other bones' shares and the tendon stress are `DESIGN` values.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -30,7 +34,7 @@ from core.buffer_geometry import (
     BufferGeometry,
     MaterialIndex,
 )
-from extensions.animals.anatomy.body import species_body
+from extensions.animals.anatomy.body import MAMMAL, BodyPlan, species_body
 from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import (
     COAT,
@@ -86,7 +90,16 @@ comptime BONE_LAYER = 1
 comptime MUSCLE_LAYER = 2
 
 
-def _bone_share(name: String, segment: Int) -> Float64:
+def _bone_share(plan: BodyPlan, name: String, segment: Int) -> Float64:
+    if plan == MAMMAL:
+        if name.startswith("femur"):
+            return 0.0385
+        if name.startswith("tibia"):
+            return 0.036
+        if name.startswith("humerus"):
+            return 0.0456
+        if name.startswith("radius"):
+            return 0.0337
     if name == "head":
         return 0.17
     if segment == HEAD.value:
@@ -141,7 +154,7 @@ def skeleton_model(animal: Animal) raises -> SdfModel:
         var span = length(z - a)
         if span <= 0.0:
             continue
-        var r = _bone_share(b.name, segment.value) * span
+        var r = _bone_share(plan, b.name, segment.value) * span
         # The skull tapers from the braincase to the muzzle.
         var taper = 0.45 if b.name == "head" else 0.8
         _ = m.cone("bone", BoneId(i), a, z, r, taper * r, k=0.4 * r)

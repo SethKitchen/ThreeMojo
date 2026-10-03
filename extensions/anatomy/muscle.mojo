@@ -14,16 +14,21 @@ maximum isometric force is `F0 = sigma PCSA`.
 
 The force curves are those of Thelen, *Adjustment of muscle mechanics
 model parameters to simulate dynamic contractions in older adults*,
-J. Biomech. Eng. 125:70-77, 2003, with the young-adult parameters:
+J. Biomech. Eng. 125:70-77, 2003, with the young-adult parameters. Each
+was read in the paper itself:
 
-- active force-length: `exp(-(l - 1)^2 / 0.45)`,
-- passive force-length: `(exp(4 (l - 1) / 0.6) - 1) / (exp(4) - 1)`,
+- active force-length: `exp(-(l - 1)^2 / 0.45)` (Appendix, p. 75),
+- passive force-length: `(exp(5 (l - 1) / 0.6) - 1) / (exp(5) - 1)`:
+  the shape factor is five (Appendix, p. 75) and the passive strain at
+  `F0` is 0.6 for young adults (Table 1, p. 71),
 - force-velocity: the inverse of Thelen's equation at full activation,
   with `Af = 0.25`, `Flen = 1.4`, and a maximum shortening velocity of
   ten optimal fiber lengths per second that falls to a quarter of that
-  as activation falls to zero,
-- tendon: an exponential toe to strain `0.609 e0` and then a line, with
-  `e0 = 0.04` the strain at `F0`.
+  as activation falls to zero (Table 1, p. 71, and Eq. 6, p. 75),
+- tendon: an exponential toe of shape 3 to strain `0.609 e0` and then a
+  line of slope `1.712 / e0`, with `e0 = 0.04` the strain at `F0` (p. 71
+  and Appendix, p. 75),
+- activation: time constants of 15 ms and 50 ms (p. 70).
 
 The fibers keep a constant thickness, so the pennation angle grows as
 they shorten: `sin a = L0 sin a0 / l`.
@@ -55,7 +60,7 @@ from units.si import (
 
 # Thelen 2003, young adults.
 comptime SHAPE_FACTOR = 0.45
-comptime PASSIVE_SHAPE = 4.0
+comptime PASSIVE_SHAPE = 5.0
 comptime PASSIVE_STRAIN = 0.6
 comptime SHORTENING_SHAPE = 0.25
 comptime LENGTHENING_LIMIT = 1.4

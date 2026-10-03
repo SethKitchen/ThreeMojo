@@ -234,7 +234,7 @@ def test_densities_are_dempster_and_whole_body() raises:
         _ = segment_density(BIRD, HEAD)
     var whole: List[Tuple[String, Float64]] = [
         ("chicken", 1044.0),
-        ("crow", 965.0),
+        ("crow", 968.0),
         ("shark", 1050.0),
         ("snake", 1057.0),
         ("spider", 1050.0),

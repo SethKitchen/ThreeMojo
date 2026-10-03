@@ -14,10 +14,14 @@ is the published one. The mass is then a prediction from the sculpt's
 volume, and the published mass checks it.
 
 The sources are in the wiki page `Animal-anatomy`, by key. Each value
-carries its `Evidence` grade. The ranges were read from search-result
-text, not from the original tables, so no value is better than
-`FROM_TEXT`. The model value is a `DESIGN` choice inside the published
-range.
+carries its `Evidence` grade. Three were read in the source itself: the
+White Leghorn's masses, measured by Hartman 1961 (Table 1, p. 45), and
+the German Shepherd Dog's masses and height, from its breed standard
+(FCI-Standard No. 166, p. 8). The others come from search-result text
+that quotes the source, `FROM_TEXT` at best. Where a source gives a
+range, the model value is a `DESIGN` choice inside it. The reference
+length is the adult male's, because the calibration measures a male;
+the wiki notes where a source gives only the female's.
 
 The coat depth is how far the sculpt's surface stands off the skin: fur,
 wool under the explicit fleece, and contour plumage. It is a `DESIGN`
@@ -155,16 +159,16 @@ def _table() -> List[SpeciesBody]:
     t.append(_body(MAMMAL, "central European wild boar", 0, 85, 70, FROM_TEXT, "WildlifeOnline", m, 0.75, FROM_TEXT, "WildlifeOnline", 0.02))
     t.append(_body(MAMMAL, "domestic cat", -1, 4.5, 3.5, FROM_TEXT, "ADW", m, 0.25, FROM_TEXT, "ADW", 0.012))
     t.append(_body(MAMMAL, "cheetah", -1, 50, 30, FROM_TEXT, "ADW", m, 0.80, FROM_TEXT, "ADW", 0.008))
-    t.append(_body(BIRD, "White Leghorn", 1, 2.6, 2.0, FROM_TEXT, "LeghornStandard", TOTAL_LENGTH, 0.45, UNVERIFIED, "", 0.02))
-    t.append(_body(MAMMAL, "Holstein-Friesian", 0, 900, 650, UNVERIFIED, "Holstein", m, 1.45, FROM_TEXT, "Holstein", 0.008))
+    t.append(_body(BIRD, "White Leghorn", 1, 2.43, 1.705, FROM_TEXT, "Hartman1961", TOTAL_LENGTH, 0.45, UNVERIFIED, "", 0.02))
+    t.append(_body(MAMMAL, "Holstein-Friesian", 0, 900, 680, UNVERIFIED, "Holstein", m, 1.47, FROM_TEXT, "Holstein", 0.008))
     t.append(_body(BIRD, "American crow", 0, 0.47, 0.43, FROM_TEXT, "BOW", TOTAL_LENGTH, 0.45, FROM_TEXT, "BOW", 0.012))
     t.append(_body(MAMMAL, "white-tailed deer", -1, 70, 50, FROM_TEXT, "FAO", m, 0.90, FROM_TEXT, "FAO", 0.015))
-    t.append(_body(MAMMAL, "medium herding dog", 0, 35, 28, UNVERIFIED, "", m, 0.60, UNVERIFIED, "", 0.03))
+    t.append(_body(MAMMAL, "German Shepherd Dog", 0, 35, 27, FROM_TEXT, "FCI166", m, 0.625, FROM_TEXT, "FCI166", 0.03))
     t.append(_body(BIRD, "golden eagle", 1, 3.7, 5.2, FROM_TEXT, "SDZWA", TOTAL_LENGTH, 0.85, FROM_TEXT, "SDZWA", 0.025))
     t.append(_body(TELEOST, "rainbow trout", 0, 1.0, 1.0, FROM_TEXT, "TroutLW", TOTAL_LENGTH, 0.45, FROM_TEXT, "TroutLW", 0.0))
     t.append(_body(MAMMAL, "red fox", -1, 6.5, 5.0, FROM_TEXT, "ADW", m, 0.40, FROM_TEXT, "ADW", 0.03))
     t.append(_body(ANURAN, "American bullfrog", 0, 0.30, 0.30, UNVERIFIED, "", BODY_LENGTH, 0.155, FROM_TEXT, "USANPN", 0.0))
-    t.append(_body(MAMMAL, "Saanen dairy goat", 0, 85, 65, UNVERIFIED, "NSWDPI", m, 0.85, FROM_TEXT, "NSWDPI", 0.01))
+    t.append(_body(MAMMAL, "Saanen dairy goat", 0, 85, 65, UNVERIFIED, "NSWDPI", m, 0.94, FROM_TEXT, "NSWDPI", 0.01))
     t.append(_body(MAMMAL, "Thoroughbred", -1, 500, 450, FROM_TEXT, "TBMorph", m, 1.62, FROM_TEXT, "TBMorph", 0.006))
     t.append(_body(MAMMAL, "African lion", -1, 190, 126, FROM_TEXT, "SDZWA", m, 1.15, FROM_TEXT, "SDZWA", 0.015))
     t.append(_body(MAMMAL, "Large White pig", 0, 300, 250, FROM_TEXT, "TNAU", m, 0.90, UNVERIFIED, "", 0.003))

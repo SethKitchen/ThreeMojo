@@ -37,7 +37,7 @@ from extensions.animals.anatomy.engineering import (
     calibrated_mass,
 )
 from extensions.animals.anatomy.flex import flexed_animal
-from extensions.animals.anatomy.muscles import animal_muscles
+from extensions.animals.anatomy.muscles import species_muscles
 from extensions.animals.anatomy.render import (
     BONE_LAYER,
     MUSCLE_LAYER,
@@ -180,7 +180,7 @@ def main() raises:
         var real = calibrated_animal(base, cal)
         var mass = calibrated_mass(base, cal)
         var total = mass.total()
-        var muscles = animal_muscles(real.rig, body.plan, total.mass)
+        var muscles = species_muscles(real.rig, id, total.mass)
         var hip = Length(Float32(real.rig.j("hipL").y), METER)
         var f = stride_frequency(WALK_FROUDE, hip)
         print(species_name(id), "-", body.kind)

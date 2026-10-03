@@ -16,9 +16,11 @@ choice. A tail takes the leg's value, also by design.
 
 Other body plans take one whole-body density:
 
-- a bird 1.044 g/cm^3 for a plucked chicken and 0.965 g/cm^3, the middle
-  of the 0.880 to 1.050 range for plucked birds, for a flier
-  (Hamershock, Seamans and Bernhardt 1993, report WL-TR-93-3049);
+- a bird 1.044 g/cm^3 for a plucked domestic chicken, and 0.968 g/cm^3
+  for a flier: the mean of the eleven wild species, plucked, which
+  range from 0.880 to 1.050 (Hamershock, Seamans and Bernhardt 1993,
+  report WL-TR-93-3049, Table 3, p. 11). The chicken is `FROM_TEXT`.
+  The mean is a `DESIGN` choice: the report has no crow and no eagle;
 - a fish with a swim bladder 1.00 g/cm^3 (Lindsey et al. 2010, zebrafish);
 - a frog 1.00 g/cm^3 (a specific gravity of about one);
 - a shark 1.05 g/cm^3, between lean tissue at 1.076 and seawater at
@@ -128,7 +130,7 @@ def whole_body_density(species: SpeciesId) raises -> Density:
     if plan == MAMMAL:
         raise Error("A mammal's density is by segment")
     if plan == BIRD:
-        return _density(1044.0 if species == CHICKEN else 965.0)
+        return _density(1044.0 if species == CHICKEN else 968.0)
     if plan == SHARK_PLAN:
         return _density(1050)
     if plan == SERPENT:
