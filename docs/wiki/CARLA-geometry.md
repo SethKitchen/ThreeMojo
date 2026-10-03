@@ -113,7 +113,9 @@ Packing first compares volume growth, then volume. Ties use area growth, then ar
 
 This gives planar and linear data a spatial cost when every volume is zero. Final ties keep the existing deterministic rules. Side lengths widen both endpoints to `Float64` before subtraction, so finite opposite-sign `Float32` limits do not overflow during packing. See [#583](https://github.com/SethKitchen/ThreeMojo/issues/583).
 
-For example, insert the 17 points `(0, 0, 0)` through `(16, 0, 0)` in order. The former volume-only split made leaf bounds `[0, 15]` and `[2, 16]`. The new bounds are `[0, 12]` and `[13, 16]`. The change affects tree packing and query cost. The query and tie policies, payload storage, and public insertion order stay the same. Existing distance and slab arithmetic defects at extreme finite coordinates can affect query results; see [#589](https://github.com/SethKitchen/ThreeMojo/issues/589). Exact result preservation for every finite input is not established.
+For example, insert the 17 points `(0, 0, 0)` through `(16, 0, 0)` in order. The former volume-only split made leaf bounds `[0, 15]` and `[2, 16]`. The new bounds are `[0, 12]` and `[13, 16]`.
+
+The change affects tree packing and query cost. The query and tie policies, payload storage, and public insertion order stay the same. Existing distance and slab arithmetic defects at extreme finite coordinates can affect query results; see [#589](https://github.com/SethKitchen/ThreeMojo/issues/589). Exact result preservation for every finite input is not established.
 
 ## Build a mesh
 
