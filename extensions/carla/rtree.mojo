@@ -16,6 +16,16 @@ a box. ThreeMojo's `math.octree.Octree` holds triangles for collision and
 has no nearest-k query, so it does not serve here. The boxes are
 `math.bounds.Box3`.
 
+**Packing.** ChooseLeaf and split assignment compare volume growth,
+then volume. Ties use area growth, then area, then length growth, then
+length. Area is the sum of the three pairwise products of side lengths.
+Length is their sum. Each comparison uses one unit at a time. This
+resolves volume ties for planar and linear data. The query, filter, and
+tie policies and public insertion order stay the same. Known distance and
+slab arithmetic defects at extreme finite coordinates are tracked in #589.
+This packing change does not establish identical query results for every
+finite input.
+
 An entry carries one whole number (a segment two), the caller's own
 data, such as an index into a list of waypoints. CARLA carries any type
 there. A filter is a struct with an `accepts` method, as CARLA's is a
@@ -93,9 +103,59 @@ trait SegmentFilter:
 # --- the tree --------------------------------------------------------------
 
 
-def _volume(box: Box3) -> Float64:
-    var size = box.max - box.min
-    return Float64(size.x) * Float64(size.y) * Float64(size.z)
+@fieldwise_init
+struct _PackingCost(ImplicitlyCopyable):
+    """Growth and size, ordered from volume to area to length."""
+
+    var volume_growth: Float64
+    var volume: Float64
+    var area_growth: Float64
+    var area: Float64
+    var length_growth: Float64
+    var length: Float64
+
+    def compare(self, other: Self) -> Int:
+        if self.volume_growth != other.volume_growth:
+            return Int(self.volume_growth > other.volume_growth) - Int(
+                self.volume_growth < other.volume_growth
+            )
+        if self.volume != other.volume:
+            return Int(self.volume > other.volume) - Int(
+                self.volume < other.volume
+            )
+        if self.area_growth != other.area_growth:
+            return Int(self.area_growth > other.area_growth) - Int(
+                self.area_growth < other.area_growth
+            )
+        if self.area != other.area:
+            return Int(self.area > other.area) - Int(self.area < other.area)
+        if self.length_growth != other.length_growth:
+            return Int(self.length_growth > other.length_growth) - Int(
+                self.length_growth < other.length_growth
+            )
+        return Int(self.length > other.length) - Int(self.length < other.length)
+
+
+def _extent(box: Box3) -> Tuple[Float64, Float64, Float64]:
+    # Widen each endpoint before subtraction: a finite Float32 span can
+    # exceed Float32 even though its measures fit in Float64.
+    var x = Float64(box.max.x) - Float64(box.min.x)
+    var y = Float64(box.max.y) - Float64(box.min.y)
+    var z = Float64(box.max.z) - Float64(box.min.z)
+    return (x * y * z, x * y + y * z + z * x, x + y + z)
+
+
+def _packing_cost(box: Box3, entry: Box3) -> _PackingCost:
+    var size = _extent(box)
+    var joined = _extent(_joined(box, entry))
+    return _PackingCost(
+        joined[0] - size[0],
+        size[0],
+        joined[1] - size[1],
+        size[1],
+        joined[2] - size[2],
+        size[2],
+    )
 
 
 def _joined(a: Box3, b: Box3) -> Box3:
@@ -354,21 +414,12 @@ struct _Rtree(Movable):
         while not self.nodes[node].leaf:
             path.append(node)
             var best = -1
-            var best_growth = 0.0
-            var best_volume = 0.0
+            var best_cost = _PackingCost(0, 0, 0, 0, 0, 0)
             for child in self.nodes[node].children:  # pragma: no branch
-                var volume = _volume(self.nodes[child].box)
-                var growth = (
-                    _volume(_joined(self.nodes[child].box, box)) - volume
-                )
-                if (
-                    best < 0
-                    or growth < best_growth
-                    or (growth == best_growth and volume < best_volume)
-                ):
+                var cost = _packing_cost(self.nodes[child].box, box)
+                if best < 0 or cost.compare(best_cost) < 0:
                     best = child
-                    best_growth = growth
-                    best_volume = volume
+                    best_cost = cost
             node = best
         self.nodes[node].children.append(entry)
         self.nodes[node].box.union(box)
@@ -439,12 +490,11 @@ struct _Rtree(Movable):
             elif len(group_b) + left <= _MIN_ENTRIES:
                 to_a = False
             else:
-                var grow_a = _volume(_joined(box_a, boxes[i])) - _volume(box_a)
-                var grow_b = _volume(_joined(box_b, boxes[i])) - _volume(box_b)
-                if grow_a != grow_b:
-                    to_a = grow_a < grow_b
-                elif _volume(box_a) != _volume(box_b):
-                    to_a = _volume(box_a) < _volume(box_b)
+                var cost_a = _packing_cost(box_a, boxes[i])
+                var cost_b = _packing_cost(box_b, boxes[i])
+                var order = cost_a.compare(cost_b)
+                if order != 0:
+                    to_a = order < 0
                 else:
                     to_a = len(group_a) <= len(group_b)
             if to_a:

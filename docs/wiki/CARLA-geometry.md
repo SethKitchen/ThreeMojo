@@ -109,6 +109,14 @@ A filter is a struct with an `accepts` method, as `PointFilter` and `SegmentFilt
 
 The results come nearest first. Entries at the same distance come in the order of insertion. Boost leaves this order open, so CARLA code that reads only the first result gets the same answer.
 
+Packing first compares volume growth, then volume. Ties use area growth, then area, then length growth, then length. Area is the sum of the three pairwise products of side lengths. Length is the sum of side lengths. The comparisons keep these units separate.
+
+This gives planar and linear data a spatial cost when every volume is zero. Final ties keep the existing deterministic rules. Side lengths widen both endpoints to `Float64` before subtraction, so finite opposite-sign `Float32` limits do not overflow during packing. See [#583](https://github.com/SethKitchen/ThreeMojo/issues/583).
+
+For example, insert the 17 points `(0, 0, 0)` through `(16, 0, 0)` in order. The former volume-only split made leaf bounds `[0, 15]` and `[2, 16]`. The new bounds are `[0, 12]` and `[13, 16]`.
+
+The change affects tree packing and query cost. The query and tie policies, payload storage, and public insertion order stay the same. Existing distance and slab arithmetic defects at extreme finite coordinates can affect query results; see [#589](https://github.com/SethKitchen/ThreeMojo/issues/589). Exact result preservation for every finite input is not established.
+
 ## Build a mesh
 
 `CarlaMesh` keeps CARLA's lists: vertices, normals, UVs, indices counted from one, and named materials. `add_triangle_strip` and `add_triangle_fan` turn the same way as CARLA's.
@@ -158,6 +166,7 @@ Each kind is a type with `is_valid`, and the functions that read one refuse a va
 
 The port refuses input where CARLA reads out of bounds, divides by zero or wraps around. It also fixes some behavior that has no use.
 
+- R-tree packing uses area and length to resolve volume ties. Its linear seed selection and node limits stay the same. This is a packing correction to this port; it does not change the query contract.
 - A bounding box half size must be finite and zero or more.
 - A UTM zone must be from 1 to 60 after the checked fractional conversion above. CARLA takes any zone.
 - `stod` does not read a hexadecimal float. It reads the zero before the `x`.
