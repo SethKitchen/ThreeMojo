@@ -32,17 +32,27 @@ there. A filter is a struct with an `accepts` method, as CARLA's is a
 lambda.
 
 **Order of results.** Boost leaves the order of a query's results open.
-This port gives the nearest first, and entries at the same distance in
+This port gives the nearest first, and entries with the same computed key in
 the order they were inserted. `intersections` gives entries in the order
 they were inserted.
 
 A query point has three coordinates. For CARLA's one- and
 two-dimensional trees, set the unused coordinates to zero: the distances
 come out the same.
+
+**Finite-coordinate correction (#589).** Segment distance retains small
+endpoint gaps and uses the same arithmetic after endpoint reversal. Slab
+queries widen before subtraction and compare uncertain parameter intervals
+with exact-sign expansions. These fix the former finite-extreme misses and
+false hits. Distances remain Float64 estimates, with a box-key floor that
+keeps nearest-query node bounds conservative. This correction does not change
+CARLA's segment construction or the insertion-order tie rule.
 """
 
+from std.math import fma
 from math.bounds import Box3
 from math.vector3 import Vector3
+from math.segment import _difference_determinant, _point_segment_measure
 
 # Boost's `linear<16>`: at most 16 entries a node, at least 30 percent.
 comptime _MAX_ENTRIES = 16
@@ -173,87 +183,146 @@ def _gap(low: Float32, high: Float32, p: Float32) -> Float64:
 
 
 def _box_distance2(box: Box3, p: Vector3) -> Float64:
+    # Explicit fused operations give every call the same rounding graph,
+    # including after inlining. Each operation is monotone for these gaps.
     var dx = _gap(box.min.x, box.max.x, p.x)
     var dy = _gap(box.min.y, box.max.y, p.y)
     var dz = _gap(box.min.z, box.max.z, p.z)
-    return dx * dx + dy * dy + dz * dz
+    return fma(dx, dx, fma(dy, dy, dz * dz))
 
 
 def _segment_distance2(a: Vector3, b: Vector3, p: Vector3) -> Float64:
-    """The squared distance from a point to a segment, in doubles."""
-    var abx = Float64(b.x) - Float64(a.x)
-    var aby = Float64(b.y) - Float64(a.y)
-    var abz = Float64(b.z) - Float64(a.z)
-    var apx = Float64(p.x) - Float64(a.x)
-    var apy = Float64(p.y) - Float64(a.y)
-    var apz = Float64(p.z) - Float64(a.z)
-    var len2 = abx * abx + aby * aby + abz * abz
-    var t = 0.0
-    if len2 > 0.0:
-        t = min(max((apx * abx + apy * aby + apz * abz) / len2, 0.0), 1.0)
-    var dx = apx - abx * t
-    var dy = apy - aby * t
-    var dz = apz - abz * t
-    return dx * dx + dy * dy + dz * dz
+    """A wide segment key whose node bounds use the same arithmetic."""
+    var result = _point_segment_measure(a, b, p)
+    if result.endpoint:
+        var endpoint = a
+        if result.at_end:
+            endpoint = b
+        # Every ancestor box contains this endpoint. One shared evaluation
+        # gives its key directly; no raw norm or segment-box floor is needed.
+        return _box_distance2(Box3(endpoint, endpoint), p)
+    var box = Box3(
+        Vector3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)),
+        Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)),
+    )
+    # Rounding can put an interior distance a few ulps below its box key.
+    # Gap, square and sum are monotone, so every containing node's key is
+    # no greater than this floor. Nodes still precede entries at equal keys.
+    return max(result.distance2, _box_distance2(box, p))
+
+
+@fieldwise_init
+struct _SegmentParameter(ImplicitlyCopyable):
+    """(face-start)/(end-start), with a positive denominator."""
+
+    var face: Float64
+    var start: Float64
+    var end: Float64
+
+
+def _parameter_before(a: _SegmentParameter, b: _SegmentParameter) -> Bool:
+    # A shared positive denominator makes original face order exact. This
+    # includes repeated slabs and common diagonal corner/edge contacts.
+    if a.start == b.start and a.end == b.end:
+        return a.face < b.face
+    var left = (a.face - a.start) * (b.end - b.start)
+    var right = (b.face - b.start) * (a.end - a.start)
+    var difference = left - right
+    # Four rounded differences, products and a subtraction: 16u bounds
+    # the absolute error relative to the sum of computed product magnitudes.
+    var guard = 1.7763568394002505e-15 * (abs(left) + abs(right))
+    if abs(difference) > guard:
+        return difference < 0
+    return (
+        _difference_determinant(
+            a.face,
+            a.start,
+            b.end,
+            b.start,
+            b.face,
+            b.start,
+            a.end,
+            a.start,
+        )
+        < 0
+    )
 
 
 def _axis_clip(
     a: Float64,
-    d: Float64,
+    b: Float64,
     low: Float64,
     high: Float64,
-    mut span: Tuple[Float64, Float64],
+    mut near: _SegmentParameter,
+    mut far: _SegmentParameter,
 ) -> Bool:
-    """Clip the parameter range of a segment to one slab of a box."""
-    if d == 0.0:
-        return a >= low and a <= high
-    var t1 = (low - a) / d
-    var t2 = (high - a) / d
-    if t1 > t2:
-        var swap = t1
-        t1 = t2
-        t2 = swap
-    span = (max(span[0], t1), min(span[1], t2))
-    return span[0] <= span[1]
+    """Clip one slab without dividing or rounding the retained endpoints."""
+    var first = min(a, b)
+    var last = max(a, b)
+    if last < low or first > high:
+        return False
+    # These comparisons also skip parallel axes and infinite outer faces.
+    if first >= low and last <= high:
+        return True
+    var lo = _SegmentParameter(0, 0, 1)
+    var hi = _SegmentParameter(1, 0, 1)
+    if a < b:
+        if low > a:
+            lo = _SegmentParameter(low, a, b)
+        if high < b:
+            hi = _SegmentParameter(high, a, b)
+    else:
+        if high < a:
+            lo = _SegmentParameter(-high, -a, -b)
+        if low > b:
+            hi = _SegmentParameter(-low, -a, -b)
+    if _parameter_before(near, lo):
+        near = lo
+    if _parameter_before(hi, far):
+        far = hi
+    return not _parameter_before(far, near)
 
 
 def segment_intersects_box(start: Vector3, end: Vector3, box: Box3) -> Bool:
-    """Return whether a segment meets an axis-aligned box.
+    """Return whether a finite segment meets an axis-aligned box.
 
     Args:
-        start: One end of the segment.
-        end: The other end.
+        start: One finite end of the segment.
+        end: The other finite end.
         box: The box. Its faces count as inside.
 
     Returns:
         Whether any point of the segment is in the box. An empty box
-        meets nothing.
+        meets nothing. Infinite outer faces need no clipping.
     """
     if box.is_empty():
         return False
-    var span = (0.0, 1.0)
-    var d = end - start
+    var near = _SegmentParameter(0, 0, 1)
+    var far = _SegmentParameter(1, 0, 1)
     return (
         _axis_clip(
             Float64(start.x),
-            Float64(d.x),
+            Float64(end.x),
             Float64(box.min.x),
             Float64(box.max.x),
-            span,
+            near,
+            far,
         )
         and _axis_clip(
             Float64(start.y),
-            Float64(d.y),
+            Float64(end.y),
             Float64(box.min.y),
             Float64(box.max.y),
-            span,
+            near,
+            far,
         )
         and _axis_clip(
             Float64(start.z),
-            Float64(d.z),
+            Float64(end.z),
             Float64(box.min.z),
             Float64(box.max.z),
-            span,
+            near,
+            far,
         )
     )
 
