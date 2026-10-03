@@ -57,6 +57,8 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 <!-- features -->
 ### Project tools
 
+- [x] [Loop body indentation](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#loop-body-indentation): coverage probes use actual body indentation and preserve loop-else control flow [#544](https://github.com/SethKitchen/ThreeMojo/issues/544)
+
 - [x] [Trait default coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#trait-defaults-and-generated-names): executable inherited method bodies have line and decision probes [#540](https://github.com/SethKitchen/ThreeMojo/issues/540)
 
 - [x] [Collision-safe coverage probes](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#trait-defaults-and-generated-names): helper aliases and loop counters use names absent from the source [#541](https://github.com/SethKitchen/ThreeMojo/issues/541)
