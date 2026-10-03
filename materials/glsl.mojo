@@ -45,6 +45,13 @@ object-like `#define`s, and the built-in functions GLSL has for floats and
 vectors. An `int` is a whole number held in a float. GLSL ES has no
 conversion between `int` and `float`, and neither has this. Whatever is
 outside the subset is refused with the shader, the line and the reason.
+
+**Loop limits.** A `while` or `do` must provably stop within 64 body
+executions. The final condition still runs. A shader with an exhausted or
+unproved loop is refused before either renderer receives its program.
+This replaces the old silent truncation and can refuse previously accepted
+runtime-dependent exits. See the Node-materials wiki page for the proof
+subset and compatibility limits.
 """
 
 from render.cube_texture_store import NO_CUBE_TEXTURE
@@ -58,6 +65,27 @@ from materials.nodes import (
     MAX_ATTRIBUTE_FLOATS,
     MAX_LOOP_COUNT,
     NODE_FLOAT,
+    NODE_CONSTANT,
+    NODE_COPY,
+    NODE_SWIZZLE,
+    NODE_ADD,
+    NODE_SUB,
+    NODE_MUL,
+    NODE_DIV,
+    NODE_NEGATE,
+    NODE_TRUNC,
+    NODE_LESS_THAN,
+    NODE_LESS_THAN_EQUAL,
+    NODE_GREATER_THAN,
+    NODE_GREATER_THAN_EQUAL,
+    NODE_EQUAL,
+    NODE_NOT_EQUAL,
+    NODE_AND,
+    NODE_OR,
+    NODE_XOR,
+    NODE_NOT,
+    NODE_SELECT,
+    NodeKind,
     OPACITY_NODE,
     POSITION_NODE,
     SIZE_NODE,
@@ -73,6 +101,8 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from math.vector4 import Vector4
 from render.texture_store import NO_TEXTURE
+from std.math import isfinite, trunc
+from std.memory import bitcast
 
 # --- word lists ---------------------------------------------------------------
 
@@ -115,9 +145,9 @@ comptime _REFUSED_FUNCTIONS = (
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
-# The most times a `while` or a `do` loop runs. The bytecode has no jumps,
-# so such a loop is unrolled this many times, and a false condition leaves
-# it; a loop that would run longer stops here.
+# The most body executions of a `while` or a `do` loop. One additional
+# condition-only iteration proves it has stopped. The compiler refuses a
+# shader when it cannot prove that no loop reaches that extra body.
 comptime MAX_WHILE_COUNT = 64
 # The built-ins that compare two vectors one component at a time.
 comptime _COMPARISONS = (
@@ -1220,6 +1250,114 @@ def _derivative(name: String) -> Bool:
     return name == "dFdx" or name == "dFdy" or name == "fwidth"
 
 
+def _loop_number_is_portable(value: Float32) -> Bool:
+    """Keep only finite normal numbers and signed zeros in an exit proof.
+    A GPU can flush a subnormal value to zero; it cannot prove a host exit.
+    """
+    return isfinite(value) and (
+        value == 0 or abs(value) >= Float32(1.1754943508222875e-38)
+    )
+
+
+def _loop_binary(kind: NodeKind, a: Float32, b: Float32) -> Optional[Float32]:
+    """Evaluate scalar arithmetic used to prove a loop stops. Other
+    operations remain unknown, even when their inputs are constants."""
+    if kind == NODE_ADD:
+        return a + b
+    if kind == NODE_SUB:
+        return a - b
+    if kind == NODE_MUL:
+        return a * b
+    if kind == NODE_DIV:
+        return a / b
+    if kind == NODE_LESS_THAN:
+        return Float32(Int(a < b))
+    if kind == NODE_LESS_THAN_EQUAL:
+        return Float32(Int(a <= b))
+    if kind == NODE_GREATER_THAN:
+        return Float32(Int(a > b))
+    if kind == NODE_GREATER_THAN_EQUAL:
+        return Float32(Int(a >= b))
+    if kind == NODE_EQUAL:
+        return Float32(Int(a == b))
+    if kind == NODE_NOT_EQUAL:
+        return Float32(Int(a != b))
+    if kind == NODE_XOR:
+        return Float32(Int((a != 0) != (b != 0)))
+    return None
+
+
+def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
+    """Prove one scalar graph value without reading runtime inputs.
+
+    A select can be known when its condition or both equal arms are known.
+    Logic can also be known from an absorbing operand. Every other unknown
+    value stays unknown. Evaluate after all enclosing loops are unrolled;
+    their first iteration alone is not a termination proof.
+
+    Raises:
+        Error: If the graph's dependencies are invalid.
+    """
+    var values = List[Optional[Float32]](length=graph.count(), fill=None)
+    var order = graph._order(root.value)
+    for place in range(len(order)):  # pragma: no branch
+        var node = order[place]
+        if graph._types[node] != NODE_FLOAT:
+            continue
+        var kind = graph._kinds[node]
+        if kind == NODE_CONSTANT:
+            var literal = graph._values[node * 4]
+            if _loop_number_is_portable(literal):
+                values[node] = literal
+            continue
+        var inputs = List[Optional[Float32]]()
+        for slot in range(3):  # pragma: no branch
+            var input = graph._inputs[node * 3 + slot]
+            inputs.append(values[input] if input >= 0 else None)
+        var a = inputs[0]
+        var b = inputs[1]
+        var c = inputs[2]
+        if kind == NODE_COPY or kind == NODE_SWIZZLE:
+            values[node] = a
+        elif kind == NODE_SELECT:
+            if a:
+                values[node] = b if a.value() != 0 else c
+            elif (
+                b
+                and c
+                and bitcast[DType.uint32](b.value())
+                == bitcast[DType.uint32](c.value())
+            ):
+                values[node] = b
+        elif kind == NODE_AND:
+            if a and a.value() == 0:
+                values[node] = Float32(0)
+            elif b and b.value() == 0:
+                values[node] = Float32(0)
+            elif a and b:
+                values[node] = Float32(1)
+        elif kind == NODE_OR:
+            if a and a.value() != 0:
+                values[node] = Float32(1)
+            elif b and b.value() != 0:
+                values[node] = Float32(1)
+            elif a and b:
+                values[node] = Float32(0)
+        elif a:
+            if kind == NODE_NOT:
+                values[node] = Float32(Int(a.value() == 0))
+            elif kind == NODE_NEGATE:
+                values[node] = -a.value()
+            elif kind == NODE_TRUNC:
+                values[node] = trunc(a.value())
+            elif b:
+                values[node] = _loop_binary(kind, a.value(), b.value())
+        if values[node]:
+            if not _loop_number_is_portable(values[node].value()):
+                values[node] = None
+    return values[root.value]
+
+
 struct _Compiler(Movable):
     """Parses and type checks one shader at a time into the graph both
     shaders share.
@@ -1230,6 +1368,9 @@ struct _Compiler(Movable):
     """
 
     var graph: NodeGraph
+    # Shared by all loops, including loops inside calls and other loops.
+    # It only changes from zero to one when a body exceeds its budget.
+    var loop_exhaustion: NodeVar
     var raw: Bool
     var stage: Int
     var version: Int
@@ -1280,6 +1421,7 @@ struct _Compiler(Movable):
     ):
         """Start a compiler with an empty graph."""
         self.graph = NodeGraph()
+        self.loop_exhaustion = NodeVar(-1)
         self.raw = raw
         self.toy = toy
         self.defines = defines.copy()
@@ -1481,6 +1623,7 @@ struct _Compiler(Movable):
             Error: If the shader is outside the subset or is not GLSL.
         """
         self.stage = stage
+        self.loop_exhaustion = self.graph.Var(self.graph.float(0))
         var lexer = _Lexer(
             "vertex" if stage == _VERTEX else "fragment", self.raw
         )
@@ -1513,6 +1656,16 @@ struct _Compiler(Movable):
             self.at = found.first
             raise self.error("main is void main()")
         _ = self.inline(main, List[_Value]())
+        var exhausted = _loop_constant(
+            self.graph, self.graph.get(self.loop_exhaustion)
+        )
+        if not exhausted or exhausted.value() != 0:
+            raise self.error(
+                "a while or do loop must provably stop within "
+                + String(MAX_WHILE_COUNT)
+                + " body executions; the loop exceeds this resource limit"
+                " or its exit proof is unsupported"
+            )
 
     def declare_outputs(mut self) raises:
         """Declare GLSL's outputs this shader and version have: a vertex's
@@ -3018,8 +3171,8 @@ struct _Compiler(Movable):
         self.graph.End()
 
     def open_loop(mut self) raises -> NodeRef:
-        """Open a `while` or a `do` loop: a `Loop` of `MAX_WHILE_COUNT`
-        times, with its own scope, which `break` and `continue` reach.
+        """Open a bounded loop plus one condition-only check, with its own
+        scope, which `break` and `continue` reach.
 
         Returns:
             The loop's index: zero, then one, and so on.
@@ -3027,7 +3180,7 @@ struct _Compiler(Movable):
         Raises:
             Error: Never: the count is in range.
         """
-        var index = self.graph.Loop(MAX_WHILE_COUNT)
+        var index = self.graph.Loop(MAX_WHILE_COUNT + 1)
         self.open()
         self.depth += 1
         self.loops += 1
@@ -3056,9 +3209,24 @@ struct _Compiler(Movable):
         self.graph.Break()
         self.graph.End()
 
+    def loop_budget(mut self, index: NodeRef) raises:
+        """Mark exhaustion before the first body beyond the budget.
+
+        That body cannot execute in an accepted shader. Do not add a
+        Break here: its liveness state would burden every runtime output.
+
+        Raises:
+            Error: Never: the loop is open and the index is scalar.
+        """
+        self.graph.If(
+            self.graph.equal(index, self.graph.float(MAX_WHILE_COUNT))
+        )
+        self.graph.assign(self.loop_exhaustion, self.graph.float(1))
+        self.graph.End()
+
     def while_loop(mut self) raises:
-        """Parse `while (c) s` as a loop of `MAX_WHILE_COUNT` times that a
-        false `c` leaves at the top of each time through.
+        """Parse `while (c) s`, including the last false condition. Refuse
+        a shader that can reach a body beyond `MAX_WHILE_COUNT`.
 
         Raises:
             Error: If the condition is not a `bool`, or the body is outside
@@ -3066,16 +3234,17 @@ struct _Compiler(Movable):
         """
         self.at += 1
         self.expect("(")
-        _ = self.open_loop()
+        var index = self.open_loop()
         var condition = self.condition("a while loop")
         self.expect(")")
         self.leave_unless(condition)
+        self.loop_budget(index)
         self.statement()
         self.close_loop()
 
     def do_loop(mut self) raises:
-        """Parse `do { ... } while (c);` as a loop of `MAX_WHILE_COUNT`
-        times. From the second time through, a false `c` leaves at the top,
+        """Parse `do { ... } while (c);` with a checked body budget.
+        From the second time through, a false `c` leaves at the top,
         where the time before would have asked it at its end: so a
         `continue` still reaches the condition.
 
@@ -3109,6 +3278,7 @@ struct _Compiler(Movable):
         var after = self.at
         self.leave_unless(condition)
         self.graph.End()
+        self.loop_budget(index)
         self.at = body
         self.statement()
         self.close_loop()
