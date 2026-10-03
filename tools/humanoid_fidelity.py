@@ -13,7 +13,9 @@ from enum import Enum
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
+import tempfile
 
 SCHEMA = 1
 
@@ -356,12 +358,21 @@ def write_snapshot(path, snapshot):
     validate_snapshot(snapshot)
     data = canonical_bytes(snapshot)
     path = Path(path)
+    # Write a private sibling, then link it into place. A link fails when the
+    # path exists, as exclusive creation does, but an interrupted write leaves
+    # only the sibling, never a truncated snapshot at the versioned path.
+    descriptor, temporary = tempfile.mkstemp(prefix=f'.{path.name}.', dir=path.parent)
     try:
-        with path.open('xb') as output:
+        with os.fdopen(descriptor, 'wb') as output:
             output.write(data)
+            output.flush()
+            os.fsync(output.fileno())
+        os.link(temporary, path)
     except FileExistsError:
         if path.read_bytes() != data:
             raise ValueError('canonical snapshot is immutable; choose a new versioned path') from None
+    finally:
+        os.unlink(temporary)
     return hashlib.sha256(data).hexdigest()
 
 

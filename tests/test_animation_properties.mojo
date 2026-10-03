@@ -677,10 +677,14 @@ def test_a_mixer_refuses_a_value_its_property_cannot_hold() raises:
 def test_a_mixer_refuses_a_blend_mode_that_is_not_named() raises:
     var scene = world()
     var mixer = AnimationMixer()
+    var first = play(mixer, number_track(morph_target(MeshIndex(0), 0), 0, 1))
     var which = play(mixer, number_track(morph_target(MeshIndex(0), 0), 0, 1))
     mixer.action(which).blend_mode = AnimationBlendMode(4)
-    with assert_raises():
+    with assert_raises(contains="blend mode"):
         mixer.update(scene, at(1))
+    # The refusal comes before any clock moves, the earlier action's too.
+    assert_equal(mixer.time().value, 0)
+    assert_equal(mixer.action(first).phase, 0)
 
 
 # --- additive actions -------------------------------------------------------

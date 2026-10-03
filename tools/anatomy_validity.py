@@ -371,7 +371,7 @@ def report(args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--build', action='store_true')
-    parser.add_argument('--mojo', default='mojo')
+    parser.add_argument('--mojo', default=str(ROOT/'.venv/bin/mojo'))
     parser.add_argument('--probe', type=Path, default=ROOT/'.cache/anatomy-probe')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--steps-mm', nargs='+', type=float, default=[20,10,5])

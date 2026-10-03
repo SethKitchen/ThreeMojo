@@ -9,6 +9,7 @@ import tempfile
 import subprocess
 import sys
 import unittest
+from unittest import mock
 from humanoid_fidelity import (adapt_part, Frame, IDENTITY, Y_TO_Z, Z_TO_Y, canonical_bytes,
     digest, finite, frame_rotation, make_snapshot, read_snapshot, report_properties, rotation,
     transform_inertia, transform_point, validate_derivative, validate_snapshot,
@@ -181,6 +182,15 @@ class FidelityTest(unittest.TestCase):
             # Exporters receive a copy. Editing it cannot change disk evidence.
             original['parts'][0]['physical_properties']['mass_kg'] = 10
             self.assertEqual(read_snapshot(path, key)['parts'][0]['physical_properties']['mass_kg'], 2)
+
+    def test_interrupted_snapshot_write_leaves_no_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'canonical.json'
+            with mock.patch('humanoid_fidelity.os.fsync', side_effect=OSError('disk full')):
+                with self.assertRaises(OSError): write_snapshot(path, snapshot())
+            self.assertEqual(list(Path(tmp).iterdir()), [])
+            # The versioned path stays free, so a retry succeeds.
+            self.assertEqual(write_snapshot(path, snapshot()), digest(snapshot()))
 
     def test_stale_geometry_identity_lod_assets_and_sources(self):
         canonical = snapshot()
