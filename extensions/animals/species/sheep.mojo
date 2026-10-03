@@ -28,17 +28,24 @@ from extensions.animals.coat import (
 )
 from extensions.sdf.ids import (
     BoneId,
-    CONE,
     ELLIPSOID,
 )
 from extensions.animals.parts import (
     HORN,
     JAW,
 )
-from extensions.sdf.sculpt import ell_y
+from extensions.sdf.sculpt import ell_y, cone_or_ball
 from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
+    aperture_tilt_along,
+    draw_u32,
+    imul32,
+    is_limb,
+    is_front_limb,
+    pick_weighted,
+    stream_of,
+    lid_distance,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import (
@@ -53,16 +60,9 @@ from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
 from extensions.animals.species.hoofed import (
     HeadFrame,
-    aperture_tilt_along,
-    cone_or_ball,
-    draw_u32,
     head_frame,
     hoofed_bones,
-    imul32,
-    limb_bone,
-    front_bone,
-    pick_weighted,
-    stream_of,
+    dewclaw_balls,
 )
 from extensions.animals.traits import Traits
 from extensions.sdf.vector import (
@@ -134,7 +134,7 @@ def _frame() -> HeadFrame:
 
 
 def _hl(v: V3) -> V3:
-    return _frame().at(v)
+    return _frame().at_chained(v)
 
 
 def _ear_of(variant: Int) -> Int:
@@ -478,7 +478,7 @@ def _hell(
     var f = _frame()
     var axis = normalize(f.dir(axis_l)) if length(axis_l) > 0.0 else f.hz
     var up = normalize(f.dir(up_l)) if length(up_l) > 0.0 else f.hy
-    _ = m.ell(tag, h, f.at(c), r, axis=axis, up=up, k=k, carve=carve)
+    _ = m.ell(tag, h, f.at_chained(c), r, axis=axis, up=up, k=k, carve=carve)
 
 
 def _top_y(z: Float64, roman: Float64) -> Float64:
@@ -1180,7 +1180,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.01,
         )
         var fpaw = rig.bone("fpaw" + side)
-        _dewclaws(m, fpaw, mc, s)
+        dewclaw_balls(m, fpaw, mc, s, -0.02, 0.0052)
         _ = m.cone("pastern", fpaw, mc, cf, 0.0148, 0.0158, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 0.97)
 
@@ -1296,7 +1296,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.01,
         )
         var hpaw = rig.bone("hpaw" + side)
-        _dewclaws(m, hpaw, mt, s)
+        dewclaw_balls(m, hpaw, mt, s, -0.02, 0.0052)
         _ = m.cone("pastern", hpaw, mt, chf, 0.0145, 0.0155, k=0.01)
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.93)
 
@@ -1772,17 +1772,6 @@ def _locks(
         )
 
 
-def _dewclaws(mut m: SdfModel, bone: BoneId, mc: V3, s: Float64) raises:
-    for k in [1.0, -1.0]:
-        _ = m.sphere(
-            "dewclaw",
-            bone,
-            mc + V3(0.009 * k * s, -0.006, -0.02),
-            0.0052,
-            k=0.004,
-        )
-
-
 def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
     # Two claws with a cleft between them, heel bulbs behind, flat on the
     # ground.
@@ -2118,7 +2107,7 @@ def sheep_paint(
     elif bone == "neck1" or bone == "neck2":
         region = 1
     var legness = 0.0
-    if limb_bone(bone):
+    if is_limb(bone):
         var upper = (
             bone.startswith("scapula")
             or bone.startswith("humerus")
@@ -2145,7 +2134,7 @@ def sheep_paint(
         else:
             var trunk = region <= 1 or region == 4
             if trunk:
-                var knee_y = 0.3 if front_bone(bone) else 0.26
+                var knee_y = 0.3 if is_front_limb(bone) else 0.26
                 wool = 1.0 - legness * smoothstep(
                     knee_y + 0.03, knee_y - 0.03, p.y
                 )
@@ -2249,16 +2238,7 @@ def sheep_paint(
             )
         # The lids: a thin dark margin and a pale rim of lid skin round it.
         if eye_d < 0.019:
-            var cc = ef.c + ef.y * e.off
-            var dv = p - cc
-            var lx = dot(dv, ef.x)
-            var ly = dot(dv, ef.y)
-            var de = abs(
-                max(
-                    sqrt(lx * lx + (ly + e.d) ** 2) - e.big_r,
-                    sqrt(lx * lx + (ly - e.d) ** 2) - e.big_r,
-                )
-            )
+            var de = lid_distance(e, ef, p)
             var on_lid = smoothstep(0.0205, 0.0178, eye_d)
             if de < 0.001:
                 return Paint(V3(0.03, 0.025, 0.022), SKIN)

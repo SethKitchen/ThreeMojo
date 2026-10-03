@@ -30,7 +30,7 @@ from extensions.animals.coat import (
 )
 from extensions.sdf.ids import BoneId
 from extensions.animals.parts import JAW
-from extensions.animals.kit import EyeSpec
+from extensions.animals.kit import EyeSpec, pick_cumulative, hashed_stream
 from extensions.animals.noise import cells3, fbm3
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig
@@ -558,18 +558,16 @@ def fish_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var size = sex_k * (1.0 + 0.1 * r.g()) * (0.45 if juv else 1.0)
     # The morph draws from its own hashed stream, so consecutive seeds
     # do not correlate.
-    var a = UInt64((options.seed + 0x632BE5AB) & 0xFFFFFFFF)
-    var m_seed = Int(((a * UInt64(0x9E3779B1)) & 0xFFFFFFFF) ^ 0x5BD1E995)
-    var mr = AnimalRandom(m_seed, 1, 0)
+    var mr = hashed_stream(options.seed, 0x632BE5AB, 0x9E3779B1, 0x5BD1E995)
     for _ in range(4):
         _ = mr.next()
     var morph = 0
     if variant == TROUT:
-        morph = _pick(mr.next(), [0.72, 0.28])
+        morph = pick_cumulative(mr.next(), [0.72, 0.28])
     if variant == GOLDFISH:
-        morph = _pick(mr.next(), [0.55, 0.17, 0.2, 0.08])
+        morph = pick_cumulative(mr.next(), [0.55, 0.17, 0.2, 0.08])
     if variant == CLOWNFISH:
-        morph = _pick(mr.next(), [0.9, 0.1])
+        morph = pick_cumulative(mr.next(), [0.9, 0.1])
     var shade_m = mr.next()
     var sl = g.sl
     var female_trout = variant == TROUT and not male
@@ -612,15 +610,6 @@ def fish_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     t.set("size", size * g.v.sl * g.v.cell_k)
     t.set("minThick", CELL * 1.15)
     return t^
-
-
-def _pick(x: Float64, weights: List[Float64]) -> Int:
-    var acc = 0.0
-    for i in range(len(weights)):
-        acc += weights[i]
-        if x < acc:
-            return i
-    return len(weights) - 1
 
 
 def fish_eye(t: Traits) -> EyeSpec:

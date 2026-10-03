@@ -34,6 +34,9 @@ from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
+    is_limb,
+    mirrored_blob,
+    aperture_local,
 )
 from extensions.animals.noise import cells3, fbm3, vnoise3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -50,6 +53,7 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     length_warp,
@@ -57,6 +61,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, exp, pi, pow, sin, sqrt
+from extensions.sdf.distance import almond_distance, rect_distance
 
 comptime TAIL_SEGS = 10
 # The head's origin, mid cranium between the eyes and the ears.
@@ -355,10 +360,6 @@ def _ear_base() -> V3:
 
 def _ear_tip() -> V3:
     return _hl(0.152, 0.192, -0.095)
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _tail_radius(t: Float64) -> Float64:
@@ -1182,7 +1183,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             m,
             "scaptop",
             scap,
-            lerp(sc, sh, 0.1) + _sx(V3(0.016, 0.03, 0), s),
+            lerp(sc, sh, 0.1) + on_side(V3(0.016, 0.03, 0), s),
             sh - sc,
             V3(0.045, 0.08, 0.065),
             lateral=lat,
@@ -1192,7 +1193,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             m,
             "scapmuscle",
             scap,
-            lerp(sc, sh, 0.5) + _sx(V3(0.012, 0, 0), s),
+            lerp(sc, sh, 0.5) + on_side(V3(0.012, 0, 0), s),
             sh - sc,
             V3(0.042, 0.16, 0.1),
             lateral=lat,
@@ -1215,7 +1216,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             m,
             "forearmmuscle",
             rad,
-            lerp(e, w, 0.28) + _sx(V3(0.006, 0, 0.008), s),
+            lerp(e, w, 0.28) + on_side(V3(0.006, 0, 0.008), s),
             w - e,
             V3(0.067, 0.13, 0.07),
             lateral=lat,
@@ -1240,7 +1241,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
         _ = m.sphere(
             "dewclaw",
             meta,
-            lerp(w, mc, 0.35) + _sx(V3(-0.03, 0, 0.006), s),
+            lerp(w, mc, 0.35) + on_side(V3(-0.03, 0, 0.006), s),
             0.011,
             k=0.01,
         )
@@ -1288,7 +1289,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.4) + _sx(V3(0.008, 0, -0.055), s),
+            lerp(hp, kn, 0.4) + on_side(V3(0.008, 0, -0.055), s),
             kn - hp,
             V3(0.076, 0.25, 0.168),
             lateral=lat,
@@ -1297,8 +1298,8 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
         _ = m.cone(
             "thighfront",
             fem,
-            _sx(V3(0.072, 0.87, -0.47), s),
-            kn + _sx(V3(-0.006, 0.08, 0), s),
+            on_side(V3(0.072, 0.87, -0.47), s),
+            kn + on_side(V3(-0.006, 0.08, 0), s),
             0.068,
             0.042,
             k=0.09,
@@ -1306,7 +1307,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
         _ = m.cone(
             "hamstring",
             fem,
-            _sx(V3(0.075, 0.88, -0.8), s),
+            on_side(V3(0.075, 0.88, -0.8), s),
             lerp(kn, hk, 0.28) + V3(0, 0, -0.045),
             0.08,
             0.05,
@@ -1316,19 +1317,23 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             m,
             "flankfold",
             fem,
-            _sx(V3(0.092, 0.62, -0.435), s),
+            on_side(V3(0.092, 0.62, -0.435), s),
             V3(-0.03, 0.16, 0.06),
             V3(0.03, 0.13, 0.05),
             lateral=lat,
             k=0.09,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.004, 0.014, 0.004), s), 0.026, k=0.04
+            "stifle",
+            tib,
+            kn + on_side(V3(0.004, 0.014, 0.004), s),
+            0.026,
+            k=0.04,
         )
         _ = m.cone(
             "shin",
             tib,
-            lerp(kn, hk, 0.06) + _sx(V3(0, 0, 0.006), s),
+            lerp(kn, hk, 0.06) + on_side(V3(0, 0, 0.006), s),
             hk,
             0.046,
             0.033,
@@ -1338,7 +1343,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             m,
             "calf",
             tib,
-            lerp(kn, hk, 0.3) + _sx(V3(0.004, 0.015, -0.045), s),
+            lerp(kn, hk, 0.3) + on_side(V3(0.004, 0.015, -0.045), s),
             hk - kn,
             V3(0.05, 0.11, 0.055),
             lateral=lat,
@@ -1583,13 +1588,6 @@ def _face_of(p: V3, hw: Float64) -> V3:
     return V3(hx / FACE_X, (hy - FACE_EY) / FACE_E, (hz - FACE_EZ) / FACE_E)
 
 
-def _g3(f: V3, c: V3, r: V3) -> Float64:
-    var a = (abs(f.x) - c.x) / r.x
-    var b = (f.y - c.y) / r.y
-    var d = (f.z - c.z) / r.z
-    return exp(-(a * a + b * b + d * d))
-
-
 def _mask_half(y: Float64, male: Bool) -> Float64:
     # The face mask's half width at height `y`, in face units.
     var ys: List[Float64] = [0.7, 0.3, 0.0, -0.3, -0.6, -0.9, -1.2, -1.5, -1.8]
@@ -1639,11 +1637,7 @@ def _rbox(
     x: Float64, y: Float64, cy: Float64, hx: Float64, hy: Float64, r: Float64
 ) -> Float64:
     # A rounded box's signed distance in the face plane.
-    var qx = abs(x) - hx + r
-    var qy = abs(y - cy) - hy + r
-    var ox = max(qx, 0.0)
-    var oy = max(qy, 0.0)
-    return sqrt(ox * ox + oy * oy) + min(max(qx, qy), 0.0) - r
+    return rect_distance(abs(x) - hx + r, abs(y - cy) - hy + r) - r
 
 
 def _smin(a: Float64, b: Float64, k: Float64) -> Float64:
@@ -1692,20 +1686,6 @@ def _spots(
         ring and c.id < 0.55
     ) else 1.0
     return inside * hole
-
-
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
 
 
 def _headish(bone: String) -> Bool:
@@ -1833,7 +1813,7 @@ def lion_paint(
     var cub_skin = juv > 0.0 and tag != "mane"
     var spotted = spots_k > 0.01 and (adult_leg or cub_skin)
     if spotted:
-        var radius = 0.018 if _limb(bone) else (
+        var radius = 0.018 if is_limb(bone) else (
             0.01 if _headish(bone) else 0.024
         )
         radius *= 1.6 if juv > 0.0 else 1.0
@@ -1956,7 +1936,7 @@ def _paint_body(
         )
         w = max(w, chest if p.z > 0.3 else 0.0)
         w *= smoothstep(0.8, 0.62, p.y) * 0.55 + 0.45
-    var legness = smoothstep(0.66, 0.42, p.y) if _limb(bone) else 0.0
+    var legness = smoothstep(0.66, 0.42, p.y) if is_limb(bone) else 0.0
     if legness > 0.0:
         var side = 1.0 if p.x >= 0.0 else -1.0
         var inner = smoothstep(0.1, -0.6, n.x * side)
@@ -1981,7 +1961,7 @@ def _paint_body(
         if paw:
             lc = c[PAW]
         col = mix3(col, lc, legness)
-    var behind_mane = male and mane_k > 0.0 and p.z > 0.25 and not _limb(bone)
+    var behind_mane = male and mane_k > 0.0 and p.z > 0.25 and not is_limb(bone)
     if behind_mane:
         # The darker hair just behind and below the mane.
         var near = smoothstep(0.3, 0.45, p.z) * (
@@ -2000,8 +1980,8 @@ def _paint_ear(c: List[V3], t: Traits, p: V3, n: V3, male: Bool) -> V3:
     # A tawny rim round a shallow pale bowl; black backs with a tawny
     # patch low in their middle; tawny at the base.
     var s = 1.0 if p.x > 0.0 else -1.0
-    var eb = _sx(_ear_base(), s)
-    var et = _sx(_ear_tip(), s)
+    var eb = on_side(_ear_base(), s)
+    var et = on_side(_ear_tip(), s)
     var eu = normalize(et - eb)
     var ht = dot(p - eb, eu) / length(et - eb)
     var facing = normalize(V3(0.7 * s, 0.05, 1))
@@ -2048,13 +2028,9 @@ def _lid_distance(t: Traits, p: V3) -> Float64:
     var e = lion_eye(t)
     var s = 1.0 if p.x > HEAD_O.x else -1.0
     var ef = eye_frame_of(e, HEAD_O, s)
-    var d = p - (ef.c + ef.y * e.off)
-    var lx = dot(d, ef.x)
-    var ly = dot(d, ef.y)
-    var lz = dot(d, ef.z)
-    var a = sqrt(lx * lx + (ly + e.d) * (ly + e.d)) - e.big_r
-    var b = sqrt(lx * lx + (ly - e.d) * (ly - e.d)) - e.big_r
-    return abs(max(a, b)) if lz > -0.3 * e.r else 1.0
+    var q = aperture_local(e, ef, p)
+    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
+    return de if q.z > -0.3 * e.r else 1.0
 
 
 def _paint_face(
@@ -2077,21 +2053,25 @@ def _paint_face(
     var col = mix3(c[FACE], c[CROWN], smoothstep(-0.15, 0.56, f.y) * 0.6)
     var pad_low = smoothstep(-0.84, -1.02, f.y)
     var whisker = (
-        0.0 if jaw else _g3(
+        0.0 if jaw else mirrored_blob(
             f, V3(0.29, max(f.y, -1.16), 0.78), V3(0.34, 0.26, 0.5)
         )
         * pad_low
     )
-    var lip = _g3(f, V3(0, -1.3, 1.0), V3(0.3, 0.14, 0.24))
+    var lip = mirrored_blob(f, V3(0, -1.3, 1.0), V3(0.3, 0.14, 0.24))
     var under_eye = (
         smoothstep(
-            0.12, 0.5, _g3(f, V3(0.47, -0.21, 0.1), V3(0.25, 0.105, 0.45))
+            0.12,
+            0.5,
+            mirrored_blob(f, V3(0.47, -0.21, 0.1), V3(0.25, 0.105, 0.45)),
         )
         * 0.95
     )
     var above_eye = (
         smoothstep(
-            0.15, 0.6, _g3(f, V3(0.49, 0.15, 0.1), V3(0.17, 0.055, 0.42))
+            0.15,
+            0.6,
+            mirrored_blob(f, V3(0.49, 0.15, 0.1), V3(0.17, 0.055, 0.42)),
         )
         * 0.6
     )
@@ -2140,7 +2120,7 @@ def _paint_face(
     col = mix3(
         col,
         c[CROWN],
-        _g3(f, V3(0.45, -0.6, 0.45), V3(0.22, 0.25, 0.4))
+        mirrored_blob(f, V3(0.45, -0.6, 0.45), V3(0.22, 0.25, 0.4))
         * (1.0 - pad_low)
         * 0.55,
     )
@@ -2159,7 +2139,9 @@ def _paint_face(
         col,
         mix3(c[BROW_MARK], c[TEAR], 0.35),
         smoothstep(
-            0.08, 0.55, _g3(f, V3(0.36, 0.29, 0.1), V3(0.085, 0.06, 0.5))
+            0.08,
+            0.55,
+            mirrored_blob(f, V3(0.36, 0.29, 0.1), V3(0.085, 0.06, 0.5)),
         )
         * 0.9,
     )
@@ -2168,8 +2150,8 @@ def _paint_face(
             col,
             mix3(c[CROWN], c[BROW_MARK], 0.35),
             max(
-                _g3(f, V3(0, 0.35, -0.15), V3(0.42, 0.42, 0.7)),
-                _g3(f, V3(0, -0.35, 0.55), V3(0.2, 0.36, 0.45))
+                mirrored_blob(f, V3(0, 0.35, -0.15), V3(0.42, 0.42, 0.7)),
+                mirrored_blob(f, V3(0, -0.35, 0.55), V3(0.2, 0.36, 0.45))
                 * (1.0 - pad_low),
             )
             * 0.25,
@@ -2187,7 +2169,9 @@ def _paint_face(
     col = mix3(
         col,
         c[CROWN],
-        _g3(f, V3(0, -0.3, 0.62), V3(0.2, 0.34, 0.4)) * (1.0 - pad_low) * 0.6,
+        mirrored_blob(f, V3(0, -0.3, 0.62), V3(0.2, 0.34, 0.4))
+        * (1.0 - pad_low)
+        * 0.6,
     )
     var em = FACE_E * HS
     var mark = 1.0

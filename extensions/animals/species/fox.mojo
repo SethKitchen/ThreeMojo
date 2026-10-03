@@ -33,6 +33,10 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    is_limb,
+    is_front_limb,
+    hashed_stream,
+    mirrored_ell_bottom,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -49,9 +53,11 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import length_warp, legs_warp, scale_about_warp
-from std.math import cos, exp, pi, pow, sin, sqrt
+from std.math import cos, exp, pi, pow, sin
+from extensions.sdf.distance import segment_param
 
 comptime TAIL_SEGS = 10
 # The head's origin, mid cranium between the eyes and the ears.
@@ -85,14 +91,6 @@ def fox_variant_names() -> List[String]:
     return [String("red"), "cross", "silver", "urban"]
 
 
-def _hashed(seed: Int, add: Int, mul: Int, xor: Int) -> AnimalRandom:
-    # The original's `rng(Math.imul(seed + add, mul) ^ xor)`, in 32 bits.
-    var a = (seed + add) & 0xFFFFFFFF
-    var lo = (a * (mul & 0xFFFF)) & 0xFFFFFFFF
-    var hi = ((a * (mul >> 16)) & 0xFFFF) << 16
-    return AnimalRandom(((lo + hi) & 0xFFFFFFFF) ^ xor, 1, 0)
-
-
 def fox_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     """Draw one fox: procedural-animals' `variation`.
 
@@ -112,7 +110,7 @@ def fox_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     """
     var sex = pick_sex(options.sex, r)
     var age = pick_age(options.age)
-    var m = _hashed(options.seed, 0x3C6EF372, 0x9E3779B1, 0x5BE0CD19)
+    var m = hashed_stream(options.seed, 0x3C6EF372, 0x9E3779B1, 0x5BE0CD19)
     for _ in range(3):
         _ = m.next()
     var weights: List[Float64] = [0.7, 0.12, 0.08, 0.1]
@@ -215,10 +213,6 @@ def _hl(t: Traits, v: V3) -> V3:
 
 def _hr(t: Traits, r: V3) -> V3:
     return V3(r.x * t.get("headW") * HS, r.y * HS, r.z * HS)
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _ear_tip(t: Traits, base: V3) -> V3:
@@ -786,7 +780,7 @@ def _fore_leg(
         m,
         "scapmuscle",
         scap,
-        lerp(sc, sh, 0.5) + _sx(V3(0.004, 0, 0), s),
+        lerp(sc, sh, 0.5) + on_side(V3(0.004, 0, 0), s),
         sh - sc,
         V3(0.014, 0.055, 0.032),
         lateral=lat,
@@ -809,7 +803,7 @@ def _fore_leg(
         m,
         "forearmmuscle",
         rad,
-        lerp(e, w, 0.25) + _sx(V3(0.0015, 0, 0.002), s),
+        lerp(e, w, 0.25) + on_side(V3(0.0015, 0, 0.002), s),
         w - e,
         V3(0.0135, 0.036, 0.0155),
         lateral=lat,
@@ -821,7 +815,7 @@ def _fore_leg(
     _ = m.sphere(
         "dewclaw",
         meta,
-        lerp(w, mc, 0.3) + _sx(V3(-0.008, 0, 0.001), s),
+        lerp(w, mc, 0.3) + on_side(V3(-0.008, 0, 0.001), s),
         0.003,
         k=0.003,
     )
@@ -887,7 +881,7 @@ def _hind_leg(
         m,
         "thigh",
         fem,
-        lerp(hp, kn, 0.4) + _sx(V3(0.002, 0, -0.016), s),
+        lerp(hp, kn, 0.4) + on_side(V3(0.002, 0, -0.016), s),
         kn - hp,
         V3(0.022, 0.078, 0.05),
         lateral=lat,
@@ -896,8 +890,8 @@ def _hind_leg(
     _ = m.cone(
         "thighfront",
         fem,
-        _sx(V3(0.021, 0.325, -0.1), s),
-        kn + _sx(V3(-0.002, 0.029, 0.0), s),
+        on_side(V3(0.021, 0.325, -0.1), s),
+        kn + on_side(V3(-0.002, 0.029, 0.0), s),
         0.02,
         0.0125,
         k=0.035,
@@ -905,7 +899,7 @@ def _hind_leg(
     _ = m.cone(
         "hamstring",
         fem,
-        _sx(V3(0.024, 0.325, -0.212), s),
+        on_side(V3(0.024, 0.325, -0.212), s),
         lerp(kn, hk, 0.28) + V3(0, 0, -0.016),
         0.024,
         0.0145,
@@ -915,7 +909,7 @@ def _hind_leg(
         m,
         "breeches",
         fem,
-        lerp(hp, kn, 0.62) + _sx(V3(0.003, -0.005, -0.045), s),
+        lerp(hp, kn, 0.62) + on_side(V3(0.003, -0.005, -0.045), s),
         kn - hp,
         V3(0.016, 0.043, 0.016),
         lateral=lat,
@@ -925,19 +919,19 @@ def _hind_leg(
         m,
         "flankfold",
         fem,
-        _sx(V3(0.026, 0.26, -0.08), s),
+        on_side(V3(0.026, 0.26, -0.08), s),
         V3(-0.03, 0.16, 0.1),
         V3(0.0105, 0.043, 0.021),
         lateral=lat,
         k=0.035,
     )
     _ = m.sphere(
-        "stifle", tib, kn + _sx(V3(0.001, 0.004, 0.003), s), 0.009, k=0.022
+        "stifle", tib, kn + on_side(V3(0.001, 0.004, 0.003), s), 0.009, k=0.022
     )
     _ = m.cone(
         "shin",
         tib,
-        lerp(kn, hk, 0.06) + _sx(V3(0, 0, 0.002), s),
+        lerp(kn, hk, 0.06) + on_side(V3(0, 0, 0.002), s),
         hk,
         0.0122 * bk,
         0.0085 * bk,
@@ -947,7 +941,7 @@ def _hind_leg(
         m,
         "calf",
         tib,
-        lerp(kn, hk, 0.3) + _sx(V3(0.001, 0.005, -0.0145), s),
+        lerp(kn, hk, 0.3) + on_side(V3(0.001, 0.005, -0.0145), s),
         hk - kn,
         V3(0.0132, 0.038, 0.016),
         lateral=lat,
@@ -1218,28 +1212,19 @@ def _head_local(t: Traits, p: V3) -> V3:
     return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
 
 
-def _ell_bottom(h: V3, c: V3, r: V3) -> Float64:
-    # The lowest point of an upright ellipsoid over a head-local point, or
-    # one when the ellipsoid does not reach over it.
-    var dx = (abs(h.x) - c.x) / r.x
-    var dz = (h.z - c.z) / r.z
-    var q = 1.0 - dx * dx - dz * dz
-    return c.y - r.y * sqrt(q) if q > 0.0 else 1.0
-
-
 def _mouth_line(t: Traits, h: V3) -> Float64:
     # The upper lip's lower rim over a head-local point.
     var mz = t.get("muzzle")
-    var lip = _ell_bottom(
+    var lip = mirrored_ell_bottom(
         h, V3(0.0145, -0.0435, 0.083), V3(0.0088, 0.0118, 0.058 / mz)
     )
-    var pad = _ell_bottom(
+    var pad = mirrored_ell_bottom(
         h, V3(0.012, -0.026, 0.125), V3(0.0105, 0.011, 0.022 / mz)
     )
-    var muzzle = _ell_bottom(
+    var muzzle = mirrored_ell_bottom(
         h, V3(0.0, -0.018, 0.088), V3(0.02, 0.023, 0.064 / mz)
     )
-    var philtrum = _ell_bottom(
+    var philtrum = mirrored_ell_bottom(
         h, V3(0.0, -0.029, 0.147), V3(0.008, 0.011, 0.008 / mz)
     )
     return min(min(lip, pad), min(muzzle, philtrum))
@@ -1249,9 +1234,8 @@ def _seg_d(h: V3, a: V3, b: V3) -> V3:
     # The distance from a head-local point, mirrored to the left, to a
     # segment, and how far along it the nearest point is.
     var q = V3(abs(h.x), h.y, h.z)
-    var ab = b - a
-    var u = clamp(dot(q - a, ab) / dot(ab, ab), 0.0, 1.0)
-    return V3(length(q - (a + ab * u)), u, 0.0)
+    var u = segment_param(q, a, b)
+    return V3(length(q - (a + (b - a) * u)), u, 0.0)
 
 
 def _tail_at(t: Traits, bone: String, p: V3) -> V3:
@@ -1279,30 +1263,6 @@ def _tail_at(t: Traits, bone: String, p: V3) -> V3:
     var l = w[seg] / ws
     var u = clamp(dot(p - a, d) / (l * tk), 0.0, 1.0)
     return V3(done + u * l, cos(ang), sin(ang))
-
-
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
-
-
-def _front(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-    )
 
 
 # Reference heights and depths the coat is laid out by.
@@ -1384,7 +1344,7 @@ def fox_paint(
         region = 4
     elif bone == "neck1" or bone == "neck2":
         region = 1
-    elif _limb(bone):
+    elif is_limb(bone):
         leg = smoothstep(0.29, 0.17, p.y)
     if region <= 1:
         c = _body(pal, t, p, n, nz, region, leg, bone)
@@ -1501,7 +1461,7 @@ def _body(
         var inner = smoothstep(0.1, -0.6, n.x * side)
         var wl = inner * 0.75 * smoothstep(
             Y_KNEE - 0.01, Y_KNEE + 0.05, p.y
-        ) * (0.4 if _front(bone) else 1.0) + smoothstep(
+        ) * (0.4 if is_front_limb(bone) else 1.0) + smoothstep(
             -0.3, -0.85, n.y
         ) * 0.4 * smoothstep(
             Y_KNEE - 0.02, Y_KNEE + 0.04, p.y
@@ -1550,7 +1510,7 @@ def _body(
         if cross_fox:
             c = mix3(c, pal.get("dark"), smoothstep(0.6, 0.95, up) * 0.6)
     if leg > 0.0:
-        var front = _front(bone)
+        var front = is_front_limb(bone)
         var side = 1.0 if p.x >= 0.0 else -1.0
         var outer = smoothstep(-0.2, 0.5, n.x * side)
         var lc = mix3(

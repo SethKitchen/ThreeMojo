@@ -43,6 +43,9 @@ from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
     sculpt_eye_socket,
+    is_limb,
+    mirrored_blob,
+    hashed_stream,
 )
 from extensions.animals.noise import fbm3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -58,6 +61,7 @@ from extensions.sdf.vector import (
     lerp,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -65,7 +69,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
-from std.math import atan2, cos, exp, pi, pow, sin, sqrt
+from std.math import atan2, cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 12
 # The head-local scale: the head was first measured on a smaller skull.
@@ -111,11 +115,7 @@ def rat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     Raises:
         Error: If the requested variant is not one of the five.
     """
-    var m = AnimalRandom(
-        (((options.seed + 0x5BD1E995) * 0x297A2D39) & 0xFFFFFFFF) ^ 0x1B873593,
-        1,
-        0,
-    )
+    var m = hashed_stream(options.seed, 0x5BD1E995, 0x297A2D39, 0x1B873593)
     for _ in range(3):
         _ = m.next()
     if options.variant.value >= 5:
@@ -379,10 +379,6 @@ def rat_rig(t: Traits) raises -> Rig:
     quadruped_bones(rig, TAIL_SEGS)
     _ = rig.add_bone("snout", "snoutBase", "nose", "head")
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _ear_frame(t: Traits, s: Float64) -> Tuple[V3, V3, V3, V3, Float64]:
@@ -779,7 +775,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "scapmuscle",
             rig.bone("scapula" + side),
-            lerp(sc, sh, 0.5) + _sx(V3(0.002, 0, 0), s),
+            lerp(sc, sh, 0.5) + on_side(V3(0.002, 0, 0), s),
             sh - sc,
             V3(0.0065, 0.016, 0.012),
             lateral=lat,
@@ -823,7 +819,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.sphere(
             "toe",
             meta,
-            w + _sx(V3(-0.0026, -0.002, 0.004), s),
+            w + on_side(V3(-0.0026, -0.002, 0.004), s),
             0.0011,
             k=0.0006,
         )
@@ -840,7 +836,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "haunch",
             fem,
-            lerp(hp, kn, 0.4) + _sx(V3(0.004, 0.002, -0.004), s),
+            lerp(hp, kn, 0.4) + on_side(V3(0.004, 0.002, -0.004), s),
             kn - hp,
             V3(0.013, 0.021, 0.018),
             lateral=lat,
@@ -850,7 +846,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.65) + _sx(V3(0.004, -0.002, 0.0), s),
+            lerp(hp, kn, 0.65) + on_side(V3(0.004, -0.002, 0.0), s),
             kn - hp,
             V3(0.009, 0.014, 0.011),
             lateral=lat,
@@ -860,21 +856,21 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "flankfold",
             fem,
-            _tm(_sx(V3(0.023, 0.042, -0.03), s)),
+            _tm(on_side(V3(0.023, 0.042, -0.03), s)),
             V3(0, 0.3, 0.1),
             V3(0.006, 0.013, 0.011),
             lateral=lat,
             k=0.01,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.001, 0, 0.001), s), 0.0052, k=0.005
+            "stifle", tib, kn + on_side(V3(0.001, 0, 0.001), s), 0.0052, k=0.005
         )
         _ = m.cone("shin", tib, kn, hk, 0.0052, 0.0027, k=0.002)
         _ = ell_y(
             m,
             "calf",
             tib,
-            lerp(kn, hk, 0.35) + _sx(V3(0.0008, 0.0015, -0.0022), s),
+            lerp(kn, hk, 0.35) + on_side(V3(0.0008, 0.0015, -0.0022), s),
             hk - kn,
             V3(0.0045, 0.011, 0.0055),
             lateral=lat,
@@ -1123,14 +1119,6 @@ def _agouti(color: Int) -> Float64:
     return table[color]
 
 
-def _g3(h: V3, c: V3, r: V3) -> Float64:
-    # A soft blob, mirrored across the midline.
-    var x = (abs(h.x) - c.x) / r.x
-    var y = (h.y - c.y) / r.y
-    var z = (h.z - c.z) / r.z
-    return exp(-(x * x + y * y + z * z))
-
-
 def _region(part: SurfacePart, bone: String) -> Int:
     # 0 torso, 1 neck, 2 head, 4 tail, 5 ear.
     var head = part == JAW or bone == "head" or bone == "snout"
@@ -1142,20 +1130,6 @@ def _region(part: SurfacePart, bone: String) -> Int:
     if bone.startswith("tail"):
         return 4
     return 1 if neck else 0
-
-
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
 
 
 def _foot(bone: String) -> Bool:
@@ -1335,7 +1309,7 @@ def rat_paint(
         c = mix3(
             c,
             pal.get("cheek"),
-            _g3(h, V3(0.009, -0.01, -0.006), V3(0.005, 0.006, 0.01)),
+            mirrored_blob(h, V3(0.009, -0.01, -0.006), V3(0.005, 0.006, 0.01)),
         )
         c = mix3(c, pal.get("muzzle"), smoothstep(0.004, 0.018, h.z) * 0.8)
         var chin = 0.7 if s.part == JAW else smoothstep(
@@ -1365,7 +1339,7 @@ def rat_paint(
             ),
         )
         ag *= 1.0 - smoothstep(0.1, 0.6, -n.y)
-        if _limb(bone):
+        if is_limb(bone):
             var sd = 1.0 if p.x >= 0.0 else -1.0
             var upper = bone.startswith("scapula") or bone.startswith("humerus")
             var leg = smoothstep(0.05, 0.03, p.y) if upper else 1.0

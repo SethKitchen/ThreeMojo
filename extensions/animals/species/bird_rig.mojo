@@ -512,11 +512,6 @@ def rectrix_frame(
     return FeatherFrame(root, axis, normal)
 
 
-def _smooth(a: Float64, b: Float64, x: Float64) -> Float64:
-    var t = min(1.0, max(0.0, (x - a) / (b - a)))
-    return t * t * (3.0 - 2.0 * t)
-
-
 def vane_width(f: Feather, t: Float64, w: Float64) -> Tuple[Float64, Float64]:
     """Return a vane's half widths: procedural-animals' `vaneWidth`.
 
@@ -528,7 +523,7 @@ def vane_width(f: Feather, t: Float64, w: Float64) -> Tuple[Float64, Float64]:
     Returns:
         The outer and the inner half width.
     """
-    var base = f.base0 + (1.0 - f.base0) * _smooth(0.0, 0.16, t)
+    var base = f.base0 + (1.0 - f.base0) * smoothstep(0.0, 0.16, t)
     var tr = f.tip_round
     var tip = 1.0
     if t > 1.0 - tr:
@@ -537,7 +532,7 @@ def vane_width(f: Feather, t: Float64, w: Float64) -> Tuple[Float64, Float64]:
     var wo = w * f.outer * base * tip
     var wi = w * (1.0 - f.outer) * base * tip
     if f.emarg > 0.0:
-        var k = _smooth(0.5, 0.64, t) * f.emarg
+        var k = smoothstep(0.5, 0.64, t) * f.emarg
         wi *= 1.0 - 0.62 * k
         wo *= 1.0 - 0.3 * k
     return (wo, max(wi, 0.0006))

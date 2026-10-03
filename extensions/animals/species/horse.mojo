@@ -32,21 +32,21 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
+    aperture_tilt_along,
+    is_front_limb,
+    is_limb,
+    pick_weighted,
 )
 from extensions.animals.noise import cells3, fbm3, vnoise3
 from extensions.animals.options import MALE, AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
-from extensions.animals.species.ungulate import (
+from extensions.animals.species.hoofed import (
     HeadFrame,
-    aperture_tilt_along,
     eye_looking,
     head_ell,
     hoofed_bones,
-    is_front_limb,
-    is_limb,
     lens_distance,
-    pick_weighted,
     pitched_head,
 )
 from extensions.animals.traits import Traits, pick_age, pick_sex
@@ -55,12 +55,12 @@ from extensions.sdf.vector import (
     clamp,
     cross,
     dot,
-    frame_zy,
     length,
     lerp,
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -69,6 +69,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, pi, sin
+from extensions.sdf.distance import oriented_ellipsoid_estimate
 
 # Six dock bones and four segments of free-hanging tail hair.
 comptime TAIL_SEGS = 10
@@ -344,10 +345,6 @@ def horse_rig(t: Traits) raises -> Rig:
     rig.mirror_joints()
     hoofed_bones(rig, TAIL_SEGS)
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _head(mut m: SdfModel, h: BoneId) raises:
@@ -925,21 +922,21 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "scapmuscle",
         scap,
-        lerp(sc, sh, 0.45) + _sx(V3(0.07, 0, -0.02), s),
+        lerp(sc, sh, 0.45) + on_side(V3(0.07, 0, -0.02), s),
         sh - sc,
         V3(0.08, 0.26, 0.15),
         lateral=lat,
         k=0.1,
     )
     _ = m.sphere(
-        "shoulderpoint", hum, sh + _sx(V3(0.02, 0.0, 0.03), s), 0.07, k=0.08
+        "shoulderpoint", hum, sh + on_side(V3(0.02, 0.0, 0.03), s), 0.07, k=0.08
     )
     _ = m.cone("upperarm", hum, sh, e, 0.1, 0.085, k=0.08)
     _ = ell_y(
         m,
         "triceps",
         hum,
-        lerp(sh, e, 0.55) + _sx(V3(0.01, 0.02, -0.1), s),
+        lerp(sh, e, 0.55) + on_side(V3(0.01, 0.02, -0.1), s),
         e - sh,
         V3(0.1, 0.17, 0.12),
         lateral=lat,
@@ -951,7 +948,7 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "forearmmuscle",
         rad,
-        lerp(e, w, 0.22) + _sx(V3(0.008, 0, 0.012), s),
+        lerp(e, w, 0.22) + on_side(V3(0.008, 0, 0.012), s),
         w - e,
         V3(0.078, 0.16, 0.085),
         lateral=lat,
@@ -960,8 +957,8 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
     _ = m.cone(
         "forearmweb",
         rad,
-        e + _sx(V3(-0.04, 0.06, -0.02), s),
-        lerp(e, w, 0.3) + _sx(V3(-0.02, 0, 0), s),
+        e + on_side(V3(-0.04, 0.06, -0.02), s),
+        lerp(e, w, 0.3) + on_side(V3(-0.02, 0, 0), s),
         0.06,
         0.045,
         k=0.06,
@@ -1031,7 +1028,7 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "thigh",
         fem,
-        lerp(hp, kn, 0.42) + _sx(V3(0.04, 0, -0.05), s),
+        lerp(hp, kn, 0.42) + on_side(V3(0.04, 0, -0.05), s),
         kn - hp,
         V3(0.1, 0.3, 0.22),
         lateral=lat,
@@ -1040,8 +1037,8 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     _ = m.cone(
         "thighfront",
         fem,
-        _sx(V3(0.2, 1.32, -0.45), s),
-        kn + _sx(V3(0.0, 0.06, 0.04), s),
+        on_side(V3(0.2, 1.32, -0.45), s),
+        kn + on_side(V3(0.0, 0.06, 0.04), s),
         0.12,
         0.07,
         k=0.1,
@@ -1049,7 +1046,7 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     _ = m.cone(
         "hamstring",
         fem,
-        _sx(V3(0.12, 1.3, -0.74), s),
+        on_side(V3(0.12, 1.3, -0.74), s),
         lerp(kn, hk, 0.3) + V3(0, 0, -0.09),
         0.12,
         0.065,
@@ -1059,18 +1056,20 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "flankfold",
         fem,
-        _sx(V3(0.2, 1.03, -0.3), s),
+        on_side(V3(0.2, 1.03, -0.3), s),
         V3(-0.1, 0.3, 0.12),
         V3(0.05, 0.15, 0.08),
         lateral=lat,
         k=0.1,
     )
-    _ = m.sphere("stifle", tib, kn + _sx(V3(0.01, 0.01, 0.03), s), 0.06, k=0.07)
+    _ = m.sphere(
+        "stifle", tib, kn + on_side(V3(0.01, 0.01, 0.03), s), 0.06, k=0.07
+    )
     _ = ell_y(
         m,
         "gaskin",
         tib,
-        lerp(kn, hk, 0.32) + _sx(V3(0.008, 0, -0.05), s),
+        lerp(kn, hk, 0.32) + on_side(V3(0.008, 0, -0.05), s),
         hk - kn,
         V3(0.078, 0.17, 0.095),
         lateral=lat,
@@ -1318,14 +1317,6 @@ def horse_palette(t: Traits) raises -> Palette:
     return pal^
 
 
-def _ell_dist(q: V3, c: V3, z_dir: V3, up: V3, r: V3) -> Float64:
-    # About the distance to an ellipsoid: its scaled radius less one.
-    var f = frame_zy(z_dir, up)
-    var d = q - c
-    var u = V3(dot(d, f.x) / r.x, dot(d, f.y) / r.y, dot(d, f.z) / r.z)
-    return (length(u) - 1.0) * min(r.x, min(r.y, r.z))
-
-
 def _face_white(t: Traits, h: V3, n: V3, hf: HeadFrame) -> Float64:
     # The white face marking as a signed distance, head-local: a star on
     # the forehead, a stripe down the face, a blaze, a snip on the muzzle.
@@ -1484,8 +1475,10 @@ def _paint_head(
     var low = pal.get("nostril")
     var up = pal.get("nostrilUp")
     var dn = min(
-        _ell_dist(hm, low - n_l * 0.011, n_l, up, V3(0.013, 0.017, 0.028)),
-        _ell_dist(
+        oriented_ellipsoid_estimate(
+            hm, low - n_l * 0.011, n_l, up, V3(0.013, 0.017, 0.028)
+        ),
+        oriented_ellipsoid_estimate(
             hm,
             low + up * 0.022 - n_l * 0.012,
             n_l,

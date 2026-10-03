@@ -36,6 +36,10 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
+    is_front_limb,
+    is_hind_limb,
+    is_limb,
+    pick_weighted,
 )
 from extensions.animals.noise import cells3, fbm3, vnoise3
 from extensions.animals.options import (
@@ -46,16 +50,12 @@ from extensions.animals.options import (
 )
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
-from extensions.animals.species.ungulate import (
+from extensions.animals.species.hoofed import (
     HeadFrame,
     eye_looking,
     head_ell,
     hoofed_bones,
-    is_front_limb,
-    is_hind_limb,
-    is_limb,
     lens_distance,
-    pick_weighted,
     pitched_head,
 )
 from extensions.animals.traits import Traits, pick_sex
@@ -64,12 +64,11 @@ from extensions.sdf.vector import (
     clamp,
     cross,
     dot,
-    frame_zy,
     length,
     lerp,
-    mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -78,6 +77,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, floor, pi, sin
+from extensions.sdf.distance import oriented_ellipsoid_estimate
 
 comptime TAIL_SEGS = 6
 # The head's origin: on its axis 0.09 m in front of the poll, level with
@@ -109,13 +109,8 @@ def _hf() -> HeadFrame:
     return HeadFrame(HEAD_O, f.hy, f.hz)
 
 
-def _sstep(a: Float64, b: Float64, x: Float64) -> Float64:
-    var t = clamp((x - a) / (b - a), 0.0, 1.0)
-    return t * t * (3.0 - 2.0 * t)
-
-
 def _bz(z: Float64) -> Float64:
-    return z - LOIN * _sstep(-0.1, -0.25, z)
+    return z - LOIN * smoothstep(-0.1, -0.25, z)
 
 
 def _b(x: Float64, y: Float64, z: Float64) -> V3:
@@ -392,10 +387,6 @@ def deer_rig(t: Traits) raises -> Rig:
     rig.mirror_joints()
     hoofed_bones(rig, TAIL_SEGS)
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
@@ -796,21 +787,25 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "scapmuscle",
         scap,
-        lerp(sc, sh, 0.45) + _sx(V3(0.032, 0, -0.01), s),
+        lerp(sc, sh, 0.45) + on_side(V3(0.032, 0, -0.01), s),
         sh - sc,
         V3(0.04, 0.14, 0.08),
         lateral=lat,
         k=0.08,
     )
     _ = m.sphere(
-        "shoulderpoint", hum, sh + _sx(V3(0.008, 0.0, 0.0), s), 0.032, k=0.05
+        "shoulderpoint",
+        hum,
+        sh + on_side(V3(0.008, 0.0, 0.0), s),
+        0.032,
+        k=0.05,
     )
     _ = m.cone("upperarm", hum, sh + V3(0, 0, -0.01), e, 0.043, 0.042, k=0.05)
     _ = ell_y(
         m,
         "triceps",
         hum,
-        lerp(sh, e, 0.55) + _sx(V3(0.005, 0.01, -0.05), s),
+        lerp(sh, e, 0.55) + on_side(V3(0.005, 0.01, -0.05), s),
         e - sh,
         V3(0.05, 0.09, 0.06),
         lateral=lat,
@@ -822,7 +817,7 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "forearmmuscle",
         rad,
-        lerp(e, w, 0.22) + _sx(V3(0.004, 0, 0.006), s),
+        lerp(e, w, 0.22) + on_side(V3(0.004, 0, 0.006), s),
         w - e,
         V3(0.04, 0.094, 0.044),
         lateral=lat,
@@ -831,8 +826,8 @@ def _foreleg(mut m: SdfModel, rig: Rig, side: String) raises:
     _ = m.cone(
         "forearmweb",
         rad,
-        e + _sx(V3(-0.02, 0.035, -0.01), s),
-        lerp(e, w, 0.3) + _sx(V3(-0.01, 0, 0), s),
+        e + on_side(V3(-0.02, 0.035, -0.01), s),
+        lerp(e, w, 0.3) + on_side(V3(-0.01, 0, 0), s),
         0.03,
         0.022,
         k=0.035,
@@ -902,7 +897,7 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "thigh",
         fem,
-        lerp(hp, kn, 0.42) + _sx(V3(0.02, 0, -0.03), s),
+        lerp(hp, kn, 0.42) + on_side(V3(0.02, 0, -0.03), s),
         kn - hp,
         V3(0.055, 0.17, 0.11),
         lateral=lat,
@@ -911,8 +906,8 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     _ = m.cone(
         "thighfront",
         fem,
-        _sx(V3(0.1, 0.8, _bz(-0.28)), s),
-        kn + _sx(V3(0.0, 0.03, 0.02), s),
+        on_side(V3(0.1, 0.8, _bz(-0.28)), s),
+        kn + on_side(V3(0.0, 0.03, 0.02), s),
         0.06,
         0.038,
         k=0.06,
@@ -920,7 +915,7 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
     _ = m.cone(
         "hamstring",
         fem,
-        _sx(V3(0.06, 0.79, _bz(-0.53)), s),
+        on_side(V3(0.06, 0.79, _bz(-0.53)), s),
         lerp(kn, hk, 0.3) + V3(0, 0, -0.045),
         0.06,
         0.032,
@@ -930,20 +925,20 @@ def _hind_leg(mut m: SdfModel, rig: Rig, side: String) raises:
         m,
         "flankfold",
         fem,
-        _sx(V3(0.1, 0.6, _bz(-0.23)), s),
+        on_side(V3(0.1, 0.6, _bz(-0.23)), s),
         V3(-0.1, 0.3, 0.12),
         V3(0.03, 0.08, 0.045),
         lateral=lat,
         k=0.06,
     )
     _ = m.sphere(
-        "stifle", tib, kn + _sx(V3(0.005, 0.005, 0.016), s), 0.032, k=0.04
+        "stifle", tib, kn + on_side(V3(0.005, 0.005, 0.016), s), 0.032, k=0.04
     )
     _ = ell_y(
         m,
         "gaskin",
         tib,
-        lerp(kn, hk, 0.3) + _sx(V3(0.004, 0, -0.022), s),
+        lerp(kn, hk, 0.3) + on_side(V3(0.004, 0, -0.022), s),
         hk - kn,
         V3(0.04, 0.094, 0.05),
         lateral=lat,
@@ -1644,14 +1639,6 @@ def _paint_antler(pal: Palette, t: Traits, tag: String, p: V3) -> Paint:
     return Paint(c * (0.85 + 0.3 * st), KERATIN)
 
 
-def _ell_dist(q: V3, c: V3, z_dir: V3, up: V3, r: V3) -> Float64:
-    # About the distance to an ellipsoid: its scaled radius less one.
-    var f = frame_zy(z_dir, up)
-    var d = q - c
-    var u = V3(dot(d, f.x) / r.x, dot(d, f.y) / r.y, dot(d, f.z) / r.z)
-    return (length(u) - 1.0) * min(r.x, min(r.y, r.z))
-
-
 def _paint_head(
     pal: Palette, t: Traits, tag: String, s: CoatSample, jag: Float64
 ) -> Paint:
@@ -1685,7 +1672,7 @@ def _paint_head(
     if h.z < -0.07:
         c = mix3(c, pal.get("body"), smoothstep(-0.07, -0.11, h.z))
     # The nostrils and the black nose leather.
-    var dn = _ell_dist(
+    var dn = oriented_ellipsoid_estimate(
         hm,
         V3(0.014, -0.01, 0.194),
         V3(0.3, -0.2, 1),
@@ -1742,7 +1729,7 @@ def _paint_head(
     var lid = near_eye and abs(de) < 0.0014
     if lid:
         return Paint(srgb(0x1C1816), SKIN)
-    var dg = _ell_dist(
+    var dg = oriented_ellipsoid_estimate(
         hm,
         V3(0.045, -0.004, 0.034),
         V3(-0.35, -0.15, 1),

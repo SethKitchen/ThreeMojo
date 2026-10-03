@@ -37,6 +37,11 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    is_limb,
+    mirrored_blob,
+    hashed_stream,
+    pick_cumulative,
+    mirrored_ell_bottom,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -53,6 +58,7 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -60,7 +66,7 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
-from std.math import cos, exp, pi, pow, sin, sqrt
+from std.math import cos, pi, pow, sin, sqrt
 
 comptime TAIL_SEGS = 8
 # The head's origin, mid cranium between the eyes and the ears.
@@ -106,23 +112,6 @@ def dog_variant_names() -> List[String]:
     return [String("shepherd"), "retriever", "terrier"]
 
 
-def _hashed(seed: Int, add: Int, mul: Int, xor: Int) -> AnimalRandom:
-    # The original's `rng(Math.imul(seed + add, mul) ^ xor)`, in 32 bits.
-    var a = (seed + add) & 0xFFFFFFFF
-    var lo = (a * (mul & 0xFFFF)) & 0xFFFFFFFF
-    var hi = ((a * (mul >> 16)) & 0xFFFF) << 16
-    return AnimalRandom(((lo + hi) & 0xFFFFFFFF) ^ xor, 1, 0)
-
-
-def _pick(x: Float64, weights: List[Float64]) -> Int:
-    var acc = 0.0
-    for i in range(len(weights)):
-        acc += weights[i]
-        if x < acc:
-            return i
-    return len(weights) - 1
-
-
 def _colors(variant: Int) -> List[Float64]:
     if variant == RETRIEVER:
         return [0.45, 0.4, 0.15]
@@ -159,10 +148,10 @@ def dog_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var t = Traits(sex, age, variant)
     var juv = t.juvenile()
     var male = t.male()
-    var m = _hashed(options.seed, 0x2B7E1516, 0x9E3779B1, 0x68E31DA4)
+    var m = hashed_stream(options.seed, 0x2B7E1516, 0x9E3779B1, 0x68E31DA4)
     for _ in range(3):
         _ = m.next()
-    var color = _pick(m.next(), _colors(variant))
+    var color = pick_cumulative(m.next(), _colors(variant))
     t.set("color", Float64(color))
     var shep = variant == SHEPHERD
     var ret = variant == RETRIEVER
@@ -358,10 +347,6 @@ def _hl(t: Traits, v: V3) -> V3:
 
 def _hr(t: Traits, r: V3) -> V3:
     return V3(r.x * t.get("headW") * HS, r.y * HS, r.z * HS)
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _ear_base(ear_type: Int) -> V3:
@@ -1152,7 +1137,7 @@ def _fore_leg(
         m,
         "scapmuscle",
         scap,
-        lerp(sc, sh, 0.5) + _sx(V3(0.007, 0, 0), s),
+        lerp(sc, sh, 0.5) + on_side(V3(0.007, 0, 0), s),
         sh - sc,
         V3(0.022, 0.085, 0.05),
         lateral=lat,
@@ -1175,7 +1160,7 @@ def _fore_leg(
         m,
         "forearmmuscle",
         rad,
-        lerp(e, w, 0.25) + _sx(V3(0.0025, 0, 0.003), s),
+        lerp(e, w, 0.25) + on_side(V3(0.0025, 0, 0.003), s),
         w - e,
         V3(0.023 * leg_k, 0.056, 0.027 * leg_k),
         lateral=lat,
@@ -1197,7 +1182,7 @@ def _fore_leg(
     _ = m.sphere(
         "dewclaw",
         meta,
-        lerp(w, mc, 0.3) + _sx(V3(-0.0135, 0, 0.002), s),
+        lerp(w, mc, 0.3) + on_side(V3(-0.0135, 0, 0.002), s),
         0.005,
         k=0.004,
     )
@@ -1263,7 +1248,7 @@ def _hind_leg(
         m,
         "thigh",
         fem,
-        lerp(hp, kn, 0.4) + _sx(V3(0.003, 0, -0.024), s),
+        lerp(hp, kn, 0.4) + on_side(V3(0.003, 0, -0.024), s),
         kn - hp,
         V3(0.035, 0.118, 0.078),
         lateral=lat,
@@ -1272,8 +1257,8 @@ def _hind_leg(
     _ = m.cone(
         "thighfront",
         fem,
-        hp + _sx(V3(-0.024, 0.044, 0.084), s),
-        kn + _sx(V3(-0.003, 0.045, 0.0), s),
+        hp + on_side(V3(-0.024, 0.044, 0.084), s),
+        kn + on_side(V3(-0.003, 0.045, 0.0), s),
         0.031,
         0.02,
         k=0.05,
@@ -1281,7 +1266,7 @@ def _hind_leg(
     _ = m.cone(
         "hamstring",
         fem,
-        hp + _sx(V3(-0.02, 0.044, -0.084), s),
+        hp + on_side(V3(-0.02, 0.044, -0.084), s),
         lerp(kn, hk, 0.28) + V3(0, 0, -0.025),
         0.037,
         0.023,
@@ -1291,7 +1276,7 @@ def _hind_leg(
         m,
         "breeches",
         fem,
-        lerp(hp, kn, 0.62) + _sx(V3(0.005, -0.008, -0.068), s),
+        lerp(hp, kn, 0.62) + on_side(V3(0.005, -0.008, -0.068), s),
         kn - hp,
         V3(0.024, 0.064, 0.018 + 0.012 * ruff),
         lateral=lat,
@@ -1301,19 +1286,19 @@ def _hind_leg(
         m,
         "flankfold",
         fem,
-        hp + _sx(V3(-0.016, -0.052, 0.1), s),
+        hp + on_side(V3(-0.016, -0.052, 0.1), s),
         V3(-0.03, 0.16, 0.1),
         V3(0.017, 0.066, 0.033),
         lateral=lat,
         k=0.05,
     )
     _ = m.sphere(
-        "stifle", tib, kn + _sx(V3(0.002, 0.007, 0.005), s), 0.014, k=0.035
+        "stifle", tib, kn + on_side(V3(0.002, 0.007, 0.005), s), 0.014, k=0.035
     )
     _ = m.cone(
         "shin",
         tib,
-        lerp(kn, hk, 0.06) + _sx(V3(0, 0, 0.003), s),
+        lerp(kn, hk, 0.06) + on_side(V3(0, 0, 0.003), s),
         hk,
         0.019 * leg_k,
         0.014 * leg_k,
@@ -1323,7 +1308,7 @@ def _hind_leg(
         m,
         "calf",
         tib,
-        lerp(kn, hk, 0.3) + _sx(V3(0.002, 0.008, -0.022), s),
+        lerp(kn, hk, 0.3) + on_side(V3(0.002, 0.008, -0.022), s),
         hk - kn,
         V3(0.021, 0.058, 0.025),
         lateral=lat,
@@ -1708,37 +1693,6 @@ def _head_local(t: Traits, p: V3) -> V3:
     return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
 
 
-def _g3(h: V3, c: V3, r: V3) -> Float64:
-    var dx = (abs(h.x) - c.x) / r.x
-    var dy = (h.y - c.y) / r.y
-    var dz = (h.z - c.z) / r.z
-    return exp(-(dx * dx + dy * dy + dz * dz))
-
-
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
-
-
-def _front(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-    )
-
-
 def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:
     # The distance to the nearest body patch, and how black it is there:
     # a black patch keeps a thin tan rim.
@@ -1757,15 +1711,6 @@ def _patch_field(t: Traits, p: V3, n_off: Float64) -> V3:
     return V3(d, black, 0.0)
 
 
-def _ell_bottom(h: V3, c: V3, r: V3) -> Float64:
-    # The lowest point of an upright ellipsoid over a head-local point, or
-    # one when the ellipsoid does not reach over it.
-    var dx = (abs(h.x) - c.x) / r.x
-    var dz = (h.z - c.z) / r.z
-    var q = 1.0 - dx * dx - dz * dz
-    return c.y - r.y * sqrt(q) if q > 0.0 else 1.0
-
-
 def _mouth_line(t: Traits, h: V3) -> Float64:
     # The upper lip's lower rim over a head-local point: the lowest of the
     # lips, the whisker pads, the muzzle and the philtrum.
@@ -1773,20 +1718,20 @@ def _mouth_line(t: Traits, h: V3) -> Float64:
     var mz = t.get("muzzle")
     var mzd = t.get("muzzleDepth")
     var mzs = min(1.0, mz)
-    var lip = _ell_bottom(
+    var lip = mirrored_ell_bottom(
         h,
         V3(0.025, -0.045 - 0.006 * f, 0.078),
         V3(0.015 + 0.002 * f, 0.013 + 0.005 * f, 0.058 / mz),
     )
-    var pad = _ell_bottom(
+    var pad = mirrored_ell_bottom(
         h,
         V3(0.021, -0.027 - 0.003 * f, 0.121),
         V3(0.015 + 0.002 * f, 0.015 * mzd, 0.026 * mzs / mz),
     )
-    var muzzle = _ell_bottom(
+    var muzzle = mirrored_ell_bottom(
         h, V3(0.0, -0.02, 0.084), V3(0.033, 0.027 * mzd, 0.064 * mzs / mz)
     )
-    var philtrum = _ell_bottom(
+    var philtrum = mirrored_ell_bottom(
         h, V3(0.0, -0.031, 0.146), V3(0.01, 0.012, 0.008 / mz)
     )
     return min(min(lip, pad), min(muzzle, philtrum))
@@ -1915,7 +1860,7 @@ def dog_paint(
         region = 4
     elif bone == "neck1" or bone == "neck2":
         region = 1
-    elif _limb(bone):
+    elif is_limb(bone):
         # The limb's own colors take over below the body line.
         leg = smoothstep(0.42, 0.24, p.y)
     if region <= 1:
@@ -2056,9 +2001,15 @@ def dog_paint(
         )
         agouti = ag.z
         var muzzle = smoothstep(0.035, 0.075, h.z)
-        var eye_ring = _g3(h, V3(0.033, 0.022, 0.038), V3(0.02, 0.014, 0.02))
-        var cheek = _g3(h, V3(0.04, -0.02, 0.0), V3(0.022, 0.022, 0.035))
-        var brow = _g3(h, V3(0.025, 0.04, 0.036), V3(0.01, 0.007, 0.01))
+        var eye_ring = mirrored_blob(
+            h, V3(0.033, 0.022, 0.038), V3(0.02, 0.014, 0.02)
+        )
+        var cheek = mirrored_blob(
+            h, V3(0.04, -0.02, 0.0), V3(0.022, 0.022, 0.035)
+        )
+        var brow = mirrored_blob(
+            h, V3(0.025, 0.04, 0.036), V3(0.01, 0.007, 0.01)
+        )
         var shep = key == KEY_BLACK_TAN or key == KEY_SABLE
         if shep:
             var mk = clamp(

@@ -122,6 +122,19 @@ def mirror(a: V3) -> V3:
     return V3(-a.x, a.y, a.z)
 
 
+def on_side(a: V3, s: Float64) -> V3:
+    """Return a left-side point moved to one side of the animal.
+
+    Args:
+        a: The point, modeled on the left.
+        s: One for the left side, minus one for the right.
+
+    Returns:
+        The point with `x` multiplied by `s`.
+    """
+    return V3(a.x * s, a.y, a.z)
+
+
 def clamp(x: Float64, low: Float64, high: Float64) -> Float64:
     """Return `x` held between two bounds.
 
