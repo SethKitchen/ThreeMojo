@@ -20,7 +20,7 @@ ThreeMojo's geometries, sized from the actor's bounding box:
 - **A walker** is capsules for the legs, the arms and the body, a sphere
   for the head, and shoes. The colors of the clothes, the skin and the hair
   come from the actor's id. The legs and the arms swing with the walker's
-  speed.
+  speed and simulation time.
 
 The lamps follow the vehicle's `VehicleLightState`: the headlamps glow
 for the position lamps and the low and high beams, and the tail lamps
@@ -772,7 +772,7 @@ def clothing(id: ActorId) -> Tuple[Color, Color, Color]:
 
 
 def stride(speed: Float32) -> Angle:
-    """Return how far a walker's legs swing at a speed.
+    """Return the target swing amplitude at a speed, without a gait phase.
 
     Args:
         speed: The walker's speed in meters per second.
@@ -1196,7 +1196,7 @@ struct ActorVisuals(Movable):
             if not alive:
                 continue
             self._pose(world, w.actor, w.node, scene)
-            var swing = stride(world.get_velocity(w.actor).length())
+            var swing = world.get_walker_gait(w.actor).swing()
             # A procedural walker has four limbs, and a cached model none.
             for k in range(len(w.limbs)):
                 var sign = Float32(1) if k == 0 or k == 3 else Float32(-1)

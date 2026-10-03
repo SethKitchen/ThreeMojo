@@ -159,6 +159,16 @@ So the replay shows the poses of frame k - 1 at t(k), one frame behind the log, 
 
 The location moves in a straight line. Each angle moves the shorter way round: from 174 to -178 degrees it passes 180. At a time factor of 2 or more, each actor takes the pose of the last frame read, with no interpolation.
 
+### Walker gait
+
+Both `Replayer.tick` and `Replayer.step` animate procedural capsule walkers. Replay integrates each recorded speed over the part of its frame that playback crosses. A seek reconstructs the gait from the start. Later ticks read only the new intervals. Paused playback and repeated rendering hold the pose. A preceding `World.tick` does not count twice: playback writes its own gait state after the world step.
+
+Stopping leaves the current pose for live simulation to ease toward standing. Restarting a replay resets its gait history. No persistent animation ownership remains after a stop or an error. As with actor transforms, the last playback operation sets the visible state if callers control an actor from more than one replayer.
+
+The log format is unchanged. It has no procedural gait phase or amplitude. Replay starts from standing and reconstructs a deterministic gait from recorded speed and time; it does not promise the original live limb pose. A negative or nonfinite time advance, an overflowing playback time, or an invalid frame duration raises an error. CARLA's final-frame duration of -1 remains supported.
+
+Time-advance checks run before playback changes state. `step` checks its scaled time before the world tick. A record-processing error disables playback. Earlier actor changes are not rolled back. Restart the replay after a record error; a later `tick` cannot resume a partly read frame.
+
 ## What the port reuses
 
 - `sensor_data.ByteWriter` writes the little-endian numbers.
