@@ -52,6 +52,10 @@ Rotation tests inspect only the linear 3-by-3 block. They refuse a nonfinite
 axis or tolerance and a negative tolerance. Extreme finite uniform scales
 still qualify as scaled rotations.
 
+`Box2.distance_to_point` uses the shared length calculation. A finite gap
+can have a representable distance even when its squared distance overflows.
+A distance beyond the `Float32` range returns infinity.
+
 Squared lengths and dot products return their direct arithmetic result. They
 can overflow or underflow even when a length or unit direction is representable.
 
@@ -60,6 +64,10 @@ can overflow or underflow even when a length or unit direction is representable.
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
 
 `Vector2` has the same members in two dimensions, except the ones that need a third. It adds `cross(other) -> Float32`, which is the one component a cross product has in a plane. It is positive when `other` lies to the left of `self`. It also adds `angle()`, the angle from +x, and `rotate_around(center, angle)`. The curves asked for the first members; see [Curves and paths](Curves).
+
+`Vector2.angle()` returns zero for two positive zero components. Signed zeros
+follow `atan2`; two negative zero components give a half turn. `angle_to`
+returns a right angle when either vector is zero.
 
 A method that changes the vector changes `self` in place, as in three.js.
 
@@ -297,6 +305,29 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 
 A plane refuses a zero normal. Three points on one line do not make a plane.
 
+Plane construction scales the normal and constant together, including subnormal
+normals and finite normals whose length exceeds `Float32`. The fallback divides
+in `Float64` before it stores the result. A normalized constant beyond the
+`Float32` range returns infinity. Nonfinite inputs retain direct IEEE behavior.
+
+`from_normal_and_point` widens raw dot products that lose range or approach
+cancellation. An exact-product expansion keeps small terms between cancelling
+large terms before division. A normalized result near the finite limit also triggers this
+fallback. The guard covers the last 32 `Float32` steps before the maximum
+finite value, plus nonfinite results. It prevents spurious overflow and finite
+saturation at this boundary.
+
+For example, `(1e-10, 0, 0)` through `(1e-36, 0, 0)`
+has constant `-1e-36`; an intermediate product rounded to zero cannot erase it.
+
+An exactly zero expansion gives a negative-zero factory constant. Its sign bit
+can differ from the direct dot product. The represented plane is unchanged.
+The direct constructor preserves signed zeros.
+
+These range corrections differ from three.js 0.180. Ordinary inputs keep their
+existing arithmetic order. Coplanar-point construction still forms its cross
+product in `Float32`; its extreme-range limits remain separate.
+
 ## Frustum
 
 `math/frustum.mojo`. Six planes facing inward: right, left, bottom, top, far and near, in three.js's order. `RIGHT` to `NEAR` index them in `planes`.
@@ -360,6 +391,12 @@ Sphere queries use the actual stored direction, including a finite nonunit direc
 An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only when it lies in it. A ray in a triangle's plane misses the triangle, and so does a degenerate triangle.
 
 `apply_matrix4` raises for a projection, and for a matrix that flattens the direction to nothing. `look_at` raises for the origin itself.
+
+`look_at` widens extreme point differences before normalization. Opposite finite
+positions can have a difference beyond `Float32` and still give a valid direction.
+For example, `(-3e38, 0, 0)` aimed at `(3e38, 3e38, 0)` follows direction `(2, 1, 0)`.
+This correction differs from three.js 0.180 range behavior. Ordinary directions
+keep their existing arithmetic order. This does not add new nonfinite-input errors.
 
 `core.raycaster` carries a ray through a scene. See [Raycasting](Raycasting).
 

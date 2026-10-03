@@ -207,8 +207,8 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         """Return the angle this vector makes with +x, three.js's `angle`.
 
         Returns:
-            From zero up to a whole turn, counterclockwise. A zero vector
-            gives a half turn, as three.js's formula gives.
+            From zero up to a whole turn, counterclockwise. Positive zero
+            components give zero. Signed zeros follow `atan2`.
         """
         return Angle(atan2(-self.y, -self.x) + Float32(pi), RADIAN)
 
