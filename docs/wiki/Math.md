@@ -305,6 +305,35 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 
 A plane refuses a zero normal. Three points on one line do not make a plane.
 
+Three-point plane and triangle normal queries retain finite coordinate products
+before normalization. This corrects range loss in three.js 0.180-style direct
+cross products. For example, the points `(0, 0, 7)`, `(2**100, 0, 7)`, and
+`(0, 2**100, 7)` have unit normal `(0, 0, 1)` and plane constant `-7`.
+The raw Float32 cross product overflows, but these results are representable.
+The same direction survives at the minimum subnormal coordinate scale.
+
+A cold fallback sums original coordinate products with exact sign and zero.
+It also handles cancellation that widening only the edge differences misses.
+The plane constant uses the original coordinate determinant. Ordinary,
+well-conditioned crosses keep their Float32 arithmetic. Nonfinite coordinates
+keep direct IEEE behavior. This is a range correction, not a guarantee of
+correctly rounded normals for every input.
+
+The three-point factory also uses original coordinates when raw dot products
+lose range, or its constant approaches cancellation or the Float32 limit. Its separate range guard covers
+512 steps below the maximum finite output; it includes edge and cross-product
+rounding. The normal-and-point factory has a smaller guard because its given
+normal components are already the original inputs. Stored Float32 plane
+coefficients can still give a small nonzero distance at an original corner.
+The fallback cannot remove this final representation error.
+
+A coordinate plane through the origin keeps the fast path when all three
+original x, y, or z coordinates are zero. Computed zeros alone do not permit
+this shortcut.
+
+Exact zero cross components in the fallback use positive zero. In the fallback,
+an exact zero plane constant uses negative zero. These zero signs do not change the geometry.
+
 Plane construction scales the normal and constant together, including subnormal
 normals and finite normals whose length exceeds `Float32`. The fallback divides
 in `Float64` before it stores the result. A normalized constant beyond the
@@ -434,6 +463,12 @@ Normalized device space is unitless. World space is meters and screen space is p
 | `closest_point_to_point(point) -> Vector3` | The nearest point on the face, an edge or a corner. |
 
 Barycentric queries use widened signed-area products. Thin triangles keep their nonzero area instead of losing it to a difference of dot products. Off-plane queries use the orthogonal projection onto the plane. Octree containment uses the same calculation.
+
+`is_degenerate` tests exact collinearity of finite stored corners. It applies
+no area tolerance. `raw_normal` and `area` still return their direct Float32
+arithmetic results. They can underflow to zero or overflow even when the unit
+normal is representable. Their rounded output does not define degeneracy.
+Barycentric and intersection queries retain their separate arithmetic limits.
 
 A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
 

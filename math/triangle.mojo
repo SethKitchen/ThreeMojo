@@ -10,10 +10,23 @@ Both hold bare `Float32` meters, as `Vector3` does. A degenerate triangle,
 one whose corners lie on a line, has no normal and no barycentric
 coordinates; three.js answers those with a zero vector or `null`, and
 here a question that has no answer is refused.
+
+## Range correction
+
+Unlike three.js 0.180, finite normal and plane queries retain cross products
+that exceed Float32 range or cancel after rounded endpoint subtraction.
+Degeneracy tests use the stored coordinates, without an area tolerance.
+Raw normals and areas retain their Float32 arithmetic and output limits.
 """
 
 from math.bounds import Box3, Plane
 from math.matrix4 import Matrix4
+from math.norm import length3
+from math.triangle_normal import (
+    _finite_triangle,
+    _ordinary_triangle_cross,
+    _triangle_cross_wide,
+)
 from math.vector3 import Vector3
 from std.math import sqrt
 
@@ -144,9 +157,18 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         """Return True if the corners lie on one line.
 
         Returns:
-            Whether the area is zero.
+            Whether the stored finite corners are exactly collinear.
+            No area tolerance is applied.
         """
-        return self.raw_normal().length() == 0
+        var cb = self.c - self.b
+        var ab = self.a - self.b
+        var normal = _cross(cb, ab)
+        if _ordinary_triangle_cross(cb, ab, normal):
+            return False
+        if _finite_triangle(self.a, self.b, self.c):
+            var wide = _triangle_cross_wide(self.a, self.b, self.c)
+            return wide[0] == 0 and wide[1] == 0 and wide[2] == 0
+        return normal.length() == 0
 
     def normal(self) raises -> Vector3:
         """Return the unit normal. three.js: `getNormal`.
@@ -157,9 +179,20 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the triangle is degenerate.
         """
-        if self.is_degenerate():
-            raise Error("A degenerate triangle has no normal")
-        var out = self.raw_normal()
+        var cb = self.c - self.b
+        var ab = self.a - self.b
+        var out = _cross(cb, ab)
+        if not _ordinary_triangle_cross(cb, ab, out):
+            if _finite_triangle(self.a, self.b, self.c):
+                var wide = _triangle_cross_wide(self.a, self.b, self.c)
+                var magnitude = length3(wide[0], wide[1], wide[2])
+                if magnitude == 0:
+                    raise Error("A degenerate triangle has no normal")
+                return Vector3(
+                    Float32(wide[0] / magnitude),
+                    Float32(wide[1] / magnitude),
+                    Float32(wide[2] / magnitude),
+                )
         out.normalize()
         return out
 
@@ -180,7 +213,11 @@ struct Triangle(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the triangle is degenerate.
         """
-        return Plane.from_normal_and_point(self.normal(), self.a)
+        if not _finite_triangle(self.a, self.b, self.c):
+            return Plane.from_normal_and_point(self.normal(), self.a)
+        if self.is_degenerate():
+            raise Error("A degenerate triangle has no normal")
+        return Plane.from_coplanar_points(self.a, self.b, self.c)
 
     def barycoord(self, point: Vector3) raises -> Vector3:
         """Return a point's barycentric coordinates. three.js:
