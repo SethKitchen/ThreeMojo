@@ -121,7 +121,10 @@ def _gap(low: Float32, high: Float32, p: Float32) -> Float64:
     return 0.0
 
 
+@no_inline
 def _box_distance2(box: Box3, p: Vector3) -> Float64:
+    # One compiled boundary gives node and endpoint-box keys the same
+    # operation graph, including any permitted multiply-add contraction.
     var dx = _gap(box.min.x, box.max.x, p.x)
     var dy = _gap(box.min.y, box.max.y, p.y)
     var dz = _gap(box.min.z, box.max.z, p.z)
@@ -158,10 +161,19 @@ def _parameter_before(a: _SegmentParameter, b: _SegmentParameter) -> Bool:
     var guard = 1.7763568394002505e-15 * (abs(left) + abs(right))
     if abs(difference) > guard:
         return difference < 0
-    return _difference_determinant(
-        a.face, a.start, b.end, b.start,
-        b.face, b.start, a.end, a.start,
-    ) < 0
+    return (
+        _difference_determinant(
+            a.face,
+            a.start,
+            b.end,
+            b.start,
+            b.face,
+            b.start,
+            a.end,
+            a.start,
+        )
+        < 0
+    )
 
 
 def _axis_clip(
@@ -220,16 +232,28 @@ def segment_intersects_box(start: Vector3, end: Vector3, box: Box3) -> Bool:
     var far = _SegmentParameter(1, 0, 1)
     return (
         _axis_clip(
-            Float64(start.x), Float64(end.x),
-            Float64(box.min.x), Float64(box.max.x), near, far,
+            Float64(start.x),
+            Float64(end.x),
+            Float64(box.min.x),
+            Float64(box.max.x),
+            near,
+            far,
         )
         and _axis_clip(
-            Float64(start.y), Float64(end.y),
-            Float64(box.min.y), Float64(box.max.y), near, far,
+            Float64(start.y),
+            Float64(end.y),
+            Float64(box.min.y),
+            Float64(box.max.y),
+            near,
+            far,
         )
         and _axis_clip(
-            Float64(start.z), Float64(end.z),
-            Float64(box.min.z), Float64(box.max.z), near, far,
+            Float64(start.z),
+            Float64(end.z),
+            Float64(box.min.z),
+            Float64(box.max.z),
+            near,
+            far,
         )
     )
 

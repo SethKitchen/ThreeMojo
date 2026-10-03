@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
 """Independent exact projection/clipped-interval oracle from retained F32 bits.
 
 Uses stdlib Fraction, not the production polynomial expansion. It verifies the
@@ -193,6 +198,37 @@ for i in range(args.stress):
     r=words[:6]+lo+hi
     assert slab_model(r)==slab(r),(i,r)
     assert slab_model(r[3:6]+r[:3]+r[6:])==slab(r),(i,r)
+# This legal polynomial refutes the former component-ratio bound of two.
+# Model the current Grow-Expansion/zero-elimination operations explicitly.
+# Degree-two Float32 products are exact in Float64, so FMA residuals are zero.
+expansion_words = [0x21bb7fcc, 0xeb450330, 0x80800000, 0xd1fb6520,
+                   0x9bbc8638, 0xd1fb6520, 0x50886eaf, 0xeb450330]
+a,b,c,d,e,f,g,h = map(val, expansion_words)
+left = [a, -a, -b, b, -e, e, f, -f]
+right = [c, d, c, d, g, h, g, h]
+expansion = []
+for x,y in zip(left,right):
+    high = x*y
+    assert F.from_float(high) == F.from_float(x)*F.from_float(y)
+    for value in [0., high]:
+        parts = []
+        total = value
+        for part in expansion:
+            next_value = total + part
+            virtual = next_value - total
+            error = (total - (next_value - virtual)) + (part - virtual)
+            if error != 0:
+                parts.append(error)
+            total = next_value
+        if total != 0:
+            parts.append(total)
+        expansion = parts
+exact = sum(F.from_float(x)*F.from_float(y) for x,y in zip(left,right))
+assert sum(map(F.from_float, expansion)) == exact
+component_ratio = sum(abs(F.from_float(x)) for x in expansion) / abs(exact)
+assert 2 < component_ratio < 3
+assert abs(F.from_float(sum(expansion))-exact) / abs(exact) < F(70,2**53)
+
 print(json.dumps({
     "oracle":"stdlib Fraction exact projection and interval clipping",
     "distance_cases":len(D),"slab_cases":len(S),
@@ -200,5 +236,6 @@ print(json.dumps({
     "float64_model_max_relative_error":maxerr,
     "distance_model_paths":paths,"slab_model_paths":slab_paths,
     "stress_cases_per_kernel":args.stress,"stress_max_relative_error":stress_max_error,
+    "expansion_regression_component_ratio":float(component_ratio),
     "scope":"Model and fixture checks; native gates remain separate",
 },indent=2))

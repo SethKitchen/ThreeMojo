@@ -25,7 +25,8 @@ def _difference_dot3(
     """Estimate (a-b).(c-d) with its exact sign for widened Float32 inputs."""
     var left = Array[Float64, 12](fill=0)
     var right = Array[Float64, 12](fill=0)
-    for axis in range(3):  # pragma: no branch
+    var axis = 0
+    while axis < 3:
         left[4 * axis] = a[axis]
         right[4 * axis] = c[axis]
         left[4 * axis + 1] = -a[axis]
@@ -34,13 +35,20 @@ def _difference_dot3(
         right[4 * axis + 2] = c[axis]
         left[4 * axis + 3] = b[axis]
         right[4 * axis + 3] = d[axis]
+        axis += 1
     return _sum_products[12](left, right)
 
 
 @no_inline
 def _difference_determinant(
-    a: Float64, b: Float64, c: Float64, d: Float64,
-    e: Float64, f: Float64, g: Float64, h: Float64,
+    a: Float64,
+    b: Float64,
+    c: Float64,
+    d: Float64,
+    e: Float64,
+    f: Float64,
+    g: Float64,
+    h: Float64,
 ) -> Float64:
     """Estimate (a-b)(c-d)-(e-f)(g-h), retaining the exact sign.
 
@@ -59,21 +67,27 @@ def _norm2(v: Array[Float64, 3]) -> Float64:
 
 @no_inline
 def _point_segment_exact(
-    a: Array[Float64, 3], b: Array[Float64, 3], p: Array[Float64, 3],
-    ap: Array[Float64, 3], bp: Array[Float64, 3],
+    a: Array[Float64, 3],
+    b: Array[Float64, 3],
+    p: Array[Float64, 3],
+    ap: Array[Float64, 3],
+    bp: Array[Float64, 3],
 ) -> Float64:
-    """Resolve endpoint signs and interior cross products before cancellation."""
+    """Resolve endpoint signs and interior cross products before cancellation.
+    """
     if _difference_dot3(p, a, b, a) <= 0:
         return _norm2(ap)
     if _difference_dot3(p, b, a, b) <= 0:
         return _norm2(bp)
     var cross = Array[Float64, 3](fill=0)
-    for axis in range(3):  # pragma: no branch
+    var axis = 0
+    while axis < 3:
         var j = (axis + 1) % 3
         var k = (axis + 2) % 3
         cross[axis] = _difference_determinant(
             p[j], a[j], b[k], a[k], p[k], a[k], b[j], a[j]
         )
+        axis += 1
     return _norm2(cross) / _difference_dot3(b, a, b, a)
 
 
@@ -88,7 +102,8 @@ def _point_segment_ordered(a: Vector3, b: Vector3, p: Vector3) -> Float64:
     var dot_b = Float64(0)
     var scale_a = Float64(0)
     var scale_b = Float64(0)
-    for axis in range(3):  # pragma: no branch
+    var axis = 0
+    while axis < 3:
         ab[axis] = bb[axis] - aa[axis]
         ap[axis] = pp[axis] - aa[axis]
         bp[axis] = pp[axis] - bb[axis]
@@ -98,6 +113,7 @@ def _point_segment_ordered(a: Vector3, b: Vector3, p: Vector3) -> Float64:
         dot_b += product_b
         scale_a += abs(product_a)
         scale_b += abs(product_b)
+        axis += 1
     var len2 = _norm2(ab)
     if len2 == 0:
         return _norm2(ap)
@@ -112,13 +128,15 @@ def _point_segment_ordered(a: Vector3, b: Vector3, p: Vector3) -> Float64:
     if dot_a > guard * scale_a and dot_b < -guard * scale_b:
         var cross = Array[Float64, 3](fill=0)
         var scale = Array[Float64, 3](fill=0)
-        for axis in range(3):  # pragma: no branch
+        var axis = 0
+        while axis < 3:
             var j = (axis + 1) % 3
             var k = (axis + 2) % 3
             var left = ap[j] * ab[k]
             var right = ap[k] * ab[j]
             cross[axis] = left - right
             scale[axis] = abs(left) + abs(right)
+            axis += 1
         var numerator = _norm2(cross)
         var magnitude = _norm2(scale)
         # The cross-vector error is at most 16u*norm(scale). This guard

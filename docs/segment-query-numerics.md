@@ -4,7 +4,7 @@ Inputs covered here are finite IEEE Float32 coordinates. A box may have
 infinite outer faces, which are skipped without arithmetic. NaN input is not a
 newly supported contract. Distances are Float64 estimates, not exact rational
 values or a promise of correctly rounded nearest ordering at every ulp tie.
-All calculations below assume ordinary IEEE round-to-nearest arithmetic, not
+All calculations below assume ordinary IEEE round-to-nearest-ties-to-even arithmetic, not
 unsafe reassociation. The production expansion uses the existing FMA/TwoSum
 primitive in math.matrix_determinant.
 
@@ -53,11 +53,23 @@ cancellation fails the check and evaluates original-coordinate expansions.
 
 Endpoint dot products expand into 12 signed products of original widened
 Float32 coordinates. Each cross component expands into 8 such products.
-Every product is exact in Float64; the shared TwoSum expansion preserves its
-sum and its sign before estimating the magnitude. A nonzero expansion has
-nonoverlapping components; their absolute sum is below twice its magnitude.
-Even the conservative gamma_23 summation bound is far below the fast path's
-2^-40 relative distance budget after the positive norm and division.
+Every product is exact in Float64. The shared loop adds each scalar with
+Grow-Expansion and removes zero components. With round-to-nearest-even,
+[Shewchuk's Theorem 10](https://people.eecs.berkeley.edu/~jrs/papers/robustr.pdf)
+shows that this operation preserves nonadjacency, starting from an empty
+expansion. No two retained components have adjacent nonzero bit ranges.
+
+Let H be the largest component's magnitude. If its least nonzero bit is 2^q,
+all lower components' bits lie below 2^(q-1). Their total absolute magnitude
+L is therefore less than 2^(q-1), and thus less than H/2. The exact sum has
+magnitude at least H-L. The component absolute-sum ratio is below
+(H+L)/(H-L) < 3. A bound of 2 would be false: legal inputs can exceed it.
+
+There are at most 24 components for these polynomials. Summing them has
+relative error below 3*gamma_23, hence below 70u. This also retains the exact
+sign and exact zero. Squaring the cross estimates, taking their positive norm,
+and dividing by the length estimate keeps the relative distance error below
+512u = 2^-44. This remains inside the fast path's 2^-40 budget.
 Endpoint distances use the direct endpoint gap, with at most gamma_5 relative
 error. No intermediate rounded t is used on either interior path.
 
@@ -73,7 +85,9 @@ interval. Its exact distance to p is no greater. The implemented gap is
 computed by ordered Float32 comparisons and a monotone Float64 subtraction.
 Squaring nonnegative values and summing in the same axis order are monotone
 IEEE operations. Therefore the computed node-box key is no greater than the
-computed endpoint-box key, not merely within an epsilon.
+computed endpoint-box key, not merely within an epsilon. A no-inline shared
+helper makes node and endpoint-box calls use the same compiled arithmetic,
+including any permitted multiply-add contraction.
 
 The final segment key is max(robust_distance, endpoint_box_key). It follows
 that every ancestor node key is <= that segment key. The heap's existing
@@ -113,7 +127,7 @@ mixed exponents, and cancellation. Each case also checks endpoint reversal.
 APIs. It checks prefixes, filters, insertion ties, and node bounds.
 `bench/carla_segment_numerics_bench.mojo` measures ordinary queries separately
 from difficult arithmetic. Run the same benchmark against both revisions.
-The original CPU test limit remains five seconds per suite.
+The original CPU limit remains five seconds per TestSuite test.
 
 A finite corpus does not prove compiler floating-point semantics for all
 inputs. The error bounds above require ordinary IEEE rounding. Neither the

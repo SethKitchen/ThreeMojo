@@ -11,7 +11,9 @@ the base is known to return wrong distances and slab decisions.
 """
 
 from extensions.carla.rtree import (
-    SegmentCloudRtree, _segment_distance2, segment_intersects_box,
+    SegmentCloudRtree,
+    _segment_distance2,
+    segment_intersects_box,
 )
 from math.bounds import Box3
 from math.vector3 import Vector3
@@ -21,18 +23,20 @@ from std.time import perf_counter_ns
 @no_inline
 def _kernel(extreme: Bool) -> Float64:
     var total = Float64(0)
-    var scale = Float32(1e38 if extreme else 10)
+    var scale = Float32(1e38) if extreme else Float32(10)
     var a = Vector3(-scale, -scale, 0)
     var b = Vector3(-1, -2, 0)
     for i in range(100000):
-        total += _segment_distance2(a, b, Vector3(-2, -2, Float32(i % 7) * 0.25))
+        total += _segment_distance2(
+            a, b, Vector3(-2, -2, Float32(i % 7) * 0.25)
+        )
     return total
 
 
 @no_inline
 def _slab(extreme: Bool) -> Int:
     var hits = 0
-    var scale = Float32(1e38 if extreme else 10)
+    var scale = Float32(1e38) if extreme else Float32(10)
     var a = Vector3(-scale, -scale, 0)
     var b = Vector3(scale, scale, 0)
     for i in range(100000):
@@ -54,11 +58,27 @@ def main() raises:
         var found = tree.get_nearest_neighbours(query, 4)
         for entry in found:
             checksum += entry.start_value
-    print("ordinary_nearest_ns", perf_counter_ns() - start, "checksum", checksum)
+    print(
+        "ordinary_nearest_ns", perf_counter_ns() - start, "checksum", checksum
+    )
     for extreme in [False, True]:
         start = perf_counter_ns()
         var distances = _kernel(extreme)
-        print("distance_extreme", extreme, "ns", perf_counter_ns() - start, "checksum", distances)
+        print(
+            "distance_extreme",
+            extreme,
+            "ns",
+            perf_counter_ns() - start,
+            "checksum",
+            distances,
+        )
         start = perf_counter_ns()
         var hits = _slab(extreme)
-        print("slab_extreme", extreme, "ns", perf_counter_ns() - start, "checksum", hits)
+        print(
+            "slab_extreme",
+            extreme,
+            "ns",
+            perf_counter_ns() - start,
+            "checksum",
+            hits,
+        )
