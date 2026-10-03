@@ -54,6 +54,56 @@ Coverage is exact for each module it measures, because every suite that can reac
 
 The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`. It runs the checks on Ubuntu and on a macOS runner with Apple Silicon.
 
+## Regenerate negative diagnostics
+
+Use `--update-expectations` only after you review a changed or new negative fixture.
+Normal checks read the manifest without changing it.
+CI never regenerates expectations.
+
+1. Use the pinned Mojo `1.1.0` (`8189361e`) toolchain from [How to install](How-to-install).
+2. Run these commands from the repository root.
+3. Name each fixture you intend to update. Do not use a wildcard for an unrelated subset.
+
+```bash
+.venv/bin/mojo --version
+python3 tools/compile_fail.py --compiler=.venv/bin/mojo --flags='-I . --Werror' \
+  --update-expectations \
+  tests/compile_fail/raw_float_is_not_an_angle.mojo \
+  tests/compile_fail/sqrt_of_volume.mojo
+git diff -- tools/compile_fail_expectations.json
+```
+
+The command first builds a valid control.
+Each selected fixture must fail with source errors located in that fixture.
+Crashes, missing imports, dependency errors, timeouts and successful negative builds stop the update.
+The command writes nothing unless every selected result is valid.
+
+The update keeps unselected records.
+It sorts fixture keys, error locations and messages, and candidate notes.
+It replaces the manifest atomically and prints the diff.
+An unchanged result does not rewrite the file.
+If the manifest changes during compilation, the command refuses to overwrite it.
+
+Updates refuse a symbolic link as the manifest path. Read-only checks can follow symbolic links.
+
+Review every changed error location, full message and candidate note before you commit.
+Each rejection must still prove the intended type boundary.
+A syntax error or changed candidate list can indicate a broken fixture.
+Do not approve a diff only because it names the expected type.
+Fix unintended changes before you repeat the command.
+
+Run the selected fixtures again without the update flag:
+
+```bash
+python3 tools/compile_fail.py --compiler=.venv/bin/mojo --flags='-I . --Werror' \
+  tests/compile_fail/raw_float_is_not_an_angle.mojo \
+  tests/compile_fail/sqrt_of_volume.mojo
+make -B compile-fail
+```
+
+Commit the reviewed manifest with its fixture or API change.
+Do not add regeneration to CI, `make check`, or a failure-recovery command.
+
 ## Split the suites over machines
 
 A suite's time is almost all compilation. So CI splits the suites over runners that work at the same time. Set `SHARD=i/n` to run group `i` of `n`:

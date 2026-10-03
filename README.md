@@ -57,6 +57,8 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 <!-- features -->
 ### Project tools
 
+- [x] [Reviewed negative diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#regenerate-negative-diagnostics): explicit selected-fixture updates preserve strict checks and replace expectations atomically [#504](https://github.com/SethKitchen/ThreeMojo/issues/504)
+
 - [x] [Loop body indentation](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#loop-body-indentation): coverage probes use actual body indentation and preserve loop-else control flow [#544](https://github.com/SethKitchen/ThreeMojo/issues/544)
 
 - [x] [Trait default coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#trait-defaults-and-generated-names): executable inherited method bodies have line and decision probes [#540](https://github.com/SethKitchen/ThreeMojo/issues/540)
