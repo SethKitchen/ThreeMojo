@@ -28,12 +28,16 @@ from extensions.physics.shape import (
     cross,
     _finite_vector,
     _inertia_inverse,
+    _inertia_determinant,
+    _wide,
+    _wide_cross,
+    _wide_dot,
     _narrow_finite,
 )
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import isfinite
+from std.math import cos, isfinite, sin, sqrt
 from units.si import Mass
 
 
@@ -90,6 +94,62 @@ def _transposed(m: Matrix3) -> Matrix3:
     return out
 
 
+# Rotation internals stay wide. Public pose and velocity remain Float32.
+def _rotation_wide(q: Quaternion) -> SIMD[DType.float64, 4]:
+    var out = SIMD[DType.float64, 4](
+        Float64(q.x), Float64(q.y), Float64(q.z), Float64(q.w)
+    )
+    return out / sqrt(_wide_dot(out, out) + out[3] * out[3])
+
+
+def _rotation_product(
+    a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    var out = _wide_cross(a, b) + a * b[3] + b * a[3]
+    out[3] = a[3] * b[3] - _wide_dot(a, b)
+    return out
+
+
+def _rotation_apply(
+    q: SIMD[DType.float64, 4], v: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    var twice = 2 * _wide_cross(q, v)
+    return v + q[3] * twice + _wide_cross(q, twice)
+
+
+def _rotation_back(q: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
+    return SIMD[DType.float64, 4](-q[0], -q[1], -q[2], q[3])
+
+
+def _tensor_apply(
+    tensor: Matrix3, v: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    var out = SIMD[DType.float64, 4](0)
+    for i in range(3):  # pragma: no branch
+        out[i] = (
+            Float64(tensor.elements[i]) * v[0]
+            + Float64(tensor.elements[3 + i]) * v[1]
+            + Float64(tensor.elements[6 + i]) * v[2]
+        )
+    return out
+
+
+def _split_rotation(
+    mut q: SIMD[DType.float64, 4],
+    mut momentum: SIMD[DType.float64, 4],
+    axis: SIMD[DType.float64, 4],
+    coefficient: Float64,
+    h: Float64,
+):
+    # Exact flow of H = coefficient * (axis . momentum)^2 / 2.
+    # This scalar projection is constant during this one subflow.
+    var half = h * coefficient * _wide_dot(axis, momentum) / 2
+    var turn = axis * sin(half)
+    turn[3] = cos(half)
+    q = _rotation_product(q, turn)
+    momentum = _rotation_apply(_rotation_back(turn), momentum)
+
+
 struct RigidBody(Copyable, Movable):
     """One body: its pose, its motion, its shape and its mass."""
 
@@ -130,7 +190,8 @@ struct RigidBody(Copyable, Movable):
     # Whether the body takes part in contacts.
     var collides: Bool
     # The split-impulse velocities: they move the body out of an overlap
-    # and are then forgotten, so they add no energy.
+    # and are then forgotten. An anisotropic pose correction can change
+    # rotational energy even though these velocities are not retained.
     var push_velocity: Vector3
     var push_angular: Vector3
 
@@ -513,6 +574,92 @@ struct RigidBody(Copyable, Movable):
         """
         var turn = rotation_matrix(self.rotation)
         return turn * self._inverse_inertia * _transposed(turn)
+
+    def _rotate_free(mut self, h: Float32) -> Bool:
+        # Return False for prescribed-omega compatibility paths. Do not
+        # interpret a locked, negative or nonsymmetric custom inverse as
+        # the inverse inertia of a free rigid solid.
+        if self.angular_velocity == Vector3(0, 0, 0):
+            return False
+        var inverse = self._inverse_inertia
+        var isotropic = Matrix3()
+        isotropic.elements[0] = inverse.elements[0]
+        isotropic.elements[4] = inverse.elements[0]
+        isotropic.elements[8] = inverse.elements[0]
+        if inverse == isotropic:
+            return False
+        var determinant: Float64
+        try:
+            determinant = _inertia_determinant(inverse)
+        except:
+            return False
+        var a = Float64(inverse.elements[0])
+        var b = Float64(inverse.elements[1])
+        var c = Float64(inverse.elements[2])
+        var d = Float64(inverse.elements[4])
+        var e = Float64(inverse.elements[5])
+        var f = Float64(inverse.elements[8])
+        var minor = a * d - b * b
+        var q = _rotation_wide(self.rotation)
+        var omega = _rotation_apply(
+            _rotation_back(q), _wide(self.angular_velocity)
+        )
+        # Invert only in wide arithmetic; a finite custom inverse can have
+        # a reciprocal tensor outside Float32's range.
+        var momentum = SIMD[DType.float64, 4](
+            (
+                (d * f - e * e) * omega[0]
+                + (c * e - b * f) * omega[1]
+                + (b * e - c * d) * omega[2]
+            )
+            / determinant,
+            (
+                (c * e - b * f) * omega[0]
+                + (a * f - c * c) * omega[1]
+                + (b * c - a * e) * omega[2]
+            )
+            / determinant,
+            (
+                (b * e - c * d) * omega[0]
+                + (b * c - a * e) * omega[1]
+                + minor * omega[2]
+            )
+            / determinant,
+            0,
+        )
+        var world_momentum = _rotation_apply(q, momentum)
+        # LDL^T gives three rank-one terms without an eigensolver. Scaling
+        # the first two columns avoids dividing by a small pivot early.
+        var axis0 = SIMD[DType.float64, 4](a, b, c, 0)
+        var square0 = _wide_dot(axis0, axis0)
+        axis0 /= sqrt(square0)
+        var axis1 = SIMD[DType.float64, 4](0, minor, a * e - b * c, 0)
+        var square1 = _wide_dot(axis1, axis1)
+        axis1 /= sqrt(square1)
+        var axis2 = SIMD[DType.float64, 4](0, 0, 1, 0)
+        var coefficient0 = square0 / a
+        var coefficient1 = square1 / (a * minor)
+        var coefficient2 = determinant / minor
+        var half = Float64(h) / 2
+        _split_rotation(q, momentum, axis0, coefficient0, half)
+        _split_rotation(q, momentum, axis1, coefficient1, half)
+        _split_rotation(q, momentum, axis2, coefficient2, Float64(h))
+        _split_rotation(q, momentum, axis1, coefficient1, half)
+        _split_rotation(q, momentum, axis0, coefficient0, half)
+        self.rotation = Quaternion(
+            Float32(q[0]), Float32(q[1]), Float32(q[2]), Float32(q[3])
+        )
+        self.rotation.normalize()
+        # Reconstruct from the final stored pose and the original world
+        # momentum. A caller's latest omega, torque and contact impulses
+        # are authoritative; there is no persistent momentum cache.
+        q = _rotation_wide(self.rotation)
+        momentum = _rotation_apply(_rotation_back(q), world_momentum)
+        omega = _rotation_apply(q, _tensor_apply(inverse, momentum))
+        self.angular_velocity = Vector3(
+            Float32(omega[0]), Float32(omega[1]), Float32(omega[2])
+        )
+        return True
 
     def velocity_at(self, point: Vector3) -> Vector3:
         """Return the velocity of a point fixed to the body.
