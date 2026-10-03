@@ -71,7 +71,15 @@ jobs:
       # build tools. No MAX, which is what proves the no-dependencies claim
       # still holds.
       - name: lint
-        run: make -B fmt-check test-tools test-coverage-tool lint-cpu compile-fail docs-check AFFECTED="$AFFECTED"
+        run: make -B fmt-check test-tools test-coverage-tool test-portability lint-cpu compile-fail docs-check AFFECTED="$AFFECTED"
+
+      # Only the offline CARLA exporter fixture needs these two packages.
+      # Keep its exact wheels in a separate environment from Mojo/MAX.
+      - name: Test CARLA far-asset baking
+        run: |
+          uv venv .venv-carla-export --python .venv/bin/python
+          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 
   cpu:
     if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
@@ -124,7 +132,7 @@ jobs:
       matrix:
         include:
           - part: lint
-            target: fmt-check test-tools test-coverage-tool lint-cpu compile-fail docs-check
+            target: fmt-check test-tools test-coverage-tool test-portability lint-cpu compile-fail docs-check
           - part: suites 1/2
             target: test-cpu SHARD=1/2
           - part: suites 2/2
@@ -150,6 +158,15 @@ jobs:
 
       - name: check-cpu
         run: make -B ${{ matrix.target }} AFFECTED="$AFFECTED"
+
+      # Only the offline CARLA exporter fixture needs these two packages.
+      # Keep its exact wheels in a separate environment from Mojo/MAX.
+      - name: Test CARLA far-asset baking
+        if: matrix.part == 'lint'
+        run: |
+          uv venv .venv-carla-export --python .venv/bin/python
+          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
 
   # Coverage runs beside the suites rather than after them, and is split the
   # same way: each runner instruments the tree and captures its group of

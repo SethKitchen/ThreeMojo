@@ -24,6 +24,50 @@ The CARLA town can use real assets in place of its procedural ones: photoscanned
 
 To fetch one entry, give its id, for example `fetch carla.vehicle.audi.a2`. The tool writes a file only after its sum matches. It never writes over a file that is already verified.
 
+## Recover an offline cache
+
+Use `fetch --offline` when a host is unavailable or this computer must not
+download files. It opens no URLs, including local `file://` URLs.
+It verifies cached archives before extracting missing members.
+It never changes the manifest or replaces a mismatched file.
+
+1. Obtain the exact pinned archive from an existing backup or an approved source.
+   A rebuilt archive can have a different checksum, even if its contents look the same.
+   Do not use `--pin` or change the manifest checksum to accept it.
+2. Read the entry's `files[].path` and `sha256` in `assets/carla/manifest.json`.
+   Put the archive at that path under the cache root.
+   For example, the Audi A2 archive belongs at
+   `.cache/carla-assets/carla/vehicles/vehicle.audi.a2.zip`.
+   Keep any existing mismatched file separately before placing a replacement.
+3. Verify the archive and extract missing members without downloading:
+
+   ```sh
+   python3 assets/carla/tools/carla_assets.py fetch --offline carla.vehicle.audi.a2
+   ```
+
+4. Check that the selected archive and every named member are present and correct:
+
+   ```sh
+   python3 assets/carla/tools/carla_assets.py verify --strict carla.vehicle.audi.a2
+   ```
+
+Both commands return a nonzero exit code for missing, unpinned or mismatched
+selected files. An invalid entry id also fails.
+`fetch --offline` cannot be combined with `--pin`.
+An existing member with different bytes stops extraction.
+Keep that file separately, then repeat the offline command to restore it
+from the verified archive.
+
+Omit the ids to process every entry.
+Use `--cache PATH` before the command to select a different cache root.
+Ordinary `verify` still reports missing and unpinned files without failing.
+Use `--strict` when a complete selected cache is required.
+
+Keep `manifest.json` and `ATTRIBUTION.md` beside backup or downloadable archives.
+Keep the applicable attribution with rendered distributions too.
+These files preserve the pinned sums, CARLA release, conversion changes,
+CARLA Team credit, source links and CC BY 4.0 link.
+
 ## Preload texture maps
 
 Call `registry.preload(workers)` before building a town to decode each
@@ -35,6 +79,82 @@ Completed maps move into the registry without a second copy of their
 pixels and mipmaps. A failed preload adds no partial cache entries.
 `texture_set` returns independent maps, so changing a set cannot change
 the registry's cached maps. This operation still copies texture data.
+
+## Share cached vehicle resources
+
+`ActorVisuals` reads each cached vehicle model once per geometry and texture
+store. Instances share geometry and image bytes. Each instance has its own
+nodes, paint, head lamps, tail lamps, and other materials. The cache keeps a
+private source graph. Changes to a live vehicle do not change that graph.
+
+For direct model placement, create a `ModelCache` from
+`extensions.carla.model_cache`. Call
+`cache.place(registry, index, scene, assets, parent, fit)` for each instance.
+`AssetRegistry.place_model` remains the uncached operation. The cache uses
+the same fit, forward axis, node hierarchy, and material tags. It also copies
+any line, point, or punctual-light instances. Skinned and instanced models
+remain unsupported by these CARLA placement operations.
+
+The key includes the cache root, entry id, and each declared file role,
+path, and digest. Blueprint aliases bound to the same entry share one model.
+The fit and forward axis are applied for each placement. They do not require
+another copy of the source bytes.
+
+### Resource lifetime and invalidation
+
+Treat shared geometry and textures as immutable. Do not replace or edit their
+contents while the cached model or its instances are in use. Materials and
+nodes are independent and can change.
+
+A cache retains each store's allocation identity, not its resource buffers.
+Moving a cache or store preserves its identity. These types cannot be copied.
+
+A new geometry or texture store gets a new identity. Replacing either store
+clears the cache before reuse. Retained identities prevent an old allocation
+address from matching a new store after destruction. Replacing the material
+store needs no resource reload because each placement copies material values.
+
+Call `visuals.cached_models.clear()` before a cache file changes in place.
+For a direct `ModelCache`, call `cache.clear()`. Changed declared paths or
+digests select a new template automatically. A byte change under an unchanged
+declaration requires `clear()`, even if the declaration includes a digest.
+Placement does not verify file bytes against the declared digest. Use the
+asset tool to verify downloaded files.
+
+Clearing a cache removes its private templates. Existing instances remain
+valid. Geometry and textures stay in the append-only stores. Rebuild the
+scene and stores to reclaim their resources. Create a new `ActorVisuals` at
+the same time: its existing actor, node, and material ids belong to that scene
+and those stores. A direct `ModelCache` can place into several scenes that
+use the same resource stores.
+
+A failed private model load commits no cache entry. It restores the resource
+counts from before the load. Retrying a failed cached vehicle spawn does not
+add unused actor nodes or paint and lamp materials.
+
+### Measure repeated spawns
+
+Generate a synthetic load-size fixture:
+
+```sh
+python3 bench/carla_model_cache_fixture.py /tmp/carla-model-bench
+.venv/bin/mojo build --Werror -I . bench/carla_model_cache_bench.mojo -o /tmp/carla-model-bench-run
+/tmp/carla-model-bench-run /tmp/carla-model-bench 32 batch
+/tmp/carla-model-bench-run /tmp/carla-model-bench 32 incremental
+```
+
+The fixture has 34,992 indexed triangles, six materials, and one 1024-square
+texture. It is a size proxy, not a CARLA source model. Run the same benchmark
+source on the base and candidate with the same fixture. Alternate their run
+order. Compare the checksums and resource counts before comparing times.
+
+The timer measures `ActorVisuals.sync`. Actor creation and fixture generation
+are outside it. The byte totals count geometry attributes and indices, and
+texture pixels with mipmaps. They do not count object or allocator overhead.
+Use a process-memory tool for peak resident memory.
+
+Materials and scene nodes still grow with the instance count. Scene updates still visit existing nodes,
+so total batch placement does not have a linear-time guarantee.
 
 ## Credit the assets
 
@@ -63,6 +183,30 @@ python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/A
 `make test-tools` checks that the catalog still matches the manifest.
 Hosting durability is tracked in [#309](https://github.com/SethKitchen/ThreeMojo/issues/309).
 The current share links are not a durable distribution guarantee.
+
+## Hosting work still required
+
+Offline recovery does not provide a hosted mirror.
+[#309](https://github.com/SethKitchen/ThreeMojo/issues/309) remains open.
+Before publishing converted archives, the owner must approve these details:
+
+- The maintainer who can publish and the maintainer-controlled destination.
+- The exact source archives and their existing pinned checksums.
+- Measured archive sizes, total transfer size, and permitted storage and bandwidth costs.
+- Public download access and the manifest and attribution packaged with the archives.
+
+The manifest does not record archive sizes.
+The vehicle estimates below do not measure all six town packages.
+An authorized publisher needs access to the source bytes and an upload-capable
+account or tool at the approved destination.
+Offline recovery does not grant that access or authorize an upload.
+Do not create a release or change credentials to bypass this step.
+
+After setup, test a real download into an empty cache.
+Verify its archive and extracted members against the unchanged manifest.
+Test permission failures, quota responses and HTML error pages at the selected host.
+The tool's synthetic tests cover these responses without downloading assets.
+They do not prove a live host is durable or accessible.
 
 ## The CARLA vehicles
 
@@ -97,7 +241,8 @@ The zips are too large to commit. Each one is a file in a shared Google Drive fo
 
 To add the URLs after you rebuild the zips:
 
-1. Upload each zip. Share each one with anyone who has the link.
+1. Obtain the owner's approval described in "Hosting work still required".
+   Upload each approved zip. Share it with the approved download audience.
 2. Write a JSON file that maps each zip name to its share link:
 
    ```json
@@ -200,6 +345,39 @@ The towns are made in three steps. They run on Windows, like the vehicle scripts
    `--top` lists the meshes that add the most triangles to each town.
 
 The build needs the `numpy`, `scipy`, `fast-simplification` and `Pillow` Python packages.
+
+Far buildings and tree impostors share a bake only when their ordered
+geometry and resolved materials match. The cache key and atlas name include
+the texture file contents, material parameters and bake settings. A component
+with different material overrides keeps its own far appearance. Each build
+starts a new cache. Its geometry, materials and texture files must stay fixed
+until that build ends.
+
+Packaged texture names use a hash of the encoded image bytes. Two material
+overrides can share a color map with different masks without replacing each
+other's image. Source images with the same filename also stay distinct.
+Equal encoded images can share one packaged file.
+
+## Test the town exporter
+
+The standard-library identity checks run with `make test-tools`.
+The synthetic bake checks need only NumPy and Pillow. They use two small
+meshes and two colors. They need no CARLA release, server or GPU.
+
+Only mesh simplification is substituted. The tests use the real material
+reconstruction, texture conversion, bake rasterizers and GLB writer. They
+check the packed pixels, shared bakes and byte-identical repeated builds.
+
+Use a separate test environment with Python 3.11 or later:
+
+```sh
+uv venv .venv-carla-export --python "$(command -v python3)"
+uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+.venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
+```
+
+The existing Linux and macOS lint jobs run this command. They keep the Mojo
+environment unchanged. A missing dependency or wheel fails the check.
 
 ## Why not Poly Haven
 

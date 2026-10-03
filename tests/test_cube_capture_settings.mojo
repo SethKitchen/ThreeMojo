@@ -91,6 +91,11 @@ def test_cube_face_settings_keep_scene_state_and_reset_capture_state() raises:
     renderer.tone_mapping = REINHARD_TONE_MAPPING
     renderer.tone_mapping_exposure = 7
     renderer.scissor_test = True
+    renderer.viewport = Rect(2, 1, 5, 3)
+    renderer.scissor = Rect(1, 2, 4, 2)
+    renderer.antialias = True
+    renderer._state[].knows_camera = True
+    renderer._state[].info.frame = 7
     renderer.set_light_probe_grid(
         LightProbeGrid(Length(1, METER), Length(1, METER), Length(1, METER))
     )
@@ -105,6 +110,18 @@ def test_cube_face_settings_keep_scene_state_and_reset_capture_state() raises:
     assert_equal(side.tone_mapping_exposure, Float32(1))
     assert_equal(side.viewport, Rect.whole(8, 8))
     assert_equal(side.scissor_test, False)
+    assert_equal(side.scissor, Rect.whole(8, 8))
+    assert_equal(side.antialias, False)
+    assert_equal(side.render_scale, 1)
+    assert_equal(side._state[].knows_camera, False)
+    assert_equal(side.info().frame, 0)
+    side._state[].knows_camera = True
+    side._state[].info.frame = 1
+    assert_equal(renderer._state[].knows_camera, True)
+    assert_equal(renderer.info().frame, 7)
+    assert_equal(renderer.viewport, Rect(2, 1, 5, 3))
+    assert_equal(renderer.scissor, Rect(1, 2, 4, 2))
+    assert_equal(renderer.antialias, True)
     var bake = renderer._cube_renderer(8, copy_probe_grid=False)
     assert_equal(bake.probe_grid.count(), 0)
 

@@ -259,12 +259,12 @@ def _percent(covered: Int, total: Int) -> Int:
 
 
 def _pad(text: String, width: Int) -> String:
-    """Return `text` padded with spaces to at least `width` characters."""
+    """Pad a field to `width` characters with at least one trailing space."""
     var length = 0
     for _ in text.codepoint_slices():
         length += 1
     if length >= width:
-        return String(text)
+        return text + " "
     return text + " " * (width - length)
 
 

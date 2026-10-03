@@ -13,6 +13,7 @@ node positions do not affect search priority.
 
 from tests.test_carla_agents import _graph, _linear_route, _link
 from std.time import perf_counter_ns
+from extensions.carla.navigation_search import NavigationSearchBudget
 
 
 def _bench(count: Int, wide: Bool) raises:
@@ -32,7 +33,11 @@ def _bench(count: Int, wide: Bool) raises:
     var want = _linear_route(graph, 0, count - 1)
     var linear_ns = perf_counter_ns() - start
     start = perf_counter_ns()
-    var got = graph._search(0, count - 1)
+    var got = graph._search(
+        0,
+        count - 1,
+        NavigationSearchBudget(count, count, 2 * count, 2 * count, 2 * count),
+    )
     var heap_ns = perf_counter_ns() - start
     if len(got) != len(want):
         raise Error("Route lengths differ")

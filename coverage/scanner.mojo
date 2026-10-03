@@ -28,6 +28,14 @@ def indent_of(line: String) -> Int:
     return count
 
 
+def _is_else_header(line: String) -> Bool:
+    """Recognize an else token followed by its colon, with optional space."""
+    var stripped = String(line.strip())
+    if not stripped.startswith("else"):
+        return False
+    return String(stripped.removeprefix("else").lstrip()).startswith(":")
+
+
 def _count_quotes(line: String) -> Int:
     """Return how many `\\\"\\\"\\\"` markers appear in `line`."""
     var count = 0
@@ -288,7 +296,7 @@ struct Scanner(Movable):
 
         # A probe cannot be inserted before a clause that continues a block.
         if (
-            stripped.startswith("else:")
+            _is_else_header(stripped)
             or stripped.startswith("elif ")
             or stripped.startswith("except")
             or stripped.startswith("finally")

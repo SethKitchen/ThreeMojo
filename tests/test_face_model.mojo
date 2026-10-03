@@ -16,7 +16,7 @@ from extensions.humanoid.skeleton.head.face_model import (
     TEETH,
 )
 from math.vector3 import Vector3
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -206,4 +206,5 @@ def test_a_bad_file_is_refused() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

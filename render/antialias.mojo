@@ -56,10 +56,12 @@ that can be done with them.
 
 That path is display-referred, with the loss described above, and it is
 named here rather than left to be discovered. Giving the GPU the same
-resolve means keeping its linear target long enough to average it, which
-is the same boundary the cube camera runs into: `Renderer.render_cube`
-still captures its six faces through byte-oriented `Framebuffer` images,
-and supersampling them does not give back range that was already gone.
+resolve means keeping its linear target long enough to average it.
+`Renderer.render_cube` does average in linear light before it makes each
+byte-oriented `Framebuffer`. Its finished faces still clamp HDR light.
+For HDR capture, use `render_cube_into` with a float target. That path
+uses the target's `samples`, independent of the renderer's `antialias`,
+and keeps the averaged light without a display conversion.
 """
 
 from render.framebuffer import Color, FloatColor, Framebuffer

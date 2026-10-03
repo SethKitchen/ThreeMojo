@@ -20,4 +20,4 @@ def main() raises:
         Vector3(0, 0, 0),
         Quaternion.identity(),
     )
-    print(body.mass)
+    print(body.mass())

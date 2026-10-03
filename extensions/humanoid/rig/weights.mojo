@@ -18,10 +18,17 @@ although the thin upper arm lies nearer. A limb's bones weigh only the
 points on their own side of the midline, so one thigh never pulls the
 other.
 
+Position welding retains Float32 grid products and truncation toward zero.
+Nonfinite positions and products outside the Int conversion domain raise
+before skin attributes change. The bucket hash uses unsigned modular
+arithmetic, so large accepted grid coordinates do not overflow signed Int.
+
 This is not a three.js port. See Extensions.
 
     skin_weights(skin, rig)
 """
+
+from std.math import isfinite
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import POSITION, BufferGeometry
@@ -191,31 +198,59 @@ struct _Heap(Movable):
         return top
 
 
+def _quantized_coordinate(value: Float32) raises -> Int:
+    """Truncate the original Float32 grid product within the Int domain."""
+    if not isfinite(value):
+        raise Error("Skin positions must be finite for welding")
+    var scaled = value * Float32(1e5)
+    # Int.MAX rounds up to 2**63 in Float32. Use an exclusive upper
+    # bound and an inclusive lower bound, both exact powers of two.
+    # This also rejects a finite coordinate whose product is infinite.
+    var lower = Float32(Int.MIN)
+    if scaled < lower or scaled >= -lower:
+        raise Error("Skin positions exceed the integer weld grid range")
+    return Int(scaled)
+
+
+def _weld_key(x: Int, y: Int, z: Int) -> UInt64:
+    """Mix quantized coordinates modulo 2**64, with no signed overflow."""
+    return (UInt64(x) * 1000003) ^ (UInt64(y) * 999983) ^ UInt64(z)
+
+
 def _welded_edges(
     points: List[Vector3], triangles: List[Int]
 ) raises -> Tuple[List[Int], List[List[Int]]]:
     """Return each vertex's welded vertex, the first at the same place,
     and each welded vertex's neighbors along the triangles' edges."""
     var count = len(points)
-    var first = Dict[Int, List[Int]]()
+    # Validate every axis once, before any conversion of a candidate.
+    var coordinates = List[Tuple[Int, Int, Int]](capacity=count)
+    for p in points:  # pragma: no branch
+        coordinates.append(
+            (
+                _quantized_coordinate(p.x),
+                _quantized_coordinate(p.y),
+                _quantized_coordinate(p.z),
+            )
+        )
+    var first = Dict[UInt64, List[Int]]()
     var weld = List[Int](capacity=count)
     for v in range(count):  # pragma: no branch
-        var p = points[v]
-        var px = Int(p.x * 1e5)
-        var py = Int(p.y * 1e5)
-        var pz = Int(p.z * 1e5)
-        var key = ((px * 1000003) ^ (py * 999983)) ^ pz
+        var p = coordinates[v]
+        var px = p[0]
+        var py = p[1]
+        var key = _weld_key(px, py, p[2])
         # The hash selects a bucket, not a position: distinct coordinates
         # can have the same XOR. Only equal quantized coordinates weld.
         if key not in first:
             first[key] = List[Int]()
         var same = -1
         for candidate in first[key]:
-            var q = points[candidate]
+            var q = coordinates[candidate]
             if (
-                px == Int(q.x * 1e5)
+                px == q[0]
                 # Equal hash, x and y imply equal z: XOR is invertible.
-                and py == Int(q.y * 1e5)
+                and py == q[1]
             ):
                 same = candidate
                 break
@@ -286,7 +321,10 @@ def skin_weights(
         joints: The joints that may turn it, or every joint if empty.
 
     Raises:
-        Error: If the skin has no positions, or a joint is not named.
+        Error: If the skin has no positions, a joint is not named, or a
+            position is not finite or its Float32 product with 1e5 is
+            outside [Int.MIN, -Int.MIN). Invalid positions leave the
+            skin attributes unchanged.
     """
     var allowed = List[Bool](length=JOINT_COUNT, fill=len(joints) == 0)
     for j in joints:  # pragma: no branch

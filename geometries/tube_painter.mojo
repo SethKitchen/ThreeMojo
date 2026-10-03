@@ -16,6 +16,11 @@ three.js fills a buffer of a million vertices and moves its draw range on.
 Here the lists grow as strokes are drawn. three.js's painter owns a mesh
 with a `STANDARD` material that reads the vertex colors, and turns its
 frustum culling off; the caller makes that mesh here.
+
+## Range correction
+
+Only equal endpoints skip a stroke. Unlike the squared-distance test in
+three.js 0.180, this rule keeps nonzero subnormal displacements.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -128,7 +133,7 @@ struct TubePainter(Movable):
         start_facing: Matrix4,
     ):
         """Append the walls between two rings, three.js's `stroke`."""
-        if (end - start).length_sq() == 0:
+        if end == start:
             return
         var ring = self._ring()
         for i in range(len(ring)):  # pragma: no branch

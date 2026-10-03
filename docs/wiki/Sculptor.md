@@ -26,7 +26,21 @@ The constructor raises for a mesh that is not in the scene, and for a mesh with 
 
 `stroke_from_ray(scene, assets, ray, world_radius)` stamps the tool once where the ray meets the mesh. The first stamp begins a stroke. Call `end_stroke` after the last stamp. `pick_from_ray` finds the hit and does not sculpt.
 
-A stroke works in the mesh's own space. The mesh's world matrix must be finite and scale by the same amount on each axis, by more than zero, and without shear. Rotation and translation are allowed, including through a parent. The scale and shear checks allow for rounding in the stored `Float32` matrix. The sculptor raises for any other matrix.
+A stroke works in the mesh's own space. The mesh's world matrix must be finite and scale by the same amount on each axis, without shear. Each stored axis length must be greater than `MIN_WORLD_SCALE`: `2^-26`, or `1.4901161193847656e-8`. The boundary itself is refused.
+
+Rotation and translation are allowed, including through a parent. The limit applies to the final world matrix, after parent transforms. The scale and shear checks allow for rounding in the stored `Float32` matrix. The minimum does not use that rounding allowance.
+
+### Minimum world scale
+
+The minimum is a conservative supported limit. It keeps world-to-local amplification below `2^26` for a uniform affine matrix. It is not a storage epsilon or the smallest scale that `Float64` can invert. Smaller positive scales can be representable and still be outside this contract. This documents the existing rejection boundary; it does not extend the supported range.
+
+The inverse, ray normalization and radius calculations use `Float64`. For a uniform affine matrix within the allowed rounding, inverse linear entries stay below `2^27` in magnitude. Its inverse translation stays below `2^157`.
+
+Finite `Float32` ray inputs then transform to components below `2^158`. The same bound applies to finite `Float32` points returned by camera unprojection. Squared direction lengths and differences between those transformed points stay below `2^320`. This leaves ample space inside the finite `Float64` range, which extends to nearly `2^1024`.
+
+The pointer brush divides its squared world radius by the squared scale. The limit bounds that amplification below `2^52`. Camera projection and unprojection must still produce usable points. A scale above the limit does not guarantee a hit, a usable camera or an accurate local offset. A large translation or distant ray can erase small local offsets through rounding.
+
+A ray brush has a separate limit: `world_radius / world_scale` must not exceed the largest finite `Float32`, about `3.402823466e38`. Its square is stored in `Float64`. A small accepted scale can still refuse an oversized brush.
 
 `world_radius` is a `Length` in world units. It must be positive and finite. The ray must have a finite origin and a direction that is not zero.
 
@@ -104,6 +118,7 @@ Each setter raises for a value outside its range. `has_hit`, `get_hit_point` and
 
 ## What is not ported
 
+- This port refuses world axis lengths at or below `2^-26`. See [Minimum world scale](#minimum-world-scale). The limit is independent of the scale and shear rounding checks.
 - three.js falls back to a scaled ray test when a product overflows. A ray here always has a unit direction and finite `Float32` corners, so no product overflows, and the fallback is not ported.
 - three.js keys a split edge by a string when the key overflows a double. The key here is an `Int`, which does not overflow for any mesh a list can hold.
 - The pointer takes no `reversedDepth` camera and no WebGPU depth range, because the cameras here have neither.

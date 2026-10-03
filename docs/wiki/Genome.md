@@ -138,7 +138,9 @@ The skin is tinted: every mesh it paints must carry a `color` attribute. The hea
 ## Locate the face and hair data
 
 Set `THREEMOJO_ASSET_ROOT` when a compiled program runs outside the repository.
-Its value is the absolute path to the `assets` directory.
+Its value is the path to the `assets` directory.
+Use an absolute path to make lookup independent of the working directory.
+A relative path is allowed. It is relative to the working directory at each lookup.
 High-level scanned heads and named scanned hairstyles read data from this root.
 
 ```sh
@@ -148,4 +150,5 @@ export THREEMOJO_ASSET_ROOT="/path/to/ThreeMojo/assets"
 
 When the variable is unset or empty, the existing repository-relative paths
 remain in use. `FaceModel(path)` still reads the explicit path you pass.
-Missing data raises the loader's file error. The setting does not download data.
+Missing data raises the loader's file error. A configured root never falls back
+to the repository's data. The setting does not download data.

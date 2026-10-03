@@ -28,12 +28,16 @@ from extensions.physics.shape import (
     cross,
     _finite_vector,
     _inertia_inverse,
+    _inertia_determinant,
+    _wide,
+    _wide_cross,
+    _wide_dot,
     _narrow_finite,
 )
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import isfinite
+from std.math import cos, isfinite, sin, sqrt
 from units.si import Mass
 
 
@@ -90,11 +94,68 @@ def _transposed(m: Matrix3) -> Matrix3:
     return out
 
 
+# Rotation internals stay wide. Public pose and velocity remain Float32.
+def _rotation_wide(q: Quaternion) -> SIMD[DType.float64, 4]:
+    var out = SIMD[DType.float64, 4](
+        Float64(q.x), Float64(q.y), Float64(q.z), Float64(q.w)
+    )
+    return out / sqrt(_wide_dot(out, out) + out[3] * out[3])
+
+
+def _rotation_product(
+    a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    var out = _wide_cross(a, b) + a * b[3] + b * a[3]
+    out[3] = a[3] * b[3] - _wide_dot(a, b)
+    return out
+
+
+def _rotation_apply(
+    q: SIMD[DType.float64, 4], v: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    var twice = 2 * _wide_cross(q, v)
+    return v + q[3] * twice + _wide_cross(q, twice)
+
+
+def _rotation_back(q: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
+    return SIMD[DType.float64, 4](-q[0], -q[1], -q[2], q[3])
+
+
+def _tensor_apply(
+    tensor: Matrix3, v: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    var out = SIMD[DType.float64, 4](0)
+    for i in range(3):  # pragma: no branch
+        out[i] = (
+            Float64(tensor.elements[i]) * v[0]
+            + Float64(tensor.elements[3 + i]) * v[1]
+            + Float64(tensor.elements[6 + i]) * v[2]
+        )
+    return out
+
+
+def _split_rotation(
+    mut q: SIMD[DType.float64, 4],
+    mut momentum: SIMD[DType.float64, 4],
+    axis: SIMD[DType.float64, 4],
+    coefficient: Float64,
+    h: Float64,
+):
+    # Exact flow of H = coefficient * (axis . momentum)^2 / 2.
+    # This scalar projection is constant during this one subflow.
+    var half = h * coefficient * _wide_dot(axis, momentum) / 2
+    var turn = axis * sin(half)
+    turn[3] = cos(half)
+    q = _rotation_product(q, turn)
+    momentum = _rotation_apply(_rotation_back(turn), momentum)
+
+
 struct RigidBody(Copyable, Movable):
     """One body: its pose, its motion, its shape and its mass."""
 
-    # Change modes through set_kind so effective mass stays consistent.
-    var kind: BodyKind
+    # Storage is internal by convention; Mojo 1.1 has no field privacy.
+    # Public value accessors and validated setters define the supported API.
+    var _kind: BodyKind
     var _has_dynamic_state: Bool
     var _dynamic_mass: Float32
     var _dynamic_inverse_mass: Float32
@@ -112,12 +173,12 @@ struct RigidBody(Copyable, Movable):
     # In rad/s, in the world frame.
     var angular_velocity: Vector3
     # In kilograms. Zero for a static or kinematic body.
-    var mass: Float32
-    var inverse_mass: Float32
+    var _mass: Float32
+    var _inverse_mass: Float32
     # The center of mass, in the body's frame, in meters.
     var center_of_mass: Vector3
     # The inverse inertia about the center of mass, in the body's frame.
-    var inverse_inertia: Matrix3
+    var _inverse_inertia: Matrix3
     # Box2D's implicit damping, per second.
     var linear_damping: Float32
     var angular_damping: Float32
@@ -129,7 +190,8 @@ struct RigidBody(Copyable, Movable):
     # Whether the body takes part in contacts.
     var collides: Bool
     # The split-impulse velocities: they move the body out of an overlap
-    # and are then forgotten, so they add no energy.
+    # and are then forgotten. An anisotropic pose correction can change
+    # rotational energy even though these velocities are not retained.
     var push_velocity: Vector3
     var push_angular: Vector3
 
@@ -159,7 +221,7 @@ struct RigidBody(Copyable, Movable):
             raise Error("Body kind is not valid")
         if shape.kind == MESH and kind != STATIC:
             raise Error("A mesh body must be static")
-        self.kind = kind
+        self._kind = kind
         self._has_dynamic_state = False
         self._dynamic_mass = 0
         self._dynamic_inverse_mass = 0
@@ -175,13 +237,13 @@ struct RigidBody(Copyable, Movable):
         self.rotation.normalize()
         self.linear_velocity = Vector3(0, 0, 0)
         self.angular_velocity = Vector3(0, 0, 0)
-        self.mass = 0
-        self.inverse_mass = 0
+        self._mass = 0
+        self._inverse_mass = 0
         self.center_of_mass = Vector3(0, 0, 0)
-        self.inverse_inertia = Matrix3()
-        self.inverse_inertia.elements[0] = 0
-        self.inverse_inertia.elements[4] = 0
-        self.inverse_inertia.elements[8] = 0
+        self._inverse_inertia = Matrix3()
+        self._inverse_inertia.elements[0] = 0
+        self._inverse_inertia.elements[4] = 0
+        self._inverse_inertia.elements[8] = 0
         self.linear_damping = 0
         self.angular_damping = 0
         self.gravity_scale = 1
@@ -191,7 +253,81 @@ struct RigidBody(Copyable, Movable):
         self.push_velocity = Vector3(0, 0, 0)
         self.push_angular = Vector3(0, 0, 0)
         if kind == DYNAMIC:
-            self.set_mass(mass)
+            var state = self._mass_state(
+                mass.value, self.shape_position, self.shape_rotation
+            )
+            self._mass = mass.value
+            self._inverse_mass = state[0]
+            self.center_of_mass = state[1]
+            self._inverse_inertia = state[2]
+
+    def kind(self) -> BodyKind:
+        """Return the motion mode as a value.
+
+        Returns:
+            The mode. Change it with `set_kind`.
+        """
+        return self._kind
+
+    def mass(self) -> Float32:
+        """Return the effective mass in kilograms.
+
+        Returns:
+            The dynamic mass, or zero for a disabled body.
+        """
+        return self._mass
+
+    def inverse_mass(self) -> Float32:
+        """Return the effective inverse mass in inverse kilograms.
+
+        Returns:
+            The reciprocal dynamic mass, or zero for a disabled body.
+        """
+        return self._inverse_mass
+
+    def inverse_inertia(self) -> Matrix3:
+        """Return a copy of the local effective inverse inertia.
+
+        Returns:
+            The tensor in inverse kg m^2, or zero for a disabled body.
+                Editing the returned copy does not change this body.
+        """
+        return self._inverse_inertia
+
+    def validate(self) raises:
+        """Check motion mode and effective and retained mass consistency.
+
+        This check guards state-entry boundaries. It does not provide
+        field privacy or validate an arbitrary physical model.
+
+        Raises:
+            Error: If the mode, mesh restriction, reciprocal mass or
+                finite inverse tensor is invalid. Disabled effective
+                mass and inverse inertia must be zero.
+        """
+        if not self._kind.is_valid():
+            raise Error("Body kind is not valid")
+        if self.shape.kind == MESH and self._kind != STATIC:
+            raise Error("A mesh body must be static")
+        if self._kind == DYNAMIC:
+            self._check_dynamic_state(
+                self._mass, self._inverse_mass, self._inverse_inertia
+            )
+        else:
+            if self._mass != 0 or self._inverse_mass != 0:
+                raise Error("A disabled body must have zero effective mass")
+            var zero = Matrix3()
+            zero.elements[0] = 0
+            zero.elements[4] = 0
+            zero.elements[8] = 0
+            if self._inverse_inertia != zero:
+                raise Error("A disabled body must have zero inverse inertia")
+            if self._has_dynamic_state:
+                self._check_dynamic_state(
+                    self._dynamic_mass,
+                    self._dynamic_inverse_mass,
+                    self._dynamic_inverse_inertia,
+                )
 
     def set_kind(mut self, kind: BodyKind) raises:
         """Change how the body moves without losing its dynamic mass.
@@ -210,42 +346,35 @@ struct RigidBody(Copyable, Movable):
                 dynamic state can be restored. Construct a dynamic body
                 before disabling it when later restoration is needed.
         """
+        self.validate()
         if not kind.is_valid():
             raise Error("Body kind is not valid")
         if self.shape.kind == MESH and kind != STATIC:
             raise Error("A mesh body must be static")
-        if kind == self.kind:
+        if kind == self._kind:
             return
         if kind == DYNAMIC:
             if not self._has_dynamic_state:
                 raise Error("The body has no retained dynamic mass")
-            self._check_dynamic_state(
-                self._dynamic_mass,
-                self._dynamic_inverse_mass,
-                self._dynamic_inverse_inertia,
-            )
-            self.mass = self._dynamic_mass
-            self.inverse_mass = self._dynamic_inverse_mass
-            self.inverse_inertia = self._dynamic_inverse_inertia
+            self._mass = self._dynamic_mass
+            self._inverse_mass = self._dynamic_inverse_mass
+            self._inverse_inertia = self._dynamic_inverse_inertia
         else:
-            if self.kind == DYNAMIC:
-                self._check_dynamic_state(
-                    self.mass, self.inverse_mass, self.inverse_inertia
-                )
-                self._dynamic_mass = self.mass
-                self._dynamic_inverse_mass = self.inverse_mass
-                self._dynamic_inverse_inertia = self.inverse_inertia
+            if self._kind == DYNAMIC:
+                self._dynamic_mass = self._mass
+                self._dynamic_inverse_mass = self._inverse_mass
+                self._dynamic_inverse_inertia = self._inverse_inertia
                 self._has_dynamic_state = True
-            self.mass = 0
-            self.inverse_mass = 0
+            self._mass = 0
+            self._inverse_mass = 0
             for i in range(9):  # pragma: no branch
-                self.inverse_inertia.elements[i] = 0
+                self._inverse_inertia.elements[i] = 0
             if kind == STATIC:
                 self.linear_velocity = Vector3(0, 0, 0)
                 self.angular_velocity = Vector3(0, 0, 0)
                 self.push_velocity = Vector3(0, 0, 0)
                 self.push_angular = Vector3(0, 0, 0)
-        self.kind = kind
+        self._kind = kind
 
     def _check_dynamic_state(
         self, mass: Float32, inverse_mass: Float32, inertia: Matrix3
@@ -274,15 +403,16 @@ struct RigidBody(Copyable, Movable):
                 properties cannot be represented. A failure changes no
                 mass-property field.
         """
-        if self.kind != DYNAMIC:
+        self.validate()
+        if self._kind != DYNAMIC:
             raise Error("Only a dynamic body has a mass")
         var state = self._mass_state(
             mass.value, self.shape_position, self.shape_rotation
         )
-        self.mass = mass.value
-        self.inverse_mass = state[0]
+        self._mass = mass.value
+        self._inverse_mass = state[0]
         self.center_of_mass = state[1]
-        self.inverse_inertia = state[2]
+        self._inverse_inertia = state[2]
 
     def _mass_state(
         self, mass: Float32, position: Vector3, rotation: Quaternion
@@ -333,10 +463,29 @@ struct RigidBody(Copyable, Movable):
                 asymmetric or not positive definite, or its inverse
                 cannot be represented. A failure leaves the old tensor.
         """
-        if self.kind != DYNAMIC:
+        self.validate()
+        if self._kind != DYNAMIC:
             raise Error("Only a dynamic body can set its inertia")
         var inverse = _inertia_inverse(inertia)
-        self.inverse_inertia = inverse
+        self._inverse_inertia = inverse
+
+    def set_inverse_inertia(mut self, inverse: Matrix3) raises:
+        """Set a custom local inverse tensor, including locked axes.
+
+        Args:
+            inverse: The finite tensor in inverse kg m^2. A zero inverse
+                locks an axis. This custom-constraint API preserves the
+                supplied entries; it does not prove a physical model.
+
+        Raises:
+            Error: If this body is not dynamic or an entry is nonfinite.
+                A failure leaves the old tensor unchanged.
+        """
+        self.validate()
+        if self._kind != DYNAMIC:
+            raise Error("Only a dynamic body can set its inverse inertia")
+        self._check_dynamic_state(self._mass, self._inverse_mass, inverse)
+        self._inverse_inertia = inverse
 
     def set_shape_pose(
         mut self, position: Vector3, rotation: Quaternion
@@ -352,7 +501,8 @@ struct RigidBody(Copyable, Movable):
                 retains its mass, or `set_mass` refuses the derived mass
                 properties. A failure leaves the pose and mass unchanged.
         """
-        if self.kind != DYNAMIC and self._has_dynamic_state:
+        self.validate()
+        if self._kind != DYNAMIC and self._has_dynamic_state:
             raise Error("Restore dynamic mode before changing the shape pose")
         _finite_vector(position)
         var turn = rotation
@@ -360,11 +510,11 @@ struct RigidBody(Copyable, Movable):
             if not isfinite(value):
                 raise Error("A shape rotation must be finite")
         turn.normalize()
-        if self.kind == DYNAMIC:
-            var state = self._mass_state(self.mass, position, turn)
-            self.inverse_mass = state[0]
+        if self._kind == DYNAMIC:
+            var state = self._mass_state(self._mass, position, turn)
+            self._inverse_mass = state[0]
             self.center_of_mass = state[1]
-            self.inverse_inertia = state[2]
+            self._inverse_inertia = state[2]
         self.shape_position = position
         self.shape_rotation = turn
 
@@ -378,7 +528,8 @@ struct RigidBody(Copyable, Movable):
             Error: If the center is nonfinite or a disabled dynamic body
                 retains its mass.
         """
-        if self.kind != DYNAMIC and self._has_dynamic_state:
+        self.validate()
+        if self._kind != DYNAMIC and self._has_dynamic_state:
             raise Error("Restore dynamic mode before changing its mass center")
         _finite_vector(center)
         self.center_of_mass = center
@@ -389,7 +540,7 @@ struct RigidBody(Copyable, Movable):
         Returns:
             Whether the kind is `DYNAMIC`.
         """
-        return self.kind == DYNAMIC
+        return self._kind == DYNAMIC
 
     def world_center_of_mass(self) -> Vector3:
         """Return the center of mass in the world.
@@ -422,7 +573,93 @@ struct RigidBody(Copyable, Movable):
             R I^-1 R^T.
         """
         var turn = rotation_matrix(self.rotation)
-        return turn * self.inverse_inertia * _transposed(turn)
+        return turn * self._inverse_inertia * _transposed(turn)
+
+    def _rotate_free(mut self, h: Float32) -> Bool:
+        # Return False for prescribed-omega compatibility paths. Do not
+        # interpret a locked, negative or nonsymmetric custom inverse as
+        # the inverse inertia of a free rigid solid.
+        if self.angular_velocity == Vector3(0, 0, 0):
+            return False
+        var inverse = self._inverse_inertia
+        var isotropic = Matrix3()
+        isotropic.elements[0] = inverse.elements[0]
+        isotropic.elements[4] = inverse.elements[0]
+        isotropic.elements[8] = inverse.elements[0]
+        if inverse == isotropic:
+            return False
+        var determinant: Float64
+        try:
+            determinant = _inertia_determinant(inverse)
+        except:
+            return False
+        var a = Float64(inverse.elements[0])
+        var b = Float64(inverse.elements[1])
+        var c = Float64(inverse.elements[2])
+        var d = Float64(inverse.elements[4])
+        var e = Float64(inverse.elements[5])
+        var f = Float64(inverse.elements[8])
+        var minor = a * d - b * b
+        var q = _rotation_wide(self.rotation)
+        var omega = _rotation_apply(
+            _rotation_back(q), _wide(self.angular_velocity)
+        )
+        # Invert only in wide arithmetic; a finite custom inverse can have
+        # a reciprocal tensor outside Float32's range.
+        var momentum = SIMD[DType.float64, 4](
+            (
+                (d * f - e * e) * omega[0]
+                + (c * e - b * f) * omega[1]
+                + (b * e - c * d) * omega[2]
+            )
+            / determinant,
+            (
+                (c * e - b * f) * omega[0]
+                + (a * f - c * c) * omega[1]
+                + (b * c - a * e) * omega[2]
+            )
+            / determinant,
+            (
+                (b * e - c * d) * omega[0]
+                + (b * c - a * e) * omega[1]
+                + minor * omega[2]
+            )
+            / determinant,
+            0,
+        )
+        var world_momentum = _rotation_apply(q, momentum)
+        # LDL^T gives three rank-one terms without an eigensolver. Scaling
+        # the first two columns avoids dividing by a small pivot early.
+        var axis0 = SIMD[DType.float64, 4](a, b, c, 0)
+        var square0 = _wide_dot(axis0, axis0)
+        axis0 /= sqrt(square0)
+        var axis1 = SIMD[DType.float64, 4](0, minor, a * e - b * c, 0)
+        var square1 = _wide_dot(axis1, axis1)
+        axis1 /= sqrt(square1)
+        var axis2 = SIMD[DType.float64, 4](0, 0, 1, 0)
+        var coefficient0 = square0 / a
+        var coefficient1 = square1 / (a * minor)
+        var coefficient2 = determinant / minor
+        var half = Float64(h) / 2
+        _split_rotation(q, momentum, axis0, coefficient0, half)
+        _split_rotation(q, momentum, axis1, coefficient1, half)
+        _split_rotation(q, momentum, axis2, coefficient2, Float64(h))
+        _split_rotation(q, momentum, axis1, coefficient1, half)
+        _split_rotation(q, momentum, axis0, coefficient0, half)
+        self.rotation = Quaternion(
+            Float32(q[0]), Float32(q[1]), Float32(q[2]), Float32(q[3])
+        )
+        self.rotation.normalize()
+        # Reconstruct from the final stored pose and the original world
+        # momentum. A caller's latest omega, torque and contact impulses
+        # are authoritative; there is no persistent momentum cache.
+        q = _rotation_wide(self.rotation)
+        momentum = _rotation_apply(_rotation_back(q), world_momentum)
+        omega = _rotation_apply(q, _tensor_apply(inverse, momentum))
+        self.angular_velocity = Vector3(
+            Float32(omega[0]), Float32(omega[1]), Float32(omega[2])
+        )
+        return True
 
     def velocity_at(self, point: Vector3) -> Vector3:
         """Return the velocity of a point fixed to the body.
@@ -437,17 +674,21 @@ struct RigidBody(Copyable, Movable):
             self.angular_velocity, point - self.world_center_of_mass()
         )
 
-    def apply_impulse(mut self, impulse: Vector3, point: Vector3):
+    def apply_impulse(mut self, impulse: Vector3, point: Vector3) raises:
         """Change the velocity by an impulse at a point. A body that is not
         dynamic does not change.
 
         Args:
             impulse: The impulse, in N s.
             point: Where it acts, in the world.
+
+        Raises:
+            Error: If the mode or mass state is inconsistent.
         """
+        self.validate()
         var r = point - self.world_center_of_mass()
         self.linear_velocity = (
-            self.linear_velocity + impulse * self.inverse_mass
+            self.linear_velocity + impulse * self._inverse_mass
         )
         self.angular_velocity = (
             self.angular_velocity
@@ -472,7 +713,7 @@ struct RigidBody(Copyable, Movable):
         Returns:
             The momentum m v, in N s.
         """
-        return self.linear_velocity * self.mass
+        return self.linear_velocity * self._mass
 
     def angular_momentum(self) -> Vector3:
         """Return the angular momentum about the center of mass.
@@ -491,6 +732,6 @@ struct RigidBody(Copyable, Movable):
             The energy m v^2 / 2 + w . I w / 2, in joules.
         """
         return 0.5 * (
-            self.mass * self.linear_velocity.dot(self.linear_velocity)
+            self._mass * self.linear_velocity.dot(self.linear_velocity)
             + self.angular_velocity.dot(self.angular_momentum())
         )

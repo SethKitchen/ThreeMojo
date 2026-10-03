@@ -443,7 +443,7 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 - Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
 - Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
 - Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
-- `while (c)` and `do { ... } while (c);`. The body of a `do` is a block in braces. See [While and do](#while-and-do).
+- `while (c)` and `do { ... } while (c);` when the compiler can prove they stop within 64 body executions. The body of a `do` is a block in braces. See [While and do](#while-and-do).
 - Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
 - Structs: `struct S { ... };` at the top of a shader, of the types above but samplers and of other structs. A struct can be a local variable, a `const`, a uniform, an array element, a parameter and a result. `S(...)` takes one value for each field. A uniform struct's fields are uniforms named `s.a`, as three.js names them.
 - Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
@@ -463,11 +463,21 @@ An `int` is a whole number that a float holds, and a `bool` is one or zero. An `
 
 ### While and do
 
-A `while` or a `do` loop runs at most `MAX_WHILE_COUNT` times, 64. A loop that would run longer stops there, and the shader must not depend on more. The bytecode has no jumps, so the compiler unrolls such a loop 64 times. A false condition leaves it, as a `break` does.
+A `while` or a `do` loop must provably stop within `MAX_WHILE_COUNT` body executions, 64. The compiler refuses a shader when a loop exceeds this limit or its exit cannot be proved. It never returns a program with a silently truncated loop. This is a bounded subset, not full GLSL loop support.
 
-- A `while` asks its condition at the top of each time through.
-- A `do` runs its body once. It asks its condition at the top of each later time, so a `continue` in it still reaches the condition.
-- A `while` inside another `while` unrolls 64 times 64. That is past the limit of a graph, so write the inner loop as a `for` with a constant count.
+The bytecode has no jumps or runtime error channel. The compiler unrolls 64 body slots and one final condition-only slot. It checks a shared exhaustion flag after all enclosing loops and function calls are expanded. The flag is checked even when the shader does not use a loop's result.
+
+- A `while` asks its condition before each body and once after the last body, unless a `break` or `return` leaves it.
+- A `do` runs its body once before its first condition. A `continue` still reaches the condition. A `break` skips it.
+- A loop of exactly 64 bodies keeps its final condition's effects. A finite loop of 65 bodies is refused, as a nonterminating loop is.
+- The proof follows finite scalar constants, arithmetic, comparisons, logic and selects. It preserves the sign of zero. Uniforms, attributes, texture reads, unsupported operations, nonfinite values and subnormal values remain unknown. An unknown value can still be safe if both paths stop.
+- Runtime data in a loop's result can be supported. For example, `while (i < 5) { sum += gain; i++; }` can use a uniform `gain` when `i` starts at zero. The unbounded uniform condition `while (i < count)` is refused.
+- The proof is conservative. It can refuse a bounded runtime-dependent exit, such as `while (flag) { break; }`. Vector-based exits and unsupported scalar functions can also prevent a proof. A constant-count `for` is an alternative when its contract fits. Its existing 1024-iteration limit does not change.
+- Nested loops can exceed `MAX_GRAPH_NODES` before the proof finishes. The existing graph, instruction and register limits still apply.
+
+This changes the old contract, which stopped `while` and `do` after 64 bodies without an error. Existing callers that depended on truncation or on an unproved exit now get a compile error. The GLSL frontend uses the same validation before either renderer receives a program. It adds no runtime GPU error mechanism.
+
+The reference is three.js r180, which passes shader source to WebGL, and the [GLSL ES 3.00 specification](https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf). The independent GLSL3 fixtures in `tests/test_glsl_loops.mojo` use the recurrence `i = i + 1`, its triangular sum and condition-call counts. They cover 63 and 64 bodies, explicit refusals at 65, 96 and 128, and supported constant-count `for` controls at those larger bounds. These fixtures do not establish general expression side-effect parity or full GLSL support. Unsigned types and explicit texture gradients remain open in [issue #614](https://github.com/SethKitchen/ThreeMojo/issues/614).
 
 ### What the GLSL compiler refuses
 
@@ -481,7 +491,7 @@ A `while` or a `do` loop runs at most `MAX_WHILE_COUNT` times, 64. A loop that w
 - A custom attribute of `int`, `bool` or a matrix, and custom attributes of more than 8 floats in all.
 - `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`: three.js declares them.
 - Recursion. A call inlines its function, so a function that calls itself has no end.
-- A `do` whose body is not a block in braces.
+- A `do` whose body is not a block in braces, or a `while` or `do` whose exit within 64 bodies cannot be proved.
 - A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
 - A declaration directly in a `switch`, outside a block.
 - A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.

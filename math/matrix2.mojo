@@ -10,16 +10,21 @@
 column vector on its right, as `Matrix3` and `Matrix4` do. `Box2` is
 `Box3` in the plane, with the same empty box: corners inside out, so that
 the first point expanded into it becomes both.
+
+## Range correction
+
+Unlike three.js 0.180, `Box2.distance_to_point` uses the shared scale-safe
+length. A distance beyond Float32 still returns infinity.
 """
 
-from math.box_extent import _shrink_exceeds_extent
+from math.box_extent import _midpoint, _shrink_exceeds_extent
 from math.vector2 import Vector2
 from math.matrix_inverse import (
     _inverse_needs_wide,
     _determinant_needs_wide,
     _inverse_wide,
 )
-from std.math import cos, inf, sin, sqrt
+from std.math import cos, inf, sin
 from units.si import Angle, RADIAN
 
 
@@ -261,7 +266,10 @@ struct Box2(Equatable, ImplicitlyCopyable):
         """
         if self.is_empty():
             return Vector2(0, 0)
-        return (self.min + self.max) * 0.5
+        return Vector2(
+            _midpoint(self.min.x, self.max.x),
+            _midpoint(self.min.y, self.max.y),
+        )
 
     def size(self) -> Vector2:
         """Return the width and height.
@@ -339,7 +347,7 @@ struct Box2(Equatable, ImplicitlyCopyable):
             Error: If the box is empty.
         """
         var gap = self.clamp_point(point) - point
-        return sqrt(gap.dot(gap))
+        return gap.length()
 
     @staticmethod
     def from_center_and_size(center: Vector2, size: Vector2) -> Box2:

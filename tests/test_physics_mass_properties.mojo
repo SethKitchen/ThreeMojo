@@ -89,10 +89,10 @@ def _check_inverse(tensor: Matrix3, inverse: Matrix3) raises:
 
 
 def _unchanged(body: RigidBody, before: RigidBody) raises:
-    _equal(body.kind, before.kind)
-    _equal(body.mass, before.mass)
-    _equal(body.inverse_mass, before.inverse_mass)
-    _equal(body.inverse_inertia, before.inverse_inertia)
+    _equal(body.kind(), before.kind())
+    _equal(body.mass(), before.mass())
+    _equal(body.inverse_mass(), before.inverse_mass())
+    _equal(body.inverse_inertia(), before.inverse_inertia())
     _equal(body.center_of_mass, before.center_of_mass)
     _equal(body.shape_position, before.shape_position)
     _equal(body.shape_rotation, before.shape_rotation)
@@ -117,7 +117,7 @@ def test_cube_overflow_reproduction() raises:
     _integration_zero(props.center.z, 1e8)
     _check_tensor(props.inertia)
     var body = _body(cube^, 1e-20)
-    _check_inverse(props.inertia, body.inverse_inertia)
+    _check_inverse(props.inertia, body.inverse_inertia())
 
 
 def test_cuboids_spheres_capsules_across_scales() raises:
@@ -160,14 +160,14 @@ def test_cuboids_spheres_capsules_across_scales() raises:
             )
         _check_tensor(box_props.inertia)
         var box_body = _body(box^, mass)
-        _check_inverse(box_props.inertia, box_body.inverse_inertia)
+        _check_inverse(box_props.inertia, box_body.inverse_inertia())
         var sphere = Shape.sphere(Length(size))
         var sphere_props = sphere.mass_properties(mass)
         _equal(sphere_props.center, Vector3(0, 0, 0))
         for i in [0, 4, 8]:
             _near(sphere_props.inertia.elements[i], 2 * m * x * x / 5)
         var sphere_body = _body(sphere^, mass)
-        _check_inverse(sphere_props.inertia, sphere_body.inverse_inertia)
+        _check_inverse(sphere_props.inertia, sphere_body.inverse_inertia())
         # r=s and half-height=s: cylinder mass is 3m/5, caps are 2m/5.
         # Closed formulas: transverse 121 m r^2 / 100, axial 23 m r^2 / 50.
         var capsule = Shape.capsule(Length(size), Length(size))
@@ -177,7 +177,7 @@ def test_cuboids_spheres_capsules_across_scales() raises:
         _near(capsule_props.inertia.elements[4], 121 * m * x * x / 100)
         _near(capsule_props.inertia.elements[8], 23 * m * x * x / 50)
         var capsule_body = _body(capsule^, mass)
-        _check_inverse(capsule_props.inertia, capsule_body.inverse_inertia)
+        _check_inverse(capsule_props.inertia, capsule_body.inverse_inertia())
         var ball = Shape.capsule(Length(size), Length(0)).mass_properties(mass)
         for i in range(9):
             _equal(ball.inertia.elements[i], sphere_props.inertia.elements[i])
@@ -224,7 +224,7 @@ def test_cuboid_extreme_aspect_ratio() raises:
     )
     _near(props.inertia.elements[8], Float64(mass) * (Float64(x) ** 2 + 1) / 3)
     var body = _body(shape^, mass)
-    _check_inverse(props.inertia, body.inverse_inertia)
+    _check_inverse(props.inertia, body.inverse_inertia())
 
 
 def test_translated_convex_cuboid() raises:
@@ -254,7 +254,7 @@ def test_translated_convex_cuboid() raises:
         _near(props.inertia.elements[8], Float64(mass) * (x * x + y * y) / 3)
         _check_tensor(props.inertia)
         var body = _body(shape^, mass)
-        _check_inverse(props.inertia, body.inverse_inertia)
+        _check_inverse(props.inertia, body.inverse_inertia())
 
 
 def test_scaled_rotated_translated_tetrahedra() raises:
@@ -325,7 +325,7 @@ def test_scaled_rotated_translated_tetrahedra() raises:
                 _near(props.inertia.elements[3 * j + i], expected, 2e-5)
         _check_tensor(props.inertia)
         var body = _body(shape^, mass)
-        _check_inverse(props.inertia, body.inverse_inertia)
+        _check_inverse(props.inertia, body.inverse_inertia())
 
 
 def test_shape_pose_rotation_and_mass_scaling() raises:
@@ -351,12 +351,13 @@ def test_shape_pose_rotation_and_mass_scaling() raises:
     expected.elements[1] = Float32(c * s * (1 / ixx - 1 / iyy))
     expected.elements[3] = expected.elements[1]
     for i in range(9):
-        _near(body.inverse_inertia.elements[i], Float64(expected.elements[i]))
-    var previous = body.inverse_inertia
+        _near(body.inverse_inertia().elements[i], Float64(expected.elements[i]))
+    var previous = body.inverse_inertia()
     body.set_mass(Mass(2 * Float32(1e-10)))
     for i in range(9):
         _near(
-            body.inverse_inertia.elements[i], Float64(previous.elements[i]) / 2
+            body.inverse_inertia().elements[i],
+            Float64(previous.elements[i]) / 2,
         )
     # Pose quaternions have the same normalization contract as body poses.
     body.set_shape_pose(
@@ -367,7 +368,8 @@ def test_shape_pose_rotation_and_mass_scaling() raises:
     )
     for i in range(9):
         _near(
-            body.inverse_inertia.elements[i], Float64(previous.elements[i]) / 2
+            body.inverse_inertia().elements[i],
+            Float64(previous.elements[i]) / 2,
         )
 
 
@@ -382,21 +384,19 @@ def test_custom_spd_tensors_across_scales() raises:
         tensor.elements[5] = scale / 2
         tensor.elements[7] = scale / 2
         body.set_inertia(tensor)
-        _check_inverse(tensor, body.inverse_inertia)
+        _check_inverse(tensor, body.inverse_inertia())
     var uneven = _diagonal(1e-30, 1, 1e30)
     body.set_inertia(uneven)
-    _check_inverse(uneven, body.inverse_inertia)
-    var retained = body.inverse_inertia
+    _check_inverse(uneven, body.inverse_inertia())
+    var retained = body.inverse_inertia()
     body.set_kind(KINEMATIC)
     body.set_kind(DYNAMIC)
-    _equal(body.inverse_inertia, retained)
-    # The public inverse field still supports intentional locked axes.
-    body.inverse_inertia.elements[0] = 0
-    body.inverse_inertia.elements[4] = 0
-    body.inverse_inertia.elements[8] = 0
+    _equal(body.inverse_inertia(), retained)
+    # The custom inverse setter supports intentional locked axes.
+    body.set_inverse_inertia(_diagonal(0, 0, 0))
     body.set_kind(STATIC)
     body.set_kind(DYNAMIC)
-    _equal(body.inverse_inertia, _diagonal(0, 0, 0))
+    _equal(body.inverse_inertia(), _diagonal(0, 0, 0))
 
 
 def test_invalid_inertia_updates_are_atomic() raises:
@@ -478,7 +478,7 @@ def test_exactly_singular_tensor_is_not_rounded_positive() raises:
     positive.elements[8] += 1
     body.set_inertia(positive)
     for i in range(3):
-        assert_true(body.inverse_inertia.elements[4 * i] > 0)
+        assert_true(body.inverse_inertia().elements[4 * i] > 0)
     var negative = singular
     negative.elements[8] -= 1
     var positive_state = body.copy()
@@ -641,7 +641,7 @@ def test_spd_inertia_inverse_retains_all_determinant_components() raises:
                 -8000000
             )
             _equal(
-                body.inverse_inertia.elements[3 * column + row],
+                body.inverse_inertia().elements[3 * column + row],
                 Float32(numerator / 24000001),
             )
 

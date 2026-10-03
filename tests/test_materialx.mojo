@@ -25,7 +25,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.png import encode as encode_png
 from std.os import remove
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.pathlib import Path
 from units.si import DEGREE
 from std.testing import (
@@ -1143,4 +1143,5 @@ def test_nodegraph_without_output_preserves_named_node_fallback() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

@@ -16,23 +16,43 @@ a box. ThreeMojo's `math.octree.Octree` holds triangles for collision and
 has no nearest-k query, so it does not serve here. The boxes are
 `math.bounds.Box3`.
 
+**Packing.** ChooseLeaf and split assignment compare volume growth,
+then volume. Ties use area growth, then area, then length growth, then
+length. Area is the sum of the three pairwise products of side lengths.
+Length is their sum. Each comparison uses one unit at a time. This
+resolves volume ties for planar and linear data. The query, filter, and
+tie policies and public insertion order stay the same. Known distance and
+slab arithmetic defects at extreme finite coordinates are tracked in #589.
+This packing change does not establish identical query results for every
+finite input.
+
 An entry carries one whole number (a segment two), the caller's own
 data, such as an index into a list of waypoints. CARLA carries any type
 there. A filter is a struct with an `accepts` method, as CARLA's is a
 lambda.
 
 **Order of results.** Boost leaves the order of a query's results open.
-This port gives the nearest first, and entries at the same distance in
+This port gives the nearest first, and entries with the same computed key in
 the order they were inserted. `intersections` gives entries in the order
 they were inserted.
 
 A query point has three coordinates. For CARLA's one- and
 two-dimensional trees, set the unused coordinates to zero: the distances
 come out the same.
+
+**Finite-coordinate correction (#589).** Segment distance retains small
+endpoint gaps and uses the same arithmetic after endpoint reversal. Slab
+queries widen before subtraction and compare uncertain parameter intervals
+with exact-sign expansions. These fix the former finite-extreme misses and
+false hits. Distances remain Float64 estimates, with a box-key floor that
+keeps nearest-query node bounds conservative. This correction does not change
+CARLA's segment construction or the insertion-order tie rule.
 """
 
+from std.math import fma
 from math.bounds import Box3
 from math.vector3 import Vector3
+from math.segment import _difference_determinant, _point_segment_measure
 
 # Boost's `linear<16>`: at most 16 entries a node, at least 30 percent.
 comptime _MAX_ENTRIES = 16
@@ -93,9 +113,59 @@ trait SegmentFilter:
 # --- the tree --------------------------------------------------------------
 
 
-def _volume(box: Box3) -> Float64:
-    var size = box.max - box.min
-    return Float64(size.x) * Float64(size.y) * Float64(size.z)
+@fieldwise_init
+struct _PackingCost(ImplicitlyCopyable):
+    """Growth and size, ordered from volume to area to length."""
+
+    var volume_growth: Float64
+    var volume: Float64
+    var area_growth: Float64
+    var area: Float64
+    var length_growth: Float64
+    var length: Float64
+
+    def compare(self, other: Self) -> Int:
+        if self.volume_growth != other.volume_growth:
+            return Int(self.volume_growth > other.volume_growth) - Int(
+                self.volume_growth < other.volume_growth
+            )
+        if self.volume != other.volume:
+            return Int(self.volume > other.volume) - Int(
+                self.volume < other.volume
+            )
+        if self.area_growth != other.area_growth:
+            return Int(self.area_growth > other.area_growth) - Int(
+                self.area_growth < other.area_growth
+            )
+        if self.area != other.area:
+            return Int(self.area > other.area) - Int(self.area < other.area)
+        if self.length_growth != other.length_growth:
+            return Int(self.length_growth > other.length_growth) - Int(
+                self.length_growth < other.length_growth
+            )
+        return Int(self.length > other.length) - Int(self.length < other.length)
+
+
+def _extent(box: Box3) -> Tuple[Float64, Float64, Float64]:
+    # Widen each endpoint before subtraction: a finite Float32 span can
+    # exceed Float32 even though its measures fit in Float64.
+    var x = Float64(box.max.x) - Float64(box.min.x)
+    var y = Float64(box.max.y) - Float64(box.min.y)
+    var z = Float64(box.max.z) - Float64(box.min.z)
+    return (x * y * z, x * y + y * z + z * x, x + y + z)
+
+
+def _packing_cost(box: Box3, entry: Box3) -> _PackingCost:
+    var size = _extent(box)
+    var joined = _extent(_joined(box, entry))
+    return _PackingCost(
+        joined[0] - size[0],
+        size[0],
+        joined[1] - size[1],
+        size[1],
+        joined[2] - size[2],
+        size[2],
+    )
 
 
 def _joined(a: Box3, b: Box3) -> Box3:
@@ -113,87 +183,146 @@ def _gap(low: Float32, high: Float32, p: Float32) -> Float64:
 
 
 def _box_distance2(box: Box3, p: Vector3) -> Float64:
+    # Explicit fused operations give every call the same rounding graph,
+    # including after inlining. Each operation is monotone for these gaps.
     var dx = _gap(box.min.x, box.max.x, p.x)
     var dy = _gap(box.min.y, box.max.y, p.y)
     var dz = _gap(box.min.z, box.max.z, p.z)
-    return dx * dx + dy * dy + dz * dz
+    return fma(dx, dx, fma(dy, dy, dz * dz))
 
 
 def _segment_distance2(a: Vector3, b: Vector3, p: Vector3) -> Float64:
-    """The squared distance from a point to a segment, in doubles."""
-    var abx = Float64(b.x) - Float64(a.x)
-    var aby = Float64(b.y) - Float64(a.y)
-    var abz = Float64(b.z) - Float64(a.z)
-    var apx = Float64(p.x) - Float64(a.x)
-    var apy = Float64(p.y) - Float64(a.y)
-    var apz = Float64(p.z) - Float64(a.z)
-    var len2 = abx * abx + aby * aby + abz * abz
-    var t = 0.0
-    if len2 > 0.0:
-        t = min(max((apx * abx + apy * aby + apz * abz) / len2, 0.0), 1.0)
-    var dx = apx - abx * t
-    var dy = apy - aby * t
-    var dz = apz - abz * t
-    return dx * dx + dy * dy + dz * dz
+    """A wide segment key whose node bounds use the same arithmetic."""
+    var result = _point_segment_measure(a, b, p)
+    if result.endpoint:
+        var endpoint = a
+        if result.at_end:
+            endpoint = b
+        # Every ancestor box contains this endpoint. One shared evaluation
+        # gives its key directly; no raw norm or segment-box floor is needed.
+        return _box_distance2(Box3(endpoint, endpoint), p)
+    var box = Box3(
+        Vector3(min(a.x, b.x), min(a.y, b.y), min(a.z, b.z)),
+        Vector3(max(a.x, b.x), max(a.y, b.y), max(a.z, b.z)),
+    )
+    # Rounding can put an interior distance a few ulps below its box key.
+    # Gap, square and sum are monotone, so every containing node's key is
+    # no greater than this floor. Nodes still precede entries at equal keys.
+    return max(result.distance2, _box_distance2(box, p))
+
+
+@fieldwise_init
+struct _SegmentParameter(ImplicitlyCopyable):
+    """(face-start)/(end-start), with a positive denominator."""
+
+    var face: Float64
+    var start: Float64
+    var end: Float64
+
+
+def _parameter_before(a: _SegmentParameter, b: _SegmentParameter) -> Bool:
+    # A shared positive denominator makes original face order exact. This
+    # includes repeated slabs and common diagonal corner/edge contacts.
+    if a.start == b.start and a.end == b.end:
+        return a.face < b.face
+    var left = (a.face - a.start) * (b.end - b.start)
+    var right = (b.face - b.start) * (a.end - a.start)
+    var difference = left - right
+    # Four rounded differences, products and a subtraction: 16u bounds
+    # the absolute error relative to the sum of computed product magnitudes.
+    var guard = 1.7763568394002505e-15 * (abs(left) + abs(right))
+    if abs(difference) > guard:
+        return difference < 0
+    return (
+        _difference_determinant(
+            a.face,
+            a.start,
+            b.end,
+            b.start,
+            b.face,
+            b.start,
+            a.end,
+            a.start,
+        )
+        < 0
+    )
 
 
 def _axis_clip(
     a: Float64,
-    d: Float64,
+    b: Float64,
     low: Float64,
     high: Float64,
-    mut span: Tuple[Float64, Float64],
+    mut near: _SegmentParameter,
+    mut far: _SegmentParameter,
 ) -> Bool:
-    """Clip the parameter range of a segment to one slab of a box."""
-    if d == 0.0:
-        return a >= low and a <= high
-    var t1 = (low - a) / d
-    var t2 = (high - a) / d
-    if t1 > t2:
-        var swap = t1
-        t1 = t2
-        t2 = swap
-    span = (max(span[0], t1), min(span[1], t2))
-    return span[0] <= span[1]
+    """Clip one slab without dividing or rounding the retained endpoints."""
+    var first = min(a, b)
+    var last = max(a, b)
+    if last < low or first > high:
+        return False
+    # These comparisons also skip parallel axes and infinite outer faces.
+    if first >= low and last <= high:
+        return True
+    var lo = _SegmentParameter(0, 0, 1)
+    var hi = _SegmentParameter(1, 0, 1)
+    if a < b:
+        if low > a:
+            lo = _SegmentParameter(low, a, b)
+        if high < b:
+            hi = _SegmentParameter(high, a, b)
+    else:
+        if high < a:
+            lo = _SegmentParameter(-high, -a, -b)
+        if low > b:
+            hi = _SegmentParameter(-low, -a, -b)
+    if _parameter_before(near, lo):
+        near = lo
+    if _parameter_before(hi, far):
+        far = hi
+    return not _parameter_before(far, near)
 
 
 def segment_intersects_box(start: Vector3, end: Vector3, box: Box3) -> Bool:
-    """Return whether a segment meets an axis-aligned box.
+    """Return whether a finite segment meets an axis-aligned box.
 
     Args:
-        start: One end of the segment.
-        end: The other end.
+        start: One finite end of the segment.
+        end: The other finite end.
         box: The box. Its faces count as inside.
 
     Returns:
         Whether any point of the segment is in the box. An empty box
-        meets nothing.
+        meets nothing. Infinite outer faces need no clipping.
     """
     if box.is_empty():
         return False
-    var span = (0.0, 1.0)
-    var d = end - start
+    var near = _SegmentParameter(0, 0, 1)
+    var far = _SegmentParameter(1, 0, 1)
     return (
         _axis_clip(
             Float64(start.x),
-            Float64(d.x),
+            Float64(end.x),
             Float64(box.min.x),
             Float64(box.max.x),
-            span,
+            near,
+            far,
         )
         and _axis_clip(
             Float64(start.y),
-            Float64(d.y),
+            Float64(end.y),
             Float64(box.min.y),
             Float64(box.max.y),
-            span,
+            near,
+            far,
         )
         and _axis_clip(
             Float64(start.z),
-            Float64(d.z),
+            Float64(end.z),
             Float64(box.min.z),
             Float64(box.max.z),
-            span,
+            near,
+            far,
         )
     )
 
@@ -354,21 +483,12 @@ struct _Rtree(Movable):
         while not self.nodes[node].leaf:
             path.append(node)
             var best = -1
-            var best_growth = 0.0
-            var best_volume = 0.0
+            var best_cost = _PackingCost(0, 0, 0, 0, 0, 0)
             for child in self.nodes[node].children:  # pragma: no branch
-                var volume = _volume(self.nodes[child].box)
-                var growth = (
-                    _volume(_joined(self.nodes[child].box, box)) - volume
-                )
-                if (
-                    best < 0
-                    or growth < best_growth
-                    or (growth == best_growth and volume < best_volume)
-                ):
+                var cost = _packing_cost(self.nodes[child].box, box)
+                if best < 0 or cost.compare(best_cost) < 0:
                     best = child
-                    best_growth = growth
-                    best_volume = volume
+                    best_cost = cost
             node = best
         self.nodes[node].children.append(entry)
         self.nodes[node].box.union(box)
@@ -439,12 +559,11 @@ struct _Rtree(Movable):
             elif len(group_b) + left <= _MIN_ENTRIES:
                 to_a = False
             else:
-                var grow_a = _volume(_joined(box_a, boxes[i])) - _volume(box_a)
-                var grow_b = _volume(_joined(box_b, boxes[i])) - _volume(box_b)
-                if grow_a != grow_b:
-                    to_a = grow_a < grow_b
-                elif _volume(box_a) != _volume(box_b):
-                    to_a = _volume(box_a) < _volume(box_b)
+                var cost_a = _packing_cost(box_a, boxes[i])
+                var cost_b = _packing_cost(box_b, boxes[i])
+                var order = cost_a.compare(cost_b)
+                if order != 0:
+                    to_a = order < 0
                 else:
                     to_a = len(group_a) <= len(group_b)
             if to_a:

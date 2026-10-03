@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "evidence_commit": "0a73a7342988e508b875eb8512f36a26f111936e",
+  "status": "production-source-unverified",
+  "notes": [
+    "Hashes pin the committed output bytes and current converter source. They do not prove that this converter produced the historical assets.",
+    "Production recipes and license declarations come from the converter source and THIRD-PARTY-NOTICES.md. No upstream source bytes, immutable source revision, or historical command log were available for verification.",
+    "Synthetic sources are original test data, licensed PolyForm-Noncommercial-1.0.0. Their regeneration is independent of the unavailable production inputs."
+  ],
+  "files": {
+    "assets/converted-fixtures/face/generic_neutral_mesh.obj": "e2fecd8d1aceeac1463349b1bec6c75a696ec15fe417efe6a44b76be816fedb0",
+    "assets/converted-fixtures/face/identity000.obj": "040daeaf939349e4626f800f831e53a418002edabf9ab7276ca8e6f84e5d6f05",
+    "assets/converted-fixtures/face/jawOpen.obj": "c7963728b62bc73a98476474565981269ac15443a98f47047fb9ef8b7239a775",
+    "assets/converted-fixtures/face/still.obj": "e2fecd8d1aceeac1463349b1bec6c75a696ec15fe417efe6a44b76be816fedb0",
+    "assets/converted-fixtures/layered.tfx.hex": "eba7f2353e4610c778d41780c584a8c615ceb645a53eebb09e4793b27ab785e3",
+    "assets/converted-fixtures/mohawk.tfx.hex": "0a1152bf83f1467cb7e4f03d305137a7b773a1e76d871b1ee5c5ae3012eec421",
+    "assets/face/ict_face.bin": "a1e9423fdbd88363e3ab9582e395720003d1459c8ed8ea5d55214b0148163271",
+    "assets/hair/layered.bin": "1b28e421245802d24d408884e0949388f40d25d5f3e43228d75453858ecc5230",
+    "assets/hair/mohawk.bin": "a23fb2b8170e9b9b2968339b1c797f0cdb96d1d837a4412a5559cc827a817ff4",
+    "tools/hair_style.py": "5ad28d8166329ae12753fbc00e8e46248433bd01129543c5b3092e787840305c",
+    "tools/ict_face_model.py": "0796033cf514d1668c40c5fb673be4c7e1d4bc02266aa805a3ff5f6352f2e27b"
+  },
+  "production_assets": [
+    {
+      "path": "assets/face/ict_face.bin",
+      "converter": "tools/ict_face_model.py",
+      "format_version": 6,
+      "output_size_bytes": 9177816,
+      "source": {
+        "status": "unverified",
+        "repository": "https://github.com/USC-ICT/ICT-FaceKit",
+        "documented_input": "FaceXModel/*.obj",
+        "revision": null,
+        "sha256": null
+      },
+      "documented_recipe": {
+        "identities": 60,
+        "skin_end": 11248,
+        "coarse_target": 6000,
+        "to_meters": 0.01,
+        "still_meters": 1e-07
+      },
+      "declared_license": "MIT",
+      "license_evidence": "THIRD-PARTY-NOTICES.md",
+      "regeneration_verified": false
+    },
+    {
+      "path": "assets/hair/layered.bin",
+      "converter": "tools/hair_style.py",
+      "format_version": 1,
+      "output_size_bytes": 1162820,
+      "source": {
+        "status": "unverified",
+        "repository": "https://github.com/Scthe/frostbitten-hair-webgpu",
+        "documented_input": "SintelHairOriginal-sintel_hair.16points.tfx",
+        "revision": null,
+        "sha256": null
+      },
+      "documented_recipe": {
+        "style": "layered",
+        "points": 16
+      },
+      "declared_license": "CC-BY-3.0",
+      "license_evidence": "THIRD-PARTY-NOTICES.md",
+      "regeneration_verified": false
+    },
+    {
+      "path": "assets/hair/mohawk.bin",
+      "converter": "tools/hair_style.py",
+      "format_version": 1,
+      "output_size_bytes": 89272,
+      "source": {
+        "status": "unverified",
+        "repository": "https://github.com/GPUOpen-Effects/TressFX",
+        "documented_input": "RATBOY_MOHAWK.tfx",
+        "revision": null,
+        "sha256": null
+      },
+      "documented_recipe": {
+        "style": "mohawk",
+        "points": 16,
+        "mohawk_from_degrees": -15.0,
+        "mohawk_to_degrees": 100.0,
+        "scalp_from_degrees": -55.0,
+        "scalp_to_degrees": 110.0,
+        "mohawk_head": 0.6,
+        "mohawk_narrow": 0.5,
+        "mohawk_reach": 0.6,
+        "human_radii": [
+          8.1,
+          9.3,
+          10.6
+        ]
+      },
+      "declared_license": "MIT",
+      "license_evidence": "THIRD-PARTY-NOTICES.md",
+      "regeneration_verified": false
+    }
+  ],
+  "synthetic_regeneration": [
+    {
+      "name": "small-face",
+      "format": "ICTF",
+      "source": "assets/converted-fixtures/face",
+      "parameters": {
+        "identities": 1,
+        "skin_end": 5,
+        "coarse_target": 2
+      },
+      "output_sha256": "d1a743cf3e984de1b6c02878271baa071e0bcd8314faaf659a12e52132bd5b65",
+      "output_size_bytes": 448
+    },
+    {
+      "name": "small-layered",
+      "format": "THRS",
+      "source": "assets/converted-fixtures/layered.tfx.hex",
+      "decoded_input_sha256": "faf7e60647890c6c0913273d457524c62b889761948afb99f6e9e9452191bb8b",
+      "parameters": {
+        "style": "layered"
+      },
+      "output_sha256": "148f5275cf1ffa80d17ef66412ad1bbf39995c53ab01779d32d87a613637f00e",
+      "output_size_bytes": 3692
+    },
+    {
+      "name": "small-mohawk",
+      "format": "THRS",
+      "source": "assets/converted-fixtures/mohawk.tfx.hex",
+      "decoded_input_sha256": "7445d413c18ba4741ce3a96ec74655d2c5df05b1d84a68a44e55cddf2d57ec01",
+      "parameters": {
+        "style": "mohawk"
+      },
+      "output_sha256": "815028649d2f125c50509ce4512a805d799932c2b2048665a156baf09521c142",
+      "output_size_bytes": 1144
+    }
+  ]
+}

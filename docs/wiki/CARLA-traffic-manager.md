@@ -97,6 +97,42 @@ The target speed is the speed limit less the speed difference, or the desired sp
 
 A vehicle with physics gets throttle, brake and steer from the PID controller. A vehicle without physics moves by its target speed times 0.05 s each step, toward its first node. A dormant vehicle moves to a free place between the respawn bounds from the hero.
 
+### Curve radius and coordinate precision
+
+The turn radius uses the stored Float32 x and y coordinates. It ignores z.
+Widened edge lengths and a checked determinant avoid cancellation
+from absolute squared world coordinates. For example, the unit circle
+through `(1, 0)`, `(0, 1)` and `(-1, 0)` keeps its 1 m radius after a
+translation of 10,000 m. The pinned CARLA formula can return 0 m there.
+
+The near-line rule stays absolute: return `FLT_MAX` meters when twice the
+absolute plan determinant is at most `EPSILON`, or 2^-22 square meters.
+This includes repeated points. A smaller angle alone does not reject a
+finite radius.
+
+A proved Float64 error bound handles ordinary triangles. The wide radius
+has relative error below 2^-27 before Float32 conversion. Uncertain
+comparisons and cancellation use exact Float32 coordinate products,
+including cases arbitrarily close to the cutoff. A radius above the
+Float32 range also returns `FLT_MAX`.
+
+Translation and uniform scaling preserve the geometric radius when the
+stored points preserve the same shape and stay above the cutoff. Scaling
+a small triangle across the cutoff changes it to the sentinel by design.
+A translation that rounds distinct coordinates together cannot preserve
+the original shape. The public coordinate layout remains Float32.
+
+The curve speed uses `sqrt(r * 0.6 * 9.81)` with widened multiplication.
+A large representable radius cannot overflow before the square root.
+The straight-line sentinel now gives a finite speed of about 4.48e19 m/s.
+The motion stage still takes the minimum of this speed, the configured
+speed and the landmark speed.
+
+The regression tests use circle, right-triangle and isosceles-triangle
+identities, plus an independent perpendicular-bisector reference. Their
+new radius and speed ratio checks have absolute tolerance 2e-7. Existing
+traffic-manager tolerances and workloads are unchanged.
+
 ### Vehicle lights
 
 The stage switches the lights of a vehicle with `set_update_vehicle_lights` on. It switches the brake lights, the blinkers before a turn, and the position, low-beam and fog lights by the weather. The lights are on at night, in heavy rain and in fog.
@@ -163,6 +199,8 @@ compared with a CARLA server. The same seed does not guarantee identical
 scenario replay. There is no legacy-bug compatibility mode. The
 [contribution rules](https://github.com/SethKitchen/ThreeMojo/blob/main/CONTRIBUTING.md#upstream-behavior-and-correctness)
 explain why proven corrections take priority over upstream defects.
+
+- Curve radii are stable under representable translations and scales above the retained near-line cutoff. This corrects the absolute-coordinate cancellation in CARLA `1360bb9`. The widened curve-speed product avoids intermediate overflow. These corrections can change braking and wide-turn decisions on translated maps.
 
 - Collision cache reads preserve the requested actor order. The geodesic boundary includes the final buffered waypoint. These correct two defects in the pinned CARLA source.
 

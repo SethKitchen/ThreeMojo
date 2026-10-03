@@ -253,8 +253,10 @@ struct Walker(Copyable, Movable):
             Quaternion.identity(),
         )
         # The capsule stays upright, and slides along walls.
+        var locked = body.inverse_inertia()
         for i in range(9):  # pragma: no branch
-            body.inverse_inertia.elements[i] = 0
+            locked.elements[i] = 0
+        body.set_inverse_inertia(locked)
         body.material = PhysicsMaterial(0, 0)
         body.linear_damping = 0
         self.body = world.add_body(body^)

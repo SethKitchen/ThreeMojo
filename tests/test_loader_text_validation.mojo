@@ -7,7 +7,7 @@ from std.testing import TestSuite, assert_equal, assert_raises
 from std.pathlib import Path
 from core.assets import Assets
 from core.scene import Scene
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from loaders.gltf import split_glb, read_gltf
 from loaders.gltf_gaussian_splat import (
     read_gltf_gaussian_splats,
@@ -222,4 +222,5 @@ def test_usdz_text_rejects_binary_or_invalid_utf8() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

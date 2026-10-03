@@ -56,6 +56,15 @@ Quote-aware scanning also reveals code after multiline shader strings. The line 
 
 `make test-coverage-tool` compares native and rewritten Mojo fixtures. It checks leaf manifests, short-circuit order, call counts, exceptions, and raw and reduced traces. It also verifies that both decision outcomes can pass while leaf coverage fails. It also checks recursion, abandoned evaluations, nested callbacks, repeated loop and `elif` decisions, and concurrent tasks.
 
+## Report columns
+
+The text report separates each field with at least one space. Long module
+names and large counts cannot touch the next field. Short fields keep their
+padding. Percentages and measured totals do not change.
+
+Do not read the table by fixed character positions. Tools can use the manifest
+and probe formats described on this page when they need structured records.
+
 ## Rules
 
 - The Makefile's `COVERED` list is every CPU module. `COVERAGE_EXCLUDE` names the GPU modules, `render/gpu.mojo` and `render/gpu_vxgi.mojo`, because a kernel has no `stderr`.
@@ -119,7 +128,17 @@ These names do not change probe IDs or manifest entries. The imported buffer fac
 
 `make test-coverage-tool` checks exact inherited-default line, branch, condition and MC/DC entries. It also checks native versus instrumented output, full default-method probe streams, recursive defaults, exceptions, nested callbacks and collisions with loop line numbers. `tests/test_trait_defaults.mojo` calls all eleven defaults through `ProgramSource` and checks inherited values through the node interpreter. The render-hook suite checks sun and point-light shadows with inherited `NoHooks` defaults.
 
-The loop rewrite still requires a body indented four spaces beyond its `for` header. A two-space loop body can compile before instrumentation and fail after it. [Issue #544](https://github.com/SethKitchen/ThreeMojo/issues/544) tracks this existing parser limit. Ordinary four-space-formatted repository modules do not have this failure. The source checks do not certify other syntax outside the supported rewrite.
+### Loop body indentation
+
+The loop rewrite uses the actual indentation of the first body statement. Blank lines and comments do not set that indentation. Multiline headers and literals retain their original probe line IDs.
+
+Physical lines can end with LF, CRLF or CR. The rewrite keeps literal line-ending bytes and tabs. A missing final newline does not change source identities. This fixes [issue #544](https://github.com/SethKitchen/ThreeMojo/issues/544).
+
+A loop entry probe reports a nonempty sequence before a body can return or raise. For a loop with an `else` clause, the final probe runs at the start of that clause. This preserves the empty outcome when the clause returns or raises. A `break` skips the clause; the entry probe has already reported the nonempty outcome.
+
+The instrumenter rejects inline loop and loop-else bodies. Put each body on a separate indented line. It also rejects a complete loop header without an indented body.
+
+`make test-coverage-tool` compares native and instrumented loops at widths of one, two, three, four and eight spaces, and with mixed block widths. The checks pin line and branch identities and exact loop outcomes. They cover comments, multiline headers and literals, nested loops, `break`, `continue`, `return`, `for`-`else` and exceptions. An `else` header can have spaces or tabs before its colon. This correction leaves the rewrites and manifests of the 761 measured repository modules byte-identical.
 
 ### The capture grows with every statement run
 

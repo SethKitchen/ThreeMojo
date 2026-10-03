@@ -249,7 +249,7 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
 endef
 
 .PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
-        docs-check wiki-publish test-tools test-coverage-tool \
+        docs-check wiki-publish test-tools test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
@@ -292,7 +292,7 @@ check: check-cpu check-gpu
 # The half that needs nothing but the Mojo toolchain. This is what to run when
 # MAX is not installed, and what proves the no-dependencies claim is still
 # true.
-check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-coverage-tool
+check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-coverage-tool test-portability
 
 # The complete GPU check needs MAX and an accelerator. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
@@ -1440,3 +1440,8 @@ test-coverage-tool:
 	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
 	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
+	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+
+# Subprocess-only contracts need native children with different environments.
+test-portability:
+	@python3 tools/check_portability.py --mojo $(MOJO)

@@ -86,6 +86,10 @@ from core.scene import Scene
 from extensions.carla.actor import ActorId
 from extensions.carla.blueprint import ActorAttributeValue
 from extensions.carla.cameras import WideAngleLens
+from extensions.carla.sensor_cache import (
+    coverage_matches,
+    sensor_material_matches,
+)
 from extensions.carla.props import Props
 from extensions.carla.render_actors import ActorVisuals
 from extensions.carla.sensor import (
@@ -190,6 +194,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import ACES_FILMIC_TONE_MAPPING, NO_TONE_MAPPING
 from renderers.environment import scene_cube
 from renderers.renderer import Renderer
+from std.collections import Set
 from std.math import atan, log2, pow, tan
 from units.si import (
     DEGREE,
@@ -740,7 +745,9 @@ struct CarlaRenderer(Movable):
     var sensor_materials: List[MaterialId]
     var coverage_sources: List[TextureId]
     var coverage_maps: List[TextureId]
-    var coverage_read: List[TextureId]
+    var coverage_read: Set[Int]
+    var _coverage_index: Dict[Int, Int]
+    var _sensor_index: Dict[Tuple[Int, Int], MaterialId]
 
     def __init__(
         out self,
@@ -804,7 +811,9 @@ struct CarlaRenderer(Movable):
         self.sensor_materials = List[MaterialId]()
         self.coverage_sources = List[TextureId]()
         self.coverage_maps = List[TextureId]()
-        self.coverage_read = List[TextureId]()
+        self.coverage_read = Set[Int]()
+        self._coverage_index = Dict[Int, Int]()
+        self._sensor_index = Dict[Tuple[Int, Int], MaterialId]()
 
     def update(mut self, world: World) raises:
         """Bring the scene to the world's state: the weather, the traffic
@@ -1114,16 +1123,21 @@ struct CarlaRenderer(Movable):
 
     def _coverage_map(mut self, source: TextureId) raises -> TextureId:
         """Keep a white RGB copy of a color map, with identical alpha and
-        sampling, refreshed once per capture so dynamic alpha stays current."""
+        sampling. Check public mutable content once per capture. Reuse
+        unchanged payloads without copying or whitening them again."""
         if source == NO_TEXTURE:
             return NO_TEXTURE
-        var slot = -1
-        for i in range(len(self.coverage_sources)):
-            if self.coverage_sources[i] == source:
-                slot = i
-                break
-        if source in self.coverage_read:
+        var slot = self._coverage_index.get(source.value, -1)
+        if source.value in self.coverage_read:
             return self.coverage_maps[slot]
+        if slot >= 0:
+            var cached = self.coverage_maps[slot]
+            if coverage_matches(
+                self.assets.textures.get(source),
+                self.assets.textures.get(cached),
+            ):
+                self.coverage_read.add(source.value)
+                return cached
         var texture = Texture(copy=self.assets.textures.get(source))
         # Replace RGB in every mip level; preserve alpha and sampler state.
         for i in range(0, len(texture.pixels), 4):
@@ -1136,13 +1150,14 @@ struct CarlaRenderer(Movable):
             texture.data[i + 2] = 1
         if slot < 0:
             slot = len(self.coverage_sources)
+            self._coverage_index[source.value] = slot
             self.coverage_sources.append(source)
             self.coverage_maps.append(self.assets.textures.add(texture^))
         else:
             self.assets.textures.textures[self.coverage_maps[slot].value] = (
                 texture^
             )
-        self.coverage_read.append(source)
+        self.coverage_read.add(source.value)
         return self.coverage_maps[slot]
 
     def _sensor_material(
@@ -1158,6 +1173,13 @@ struct CarlaRenderer(Movable):
             or source.alpha_to_coverage
         ):
             map = self._coverage_map(source.map)
+        var key = (id.value, tag.value)
+        if key in self._sensor_index:
+            var cached = self._sensor_index[key]
+            if sensor_material_matches(
+                source, self.assets.materials.get(cached), map
+            ):
+                return cached
         var flat = Material(
             cityscapes_color(tag),
             map=map,
@@ -1175,15 +1197,12 @@ struct CarlaRenderer(Movable):
             source.clip_intersection,
             source.clip_shadows,
         )
-        for i in range(len(self.sensor_sources)):
-            if (
-                self.sensor_sources[i] == id
-                and self.sensor_tags[i] == tag.value
-            ):
-                var cached = self.sensor_materials[i]
-                self.assets.materials.materials[cached.value] = flat
-                return cached
+        if key in self._sensor_index:
+            var cached = self._sensor_index[key]
+            self.assets.materials.materials[cached.value] = flat
+            return cached
         var added = self.assets.materials.add(flat)
+        self._sensor_index[key] = added
         self.sensor_sources.append(id)
         self.sensor_tags.append(tag.value)
         self.sensor_materials.append(added)

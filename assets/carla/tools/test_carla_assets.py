@@ -15,7 +15,10 @@ from pathlib import Path
 import tempfile
 import unittest
 import zipfile
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
+from email.message import Message
+from unittest.mock import patch
+from urllib.error import HTTPError
 
 import carla_assets as tool
 
@@ -327,6 +330,195 @@ class FetchTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             self.assertEqual(tool.main(common + ['verify']), 1)
             self.assertEqual(tool.main(common + ['fetch']), 1)
+
+
+class RecoveryTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Fixture()
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, 'w') as bundle:
+            bundle.writestr('color.jpg', b'original pixels')
+        self.data = buffer.getvalue()
+        self.item = {
+            'role': 'archive', 'url': 'https://example.org/scan.zip',
+            'sha256': _sum(self.data), 'path': 'scan.zip',
+            'extract': [{'role': 'albedo', 'member': 'color.jpg', 'path': 'scan/color.jpg'}],
+        }
+        entry = texture_entry(self.item['url'], self.item['sha256'])
+        entry['files'] = [self.item]
+        self.manifest = manifest_of(entry)
+        self.original = copy.deepcopy(self.manifest)
+        self.archive = self.fixture.cache / 'scan.zip'
+        self.extracted = self.fixture.cache / 'scan/color.jpg'
+
+    def tearDown(self):
+        self.fixture.close()
+
+    def _place_archive(self, data=None):
+        self.fixture.cache.mkdir(exist_ok=True)
+        self.archive.write_bytes(self.data if data is None else data)
+
+    def _cli(self, *args):
+        path = self.fixture.root / 'manifest.json'
+        path.write_text(json.dumps(self.manifest), encoding='utf-8')
+        before = path.read_bytes()
+        with redirect_stdout(io.StringIO()) as out:
+            result = tool.main(['--manifest', str(path), '--cache', str(self.fixture.cache), *args])
+        self.assertEqual(path.read_bytes(), before)
+        return result, out.getvalue()
+
+    def test_offline_extracts_then_repairs_only_missing_members_without_urls(self):
+        self._place_archive()
+        with patch.object(tool.urllib.request, 'urlopen', side_effect=AssertionError('network access')):
+            self.assertEqual(self._cli('fetch', 'asphalt', '--offline')[0], 0)
+            self.assertEqual(self.extracted.read_bytes(), b'original pixels')
+            self.assertEqual(self._cli('verify', 'asphalt', '--strict')[0], 0)
+            self.extracted.unlink()
+            self.assertEqual(self._cli('verify', '--strict', 'asphalt')[0], 1)
+            self.assertEqual(self._cli('fetch', '--offline', 'asphalt')[0], 0)
+            self.assertEqual(self.extracted.read_bytes(), b'original pixels')
+            self.assertEqual(self._cli('verify', 'asphalt', '--strict')[0], 0)
+        self.assertEqual(self.manifest, self.original)
+        self.assertEqual(self.archive.read_bytes(), self.data)
+
+    def test_offline_missing_archives_fail_without_creating_cache_or_opening_urls(self):
+        for url in (self.item['url'], None, self.fixture.source.as_uri()):
+            with self.subTest(url=url), patch.object(tool.urllib.request, 'urlopen') as opener:
+                self.item['url'] = url
+                result, output = self._cli('fetch', '--offline')
+                self.assertEqual(result, 1)
+                self.assertIn('missing', output)
+                opener.assert_not_called()
+                self.assertFalse(self.fixture.cache.exists())
+
+    def test_offline_corrupt_archive_is_unchanged_and_never_extracted(self):
+        self._place_archive(b'corrupt archive')
+        with patch.object(tool, '_download') as download, patch.object(tool, '_extract') as extract:
+            result, output = self._cli('fetch', '--offline')
+            self.assertEqual(result, 1)
+            self.assertIn('mismatch', output)
+            download.assert_not_called()
+            extract.assert_not_called()
+        self.assertEqual(self.archive.read_bytes(), b'corrupt archive')
+        self.assertFalse(self.extracted.exists())
+        self.assertEqual(self.manifest, self.original)
+
+    def test_offline_pinned_nonarchive_checks_bytes_without_opening_urls(self):
+        data = b'plain texture pixels'
+        self.manifest = manifest_of(texture_entry('https://example.org/color.jpg', _sum(data)))
+        original = copy.deepcopy(self.manifest)
+        target = self.fixture.cache / 'asphalt/color.jpg'
+        with patch.object(tool.urllib.request, 'urlopen') as opener:
+            self.assertEqual(self._cli('fetch', '--offline')[0], 1)
+            target.parent.mkdir(parents=True)
+            target.write_bytes(data)
+            result, output = self._cli('fetch', '--offline')
+            self.assertEqual(result, 0)
+            self.assertIn('kept', output)
+            self.assertEqual(self._cli('verify', '--strict')[0], 0)
+            target.write_bytes(b'corrupt texture pixels')
+            result, output = self._cli('fetch', '--offline')
+            self.assertEqual(result, 1)
+            self.assertIn('mismatch', output)
+            self.assertEqual(self._cli('verify', '--strict')[0], 1)
+            opener.assert_not_called()
+        self.assertEqual(target.read_bytes(), b'corrupt texture pixels')
+        self.assertEqual(self.manifest, original)
+
+    def test_offline_corrupt_member_is_unchanged_and_fails_verification(self):
+        self._place_archive()
+        tool.fetch(self.manifest, self.fixture.cache, offline=True)
+        self.extracted.write_bytes(b'corrupt pixels')
+        with patch.object(tool.urllib.request, 'urlopen') as opener:
+            with self.assertRaisesRegex(tool.FetchError, 'extracted member differs'):
+                tool.fetch(self.manifest, self.fixture.cache, offline=True)
+            self.assertEqual(self._cli('verify', '--strict')[0], 1)
+            opener.assert_not_called()
+        self.assertEqual(self.extracted.read_bytes(), b'corrupt pixels')
+
+    def test_offline_unpinned_files_are_never_trusted(self):
+        self.item['sha256'] = None
+        for present in (False, True):
+            if present:
+                self._place_archive()
+            with self.subTest(present=present), patch.object(tool, '_download') as download:
+                result, output = self._cli('fetch', '--offline')
+                self.assertEqual(result, 1)
+                self.assertIn('unpinned', output)
+                self.assertEqual(self._cli('verify', '--strict')[0], 1)
+                self.assertEqual(self._cli('verify')[0], 0)
+                self.assertIsNone(self.item['sha256'])
+                self.assertFalse(self.extracted.exists())
+                download.assert_not_called()
+
+    def test_offline_cannot_pin_through_api_or_cli(self):
+        self.item['sha256'] = None
+        with self.assertRaisesRegex(tool.FetchError, 'cannot pin'):
+            tool.fetch(self.manifest, self.fixture.cache, pin=True, offline=True)
+        with self.assertRaisesRegex(tool.FetchError, 'cannot pin'):
+            tool.fetch_file(self.item, self.fixture.cache, pin=True, offline=True)
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as stopped:
+            self._cli('fetch', '--offline', '--pin')
+        self.assertEqual(stopped.exception.code, 2)
+        self.assertIsNone(self.item['sha256'])
+        self.assertFalse(self.fixture.cache.exists())
+
+    def test_strict_verification_is_opt_in_and_selection_excludes_other_missing_files(self):
+        self.manifest['entries'].append(texture_entry(None, _sum(b'other'), 'other', 'other.jpg'))
+        self.assertEqual(self._cli('verify')[0], 0)
+        self.assertEqual(self._cli('verify', '--strict')[0], 1)
+        self._place_archive()
+        self.assertEqual(self._cli('fetch', '--offline', 'asphalt')[0], 0)
+        self.assertEqual(self._cli('verify', '--strict', 'asphalt')[0], 0)
+        self.assertEqual(self._cli('verify', '--strict')[0], 1)
+        self.assertEqual(self._cli('fetch', '--offline')[0], 1)
+        self.assertEqual(tool.verify(self.manifest, self.fixture.cache, ['asphalt']),
+                         [('scan.zip', 'ok'), ('scan/color.jpg', 'ok')])
+
+    def test_unknown_selection_is_rejected_before_any_cache_work(self):
+        self._place_archive()
+        with patch.object(tool, 'fetch_file') as fetcher, patch.object(tool, 'sha256_of') as hasher:
+            with self.assertRaisesRegex(tool.ManifestError, 'no entry'):
+                tool.fetch(self.manifest, self.fixture.cache, ['asphalt', 'unknown'], offline=True)
+            with self.assertRaisesRegex(tool.ManifestError, 'no entry'):
+                tool.verify(self.manifest, self.fixture.cache, ['asphalt', 'unknown'])
+            fetcher.assert_not_called()
+            hasher.assert_not_called()
+
+    def test_permission_quota_and_missing_http_responses_leave_no_download(self):
+        for code in (403, 429, 404):
+            error = HTTPError(self.item['url'], code, 'synthetic failure', {}, None)
+            with self.subTest(code=code), patch.object(tool.urllib.request, 'urlopen', side_effect=error) as opener:
+                with self.assertRaisesRegex(tool.FetchError, str(code)):
+                    tool.fetch(self.manifest, self.fixture.cache)
+                opener.assert_called_once()
+                self.assertEqual(list(self.fixture.cache.iterdir()), [])
+                self.assertEqual(self.manifest, self.original)
+
+    def test_html_permission_and_quota_pages_are_refused_even_if_mislabeled(self):
+        for content_type in ('text/html', 'application/octet-stream'):
+            for body in (b'<html>Sign in for permission</html>', b'<html>Download quota exceeded</html>'):
+                response = io.BytesIO(body)
+                response.headers = Message()
+                response.headers['Content-Type'] = content_type
+                with self.subTest(content_type=content_type, body=body):
+                    with patch.object(tool.urllib.request, 'urlopen', return_value=response):
+                        with self.assertRaises(tool.FetchError):
+                            tool.fetch(self.manifest, self.fixture.cache)
+                    self.assertEqual(list(self.fixture.cache.iterdir()), [])
+                    self.assertEqual(self.manifest, self.original)
+
+    def test_synthetic_clean_cache_download_verifies_before_extracting(self):
+        response = io.BytesIO(self.data)
+        response.headers = Message()
+        response.headers['Content-Type'] = 'application/zip'
+        with patch.object(tool.urllib.request, 'urlopen', return_value=response) as opener:
+            self.assertEqual(tool.fetch(self.manifest, self.fixture.cache)[0][2], 'fetched')
+            opener.assert_called_once()
+        self.assertEqual(self.archive.read_bytes(), self.data)
+        self.assertEqual(self.extracted.read_bytes(), b'original pixels')
+        self.assertEqual(self._cli('verify', '--strict')[0], 0)
+        self.assertEqual(self.manifest, self.original)
 
 
 class CreditTests(unittest.TestCase):

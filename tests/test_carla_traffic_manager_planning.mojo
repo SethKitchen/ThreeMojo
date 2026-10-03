@@ -389,7 +389,10 @@ def test_turn_and_landmark_speeds() raises:
         SimpleWaypointIndex(61),
         SimpleWaypointIndex(62),
     ]
-    assert_true(isinf(stage.get_turn_target_velocity(straight, 8, shared)))
+    var straight_speed = stage.get_turn_target_velocity(straight, 8, shared)
+    assert_false(isinf(straight_speed))
+    assert_true(straight_speed > 1e19)
+    assert_equal(min(Float32(8), straight_speed), 8.0)
     assert_equal(
         stage.get_turn_target_velocity(
             [SimpleWaypointIndex(60), SimpleWaypointIndex(61)], 8, shared
