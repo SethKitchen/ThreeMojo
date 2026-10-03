@@ -84,9 +84,9 @@ def _sign_bit(value: Float64) -> Bool:
     return (bitcast[DType.uint64](value) >> 63) != 0
 
 
-def _scalar_polynomial[n: Int](
-    coefficients: Array[Float64, n], x: Float64
-) -> Float64:
+def _scalar_polynomial[
+    n: Int
+](coefficients: Array[Float64, n], x: Float64) -> Float64:
     var result = coefficients[n - 1]
     var i = n - 2
     while i >= 0:
@@ -95,9 +95,7 @@ def _scalar_polynomial[n: Int](
     return result
 
 
-def _jet_polynomial[n: Int](
-    coefficients: Array[Float64, n], x: _Jet
-) -> _Jet:
+def _jet_polynomial[n: Int](coefficients: Array[Float64, n], x: _Jet) -> _Jet:
     var result = _Jet.constant(coefficients[n - 1])
     var i = n - 2
     while i >= 0:
@@ -121,7 +119,9 @@ def _curve_sincos(value: Float64) -> Tuple[Float64, Float64]:
     var low = Float64(quadrant) * _HALF_PI_LOW
     var reduced = (value - high) - low
     var square = reduced * reduced
-    var sine = reduced * _scalar_polynomial(materialize[_SIN_COEFFICIENTS](), square)
+    var sine = reduced * _scalar_polynomial(
+        materialize[_SIN_COEFFICIENTS](), square
+    )
     var cosine = _scalar_polynomial(materialize[_COS_COEFFICIENTS](), square)
     var mode = quadrant & 3
     if mode == 0:
@@ -187,9 +187,9 @@ def _curve_atan2(y: Float64, x: Float64) -> Float64:
     return (_HALF_PI if y > 0.0 else -_HALF_PI) - result
 
 
-def _polynomial_derivative[n: Int](
-    coefficients: Array[Float64, n], x: Float64
-) -> Float64:
+def _polynomial_derivative[
+    n: Int
+](coefficients: Array[Float64, n], x: Float64) -> Float64:
     var value = coefficients[n - 1]
     var derivative = 0.0
     var i = n - 2
@@ -211,8 +211,16 @@ def _sincos_derivative(value: Float64) -> Tuple[Float64, Float64]:
     var reduced = (value - high) - low
     var square = reduced * reduced
     var sine = _scalar_polynomial(materialize[_SIN_COEFFICIENTS](), square)
-    sine += 2.0 * square * _polynomial_derivative(materialize[_SIN_COEFFICIENTS](), square)
-    var cosine = 2.0 * reduced * _polynomial_derivative(materialize[_COS_COEFFICIENTS](), square)
+    sine += (
+        2.0
+        * square
+        * _polynomial_derivative(materialize[_SIN_COEFFICIENTS](), square)
+    )
+    var cosine = (
+        2.0
+        * reduced
+        * _polynomial_derivative(materialize[_COS_COEFFICIENTS](), square)
+    )
     var mode = quadrant & 3
     if mode == 0:
         return (sine, cosine)
@@ -236,8 +244,14 @@ def _atan_derivative(value: Float64) -> Float64:
         magnitude = (magnitude - 1.0) / denominator
         derivative *= 2.0 / (denominator * denominator)
     var square = magnitude * magnitude
-    var polynomial = _scalar_polynomial(materialize[_ATAN_COEFFICIENTS](), square)
-    polynomial += 2.0 * square * _polynomial_derivative(materialize[_ATAN_COEFFICIENTS](), square)
+    var polynomial = _scalar_polynomial(
+        materialize[_ATAN_COEFFICIENTS](), square
+    )
+    polynomial += (
+        2.0
+        * square
+        * _polynomial_derivative(materialize[_ATAN_COEFFICIENTS](), square)
+    )
     derivative *= polynomial
     return -derivative if inverse else derivative
 
@@ -256,13 +270,21 @@ def _atan2_derivative(
 
 def _curve_sinc(value: Float64) -> Float64:
     if abs(value) <= _QUARTER_PI:
-        return _scalar_polynomial(materialize[_SIN_COEFFICIENTS](), value * value)
+        return _scalar_polynomial(
+            materialize[_SIN_COEFFICIENTS](), value * value
+        )
     return _curve_sin(value) / value
 
 
 def _sinc_derivative(value: Float64) -> Float64:
     if abs(value) <= _QUARTER_PI:
-        return 2.0 * value * _polynomial_derivative(materialize[_SIN_COEFFICIENTS](), value * value)
+        return (
+            2.0
+            * value
+            * _polynomial_derivative(
+                materialize[_SIN_COEFFICIENTS](), value * value
+            )
+        )
     return (_sincos_derivative(value)[0] - _curve_sinc(value)) / value
 
 
@@ -273,8 +295,12 @@ def _sinc_jet(value: _Jet) -> _Jet:
     var trigonometric = _sincos_jet(value)[0] / value
     if domain.low > _QUARTER_PI:
         return trigonometric
-    var polynomial = _jet_polynomial(materialize[_SIN_COEFFICIENTS](), value * value)
-    return _uncertain(polynomial.rounded_value().hull(trigonometric.rounded_value()))
+    var polynomial = _jet_polynomial(
+        materialize[_SIN_COEFFICIENTS](), value * value
+    )
+    return _uncertain(
+        polynomial.rounded_value().hull(trigonometric.rounded_value())
+    )
 
 
 def _sincos_branch(value: _Jet, quadrant: Int) -> Tuple[_Jet, _Jet]:
@@ -285,7 +311,9 @@ def _sincos_branch(value: _Jet, quadrant: Int) -> Tuple[_Jet, _Jet]:
     var low = _Jet.constant(Float64(quadrant)) * _Jet.constant(_HALF_PI_LOW)
     var reduced = (value - _Jet.constant(high)) - low
     var square = reduced * reduced
-    var sine = reduced * _jet_polynomial(materialize[_SIN_COEFFICIENTS](), square)
+    var sine = reduced * _jet_polynomial(
+        materialize[_SIN_COEFFICIENTS](), square
+    )
     var cosine = _jet_polynomial(materialize[_COS_COEFFICIENTS](), square)
     var mode = quadrant & 3
     if mode == 0:
@@ -334,6 +362,23 @@ def _sincos_jet(value: _Jet) -> Tuple[_Jet, _Jet]:
     # Quadrant changes are real branches in the scalar polynomial. No
     # smooth derivative is asserted across their rounded join.
     return (_uncertain(sine), _uncertain(cosine))
+
+
+def _constant_sincos_jet(heading: Float64) -> Tuple[_Jet, _Jet]:
+    # The caller proves this stored heading is independent of road s.
+    # Each allowed compiled graph supplies one fixed scalar coefficient in
+    # the rounded output enclosure. Derivatives of that coefficient are zero;
+    # its uncertainty stays in the value interval, not a fictitious varying
+    # scalar error. Different scalar call sites can choose different values.
+    # Generic singleton/zero-derivative jets do not establish this provenance.
+    var result = _sincos_jet(_Jet.constant(heading))
+    if not isfinite(heading) or abs(heading) > _PHASE_LIMIT:
+        return result
+    var zero = _Interval.point(0.0)
+    return (
+        _Jet(result[0].rounded_value(), zero, zero, 0.0),
+        _Jet(result[1].rounded_value(), zero, zero, 0.0),
+    )
 
 
 def _atan_branch(value: _Jet, inverse: Bool, shifted: Bool) -> _Jet:
@@ -423,6 +468,8 @@ def _atan2_jet(y: _Jet, x: _Jet) -> _Jet:
     var one = _atan_jet(y / x)
     if dx.high < 0.0:
         one = _Jet.constant(_PI if dy.low > 0.0 else -_PI) + one
-    var two = _Jet.constant(_HALF_PI if dy.low > 0.0 else -_HALF_PI) - _atan_jet(x / y)
+    var two = _Jet.constant(
+        _HALF_PI if dy.low > 0.0 else -_HALF_PI
+    ) - _atan_jet(x / y)
     # Include both scalar recipes where the magnitude comparison changes.
     return _uncertain(one.rounded_value().hull(two.rounded_value()))

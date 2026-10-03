@@ -22,13 +22,17 @@ index: `lane_transform` is `Lane::ComputeTransform`, `lane_corners` is
 anywhere in the map: its road id, its section id and its lane id.
 
 CARLA writes a point in single precision. This port computes lane centers
-in double and rounds at the public `Location` boundary. Internal nearest
+in double and rounds at the public `Location` boundary. Map nearest
 queries retain the double center. The lane pose follows the derivative of
 that center, including changing widths and sampled-reference tangents.
 This intentionally corrects CARLA's use of a slope as an angle. Pitch
 also accounts for the lane center's horizontal speed. A section with a
 width-record kink does not use the two-row straight-lane mesh shortcut.
 These corrections can change poses, nearest waypoints and mesh counts.
+
+The fixed-s `Road.nearest_lane` helper still compares narrowed centers.
+Map does not call this helper. Its separate numerical limitation is
+tracked in issue #604.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/road/Road.cpp`,
 `LaneSection.cpp`, `LaneSectionMap.h` and `Lane.cpp`.
@@ -1054,14 +1058,20 @@ struct Road(Copyable, Movable):
         var c = cos(point.tangent)
         var sn = sin(point.tangent)
         var normal = _sincos_derivative(point.tangent)
-        var dx = differential[0] + slope * sn + offset * differential[2] * normal[0]
-        var dy = differential[1] - slope * c - offset * differential[2] * normal[1]
+        var dx = (
+            differential[0] + slope * sn + offset * differential[2] * normal[0]
+        )
+        var dy = (
+            differential[1] - slope * c - offset * differential[2] * normal[1]
+        )
         var geometry_at = info_index(self.info.geometries, s)
         ref geometry = self.info.geometries[geometry_at].geometry
         if geometry.kind == ARC:
             var distance = s - self.info.geometries[geometry_at].s
             var derivative = geometry._arc_offset_derivative(
-                min(max(distance, 0.0), geometry.length), offset, slope,
+                min(max(distance, 0.0), geometry.length),
+                offset,
+                slope,
                 distance >= 0.0 and distance <= geometry.length,
             )
             dx = derivative[0]
@@ -1069,14 +1079,18 @@ struct Road(Copyable, Movable):
         var magnitude = max(abs(dx), abs(dy))
         var horizontal = 0.0
         if magnitude > 0.0:
-            horizontal = magnitude * sqrt((dx / magnitude) * (dx / magnitude) + (dy / magnitude) * (dy / magnitude))
+            horizontal = magnitude * sqrt(
+                (dx / magnitude) * (dx / magnitude)
+                + (dy / magnitude) * (dy / magnitude)
+            )
         var yaw = Float32(-point.tangent) * _TO_DEGREES
         if horizontal > 0.0:
             # Keep the reference heading's winding, while correcting its
             # direction by the actual derivative in the reference frame.
             yaw = (
                 Float32(
-                    -point.tangent + atan2(
+                    -point.tangent
+                    + atan2(
                         (dx / magnitude) * sn - (dy / magnitude) * c,
                         (dx / magnitude) * c + (dy / magnitude) * sn,
                     )

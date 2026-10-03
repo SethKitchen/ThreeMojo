@@ -12,8 +12,15 @@ from extensions.carla.lane_refinement import _axis_lane_minimum
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import (
-    LANE_DRIVING, LaneId, NO_JUNCTION, RoadId, RoadInfoElevation,
-    RoadInfoGeometry, RoadInfoLaneOffset, RoadInfoLaneWidth, SectionId,
+    LANE_DRIVING,
+    LaneId,
+    NO_JUNCTION,
+    RoadId,
+    RoadInfoElevation,
+    RoadInfoGeometry,
+    RoadInfoLaneOffset,
+    RoadInfoLaneWidth,
+    SectionId,
 )
 from math.vector3 import Vector3
 from std.testing import TestSuite, assert_equal, assert_true
@@ -23,7 +30,15 @@ def test_direct_road_translated_grid_and_exact_tie() raises:
     var base = Float64(1e20)
     var length = Float64(81920.0)
     var geometry = RoadGeometry(LINE, base, 0.0, 0.0, 0.0, length)
-    var road = Road(RoadId(1), "grid", base + length, NO_JUNCTION, RoadId(0), RoadId(0), True)
+    var road = Road(
+        RoadId(1),
+        "grid",
+        base + length,
+        NO_JUNCTION,
+        RoadId(0),
+        RoadId(0),
+        True,
+    )
     _ = road.add_section(SectionId(0), base)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
@@ -31,8 +46,12 @@ def test_direct_road_translated_grid_and_exact_tie() raises:
         RoadInfoLaneWidth(base, CubicPolynomial.constant(0.0002))
     )
     road.info.geometries.append(RoadInfoGeometry(base, geometry^))
-    road.info.elevations.append(RoadInfoElevation(0.0, CubicPolynomial.constant(0.0)))
-    road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0)))
+    road.info.elevations.append(
+        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+    )
+    road.info.lane_offsets.append(
+        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.0))
+    )
     # Legal stored s values are base + k*16384. The x coordinate is exactly
     # k*16384, and y/z are constant. These answers follow from integer gaps.
     for sample in [
@@ -43,7 +62,11 @@ def test_direct_road_translated_grid_and_exact_tie() raises:
         (100000.0, base + length),
     ]:
         var found = _axis_lane_minimum(
-            road, 0, 0, base, base + length,
+            road,
+            0,
+            0,
+            base,
+            base + length,
             Vector3(Float32(sample[0]), Float32(0.0001), 0),
         )
         assert_true(Bool(found))

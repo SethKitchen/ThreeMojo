@@ -11,8 +11,16 @@ branch has no finite derivative certificate. Search policy and work limits
 live in lane_refinement, not here.
 """
 
-from extensions.carla.curve_interval import _tight_sum_bound, _tight_quotient_bound, _tight_square_bound, _Interval, _Jet, _power_quotient_bound
+from extensions.carla.curve_interval import (
+    _tight_sum_bound,
+    _tight_quotient_bound,
+    _tight_square_bound,
+    _Interval,
+    _Jet,
+    _power_quotient_bound,
+)
 from extensions.carla.curve_trig import (
+    _constant_sincos_jet,
     _atan2_jet,
     _atan_jet,
     _curve_cos,
@@ -23,7 +31,13 @@ from extensions.carla.curve_trig import (
     _uncertain,
 )
 from extensions.carla.geometry import (
-    ARC, LINE, PARAM_POLY3, SPIRAL, RoadGeometry, _GL_NODES, _GL_WEIGHTS,
+    ARC,
+    LINE,
+    PARAM_POLY3,
+    SPIRAL,
+    RoadGeometry,
+    _GL_NODES,
+    _GL_WEIGHTS,
 )
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
@@ -32,11 +46,12 @@ from math.vector3 import Vector3
 from std.math import ceil, inf, isfinite
 
 
-def _polynomial_jet(polynomial: CubicPolynomial, s: _Jet, shift: Float64 = 0.0) -> _Jet:
+def _polynomial_jet(
+    polynomial: CubicPolynomial, s: _Jet, shift: Float64 = 0.0
+) -> _Jet:
     return (_Jet.constant(polynomial.a) - _Jet.constant(shift)) + s * (
-        _Jet.constant(polynomial.b) + s * (
-            _Jet.constant(polynomial.c) + s * _Jet.constant(polynomial.d)
-        )
+        _Jet.constant(polynomial.b)
+        + s * (_Jet.constant(polynomial.c) + s * _Jet.constant(polynomial.d))
     )
 
 
@@ -68,8 +83,11 @@ def _spiral_counts(geometry: RoadGeometry, d: _Jet) -> Tuple[Int, Int]:
     var k0 = geometry.curvature_start
     var rate = (geometry.curvature_end - k0) / geometry.length
     var reach = (
-        _Jet.constant(k0) + _Jet.constant(rate) * d
-    ).rounded_value().absolute().maximum(_Interval.point(abs(k0)))
+        (_Jet.constant(k0) + _Jet.constant(rate) * d)
+        .rounded_value()
+        .absolute()
+        .maximum(_Interval.point(abs(k0)))
+    )
     var counts = d.rounded_value() * (_Interval.point(1.0) + reach)
     if not counts.is_finite() or counts.low < 0.0 or counts.high > 1e9:
         # No Int conversion of an unbounded value. The caller must split
@@ -95,13 +113,27 @@ def _spiral_jet(
         var start = step * _Jet.constant(Float64(piece))
         var i = 0
         while i < 5:
-            var t = start + step * _Jet.constant(0.5) * _Jet.constant(1.0 + nodes[i])
+            var t = start + step * _Jet.constant(0.5) * _Jet.constant(
+                1.0 + nodes[i]
+            )
             var theta = _Jet.constant(geometry.heading) + t * (
                 k0 + _Jet.constant(0.5) * rate * t
             )
             var trig = _sincos_jet(theta)
-            x = x + step * _Jet.constant(0.5) * _Jet.constant(weights[i]) * trig[1]
-            y = y + step * _Jet.constant(0.5) * _Jet.constant(weights[i]) * trig[0]
+            x = (
+                x
+                + step
+                * _Jet.constant(0.5)
+                * _Jet.constant(weights[i])
+                * trig[1]
+            )
+            y = (
+                y
+                + step
+                * _Jet.constant(0.5)
+                * _Jet.constant(weights[i])
+                * trig[0]
+            )
             i += 1
         piece += 1
     var heading = _Jet.constant(geometry.heading) + d * (
@@ -138,8 +170,12 @@ def _sample_blend_jet(rate: _Jet, one: Float64, two: Float64) -> _Jet:
     # Scalar evaluation retains the original weighted expression. Its error
     # bounds that graph, including permitted contraction. Only the ideal real
     # value and derivatives use the algebraically identical local expression.
-    var result = rate * _Jet.constant(one) + (_Jet.constant(1.0) - rate) * _Jet.constant(two)
-    var ideal = _Jet.constant(two) + rate * (_Jet.constant(one) - _Jet.constant(two))
+    var result = rate * _Jet.constant(one) + (
+        _Jet.constant(1.0) - rate
+    ) * _Jet.constant(two)
+    var ideal = _Jet.constant(two) + rate * (
+        _Jet.constant(one) - _Jet.constant(two)
+    )
     # Both expressions enclose the same exact real quantity. Intersection
     # also retains the original finite enclosure if the local difference
     # overflows even though the weighted expression remains bounded.
@@ -171,12 +207,18 @@ def _sample_jet(
                 elif one.tu < 0.0 and two.tu < 0.0:
                     heading = _Jet.constant(_curve_atan2(one.tv + two.tv, -1.0))
                 elif one.tu == 0.0 and two.tu == 0.0:
-                    heading = _Jet.constant(_curve_atan2(one.tv + two.tv, one.tu + two.tu))
+                    heading = _Jet.constant(
+                        _curve_atan2(one.tv + two.tv, one.tu + two.tu)
+                    )
     var c = _Jet.constant(_curve_cos(geometry.heading))
     var s = _Jet.constant(_curve_sin(geometry.heading))
     return (
-        (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + u * c - v * s,
-        (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + v * c + u * s,
+        (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x)))
+        + u * c
+        - v * s,
+        (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y)))
+        + v * c
+        + u * s,
         _Jet.constant(geometry.heading) + heading,
     )
 
@@ -205,8 +247,12 @@ def _arc_offset_jet(
     var chord = factor * _sinc_jet(half)
     var trig = _sincos_jet(phase)
     return (
-        (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + offset * _Jet.constant(_curve_sin(geometry.heading)) + chord * trig[1],
-        (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) - offset * _Jet.constant(_curve_cos(geometry.heading)) + chord * trig[0],
+        (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x)))
+        + offset * _Jet.constant(_curve_sin(geometry.heading))
+        + chord * trig[1],
+        (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y)))
+        - offset * _Jet.constant(_curve_cos(geometry.heading))
+        + chord * trig[0],
         _Jet.constant(geometry.heading) + turn,
     )
 
@@ -216,9 +262,15 @@ def _reference_jet(
 ) -> Tuple[_Jet, _Jet, _Jet]:
     var d = _geometry_distance(geometry, distance)
     if geometry.kind == LINE:
+        # These coefficients are fixed across this LINE's parameter domain.
+        # Enclose all allowed scalar contractions instead of treating one
+        # sampled call-site result as the only possible coefficient.
+        var direction = _constant_sincos_jet(geometry.heading)
         return (
-            (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + d * _Jet.constant(_curve_cos(geometry.heading)),
-            (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + d * _Jet.constant(_curve_sin(geometry.heading)),
+            (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x)))
+            + d * direction[1],
+            (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y)))
+            + d * direction[0],
             _Jet.constant(geometry.heading),
         )
     if geometry.kind == ARC:
@@ -231,7 +283,9 @@ def _reference_jet(
         if counts[0] == counts[1]:
             return first
         # A piece-count transition is an actual evaluator discontinuity.
-        return _union_points(first, _spiral_jet(geometry, d, counts[1], translation))
+        return _union_points(
+            first, _spiral_jet(geometry, d, counts[1], translation)
+        )
     if len(geometry.samples) < 2:
         return _unknown_point()
     var domain = d.rounded_value()
@@ -266,7 +320,11 @@ def _reference_work(road: Road, low: Float64, high: Float64) -> Int:
 
 
 def _lane_jet_model(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
     translation: Vector3,
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
     var geometry_at = info_index(road.info.geometries, low)
@@ -302,29 +360,49 @@ def _lane_jet_model(
                 raise Error("A lane bound needs a width record")
             if info_index(lanes[i].info.widths, high) != width_at:
                 return _unknown_point()
-            var width = _polynomial_jet(lanes[i].info.widths[width_at].polynomial, s)
+            var width = _polynomial_jet(
+                lanes[i].info.widths[width_at].polynomial, s
+            )
             if lanes[i].id != lane_id:
                 offset = offset + sign * width
             else:
                 offset = offset + sign * width * _Jet.constant(0.5)
                 done = True
-    offset = offset - _polynomial_jet(road.info.lane_offsets[offset_at].polynomial, s)
+    offset = offset - _polynomial_jet(
+        road.info.lane_offsets[offset_at].polynomial, s
+    )
     ref record = road.info.geometries[geometry_at]
-    var point = _reference_jet(record.geometry, s - _Jet.constant(record.s), translation)
+    var point = _reference_jet(
+        record.geometry, s - _Jet.constant(record.s), translation
+    )
     if record.geometry.kind == ARC:
         var d = _geometry_distance(record.geometry, s - _Jet.constant(record.s))
         var arc = _arc_offset_jet(record.geometry, d, offset, translation)
         return (
-            arc[0], arc[1],
-            _polynomial_jet(road.info.elevations[elevation_at].polynomial, s, Float64(translation.z)),
+            arc[0],
+            arc[1],
+            _polynomial_jet(
+                road.info.elevations[elevation_at].polynomial,
+                s,
+                Float64(translation.z),
+            ),
         )
-    var trig = _sincos_jet(point[2])
+    var trig: Tuple[_Jet, _Jet]
+    if record.geometry.kind == LINE:
+        # Structural provenance: the reference tangent is exactly the stored
+        # geometry heading, regardless of changing lane widths and offsets.
+        trig = _constant_sincos_jet(record.geometry.heading)
+    else:
+        trig = _sincos_jet(point[2])
     return (
         point[0] + offset * trig[0],
         point[1] - offset * trig[1],
-        _polynomial_jet(road.info.elevations[elevation_at].polynomial, s, Float64(translation.z)),
+        _polynomial_jet(
+            road.info.elevations[elevation_at].polynomial,
+            s,
+            Float64(translation.z),
+        ),
     )
-
 
 
 def _lane_jet(
@@ -335,7 +413,11 @@ def _lane_jet(
 
 
 def _distance_jet(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
     location: Vector3,
 ) raises -> _Jet:
     var point = _lane_jet(road, section, lane, low, high)
@@ -345,14 +427,15 @@ def _distance_jet(
     return _square_jet(x) + _square_jet(y) + _square_jet(z)
 
 
-
 def _scaled_coordinate_jet(point: _Jet, query: Float64, scale: Float64) -> _Jet:
     # The target is the exact real distance between stored center coordinates.
     # Query subtraction and normalization are mathematical operations here;
     # they are not additional rounded operations of the center evaluator.
     var divisor = _Interval.point(scale)
     return _Jet(
-        _tight_quotient_bound(_tight_sum_bound(point.value, -_Interval.point(query)), divisor),
+        _tight_quotient_bound(
+            _tight_sum_bound(point.value, -_Interval.point(query)), divisor
+        ),
         _power_quotient_bound(point.first, divisor),
         _power_quotient_bound(point.second, divisor),
         (_Interval.point(point.error) / divisor).high,
@@ -369,7 +452,10 @@ def _point_square_jet(value: _Jet) -> _Jet:
         _tight_square_bound(value.value),
         twice * value.value * value.first,
         twice * (value.first.square() + value.value * value.second),
-        (twice * _Interval.point(value.value.magnitude()) * error + error.square()).high,
+        (
+            twice * _Interval.point(value.value.magnitude()) * error
+            + error.square()
+        ).high,
     )
 
 
@@ -379,14 +465,24 @@ def _scaled_point_distance_jet(
     # Derivatives describe the continuous stored-polynomial center. Its
     # separate scalar-rounding enclosure also bounds the rounded staircase.
     # No scalar rounding is invented for the exact point-distance predicate.
-    var x = _point_square_jet(_scaled_coordinate_jet(point[0], Float64(location.x), scale))
-    var y = _point_square_jet(_scaled_coordinate_jet(-point[1], Float64(location.y), scale))
-    var z = _point_square_jet(_scaled_coordinate_jet(point[2], Float64(location.z), scale))
+    var x = _point_square_jet(
+        _scaled_coordinate_jet(point[0], Float64(location.x), scale)
+    )
+    var y = _point_square_jet(
+        _scaled_coordinate_jet(-point[1], Float64(location.y), scale)
+    )
+    var z = _point_square_jet(
+        _scaled_coordinate_jet(point[2], Float64(location.z), scale)
+    )
     return _Jet(
         _tight_sum_bound(_tight_sum_bound(x.value, y.value), z.value),
         x.first + y.first + z.first,
         x.second + y.second + z.second,
-        (_Interval.point(x.error) + _Interval.point(y.error) + _Interval.point(z.error)).high,
+        (
+            _Interval.point(x.error)
+            + _Interval.point(y.error)
+            + _Interval.point(z.error)
+        ).high,
     )
 
 
@@ -396,16 +492,26 @@ def _scaled_point_distance_box(
     # Direct value enclosure also works when derivative arithmetic overflows.
     # Positive infinite lower distances can still exclude a distant interval.
     var divisor = _Interval.point(scale)
-    var x = (point[0].rounded_value() - _Interval.point(Float64(location.x))) / divisor
-    var y = (-point[1].rounded_value() - _Interval.point(Float64(location.y))) / divisor
-    var z = (point[2].rounded_value() - _Interval.point(Float64(location.z))) / divisor
+    var x = (
+        point[0].rounded_value() - _Interval.point(Float64(location.x))
+    ) / divisor
+    var y = (
+        -point[1].rounded_value() - _Interval.point(Float64(location.y))
+    ) / divisor
+    var z = (
+        point[2].rounded_value() - _Interval.point(Float64(location.z))
+    ) / divisor
     var result = x.square() + y.square() + z.square()
     return _Interval(max(0.0, result.low), max(0.0, result.high))
 
 
 def _expansion_distance_jet(
-    road: Road, section: Int, lane: Int, s: Float64,
-    location: Vector3, scale: Float64,
+    road: Road,
+    section: Int,
+    lane: Int,
+    s: Float64,
+    location: Vector3,
+    scale: Float64,
 ) raises -> _Jet:
     # Translate constant origins in the IDEAL expression before interval
     # evaluation, to avoid losing its small relative value to world-coordinate
@@ -430,17 +536,25 @@ def _lane_width_box(
         raise Error("A lane classification needs a width record")
     if info_index(widths, high) != at:
         return _Interval.whole()
-    return _polynomial_jet(widths[at].polynomial, _Jet.variable(low, high)).rounded_value()
+    return _polynomial_jet(
+        widths[at].polynomial, _Jet.variable(low, high)
+    ).rounded_value()
 
 
 def _scaled_plan_width_box(
-    point: Tuple[_Jet, _Jet, _Jet], width: _Interval,
-    location: Vector3, scale: Float64,
+    point: Tuple[_Jet, _Jet, _Jet],
+    width: _Interval,
+    location: Vector3,
+    scale: Float64,
 ) -> _Interval:
     # Sign of 4*plan_distance^2-width^2 for every stored center and width.
     # Division precedes multiplication, so tiny positive widths do not vanish.
     var divisor = _Interval.point(scale)
-    var x = (point[0].rounded_value() - _Interval.point(Float64(location.x))) / divisor
-    var y = (-point[1].rounded_value() - _Interval.point(Float64(location.y))) / divisor
+    var x = (
+        point[0].rounded_value() - _Interval.point(Float64(location.x))
+    ) / divisor
+    var y = (
+        -point[1].rounded_value() - _Interval.point(Float64(location.y))
+    ) / divisor
     var diameter = width / divisor
     return _Interval.point(4.0) * (x.square() + y.square()) - diameter.square()

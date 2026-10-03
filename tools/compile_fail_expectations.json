@@ -1919,6 +1919,30 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_navigation_search_limit_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 11,
+        "message": "invalid call to 'check': value passed to 'value' cannot be converted from 'IntLiteral[0]' to 'NavigationSearchLimit'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_navigation_search_status_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 11,
+        "message": "invalid call to 'check': value passed to 'value' cannot be converted from 'IntLiteral[0]' to 'NavigationSearchStatus'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_nerve_part_is_not_a_bare_int.mojo": {
     "errors": [
       {

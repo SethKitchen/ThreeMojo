@@ -49,6 +49,14 @@ actor.
 - The replayer does not load a map: it plays into the world it is given,
   and the header's map name is not checked. There is no map override.
 - The replayer reads the whole recording into memory when it starts.
+- Capsule gait is reconstructed from recorded speed and replay time,
+  starting from standing. The log has no procedural phase or amplitude.
+  Playback writes its own gait after physics, so `step` counts time once.
+  Stopping leaves no persistent gait owner; live ticks resume immediately.
+- Negative or nonfinite advances, overflowing times and invalid frame
+  intervals are refused. CARLA's final-frame duration of -1 is supported.
+  A record-processing error disables playback. Earlier actor changes are
+  not rolled back; restart the replay rather than resume a partial frame.
 - The visual time, the scene lights, the bicycles' animation and the
   wheels' animation go into the replayer's own fields, since the world
   has none. See `replayer_helper` for the rest.
@@ -57,7 +65,7 @@ The source is CARLA's simulator plugin, `Carla/Recorder/
 CarlaReplayer.cpp` and `CarlaRecorder.cpp`.
 """
 
-from extensions.carla.actor import ActorId, NO_ACTOR, no_rotation
+from extensions.carla.actor import ActorId, NO_ACTOR, WALKER_ACTOR, no_rotation
 from extensions.carla.recorder_format import c_fixed, c_general
 from extensions.carla.recorder_packets import (
     LogReader,
@@ -115,10 +123,12 @@ from extensions.carla.replayer_helper import (
     set_walker_speed,
 )
 from extensions.carla.transform import CarlaTransform
+from extensions.carla.walker_gait import WalkerGait
 from extensions.carla.world import World
 from std.collections import Dict
 from std.pathlib import Path
-from units.si import SECOND, Duration, Length
+from std.math import isfinite
+from units.si import SECOND, Duration, Length, Velocity
 
 
 def _identity() -> CarlaTransform:
@@ -157,6 +167,10 @@ struct Replayer(Movable):
     var scene_lights: Dict[Int, RecordedLightScene]
     var bikers: Dict[Int, RecordedAnimBiker]
     var wheels: Dict[Int, RecordedAnimWheels]
+    # Replay-local state is copied to the world after each playback move.
+    # A preceding World.tick cannot double-advance this canonical gait.
+    var _walker_gaits: Dict[Int, WalkerGait]
+    var _walker_speeds: Dict[Int, Velocity]
 
     def __init__(out self):
         """Create a replayer that is not replaying: time factor 1, heroes
@@ -185,6 +199,8 @@ struct Replayer(Movable):
         self.scene_lights = Dict[Int, RecordedLightScene]()
         self.bikers = Dict[Int, RecordedAnimBiker]()
         self.wheels = Dict[Int, RecordedAnimWheels]()
+        self._walker_gaits = Dict[Int, WalkerGait]()
+        self._walker_speeds = Dict[Int, Velocity]()
 
     def is_enabled(self) -> Bool:
         """Return whether a replay runs, `IsEnabled`.
@@ -250,6 +266,8 @@ struct Replayer(Movable):
         self.frame.duration_this = 0
         self.mapped_id = Dict[Int, Int]()
         self.is_hero_map = Dict[Int, Bool]()
+        self._walker_gaits = Dict[Int, WalkerGait]()
+        self._walker_speeds = Dict[Int, Velocity]()
         self.info = RecorderInfo.read(self.reader)
 
     def _get_total_time(mut self) -> Float64:
@@ -353,7 +371,8 @@ struct Replayer(Movable):
             CARLA's text, as `replay_file` returns it.
 
         Raises:
-            Error: If the world refuses a record.
+            Error: If the world refuses a record, or playback timing
+                is not valid.
         """
         if self.enabled:
             self.stop(world)
@@ -427,7 +446,7 @@ struct Replayer(Movable):
             delta: The world's tick, scaled by the time factor.
 
         Raises:
-            Error: If the world refuses a record.
+            Error: If the world refuses a record, or playback timing is invalid.
         """
         if self.enabled:
             self._process_to_time(
@@ -447,8 +466,18 @@ struct Replayer(Movable):
             The world's new frame.
 
         Raises:
-            Error: If the world cannot tick, or refuses a record.
+            Error: If the world cannot tick, refuses a record, or playback
+                timing is invalid.
         """
+        if self.enabled:
+            if Bool(world.settings.fixed_delta_seconds):
+                _ = self._checked_time(
+                    Float64(
+                        world.settings.fixed_delta_seconds.value().to(SECOND)
+                    )
+                    * self.time_factor
+                )
+                _ = self._frame_end()
         var frame = world.tick()
         if self.enabled:
             self._process_to_time(
@@ -458,21 +487,41 @@ struct Replayer(Movable):
 
     # --- the frames -----------------------------------------------------------
 
+    def _checked_time(self, time: Float64) raises -> Float64:
+        """Validate a time advance before changing playback or the world."""
+        if not isfinite(time) or time < 0:
+            raise Error("Replay time advance must be finite and nonnegative")
+        var new_time = self.current_time + time
+        if not isfinite(new_time):
+            raise Error("Replay time must remain finite")
+        return new_time
+
     def _process_to_time(
         mut self, mut world: World, time: Float64, first_time: Bool
     ) raises:
-        """`ProcessToTime`: read up to the frame that holds the new time."""
+        """Preflight time; a record-processing error requires a restart."""
+        var new_time = self._checked_time(time)
+        _ = self._frame_end()
+        try:
+            self._process_frames(world, new_time, first_time)
+        except error:
+            # Actor operations are not transactional. Never resume a partly
+            # consumed frame with its old cached speed after an exception.
+            self.enabled = False
+            raise error^
+
+    def _process_frames(
+        mut self, mut world: World, new_time: Float64, first_time: Bool
+    ) raises:
+        """Read the frames crossed by a validated playback move."""
         var per = 0.0
-        var new_time = self.current_time + time
         var found = False
         var exit_loop = False
-        if (
-            new_time >= self.frame.elapsed
-            and new_time < self.frame.elapsed + self.frame.duration_this
-        ):
+        if new_time >= self.frame.elapsed and new_time < self._frame_end():
             per = (new_time - self.frame.elapsed) / self.frame.duration_this
             found = True
             exit_loop = True
+        self._advance_frame_gaits(world, new_time, first_time)
         while not self.reader.failed and not exit_loop:
             self._read_header()
             var id = self.header_id
@@ -480,7 +529,8 @@ struct Replayer(Movable):
                 break
             if id == PACKET_FRAME_START.value:
                 self.frame = RecorderFrame.read(self.reader)
-                if new_time < self.frame.elapsed + self.frame.duration_this:
+                _ = self._frame_end()
+                if new_time < self._frame_end():
                     per = (
                         new_time - self.frame.elapsed
                     ) / self.frame.duration_this
@@ -495,7 +545,10 @@ struct Replayer(Movable):
                 self._events_parent(world)
             elif id == PACKET_WEATHER.value:
                 self._weather(world)
+            elif id == PACKET_ANIM_WALKER.value:
+                self._walker_animation(world)
             elif id == PACKET_FRAME_END.value:
+                self._advance_frame_gaits(world, new_time, first_time)
                 if found:
                     exit_loop = True
             elif found and self._frame_packet(world, id, first_time):
@@ -504,9 +557,66 @@ struct Replayer(Movable):
                 self.reader.skip(self.header_size)
         if self.enabled and found:
             self._update_positions(world, per)
+        for entry in self._walker_gaits.items():
+            var id = ActorId(entry.key)
+            if not world.is_alive(id):
+                continue
+            if self._skip_hero(id):
+                continue
+            world.walkers[world.actor(id).handle].gait = entry.value
         self.current_time = new_time
         if self.current_time >= self.time_to_stop:
             self.stop(world, True)
+
+    def _frame_end(self) raises -> Float64:
+        """Refuse an invalid frame interval before changing its actors."""
+        # CARLA leaves -1 in the last frame: no following interval.
+        var duration = self.frame.duration_this
+        if duration == -1:
+            duration = 0
+        var end = self.frame.elapsed + duration
+        if not isfinite(end) or duration < 0:
+            raise Error(
+                "A replay frame must have a finite nonnegative duration"
+            )
+        return end
+
+    def _advance_frame_gaits(
+        mut self, world: World, new_time: Float64, first_time: Bool
+    ) raises:
+        """Integrate only the part of this frame crossed by playback."""
+        if not (self.enabled or first_time):
+            return
+        var start = max(self.current_time, self.frame.elapsed)
+        var end = min(new_time, self._frame_end())
+        if end <= start:
+            return
+        for entry in self._walker_speeds.items():
+            var id = ActorId(entry.key)
+            if not world.is_alive(id):
+                continue
+            if self._skip_hero(id):
+                continue
+            self._walker_gaits[entry.key].advance(
+                entry.value, Duration(Float32(end - start), SECOND)
+            )
+
+    def _walker_animation(mut self, mut world: World) raises:
+        """Read speed in every crossed frame, including a seek's history."""
+        var total = self.reader.u16()
+        for _ in range(total):
+            var w = RecordedAnimWalker.read(self.reader)
+            var id = self.mapped(w.database_id)
+            if self._skip_hero(id):
+                continue
+            if not world.is_alive(id):
+                continue
+            if world.actor(id).kind != WALKER_ACTOR:
+                continue
+            set_walker_speed(world, id, w.speed)
+            if id.value not in self._walker_gaits:
+                self._walker_gaits[id.value] = WalkerGait()
+            self._walker_speeds[id.value] = Velocity(w.speed / 100)
 
     def _frame_packet(
         mut self, mut world: World, id: Int, first_time: Bool
@@ -535,13 +645,6 @@ struct Replayer(Movable):
                 v.database_id = self.mapped(v.database_id)
                 if not self._skip_hero(v.database_id):
                     self.wheels[v.database_id.value] = v^
-        elif id == PACKET_ANIM_WALKER.value:
-            total = self.reader.u16()
-            for _ in range(total):
-                var w = RecordedAnimWalker.read(self.reader)
-                w.database_id = self.mapped(w.database_id)
-                if not self._skip_hero(w.database_id):
-                    set_walker_speed(world, w.database_id, w.speed)
         elif id == PACKET_ANIM_BIKER.value:
             total = self.reader.u16()
             for _ in range(total):
@@ -605,7 +708,11 @@ struct Replayer(Movable):
         var total = self.reader.u16()
         for _ in range(total):
             var e = RecordedEventDel.read(self.reader)
-            _ = process_event_del(world, self.mapped(e.database_id))
+            var id = self.mapped(e.database_id)
+            _ = process_event_del(world, id)
+            if id.value in self._walker_gaits:
+                _ = self._walker_gaits.pop(id.value)
+                _ = self._walker_speeds.pop(id.value)
             if e.database_id.value in self.mapped_id:
                 _ = self.mapped_id.pop(e.database_id.value)
 

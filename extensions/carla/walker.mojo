@@ -21,6 +21,7 @@ from extensions.carla.actor import compose
 from extensions.carla.physics.simulation import WalkerId
 from extensions.carla.physics.walker import WalkerControl
 from extensions.carla.transform import CarlaTransform
+from extensions.carla.walker_gait import WalkerGait
 
 
 @fieldwise_init
@@ -61,6 +62,7 @@ struct WalkerRecord(Copyable, Movable):
 
     var physics: WalkerId
     var control: WalkerControl
+    var gait: WalkerGait
     var bones: List[BoneTransformDataIn]
     # How much of the set pose shows over the walk, zero to one.
     var pose_blend: Float32
@@ -73,6 +75,7 @@ struct WalkerRecord(Copyable, Movable):
         """
         self.physics = physics
         self.control = WalkerControl()
+        self.gait = WalkerGait()
         self.bones = List[BoneTransformDataIn]()
         self.pose_blend = 0
 

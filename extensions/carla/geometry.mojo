@@ -395,8 +395,12 @@ struct RoadGeometry(Copyable, Movable):
         var trig = _curve_sincos(phase)
         var derivative = _sincos_derivative(phase)
         return (
-            slope * sin(self.heading) + dchord * trig[1] + chord * derivative[1] * dhalf,
-            -slope * cos(self.heading) + dchord * trig[0] + chord * derivative[0] * dhalf,
+            slope * sin(self.heading)
+            + dchord * trig[1]
+            + chord * derivative[1] * dhalf,
+            -slope * cos(self.heading)
+            + dchord * trig[0]
+            + chord * derivative[0] * dhalf,
         )
 
     def _spiral(self, d: Float64) -> DirectedPoint:
@@ -419,10 +423,15 @@ struct RoadGeometry(Copyable, Movable):
                 x += step * 0.5 * weights[i] * cos(theta)
                 y += step * 0.5 * weights[i] * sin(theta)
         return DirectedPoint(
-            self.x + x, self.y + y, 0.0, self.heading + d * (k0 + 0.5 * rate * d)
+            self.x + x,
+            self.y + y,
+            0.0,
+            self.heading + d * (k0 + 0.5 * rate * d),
         )
 
-    def _derivative_at(self, distance: Float64) -> Tuple[Float64, Float64, Float64]:
+    def _derivative_at(
+        self, distance: Float64
+    ) -> Tuple[Float64, Float64, Float64]:
         if distance < 0.0 or distance > self.length:
             return (0.0, 0.0, 0.0)
         var d = distance
@@ -451,7 +460,9 @@ struct RoadGeometry(Copyable, Movable):
                     var t = start + step * 0.5 * (1.0 + nodes[i])
                     var dt = dstart + dstep * 0.5 * (1.0 + nodes[i])
                     var theta = self.heading + t * (k0 + 0.5 * rate * t)
-                    var dtheta = dt * (k0 + 0.5 * rate * t) + t * (0.5 * rate * dt)
+                    var dtheta = dt * (k0 + 0.5 * rate * t) + t * (
+                        0.5 * rate * dt
+                    )
                     var trig = _curve_sincos(theta)
                     var derivative = _sincos_derivative(theta)
                     var factor = step * 0.5 * weights[i]

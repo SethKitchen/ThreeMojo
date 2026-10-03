@@ -305,6 +305,35 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 
 A plane refuses a zero normal. Three points on one line do not make a plane.
 
+Three-point plane and triangle normal queries retain finite coordinate products
+before normalization. This corrects range loss in three.js 0.180-style direct
+cross products. For example, the points `(0, 0, 7)`, `(2**100, 0, 7)`, and
+`(0, 2**100, 7)` have unit normal `(0, 0, 1)` and plane constant `-7`.
+The raw Float32 cross product overflows, but these results are representable.
+The same direction survives at the minimum subnormal coordinate scale.
+
+A cold fallback sums original coordinate products with exact sign and zero.
+It also handles cancellation that widening only the edge differences misses.
+The plane constant uses the original coordinate determinant. Ordinary,
+well-conditioned crosses keep their Float32 arithmetic. Nonfinite coordinates
+keep direct IEEE behavior. This is a range correction, not a guarantee of
+correctly rounded normals for every input.
+
+The three-point factory also uses original coordinates when raw dot products
+lose range, or its constant approaches cancellation or the Float32 limit. Its separate range guard covers
+512 steps below the maximum finite output; it includes edge and cross-product
+rounding. The normal-and-point factory has a smaller guard because its given
+normal components are already the original inputs. Stored Float32 plane
+coefficients can still give a small nonzero distance at an original corner.
+The fallback cannot remove this final representation error.
+
+A coordinate plane through the origin keeps the fast path when all three
+original x, y, or z coordinates are zero. Computed zeros alone do not permit
+this shortcut.
+
+Exact zero cross components in the fallback use positive zero. In the fallback,
+an exact zero plane constant uses negative zero. These zero signs do not change the geometry.
+
 Plane construction scales the normal and constant together, including subnormal
 normals and finite normals whose length exceeds `Float32`. The fallback divides
 in `Float64` before it stores the result. A normalized constant beyond the
@@ -435,6 +464,12 @@ Normalized device space is unitless. World space is meters and screen space is p
 
 Barycentric queries use widened signed-area products. Thin triangles keep their nonzero area instead of losing it to a difference of dot products. Off-plane queries use the orthogonal projection onto the plane. Octree containment uses the same calculation.
 
+`is_degenerate` tests exact collinearity of finite stored corners. It applies
+no area tolerance. `raw_normal` and `area` still return their direct Float32
+arithmetic results. They can underflow to zero or overflow even when the unit
+normal is representable. Their rounded output does not define degeneracy.
+Barycentric and intersection queries retain their separate arithmetic limits.
+
 A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
 
 `Triangle.from_points_and_indices(points, a, b, c)` picks three corners from a list. An index out of range raises. `intersects_box(box)` is `Box3.intersects_triangle`. `a == b` compares the corners in order.
@@ -482,6 +517,72 @@ The floor accepts every positive `Int`, including `Int.MAX`.
 `SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform. The core generator and Clearwater share one 32-bit step in `math/random.mojo`.
 
 For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.
+
+### Periodic scalar helpers
+
+`euclidean_modulo(n, m)` accepts Float32 inputs. For finite inputs and a
+nonzero divisor, its result has the divisor's sign and a magnitude below
+`abs(m)`. Exact multiples return a zero with the divisor's sign. The exact
+mathematical result is rounded to Float32. If that reaches the excluded
+endpoint, the result is the adjacent Float32 toward zero. A zero divisor,
+an infinite operand, or a NaN operand returns NaN.
+
+`pingpong(x, length)` accepts every finite Float32 input and positive finite
+length. Its result is from zero to the length, with positive zero at period
+boundaries. It constructs the period in Float64 and folds the exact binary
+remainder before the final Float32 rounding. It keeps small phases and cannot
+overflow for a positive finite length.
+
+A negative length keeps three.js's
+extension from `2 * length` to `length`. This negative extension can round to
+negative infinity when its result does not fit Float32. Zero lengths and
+nonfinite operands return NaN.
+
+`math/remainder.mojo` provides `remainder_float64(n, m)`. It returns the exact
+truncating remainder for every finite binary64 pair with a nonzero divisor.
+The sign, including a zero's sign, comes from the dividend. A finite dividend
+and infinite divisor return the dividend. Zero divisors, infinite dividends,
+and NaN operands return NaN. NaN payloads are not preserved.
+
+The shared primitive uses integer significands and powers of two. It does not
+use a floating-point quotient, floating-point `%`, or a host library. Its
+integer residual stays below a 53-bit divisor. Each shift is at most ten bits,
+so the intermediate fits UInt64. There are at most 205 shifts. The final exact
+remainder fits the input binary64 lattice, including subnormal values.
+
+`tools/reference_remainders.py` decodes inputs to exact Python fractions. It
+uses rational floor division and rounds directly to the target format. The
+saved controls cover every finite exponent field, both signs, subnormals,
+exact multiples, representable neighbors, and seeded random pairs. Run
+`python3 tools/reference_remainders.py --check` to check the controls. Use
+`--write` only for an intentional fixture change. The native suite compares
+bits, without a tolerance.
+
+CPU evidence does not verify GPU runtime behavior.
+
+#### Differences from three.js
+
+The upstream baseline is three.js 0.180.0, `src/math/MathUtils.js`. Its
+Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0, Float32 bits
+`0x71800000` are exactly `2^100`. Both native Float32 and widened Float64 `%`
+return zero for a divisor of `1.5`. Exact rational arithmetic gives one.
+The shared primitive returns one.
+
+This is a reproduced API counterexample;
+it does not identify the compiler's internal cause.
+
+The unconditional upstream add-divisor step can erase a small positive
+remainder or overflow. The pingpong formula can overflow its Float32 period
+or erase a small folded phase. These cases now follow the mathematical wave.
+Opposite-sign endpoint rounding uses the adjacent value toward zero, rather
+than wrapping to zero. Ordinary three.js fixtures remain covered. These
+corrections can change a caller's phase or replay at the affected boundaries.
+
+The caller audit found no other direct calls to these two helpers in the
+frozen source. The animation mixer has its own quotient-based loop counter
+and phase reduction. Its counter range and large-step behavior need a separate
+contract; this change does not modify them. Integer texture wrapping and the
+large-angle sine reducer use separate arithmetic and are unchanged.
 
 ## Large-angle sine regressions
 

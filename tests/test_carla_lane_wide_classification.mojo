@@ -21,7 +21,7 @@ def test_narrow_lane_at_wide_origin_is_not_a_rounded_on_road_hit() raises:
         ' b="0" c="0" d="0"/><laneSection s="0">'
         '<center><lane id="0" type="none"/></center><right><lane id="-1"'
         ' type="driving"><width sOffset="0" a="0.0002" b="0" c="0" d="0"/>'
-        '</lane></right></laneSection></lanes></road></OpenDRIVE>'
+        "</lane></right></laneSection></lanes></road></OpenDRIVE>"
     )
     var roads = parsed.roads.copy()
     # Bypass MapBuilder's separate Float32 input storage. RoadGeometry.x can
@@ -52,19 +52,19 @@ def test_zero_squared_score_does_not_certify_coincident_center() raises:
         ' b="0" c="0" d="0"/></lane></left>'
         '<center><lane id="0" type="none"/></center><right><lane id="-1"'
         ' type="driving"><width sOffset="0" a="1" b="0" c="0" d="0"/>'
-        '</lane></right></laneSection></lanes></road></OpenDRIVE>'
+        "</lane></right></laneSection></lanes></road></OpenDRIVE>"
     )
     var roads = parsed.roads.copy()
     var tiny = Float64(1e-200)
     roads[0].info.lane_offsets[0].polynomial = CubicPolynomial.constant(-tiny)
     var right = roads[0].sections[0].lane_index(LaneId(-1))
     var left = roads[0].sections[0].lane_index(LaneId(1))
-    roads[0].sections[0].lanes[right].info.widths[0].polynomial = (
-        CubicPolynomial.constant(2.0 * tiny)
-    )
-    roads[0].sections[0].lanes[left].info.widths[0].polynomial = (
-        CubicPolynomial.constant(2.0 * tiny)
-    )
+    roads[0].sections[0].lanes[right].info.widths[
+        0
+    ].polynomial = CubicPolynomial.constant(2.0 * tiny)
+    roads[0].sections[0].lanes[left].info.widths[
+        0
+    ].polynomial = CubicPolynomial.constant(2.0 * tiny)
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var point = Vector3(0, 0, 0)
     var right_center = map.roads[0]._lane_point(0, right, 0.5)
@@ -79,7 +79,12 @@ def test_zero_squared_score_does_not_certify_coincident_center() raises:
     assert_equal(map.roads[0]._lane_distance_squared(0, right, 0.5, point), 0.0)
     assert_equal(map.roads[0]._lane_distance_squared(0, left, 0.5, point), 0.0)
     var nearest = map.closest_waypoint_on_road(point).value()
-    print("ZERO_SQUARE_CENTERS", right_center.y, left_center.y, nearest.lane_id.value)
+    print(
+        "ZERO_SQUARE_CENTERS",
+        right_center.y,
+        left_center.y,
+        nearest.lane_id.value,
+    )
     assert_equal(nearest.lane_id, LaneId(1))
     var under = map.waypoint(point)
     assert_true(Bool(under))

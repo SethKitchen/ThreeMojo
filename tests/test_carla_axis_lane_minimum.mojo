@@ -11,24 +11,43 @@ from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import LaneId
 from math.vector3 import Vector3
 from std.math import inf
-from std.testing import TestSuite, assert_equal, assert_false, assert_raises, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def _flat_map(
-    length: Float64 = 1.0, origin: Float64 = 0.0,
-    record_s: Float64 = 0.0, reverse: Bool = False,
+    length: Float64 = 1.0,
+    origin: Float64 = 0.0,
+    record_s: Float64 = 0.0,
+    reverse: Bool = False,
 ) raises -> Map:
     var side = "left" if reverse else "right"
     var id = 1 if reverse else -1
-    var parsed = load_opendrive(String(
-        '<OpenDRIVE><road id="1" length="1" junction="-1" rule="RHT">'
-        '<planView><geometry s="0" x="0" y="0" hdg="0" length="1">'
-        '<line/></geometry></planView><lanes><laneOffset s="0" a="0"'
-        ' b="0" c="0" d="0"/><laneSection s="0">'
-        '<center><lane id="0" type="none"/></center><', side, '><lane id="', id,
-        '" type="driving"><width sOffset="0" a="0.0002" b="0" c="0" d="0"/>'
-        '</lane></', side, '></laneSection></lanes></road></OpenDRIVE>',
-    ))
+    var parsed = load_opendrive(
+        String(
+            (
+                '<OpenDRIVE><road id="1" length="1" junction="-1" rule="RHT">'
+                '<planView><geometry s="0" x="0" y="0" hdg="0" length="1">'
+                '<line/></geometry></planView><lanes><laneOffset s="0" a="0"'
+                ' b="0" c="0" d="0"/><laneSection s="0">'
+                '<center><lane id="0" type="none"/></center><'
+            ),
+            side,
+            '><lane id="',
+            id,
+            (
+                '" type="driving"><width sOffset="0" a="0.0002" b="0" c="0"'
+                ' d="0"/></lane></'
+            ),
+            side,
+            "></laneSection></lanes></road></OpenDRIVE>",
+        )
+    )
     var roads = parsed.roads.copy()
     roads[0].length = record_s + length
     roads[0].sections[0].s = record_s
@@ -38,7 +57,9 @@ def _flat_map(
     roads[0].info.geometries[0].geometry.x = origin
     var lane = roads[0].sections[0].lane_index(LaneId(id))
     roads[0].sections[0].lanes[lane].distance = record_s
-    roads[0].sections[0].lanes[lane].info.widths[0].polynomial = CubicPolynomial.constant(0.0002)
+    roads[0].sections[0].lanes[lane].info.widths[
+        0
+    ].polynomial = CubicPolynomial.constant(0.0002)
     return Map(roads^, List[Junction](), List[Signal](), List[Controller]())
 
 
@@ -47,8 +68,12 @@ def test_axis_endpoints_are_exact_minima() raises:
     var segment = map.segment(0)
     var low = min(segment[2].s, segment[3].s)
     var high = max(segment[2].s, segment[3].s)
-    assert_equal(map.closest_waypoint_on_road(Vector3(-1, 0.0001, 0)).value().s, low)
-    assert_equal(map.closest_waypoint_on_road(Vector3(11, 0.0001, 0)).value().s, high)
+    assert_equal(
+        map.closest_waypoint_on_road(Vector3(-1, 0.0001, 0)).value().s, low
+    )
+    assert_equal(
+        map.closest_waypoint_on_road(Vector3(11, 0.0001, 0)).value().s, high
+    )
 
 
 def test_reverse_lane_uses_same_exact_parameter_minimum() raises:
@@ -80,7 +105,11 @@ def test_wide_origin_search_reaches_adjacent_stored_parameters() raises:
     var center = map.roads[0]._lane_center(0, lane, nearest.s)
     assert_equal(center[0], 16384.0)
     var lower = map.roads[0]._lane_center(0, lane, 1e20)
-    var query: Array[Float64, 3] = [Float64(location.x), Float64(location.y), 0.0]
+    var query: Array[Float64, 3] = [
+        Float64(location.x),
+        Float64(location.y),
+        0.0,
+    ]
     assert_equal(_wide_point_order(center, lower, query), -1)
 
 
@@ -109,11 +138,17 @@ def test_axis_search_charges_existing_work_limits() raises:
     assert_equal(certified[3], 64)
     assert_equal(certified[4], 66)
     with assert_raises(contains="interval work limit"):
-        _ = _axis_lane_minimum(map.roads[0], 0, lane, 0.0, 2e20, location, max_nodes=1)
+        _ = _axis_lane_minimum(
+            map.roads[0], 0, lane, 0.0, 2e20, location, max_nodes=1
+        )
     with assert_raises(contains="quadrature work limit"):
-        _ = _axis_lane_minimum(map.roads[0], 0, lane, 0.0, 2e20, location, max_terms=2)
+        _ = _axis_lane_minimum(
+            map.roads[0], 0, lane, 0.0, 2e20, location, max_terms=2
+        )
     with assert_raises(contains="numerical accuracy limit"):
-        _ = _axis_lane_minimum(map.roads[0], 0, lane, 0.0, 2e20, location, max_depth=0)
+        _ = _axis_lane_minimum(
+            map.roads[0], 0, lane, 0.0, 2e20, location, max_depth=0
+        )
 
 
 def test_axis_search_rejects_invalid_parameter_bounds() raises:
@@ -121,7 +156,9 @@ def test_axis_search_rejects_invalid_parameter_bounds() raises:
     var lane = map.roads[0].sections[0].lane_index(LaneId(-1))
     for bounds in [(-1.0, 1.0), (1.0, 0.0), (0.0, inf[DType.float64]())]:
         with assert_raises(contains="finite nonnegative parameter bounds"):
-            _ = _axis_lane_minimum(map.roads[0], 0, lane, bounds[0], bounds[1], Vector3(0, 0, 0))
+            _ = _axis_lane_minimum(
+                map.roads[0], 0, lane, bounds[0], bounds[1], Vector3(0, 0, 0)
+            )
 
 
 def test_other_affine_shapes_cannot_claim_axis_certificate() raises:
@@ -129,13 +166,19 @@ def test_other_affine_shapes_cannot_claim_axis_certificate() raises:
     var road = map.roads[0].copy()
     var lane = road.sections[0].lane_index(LaneId(-1))
     road.info.geometries[0].geometry.heading = 0.7
-    assert_false(Bool(_axis_lane_minimum(road, 0, lane, 0.0, 1.0, Vector3(0, 0, 0))))
+    assert_false(
+        Bool(_axis_lane_minimum(road, 0, lane, 0.0, 1.0, Vector3(0, 0, 0)))
+    )
     road.info.geometries[0].geometry.heading = 0.0
     road.info.elevations[0].polynomial.b = 0.1
-    assert_false(Bool(_axis_lane_minimum(road, 0, lane, 0.0, 1.0, Vector3(0, 0, 0))))
+    assert_false(
+        Bool(_axis_lane_minimum(road, 0, lane, 0.0, 1.0, Vector3(0, 0, 0)))
+    )
     road.info.elevations[0].polynomial.b = 0.0
     road.sections[0].lanes[lane].info.widths[0].polynomial.b = 0.1
-    assert_false(Bool(_axis_lane_minimum(road, 0, lane, 0.0, 1.0, Vector3(0, 0, 0))))
+    assert_false(
+        Bool(_axis_lane_minimum(road, 0, lane, 0.0, 1.0, Vector3(0, 0, 0)))
+    )
 
 
 def main() raises:

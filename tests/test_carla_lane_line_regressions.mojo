@@ -9,13 +9,32 @@ These six controls supplement the general-curve tests. They do not constitute
 the full lane-geometry regression suite.
 """
 
-from extensions.carla.map import Controller, Junction, Map, Signal, _distance_is_convex, _polynomial_candidates
+from extensions.carla.map import (
+    Controller,
+    Junction,
+    Map,
+    Signal,
+    _distance_is_convex,
+    _polynomial_candidates,
+)
 from extensions.carla.opendrive import load_opendrive
-from extensions.carla.road_info import LaneId, SectionId, RoadInfoElevation, RoadInfoLaneOffset, RoadInfoLaneWidth
+from extensions.carla.road_info import (
+    LaneId,
+    SectionId,
+    RoadInfoElevation,
+    RoadInfoLaneOffset,
+    RoadInfoLaneWidth,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from math.vector3 import Vector3
 from std.math import cos, sin
-from std.testing import TestSuite, assert_almost_equal, assert_equal, assert_false, assert_true
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_false,
+    assert_true,
+)
 
 
 def _map(
@@ -96,7 +115,7 @@ def test_narrow_nonconvex_cubic_checks_every_stationary_basin() raises:
         ' b="-6.7925" c="18200" d="-13000000"/><laneSection s="0">'
         '<center><lane id="0" type="none"/></center><right><lane id="-1"'
         ' type="driving"><width sOffset="0" a="0.0002" b="0" c="0" d="0"/>'
-        '</lane></right></laneSection></lanes></road></OpenDRIVE>'
+        "</lane></right></laneSection></lanes></road></OpenDRIVE>"
     )
     var point = Vector3(Float32(0.0009), Float32(0.0005525), 0)
     var nearest = map.closest_waypoint_on_road(point).value()
@@ -133,14 +152,16 @@ def test_five_stationary_roots_and_interior_flat_minimum() raises:
     # C=(0.0008t, 0.019(t-.2)(t-.5)(t-.8)), query=(0.0004,0).
     # Differentiated distance has five roots: 0.2214685, 0.2940383,
     # 0.5, 0.7059617, 0.7785315. The middle root is the global minimum.
-    var five = _polynomial_candidates([
-        -0.0000193808,
-        0.0002445316,
-        -0.00115881,
-        0.00257754,
-        -0.0027075,
-        0.001083,
-    ])
+    var five = _polynomial_candidates(
+        [
+            -0.0000193808,
+            0.0002445316,
+            -0.00115881,
+            0.00257754,
+            -0.0027075,
+            0.001083,
+        ]
+    )
     for expected in [
         0.221468515652635,
         0.294038323401528,
@@ -197,7 +218,9 @@ def test_cubic_certification_requires_one_unclamped_record_interval() raises:
     overflow.info.lane_offsets[0].polynomial.d = 1e308
     assert_equal(len(overflow._lane_distance_derivative(0, 0, 0, 25, point)), 0)
     var center = road.sections[0].lane_index(LaneId(0))
-    assert_equal(len(road._lane_distance_derivative(0, center, 0, 75, point)), 6)
+    assert_equal(
+        len(road._lane_distance_derivative(0, center, 0, 75, point)), 6
+    )
 
 
 def test_nonconvex_elevation_and_rotated_left_and_right_centers() raises:
@@ -206,27 +229,39 @@ def test_nonconvex_elevation_and_rotated_left_and_right_centers() raises:
             var side = "right" if id < 0 else "left"
             var parsed = load_opendrive(
                 String(
-                    '<OpenDRIVE><road id="1" length="0.001001" junction="-1" rule="',
+                    (
+                        '<OpenDRIVE><road id="1" length="0.001001"'
+                        ' junction="-1" rule="'
+                    ),
                     "RHT" if rht else "LHT",
-                    '"><planView><geometry s="0" x="0" y="0" hdg="0" length="0.001001">'
-                    '<line/></geometry></planView><elevationProfile><elevation s="0" '
-                    'a="-0.00029575" b="6.7925" c="-18200" d="13000000"/>'
-                    '</elevationProfile><lanes><laneOffset s="0" a="',
+                    (
+                        '"><planView><geometry s="0" x="0" y="0" hdg="0"'
+                        ' length="0.001001"><line/></geometry></planView><elevationProfile><elevation'
+                        ' s="0" a="-0.00029575" b="6.7925" c="-18200"'
+                        ' d="13000000"/></elevationProfile><lanes><laneOffset'
+                        ' s="0" a="'
+                    ),
                     -Float64(id) * 0.0001,
-                    '" b="0" c="0" d="0"/><laneSection s="0"><center><lane id="0" '
-                    'type="none"/></center><',
+                    (
+                        '" b="0" c="0" d="0"/><laneSection s="0"><center><lane'
+                        ' id="0" type="none"/></center><'
+                    ),
                     side,
                     '><lane id="',
                     id,
-                    '" type="driving"><width sOffset="0" a="0.0002" b="0" c="0" d="0"/>'
-                    '</lane></',
+                    (
+                        '" type="driving"><width sOffset="0" a="0.0002" b="0"'
+                        ' c="0" d="0"/></lane></'
+                    ),
                     side,
-                    '></laneSection></lanes></road></OpenDRIVE>',
+                    "></laneSection></lanes></road></OpenDRIVE>",
                 )
             )
             var roads = parsed.roads.copy()
             roads[0].info.geometries[0].geometry.heading = 0.7
-            var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
+            var map = Map(
+                roads^, List[Junction](), List[Signal](), List[Controller]()
+            )
             var point = Vector3(
                 Float32(0.0009 * cos(0.7)),
                 Float32(-0.0009 * sin(0.7)),
@@ -236,7 +271,10 @@ def test_nonconvex_elevation_and_rotated_left_and_right_centers() raises:
             assert_equal(nearest.lane_id, LaneId(id))
             assert_almost_equal(nearest.s, 0.0009, atol=2e-4)
             assert_true(Bool(map.waypoint(point)))
-            assert_true(map.compute_transform(nearest).location.distance_to(point) < 1e-9)
+            assert_true(
+                map.compute_transform(nearest).location.distance_to(point)
+                < 1e-9
+            )
 
 
 def test_line_polynomial_translation_and_far_query_scale() raises:

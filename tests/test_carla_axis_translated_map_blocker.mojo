@@ -16,25 +16,44 @@ from extensions.carla.road_info import LaneId
 from math.vector3 import Vector3
 from std.math import inf
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_false, assert_raises, assert_true
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def _flat_map(
-    length: Float64 = 1.0, origin: Float64 = 0.0,
-    record_s: Float64 = 0.0, reverse: Bool = False,
+    length: Float64 = 1.0,
+    origin: Float64 = 0.0,
+    record_s: Float64 = 0.0,
+    reverse: Bool = False,
     quadratic_width: Bool = False,
 ) raises -> Map:
     var side = "left" if reverse else "right"
     var id = 1 if reverse else -1
-    var parsed = load_opendrive(String(
-        '<OpenDRIVE><road id="1" length="1" junction="-1" rule="RHT">'
-        '<planView><geometry s="0" x="0" y="0" hdg="0" length="1">'
-        '<line/></geometry></planView><lanes><laneOffset s="0" a="0"'
-        ' b="0" c="0" d="0"/><laneSection s="0">'
-        '<center><lane id="0" type="none"/></center><', side, '><lane id="', id,
-        '" type="driving"><width sOffset="0" a="0.0002" b="0" c="0" d="0"/>'
-        '</lane></', side, '></laneSection></lanes></road></OpenDRIVE>',
-    ))
+    var parsed = load_opendrive(
+        String(
+            (
+                '<OpenDRIVE><road id="1" length="1" junction="-1" rule="RHT">'
+                '<planView><geometry s="0" x="0" y="0" hdg="0" length="1">'
+                '<line/></geometry></planView><lanes><laneOffset s="0" a="0"'
+                ' b="0" c="0" d="0"/><laneSection s="0">'
+                '<center><lane id="0" type="none"/></center><'
+            ),
+            side,
+            '><lane id="',
+            id,
+            (
+                '" type="driving"><width sOffset="0" a="0.0002" b="0" c="0"'
+                ' d="0"/></lane></'
+            ),
+            side,
+            "></laneSection></lanes></road></OpenDRIVE>",
+        )
+    )
     var roads = parsed.roads.copy()
     roads[0].length = record_s + length
     roads[0].sections[0].s = record_s
@@ -44,7 +63,9 @@ def _flat_map(
     roads[0].info.geometries[0].geometry.x = origin
     var lane = roads[0].sections[0].lane_index(LaneId(id))
     roads[0].sections[0].lanes[lane].distance = record_s
-    roads[0].sections[0].lanes[lane].info.widths[0].polynomial = CubicPolynomial.constant(0.0002)
+    roads[0].sections[0].lanes[lane].info.widths[
+        0
+    ].polynomial = CubicPolynomial.constant(0.0002)
     if quadratic_width:
         roads[0].sections[0].lanes[lane].info.widths[0].polynomial.c = 1e-40
     return Map(roads^, List[Junction](), List[Signal](), List[Controller]())
@@ -61,8 +82,10 @@ def test_translated_parameter_grid_rejects_unrepresentable_subdivision() raises:
 
 def test_translated_fixture_preserves_exact_input_bits() raises:
     var base = Float64(1e20)
-    assert_equal(bitcast[DType.uint64](base), UInt64(0x4415af1d78b58c40))
-    assert_equal(bitcast[DType.uint64](base + 81920.0), UInt64(0x4415af1d78b58c45))
+    assert_equal(bitcast[DType.uint64](base), UInt64(0x4415AF1D78B58C40))
+    assert_equal(
+        bitcast[DType.uint64](base + 81920.0), UInt64(0x4415AF1D78B58C45)
+    )
     assert_equal(base + 16384.0 - base, 16384.0)
     assert_equal(base + 8192.0, base)
 
@@ -78,7 +101,8 @@ def test_adjacent_parameters_reject_both_midpoint_rounding_directions() raises:
         for reverse in [False, True]:
             with assert_raises(contains="Float64 road-s resolution"):
                 _ = _flat_map(
-                    length=16384.0, record_s=Float64(1e20) + shift,
+                    length=16384.0,
+                    record_s=Float64(1e20) + shift,
                     reverse=reverse,
                 )
 
@@ -89,8 +113,13 @@ def test_aligned_translated_map_keeps_representable_queries() raises:
     var base = Float64(1e20)
     var map = _flat_map(length=65536.0, record_s=base)
     assert_equal(map.segment_count(), 1)
-    assert_equal(map.closest_waypoint_on_road(Vector3(10000, 0.0001, 0)).value().s, base + 16384.0)
-    assert_equal(map.closest_waypoint_on_road(Vector3(8192, 0.0001, 0)).value().s, base)
+    assert_equal(
+        map.closest_waypoint_on_road(Vector3(10000, 0.0001, 0)).value().s,
+        base + 16384.0,
+    )
+    assert_equal(
+        map.closest_waypoint_on_road(Vector3(8192, 0.0001, 0)).value().s, base
+    )
 
 
 def test_passing_singleton_does_not_require_an_interior_midpoint() raises:
@@ -123,7 +152,9 @@ def test_non_affine_translated_sampling_requires_directed_progress() raises:
     for reverse in [False, True]:
         with assert_raises(contains="Lane index sampling cannot advance"):
             _ = _flat_map(
-                length=81920.0, record_s=1e20, reverse=reverse,
+                length=81920.0,
+                record_s=1e20,
+                reverse=reverse,
                 quadratic_width=True,
             )
 
@@ -133,7 +164,9 @@ def test_terminal_non_affine_sampling_keeps_zero_span_entry() raises:
     # a 1 m step is requested. Its zero-span index entry remains valid.
     for reverse in [False, True]:
         var map = _flat_map(
-            length=0.000001, reverse=reverse, quadratic_width=True,
+            length=0.000001,
+            reverse=reverse,
+            quadratic_width=True,
         )
         assert_equal(map.segment_count(), 1)
         var segment = map.segment(0)

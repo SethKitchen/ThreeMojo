@@ -5,15 +5,45 @@
 
 """Required controls for evaluator bounds, transitions, and exhaustion."""
 
-from extensions.carla.curve_bounds import _lane_jet, _reference_work, _spiral_counts
+from extensions.carla.curve_bounds import (
+    _lane_jet,
+    _reference_work,
+    _spiral_counts,
+)
 from extensions.carla.curve_interval import _Jet
-from extensions.carla.geometry import ARC, LINE, PARAM_POLY3, SPIRAL, RoadGeometry, _Sample, with_arc, with_spiral
+from extensions.carla.geometry import (
+    ARC,
+    LINE,
+    PARAM_POLY3,
+    SPIRAL,
+    RoadGeometry,
+    _Sample,
+    with_arc,
+    with_spiral,
+)
 from extensions.carla.lane_refinement import _chord_error, _refine_lane
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
-from extensions.carla.road_info import LANE_DRIVING, LaneId, NO_JUNCTION, RoadId, RoadInfoElevation, RoadInfoGeometry, RoadInfoLaneOffset, RoadInfoLaneWidth, SectionId
+from extensions.carla.road_info import (
+    LANE_DRIVING,
+    LaneId,
+    NO_JUNCTION,
+    RoadId,
+    RoadInfoElevation,
+    RoadInfoGeometry,
+    RoadInfoLaneOffset,
+    RoadInfoLaneWidth,
+    SectionId,
+)
 from math.vector3 import Vector3
-from std.testing import TestSuite, assert_almost_equal, assert_equal, assert_false, assert_raises, assert_true
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def _road(
@@ -21,23 +51,39 @@ def _road(
     offset: CubicPolynomial = CubicPolynomial.constant(0.0),
     width: Float64 = 0.0002,
 ) raises -> Road:
-    var road = Road(RoadId(1), "bounded", geometry.length, NO_JUNCTION, RoadId(0), RoadId(0), True)
+    var road = Road(
+        RoadId(1),
+        "bounded",
+        geometry.length,
+        NO_JUNCTION,
+        RoadId(0),
+        RoadId(0),
+        True,
+    )
     _ = road.add_section(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
-    road.sections[0].lanes[0].info.widths.append(RoadInfoLaneWidth(0.0, CubicPolynomial.constant(width)))
+    road.sections[0].lanes[0].info.widths.append(
+        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(width))
+    )
     road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
-    road.info.elevations.append(RoadInfoElevation(0.0, CubicPolynomial.constant(0.0)))
+    road.info.elevations.append(
+        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+    )
     road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, offset))
     return road^
 
 
 def test_tiny_curvature_uses_the_same_stable_reference_and_lane_recipe() raises:
     for curvature in [-1e-18, 1e-18]:
-        var geometry = with_arc(RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 1.0), curvature)
+        var geometry = with_arc(
+            RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 1.0), curvature
+        )
         var point = geometry.pos_at(0.001)
         assert_almost_equal(point.x, 0.001, atol=1e-18)
-        assert_almost_equal(point.y, 0.5 * curvature * 0.001 * 0.001, atol=1e-37)
+        assert_almost_equal(
+            point.y, 0.5 * curvature * 0.001 * 0.001, atol=1e-37
+        )
         var lane = geometry._arc_offset(0.001, 0.0)
         assert_equal(lane.x, point.x)
         assert_equal(lane.y, point.y)
@@ -49,7 +95,9 @@ def test_tiny_curvature_uses_the_same_stable_reference_and_lane_recipe() raises:
 
 def test_collapsed_reversed_and_vertical_arc_centers_keep_orientation() raises:
     for curvature in [-0.01, 0.01]:
-        var geometry = with_arc(RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 100.0), curvature)
+        var geometry = with_arc(
+            RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 100.0), curvature
+        )
         var radius = 1.0 / curvature
         for s in [0.0, 0.01, 20.0, 99.0]:
             var point = geometry._arc_offset(s, -radius)
@@ -59,15 +107,25 @@ def test_collapsed_reversed_and_vertical_arc_centers_keep_orientation() raises:
             assert_equal(derivative[0], 0.0)
             assert_equal(derivative[1], 0.0)
         var road = _road(geometry^, CubicPolynomial.constant(1.0 + radius), 2.0)
-        assert_almost_equal(road.lane_transform(0, 0, 0.0).rotation.yaw, 0.0, atol=1e-6)
-        road.info.elevations[0] = RoadInfoElevation(0.0, CubicPolynomial(0.0, 0.1, 0.0, 0.0, 0.0))
-        assert_almost_equal(road.lane_transform(0, 0, 0.0).rotation.pitch, -90.0, atol=1e-6)
+        assert_almost_equal(
+            road.lane_transform(0, 0, 0.0).rotation.yaw, 0.0, atol=1e-6
+        )
+        road.info.elevations[0] = RoadInfoElevation(
+            0.0, CubicPolynomial(0.0, 0.1, 0.0, 0.0, 0.0)
+        )
+        assert_almost_equal(
+            road.lane_transform(0, 0, 0.0).rotation.pitch, -90.0, atol=1e-6
+        )
 
 
 def test_actual_gauss_piece_transitions_are_enclosed_without_unit_speed() raises:
-    var geometry = with_spiral(RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.01)
+    var geometry = with_spiral(
+        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.01
+    )
     var threshold = 1.0 / 1.01
-    var counts = _spiral_counts(geometry, _Jet.variable(threshold - 1e-8, threshold + 1e-8))
+    var counts = _spiral_counts(
+        geometry, _Jet.variable(threshold - 1e-8, threshold + 1e-8)
+    )
     assert_equal(counts[0], 2)
     assert_equal(counts[1], 3)
     var road = _road(geometry^)
@@ -114,16 +172,27 @@ def test_between_quarter_deviation_is_not_the_sampled_one_millimeter() raises:
 
 
 def test_local_work_and_accuracy_exhaustion_are_explicit_errors() raises:
-    var geometry = with_arc(RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 0.001001), 0.001)
-    var road = _road(geometry^, CubicPolynomial(0.00039575, -6.7925, 18200.0, -13000000.0, 0.0))
+    var geometry = with_arc(
+        RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 0.001001), 0.001
+    )
+    var road = _road(
+        geometry^,
+        CubicPolynomial(0.00039575, -6.7925, 18200.0, -13000000.0, 0.0),
+    )
     var query = Vector3(0.0009, 0.0005525, 0.0)
     var distance = road._lane_distance_squared(0, 0, 0.0, query)
     with assert_raises():
-        _ = _refine_lane(road, 0, 0, 0.0, 0.001, query, 0.0, distance, max_nodes=0)
+        _ = _refine_lane(
+            road, 0, 0, 0.0, 0.001, query, 0.0, distance, max_nodes=0
+        )
     with assert_raises():
-        _ = _refine_lane(road, 0, 0, 0.0, 0.001, query, 0.0, distance, max_terms=0)
+        _ = _refine_lane(
+            road, 0, 0, 0.0, 0.001, query, 0.0, distance, max_terms=0
+        )
     with assert_raises():
-        _ = _refine_lane(road, 0, 0, 0.0, 0.001, query, 0.0, distance, max_depth=0)
+        _ = _refine_lane(
+            road, 0, 0, 0.0, 0.001, query, 0.0, distance, max_depth=0
+        )
 
 
 def main() raises:

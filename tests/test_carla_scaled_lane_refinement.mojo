@@ -11,8 +11,15 @@ from extensions.carla.lane_refinement import _refine_lane
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import (
-    LANE_DRIVING, LaneId, NO_JUNCTION, RoadId, RoadInfoElevation,
-    RoadInfoGeometry, RoadInfoLaneOffset, RoadInfoLaneWidth, SectionId,
+    LANE_DRIVING,
+    LaneId,
+    NO_JUNCTION,
+    RoadId,
+    RoadInfoElevation,
+    RoadInfoGeometry,
+    RoadInfoLaneOffset,
+    RoadInfoLaneWidth,
+    SectionId,
 )
 from math.vector3 import Vector3
 from std.math import inf
@@ -23,14 +30,22 @@ def _scaled_road(scale: Float64) raises -> Road:
     var geometry = RoadGeometry(PARAM_POLY3, 0.0, 0.0, 0.0, 0.0, 1.0)
     geometry.samples.append(_Sample(-scale, 2.0 * scale, 0.0, 1.0, 0.0))
     geometry.samples.append(_Sample(scale, 2.0 * scale, 1.0, 1.0, 0.0))
-    var road = Road(RoadId(1), "scaled", 1.0, NO_JUNCTION, RoadId(0), RoadId(0), True)
+    var road = Road(
+        RoadId(1), "scaled", 1.0, NO_JUNCTION, RoadId(0), RoadId(0), True
+    )
     _ = road.add_section(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
-    road.sections[0].lanes[0].info.widths.append(RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0 * scale)))
+    road.sections[0].lanes[0].info.widths.append(
+        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(2.0 * scale))
+    )
     road.info.geometries.append(RoadInfoGeometry(0.0, geometry^))
-    road.info.elevations.append(RoadInfoElevation(0.0, CubicPolynomial.constant(0.0)))
-    road.info.lane_offsets.append(RoadInfoLaneOffset(0.0, CubicPolynomial.constant(scale)))
+    road.info.elevations.append(
+        RoadInfoElevation(0.0, CubicPolynomial.constant(0.0))
+    )
+    road.info.lane_offsets.append(
+        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(scale))
+    )
     return road^
 
 

@@ -5,7 +5,10 @@
 
 """Controls for local rounding bounds and equivalent ideal sample blends."""
 
-from extensions.carla.curve_bounds import _sample_blend_jet, _intersect_ideal_bounds
+from extensions.carla.curve_bounds import (
+    _sample_blend_jet,
+    _intersect_ideal_bounds,
+)
 from extensions.carla.curve_interval import _Interval, _Jet, _roundoff
 from extensions.carla.opendrive import load_opendrive_file
 from extensions.carla.road_info import RoadId, LaneId
@@ -31,10 +34,18 @@ def test_half_spacing_at_binade_and_subnormal_boundaries() raises:
         [UInt64(0x7FEFFFFFFFFFFFFF), UInt64(0x7C90000000000000)],
     ]
     for i in range(len(cases)):
-        assert_equal(bitcast[DType.uint64](_roundoff(bitcast[DType.float64](cases[i][0]))), cases[i][1] + UInt64(1))
+        assert_equal(
+            bitcast[DType.uint64](
+                _roundoff(bitcast[DType.float64](cases[i][0]))
+            ),
+            cases[i][1] + UInt64(1),
+        )
     assert_equal(_roundoff(-1.0), inf[DType.float64]())
     assert_equal(_roundoff(inf[DType.float64]()), inf[DType.float64]())
-    assert_equal(_roundoff(bitcast[DType.float64](UInt64(0x7FF8000000000001))), inf[DType.float64]())
+    assert_equal(
+        _roundoff(bitcast[DType.float64](UInt64(0x7FF8000000000001))),
+        inf[DType.float64](),
+    )
 
 
 def test_blend_ideal_rewrite_keeps_the_original_scalar_error() raises:
@@ -52,7 +63,9 @@ def test_blend_ideal_rewrite_keeps_the_original_scalar_error() raises:
         var one = samples[i][1]
         var two = samples[i][2]
         var rate = _Jet.variable(r, r)
-        var original = rate * _Jet.constant(one) + (_Jet.constant(1.0) - rate) * _Jet.constant(two)
+        var original = rate * _Jet.constant(one) + (
+            _Jet.constant(1.0) - rate
+        ) * _Jet.constant(two)
         var result = _sample_blend_jet(rate, one, two)
         assert_equal(result.error, original.error)
         var executed = r * one + (1.0 - r) * two
@@ -83,7 +96,11 @@ def test_ideal_intersection_retains_finite_original_on_rewrite_overflow() raises
 
 def test_sampled_town_query_resolves_without_larger_work_or_accuracy_limits() raises:
     var map = load_opendrive_file("assets/carla/town.xodr")
-    var query = Vector3(bitcast[DType.float32](UInt32(1105004517)), bitcast[DType.float32](UInt32(3268476412)), bitcast[DType.float32](UInt32(1069720068)))
+    var query = Vector3(
+        bitcast[DType.float32](UInt32(1105004517)),
+        bitcast[DType.float32](UInt32(3268476412)),
+        bitcast[DType.float32](UInt32(1069720068)),
+    )
     var result = map.closest_waypoint_on_road(query).value()
     assert_equal(result.road_id, RoadId(5))
     assert_equal(result.lane_id, LaneId(-1))

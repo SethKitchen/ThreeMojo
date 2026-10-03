@@ -218,10 +218,13 @@ def _endpoint_in_exact_range(value: Float64) -> Bool:
     # This is an arithmetic fast-path domain, not a map-coordinate limit.
     # Outside it the existing outward interval operation remains available.
     var magnitude = abs(value)
-    return isfinite(value) and (value == 0.0 or (
-        magnitude >= bitcast[DType.float64](UInt64(0x26F0000000000000))
-        and magnitude <= bitcast[DType.float64](UInt64(0x58F0000000000000))
-    ))
+    return isfinite(value) and (
+        value == 0.0
+        or (
+            magnitude >= bitcast[DType.float64](UInt64(0x26F0000000000000))
+            and magnitude <= bitcast[DType.float64](UInt64(0x58F0000000000000))
+        )
+    )
 
 
 def _residual_bracket(value: Float64, residual: Float64) -> _Interval:
@@ -253,7 +256,9 @@ def _directed_endpoint_product(one: Float64, two: Float64) -> _Interval:
 
 
 def _directed_endpoint_quotient(one: Float64, two: Float64) -> _Interval:
-    if two == 0.0 or not (_endpoint_in_exact_range(one) and _endpoint_in_exact_range(two)):
+    if two == 0.0 or not (
+        _endpoint_in_exact_range(one) and _endpoint_in_exact_range(two)
+    ):
         return _power_quotient_bound(_Interval.point(one), _Interval.point(two))
     var value = one / two
     var residual = fma(-value, two, one)
@@ -269,20 +274,22 @@ def _tight_sum_bound(one: _Interval, two: _Interval) -> _Interval:
 
 
 def _tight_product_bound(one: _Interval, two: _Interval) -> _Interval:
-    return _directed_endpoint_product(one.low, two.low).hull(
-        _directed_endpoint_product(one.low, two.high)
-    ).hull(_directed_endpoint_product(one.high, two.low)).hull(
-        _directed_endpoint_product(one.high, two.high)
+    return (
+        _directed_endpoint_product(one.low, two.low)
+        .hull(_directed_endpoint_product(one.low, two.high))
+        .hull(_directed_endpoint_product(one.high, two.low))
+        .hull(_directed_endpoint_product(one.high, two.high))
     )
 
 
 def _tight_quotient_bound(one: _Interval, two: _Interval) -> _Interval:
     if two.contains(0.0):
         return _Interval.whole()
-    return _directed_endpoint_quotient(one.low, two.low).hull(
-        _directed_endpoint_quotient(one.low, two.high)
-    ).hull(_directed_endpoint_quotient(one.high, two.low)).hull(
-        _directed_endpoint_quotient(one.high, two.high)
+    return (
+        _directed_endpoint_quotient(one.low, two.low)
+        .hull(_directed_endpoint_quotient(one.low, two.high))
+        .hull(_directed_endpoint_quotient(one.high, two.low))
+        .hull(_directed_endpoint_quotient(one.high, two.high))
     )
 
 
@@ -303,11 +310,15 @@ def _roundoff(magnitude: Float64) -> Float64:
     # in the returned allowance; this is not a geometric tolerance change.
     if not isfinite(magnitude) or magnitude < 0.0:
         return inf[DType.float64]()
-    var exponent = Int((bitcast[DType.uint64](magnitude) >> UInt64(52)) & UInt64(0x7FF))
+    var exponent = Int(
+        (bitcast[DType.uint64](magnitude) >> UInt64(52)) & UInt64(0x7FF)
+    )
     if exponent <= 1:
         return _next_up(bitcast[DType.float64](UInt64(1)))
     if exponent < 54:
-        return _next_up(bitcast[DType.float64](UInt64(1) << UInt64(exponent - 2)))
+        return _next_up(
+            bitcast[DType.float64](UInt64(1) << UInt64(exponent - 2))
+        )
     return _next_up(bitcast[DType.float64](UInt64(exponent - 53) << UInt64(52)))
 
 

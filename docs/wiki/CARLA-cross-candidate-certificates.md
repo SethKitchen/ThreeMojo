@@ -1,3 +1,8 @@
+<!--
+Copyright (c) 2026 Seth Kitchen, PE
+SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+-->
+
 # CARLA cross-candidate certificates
 
 ## Draft scope

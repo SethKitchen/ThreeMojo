@@ -920,15 +920,27 @@ def _assert_town_segment_index(map: Map) raises:
                     assert_equal(second.road_id, road.id)
                     assert_equal(second.section_id, section.id)
                     assert_equal(second.lane_id, lane)
-                    assert_true(second.s >= first.s if positive else second.s <= first.s)
+                    assert_true(
+                        second.s >= first.s if positive else second.s <= first.s
+                    )
                     if index == begin:
-                        assert_almost_equal(first.s, start if positive else end, atol=1e-4)
+                        assert_almost_equal(
+                            first.s, start if positive else end, atol=1e-4
+                        )
                     else:
-                        assert_true(first.s >= previous if positive else first.s <= previous)
+                        assert_true(
+                            first.s
+                            >= previous if positive else first.s
+                            <= previous
+                        )
                         # A record split leaves at most one representable step;
                         # no Float64 parameter is missing between its two sides.
-                        var low_bits = bitcast[DType.uint64](min(previous, first.s))
-                        var high_bits = bitcast[DType.uint64](max(previous, first.s))
+                        var low_bits = bitcast[DType.uint64](
+                            min(previous, first.s)
+                        )
+                        var high_bits = bitcast[DType.uint64](
+                            max(previous, first.s)
+                        )
                         assert_true(high_bits - low_bits <= UInt64(1))
                     var low = min(first.s, second.s)
                     var high = max(first.s, second.s)
@@ -954,7 +966,9 @@ def _assert_town_segment_index(map: Map) raises:
                     previous = second.s
                     index += 1
                 assert_true(index > begin)
-                assert_almost_equal(previous, end if positive else start, atol=1e-4)
+                assert_almost_equal(
+                    previous, end if positive else start, atol=1e-4
+                )
     assert_equal(lane_count, 26)
     assert_equal(index, map.segment_count())
 

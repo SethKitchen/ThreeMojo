@@ -55,6 +55,10 @@ A ticked item has a port, tests and documentation on the linked wiki page. Each 
 Every three.js feature in scope is ported: 215 features, and none is open. Each wiki page lists what its port leaves out, under "What is not ported". [Out of scope](#out-of-scope) lists what the port leaves out on purpose, and why. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
+### Navigation safety
+
+- [x] [Finite navigation search budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#search-budgets): sparse node records, explicit work limits, and distinct exhaustion results [#479](https://github.com/SethKitchen/ThreeMojo/issues/479)
+
 ### Physics safety
 
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
@@ -65,7 +69,11 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 ### Numerical range
 
-- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, finite three-point normals, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+
+### Numeric correctness
+
+- [x] [Exact periodic remainders](https://github.com/SethKitchen/ThreeMojo/wiki/Math#periodic-scalar-helpers): finite binary reduction, strict Euclidean ranges, and range-safe positive pingpong periods [#603](https://github.com/SethKitchen/ThreeMojo/issues/603)
 
 ### Project tools
 
@@ -444,6 +452,8 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Minimum-cost CARLA routes](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#the-route-planner): exact sample-count search with zero-cost lane changes [#533](https://github.com/SethKitchen/ThreeMojo/issues/533)
 - [x] [Shared physics](https://github.com/SethKitchen/ThreeMojo/wiki/Physics): reusable bodies, contacts, integration and quantities; CARLA imports; mass-preserving mode transitions; finite atomic mass properties; momentum-preserving free rotation [#294](https://github.com/SethKitchen/ThreeMojo/issues/294) [#482](https://github.com/SethKitchen/ThreeMojo/issues/482) [#430](https://github.com/SethKitchen/ThreeMojo/issues/430)
 - [x] [Physics numerical contacts](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#numerical-contact-boundaries): preserve translated support points and finite friction means [#428](https://github.com/SethKitchen/ThreeMojo/issues/428), [#429](https://github.com/SethKitchen/ThreeMojo/issues/429)
+- [x] [Simulation-driven walker gait](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-rendering#walker-gait): alternating capsule limbs, smooth stops, capture-independent timing, and deterministic recorded playback [#290](https://github.com/SethKitchen/ThreeMojo/issues/290)
+
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
 - [x] [Dimension-safe R-tree packing](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-geometry#find-the-nearest-segment): volume, area, and length costs keep planar and linear trees spatially packed [#583](https://github.com/SethKitchen/ThreeMojo/issues/583)
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)

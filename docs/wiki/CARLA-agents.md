@@ -186,7 +186,7 @@ The suites check the agents and the navigation against numbers from outside the 
 
 The route planner and the pedestrian navigation mesh use one private binary min-heap. Route scores are unsigned 64-bit integers with a marker above the supported signed range. Pedestrian scores remain floating point. A lower search score comes first. Equal scores use the lower node id, as before. Route searches skip entries for closed nodes.
 
-Pedestrian searches also skip an old score when a better route has replaced it, and can reopen a closed polygon. Partial paths still end at the closest reached polygon.
+Pedestrian searches also skip an old score when a better route has replaced it, and can reopen a closed polygon. Partial paths retain the previous strict best-record update rule.
 
 Area costs must be finite and at least 1. Both the setter and the read boundary check this, including direct changes to the public cost array. A NaN search score raises an error. Use an excluded area flag to block travel, as CARLA's filters do. This finite-cost check is a port safety rule; upstream Detour does not enforce it in its setter.
 
@@ -195,3 +195,68 @@ Each queue push and pop costs O(log n) for n pending entries. This change does n
 Run `mojo run -I . bench/carla_search_queue_bench.mojo` to compare queue operations at 100, 1,000 and 10,000 entries. This benchmark excludes map lookup and geometry work. The tests compare complete generated paths with linear-selection references. The route reference uses the same zero-heuristic policy. A separate all-pairs oracle checks that route costs are minimum.
 
 Run `mojo run -I . bench/carla_route_search_bench.mojo` to compare complete searches on generated sparse and wide-frontier graphs with 100, 1,000 and 10,000 nodes. Graph construction is outside the timed region. Both searches must return the same path.
+
+## Search budgets
+
+`NavigationSearchBudget` sets finite limits for one graph search. Its default policy allows 4,096 discovered nodes, 8,192 expansions, 8,192 resident heap entries, 32,768 heap pops, and 65,536 examined edges. These values are a resource policy, not an optimal size for every map. A caller can set larger finite limits.
+
+There is no implicit unlimited mode. Each query checks all limits, including fields changed after construction. Negative limits raise an error.
+
+The limits are independent. A zero value forbids that operation. A query from a node to itself needs one discovered node, one queue slot, and one pop. It needs no expansion or edge inspection.
+
+A goal pop is not an expansion. A stale heap entry still consumes a pop. A reopened polygon can consume another expansion. Every inspected adjacency entry consumes an edge, including excluded areas and candidates that do not improve a path.
+
+One wide node therefore cannot bypass the work limits.
+
+Each query stops before the first operation that would exceed a limit. Node and queue capacity checks occur before either structure grows. The mesh stores only discovered polygon records. It does not initialize or scan a record for every polygon.
+
+Reconstruction is bounded by the discovered records. Counts limit logical entries, not allocator bytes. Dynamic arrays and hash tables can reserve extra capacity.
+
+`NavMesh.find_path_result` returns `NavPathResult`. Its `polygons` field holds the path. `GlobalRoutePlanner.search_nodes` searches typed graph node ids without localization. `path_search_result` localizes two map points first. Both return `RouteSearchResult`, whose `nodes` field holds the route. Each result has a `report` with these fields:
+
+- `status`: `SEARCH_SUCCESS`, `SEARCH_UNREACHABLE`, `SEARCH_EXHAUSTED`, or `SEARCH_TRUNCATED`
+- `limit`: the first exhausted resource, or `SEARCH_LIMIT_NONE`
+- `discovered`, `expanded`, `queue_peak`, `popped`, and `examined`: exact logical counts
+- `stale` and `reopened`: stale pops and reopened mesh nodes
+- `output_truncated`: whether the output omitted a suffix
+
+`SEARCH_TRUNCATED` means the goal was reached but the polygon output was shortened. An exhausted or unreachable result keeps that status when its output is also shortened. Check `output_truncated` separately. `max_polygons` remains an output limit.
+
+It does not reduce search work. It must be nonnegative. Zero can return an empty prefix after a successful search.
+
+A mesh partial path preserves the previous best-record rule. A newly admitted or improved record replaces the selected record only when its heuristic is strictly smaller than the selected record's current heuristic. Equal heuristics retain the previous choice. An improved route can change a record's portal position and increase its heuristic.
+
+The rule does not recompute a global nearest polygon. An exhausted mesh result can include a discovered goal before it is settled. This does not certify an optimal path. An exhausted route path ends at the last settled node in deterministic cost and node-id order.
+
+It can be empty before the first pop. It has no closest-to-goal guarantee. An unreachable route is empty. `path_search_result` appends the destination piece only after success, so its output can hold one more entry than `max_nodes`.
+
+The existing list methods `find_path` and `path_search` accept an optional trailing budget. `trace_route` also forwards an optional trailing budget. `Navigation` accepts a constructor `search_budget` and exposes that field for later queries. It applies to path queries, agent routes, and crowd corridor replans.
+
+They raise `Navigation search budget exhausted` when a limit stops the search. This prevents exhaustion from appearing to be unreachability. With sufficient limits, successful and unreachable outputs retain their previous behavior. The mesh still returns the same deterministic partial path and output prefix.
+
+Route costs remain exact integers. Mesh area costs must still be finite and at least 1.
+
+A failed direct walker-target search preserves the previous target and corridor. An exhausted crowd corridor replan also preserves those fields and raises the error to its caller. A multi-agent tick is not transactional. A route-point advance commits its index and walking state only after the direct-target search returns.
+
+If another search fails during replacement-route preparation, the manager restores that walker's previous route record.
+
+These limits do not bound graph construction, map localization, mesh building, or straight-path processing. They do not replace those operations' separate safety contracts.
+
+### Measure bounded searches
+
+`tests/test_carla_navigation_search_budget.mojo` checks zero and one limits, stale entries, reopened polygons, disconnected graphs, deterministic partial paths, output truncation, and independent shortest-path references. A 10,000-node wide graph checks exact counts, not only elapsed time.
+
+`bench/carla_navigation_budget_bench.mojo` measures searches on 1,000, 10,000, and 100,000-node graphs. It also measures peak requested Mojo heap bytes with a Linux/ELF allocation hook for the pinned Mojo 1.1.0 runtime. The hook excludes allocator metadata and other threads. Graph construction is outside each measurement. Build and run it with:
+
+```sh
+cc -shared -fPIC -O2 bench/navigation_allocations.c -o /tmp/navigation_allocations.so
+mojo build -I . bench/carla_navigation_budget_bench.mojo -o /tmp/navigation_budget_bench
+LD_PRELOAD=/tmp/navigation_allocations.so /tmp/navigation_budget_bench /tmp/navigation_allocations.so
+```
+
+The complete-search comparison in `bench/carla_route_search_bench.mojo` supplies explicit sufficient budgets for its existing 10,000-node workloads. It still checks every output node against the former linear-selection search.
+
+
+Run `mojo run -I . bench/carla_navigation_headroom_bench.mojo` to measure the default policy on the project fixtures. The route measurements used 1,072 queries over the town, long-road, and two-lane fixtures. Their maxima were 7 records, 7 expansions, 2 heap entries, 7 pops, and 8 edges. Across 384 sampled mesh queries, the maxima were 389 records, 375 expansions, 180 heap entries, 481 pops, and 1,309 edges.
+
+These measurements establish headroom for these fixtures only.
