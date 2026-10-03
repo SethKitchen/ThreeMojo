@@ -255,7 +255,7 @@ def is_physics_enabled(world: World, actor: ActorId) raises -> Bool:
     var body = world.actor(actor).body
     return (
         body.value >= 0
-        and world.physics.world.bodies[body.value].kind == DYNAMIC
+        and world.physics.world.bodies[body.value].kind() == DYNAMIC
     )
 
 

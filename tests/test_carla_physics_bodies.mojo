@@ -337,13 +337,13 @@ def test_body_kinds_and_refusals() raises:
     with assert_raises():
         _ = _body(DYNAMIC, _cube(1), nan[DType.float32](), Vector3(0, 0, 0))
     var still = _body(STATIC, _cube(1), 5, Vector3(0, 0, 0))
-    assert_equal(still.mass, 0)
+    assert_equal(still.mass(), 0)
     assert_false(still.is_dynamic())
     with assert_raises():
         still.set_mass(_kg(1))
     # A static body's shape can move; its mass stays none.
     still.set_shape_pose(Vector3(0, 0, 1), Quaternion.identity())
-    assert_equal(still.mass, 0)
+    assert_equal(still.mass(), 0)
 
 
 def test_body_motion() raises:

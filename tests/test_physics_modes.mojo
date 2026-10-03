@@ -54,11 +54,11 @@ def _vector_equal(a: Vector3, b: Vector3) raises:
 
 
 def _zero_mass(body: RigidBody) raises:
-    assert_equal(body.mass, 0)
-    assert_equal(body.inverse_mass, 0)
+    assert_equal(body.mass(), 0)
+    assert_equal(body.inverse_mass(), 0)
     var world = body.world_inverse_inertia()
     for i in range(9):
-        assert_equal(body.inverse_inertia.elements[i], 0)
+        assert_equal(body.inverse_inertia().elements[i], 0)
         assert_equal(world.elements[i], 0)
 
 
@@ -78,7 +78,7 @@ def test_mode_chain_keeps_dynamic_configuration() raises:
     configured.elements[7] = 0.75
     body.set_inertia(configured)
     body.set_center_of_mass(Vector3(0.2, 0.3, 0.4))
-    var local = body.inverse_inertia
+    var local = body.inverse_inertia()
     body.linear_velocity = Vector3(3, 2, 1)
     body.angular_velocity = Vector3(1, 2, 3)
     body.set_kind(KINEMATIC)
@@ -98,8 +98,8 @@ def test_mode_chain_keeps_dynamic_configuration() raises:
     _vector_equal(body.linear_velocity, Vector3(0, 0, 0))
     _vector_equal(body.angular_velocity, Vector3(0, 0, 0))
     body.set_kind(DYNAMIC)
-    assert_equal(body.mass, 6)
-    assert_equal(body.inverse_mass, Float32(1.0 / 6.0))
+    assert_equal(body.mass(), 6)
+    assert_equal(body.inverse_mass(), Float32(1.0 / 6.0))
     _vector_equal(body.center_of_mass, Vector3(0.2, 0.3, 0.4))
     _vector_equal(body.shape_position, Vector3(0.7, 0.8, 0.9))
     assert_equal(body.shape_rotation.x, shape_rotation.x)
@@ -107,7 +107,7 @@ def test_mode_chain_keeps_dynamic_configuration() raises:
     assert_equal(body.shape_rotation.z, shape_rotation.z)
     assert_equal(body.shape_rotation.w, shape_rotation.w)
     for i in range(9):
-        assert_equal(body.inverse_inertia.elements[i], local.elements[i])
+        assert_equal(body.inverse_inertia().elements[i], local.elements[i])
     body.apply_impulse(Vector3(6, 0, 0), body.world_center_of_mass())
     _vector_equal(body.linear_velocity, Vector3(1, 0, 0))
     body.set_kind(DYNAMIC)
@@ -129,21 +129,23 @@ def test_restored_tensor_uses_the_new_world_orientation() raises:
     assert_almost_equal(tensor.elements[8], 0.125, atol=1e-6)
     assert_almost_equal(tensor.elements[1], 0, atol=1e-6)
     _vector_equal(body.position, Vector3(10, 20, 30))
-    assert_equal(body.inverse_inertia.elements[0], 0.5)
-    assert_equal(body.inverse_inertia.elements[4], 0.25)
+    assert_equal(body.inverse_inertia().elements[0], 0.5)
+    assert_equal(body.inverse_inertia().elements[4], 0.25)
 
 
 def test_repeated_toggles_keep_locked_axes() raises:
     var body = _body()
+    var locked = body.inverse_inertia()
     for i in range(9):
-        body.inverse_inertia.elements[i] = 0
+        locked.elements[i] = 0
+    body.set_inverse_inertia(locked)
     for _ in range(4):
         body.set_kind(KINEMATIC)
         _zero_mass(body)
         body.set_kind(DYNAMIC)
-        assert_equal(body.mass, 6)
+        assert_equal(body.mass(), 6)
         for i in range(9):
-            assert_equal(body.inverse_inertia.elements[i], 0)
+            assert_equal(body.inverse_inertia().elements[i], 0)
     body.apply_impulse(Vector3(6, 0, 0), Vector3(0, 1, 0))
     _vector_equal(body.linear_velocity, Vector3(1, 0, 0))
     _vector_equal(body.angular_velocity, Vector3(0, 0, 0))
@@ -165,24 +167,24 @@ def test_disabled_configuration_edits_are_refused() raises:
     _vector_equal(body.shape_position, Vector3(0, 0, 0))
     _vector_equal(body.center_of_mass, Vector3(0, 0, 0))
     body.set_kind(DYNAMIC)
-    assert_equal(body.mass, 6)
-    assert_equal(body.inverse_inertia.elements[0], 0.5)
+    assert_equal(body.mass(), 6)
+    assert_equal(body.inverse_inertia().elements[0], 0.5)
     body.set_mass(Mass(12))
-    var tensor = body.inverse_inertia
+    var tensor = body.inverse_inertia()
     body.set_kind(STATIC)
     body.set_kind(KINEMATIC)
     body.set_kind(DYNAMIC)
-    assert_equal(body.mass, 12)
+    assert_equal(body.mass(), 12)
     for i in range(9):
-        assert_equal(body.inverse_inertia.elements[i], tensor.elements[i])
+        assert_equal(body.inverse_inertia().elements[i], tensor.elements[i])
 
 
 def test_invalid_transitions_leave_state_unchanged() raises:
     var body = _body()
     with assert_raises():
         body.set_kind(BodyKind(3))
-    assert_equal(body.kind, DYNAMIC)
-    assert_equal(body.mass, 6)
+    assert_equal(body.kind(), DYNAMIC)
+    assert_equal(body.mass(), 6)
     var still = RigidBody(
         STATIC,
         Shape.sphere(Length(1)),
@@ -192,7 +194,7 @@ def test_invalid_transitions_leave_state_unchanged() raises:
     )
     with assert_raises():
         still.set_kind(DYNAMIC)
-    assert_equal(still.kind, STATIC)
+    assert_equal(still.kind(), STATIC)
     _zero_mass(still)
     still.set_kind(KINEMATIC)
     with assert_raises():
@@ -211,7 +213,7 @@ def test_invalid_transitions_leave_state_unchanged() raises:
         with assert_raises():
             mesh.set_kind(kind)
     mesh.set_kind(STATIC)
-    assert_equal(mesh.kind, STATIC)
+    assert_equal(mesh.kind(), STATIC)
 
 
 def test_nonfinite_mass_state_is_not_saved() raises:
@@ -222,30 +224,31 @@ def test_nonfinite_mass_state_is_not_saved() raises:
         nan[DType.float32](),
     ]:
         var body = _body()
-        body.mass = bad
+        body._mass = bad
         with assert_raises():
             body.set_kind(KINEMATIC)
-        assert_equal(body.kind, DYNAMIC)
+        assert_equal(body.kind(), DYNAMIC)
     var body = _body()
-    body.inverse_mass = 0.5
+    body._inverse_mass = 0.5
     with assert_raises():
         body.set_kind(KINEMATIC)
-    assert_equal(body.mass, 6)
-    body.inverse_mass = 1 / body.mass
-    body.inverse_inertia.elements[4] = nan[DType.float32]()
+    assert_equal(body.mass(), 6)
+    body._inverse_mass = 1 / body.mass()
+    body._inverse_inertia.elements[4] = nan[DType.float32]()
     with assert_raises():
         body.set_kind(STATIC)
-    assert_equal(body.kind, DYNAMIC)
-    assert_equal(body.mass, 6)
+    assert_equal(body.kind(), DYNAMIC)
+    assert_equal(body.mass(), 6)
 
 
 def _effective_state_equal(body: RigidBody, before: RigidBody) raises:
-    assert_equal(body.kind, before.kind)
-    assert_equal(body.mass, before.mass)
-    assert_equal(body.inverse_mass, before.inverse_mass)
+    assert_equal(body.kind(), before.kind())
+    assert_equal(body.mass(), before.mass())
+    assert_equal(body.inverse_mass(), before.inverse_mass())
     for i in range(9):
         assert_equal(
-            body.inverse_inertia.elements[i], before.inverse_inertia.elements[i]
+            body.inverse_inertia().elements[i],
+            before.inverse_inertia().elements[i],
         )
     _vector_equal(body.center_of_mass, before.center_of_mass)
     _vector_equal(body.position, before.position)
@@ -301,14 +304,16 @@ def test_invalid_retained_state_is_rejected_atomically() raises:
 def test_one_locked_axis_keeps_the_other_axis_response() raises:
     var body = _body()
     body.set_inertia(_tensor())
-    body.inverse_inertia.elements[0] = 0
+    var locked = body.inverse_inertia()
+    locked.elements[0] = 0
+    body.set_inverse_inertia(locked)
     for _ in range(4):
         body.set_kind(KINEMATIC)
         _zero_mass(body)
         body.set_kind(DYNAMIC)
-        assert_equal(body.inverse_inertia.elements[0], 0)
-        assert_equal(body.inverse_inertia.elements[4], 0.25)
-        assert_equal(body.inverse_inertia.elements[8], 0.125)
+        assert_equal(body.inverse_inertia().elements[0], 0)
+        assert_equal(body.inverse_inertia().elements[4], 0.25)
+        assert_equal(body.inverse_inertia().elements[8], 0.125)
     body.apply_impulse(Vector3(0, 6, 0), Vector3(0, 0, 1))
     _vector_equal(body.angular_velocity, Vector3(0, 0, 0))
     body.apply_impulse(Vector3(6, 0, 0), Vector3(0, 1, 0))
