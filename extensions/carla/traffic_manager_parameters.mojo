@@ -33,6 +33,13 @@ bounds unset until the first step sets them to 20 m and the episode's
 active distance. Here they start at 20 m and 2000 m, CARLA's default
 active distance.
 
+The local lifetime contract adds `remove_actor` for permanent destruction
+and `clear_actor_settings` for an episode reset. They preserve global
+settings. Temporary autopilot unregister must not call either operation.
+`configured_actor_ids` reads only settings that remain, including collision
+ignore targets; it does not retain a history of destroyed actors. These
+cleanup rules do not claim exact CARLA lifetime behavior.
+
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/Parameters.cpp`.
 """
 
@@ -40,7 +47,7 @@ from extensions.carla.actor import ActorId
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from extensions.carla.traffic_manager_map import RoadOption
 from math.vector3 import Vector3
-from std.collections import Dict
+from std.collections import Dict, Set
 from units.si import Duration, Length, MILLISECOND, Velocity
 
 
@@ -138,6 +145,162 @@ struct Parameters(Movable):
         self._upload_route = Dict[Int, Bool]()
         self._custom_route = Dict[Int, List[RoadOption]]()
         self._synchronous_time_out = Duration(10, MILLISECOND)
+
+    # --- actor lifetime -------------------------------------------------------
+
+    def configured_actor_ids(self) -> List[ActorId]:
+        """Return the actors named by per-actor settings.
+
+        Collision-ignore targets are included. The order is not specified.
+        The result contains no historical ids after their settings are removed.
+
+        Returns:
+            Each configured owner or collision-ignore target once.
+        """
+        var ids = Set[Int]()
+        for entry in self._percentage_difference.items():
+            ids.add(entry.key)
+        for entry in self._lane_offset.items():
+            ids.add(entry.key)
+        for entry in self._exact_desired_speed.items():
+            ids.add(entry.key)
+        for entry in self._large_vehicle_wide_turn.items():
+            ids.add(entry.key)
+        for entry in self._ignore_collision.items():
+            ids.add(entry.key)
+        for entry in self._distance_to_leading_vehicle.items():
+            ids.add(entry.key)
+        for entry in self._force_lane_change.items():
+            ids.add(entry.key)
+        for entry in self._auto_lane_change.items():
+            ids.add(entry.key)
+        for entry in self._perc_run_traffic_light.items():
+            ids.add(entry.key)
+        for entry in self._perc_run_traffic_sign.items():
+            ids.add(entry.key)
+        for entry in self._perc_ignore_walkers.items():
+            ids.add(entry.key)
+        for entry in self._perc_ignore_vehicles.items():
+            ids.add(entry.key)
+        for entry in self._perc_keep_slow_lane.items():
+            ids.add(entry.key)
+        for entry in self._perc_random_left.items():
+            ids.add(entry.key)
+        for entry in self._perc_random_right.items():
+            ids.add(entry.key)
+        for entry in self._auto_update_vehicle_lights.items():
+            ids.add(entry.key)
+        for entry in self._upload_path.items():
+            ids.add(entry.key)
+        for entry in self._custom_path.items():
+            ids.add(entry.key)
+        for entry in self._upload_route.items():
+            ids.add(entry.key)
+        for entry in self._custom_route.items():
+            ids.add(entry.key)
+        for entry in self._ignore_collision.items():
+            for other in entry.value:
+                ids.add(other)
+        var out = List[ActorId]()
+        for id in ids:
+            out.append(ActorId(id))
+        return out^
+
+    def remove_actor(mut self, actor: ActorId) raises:
+        """Remove a permanently destroyed actor's settings and references.
+
+        Do not call this when a living actor leaves autopilot temporarily.
+        Other actors' settings and all global settings stay unchanged.
+
+        Args:
+            actor: The destroyed actor. An unknown valid id is ignored.
+
+        Raises:
+            Error: If the id is not valid.
+        """
+        var a = _check(actor)
+        if a in self._percentage_difference:
+            _ = self._percentage_difference.pop(a)
+        if a in self._lane_offset:
+            _ = self._lane_offset.pop(a)
+        if a in self._exact_desired_speed:
+            _ = self._exact_desired_speed.pop(a)
+        if a in self._large_vehicle_wide_turn:
+            _ = self._large_vehicle_wide_turn.pop(a)
+        if a in self._ignore_collision:
+            _ = self._ignore_collision.pop(a)
+        if a in self._distance_to_leading_vehicle:
+            _ = self._distance_to_leading_vehicle.pop(a)
+        if a in self._force_lane_change:
+            _ = self._force_lane_change.pop(a)
+        if a in self._auto_lane_change:
+            _ = self._auto_lane_change.pop(a)
+        if a in self._perc_run_traffic_light:
+            _ = self._perc_run_traffic_light.pop(a)
+        if a in self._perc_run_traffic_sign:
+            _ = self._perc_run_traffic_sign.pop(a)
+        if a in self._perc_ignore_walkers:
+            _ = self._perc_ignore_walkers.pop(a)
+        if a in self._perc_ignore_vehicles:
+            _ = self._perc_ignore_vehicles.pop(a)
+        if a in self._perc_keep_slow_lane:
+            _ = self._perc_keep_slow_lane.pop(a)
+        if a in self._perc_random_left:
+            _ = self._perc_random_left.pop(a)
+        if a in self._perc_random_right:
+            _ = self._perc_random_right.pop(a)
+        if a in self._auto_update_vehicle_lights:
+            _ = self._auto_update_vehicle_lights.pop(a)
+        if a in self._upload_path:
+            _ = self._upload_path.pop(a)
+        if a in self._custom_path:
+            _ = self._custom_path.pop(a)
+        if a in self._upload_route:
+            _ = self._upload_route.pop(a)
+        if a in self._custom_route:
+            _ = self._custom_route.pop(a)
+        var references = List[Int]()
+        for entry in self._ignore_collision.items():
+            references.append(entry.key)
+        for reference in references:
+            if a not in self._ignore_collision[reference]:
+                continue
+            # The membership check above proves the source is nonempty.
+            var kept = List[Int]()
+            for other in self._ignore_collision[reference]:  # pragma: no branch
+                if other != a:
+                    kept.append(other)
+            if len(kept) == 0:
+                _ = self._ignore_collision.pop(reference)
+            else:
+                self._ignore_collision[reference] = kept^
+
+    def clear_actor_settings(mut self):
+        """Remove every per-actor setting at an episode reset.
+
+        Global settings stay unchanged. Actor ids can name different actors
+        in the next episode, so none of their old settings can carry over.
+        """
+        self._percentage_difference = Dict[Int, Float32]()
+        self._lane_offset = Dict[Int, Length]()
+        self._exact_desired_speed = Dict[Int, Velocity]()
+        self._large_vehicle_wide_turn = Dict[Int, Bool]()
+        self._ignore_collision = Dict[Int, List[Int]]()
+        self._distance_to_leading_vehicle = Dict[Int, Length]()
+        self._force_lane_change = Dict[Int, ChangeLaneInfo]()
+        self._auto_lane_change = Dict[Int, Bool]()
+        self._perc_run_traffic_light = Dict[Int, Float32]()
+        self._perc_run_traffic_sign = Dict[Int, Float32]()
+        self._perc_ignore_walkers = Dict[Int, Float32]()
+        self._perc_ignore_vehicles = Dict[Int, Float32]()
+        self._perc_keep_slow_lane = Dict[Int, Float32]()
+        self._perc_random_left = Dict[Int, Float32]()
+        self._perc_random_right = Dict[Int, Float32]()
+        self._auto_update_vehicle_lights = Dict[Int, Bool]()
+        self._upload_path = Dict[Int, Bool]()
+        self._custom_path = Dict[Int, List[Vector3]]()
+        self._upload_route = Dict[Int, Bool]()
+        self._custom_route = Dict[Int, List[RoadOption]]()
 
     # --- setters --------------------------------------------------------------
 
