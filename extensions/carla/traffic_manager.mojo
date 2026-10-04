@@ -33,6 +33,13 @@ traffic manager steps, so its commands act on the next tick.
    lights run for each registered vehicle, in that order.
 3. The commands go to the world.
 
+**Actor lifetime.** Temporary unregister removes runtime state but keeps
+per-actor settings. A processed step removes settings for known destroyed
+actors, even if they were never registered. Unknown future ids stay pending.
+`reset` clears per-actor settings before an id can name a new episode's actor;
+`stop` and `release` preserve them. All three keep global settings. This is an
+explicit local lifetime contract, not a claim of exact CARLA cleanup behavior.
+
 **What the world lacks.** The world has no `set_simulate_physics`. To
 turn a vehicle's physics off, the traffic manager makes its body
 kinematic and stops it; the body then moves only where the traffic
@@ -49,6 +56,7 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrafficManagerLocal
 
 from extensions.carla.actor import (
     ACTOR_DORMANT,
+    ACTOR_INVALID,
     ActorId,
     NO_ACTOR,
     RED,
@@ -448,6 +456,17 @@ struct ALSM(Movable):
                 )
             shared.marked_for_removal = List[ActorId]()
         self._update_unregistered(world, shared)
+        # Settings can outlive registration, or precede the first ALSM step.
+        # Visit only configured ids, not the world's historical tombstones.
+        # Unknown future ids remain pending until the world has used them.
+        for actor in shared.parameters.configured_actor_ids():
+            if (
+                actor.is_valid()
+                and actor.value >= 1
+                and actor.value <= len(world.actors)
+                and world.actors[actor.value - 1].state == ACTOR_INVALID
+            ):
+                shared.parameters.remove_actor(actor)
 
     def _update_registered(
         mut self,
@@ -729,6 +748,10 @@ struct ALSM(Movable):
             Error: If the id is not valid.
         """
         var a = actor.value
+        # This is runtime state, not the user's per-actor preferences.
+        # Re-registering must observe a fresh physics decision.
+        if a in self.has_physics_enabled:
+            _ = self.has_physics_enabled.pop(a)
         if registered_actor:
             registered.remove([actor])
             if a in shared.buffer_map:
@@ -841,7 +864,8 @@ struct TrafficManagerLocal(Movable):
         """Run one step and send its commands, `Step`.
 
         In asynchronous mode, a step on a frame already stepped does
-        nothing.
+        nothing. Each completed step removes settings for actors destroyed
+        in the world, including actors that were already unregistered.
 
         Args:
             world: The world.
@@ -953,6 +977,9 @@ struct TrafficManagerLocal(Movable):
     def reset(mut self, world: World) raises:
         """Release and build the map again for a world, `Reset`.
 
+        Per-actor settings are removed because an id can name a different
+        actor in the new episode. Global settings stay unchanged.
+
         Args:
             world: The world, perhaps with a new map.
 
@@ -960,6 +987,7 @@ struct TrafficManagerLocal(Movable):
             Error: If the map cannot be built.
         """
         self.release()
+        self.shared.parameters.clear_actor_settings()
         self.shared.local_map = _local_map(world, self.map_name, None)
         self.alsm.reset(world)
 
