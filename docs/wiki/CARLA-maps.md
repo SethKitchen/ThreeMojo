@@ -75,6 +75,65 @@ The input s must be finite and inside the specified lane section. Shared endpoin
 
 The endpoint is resolved before sampling. A large interval does not traverse a different road. Ordinary forward samples keep the existing spacing and order. Exact endpoints do not add a duplicate sample.
 
+## Junction bounds
+
+`junction_box` encloses the centers of nonzero lanes selected by `LANE_ANY`
+on each connecting road. This mask excludes `LANE_NONE`. It includes every
+section, even when lane links stop or change lane id.
+It evaluates increasing road s for both traffic directions. It includes the
+exact section endpoints and both sides of each record boundary.
+
+It does not follow a successor road. Repeated connections do not change
+the result.
+A junction without lanes keeps CARLA's empty-box sentinel.
+
+The bound covers the supported lane-center model, not the lane surface.
+That model includes line, arc, spiral, poly3 and paramPoly3 geometry, lane
+widths, lane offsets and elevation. Poly3 and paramPoly3 use the existing
+sampled position and tangent tables, including their extrapolated tail.
+Superelevation, crossfall and shape remain outside the supported model.
+
+The approximation has an explicit error budget:
+
+- Split at geometry starts and ends, table knots, section boundaries, and
+  all width, offset and elevation record starts.
+- On each smooth span, bound the second derivative. Subdivide until the
+  maximum coordinate distance from a chord is at most 0.01 m. Add that
+  distance to the sampled box. Constant-offset arcs instead evaluate the
+  cardinal headings that can contain an extremum.
+- Add a Float32 rounding allowance of four machine epsilons times the
+  coordinate and offset scale, with a 1 m floor. Add coefficient-scaled
+  Float64 Horner error for the road-s cubics. A large road s can make this
+  numerical allowance much larger than 0.01 m. Arc bounds also include
+  phase and radius cancellation error. Unresolved arc phases use a
+  full-circle-sized numerical allowance.
+- For a spiral, also add `1.1e-7 * geometry.length` meters per plan axis.
+  This covers twice the five-point Gauss-Legendre remainder bound for the
+  supported evaluator. It is separate from the chord error.
+- A singular paramPoly3 tangent or a span that needs more than 65,536
+  subdivisions uses a wider envelope. It encloses the reference chord,
+  its curvature error, and the complete lateral-offset disk. Elevation
+  uses its cubic envelope. This fallback has no 0.01 m tightness claim.
+
+These are conservative numerical bounds, not exact extrema. The geometric
+proof applies to finite record arithmetic. Non-finite coefficient or
+subdivision arithmetic raises an error. Evaluated locations and padded
+bounds must fit in finite Float32 coordinates. This contract does not
+repair unrelated geometry evaluation or nearest-lane limitations.
+
+For a smooth coordinate with second derivative bounded by M, the chord
+error is at most `M * h * h / 8`. For a lane center `P + t*n`, a sufficient
+plan bound is `|P''| + |t''| + 2*|t'|*|heading'| +
+|t|*(|heading''| + |heading'|^2)`. Cubic Bernstein control values bound the
+width, offset and elevation terms. A parametric tangent uses the minimum
+length of its interpolated derivative vector over the complete span.
+
+Corrected boxes can add junction road conflicts and stop/yield check boxes.
+They can also change mesh-region selection and the expanded mesh boxes.
+Traffic-manager waypoint junction flags use road topology, not these boxes.
+Scenario replay can therefore differ where the old box omitted a curved
+interior. Ordering remains deterministic.
+
 ## Traffic rules
 
 A road with `rule="LHT"` keeps traffic to the left. Its left lanes run with s and its right lanes against it. `right`, `left`, the lane change and the sign placement all follow the rule.
@@ -120,6 +179,7 @@ This port keeps CARLA's numbers except for the corrections listed here.
 - Waypoint pitch uses the arctangent of the elevation grade, with the sign required by CARLA's corrected rotation convention. Uphill waypoints face uphill in either traffic direction. CARLA's old lane transform used the raw grade as a positive angle. The sign follows the [corrected CARLA rotation basis](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rotation.h).
 - Topology retains dead-end lanes and their section identity. The pinned [CARLA `Map.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/road/Map.cpp) narrows the endpoint to a float before lookup. This can drop an increasing-s lane at the road end. The port deliberately corrects that behavior. See [issue #285](https://github.com/SethKitchen/ThreeMojo/issues/285).
 - Backward lane traversal measures the remainder toward the lane start. The pinned [CARLA `Waypoint.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/client/Waypoint.cpp) uses the forward remainder for its final backward step. That can leave the starting road or fail at an isolated end. The port deliberately corrects that behavior and handles exact and unlinked section endpoints. See [issue #286](https://github.com/SethKitchen/ThreeMojo/issues/286).
+- Junction bounds include reverse-running curved lane interiors. The pinned CARLA `CreateJunctionBoundingBoxes` uses a signed ten-step interval and skips those interiors. The port uses the [bounded approximation](#junction-bounds) above. A 100 m semicircle with a positive RHT lane is the reproducible counterexample. See [issue #487](https://github.com/SethKitchen/ThreeMojo/issues/487).
 - CARLA walks roads, junctions and signals in hash order. This port walks them in order of id.
 - CARLA computes a point in single precision. This port computes in double and rounds where CARLA returns a float.
 - A spiral uses Gauss-Legendre quadrature, as [CARLA](CARLA) explains.
