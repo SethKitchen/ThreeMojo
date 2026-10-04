@@ -23,7 +23,16 @@ the same way here.
 Both close on themselves. `u` runs once along the tube's path and `v` once
 around the tube, and each seam has a vertex on each side for the reason the
 sphere's does: one carries zero and the other one.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import normalized_cross3, _ordinary_squared
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -217,8 +226,26 @@ def torus_knot(
         binormal.cross(across)
         var normal = binormal
         normal.cross(tangent)
-        binormal.normalize()
-        normal.normalize()
+        if _ordinary_squared(binormal.length_sq()) and _ordinary_squared(
+            normal.length_sq()
+        ):
+            binormal.normalize()
+            normal.normalize()
+        else:
+            var tx = Float64(ahead.x) - Float64(here.x)
+            var ty = Float64(ahead.y) - Float64(here.y)
+            var tz = Float64(ahead.z) - Float64(here.z)
+            var bx = normalized_cross3(
+                tx,
+                ty,
+                tz,
+                Float64(ahead.x) + Float64(here.x),
+                Float64(ahead.y) + Float64(here.y),
+                Float64(ahead.z) + Float64(here.z),
+            )
+            var nx = normalized_cross3(bx[0], bx[1], bx[2], tx, ty, tz)
+            binormal = Vector3(Float32(bx[0]), Float32(bx[1]), Float32(bx[2]))
+            normal = Vector3(Float32(nx[0]), Float32(nx[1]), Float32(nx[2]))
         for step in range(radial_segments + 1):  # pragma: no branch
             var v = Float32(step) / Float32(radial_segments)
             var around = v * 2 * Float32(pi)
