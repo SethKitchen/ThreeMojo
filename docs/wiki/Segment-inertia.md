@@ -33,32 +33,26 @@ The result lives in the leg frame. The origin is the tibiofemoral joint line. Pl
 
 ## Method
 
-The integral runs over the one skin of the limb. See [Integument](Integument#one-skin-for-a-limb). Each grid cell takes the density of what fills it.
+The integral runs over the one skin of the limb. The final cells stop at exact segment cut planes. Each accepted cuboid includes its own inertia. See [Integument](Integument#one-skin-for-a-limb). Each grid cell takes the density of what fills it.
 
 | Fill | Density |
 |---|---|
 | The dermis | 1.10 g/cm³, `skin_tissue` |
 | Cortical or trabecular bone | The bone's apparent density |
-| Marrow | 0.92 g/cm³: adult yellow marrow is mostly fat |
+| Marrow | 0.92 g/cm³, the named fat proxy; not a measured marrow density |
 | A muscle belly | 1.06 g/cm³, `muscle_tissue` |
 | A tendon | 1.12 g/cm³, `tendon_tissue` |
 | Everything else | 0.92 g/cm³, `adipose_tissue` |
 
-Knee tissues, foot ligaments, vessels, lymphatics and nerves count as fat. Their volume is small, and their densities lie within a fifth of fat's.
+Knee tissues, foot ligaments, vessels, lymphatics and nerves have no separate density assignment. A higher-priority overlapping region wins. Otherwise they use the fat proxy. No uncertainty bound is asserted. Bone pore-fluid and pore-marrow mass is not added to apparent bone mass.
 
-The segments follow de Leva (1996). Horizontal planes through the hip joint's center, the knee's and the lateral malleolus cut the limb. The knee's center is the middle of the femoral condyles.
+De Leva (1996) provides context for these authored segment cuts. Horizontal planes through the hip joint's center, the knee's and the lateral malleolus cut the limb. The knee's center is the middle of the femoral condyles.
 
-## Values
+## Reproducible results
 
-A six-foot untoned male at a 5 mm step:
+Use the [anatomy validity report](Anatomy-validity) for current results. It records the exact source, spec, grid widths and density assignments. It reports mass, center and all tensor entries at three or more grid widths.
 
-| Segment | Mass | Center of mass | Radii of gyration, across and along |
-|---|---|---|---|
-| Thigh | 9.9 kg | 45% of its length from the hip | 29% and 14% of its length |
-| Shank | 5.5 kg | 45% from the knee | 29% and 10% |
-| Foot | 1.5 kg | 42% from the heel | 24% and 12% |
-
-De Leva reports 41%, 45% and 44% for the three centers, and radii of 33% and 15%, 25% and 10%, and 26% and 12%. The centers and the radii agree within a few points. The shank is heavy against the thigh: 0.55 of it, where de Leva reports 0.31. The calf and the ankle are still fuller than a typical man's.
+A comparison with a population mean is not validation of this authored template. The report has no matched subject data or task-specific physical acceptance threshold.
 
 ## Limits
 
@@ -69,3 +63,5 @@ For engineering use, validate the geometry, tissue assignments and segment bound
 The skin loft is a geometric envelope. It is not a measured tissue boundary. Small tissues use the density approximations listed above. Per-part solids can overlap. Do not sum their mass reports to estimate whole-body mass. The model has no constitutive law, muscle activation, joint-contact solver or uncertainty estimate.
 
 Animation, facial shape changes and mesh simplification do not update this integral. Keep the anatomical spec and physical model separate from visual meshes. Do not compute physical properties from diagrammatically widened vessels, baked textures or a game mesh.
+
+Use the [anatomy validity report](Anatomy-validity) for exclusive region accounting, three-grid sampling sensitivity, independent numerical controls and explicit use gates.

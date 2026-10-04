@@ -154,10 +154,11 @@ struct HeadDimensions(Copyable, Movable):
         Raises:
             Error: If sex or stature is refused, if the torso fails
                 `validate`, if a list does not hold seven vertebrae, if a
-                size is not positive, or if a landmark is not finite.
+                size is not finite and positive, or if a landmark is not finite.
         """
         check_spec(self.stature, self.sex, RIGHT, "head")
         self.torso.validate()
+        self.frame.validate()
         if (
             len(self.centers) != CERVICAL
             or len(self.widths) != CERVICAL
@@ -167,6 +168,13 @@ struct HeadDimensions(Copyable, Movable):
             raise Error("A neck needs seven vertebrae, C1 to C7")
         for index in range(CERVICAL):  # pragma: no branch
             finite_point(self.centers[index], "cervical vertebra", "head")
+            finite_point(
+                Vector3(
+                    self.widths[index], self.depths[index], self.heights[index]
+                ),
+                "cervical size",
+                "head",
+            )
             if not (
                 self.widths[index] > 0
                 and self.depths[index] > 0

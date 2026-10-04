@@ -39,6 +39,8 @@ The rigid-body core lives in [Shared physics](Physics). Its CARLA import paths r
 
 `CarlaPhysics.tick` advances the world by CARLA's `fixed_delta_seconds`. It can cut the step into substeps. Each substep updates every vehicle and walker, and then steps the world. External forces and torques applied before the tick act through every substep. They are cleared after the tick.
 
+The [tick-force benchmark](Tick-force-restoration) retains all-body snapshots after comparing dynamic-only alternatives. Static and kinematic forces are consumed without acceleration. Ghost dynamic bodies still receive their forces.
+
 ```mojo
 from extensions.carla.physics.shape import PhysicsMaterial
 from extensions.carla.physics.simulation import CarlaPhysics
@@ -111,6 +113,40 @@ A tire's grip is `friction_force_multiplier` times the friction of the ground's 
 - Without a throttle, the engine brakes the car a little. Out of gear, the engine revs against `rev_up_moi`.
 - The differential follows `differential_type`: each wheel with `affected_by_engine`, all wheels with `front_rear_split`, the front axle, or the rear axle.
 
+### Moving supports
+
+Tire slip and wheel spin use motion relative to the support surface.
+At a contact point, each body's velocity is `v + omega cross r`.
+Here, `r` runs from that body's center of mass to the contact point.
+The tire solver subtracts the support velocity from the chassis velocity.
+It predicts both bodies' pending gravity, force, torque and damping kicks.
+
+Both bodies' mass and world inertia determine the tire's effective mass.
+Each incremental impulse updates both predicted states.
+Wheels on the same support share its prediction.
+Each final wheel force and its opposite reaction are added once.
+Static and kinematic supports have no impulse response.
+A moving kinematic support can supply work through its prescribed motion.
+
+The solver keeps eight passes and the existing tire force limits.
+It solves one vehicle's wheels at a time.
+It does not predict later aerodynamic forces or collision impulses.
+For physical inertia in a closed finite-mass pair without drive, braking
+does not increase kinetic energy. It preserves total linear and angular
+momentum within rounding.
+World damping, external forces and engine torque can change these totals.
+
+A uniform translation leaves the tire result unchanged when the tire
+directions and relative motion stay the same.
+Air drag still uses world velocity in still air.
+Chassis speed telemetry and the controller's speed input remain world
+quantities. They do not become wheel rolling speed.
+
+The relative-velocity and effective-mass equations follow rigid-body
+impulse mechanics. See [Catto's sequential-impulse derivation, slides
+18–24](https://box2d.org/files/ErinCatto_SequentialImpulses_GDC2006.pdf).
+The focused tests also use independent scalar impulse calculations.
+
 ## Walk a walker
 
 `add_walker` spawns a capsule at a location. `apply_walker_control` takes a direction, a speed and a jump.
@@ -167,6 +203,7 @@ A contact can have a gap of up to 2 cm. The solver lets the bodies close the gap
 ## Differences from CARLA
 
 - The physics engine is the port's own. The tire, spring, engine and walker models are the ones described above.
+- The moving-support tire correction changes replay from the port at `af6c253`. A car and platform moving together at 10 m/s previously produced about −20000 N of braking with zero relative motion. The corrected force is zero when aerodynamic forces are disabled. This is a correction to the port's model. It does not claim identical CARLA trajectories.
 - `SPHERECAST` and `SHAPECAST` wheels cast a ray, as `RAYCAST` wheels do.
 - `lateral_slip_graph`, `suspension_smoothing`, `sleep_threshold` and `sleep_slope_limit` are kept for CARLA's API, and the model does not read them. Bodies do not sleep.
 - `WheelPhysicsControl`'s run-time fields `wheel_index`, `location`, `old_location` and `velocity` are not part of the setup. `WheelState` reports the location and the velocity.
@@ -186,3 +223,20 @@ The four suites `tests/test_carla_physics_bodies.mojo`, `_world.mojo`, `_vehicle
 - The roll down a slope, with and without the handbrake.
 - The yaw rate of a steered car, the Ackermann controller's steps and its convergence, and CARLA's rollover behavior.
 - The walker's speed, braking, turning, traction limit, slope, curb, step, wall, landing, jump height and double jump.
+
+`tests/test_carla_moving_supports.mojo` checks uniform translations,
+common rigid rotation and accelerating supports. It also checks coupled
+off-center mass, shared supports and separate finite supports.
+Other controls check forward and reverse traction, braking energy loss,
+momentum conservation and the still-air distinction.
+
+### Tire benchmark
+
+`bench/carla_moving_supports_bench.mojo` measures three four-wheel tire solves.
+The support can be static, one moving body or four moving bodies.
+Each case has 5000 warm-up solves and 500000 measured solves.
+The checksum consumes chassis force and every wheel's speed on each iteration.
+
+Build the same benchmark source against each implementation before comparison.
+Use the same CPU and balanced variant order when possible.
+These costs exclude suspension ray casts and the world's contact solve.

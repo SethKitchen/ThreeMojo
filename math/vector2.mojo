@@ -9,7 +9,18 @@ from math.matrix3 import Matrix3
 from math.utils import SeededRandom
 from math.vector3 import _js_round
 from math.norm import length2, normalized2, _ordinary_squared
-from std.math import acos, atan2, ceil, cos, floor, pi, sin, sqrt, trunc
+from std.math import (
+    acos,
+    atan2,
+    ceil,
+    copysign,
+    cos,
+    floor,
+    pi,
+    sin,
+    sqrt,
+    trunc,
+)
 from units.si import Angle, RADIAN
 
 
@@ -207,9 +218,17 @@ struct Vector2(Equatable, ImplicitlyCopyable):
         """Return the angle this vector makes with +x, three.js's `angle`.
 
         Returns:
-            From zero up to a whole turn, counterclockwise. A zero vector
-            gives a half turn, as three.js's formula gives.
+            From zero to a whole turn, counterclockwise. A whole turn is
+            possible: a tiny negative y, or (+0, -0), rounds `atan2` to pi.
+            Positive zero components give zero. Signed zeros follow the
+            IEEE `atan2` table on every platform.
         """
+        if self.x == 0 and self.y == 0:
+            # Apple's atan2f returns one ulp less than pi for two zeros, so
+            # read the IEEE table here. A negative-zero x gives a half turn.
+            if copysign(Float32(1), self.x) < 0:
+                return Angle(Float32(pi), RADIAN)
+            return Angle(copysign(Float32(pi), -self.y) + Float32(pi), RADIAN)
         return Angle(atan2(-self.y, -self.x) + Float32(pi), RADIAN)
 
     def angle_to(self, other: Self) -> Angle:

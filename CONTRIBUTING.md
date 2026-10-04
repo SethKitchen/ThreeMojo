@@ -113,12 +113,26 @@ They honor `TMPDIR` and remove that directory when the child exits.
 The CPU runner also cleans up after a test timeout.
 The helper rejects names that escape that directory.
 
-A suite that writes temporary files must run through the test runner.
+Wrap each fixture-using suite's `main` body in `with TestScratch():`.
+Import `TestScratch` beside `temporary_path` from `tests/test_scratch.mojo`.
+A direct `mojo run` then creates one private root for the suite.
+It honors `TMPDIR` and restores the environment on success or an exception.
+
+Nested contexts borrow the same root. A runner-supplied root stays runner-owned.
+A supplied root must be an absolute path to an existing directory.
+Only a root created by the context is removed by it.
+
+The context restores the environment before cleanup. A cleanup error propagates.
+The pinned standard library refuses symbolic links during cleanup.
+If cleanup fails, inspect and remove the remaining private directory.
+
+Direct runs cannot clean up after a forced process termination.
+Use the runner to enforce the five-second gate and clean up after a timeout.
 For a directly built suite, use:
 
 ```sh
 python3 tools/run_suite.py --seconds 5 --suite tests/test_face_model.mojo -- .cache/bin/test_face_model
 ```
 
-Do not set `THREEMOJO_TEST_TMPDIR` yourself. The runner owns that directory's
-lifetime. X11 socket paths remain system protocol paths, not test fixtures.
+Do not set `THREEMOJO_TEST_TMPDIR` yourself. Its active test scope or runner
+owns that directory's lifetime. X11 socket paths remain system protocol paths, not test fixtures.

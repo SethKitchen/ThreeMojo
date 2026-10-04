@@ -22,6 +22,13 @@ lengths, the parameter for a distance and the frames agree with
 three.js's to a double's last bits and not a float's. `math.curve3`
 works in floats.
 
+## Range correction
+
+Unlike three.js 0.180, scalar lengths and unit directions use scale-safe
+arithmetic when a squared norm underflows or overflows. Ordinary inputs keep
+the reciprocal-multiply order. A finite nonzero direction remains valid even
+when its length cannot fit in Float64.
+
 ## What differs from `math.curve3`
 
 The tangent of a curve here is three.js's base `getTangent`: the chord
@@ -42,7 +49,12 @@ as three.js does for its `CatmullRomCurve3` and the two Bezier curves.
 from math.curve_checks import check_curve_parameter, curve_sample_count
 from math.curve3 import Curve3, FrenetFrames
 from math.vector3 import Vector3
-from std.math import acos, cos, sin, sqrt
+from math.norm import (
+    length3 as scalar_length3,
+    normalized3 as scalar_normalized3,
+    _ordinary_squared,
+)
+from std.math import acos, cos, isfinite, sin, sqrt
 from units.si import Length, METER
 
 # Four doubles: a point or a direction in space, and a fourth number that
@@ -127,7 +139,7 @@ def length3(a: Point3) -> Float64:
     Returns:
         Its length.
     """
-    return sqrt(dot3(a, a))
+    return scalar_length3(a[0], a[1], a[2])
 
 
 def normalized3(a: Point3) -> Point3:
@@ -137,10 +149,18 @@ def normalized3(a: Point3) -> Point3:
         a: The point.
 
     Returns:
-        `a` times one over its length, or `a` itself if it is zero long.
+        The unit direction for finite nonzero components. Zero stays zero.
+        Nonfinite components keep the direct reciprocal-multiply result.
+        The fourth component is unused and must be zero.
     """
-    var length = length3(a)
-    return a * (1.0 / (length if length != 0 else 1.0))
+    var squared = dot3(a, a)
+    if _ordinary_squared(squared):
+        # Keep the reciprocal-multiply order of ordinary three.js fixtures.
+        return a * (1.0 / sqrt(squared))
+    if not (isfinite(a[0]) and isfinite(a[1]) and isfinite(a[2])):
+        return a * (1.0 / sqrt(squared))
+    var unit = scalar_normalized3(a[0], a[1], a[2])
+    return Point3(unit[0], unit[1], unit[2], a[3])
 
 
 trait SpaceCurve(Copyable, Movable):

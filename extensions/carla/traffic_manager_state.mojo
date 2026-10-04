@@ -22,6 +22,12 @@ A vehicle's path, its buffer, is a list of nodes of the
 Here a set of actors is a list, and a query that returns one sorts it by
 id.
 
+**Differences from CARLA.** The circle radius uses widened edge lengths
+and a checked determinant with an exact fallback. Translation does not
+cancel absolute
+Float32 squared coordinates. The original absolute near-line threshold
+stays in square meters. Radii above `FLT_MAX` use that sentinel.
+
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrackTraffic.cpp`,
 `SimulationState.cpp`, `LocalizationUtils.cpp`, `TrafficManagerGeometry.cpp`
 and `DataStructures.h`.
@@ -46,6 +52,7 @@ from extensions.carla.traffic_manager_map import (
     distance_squared,
 )
 from extensions.carla.transform import CarlaRotation
+from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import cos, sqrt
@@ -867,38 +874,83 @@ def three_point_circle_radius(
         last: A third.
 
     Returns:
-        The radius, or `FLT_MAX` meters when the points are nearly on a
-        line.
+        The radius in meters. Return `FLT_MAX` when twice the absolute
+        plan determinant is at most `EPSILON` square meters, including
+        repeated points, or when the radius exceeds the Float32 range.
+        Finite points above that absolute cutoff keep their radius even
+        when their turn angle is small. The z coordinates are ignored.
+
     """
-    var x1 = first.x
-    var y1 = first.y
-    var x2 = middle.x
-    var y2 = middle.y
-    var x3 = last.x
-    var y3 = last.y
+    var x1 = Float64(first.x)
+    var y1 = Float64(first.y)
+    var x2 = Float64(middle.x)
+    var y2 = Float64(middle.y)
+    var x3 = Float64(last.x)
+    var y3 = Float64(last.y)
     var x12 = x1 - x2
-    var x13 = x1 - x3
     var y12 = y1 - y2
+    var x13 = x1 - x3
     var y13 = y1 - y3
-    var y31 = y3 - y1
-    var y21 = y2 - y1
-    var sx13 = x1 * x1 - x3 * x3
-    var sy13 = y1 * y1 - y3 * y3
-    var sx21 = x2 * x2 - x1 * x1
-    var sy21 = y2 * y2 - y1 * y1
-    var f_denom = Float32(2.0) * (y31 * x12 - y21 * x13)
-    if abs(f_denom) <= EPSILON:
+    var left = x12 * y13
+    var right = y12 * x13
+    var determinant = left - right
+    var products = abs(left) + abs(right)
+    # Each product has two rounded shifts and one multiplication. With
+    # u=2**-53, its error is at most gamma(3) times its exact magnitude.
+    # The subtraction adds at most u*(abs(left)+abs(right)). Thus 8*u
+    # times the rounded product sum bounds the determinant error, with
+    # room for the sum and the filter comparisons to round too.
+    var error = Float64(8.881784197001252e-16) * products
+    var cutoff = Float64(EPSILON) * 0.5
+    if abs(determinant) + error < cutoff:
         return Length(FLOAT_MAX)
-    var f = (sx13 * x12 + sy13 * x12 + sx21 * x13 + sy21 * x13) / f_denom
-    # CARLA's second denominator, 2 (x31 y12 - x21 y13), is minus the
-    # first: x31 = -x13, y12 = -y21, x21 = -x12 and y13 = -y31. So its
-    # test for a line never fires once the first has passed.
-    var g_denom = -f_denom
-    var g = (sx13 * y12 + sy13 * y12 + sx21 * y13 + sy21 * y13) / g_denom
-    var c = -(x1 * x1 + y1 * y1) - Float32(2.0) * g * x1 - Float32(2.0) * f * y1
-    var h = -g
-    var k = -f
-    return Length(sqrt(h * h + k * k - c))
+    # Bound determinant error by 2**-28 of its computed magnitude.
+    # Side squares, their product, sqrt and division add at most nine
+    # factors of (1 +/- u). The wide radius error is therefore below
+    # 2**-27 relative, one eighth of Float32's unit roundoff, before
+    # conversion. This budget admits ordinary shallow road curves.
+    # The lower bound must also clear the original absolute cutoff.
+    # Every uncertain case uses exact products; this rejects no new turn.
+    if (
+        error > abs(determinant) * Float64(3.725290298461914e-9)
+        or abs(determinant) - error <= cutoff
+    ):
+        # Expand (middle-first) cross (last-first) into exact coordinate
+        # products. This also retains a short edge beside a distant point.
+        determinant = _sum_products[6](
+            [x1, x2, x3, -x1, -x2, -x3], [y2, y3, y1, y3, y1, y2]
+        )
+        var sign = Float64(1)
+        if determinant < 0:
+            sign = -1
+        # Keep CARLA's <= EPSILON test. Subtract the threshold inside the
+        # expansion so a rounded tie cannot hide a small nonzero excess.
+        var above_threshold = _sum_products[7](
+            [
+                sign * x1,
+                sign * x2,
+                sign * x3,
+                -sign * x1,
+                -sign * x2,
+                -sign * x3,
+                -Float64(EPSILON),
+            ],
+            [2 * y2, 2 * y3, 2 * y1, 2 * y3, 2 * y1, 2 * y2, 1],
+        )
+        if above_threshold <= 0:
+            return Length(FLOAT_MAX)
+    var x23 = x2 - x3
+    var y23 = y2 - y3
+    var a2 = x12 * x12 + y12 * y12
+    var b2 = x13 * x13 + y13 * y13
+    var c2 = x23 * x23 + y23 * y23
+    # R = abc / (4 area). Finite Float32 differences have magnitude
+    # below 2**129, so a2*b2*c2 is below 2**777 and fits Float64.
+    # Even subnormal Float32 edges have squares in normal Float64 range.
+    var radius = sqrt(a2 * b2 * c2) / (2 * abs(determinant))
+    if radius > Float64(FLOAT_MAX):
+        return Length(FLOAT_MAX)
+    return Length(Float32(radius))
 
 
 def interpolate_buffer_at(

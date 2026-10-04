@@ -33,7 +33,7 @@ from render.framebuffer import Color, Framebuffer
 from std.ffi import OwnedDLHandle, c_int, external_call
 from std.math import inf, nan
 from std.subprocess import run
-from test_scratch import temporary_path
+from test_scratch import TestScratch, temporary_path
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -447,4 +447,5 @@ def test_a_window_dropped_open_closes_itself() raises:
 
 
 def main() raises:
-    TestSuite.discover_tests[__functions_in_module()]().run()
+    with TestScratch():
+        TestSuite.discover_tests[__functions_in_module()]().run()

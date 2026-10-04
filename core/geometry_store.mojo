@@ -26,6 +26,8 @@ that is the moment to add one, not before.
 
 from core.buffer_geometry import BufferGeometry
 
+from std.memory import ArcPointer
+
 
 @fieldwise_init
 struct GeometryId(Equatable, ImplicitlyCopyable, Writable):
@@ -43,9 +45,15 @@ struct GeometryStore(Movable):
 
     var geometries: List[BufferGeometry]
 
+    # Retained allocation identity for resource caches. Moving this store
+    # preserves it; a fresh store gets a new identity. A cache retains the
+    # token, not this store's resources, so allocator address reuse is safe.
+    var _cache_owner: ArcPointer[Int]
+
     def __init__(out self):
         """Create an empty store."""
         self.geometries = List[BufferGeometry]()
+        self._cache_owner = ArcPointer(Int(0))
 
     def count(self) -> Int:
         """Return how many geometries the store holds."""

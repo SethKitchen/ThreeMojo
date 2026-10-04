@@ -21,10 +21,13 @@ One `step` does this, in order:
 5. Restitution is a second pass, as in Box2D 3.0: each point that hit
    faster than the bounce threshold gets the speed apart that the
    restitution asks for.
-6. Split impulses push overlapping bodies apart. They change the
-   positions and not the velocities, so they add no energy.
-7. Velocities move the bodies. The orientation integrates as a
-   quaternion and is normalized.
+6. Split impulses push overlapping bodies apart. They change pose and
+   not the stored velocities. For anisotropic bodies this correction
+   can change rotational energy.
+7. Velocities move the bodies. A symmetric split of exact rotations
+   advances free anisotropic rotation while preserving world momentum
+   up to rounding. Isotropic and custom constrained bodies retain the
+   normalized-quaternion prescribed-velocity update.
 
 A ray cast, `raycast`, finds the nearest shape a ray meets. It is what a
 wheel's suspension and a walker's floor test use.
@@ -171,7 +174,7 @@ struct PhysicsWorld(Movable):
         self._dirty = False
         self._order = List[Int]()
 
-    def add_body(mut self, var body: RigidBody) -> BodyId:
+    def add_body(mut self, var body: RigidBody) raises -> BodyId:
         """Add a body. A mesh body's triangles go into the static octree.
 
         Args:
@@ -179,7 +182,11 @@ struct PhysicsWorld(Movable):
 
         Returns:
             Its id.
+
+        Raises:
+            Error: If the body's mode or mass state is inconsistent.
         """
+        body.validate()
         var id = len(self.bodies)
         if body.shape.kind == MESH:
             var turn = rotation_matrix(body.shape_world_rotation())
@@ -257,11 +264,15 @@ struct PhysicsWorld(Movable):
             dt: The step. It must be more than zero and finite.
 
         Raises:
-            Error: If the step is not more than zero and finite.
+            Error: If the step is not more than zero and finite, or a
+                body's mode or mass state is inconsistent.
         """
         var h = dt.value
         if not (isfinite(h) and h > 0):
             raise Error("A physics step must be more than zero")
+        # Validate the complete batch before any body or pending force changes.
+        for body in self.bodies:
+            body.validate()
         self._integrate_velocities(h)
         if self._dirty:
             self._rebuild()
@@ -281,10 +292,10 @@ struct PhysicsWorld(Movable):
     def _integrate_velocities(mut self, h: Float32):
         for i in range(len(self.bodies)):
             ref body = self.bodies[i]
-            if body.kind == DYNAMIC:
+            if body.kind() == DYNAMIC:
                 var accel = (
                     self.gravity * body.gravity_scale
-                    + body.force * body.inverse_mass
+                    + body.force * body.inverse_mass()
                 )
                 body.linear_velocity = (body.linear_velocity + accel * h) * (
                     1 / (1 + h * body.linear_damping)
@@ -444,8 +455,8 @@ struct PhysicsWorld(Movable):
         var ca = cross(ra, n)
         var cb = cross(rb, n)
         var k = (
-            ba.inverse_mass
-            + bb.inverse_mass
+            ba.inverse_mass()
+            + bb.inverse_mass()
             + ca.dot(ba.world_inverse_inertia().transform(ca))
             + cb.dot(bb.world_inverse_inertia().transform(cb))
         )
@@ -489,13 +500,13 @@ struct PhysicsWorld(Movable):
     def _impulse(mut self, a: Int, b: Int, p: _Point, j: Vector3):
         """Give `b` the impulse `j` at the point and `a` its opposite."""
         ref ba = self.bodies[a]
-        ba.linear_velocity = ba.linear_velocity - j * ba.inverse_mass
+        ba.linear_velocity = ba.linear_velocity - j * ba.inverse_mass()
         ba.angular_velocity = (
             ba.angular_velocity
             - ba.world_inverse_inertia().transform(cross(p.ra, j))
         )
         ref bb = self.bodies[b]
-        bb.linear_velocity = bb.linear_velocity + j * bb.inverse_mass
+        bb.linear_velocity = bb.linear_velocity + j * bb.inverse_mass()
         bb.angular_velocity = (
             bb.angular_velocity
             + bb.world_inverse_inertia().transform(cross(p.rb, j))
@@ -548,13 +559,13 @@ struct PhysicsWorld(Movable):
 
     def _push(mut self, a: Int, b: Int, p: _Point, j: Vector3):
         ref ba = self.bodies[a]
-        ba.push_velocity = ba.push_velocity - j * ba.inverse_mass
+        ba.push_velocity = ba.push_velocity - j * ba.inverse_mass()
         ba.push_angular = (
             ba.push_angular
             - ba.world_inverse_inertia().transform(cross(p.ra, j))
         )
         ref bb = self.bodies[b]
-        bb.push_velocity = bb.push_velocity + j * bb.inverse_mass
+        bb.push_velocity = bb.push_velocity + j * bb.inverse_mass()
         bb.push_angular = (
             bb.push_angular
             + bb.world_inverse_inertia().transform(cross(p.rb, j))
@@ -583,19 +594,29 @@ struct PhysicsWorld(Movable):
     def _integrate_positions(mut self, h: Float32):
         for i in range(len(self.bodies)):
             ref body = self.bodies[i]
-            if body.kind == STATIC:
+            if body.kind() == STATIC:
                 continue
             var com = body.world_center_of_mass()
             var w = body.angular_velocity + body.push_angular
+            var free_rotation = False
+            if body.kind() == DYNAMIC and body._rotate_free(h):
+                # Physical drift already updated pose and omega. Split
+                # correction remains pose-only, as in the contact solver.
+                free_rotation = True
+                w = body.push_angular
             var q = body.rotation
-            var spin = Quaternion(w.x, w.y, w.z, 0) * q
-            q = Quaternion(
-                q.x + spin.x * 0.5 * h,
-                q.y + spin.y * 0.5 * h,
-                q.z + spin.z * 0.5 * h,
-                q.w + spin.w * 0.5 * h,
-            )
-            q.normalize()
+            # A second normalization can change the Float32 pose after
+            # free drift reconstructed omega from it. Leave that pose
+            # untouched unless an actual split correction is required.
+            if not free_rotation or w != Vector3(0, 0, 0):
+                var spin = Quaternion(w.x, w.y, w.z, 0) * q
+                q = Quaternion(
+                    q.x + spin.x * 0.5 * h,
+                    q.y + spin.y * 0.5 * h,
+                    q.z + spin.z * 0.5 * h,
+                    q.w + spin.w * 0.5 * h,
+                )
+                q.normalize()
             body.rotation = q
             com = com + (body.linear_velocity + body.push_velocity) * h
             body.position = com - q.rotate(body.center_of_mass)

@@ -38,11 +38,35 @@ The file formats keep a scale and a rotation. `write_covariance` makes the covar
 
 `objects/gaussian_splat.mojo` has `GaussianSplat`. It holds the geometry and the scene node that places it.
 
-- `compute_bounding_box` grows each splat by two standard deviations of its widest coordinate axis.
-- `compute_bounding_sphere` uses the largest absolute covariance row sum. This also covers a rotated long axis.
+- `compute_bounding_box` grows each splat by two standard deviations of its widest regularized coordinate axis. It rounds stored endpoints outward.
+- `compute_bounding_sphere` uses the largest absolute regularized covariance row sum. This also covers a rotated long axis. It rounds the stored radius outward.
 - `raycast(world, raycaster)` finds where a ray meets the ellipsoid of each splat at two standard deviations. It skips a splat with an opacity below 0.2. It returns one `SplatHit` for each splat that the ray meets, with the distance as a `Length`.
 - `update_sort(world, view, near)` sorts the splats from far to near into `order`. It uses 4096 depth bins and a stable counting sort, as three.js's CPU sort does. It sorts again only when the view direction turns by more than the threshold of three.js.
 - `spherical_harmonics_colors(camera)` gives the view-dependent color of each splat for a camera position in the object's space.
+
+## Picking shape and bounds
+
+Picking uses `C + max(diag(C)) * 1e-4 I` as the covariance. This is the
+existing raycast regularization. The global box, global sphere and
+per-splat spherical filter all include that same diagonal addition.
+A grazing ray must not be rejected by an unregularized broad-phase bound.
+
+Bound calculations use 64-bit arithmetic before storage. A compensated
+endpoint sum retains a small extent beside a large center. Error bounds
+and directed 32-bit conversion keep the stored bounds conservative.
+An endpoint outside the 32-bit range is infinite. The sphere then uses
+the midpoint of the splat centers, so its center can remain finite.
+An empty object retains its zero-radius sphere and empty box.
+
+Zero covariance is accepted and gives a point bound. If outward radius
+arithmetic crosses the finite limit, an exact test checks these point
+centers against the largest finite radius. It uses that radius only when
+every splat has zero reach and every center fits. Positive-reach splats
+and points outside that sphere keep an infinite bound.
+
+Rasterization still uses the original covariance. The larger global sphere
+also sets the depth-sort range. Bin boundaries can therefore move slightly;
+the stable counting-sort algorithm and projected splat shape do not change.
 
 ## Ray query precision
 
@@ -63,10 +87,11 @@ coordinates. The world distance still controls the near and far filters.
 
 Tests cover large and small covariances, rotated axes, exact misses, and
 scaled and sheared world transforms. These tests do not establish correct
-results for every finite input. Bound construction can still overflow at
-extreme finite centers; [issue #549](https://github.com/SethKitchen/ThreeMojo/issues/549)
-tracks that separate limit. See [issue #498](https://github.com/SethKitchen/ThreeMojo/issues/498)
-for the squared-distance audit.
+results for every finite input. Box midpoints use wide sums, so a large
+finite center does not overflow during bound construction. Tests include
+an end-to-end ray hit at a center of `3e38`. See
+[issue #498](https://github.com/SethKitchen/ThreeMojo/issues/498) for the
+squared-distance audit.
 
 ## The draw
 
@@ -133,7 +158,9 @@ SPZ uses the same splat limit in every version. The SPZ v4 parser checks its mag
 
 ## Tests
 
-`assets/gaussian_splat/make_splats.mjs` writes the test files. It reads each file with the loaders of three.js r186 into `expected.json`. It also writes the bounds, a raycast and the sort of three.js's `GaussianSplat` for one object and one camera. `tests/test_gaussian_splat_loaders.mojo` and `tests/test_gaussian_splat.mojo` compare the port with these values. The sphere and sort range instead use conservative row-sum bounds. three.js uses only the diagonal for its sphere, which can exclude part of a rotated splat.
+`assets/gaussian_splat/make_splats.mjs` writes the test files. It reads each file with the loaders of three.js r186 into `expected.json`. It also writes the bounds, a raycast and the sort of three.js's `GaussianSplat` for one object and one camera. `tests/test_gaussian_splat_loaders.mojo` and `tests/test_gaussian_splat.mojo` compare the port with these values.
+
+The box, sphere and sort range instead use conservative regularized bounds. Analytic tests check their extents and public hit containment. three.js uses only the diagonal for its sphere, which can exclude part of a rotated splat.
 
 ## What is not ported
 

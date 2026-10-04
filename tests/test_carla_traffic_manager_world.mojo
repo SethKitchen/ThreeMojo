@@ -294,7 +294,7 @@ def test_hybrid_mode_teleports_far_vehicles() raises:
     _run(tm, world, 20)
     assert_false(is_physics_enabled(world, car))
     var body = world.actor(car).body.value
-    assert_true(world.physics.world.bodies[body].kind == KINEMATIC)
+    assert_true(world.physics.world.bodies[body].kind() == KINEMATIC)
     # 20 steps of 8.333 m/s times 0.05 s.
     assert_almost_equal(
         world.get_location(car).x,
@@ -721,20 +721,20 @@ def test_physics_toggle_stops_and_restores_effective_mass() raises:
     var world = _world(straight_town())
     var car = _spawn(world, 20, 1.75)
     var id = world.actor(car).body.value
-    var mass = world.physics.world.bodies[id].mass
-    var tensor = world.physics.world.bodies[id].inverse_inertia
+    var mass = world.physics.world.bodies[id].mass()
+    var tensor = world.physics.world.bodies[id].inverse_inertia()
     world.set_target_velocity(car, Vector3(3, 0, 0))
     set_simulate_physics(world, car, False)
     assert_equal(world.get_velocity(car).length_sq(), 0)
-    assert_equal(world.physics.world.bodies[id].inverse_mass, 0)
+    assert_equal(world.physics.world.bodies[id].inverse_mass(), 0)
     world.add_impulse(car, Vector3(mass, 0, 0))
     assert_equal(world.get_velocity(car).length_sq(), 0)
     set_simulate_physics(world, car, False)
     set_simulate_physics(world, car, True)
-    assert_equal(world.physics.world.bodies[id].mass, mass)
+    assert_equal(world.physics.world.bodies[id].mass(), mass)
     for i in range(9):
         assert_equal(
-            world.physics.world.bodies[id].inverse_inertia.elements[i],
+            world.physics.world.bodies[id].inverse_inertia().elements[i],
             tensor.elements[i],
         )
     world.add_impulse(car, Vector3(mass, 0, 0))

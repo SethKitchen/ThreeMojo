@@ -35,14 +35,119 @@ distance is one dot product and an add. The constructor normalizes both,
 because every question a plane answers assumes the normal is unit and a
 plane built from three points has no reason to have one. A zero normal is
 refused: it is not a plane.
+
+## Range correction
+
+Unlike three.js 0.180, plane normalization uses a wider fallback for extreme
+finite components. Normal and constant use the same divisor. A normalized
+constant can still be infinite when its true value cannot fit in Float32.
+`from_normal_and_point` widens the dot product before division when the direct
+result loses range or is too close to cancellation. Three-point construction
+also retains the original finite coordinate products before normalization.
+Its constant uses the original coordinate determinant in the wide fallback.
 """
 
-from math.box_extent import _shrink_exceeds_extent
+from math.box_extent import (
+    _extent_about_center,
+    _max_radius_encloses_box,
+    _midpoint,
+    _radius_up,
+    _shrink_exceeds_extent,
+)
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
+from math.matrix_determinant import _determinant3_f32, _sum_products
 from math.triangle import Line3, Triangle
+from math.triangle_normal import (
+    _coordinate_plane_through_origin,
+    _finite_triangle,
+    _ordinary_triangle_cross,
+    _triangle_cross_wide,
+)
 from math.vector3 import Vector3
-from std.math import inf, sqrt
+from math.norm import length3, _ordinary_squared
+from std.math import inf, isfinite, sqrt
+from std.memory import bitcast
+from std.sys.intrinsics import unlikely
+
+
+# The last 32 Float32 steps below max finite need a wide quotient. This
+# covers ordinary product, norm, and division rounding near overflow. For
+# finite points, the absolute dot terms divided by the norm sum to at most
+# sqrt(3) times max finite; eight unit roundoffs need fewer than 14 steps.
+# The remaining margin covers the norm and final division.
+comptime _PLANE_CONSTANT_LIMIT = Float32(3.4028169760142154e38)
+# Three-point normals also include bounded Float32 edge/cross error. The
+# full direction bound and point dot need fewer than 512 top-binade steps.
+comptime _GEOMETRIC_PLANE_CONSTANT_LIMIT = Float32(3.402719620448118e38)
+
+
+@no_inline
+def _plane_components_wide(
+    normal: Vector3, constant: Float32
+) raises -> Tuple[Vector3, Float32]:
+    """Divide plane components before narrowing the normal's wide length."""
+    var magnitude = length3(
+        Float64(normal.x), Float64(normal.y), Float64(normal.z)
+    )
+    if magnitude == 0:
+        raise Error("A plane needs a normal with some length")
+    return (
+        Vector3(
+            Float32(Float64(normal.x) / magnitude),
+            Float32(Float64(normal.y) / magnitude),
+            Float32(Float64(normal.z) / magnitude),
+        ),
+        Float32(Float64(constant) / magnitude),
+    )
+
+
+@no_inline
+def _plane_point_constant_wide(normal: Vector3, point: Vector3) -> Float32:
+    """Retain cancelling finite products before the normalized constant."""
+    var left = [Float64(normal.x), Float64(normal.y), Float64(normal.z)]
+    var right = [Float64(point.x), Float64(point.y), Float64(point.z)]
+    var product: Float64
+    if (
+        isfinite(normal.x)
+        and isfinite(normal.y)
+        and isfinite(normal.z)
+        and isfinite(point.x)
+        and isfinite(point.y)
+        and isfinite(point.z)
+    ):
+        # Each widened Float32 product is exact in Float64. An expansion
+        # also keeps a small middle term when the large terms cancel.
+        product = _sum_products[3](left, right)
+    else:
+        # The expansion requires finite factors. Preserve IEEE behavior.
+        product = left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+    return Float32(-product / length3(left[0], left[1], left[2]))
+
+
+@no_inline
+def _plane_coplanar_components_wide(
+    a: Vector3, b: Vector3, c: Vector3
+) raises -> Tuple[Vector3, Float32]:
+    """Normalize an exact-sign cross and coordinate determinant for finite points.
+    """
+    var wide = _triangle_cross_wide(a, b, c)
+    var magnitude = length3(wide[0], wide[1], wide[2])
+    if magnitude == 0:
+        raise Error("Three points on one line do not make a plane")
+    # Multiplying a rounded unit normal by a large point can lose a small
+    # residual. The shared determinant retains all 72-bit triple products.
+    var determinant = _determinant3_f32(
+        [a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z]
+    )
+    return (
+        Vector3(
+            Float32(wide[0] / magnitude),
+            Float32(wide[1] / magnitude),
+            Float32(wide[2] / magnitude),
+        ),
+        Float32(-determinant / magnitude),
+    )
 
 
 @fieldwise_init
@@ -146,7 +251,11 @@ struct Box3(Equatable, ImplicitlyCopyable):
         """Return the middle of this box, or the origin for an empty one."""
         if self.is_empty():
             return Vector3(0, 0, 0)
-        return (self.min + self.max) * 0.5
+        return Vector3(
+            _midpoint(self.min.x, self.max.x),
+            _midpoint(self.min.y, self.max.y),
+            _midpoint(self.min.z, self.max.z),
+        )
 
     def size(self) -> Vector3:
         """Return this box's extent along each axis, or zero for an empty
@@ -289,15 +398,40 @@ struct Box3(Equatable, ImplicitlyCopyable):
         self = Box3.from_points(corners)
 
     def bounding_sphere(self) -> Sphere:
-        """Return the sphere around this box: its center, and half its
-        diagonal as the radius. Empty for an empty box.
+        """Return a sphere around this box, empty for an empty box.
+
+        Finite bounds use the stored rounded center and an outward-rounded
+        corner radius. Intermediate full extents need not fit in Float32.
+        A radius too large for Float32 is infinity. Nonfinite bounds retain
+        their existing IEEE arithmetic.
 
         Returns:
             The sphere.
         """
         if self.is_empty():
             return Sphere.empty()
-        return Sphere(self.center(), self.size().length() * 0.5)
+        var middle = self.center()
+        if not (
+            isfinite(self.min.x)
+            and isfinite(self.min.y)
+            and isfinite(self.min.z)
+            and isfinite(self.max.x)
+            and isfinite(self.max.y)
+            and isfinite(self.max.z)
+        ):
+            return Sphere(middle, self.size().length() * 0.5)
+        var radius = _radius_up(
+            _extent_about_center(self.min.x, self.max.x, middle.x),
+            _extent_about_center(self.min.y, self.max.y, middle.y),
+            _extent_about_center(self.min.z, self.max.z, middle.z),
+        )
+        if radius == inf[DType.float32]() and _max_radius_encloses_box(
+            [self.min.x, self.min.y, self.min.z],
+            [self.max.x, self.max.y, self.max.z],
+            [middle.x, middle.y, middle.z],
+        ):
+            radius = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+        return Sphere(middle, radius)
 
     @staticmethod
     def from_center_and_size(center: Vector3, size: Vector3) -> Box3:
@@ -792,11 +926,21 @@ struct Plane(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the normal has no length: no direction, no plane.
         """
-        var length = normal.length()
-        if length == 0:
-            raise Error("A plane needs a normal with some length")
-        self.normal = normal * (1 / length)
-        self.constant = constant / length
+        var squared = normal.dot(normal)
+        if unlikely(not _ordinary_squared(squared)):
+            var components = _plane_components_wide(normal, constant)
+            self.normal = components[0]
+            self.constant = components[1]
+        else:
+            var magnitude = sqrt(squared)
+            self.normal = normal * (1 / magnitude)
+            self.constant = constant / magnitude
+            if unlikely(not abs(self.constant) < _PLANE_CONSTANT_LIMIT):
+                # A rounded ordinary length can move a quotient across the
+                # finite limit in either direction. Recheck that boundary.
+                var components = _plane_components_wide(normal, constant)
+                self.normal = components[0]
+                self.constant = components[1]
 
     @staticmethod
     def from_normal_and_point(normal: Vector3, point: Vector3) raises -> Plane:
@@ -812,7 +956,27 @@ struct Plane(Equatable, ImplicitlyCopyable):
         Raises:
             Error: If the normal has no length.
         """
-        return Plane(normal, -normal.dot(point))
+        var constant = -normal.dot(point)
+        var product_scale = (
+            abs(normal.x * point.x)
+            + abs(normal.y * point.y)
+            + abs(normal.z * point.z)
+        )
+        # Eight Float32 unit roundoffs bound the direct products and sum.
+        # Cancellation and range loss use an exact-product expansion.
+        if (
+            _ordinary_squared(normal.dot(normal))
+            and _ordinary_squared(abs(constant))
+            and abs(constant) > Float32(4.76837158203125e-7) * product_scale
+        ):
+            var plane = Plane(normal, constant)
+            if abs(plane.constant) < _PLANE_CONSTANT_LIMIT:
+                return plane
+        # Recompute the dot too: widening a rounded raw constant can still
+        # overflow even when the exact normalized constant is representable.
+        var plane = Plane(normal, 0)
+        plane.constant = _plane_point_constant_wide(normal, point)
+        return plane
 
     @staticmethod
     def from_coplanar_points(
@@ -836,11 +1000,33 @@ struct Plane(Equatable, ImplicitlyCopyable):
             Error: If the points lie on one line, or two of them coincide,
                 which leaves no plane to choose.
         """
-        var normal = c - b
-        normal.cross(a - b)
-        if normal.length() == 0:
-            raise Error("Three points on one line do not make a plane")
-        return Plane(normal, -normal.dot(a))
+        var cb = c - b
+        var ab = a - b
+        var normal = cb
+        normal.cross(ab)
+        if _ordinary_triangle_cross(cb, ab, normal):
+            var constant = -normal.dot(a)
+            var plane = Plane(normal, constant)
+            var point_scale = max(abs(a.x), max(abs(a.y), abs(a.z)))
+            # A rounded cross can erase a small geometric plane constant.
+            # Subnormal raw dots also lose relative accuracy. Retain the
+            # original points for range loss, cancellation, and finite limits.
+            if point_scale == 0 or (
+                _ordinary_squared(abs(constant))
+                and abs(plane.constant) > Float32(3.0517578125e-5) * point_scale
+                and abs(plane.constant) < _GEOMETRIC_PLANE_CONSTANT_LIMIT
+            ):
+                return plane
+            if _coordinate_plane_through_origin(a, b, c):
+                return plane
+        if not _finite_triangle(a, b, c):
+            # Keep the original IEEE arithmetic for nonfinite coordinates.
+            return Plane(normal, -normal.dot(a))
+        var components = _plane_coplanar_components_wide(a, b, c)
+        var plane = Plane(Vector3(1, 0, 0), 0)
+        plane.normal = components[0]
+        plane.constant = components[1]
+        return plane
 
     def distance_to_point(self, point: Vector3) -> Float32:
         """Return how far `point` is in front of this plane: negative

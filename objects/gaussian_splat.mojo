@@ -10,9 +10,10 @@ A `GaussianSplat` holds a `GaussianSplatGeometry` and the scene node that
 places it. It keeps what three.js's object keeps beside its GPU buffers:
 
 - **Bounds.** The box grows each splat by the largest coordinate extent,
-  as in three.js. The sphere uses the largest absolute covariance row sum
-  to bound rotated long axes. This corrects three.js's diagonal-only
-  sphere, which can reject a ray inside a rotated anisotropic splat.
+  including the diagonal regularization used by picking. The sphere uses
+  the largest absolute regularized covariance row sum to cover rotated
+  long axes. Stored bounds round outward. Rendering retains its original
+  covariance; the larger sphere also supplies the depth-sort range.
 - **A raycast.** `raycast` meets the ray with the ellipsoid each splat's
   covariance describes, at the kernel's cutoff: three.js's
   `computeRayIntersection`. Splats fainter than `MIN_RAYCAST_OPACITY` are
@@ -43,9 +44,11 @@ from math.ray import (
     _RayProducts,
 )
 from math.bounds import Box3, Sphere
+from math.box_extent import _max_radius_encloses_box
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from std.math import floor, max, min, sqrt
+from std.math import floor, inf, isfinite, max, min, sqrt
+from std.memory import bitcast
 from units.si import Length, METER
 
 # How many standard deviations a splat is drawn out to.
@@ -61,6 +64,59 @@ comptime BIN_COUNT = 4096
 comptime SORT_DIRECTION_THRESHOLD = Float32(0.9995)
 # The narrowest depth range the sort divides into bins.
 comptime MIN_SORT_RANGE = Float64(0.0001)
+
+
+def _sqrt_bound(variance: Float64) -> Float64:
+    """Round a covariance reach above the regularized ellipsoid.
+
+    The narrow phase and bounds share the rounded floor R and diagonals
+    Aii=fl(Cii+R). Two positive row additions give at least (1-u)**2
+    times the exact row sum of this stored matrix, where u=2**-53.
+    The square root and final inflated product therefore give at least
+    (1-u)**3*(1+16*u) times the exact reach, which is greater than one.
+    A subsequent rounded square retains a positive margin as well.
+
+    For finite Float32 covariance entries, every nonzero intermediate is
+    normal Float64. Even a cancellation in Cii+R cannot go below 2**-217;
+    a row sum stays below 2**131. No underflow or overflow invalidates the
+    relative error bounds. The floor's rounding is shared with the actual
+    picking matrix, rather than hidden by a different broad-phase formula.
+    """
+    return SPLAT_KERNEL_CUTOFF * sqrt(variance) * Float64(1.0000000000000018)
+
+
+def _round_bound[upper: Bool](value: Float64, residual: Float64) -> Float32:
+    """Round an exact two-term sum outward to a stored Float32 endpoint."""
+    var stored = Float32(value)
+    var wide = Float64(stored)
+    var change: Bool
+    comptime if upper:
+        change = wide < value or (wide == value and residual > 0)
+    else:
+        change = wide > value or (wide == value and residual < 0)
+    if change:
+        if stored == 0:
+            comptime if upper:
+                return bitcast[DType.float32](UInt32(1))
+            else:
+                return bitcast[DType.float32](UInt32(0x80000001))
+        var bits = bitcast[DType.uint32](stored)
+        if (stored > 0) == upper:
+            bits += 1
+        else:
+            bits -= 1
+        stored = bitcast[DType.float32](bits)
+    return stored
+
+
+def _bound_coordinate[upper: Bool](center: Float32, extent: Float64) -> Float32:
+    """Keep a tiny extent even when the wide endpoint rounds to its center."""
+    var first = Float64(center)
+    var second = extent if upper else -extent
+    var value = first + second
+    var virtual = value - first
+    var residual = (first - (value - virtual)) + (second - virtual)
+    return _round_bound[upper](value, residual)
 
 
 @fieldwise_init
@@ -137,39 +193,53 @@ struct GaussianSplat(Copyable, Movable):
         """Return how many splats there are."""
         return self.splat_geometry.count()
 
+    @always_inline
+    def _covariance_floor(self, index: Int) -> Float64:
+        """Return the same diagonal regularization used by every pick bound."""
+        ref c = self.splat_geometry.covariances
+        return (
+            max(
+                Float64(c[index * 6]),
+                max(Float64(c[index * 6 + 3]), Float64(c[index * 6 + 5])),
+            )
+            * COVARIANCE_FLATNESS
+        )
+
     def _extent(self, index: Int) -> Float64:
-        """Return how far a splat is drawn from its center.
+        """Return the largest coordinate reach of the picking ellipsoid.
 
         Args:
             index: Which splat.
 
         Returns:
-            `SPLAT_KERNEL_CUTOFF` times the square root of its largest
-            variance, and not a number for a negative variance, as
-            three.js's `Math.sqrt` gives.
+            An outward bound on `SPLAT_KERNEL_CUTOFF` times the square root
+            of its largest regularized variance. Negative variance gives
+            not a number, as three.js's `Math.sqrt` gives.
         """
         ref c = self.splat_geometry.covariances
         var largest = max(
             Float64(c[index * 6]),
             max(Float64(c[index * 6 + 3]), Float64(c[index * 6 + 5])),
         )
-        return SPLAT_KERNEL_CUTOFF * sqrt(largest)
+        return _sqrt_bound(largest + self._covariance_floor(index))
 
     @always_inline
     def _sphere_extent(self, index: Int) -> Float64:
         """Return a conservative radius for a positive covariance matrix.
 
-        The largest absolute row sum bounds every covariance eigenvalue.
-        Unlike the largest diagonal, it covers a rotated long axis.
+        The largest absolute regularized row sum bounds every eigenvalue.
+        Unlike the largest diagonal, it covers a rotated long axis. The
+        same diagonal floor is used by the narrow-phase inverse.
         """
         ref c = self.splat_geometry.covariances
         var xy = abs(Float64(c[index * 6 + 1]))
         var xz = abs(Float64(c[index * 6 + 2]))
         var yz = abs(Float64(c[index * 6 + 4]))
-        var x = abs(Float64(c[index * 6])) + xy + xz
-        var y = abs(Float64(c[index * 6 + 3])) + xy + yz
-        var z = abs(Float64(c[index * 6 + 5])) + xz + yz
-        return SPLAT_KERNEL_CUTOFF * sqrt(max(x, max(y, z)))
+        var regularizer = self._covariance_floor(index)
+        var x = abs(Float64(c[index * 6]) + regularizer) + xy + xz
+        var y = abs(Float64(c[index * 6 + 3]) + regularizer) + xy + yz
+        var z = abs(Float64(c[index * 6 + 5]) + regularizer) + xz + yz
+        return _sqrt_bound(max(x, max(y, z)))
 
     def _center(self, index: Int) -> Vector3:
         """Return a splat's center.
@@ -184,34 +254,101 @@ struct GaussianSplat(Copyable, Movable):
         return Vector3(c[index * 3], c[index * 3 + 1], c[index * 3 + 2])
 
     def compute_bounding_box(mut self):
-        """Bound every splat, each grown by its extent, three.js's
-        `computeBoundingBox`. An object of no splats has the empty box."""
+        """Bound every regularized picking ellipsoid with outward endpoints.
+
+        This is three.js's `computeBoundingBox`, enlarged to include its
+        raycast regularization. An object of no splats has the empty box.
+        """
         var box = Box3.empty()
         for index in range(self.count()):
             var center = self._center(index)
-            var reach = Float32(self._extent(index))
+            var reach = self._extent(index)
             box.expand_by_point(
-                Vector3(center.x - reach, center.y - reach, center.z - reach)
+                Vector3(
+                    _bound_coordinate[False](center.x, reach),
+                    _bound_coordinate[False](center.y, reach),
+                    _bound_coordinate[False](center.z, reach),
+                )
             )
             box.expand_by_point(
-                Vector3(center.x + reach, center.y + reach, center.z + reach)
+                Vector3(
+                    _bound_coordinate[True](center.x, reach),
+                    _bound_coordinate[True](center.y, reach),
+                    _bound_coordinate[True](center.z, reach),
+                )
             )
         self.bounding_box = box
 
     def compute_bounding_sphere(mut self):
         """Bound every splat with a sphere, three.js's
         `computeBoundingSphere`: centered on the box, and reaching the far
-        side of the farthest splat."""
+        side of the farthest regularized splat. A box with an infinite
+        endpoint uses the finite center-only midpoint instead.
+        """
         self.compute_bounding_box()
-        var sphere = self.bounding_box.value().bounding_sphere()
-        var reach = Float32(0)
+        var middle = self.bounding_box.value().center()
+        if not (
+            isfinite(middle.x) and isfinite(middle.y) and isfinite(middle.z)
+        ):
+            # A finite center plus a positive extent can need an infinite
+            # Float32 box endpoint. The center-only box still has a midpoint.
+            # The empty box has a finite origin center, so this path has splats.
+            var first = self._center(0)
+            var centers = Box3(first, first)
+            for index in range(1, self.count()):
+                centers.expand_by_point(self._center(index))
+            middle = centers.center()
+        var reach = Float64(0)
         for index in range(self.count()):
-            var far = sphere.center.distance_to(self._center(index)) + Float32(
-                self._sphere_extent(index)
-            )
+            var center = self._center(index)
+            var x = Float64(center.x) - Float64(middle.x)
+            var y = Float64(center.y) - Float64(middle.y)
+            var z = Float64(center.z) - Float64(middle.z)
+            # Differences, squares and two sums give a squared-distance lower
+            # bound (1-u)**5. The root, reach addition and final product give
+            # (1-u)**5.5*(1+16*u) > 1 for the enclosing distance plus reach.
+            # Finite Float32 differences have squared magnitudes between
+            # 2**-298 and 2**258, safely inside normal Float64 arithmetic.
+            var far = (
+                sqrt(x * x + y * y + z * z) + self._sphere_extent(index)
+            ) * Float64(1.0000000000000018)
             reach = max(reach, far)
-        sphere.radius = reach
+        var radius = _round_bound[True](reach, 0)
+        if radius == inf[DType.float32]() and self._zero_reach_fits_limit(
+            middle
+        ):
+            radius = bitcast[DType.float32](UInt32(0x7F7FFFFF))
+        var sphere = Sphere(middle, radius)
         self.bounding_sphere = sphere
+
+    def _zero_reach_fits_limit(self, middle: Vector3) -> Bool:
+        """Exactly admit a finite-limit sphere for point splats only.
+
+        Zero covariance is accepted by the geometry boundary. Inflating a
+        rounded distance can cross the Float32 limit even when every point
+        is exactly inside it. This predicate proves containment before
+        replacing infinity; positive reaches and outside points fail.
+        An empty set is enclosed, as for any universal point predicate.
+        """
+        if not (
+            isfinite(middle.x) and isfinite(middle.y) and isfinite(middle.z)
+        ):
+            return False
+        var stored_middle: Array[Float32, 3] = [middle.x, middle.y, middle.z]
+        for index in range(self.count()):
+            if self._sphere_extent(index) != 0:
+                return False
+            var point = self._center(index)
+            if not (
+                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
+            ):
+                return False
+            var coordinate: Array[Float32, 3] = [point.x, point.y, point.z]
+            if not _max_radius_encloses_box(
+                coordinate, coordinate, stored_middle
+            ):
+                return False
+        return True
 
     def raycast[
         R: RayQuery
@@ -297,7 +434,7 @@ struct GaussianSplat(Copyable, Movable):
         )
         if _radius_relation(ratio, bound * bound)[1]:
             return None
-        var floor_variance = largest * COVARIANCE_FLATNESS
+        var floor_variance = self._covariance_floor(index)
         var a00 = c00 + floor_variance
         var a11 = c11 + floor_variance
         var a22 = c22 + floor_variance

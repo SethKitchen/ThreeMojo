@@ -1,6 +1,6 @@
 # CARLA geometry
 
-Eight modules in `extensions/carla/` port CARLA's engine-independent `geom/`, `image/` and `pointcloud/` code. They give CARLA's math helpers, bounding boxes, map projections, R-trees, meshes, mesh simplification, point cloud files and image conversions. The numbers match CARLA's for the same inputs.
+Eight modules in `extensions/carla/` port CARLA's engine-independent `geom/`, `image/` and `pointcloud/` code. They give CARLA's math helpers, bounding boxes, map projections, R-trees, meshes, mesh simplification, point cloud files and image conversions. The numbers follow CARLA, except for the corrections listed on this page.
 
 The port follows the `LibCarla` source at commit `1360bb9`. See [CARLA](CARLA) for the roads, sensors and frames.
 
@@ -107,7 +107,45 @@ var nearest = tree.get_nearest_neighbours(Vector3(5, 2, 0), 1)
 
 A filter is a struct with an `accepts` method, as `PointFilter` and `SegmentFilter` define. `get_intersections` returns the segments that meet a `Box3`.
 
-The results come nearest first. Entries at the same distance come in the order of insertion. Boost leaves this order open, so CARLA code that reads only the first result gets the same answer.
+The results come in computed squared-distance order. Equal keys use insertion order. Boost leaves this order open. Code that depends on a tied result must use the port's insertion rule.
+
+### Finite segment queries
+
+For finite Float32 coordinates, segment queries retain small endpoint gaps.
+Reversing a segment does not change its distance key. The nearest point can
+be inside a segment even when its parameter rounds to an endpoint in Float64.
+The distance kernel uses endpoint signs and cross products to retain that gap.
+It uses expanded products when ordinary wide arithmetic cannot resolve them.
+
+Distances are Float64 estimates. They are not exact rational results.
+The [numerical design](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/segment-query-numerics.md)
+gives the error bounds and the supported ordering contract.
+
+A node box gives a lower bound for each segment below it. Each segment key
+is at least its own box key, so rounding cannot put it below a parent bound.
+This preserves query pruning and insertion order for equal computed keys.
+
+Box queries widen coordinates before subtraction. They compare uncertain
+slab parameters before division. Thus a segment from negative to positive
+Float32 limits can meet a small box without an infinite direction. Distinct
+small slabs remain distinct even when their Float64 parameters round alike.
+Faces still count as inside. Intersection results keep insertion order.
+
+These correct ThreeMojo's former finite-extreme behavior, tracked in
+[issue #589](https://github.com/SethKitchen/ThreeMojo/issues/589).
+CARLA's pinned reference is
+[`geom/Rtree.h` at 1360bb9](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rtree.h).
+The correction does not change lane construction. Extreme-coordinate queries
+can select a different nearest lane or junction segment than earlier releases.
+There is no mode that restores the old incorrect results.
+
+Packing first compares volume growth, then volume. Ties use area growth, then area, then length growth, then length. Area is the sum of the three pairwise products of side lengths. Length is the sum of side lengths. The comparisons keep these units separate.
+
+This gives planar and linear data a spatial cost when every volume is zero. Final ties keep the existing deterministic rules. Side lengths widen both endpoints to `Float64` before subtraction, so finite opposite-sign `Float32` limits do not overflow during packing. See [#583](https://github.com/SethKitchen/ThreeMojo/issues/583).
+
+For example, insert the 17 points `(0, 0, 0)` through `(16, 0, 0)` in order. The former volume-only split made leaf bounds `[0, 15]` and `[2, 16]`. The new bounds are `[0, 12]` and `[13, 16]`.
+
+The change affects tree packing and query cost. The query and tie policies, payload storage, and public insertion order stay the same. Existing distance and slab arithmetic defects at extreme finite coordinates can affect query results; see [#589](https://github.com/SethKitchen/ThreeMojo/issues/589). Exact result preservation for every finite input is not established.
 
 ## Build a mesh
 
@@ -158,6 +196,7 @@ Each kind is a type with `is_valid`, and the functions that read one refuse a va
 
 The port refuses input where CARLA reads out of bounds, divides by zero or wraps around. It also fixes some behavior that has no use.
 
+- R-tree packing uses area and length to resolve volume ties. Its linear seed selection and node limits stay the same. This is a packing correction to this port; it does not change the query contract.
 - A bounding box half size must be finite and zero or more.
 - A UTM zone must be from 1 to 60 after the checked fractional conversion above. CARLA takes any zone.
 - `stod` does not read a hexadecimal float. It reads the zero before the `x`.

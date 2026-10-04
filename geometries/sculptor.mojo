@@ -38,7 +38,9 @@ with update ranges for the upload, and grows the bounding box and sphere
 as vertices move; here each write replaces the attributes and the index at
 their exact length, and the bounds are computed when asked. A pointer's
 ray comes from `unproject_point`, in `Float32`, where three.js unprojects
-in doubles.
+in doubles. This port supports world axis lengths strictly greater than
+`MIN_WORLD_SCALE` (2^-26). The limit bounds world-to-local amplification;
+it is a conservative arithmetic contract, not a floating-point epsilon.
 """
 
 from cameras.camera import Camera, project_point, unproject_point
@@ -88,8 +90,15 @@ comptime TOPOLOGY_HYSTERESIS2 = 2.05 * 2.05
 comptime UNIFORM_SCALE_TOLERANCE = 8 * 1.1920928955078125e-7
 # How far above the plane the clay tool builds, as a share of the radius.
 comptime CLAY_OFFSET_RATIO = 0.1
-# JavaScript's `Number.EPSILON`.
-comptime _EPSILON = 2.220446049250313e-16
+# Bound world-to-local amplification below 2^26. For an affine, uniform
+# world matrix, this keeps inverse-transformed Float32 ray components and
+# their squared norms far inside Float64's range. The pointer path also
+# squares transformed point differences and divides radius^2 by scale^2.
+# This conservative domain preserves the existing strict lower boundary;
+# it is not the smallest representable or invertible scale. Ray brushes
+# must also pass the separate MAX_FLOAT32 local-radius check.
+comptime MIN_WORLD_SCALE = 1.0 / 67108864.0
+comptime _MIN_WORLD_SCALE2 = MIN_WORLD_SCALE * MIN_WORLD_SCALE
 
 
 @fieldwise_init
@@ -328,7 +337,8 @@ struct Sculptor(Movable):
     `Sculptor`.
 
     The mesh must wear one material, and its world matrix must scale
-    uniformly, by more than zero, without shear.
+    uniformly, with each stored axis length greater than `MIN_WORLD_SCALE`
+    (2^-26), without shear. The limit applies after parent transforms.
     """
 
     # The mesh's place in `scene.meshes`.
@@ -550,7 +560,7 @@ struct Sculptor(Movable):
 
         Raises:
             Error: If the matrix is not finite, or the scale is not uniform,
-                is zero, or shears.
+                is at or below `MIN_WORLD_SCALE`, or shears.
         """
         scene.update()
         var world = scene.world_matrix(scene.meshes[self.mesh].node)
@@ -569,15 +579,15 @@ struct Sculptor(Movable):
         var dot_xz = e[0] * e[8] + e[1] * e[9] + e[2] * e[10]
         var dot_yz = e[4] * e[8] + e[5] * e[9] + e[6] * e[10]
         if (
-            scale_min2 <= _EPSILON
+            scale_min2 <= _MIN_WORLD_SCALE2
             or scale_max2 - scale_min2 > tolerance
             or abs(dot_xy) > tolerance
             or abs(dot_xz) > tolerance
             or abs(dot_yz) > tolerance
         ):
             raise Error(
-                "Sculptor: The mesh must have a non-zero uniform world scale"
-                " without shear."
+                "Sculptor: The mesh must have a uniform world scale greater"
+                " than MIN_WORLD_SCALE (1/67108864), without shear."
             )
         self._matrix_world = e.copy()
         self._matrix_inverse = _inverse(e)
@@ -1064,7 +1074,8 @@ struct Sculptor(Movable):
         Raises:
             Error: If the radius is not a positive finite number, or too
                 large for the mesh's scale; the ray is not finite or has no
-                direction; or the mesh's scale is not uniform.
+                direction; or the world matrix is not finite, uniform and
+                without shear, with axis lengths above `MIN_WORLD_SCALE`.
         """
         if not self._intersection_from_ray(scene, ray, world_radius):
             return False
@@ -1095,8 +1106,9 @@ struct Sculptor(Movable):
             Whether the pointer's ray met the mesh.
 
         Raises:
-            Error: If no view is connected, the mesh's scale is not
-                uniform, or the camera cannot be read.
+            Error: If no view is connected, the world matrix is outside
+                the supported scale range or has shear, or the camera
+                cannot be read.
         """
         if not self._intersection_ray_mesh(camera, scene, client_x, client_y):
             return False
@@ -1129,7 +1141,8 @@ struct Sculptor(Movable):
 
         Raises:
             Error: If the button is invalid, no view is connected, the
-                mesh's scale is not uniform, or the camera cannot be read.
+                world matrix is outside the supported scale range or has
+                shear, or the camera cannot be read.
         """
         if not button.is_valid():
             raise Error("Invalid pointer button: ", button.value)
@@ -1173,8 +1186,8 @@ struct Sculptor(Movable):
             pointer_id: Which pointer.
 
         Raises:
-            Error: If the mesh's scale is not uniform, or the camera
-                cannot be read.
+            Error: If the world matrix is outside the supported scale
+                range or has shear, or the camera cannot be read.
         """
         if (
             not self.enabled

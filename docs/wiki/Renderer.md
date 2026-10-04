@@ -122,11 +122,24 @@ Supersampling rather than a multisampled fill rule keeps both backends on one co
 
 That path loses the range described above. It is the best that can be done with bytes, and it is named here rather than left to be found. Prepare with `supersampled()`, pass that renderer's `render_scale` as the draw's `line_width`, draw at its size, and downsample. Giving the GPU the same linear resolve means keeping its target long enough to average it. A multisampled target does that: `GpuRenderer.read_back_target` resolves its samples in linear light, on the device. See [GPU backend](GPU-backend#multisampled-targets-on-the-gpu).
 
-`render_cube` has the same boundary. It captures its six faces through byte-oriented `Framebuffer` images. Supersampling them does not restore range that was already gone.
+`render_cube` averages each face in linear light before it makes the sRGB byte image. The finished cube still clamps HDR light. `render_cube_into` with a `FLOAT_TARGET` keeps that range.
 
 ### What the setting does not change
 
-The viewport and the scissor are given in output pixels and scaled with the frame. `render_into` and `render_array_into` draw into a target the caller holds, at its size, and are not changed by the setting.
+The viewport and the scissor are given in output pixels and scaled with the frame. `render_into`, `render_array_into`, `render_into_layer` and `render_cube_into` use the target's `samples`. The renderer's `antialias` does not add samples to these draws.
+
+### Cube capture sampling
+
+The two cube capture APIs have different sampling owners. This is intentional.
+
+- `render_cube` uses `camera.size` and the renderer's `antialias`. With the setting off, it takes one sample per pixel. With the setting on, it takes four. It averages linear light before it creates each sRGB byte face.
+- `render_cube_into` uses each target face's size and `samples`. Zero or one takes one sample. Use 4, 9 or 16 for a regular sample grid. The camera's size and the renderer's `antialias` do not change that grid. The samples are averaged once into the target, with no tone mapping or sRGB encode.
+
+For a four-sample HDR capture, pass `cube_render_target(size, Color(0, 0, 0), FLOAT_TARGET, samples=4)` to `render_cube_into`. Changing the renderer's anti-aliasing setting does not change that capture or sample it twice. See [Layered render targets](Render-target-and-framebuffer#layered-render-targets).
+
+This ownership follows three.js r186: [`WebGLRenderer`](https://github.com/mrdoob/three.js/blob/r186/src/renderers/WebGLRenderer.js) supplies `antialias` to the context, and [`RenderTarget`](https://github.com/mrdoob/three.js/blob/r186/src/core/RenderTarget.js) owns a separate `samples` count. [`CubeCamera.update`](https://github.com/mrdoob/three.js/blob/r186/src/cameras/CubeCamera.js) selects the target's faces. This port uses regular sample grids instead of hardware MSAA. The byte-returning `render_cube` convenience API also honors the renderer setting because it has no caller-owned target.
+
+Both capture APIs keep full face viewports and separate capture history. They do not change the main renderer's viewport, scissor or history. The scene settings described above still apply.
 
 ## Tone mapping
 

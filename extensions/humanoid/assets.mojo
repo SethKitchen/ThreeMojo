@@ -14,6 +14,8 @@ def humanoid_asset_path(default_path: String) raises -> String:
     Returns:
         The default path when `THREEMOJO_ASSET_ROOT` is unset or empty.
         Otherwise, the same asset relative to that configured directory.
+        A relative root is resolved from the working directory at each call.
+        Use an absolute root for lookup independent of the working directory.
 
     Raises:
         Error: If the default path does not start with `assets/`.

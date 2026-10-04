@@ -348,5 +348,34 @@ def test_default_entry_skips_docs_and_tracks_nested_definitions() raises:
     assert_equal(scanner.function_number(), 1)
 
 
+def test_else_header_allows_space_before_colon() raises:
+    for header in [
+        String("else:"),
+        String("else : # spaced"),
+        String("else\t:"),
+    ]:
+        var scanner = Scanner()
+        _ = scanner.is_executable("def f():")
+        _ = scanner.is_executable("  if ready:")
+        _ = scanner.is_executable("    pass")
+        assert_equal(scanner.is_executable("  " + header), False)
+        assert_equal(scanner.is_executable("    pass"), True)
+    var scanner = Scanner()
+    _ = scanner.is_executable("def f():")
+    assert_equal(scanner.is_executable("  elsewhere()"), True)
+
+
+def test_function_number_is_absent_outside_a_function() raises:
+    var scanner = Scanner()
+    assert_equal(scanner.function_number(), -1)
+    _ = scanner.is_executable("struct S:")
+    assert_equal(scanner.function_number(), -1)
+    _ = scanner.is_executable("  def f(self):")
+    _ = scanner.is_executable("    pass")
+    assert_equal(scanner.function_number(), 0)
+    _ = scanner.is_executable("  var field: Int")
+    assert_equal(scanner.function_number(), -1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

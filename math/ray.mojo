@@ -21,6 +21,12 @@ Changing the public direction does not extend every other method's
 contract to arbitrary non-unit vectors. three.js leaves normalization to
 the caller.
 
+## Range correction
+
+Unlike three.js 0.180, `look_at` widens extreme finite positions before
+subtraction and normalization. Ordinary directions keep their arithmetic order.
+The correction does not add new nonfinite-input errors.
+
 A hit is an `Optional`. A ray that misses has no point to give, and a
 point picked to mean "none" would be a point somewhere. three.js returns
 `null` for the same reason. `intersect_*` gives the point and
@@ -39,7 +45,9 @@ Like `Vector3` and the bounds, a ray holds bare `Float32` meters. The
 
 from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
+from math.matrix_determinant import _sum_products
 from math.vector3 import Vector3
+from math.norm import normalized3, _ordinary_squared
 from std.math import copysign, inf, max, min, nan, sqrt
 from std.memory import bitcast
 from std.sys.intrinsics import unlikely
@@ -241,6 +249,77 @@ def _radius_relation(
 
 
 @fieldwise_init
+struct _SphereExact(ImplicitlyCopyable):
+    """Exact-sign estimates of the finite Float32 sphere polynomials."""
+
+    var outside: Float64
+    var projection: Float64
+    var discriminant: Float64
+    var cross_x: Float64
+    var cross_y: Float64
+    var cross_z: Float64
+
+
+@no_inline
+def _sphere_exact(
+    origin: Vector3, direction: Vector3, sphere: Sphere
+) -> _SphereExact:
+    """Evaluate degree-two and degree-four polynomials without rounded shifts.
+
+    Every factor below is a Float32 value or an exact product of two such
+    values. The determinant expansion preserves all cancellation. Degree
+    four spans 2**-596 through less than 2**518, within normal Float64.
+    """
+    var o = [Float64(origin.x), Float64(origin.y), Float64(origin.z)]
+    var c = [
+        Float64(sphere.center.x),
+        Float64(sphere.center.y),
+        Float64(sphere.center.z),
+    ]
+    var d = [Float64(direction.x), Float64(direction.y), Float64(direction.z)]
+    var r = Float64(sphere.radius)
+    var side_left = Array[Float64, 10](fill=0)
+    var side_right = Array[Float64, 10](fill=0)
+    var projection_left = Array[Float64, 6](fill=0)
+    var projection_right = Array[Float64, 6](fill=0)
+    var left = Array[Float64, 51](fill=0)
+    var right = Array[Float64, 51](fill=0)
+    var cross = Array[Float64, 3](fill=0)
+    for axis in range(3):  # pragma: no branch
+        side_left[3 * axis] = c[axis]
+        side_right[3 * axis] = c[axis]
+        side_left[3 * axis + 1] = -2 * c[axis]
+        side_right[3 * axis + 1] = o[axis]
+        side_left[3 * axis + 2] = o[axis]
+        side_right[3 * axis + 2] = o[axis]
+        projection_left[2 * axis] = c[axis]
+        projection_left[2 * axis + 1] = -o[axis]
+        projection_right[2 * axis] = d[axis]
+        projection_right[2 * axis + 1] = d[axis]
+        left[axis] = r * r
+        right[axis] = d[axis] * d[axis]
+        var j = (axis + 1) % 3
+        var k = (axis + 2) % 3
+        var factors = [c[j] * d[k], -c[k] * d[j], -o[j] * d[k], o[k] * d[j]]
+        cross[axis] = _sum_products[4](factors, Array[Float64, 4](fill=1))
+        for a in range(4):  # pragma: no branch
+            for b in range(4):  # pragma: no branch
+                var index = 3 + 16 * axis + 4 * a + b
+                left[index] = -factors[a]
+                right[index] = factors[b]
+    side_left[9] = -r
+    side_right[9] = r
+    return _SphereExact(
+        _sum_products[10](side_left, side_right),
+        _sum_products[6](projection_left, projection_right),
+        _sum_products[51](left, right),
+        cross[0],
+        cross[1],
+        cross[2],
+    )
+
+
+@fieldwise_init
 struct _BoxEndpoint(ImplicitlyCopyable):
     """A slab parameter stored as widened face/origin values and a divisor."""
 
@@ -412,7 +491,19 @@ struct Ray(ImplicitlyCopyable):
         var toward = target - self.origin
         if toward.length() == 0:
             raise Error("A ray cannot look at its own origin")
-        toward.normalize()
+        if _ordinary_squared(toward.dot(toward)):
+            toward.normalize()
+        else:
+            # Widen positions before subtraction. Opposite finite Float32
+            # positions can have a difference that cannot fit in Float32.
+            var unit = normalized3(
+                Float64(target.x) - Float64(self.origin.x),
+                Float64(target.y) - Float64(self.origin.y),
+                Float64(target.z) - Float64(self.origin.z),
+            )
+            toward = Vector3(
+                Float32(unit[0]), Float32(unit[1]), Float32(unit[2])
+            )
         self.direction = toward
 
     def recast(mut self, t: Float32):
@@ -551,24 +642,67 @@ struct Ray(ImplicitlyCopyable):
         """Retain the full-range, center-relative sphere reconstruction."""
         if sphere.is_empty():
             return _SphereHit(False, Vector3(0, 0, 0))
+        var q = (
+            (Float64(sphere.center.x) - Float64(self.origin.x)) ** 2
+            + (Float64(sphere.center.y) - Float64(self.origin.y)) ** 2
+            + (Float64(sphere.center.z) - Float64(self.origin.z)) ** 2
+        )
+        var dx = Float64(self.direction.x)
+        var dy = Float64(self.direction.y)
+        var dz = Float64(self.direction.z)
+        var norm = dx * dx + dy * dy + dz * dz
+        var r2 = Float64(sphere.radius) * Float64(sphere.radius)
+        if (
+            q < inf[DType.float64]()
+            and norm > 0
+            and norm < inf[DType.float64]()
+            and r2 < inf[DType.float64]()
+        ):
+            var exact = _sphere_exact(self.origin, self.direction, sphere)
+            if exact.discriminant < 0 or (
+                exact.projection < 0 and exact.outside > 0
+            ):
+                return _SphereHit(False, Vector3(0, 0, 0))
+            if exact.outside == 0:
+                return _SphereHit(True, self.origin)
+            var offset = sqrt(exact.discriminant) / norm
+            if exact.outside > 0:
+                offset = -offset
+            var cx = exact.cross_x
+            var cy = exact.cross_y
+            var cz = exact.cross_z
+            return _SphereHit(
+                True,
+                Vector3(
+                    Float32(
+                        Float64(sphere.center.x)
+                        - (dy * cz - dz * cy) / norm
+                        + dx * offset
+                    ),
+                    Float32(
+                        Float64(sphere.center.y)
+                        - (dz * cx - dx * cz) / norm
+                        + dy * offset
+                    ),
+                    Float32(
+                        Float64(sphere.center.z)
+                        - (dx * cy - dy * cx) / norm
+                        + dz * offset
+                    ),
+                ),
+            )
         var approach = _line_approach(
             self.origin, self.direction, sphere.center
         )
-        var foot = approach.parameter
         var drop_sq = approach.distance_sq
         var radius_sq = Float64(sphere.radius) * Float64(sphere.radius)
         if drop_sq > radius_sq:
             return _SphereHit(False, Vector3(0, 0, 0))
-        var half = sqrt((radius_sq - drop_sq) / approach.norm_sq)
-        var entering = foot - half
-        var leaving = foot + half
-        if leaving < 0:
-            return _SphereHit(False, Vector3(0, 0, 0))
-        var offset = -half
-        if entering < 0:
-            offset = half
-        # Work from the center and the perpendicular gap. A distant origin
-        # can make even a Float64 parameter round away a small radius.
+        # Only extended/invalid inputs reach this branch. The half-width
+        # is NaN, except for an infinite radius and valid ray where it is
+        # positive infinity. The former root sign tests cannot reject it;
+        # the latter always chooses the exit. Preserve those results.
+        var offset = sqrt((radius_sq - drop_sq) / approach.norm_sq)
         return _SphereHit(
             True,
             Vector3(
@@ -678,12 +812,53 @@ struct Ray(ImplicitlyCopyable):
         """
         if sphere.is_empty():
             return False
+        var x = Float64(sphere.center.x) - Float64(self.origin.x)
+        var y = Float64(sphere.center.y) - Float64(self.origin.y)
+        var z = Float64(sphere.center.z) - Float64(self.origin.z)
+        var dx = Float64(self.direction.x)
+        var dy = Float64(self.direction.y)
+        var dz = Float64(self.direction.z)
+        var norm = dx * dx + dy * dy + dz * dz
+        var projection = x * dx + y * dy + z * dz
+        var distance = x * x + y * y + z * z
+        var radius = Float64(sphere.radius) * Float64(sphere.radius)
+        var outside = distance - radius
+        var discriminant = projection * projection - norm * outside
+        # 32u bounds the complete quadratic evaluation, including rounded
+        # coordinate differences. This is a filter, never a hit tolerance.
+        var guard = 0.000000000000003552713678800501 * (
+            projection * projection + norm * (distance + radius)
+        )
+        if discriminant < -guard:
+            return False
+        # A certified crossing with a forward projection already meets the
+        # half-line. Only a backward projection needs the origin-side filter
+        # to distinguish a containing sphere from one behind the ray.
+        if discriminant > guard:
+            if projection >= 0:
+                return True
+            var boundary = (
+                bitcast[DType.uint64](distance)
+                - bitcast[DType.uint64](radius)
+                + UInt64(16)
+            )
+            if boundary > UInt64(32):
+                return outside < 0
+        if (
+            distance < inf[DType.float64]()
+            and norm > 0
+            and norm < inf[DType.float64]()
+            and radius < inf[DType.float64]()
+        ):
+            var exact = _sphere_exact(self.origin, self.direction, sphere)
+            return exact.discriminant >= 0 and (
+                exact.projection >= 0 or exact.outside <= 0
+            )
+        # Preserve the established extended/invalid-input comparison.
         var ratio = _distance_sq_ratio(
             self.origin, self.direction, sphere.center
         )
-        return _radius_relation(
-            ratio, Float64(sphere.radius) * Float64(sphere.radius)
-        )[0]
+        return _radius_relation(ratio, radius)[0]
 
     def distance_to_plane(self, plane: Plane) -> Optional[Float32]:
         """Return how far along this ray `plane` is met, three.js's

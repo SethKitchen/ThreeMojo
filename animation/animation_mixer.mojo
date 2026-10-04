@@ -87,6 +87,13 @@ around again. It bounced near the end for ever, and moving the same
 elapsed time in smaller steps gave a different answer from moving it in
 one.
 
+A scaled step and phase sum retain Float32 rounding. Exact binary division
+then computes the whole count and residual together. A nonfinite step or sum,
+or an unsupported count or stored phase, raises before timing fields change.
+Finite repetitions can stop before an unconstrained count would exceed Int.
+This corrects the large-ratio quotient defect in three.js r180 and the old
+Float32 formula. See the wiki's "Large advances" section for boundary rules.
+
 ## Repetitions
 
 A `REPEAT` or `PING_PONG` action runs through its clip `repetitions`
@@ -271,6 +278,7 @@ two. A clip of no length is refused where clips are built, which is what
 lets the looping divide by the length without asking.
 """
 
+from animation.loop_time import _split_loop_time, _stored_loop_phase
 from animation.animation_clip import (
     ADDITIVE_BLEND_MODE,
     AnimationBlendMode,
@@ -336,7 +344,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import floor, inf, isfinite
+from std.math import inf, isfinite
 from units.si import Angle, DEGREE, Duration, Length, METER, RADIAN, SECOND
 
 # How many numbers a pile holds: four, which is what the widest value, a
@@ -1448,6 +1456,37 @@ struct Binding(Copyable, Movable):
         return TrackTarget(TrackKind(self.kind), self.node, self.slot)
 
 
+@fieldwise_init
+struct _ActionMove(Copyable, ImplicitlyCopyable, Movable):
+    """A checked clock transition, before any action field changes."""
+
+    var phase: Float32
+    var loop_delta: Int
+    var count: Int
+    var from_end: Int
+    var pending: Int128
+    var finishing: Bool
+
+
+@fieldwise_init
+struct _ActionTick(Copyable, ImplicitlyCopyable, Movable):
+    """A checked step and effective scale, without a copy of the clip."""
+
+    var moved_by: Float32
+    var scale: Float32
+    var move: _ActionMove
+
+
+@fieldwise_init
+struct _PreparedUpdate(Movable):
+    """Checked mixer timing; one action needs no allocated plan storage."""
+
+    var seconds: Float32
+    var elapsed: Float32
+    var first: _ActionTick
+    var others: List[_ActionTick]
+
+
 struct AnimationAction(Copyable, Movable):
     """One clip being played: where it has got to, and how much of it to
     use."""
@@ -1747,7 +1786,9 @@ struct AnimationAction(Copyable, Movable):
         var length = self.clip.duration().to(SECOND)
         if self.loop == PING_PONG:
             if self.phase > length:
-                return Duration(length * 2 - self.phase, SECOND)
+                return Duration(
+                    Float32(Float64(length) * 2 - Float64(self.phase)), SECOND
+                )
         return Duration(self.phase, SECOND)
 
     def set_weight(mut self, weight: Float32) raises:
@@ -1953,7 +1994,8 @@ struct AnimationAction(Copyable, Movable):
                 `time_scale`, so this can move the action either way.
 
         Raises:
-            Error: If `seconds` is not a number.
+            Error: If the step or phase sum is not finite, or the loop
+                count or reduced phase does not fit its stored type.
         """
         if not isfinite(seconds):
             raise Error(
@@ -1985,27 +2027,93 @@ struct AnimationAction(Copyable, Movable):
                 ZERO_SLOPE_ENDING if self.zero_slope_at_end else ZERO_CURVATURE_ENDING
             )
 
-    def _move(mut self, moved_by: Float32):
-        """Move the phase by `moved_by` seconds of clip time, and note in
-        `loop_delta`, `just_finished` and `direction` what that did.
-
-        A clip lasts longer than no time, which `AnimationClip` has already
-        made sure of, so dividing by its length is safe here. A move of
-        nothing does nothing, as three.js's `_updateTime` returns early on
-        a delta of zero.
+    def _plan_move(
+        self, moved_by: Float32, phase: Float32
+    ) raises -> _ActionMove:
+        """Check a stored Float32 step, sum, count and phase without mutation.
         """
+        if not isfinite(moved_by):
+            raise Error("An action's scaled advance must be a finite number")
+        if moved_by == 0:
+            return _ActionMove(phase, 0, self.loop_count, 0, 0, False)
+        var moved = phase + moved_by
+        if not isfinite(moved):
+            raise Error("An action's advanced phase must be a finite number")
+        if self.loop == ONCE:
+            return _ActionMove(moved, 0, self.loop_count, 0, 0, False)
+        var length = self.clip.duration().to(SECOND)
+        # Most frames stay in one leg. The stored sum is already its exact
+        # reduced phase, and its whole-count difference is zero.
+        if phase >= 0 and phase < length and moved >= 0 and moved < length:
+            return _ActionMove(moved, 0, self.loop_count, 0, 0, False)
+        var period = Float64(length) * 2
+        if (
+            self.loop == PING_PONG
+            and phase >= length
+            and moved >= length
+            and Float64(phase) < period
+            and Float64(moved) < period
+        ):
+            return _ActionMove(moved, 0, self.loop_count, 1, 0, False)
+        var from_end = _split_loop_time(phase, length)[0]
+        if abs(from_end) > Int128(Int.MAX):
+            raise Error("An action's starting loop count must fit Int")
+        var to_end, residual = _split_loop_time(moved, length)
+        var delta = to_end - from_end
+        var crossed = abs(delta)
+        var count = self.loop_count
+        if not self.started and moved_by > 0:
+            count = 0
+        var pending = Int128(0)
+        if delta != 0 and Bool(self.repetitions):
+            pending = max(Int128(self.repetitions.value()) - Int128(count), 0)
+            if pending <= crossed:
+                # Keep the existing finish convention: no LOOPED event, and
+                # do not store the overshoot in loop_count or started.
+                return _ActionMove(
+                    moved, 0, count, Int(from_end), pending, True
+                )
+        if crossed > Int128(Int.MAX) or Int128(count) + crossed > Int128(
+            Int.MAX
+        ):
+            raise Error("An action's loop count must fit Int")
+        var wraps_first = (
+            self.loop == PING_PONG
+            and not self.started
+            and moved_by < 0
+            and delta != 0
+        )
+        var reduced = _stored_loop_phase(
+            to_end, residual, length, self.loop == PING_PONG, wraps_first
+        )
+        return _ActionMove(
+            reduced, Int(delta), count, Int(from_end), pending, False
+        )
+
+    def _move(mut self, moved_by: Float32) raises:
+        """Apply a checked move; unsupported steps leave all fields unchanged.
+
+        Scaling and phase addition keep their stored Float32 rounding.
+        Exact quotient and residual arithmetic then count the same ends.
+        A zero step only clears the last move's event flags, as before.
+        """
+        var move = self._plan_move(moved_by, self.phase)
+        self._apply_move(moved_by, move)
+
+    def _apply_move(mut self, moved_by: Float32, move: _ActionMove):
+        """Apply a transition only after its arithmetic has been checked."""
         self.loop_delta = 0
         self.just_finished = False
         if moved_by == 0:
             return
         var length = self.clip.duration().to(SECOND)
-        var moved = self.phase + moved_by
         var ping_pong = self.loop == PING_PONG
         if self.loop == ONCE:
             if not self.started:
                 self.started = True
                 self.loop_count = 0
                 self._set_endings(True, True, False)
+            var moved = move.phase
             if moved >= length:
                 moved = length
                 self._finish(moved_by)
@@ -2014,41 +2122,19 @@ struct AnimationAction(Copyable, Movable):
                 self._finish(moved_by)
             self.phase = moved
             return
-        # three.js leaves a clip uncounted, its `_loopCount` at -1, until
-        # it first wraps, whichever way it ran before that. A pass backward
-        # through zero then wraps to the end, for `PING_PONG` as for
-        # `REPEAT`, so a clip run backward plays backward. Here that is a
-        # leg's worth of phase: without it the pass turned round, and the
-        # clip ran forward under a negative time scale.
-        var wraps_first = ping_pong and not self.started and moved_by < 0
         var none_left = Bool(self.repetitions) and self.repetitions.value() == 0
-        # three.js's `_loopCount`: a clip run forward counts from zero as it
-        # starts, and one run backward from -1, so its first pass through
-        # zero is not a repetition.
-        var count = self.loop_count
         if not self.started:
-            # A clip that repeats runs on past the end it is heading for,
-            # unless it repeats no times at all, and is flat at the end it
-            # left.
             if moved_by > 0:
-                count = 0
                 self._set_endings(True, none_left, ping_pong)
             else:
                 self._set_endings(none_left, True, ping_pong)
-        # Each end of the clip passed is one of three.js's loops, for
-        # `PING_PONG` as much as for `REPEAT`: the phase has one end every
-        # clip's length, whichever leg it is on.
-        var from_end = Int(floor(self.phase / length))
-        self.loop_delta = Int(floor(moved / length)) - from_end
+        if move.finishing:
+            self._finish_repeating(moved_by, move.from_end, move.pending)
+            return
+        self.loop_delta = move.loop_delta
         if self.loop_delta != 0:
             if Bool(self.repetitions):
-                var pending = self.repetitions.value() - count
-                if pending <= abs(self.loop_delta):
-                    self._finish_repeating(moved_by, from_end, pending)
-                    return
-                if pending == abs(self.loop_delta) + 1:
-                    # Entering the last run, which does not run on past
-                    # the end it is heading for.
+                if move.pending == Int128(abs(self.loop_delta)) + 1:
                     var at_start = moved_by < 0
                     self._set_endings(at_start, not at_start, ping_pong)
                 else:
@@ -2056,20 +2142,12 @@ struct AnimationAction(Copyable, Movable):
             else:
                 self._set_endings(False, False, ping_pong)
             self.started = True
-            self.loop_count = count + abs(self.loop_delta)
-            if wraps_first:
-                moved += length
+            self.loop_count = move.count + abs(self.loop_delta)
         self.direction = -1 if moved_by < 0 else 1
-        var period = length
-        if ping_pong:
-            # The phase runs over the whole there-and-back, and `at` folds
-            # it. Folding it here instead would lose which leg it is on.
-            period = length * 2
-        moved -= floor(moved / period) * period
-        self.phase = moved
+        self.phase = move.phase
 
     def _finish_repeating(
-        mut self, moved_by: Float32, from_end: Int, pending: Int
+        mut self, moved_by: Float32, from_end: Int, pending: Int128
     ):
         """End a `REPEAT` or `PING_PONG` action whose last repetition ran
         out during this move, three.js's `finished` branch of
@@ -2101,26 +2179,34 @@ struct AnimationAction(Copyable, Movable):
         # least the first. An even end is the start of the clip and an odd
         # one its end, since the phase runs there and back.
         var ends = max(pending, 1)
-        var stop = from_end + ends if moved_by > 0 else from_end - ends + 1
+        var origin = Int128(from_end)
+        # An initial reverse crossing wraps to the other leg before any
+        # complete repetition. A finish in this same move needs that leg
+        # too. Zero repetitions stop at the first boundary without a wrap.
+        if not self.started and moved_by < 0 and pending > 1:
+            origin += 1
+        var stop = origin + ends if moved_by > 0 else origin - ends + 1
         self.phase = length if stop % 2 != 0 else Float32(0)
 
-    def _update_time_scale(mut self, time: Float32) -> Float32:
-        """Return the time scale for this update with any warp applied,
-        and end the warp once the mixer's clock is past it, three.js's
-        `_updateTimeScale`."""
-        var scale: Float32 = 0
-        if not self.paused:
-            scale = self.time_scale
-            if self.warping:
-                scale *= self.warp_ramp.at(time)
-                if time > self.warp_ramp.end:
-                    self.warping = False
-                    if scale == 0:
-                        self.paused = True
-                    else:
-                        self.time_scale = scale
-        self.applied_time_scale = scale
+    def _time_scale_at(self, time: Float32) -> Float32:
+        """Read the effective scale without ending a warp or pausing."""
+        if self.paused:
+            return 0
+        var scale = self.time_scale
+        if self.warping:
+            scale *= self.warp_ramp.at(time)
         return scale
+
+    def _update_time_scale(mut self, time: Float32, scale: Float32):
+        """Read the checked scale and commit a completed warp, as three.js does.
+        """
+        if not self.paused and self.warping and time > self.warp_ramp.end:
+            self.warping = False
+            if scale == 0:
+                self.paused = True
+            else:
+                self.time_scale = scale
+        self.applied_time_scale = scale
 
     def _update_weight(mut self, time: Float32) -> Float32:
         """Return the weight for this update with any fade applied, and
@@ -2138,27 +2224,39 @@ struct AnimationAction(Copyable, Movable):
         self.applied_weight = weight
         return weight
 
-    def _tick(mut self, time: Float32, seconds: Float32) -> Float32:
-        """Run one mixer update for an active action, three.js's `_update`,
-        and return the weight it contributes.
-
-        `time` is the mixer's clock after the update and `seconds` is how
-        far it moved. A start time still ahead holds the clock; the update
-        that passes it runs only the part after it.
-        """
-        self.now = time
-        var step = seconds
+    def _step_at(self, time: Float32, seconds: Float32) -> Float32:
+        """Read the scheduled part of a mixer step without starting it."""
         if self.scheduled:
             var way = Float32(1) if seconds > 0 else (
                 Float32(-1) if seconds < 0 else Float32(0)
             )
             var running = (time - self.start_time) * way
             if running < 0 or way == 0:
-                step = 0
-            else:
+                return 0
+            return way * running
+        return seconds
+
+    def _plan_tick(
+        self, time: Float32, seconds: Float32, phase: Float32
+    ) raises -> _ActionTick:
+        """Read one action's timing once, with its current or reset phase."""
+        var step = self._step_at(time, seconds)
+        var scale = self._time_scale_at(time)
+        var moved_by = step * scale
+        return _ActionTick(moved_by, scale, self._plan_move(moved_by, phase))
+
+    def _tick(
+        mut self, time: Float32, seconds: Float32, tick: _ActionTick
+    ) -> Float32:
+        """Apply preflighted timing, then read the fade, as three.js does."""
+        self.now = time
+        if self.scheduled:
+            if seconds > 0 and time >= self.start_time:
                 self.scheduled = False
-                step = way * running
-        self._move(step * self._update_time_scale(time))
+            elif seconds < 0 and time <= self.start_time:
+                self.scheduled = False
+        self._update_time_scale(time, tick.scale)
+        self._apply_move(tick.moved_by, tick.move)
         return self._update_weight(time)
 
 
@@ -2675,6 +2773,7 @@ struct AnimationMixer(Movable):
         Raises:
             Error: As `update` does.
         """
+        _ = self._prepare_update(time, True)
         self._zero_time()
         self.update(scene, time)
 
@@ -2692,6 +2791,7 @@ struct AnimationMixer(Movable):
         Raises:
             Error: As `update` does.
         """
+        _ = self._prepare_update(time, True)
         self._zero_time()
         self.update(scene, assets, time)
 
@@ -2714,8 +2814,41 @@ struct AnimationMixer(Movable):
         Raises:
             Error: As `update` does.
         """
+        _ = self._prepare_update(time, True)
         self._zero_time()
         self.update(scene, assets, cameras, time)
+
+    def _prepare_update(
+        self, delta: Duration, rewind: Bool = False
+    ) raises -> _PreparedUpdate:
+        """Stage every active clock before changing clocks, phases or events."""
+        if not isfinite(self.time_scale):
+            raise Error("A mixer's time scale must be a number")
+        var seconds = delta.to(SECOND) * self.time_scale
+        if not isfinite(seconds):
+            raise Error("A mixer cannot advance by a time that is not a number")
+        var elapsed = seconds if rewind else self.elapsed + seconds
+        if not isfinite(elapsed):
+            raise Error("A mixer's advanced clock must be a finite number")
+        var first = _ActionTick(0, 0, _ActionMove(0, 0, 0, 0, 0, False))
+        var others = List[_ActionTick]()
+        var count = 0
+        for index in range(len(self.actions)):  # pragma: no branch
+            if self.uncached[index] or not self.actions[index].active:
+                continue
+            if not self.actions[index].blend_mode.is_valid():
+                raise Error("An action needs a blend mode that exists")
+            var phase = Float32(0) if rewind else self.actions[index].phase
+            var tick = self.actions[index]._plan_tick(elapsed, seconds, phase)
+            if count == 0:
+                first = tick
+            else:
+                if count == 1:
+                    # Cover small groups without reserving an inactive cache.
+                    others.reserve(min(len(self.actions) - index, 8))
+                others.append(tick)
+            count += 1
+        return _PreparedUpdate(seconds, elapsed, first, others^)
 
     def _update(
         mut self,
@@ -2727,14 +2860,8 @@ struct AnimationMixer(Movable):
         delta: Duration,
     ) raises:
         """Run one update; see `update`."""
-        if not isfinite(self.time_scale):
-            raise Error("A mixer's time scale must be a number")
-        # three.js's `update` multiplies the delta by the time scale
-        # before anything else sees it.
-        var seconds = delta.to(SECOND) * self.time_scale
-        if not isfinite(seconds):
-            raise Error("A mixer cannot advance by a time that is not a number")
-        self.elapsed += seconds
+        var prepared = self._prepare_update(delta)
+        self.elapsed = prepared.elapsed
         self.events = List[AnimationEvent]()
 
         var targets = List[TrackTarget]()
@@ -2742,6 +2869,7 @@ struct AnimationMixer(Movable):
         var piles = List[Float32]()
         var added = List[Float32]()
         var additive = List[Float32]()
+        var action_count = 0
 
         for index in range(len(self.actions)):  # pragma: no branch
             if self.uncached[index]:
@@ -2752,9 +2880,14 @@ struct AnimationMixer(Movable):
                 self.actions[index].now = self.elapsed
                 self.actions[index].applied_weight = 0
                 continue
-            if not self.actions[index].blend_mode.is_valid():
-                raise Error("An action needs a blend mode that exists")
-            var share = self.actions[index]._tick(self.elapsed, seconds)
+            var tick = (
+                prepared.first if action_count
+                == 0 else prepared.others[action_count - 1]
+            )
+            action_count += 1
+            var share = self.actions[index]._tick(
+                self.elapsed, prepared.seconds, tick
+            )
             self._record(index)
             if share <= 0:
                 continue

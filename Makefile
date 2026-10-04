@@ -249,7 +249,7 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
 endef
 
 .PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
-        docs-check wiki-publish test-tools test-coverage-tool \
+        docs-check wiki-publish test-tools test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
@@ -292,7 +292,7 @@ check: check-cpu check-gpu
 # The half that needs nothing but the Mojo toolchain. This is what to run when
 # MAX is not installed, and what proves the no-dependencies claim is still
 # true.
-check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-coverage-tool
+check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-coverage-tool test-portability
 
 # The complete GPU check needs MAX and an accelerator. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
@@ -405,18 +405,31 @@ gpu-status:
 lint: lint-cpu lint-gpu
 
 # The suites are linted where `test-cpu` builds them.
+# On failure, name the source and quote the actual argv; keep normal output quiet.
 lint-cpu: $(LINT_CPU_STAMP)
 $(LINT_CPU_STAMP):
 	@printf '%s\n' $(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS)) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
-	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
+	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) \
+	               --Werror -o /dev/null "$$source"; \
+	             out=$$("$$@" 2>&1); rc=$$?; \
+	             if [ $$rc -ne 0 ]; then \
+	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
+	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	             fi; \
+	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
 	  || exit 1
 	@printf '%s\n' $(CPU_DOC_SOURCES) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'out=$$($(MOJO) doc $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
-	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
+	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
+	               --Werror -o /dev/null "$$source"; \
+	             out=$$("$$@" 2>&1); rc=$$?; \
+	             if [ $$rc -ne 0 ]; then \
+	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
+	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
+	             fi; \
+	             printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
 	  || exit 1
 	@echo "No warnings (CPU)."
@@ -449,26 +462,53 @@ $(LINT_GPU_STAMP): $(COMPILE_GPU_STAMP)
 	@$(call stamp,lint-gpu)
 
 # mojo format has no --check flag, so format scratch copies and diff them.
-# One invocation avoids paying compiler startup once for every source file.
+# Keep each recipe below the shell's argument limit. GNU Make 3.81 has no
+# $(file ...) function, so write the selected paths in small recipe lines.
+# The manifest also lets the copy and diff loops share exactly one selection.
+# Each make process owns its manifest. Keep it outside stamp(fmt)'s fmt-*
+# cleanup so concurrent checks cannot remove or overwrite another selection.
+FMT_RUN_ID := $(shell python3 -c 'import uuid; print(uuid.uuid4().hex)')
+FMT_INPUTS := $(CACHE_DIR)/format-inputs-$(FMT_RUN_ID)
+define write-format-inputs
+$(if $(strip $(1)),@printf '%s\n' $(foreach f,$(wordlist 1,4,$(1)),$(call quote,$(f))) >> $(FMT_INPUTS)
+$(call write-format-inputs,$(wordlist 5,$(words $(1)),$(1))))
+endef
+
 fmt-check: $(FMT_STAMP)
 $(FMT_STAMP):
-	@fail=0; tmp=$$(mktemp -d) || exit 1; \
-	trap 'rm -rf "$$tmp"' 0; \
-	set --; \
-	for f in $(FORMATTED); do \
+	@test -n "$(FMT_RUN_ID)" || { echo "Cannot name formatter inputs."; exit 1; }
+	@mkdir -p $(CACHE_DIR)
+	@: > $(FMT_INPUTS)
+	$(call write-format-inputs,$(FORMATTED))
+	@fail=0; tmp=$$(mktemp -d) || { rm -f $(FMT_INPUTS); exit 1; }; \
+	trap 'rm -rf "$$tmp"; rm -f $(FMT_INPUTS)' 0; \
+	format_batch() { \
+	  [ $$# -gt 0 ] || return 0; \
+	  $(call run,$(MOJO) format -q "$$@"); \
+	  return $$rc; \
+	}; \
+	set --; size=0; copied=0; \
+	while IFS= read -r f; do \
 	  mkdir -p "$$tmp/$$(dirname "$$f")" || exit 1; \
 	  cp "$$f" "$$tmp/$$f" || exit 1; \
-	  set -- "$$@" "$$tmp/$$f"; \
-	done; \
-	if [ $$# -gt 0 ]; then \
-	  $(call run,$(MOJO) format -q "$$@"); \
-	  [ $$rc -eq 0 ] || exit $$rc; \
-	fi; \
-	for f in $(FORMATTED); do \
+	  path="$$tmp/$$f"; \
+	  if [ $$# -ge 64 ] || [ $$((size + $${#path} + 1)) -gt 8192 ]; then \
+	    format_batch "$$@" || exit $$?; \
+	    set --; size=0; \
+	  fi; \
+	  set -- "$$@" "$$path"; size=$$((size + $${#path} + 1)); \
+	  copied=$$((copied + 1)); \
+	done < $(FMT_INPUTS) || exit $$?; \
+	[ $$copied -eq $(words $(FORMATTED)) ] || { echo "Incomplete formatter inputs."; exit 1; }; \
+	format_batch "$$@" || exit $$?; \
+	checked=0; \
+	while IFS= read -r f; do \
 	  if ! diff -q "$$f" "$$tmp/$$f" > /dev/null; then \
 	    echo "needs formatting: $$f"; fail=1; \
 	  fi; \
-	done; \
+	  checked=$$((checked + 1)); \
+	done < $(FMT_INPUTS) || exit $$?; \
+	[ $$checked -eq $(words $(FORMATTED)) ] || { echo "Incomplete formatter inputs."; exit 1; }; \
 	if [ $$fail -ne 0 ]; then echo "Run 'make fmt'."; exit 1; fi; \
 	echo "All files formatted."
 	@$(call stamp,fmt)
@@ -1440,3 +1480,8 @@ test-coverage-tool:
 	@python3 tools/check_coverage_grouping.py --mojo $(MOJO)
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
 	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
+	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+
+# Subprocess-only contracts need native children with different environments.
+test-portability:
+	@python3 tools/check_portability.py --mojo $(MOJO)

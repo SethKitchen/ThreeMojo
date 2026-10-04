@@ -12,12 +12,22 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.skeleton.simplify import (
+    BEST_EFFORT,
+    MINIMUM_SHARES,
     MIN_PART_TRIANGLES,
+    SAFE_COLLAPSE_LIMIT,
+    SMALL_WELDED_SOURCES,
+    STRICT,
+    TriangleBudgetMode,
+    TriangleBudgetReason,
     WeldedMesh,
     _Collapser,
     _Entry,
     _Heap,
+    _read_mesh,
+    _replace_budget_meshes,
     fit_triangle_budget,
+    fit_triangle_budget_result,
     share_budget,
     simplify,
     simplify_welded,
@@ -610,6 +620,347 @@ def test_budget_keeps_protected_topology_above_the_target() raises:
     scene.add_mesh(Mesh(id, MaterialId(0), node))
     fit_triangle_budget(scene, assets, 0, 32)
     assert_equal(assets.geometries.get(id).triangle_count(), 33)
+
+
+def _protected_faces(triangles: Int) raises -> BufferGeometry:
+    """Return overlapping faces with no safely collapsible edge."""
+    var geometry = _loose([0, 0, 0, 1, 0, 0, 0, 1, 0])
+    var faces = List[Int]()
+    for _ in range(triangles):  # pragma: no branch
+        faces.append(0)
+        faces.append(1)
+        faces.append(2)
+    geometry.set_index(faces^)
+    return geometry^
+
+
+def test_budget_result_reports_exact_feasible_and_shared_counts() raises:
+    for workers in [1, 3]:  # pragma: no branch
+        var assets = Assets()
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        var first = assets.geometries.add(_fan(33))
+        var second = assets.geometries.add(_fan(33))
+        scene.add_mesh(Mesh(first, MaterialId(0), node))
+        scene.add_mesh(Mesh(second, MaterialId(0), node))
+        scene.add_mesh(Mesh(first, MaterialId(0), node))
+        var result = fit_triangle_budget_result(scene, assets, 0, 64, workers)
+        # Independent counts, rather than a comparison to the allocator.
+        assert_equal(assets.geometries.get(first).triangle_count(), 32)
+        assert_equal(assets.geometries.get(second).triangle_count(), 32)
+        assert_equal(result.requested_triangles, 64)
+        assert_equal(result.retained_triangles, 64)
+        assert_equal(result.minimum_triangles, 64)
+        assert_equal(result.small_source_triangles, 0)
+        assert_equal(result.protected_triangles, 0)
+        assert_true(result.target_met())
+        for reason in [
+            MINIMUM_SHARES,
+            SMALL_WELDED_SOURCES,
+            SAFE_COLLAPSE_LIMIT,
+        ]:
+            assert_false(result.has_reason(reason))
+
+
+def test_budget_result_reports_infeasible_minima() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var first = assets.geometries.add(_fan(33))
+    var second = assets.geometries.add(_fan(33))
+    scene.add_mesh(Mesh(first, MaterialId(0), node))
+    scene.add_mesh(Mesh(second, MaterialId(0), node))
+    var result = fit_triangle_budget_result(scene, assets, 0, 63)
+    assert_equal(result.requested_triangles, 63)
+    assert_equal(result.retained_triangles, 64)
+    assert_equal(result.minimum_triangles, 64)
+    assert_false(result.target_met())
+    assert_true(result.has_reason(MINIMUM_SHARES))
+    assert_false(result.has_reason(SMALL_WELDED_SOURCES))
+    assert_false(result.has_reason(SAFE_COLLAPSE_LIMIT))
+
+
+def test_budget_result_reports_protected_topology_and_overlapping_reasons() raises:
+    for budget in [31, 32, 33]:  # pragma: no branch
+        var assets = Assets()
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        var id = assets.geometries.add(_protected_faces(33))
+        scene.add_mesh(Mesh(id, MaterialId(0), node))
+        var result = fit_triangle_budget_result(scene, assets, 0, budget)
+        assert_equal(assets.geometries.get(id).triangle_count(), 33)
+        assert_equal(result.requested_triangles, budget)
+        assert_equal(result.retained_triangles, 33)
+        assert_equal(result.minimum_triangles, 32)
+        assert_equal(result.target_met(), budget == 33)
+        assert_equal(result.has_reason(MINIMUM_SHARES), budget == 31)
+        assert_false(result.has_reason(SMALL_WELDED_SOURCES))
+        assert_equal(result.has_reason(SAFE_COLLAPSE_LIMIT), budget < 33)
+
+
+def test_budget_result_uses_small_welded_sources_and_preserves_them() raises:
+    for budget in [1, 3]:  # pragma: no branch
+        var assets = Assets()
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        var geometry = _fan(3)
+        # Thirty degenerate faces disappear in welding, leaving three.
+        for _ in range(30):  # pragma: no branch
+            geometry.index.append(0)
+            geometry.index.append(0)
+            geometry.index.append(1)
+        assert_equal(geometry.triangle_count(), 33)
+        var id = assets.geometries.add(geometry^)
+        scene.add_mesh(Mesh(id, MaterialId(0), node))
+        scene.add_mesh(Mesh(id, MaterialId(0), node))
+        if budget == 1:
+            var before = assets.geometries.get(id).clone()
+            with assert_raises(contains="small welded sources 3"):
+                _ = fit_triangle_budget_result(
+                    scene, assets, 0, budget, mode=STRICT
+                )
+            _assert_same_geometry(assets.geometries.get(id), before)
+        var result = fit_triangle_budget_result(scene, assets, 0, budget)
+        assert_equal(assets.geometries.get(id).triangle_count(), 3)
+        assert_equal(result.requested_triangles, budget)
+        assert_equal(result.retained_triangles, 3)
+        assert_equal(result.minimum_triangles, 3)
+        assert_equal(result.small_source_triangles, 3)
+        assert_equal(result.protected_triangles, 0)
+        assert_equal(result.target_met(), budget == 3)
+        assert_equal(result.has_reason(MINIMUM_SHARES), budget == 1)
+        assert_equal(result.has_reason(SMALL_WELDED_SOURCES), budget == 1)
+        assert_false(result.has_reason(SAFE_COLLAPSE_LIMIT))
+
+
+def test_strict_budget_commits_only_a_met_target() raises:
+    for workers in [1, 3]:  # pragma: no branch
+        var assets = Assets()
+        var scene = Scene()
+        var node = scene.add(Object3D())
+        var id = assets.geometries.add(_fan(33))
+        scene.add_mesh(Mesh(id, MaterialId(0), node))
+        var result = fit_triangle_budget_result(
+            scene, assets, 0, 32, workers, STRICT
+        )
+        assert_true(result.target_met())
+        assert_equal(result.retained_triangles, 32)
+        assert_equal(assets.geometries.get(id).triangle_count(), 32)
+
+
+def _assert_same_geometry(
+    actual: BufferGeometry, expected: BufferGeometry
+) raises:
+    """Check indices and position, normal and texture-coordinate data."""
+    assert_equal(actual.index, expected.index)
+    for name in [String(POSITION), String(NORMAL), String(UV)]:
+        assert_equal(actual.has_attribute(name), expected.has_attribute(name))
+        if expected.has_attribute(name):
+            assert_equal(
+                actual.attribute_view(name).data,
+                expected.attribute_view(name).data,
+            )
+
+
+def test_strict_failure_keeps_all_original_shared_assets() raises:
+    for workers in [1, 3]:  # pragma: no branch
+        for budget in [1, 64]:  # pragma: no branch
+            var assets = Assets()
+            var scene = Scene()
+            var node = scene.add(Object3D())
+            var first = assets.geometries.add(_fan(33))
+            var second = assets.geometries.add(_protected_faces(33))
+            var before_first = assets.geometries.get(first).clone()
+            var before_second = assets.geometries.get(second).clone()
+            scene.add_mesh(Mesh(first, MaterialId(0), node))
+            scene.add_mesh(Mesh(second, MaterialId(0), node))
+            scene.add_mesh(Mesh(first, MaterialId(0), node))
+            with assert_raises(contains="retained 65"):
+                _ = fit_triangle_budget_result(
+                    scene, assets, 0, budget, workers, STRICT
+                )
+            _assert_same_geometry(assets.geometries.get(first), before_first)
+            _assert_same_geometry(assets.geometries.get(second), before_second)
+            assert_equal(scene.meshes[0].geometry, scene.meshes[2].geometry)
+
+
+def test_conversion_failure_keeps_all_original_shared_assets() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var first = assets.geometries.add(_fan(33))
+    var second = assets.geometries.add(_fan(34))
+    var before_first = assets.geometries.get(first).clone()
+    var before_second = assets.geometries.get(second).clone()
+    scene.add_mesh(Mesh(first, MaterialId(0), node))
+    scene.add_mesh(Mesh(second, MaterialId(0), node))
+    scene.add_mesh(Mesh(first, MaterialId(0), node))
+    var meshes = List[WeldedMesh]()
+    meshes.append(_read_mesh(_fan(32)))
+    # A partial trailing face reaches set_index, which refuses conversion.
+    # Inject it at the internal conversion boundary: valid public inputs
+    # cannot produce a partial face after welding or edge collapse.
+    meshes.append(WeldedMesh([Vector3(0, 0, 0)], List[Float32](), [0]))
+    with assert_raises(contains="whole triangles"):
+        _replace_budget_meshes(assets, [first, second], meshes)
+    _assert_same_geometry(assets.geometries.get(first), before_first)
+    _assert_same_geometry(assets.geometries.get(second), before_second)
+    assert_equal(scene.meshes[0].geometry, scene.meshes[2].geometry)
+
+
+def test_budget_result_empty_range_and_invalid_typed_values() raises:
+    var assets = Assets()
+    var scene = Scene()
+    assert_true(BEST_EFFORT.is_valid())
+    assert_true(STRICT.is_valid())
+    assert_false(TriangleBudgetMode(-1).is_valid())
+    assert_false(TriangleBudgetMode(2).is_valid())
+    for mode in [BEST_EFFORT, STRICT]:  # pragma: no branch
+        var result = fit_triangle_budget_result(scene, assets, 0, 1, 3, mode)
+        assert_equal(result.requested_triangles, 1)
+        assert_equal(result.retained_triangles, 0)
+        assert_equal(result.minimum_triangles, 0)
+        assert_equal(result.small_source_triangles, 0)
+        assert_equal(result.protected_triangles, 0)
+        assert_true(result.target_met())
+        for reason in [
+            MINIMUM_SHARES,
+            SMALL_WELDED_SOURCES,
+            SAFE_COLLAPSE_LIMIT,
+        ]:
+            assert_true(reason.is_valid())
+            assert_false(result.has_reason(reason))
+        for value in [-1, 3]:  # pragma: no branch
+            assert_false(TriangleBudgetReason(value).is_valid())
+            with assert_raises(contains="reason must be a named value"):
+                _ = result.has_reason(TriangleBudgetReason(value))
+    for value in [-1, 2]:  # pragma: no branch
+        with assert_raises(contains="mode must be best effort or strict"):
+            _ = fit_triangle_budget_result(
+                scene, assets, 0, 1, mode=TriangleBudgetMode(value)
+            )
+
+
+def test_budget_result_does_not_recreate_faces_removed_by_welding() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    # Six distinct vertices, but every indexed face repeats a vertex.
+    var geometry = _loose(
+        [
+            0,
+            0,
+            0,
+            1,
+            0,
+            0,
+            2,
+            0,
+            0,
+            3,
+            0,
+            0,
+            4,
+            0,
+            0,
+            5,
+            0,
+            0,
+        ]
+    )
+    geometry.set_attribute(
+        String(UV), BufferAttribute(List[Float32](length=12, fill=0), 2)
+    )
+    geometry.set_attribute(
+        String("color"), BufferAttribute(List[Float32](length=18, fill=1), 3)
+    )
+    geometry.add_group(0, 9)
+    geometry.set_index([0, 0, 1, 2, 2, 3, 4, 4, 5])
+    var id = assets.geometries.add(geometry^)
+    scene.add_mesh(Mesh(id, MaterialId(0), node))
+    var result = fit_triangle_budget_result(scene, assets, 0, 1, mode=STRICT)
+    assert_equal(result.retained_triangles, 0)
+    assert_equal(result.minimum_triangles, 0)
+    assert_true(result.target_met())
+    assert_equal(assets.geometries.get(id).triangle_count(), 0)
+    assert_equal(assets.geometries.get(id).vertex_count(), 0)
+    assert_equal(
+        assets.geometries.get(id).attribute_view(String(NORMAL)).count(), 0
+    )
+    assert_false(assets.geometries.get(id).has_attribute(String("color")))
+    assert_equal(len(assets.geometries.get(id).groups), 0)
+    assert_equal(
+        assets.geometries.get(id).attribute_view(String(UV)).count(), 0
+    )
+
+
+def test_budget_result_counts_only_selected_unique_geometries() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var ignored = assets.geometries.add(_fan(34))
+    var shared = assets.geometries.add(_fan(33))
+    var later = assets.geometries.add(_fan(33))
+    scene.add_mesh(Mesh(ignored, MaterialId(0), node))
+    scene.add_mesh(Mesh(shared, MaterialId(0), node))
+    scene.add_mesh(Mesh(later, MaterialId(0), node))
+    scene.add_mesh(Mesh(shared, MaterialId(0), node))
+    var result = fit_triangle_budget_result(scene, assets, 2, 64)
+    assert_equal(result.retained_triangles, 64)
+    assert_equal(result.minimum_triangles, 64)
+    assert_equal(assets.geometries.get(ignored).triangle_count(), 34)
+    assert_equal(assets.geometries.get(shared).triangle_count(), 32)
+    assert_equal(assets.geometries.get(later).triangle_count(), 32)
+
+
+def test_budget_result_can_meet_total_despite_a_protected_share() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var geometry = _protected_faces(33)
+    geometry.set_attribute(
+        String(POSITION),
+        BufferAttribute(
+            [
+                0,
+                0,
+                0,
+                0.01,
+                0,
+                0,
+                0,
+                0.01,
+                0,
+            ],
+            3,
+        ),
+    )
+    var protected = assets.geometries.add(geometry^)
+    var ball = assets.geometries.add(_ball(8))
+    scene.add_mesh(Mesh(protected, MaterialId(0), node))
+    scene.add_mesh(Mesh(ball, MaterialId(0), node))
+    var result = fit_triangle_budget_result(scene, assets, 0, 65, mode=STRICT)
+    assert_equal(assets.geometries.get(protected).triangle_count(), 33)
+    assert_equal(assets.geometries.get(ball).triangle_count(), 32)
+    assert_equal(result.retained_triangles, 65)
+    assert_equal(result.protected_triangles, 1)
+    assert_true(result.target_met())
+    assert_false(result.has_reason(SAFE_COLLAPSE_LIMIT))
+
+
+def test_budget_input_failure_does_not_replace_an_earlier_geometry() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var first = assets.geometries.add(_fan(33))
+    var invalid = assets.geometries.add(BufferGeometry())
+    var before = assets.geometries.get(first).clone()
+    scene.add_mesh(Mesh(first, MaterialId(0), node))
+    scene.add_mesh(Mesh(invalid, MaterialId(0), node))
+    with assert_raises():
+        _ = fit_triangle_budget_result(scene, assets, 0, 32, mode=STRICT)
+    _assert_same_geometry(assets.geometries.get(first), before)
+    assert_false(assets.geometries.get(invalid).has_attribute(String(POSITION)))
 
 
 def main() raises:

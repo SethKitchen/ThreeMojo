@@ -20,7 +20,7 @@ ThreeMojo's geometries, sized from the actor's bounding box:
 - **A walker** is capsules for the legs, the arms and the body, a sphere
   for the head, and shoes. The colors of the clothes, the skin and the hair
   come from the actor's id. The legs and the arms swing with the walker's
-  speed.
+  speed and simulation time.
 
 The lamps follow the vehicle's `VehicleLightState`: the headlamps glow
 for the position lamps and the low and high beams, and the tail lamps
@@ -41,9 +41,10 @@ from core.buffer_geometry import (
     UV,
 )
 from core.geometry_store import GeometryId
-from core.object3d import NodeId, Object3D
+from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
-from extensions.carla.assets import AssetRegistry
+from extensions.carla.assets import AssetRegistry, ModelPlacement
+from extensions.carla.model_cache import ModelCache
 from extensions.carla.actor import Actor, ActorId, VEHICLE_ACTOR, WALKER_ACTOR
 from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.render_textures import hash2
@@ -772,7 +773,7 @@ def clothing(id: ActorId) -> Tuple[Color, Color, Color]:
 
 
 def stride(speed: Float32) -> Angle:
-    """Return how far a walker's legs swing at a speed.
+    """Return the target swing amplitude at a speed, without a gait phase.
 
     Args:
         speed: The walker's speed in meters per second.
@@ -789,6 +790,7 @@ struct ActorVisuals(Movable):
     var vehicles: List[VehicleVisual]
     var walkers: List[WalkerVisual]
     var models: List[VehicleModel]
+    var cached_models: ModelCache
     var glass: MaterialId
     var rubber: MaterialId
     var chrome: MaterialId
@@ -801,6 +803,7 @@ struct ActorVisuals(Movable):
         self.vehicles = List[VehicleVisual]()
         self.walkers = List[WalkerVisual]()
         self.models = List[VehicleModel]()
+        self.cached_models = ModelCache()
         self.glass = MaterialId(0)
         self.rubber = MaterialId(0)
         self.chrome = MaterialId(0)
@@ -874,11 +877,23 @@ struct ActorVisuals(Movable):
         blueprint, or the procedural one."""
         var box = world.get_bounding_box(id)
         var type_id = world.actor(id).type_id
+        var paint_material = car_paint(vehicle_color(world.actor(id)))
         var first = len(scene.meshes)
+        var scanned = registry.cached_entry(registry.model_key(type_id))
+        var placement = Optional[ModelPlacement]()
+        if Bool(scanned):
+            # Load before actor-owned allocations. A failed model and retry
+            # must not leave an unused holder or three override materials.
+            placement = self.cached_models.place(
+                registry,
+                scanned.value(),
+                scene,
+                assets,
+                NO_PARENT,
+                Vector3(box.extent.x * 2, box.extent.z * 2, box.extent.y * 2),
+            )
         var node = scene.add(Object3D())
-        var paint = assets.materials.add(
-            car_paint(vehicle_color(world.actor(id)))
-        )
+        var paint = assets.materials.add(paint_material)
         var heads = assets.materials.add(
             standard_material(
                 Color(230, 230, 220),
@@ -898,16 +913,9 @@ struct ActorVisuals(Movable):
             )
         )
         var front = box.extent.x
-        var scanned = registry.cached_entry(registry.model_key(type_id))
-        if Bool(scanned):
-            scene.update()
-            var placed = registry.place_model(
-                scanned.value(),
-                scene,
-                assets,
-                node,
-                Vector3(box.extent.x * 2, box.extent.z * 2, box.extent.y * 2),
-            )
+        if Bool(placement):
+            var placed = placement.value().copy()
+            scene.add(placed.pivot, parent=node)
             first = placed.first_mesh
             # CARLA paints a car from its blueprint's color and lights its
             # lamps from its light state: the model wears the procedural
@@ -1196,7 +1204,7 @@ struct ActorVisuals(Movable):
             if not alive:
                 continue
             self._pose(world, w.actor, w.node, scene)
-            var swing = stride(world.get_velocity(w.actor).length())
+            var swing = world.get_walker_gait(w.actor).swing()
             # A procedural walker has four limbs, and a cached model none.
             for k in range(len(w.limbs)):
                 var sign = Float32(1) if k == 0 or k == 3 else Float32(-1)

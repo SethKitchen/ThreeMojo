@@ -42,7 +42,15 @@ Dynamic-to-kinematic changes keep velocity. Entering static stops linear, angula
 
 World position and orientation can change while physics is disabled. Restored world inertia uses the new orientation and the retained local tensor. Mass, inertia, mass-center and shape-offset setters reject edits to a disabled dynamic configuration. Restore dynamic mode before making those edits. A body created static or kinematic has no saved dynamic mass; create it dynamic first when later restoration is needed.
 
-Do not assign `kind`, mass-property fields or the shape directly to bypass this contract. Public fields remain for source compatibility and custom locked-axis setup while dynamic. The transition checks finite, reciprocal mass state and finite inverse-tensor entries. It does not repair a custom inverse tensor or validate a physical model. These checks preserve the existing locked-axis contract; `set_inertia` has the stricter solid-tensor contract below.
+Read `kind()`, `mass()`, `inverse_mass()` and `inverse_inertia()` as values. These replace the former public fields. Add parentheses to existing reads. Direct assignment to these names is a compile error. Change the mode with `set_kind`, the mass with `set_mass`, and solid inertia with `set_inertia`.
+
+Use `set_inverse_inertia` for a finite custom inverse tensor, including locked axes. This setter retains the supplied entries. A returned tensor is a copy; editing it does not edit the body. Custom tensors keep their previous finite-entry contract. Negative and nonsymmetric tensors remain accepted for compatibility. They do not need to describe a positive-definite solid.
+
+Mojo 1.1 has no enforced field privacy. Underscore storage is internal by convention, not a security boundary. Do not mutate that storage, use reflection to bypass setters, or replace the shape directly. The supported API prevents partial mode and mass edits; it does not make arbitrary storage access safe.
+
+`validate` checks valid mode, mesh restrictions, reciprocal dynamic mass, finite inverse tensors and zero disabled effective properties. Setters, standalone impulses, world insertion and each world step run this check. A step checks all bodies before it changes any body or consumes forces. A failed check leaves that operation's state unchanged. World insertion and standalone impulses can now raise `Error`.
+
+Validation runs at these boundaries, not inside each contact operation. Read accessors return stored values without validation. Pose, center, shape, material and motion fields remain mutable. These checks do not validate an arbitrary physical model or prevent deliberate, coherent edits to internal storage.
 
 
 ## Mass-property numerical range
@@ -59,15 +67,39 @@ Input coordinates already rounded to Float32 cannot recover lost geometric detai
 
 `RigidBody.set_mass` also requires representable inverse mass and inverse inertia. It computes and validates all candidate properties before it changes the body. `set_inertia` requires exact symmetry, finite entries and positive definiteness. Its inverse must remain finite and positive definite after conversion to Float32. Failed mass, inertia, shape-pose and center updates leave the old properties unchanged. Shape-pose updates normalize finite quaternions, as body construction does.
 
-The public inverse-inertia field still permits an intentional zero inverse along a locked axis. Set up such custom constraints while the body is dynamic. Mode changes retain that finite inverse exactly. Do not pass a singular inertia to `set_inertia` to request a locked axis: a zero inertia and a zero inverse inertia have different meanings.
+The `set_inverse_inertia` method permits an intentional zero inverse along a locked axis. Set up these custom constraints while the body is dynamic. Mode changes retain that finite inverse exactly. Do not pass a singular inertia to `set_inertia` to request a locked axis. A zero inertia and a zero inverse inertia have different meanings.
 
-Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent solid formulas over several scales. They check translated hulls, transformed centers, tensor rotation, mass scaling, symmetry, positive definiteness and failed-update atomicity. These checks establish a numerical contract. They do not establish physical calibration or add torque-free gyroscopic dynamics.
+Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent solid formulas over several scales. They check translated hulls, transformed centers, tensor rotation, mass scaling, symmetry, positive definiteness and failed-update atomicity. These checks establish a numerical contract. They do not establish physical calibration.
 
 ## Apply forces
 
 A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor. `PhysicsWorld.step` consumes forces for one step. A controller must apply its force before each step. `CarlaPhysics.tick` retains external forces across its substeps and rebuilds vehicle forces per substep.
 
-Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints, continuous collision detection, improved angular integration and moving-ground tire coupling remain separate work.
+Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints, continuous collision detection and moving-ground tire coupling remain separate work.
+
+## Free rotational integration
+
+A dynamic body with a symmetric positive-definite inverse tensor follows the coupled Euler equations. Angular velocity remains a world-frame, writable value. The solver reconstructs momentum after forces, damping and contact impulses. It does not keep a hidden momentum cache. Changes to velocity or inertia take effect on the next step.
+
+The free drift uses a second-order symmetric Hamiltonian split. Write the local inverse tensor as A = LDLᵀ. Each column of L supplies one axis. After normalization, energy is a sum of Hᵢ = cᵢ (uᵢ · m)² / 2, where m is local angular momentum. Each term has an exact solution: rotate the pose about uᵢ, and rotate m by the opposite angle. The rate cᵢ (uᵢ · m) stays constant during that term.
+
+The solver applies terms 1, 2, 3, 2, 1 with durations h/2, h/2, h, h/2, h/2. The factorization and rotations use Float64. Pose and angular velocity still store Float32. The solver reconstructs velocity from the final stored pose and the original world momentum. Each such drift performs five rotations. It has no iterative solve, convergence fallback or spin-dependent loop.
+
+This uses the exact-flow splitting principle of [Dullweber, Leimkuhler and McLachlan (1997)](https://www-wales.ch.cam.ac.uk/~andreas/paper/symplectic.html). The LDLᵀ axes need not be orthogonal. This factorization is an implementation choice, rather than a principal-axis eigensolver.
+
+Each subflow preserves world angular momentum in exact arithmetic. The composition has second-order trajectory and energy error at resolved timesteps. It does not exactly preserve energy. For positive-definite A, the preserved momentum norm bounds the energy between its smallest and largest eigenvalues times |m|²/2. This is a stability bound. Large timesteps can still give inaccurate motion and large energy error.
+
+The torque kick has ΔL = h τ before damping. An impulse J at offset r has ΔL = r × J.
+
+Damping keeps the factor 1/(1 + h d), applied before free drift. Contacts keep the same impulse solver. Split impulses remain pose-only contact corrections. They do not change the stored velocity directly; for an anisotropic body, that pose correction can change angular momentum and rotational energy. Free-drift conservation claims exclude those corrections, damping and applied torques.
+
+Isotropic bodies keep the previous normalized-quaternion update and constant torque-free world angular velocity. Kinematic bodies also keep prescribed velocity. A zero angular velocity needs no free drift. Singular, negative or nonsymmetric custom inverse tensors keep the previous prescribed-velocity update. Their finite-entry API remains supported; it does not describe an unconstrained rigid solid. In particular, a locked axis does not have a finite reciprocal inertia.
+
+Float32 pose and velocity impose a precision limit. Tensor conditioning can amplify their rounding error. Positive definiteness alone does not establish that a tensor describes a realizable or calibrated mass distribution. Neither very large spin nor a very ill-conditioned tensor has an unrestricted accuracy guarantee. The resulting pose and velocity must remain representable. Choose a step that resolves the rotation, then check convergence for the intended model.
+
+`test_physics_rotation` checks the original asymmetric-cuboid failure, arbitrary initial orientation and full off-diagonal tensors. Controls include an analytical symmetric top and an independent Float64 RK4 solution of the coupled Euler and quaternion equations. The reference is checked at two resolutions. A thin physical-top control checks that ill-conditioning does not disable gyroscopic motion.
+
+Tests measure maximum momentum and energy errors throughout a 100-second run. They also check second-order refinement, torque and impulse balance, damping, off-center contact, high-spin stability, deterministic repeats and custom-tensor compatibility. Determinism here means repeat runs with the same build and inputs. It does not promise bitwise parity between architectures.
 
 ## Disabled collisions
 
@@ -85,4 +117,4 @@ Material mixing widens the friction product before its square root. This keeps a
 
 ## Verification boundary
 
-The extraction changes import paths, not the numerical solver. Existing CARLA behavior and its known limitations remain. Shared code is not evidence that a model is validated for an engineering scenario. Select measured inputs, acceptance tolerances and validation cases for each use.
+The shared solver includes the rotational integration described above. CARLA uses the same implementation. Other known model limitations remain. Shared code is not evidence that a model is validated for an engineering scenario. Select measured inputs, acceptance tolerances and validation cases for each use.

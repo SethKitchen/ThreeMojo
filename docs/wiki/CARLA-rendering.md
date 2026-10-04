@@ -46,6 +46,32 @@ var depth = view.render_depth(world, camera)
 
 The semantic and depth images come from the rasterizer, not from rays. Each mesh is drawn flat in the color of its semantic tag. The depth comes from the same depth buffer.
 
+### Ground-truth override cache
+
+Semantic and depth captures reuse one material for each source material and semantic tag. Hash indexes find the material and its coverage texture. These lookups take expected constant time. Override IDs stay stable when a source changes.
+
+A coverage texture owns a white-RGB copy of the source image and its mip levels. The source and the copy do not share writable buffers. Before each capture, the cache compares every stored alpha sample and all mip and sampler fields. Byte alpha, float alpha and mip alpha edits take effect on the next capture. The same applies to offsets, filters, UV transforms, color space, alpha mode and sampler tables.
+
+Float alpha comparisons preserve the exact bits, including signed zero. Source RGB changes do not invalidate a white-RGB copy.
+
+Alpha maps stay linked to the original texture and use its current samples.
+
+An unchanged coverage texture is scanned once per capture. Its pixel and mip buffers are not allocated, copied or whitened again. A changed texture replaces the owned copy in the same texture slot. An unchanged material is not rebuilt. Changes to its coverage, visibility, sidedness and clipping fields refresh the override in its existing slot. Weather updates are not the invalidation mechanism.
+
+These caches retain at most one coverage texture per source texture and one material per source-material/tag pair used by the renderer. They do not reclaim source assets or actor resources. The generated override records and coverage textures are private working data; callers must edit the source assets. Each capture restores mesh materials and the background, including when rendering fails.
+
+`bench/carla_sensor_cache_bench.mojo` measures full depth captures with byte or float foliage masks and mip levels. It reports live-buffer replacements, copied pixel/mip bytes, retained pixel/mip bytes and capture time. Run it under `/usr/bin/time -v` to measure peak resident memory. The mask is a synthetic repeated leaf-gap pattern; the result is not a city-scale performance claim.
+
+With Mojo 1.1.0 on Linux x86-64, a coordinated rerun used three alternating pairs of 20 captures and a 1024 by 1024 mask. The candidate binary was built from final #503 source on base `650715e`. The comparison used a retained baseline binary whose pre-format benchmark source had no contemporaneous hash. These isolated-child measurements do not establish performance for later combined integrations. Shared-host timing noise remains.
+
+The unchanged byte mask copied 111,848,080 bytes before and zero after. The float mask copied 447,392,320 bytes before and zero after. Median full-capture times were 1,452.332 to 1,349.688 ms for bytes and 1,478.332 to 1,332.748 ms for floats: observed speedups of 1.076 and 1.109.
+
+Median peak RSS fell from 95,912 to 94,392 KiB for bytes and from 141,600 to 128,512 KiB for floats. Retained occupied pixel/mip bytes stayed at 11,184,808 and 44,739,232. The cache removes repeated temporary copies. It retains the owned source and coverage image.
+
+Alternating alpha edits still require 19 copy replacements after warmup. Byte capture medians changed from 1,438.656 to 1,388.720 ms. Float capture medians changed from 1,442.408 to 1,466.265 ms, a 1.65% increase. Their peak RSS medians were 96,104 to 96,992 KiB and 141,584 to 140,464 KiB. These controls do not show a speedup for every workload.
+
+Image checksums are a benchmark sanity check; pixel-wise regressions check output correctness. This completes [#503](https://github.com/SethKitchen/ThreeMojo/issues/503).
+
 ## The town
 
 `Town` builds a map into a scene. `TownSettings` sets the mesh resolution, the texture size, the spacings and the seed. The same seed builds the same town.
@@ -101,7 +127,17 @@ The body wears car paint: a metallic base under a clear coat, in the color of th
 | High beam | Brightest glow | Glow | Brighter spot light |
 | Brake | No change | Bright glow | No change |
 
-A walker is capsules, a head and shoes. The colors of the clothes come from the actor's id. The legs and the arms swing with the walker's speed.
+### Walker gait
+
+A procedural walker is capsules, a head and shoes. Its clothes use colors from the actor's id. `World.tick` advances its gait from horizontal speed and simulation time. Rendering only reads the pose. Repeated captures at one tick and a renderer created later see the same pose.
+
+At constant speed, one cycle uses 1.5 meters of horizontal travel. The left leg and right arm swing together. The other limbs swing in the opposite direction. The target amplitude is twelve degrees per meter per second, capped at thirty degrees. An exponential response with a 0.15 second time constant smooths speed changes. At rest the phase holds and the amplitude tends to zero.
+
+Each world tick uses its final horizontal speed for that tick. Vertical falls and teleports do not add a stride. A new actor starts standing; a destroyed actor's model is hidden.
+
+The phase stays within one cycle, including after long simulation times. `World.get_walker_gait` returns a copy without advancing it. `WalkerGait.advance` rejects negative or nonfinite speed and duration; a zero duration holds the pose. See [replay gait](CARLA-recorder#walker-gait) for recorded motion.
+
+This fixes [#290](https://github.com/SethKitchen/ThreeMojo/issues/290). Previously, constant speed produced a fixed limb angle and a sliding walker. The capsule character and its procedural limbs remain separate from the humanoid rig. Bone-control records do not drive these limbs. A cached walker model has no procedural joints and stays rigid.
 
 ## Weather
 

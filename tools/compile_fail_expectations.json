@@ -1440,6 +1440,18 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'HitKind'"
     ]
   },
+  "tests/compile_fail/a_humanoid_use_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'require_humanoid_use': value passed to 'use' cannot be converted from 'IntLiteral[0]' to 'HumanoidUse'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/a_joint_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1630,6 +1642,18 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_limb_region_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "invalid call to 'region_label': value passed to 'region' cannot be converted from 'IntLiteral[0]' to 'LimbRegion'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   },
   "tests/compile_fail/a_limb_segment_is_not_a_bare_int.mojo": {
     "errors": [
@@ -1889,6 +1913,30 @@
         "line": 13,
         "column": 24,
         "message": "invalid call to 'area_of': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'NavPolygonId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_navigation_search_limit_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 11,
+        "message": "invalid call to 'check': value passed to 'value' cannot be converted from 'IntLiteral[0]' to 'NavigationSearchLimit'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_navigation_search_status_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 11,
+        "message": "invalid call to 'check': value passed to 'value' cannot be converted from 'IntLiteral[0]' to 'NavigationSearchStatus'"
       }
     ],
     "notes": [
@@ -4528,6 +4576,70 @@
         "line": 12,
         "column": 22,
         "message": "invalid call to 'plus': value passed to 'other' cannot be converted from 'IntLiteral[2]' to 'TorsoContents'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/body_inverse_inertia_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/body_mass_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/body_inverse_mass_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/body_kind_assignment.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 9,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_triangle_budget_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 16,
+        "column": 62,
+        "message": "invalid call to 'fit_triangle_budget_result': value passed to 'mode' cannot be converted from 'IntLiteral[0]' to 'TriangleBudgetMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_triangle_budget_reason_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 27,
+        "message": "invalid call to 'has_reason': value passed to 'reason' cannot be converted from 'IntLiteral[0]' to 'TriangleBudgetReason'"
       }
     ],
     "notes": [

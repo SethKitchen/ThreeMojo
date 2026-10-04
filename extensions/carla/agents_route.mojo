@@ -73,6 +73,12 @@ from extensions.carla.agents_misc import (
 from extensions.carla.map import Map, Waypoint
 from extensions.carla.road_info import CHANGE_LEFT, CHANGE_RIGHT, LANE_DRIVING
 from extensions.carla.search_queue import _MinCostQueue
+from extensions.carla.navigation_search import (
+    NavigationSearchBudget,
+    NavigationSearchReport,
+    SEARCH_SUCCESS,
+    SEARCH_EXHAUSTED,
+)
 from math.vector3 import Vector3
 from std.ffi import external_call
 from std.math import floor, sqrt
@@ -100,6 +106,31 @@ struct RouteNodeId(Equatable, ImplicitlyCopyable, Writable):
             Whether the value is a 32-bit signed integer.
         """
         return self.value >= _INT32_MIN and self.value <= _INT32_MAX
+
+
+struct RouteSearchResult(Movable):
+    """A bounded route and its exact search report.
+
+    Args:
+        None.
+
+    Returns:
+        An empty unreachable result.
+
+    """
+
+    var nodes: List[RouteNodeId]
+    var report: NavigationSearchReport
+
+    def __init__(out self):
+        """Create an empty result.
+
+        Returns:
+            An empty result.
+
+        """
+        self.nodes = List[RouteNodeId]()
+        self.report = NavigationSearchReport()
 
 
 struct RouteEdge(Copyable, Movable):
@@ -608,34 +639,100 @@ struct GlobalRoutePlanner(Movable):
         return self._road_id_to_edge.get(_lane_key(w.value()))
 
     def path_search(
-        self, map: Map, origin: Vector3, destination: Vector3
+        self,
+        map: Map,
+        origin: Vector3,
+        destination: Vector3,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
     ) raises -> List[RouteNodeId]:
-        """Find a minimum sample-count route, `_path_search`.
+        """Find a minimum sample-count route with finite search limits.
 
         Args:
             map: The map.
             origin: Where the route starts.
             destination: Where it ends.
+            budget: The independent search work and storage limits.
 
         Returns:
-            The nodes from the origin's piece to the destination's, then
-            the end node of the destination's piece. Empty if a point has
-            no piece or no route joins them. The final piece is appended
-            after the search; its cost is the same for all alternatives.
+            The nodes through the destination piece, or empty if unreachable.
+            The final piece adds the same fixed cost to all alternatives.
 
         Raises:
-            Error: If a map query fails, or the minimum cost to the
-                destination piece's entry exceeds the signed 64-bit range.
+            Error: If `path_search_result` fails, or a search limit is exhausted.
         """
+        var result = self.path_search_result(map, origin, destination, budget)
+        if result.report.status == SEARCH_EXHAUSTED:
+            raise Error("Navigation search budget exhausted")
+        var out = result.nodes^
+        result.nodes = List[RouteNodeId]()
+        return out^
+
+    def path_search_result(
+        self,
+        map: Map,
+        origin: Vector3,
+        destination: Vector3,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
+    ) raises -> RouteSearchResult:
+        """Find a route with explicit work and termination data.
+
+        Args:
+            map: The map.
+            origin: Where the route starts.
+            destination: Where it ends.
+            budget: The finite graph-search limits, excluding localization.
+
+        Returns:
+            Success includes the destination piece's end node. An exhausted
+            result ends at the last settled node; it need not approach the goal.
+            An unreachable result is empty. Output has at most max_nodes + 1
+            entries, including the destination piece appended after success.
+
+        Raises:
+            Error: If a limit or map query is invalid, or the target cost exceeds
+                the signed 64-bit range.
+        """
+        budget.validate()
         var start = self._localize(map, origin)
         var end = self._localize(map, destination)
-        var out = List[RouteNodeId]()
+        var result = RouteSearchResult()
         if not (Bool(start) and Bool(end)):
-            return out^
-        out = self._search(start.value()[0], end.value()[0])
-        if len(out) > 0:
-            out.append(RouteNodeId(end.value()[1]))
-        return out^
+            return result^
+        result = self._search_result(start.value()[0], end.value()[0], budget)
+        if result.report.status == SEARCH_SUCCESS:
+            result.nodes.append(RouteNodeId(end.value()[1]))
+        return result^
+
+    def search_nodes(
+        self,
+        source: RouteNodeId,
+        target: RouteNodeId,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
+    ) raises -> RouteSearchResult:
+        """Search between graph nodes without map localization.
+
+        Args:
+            source: The start node.
+            target: The goal node.
+            budget: The finite graph-search limits.
+
+        Returns:
+            The minimum-cost node path and report. On exhaustion, the partial
+            path ends at the last settled node, or is empty before the first pop.
+            An unreachable result is empty.
+
+        Raises:
+            Error: If an id is invalid or absent, a limit is negative, or the
+                minimum target cost exceeds the signed 64-bit range.
+        """
+        if not (source.is_valid() and target.is_valid()):
+            raise Error("Route node id is not valid")
+        if (
+            source.value not in self._node_index
+            or target.value not in self._node_index
+        ):
+            raise Error("The graph has no such node")
+        return self._search_result(source.value, target.value, budget)
 
     def _validate_costs(self) raises:
         # Construction owns edge costs. Check them once, not on each
@@ -644,53 +741,87 @@ struct GlobalRoutePlanner(Movable):
             if edge.length < 0:
                 raise Error("A route edge cost must be nonnegative")
 
-    def _search(self, source: Int, target: Int) raises -> List[RouteNodeId]:
-        # Dijkstra's algorithm is A* with a zero heuristic. The graph must
-        # have validated nonnegative sample counts, not geometric lengths.
-        # The heap orders exact integer costs, then node ids. A strict
-        # improvement changes the predecessor; equal costs leave it alone.
-        # With nonnegative costs, each node is final on its first pop.
-        var out = List[RouteNodeId]()
+    def _search(
+        self,
+        source: Int,
+        target: Int,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
+    ) raises -> List[RouteNodeId]:
+        var result = self._search_result(source, target, budget)
+        if result.report.status == SEARCH_EXHAUSTED:
+            raise Error("Navigation search budget exhausted")
+        var out = result.nodes^
+        result.nodes = List[RouteNodeId]()
+        return out^
+
+    def _search_result(
+        self, source: Int, target: Int, budget: NavigationSearchBudget
+    ) raises -> RouteSearchResult:
+        # Dijkstra retains exact costs and cost/node-id ties. Strict
+        # improvements preserve the former first-predecessor policy.
+        budget.validate()
+        var result = RouteSearchResult()
         var open = _MinCostQueue[DType.uint64]()
         var g = Dict[Int, UInt64]()
         var came_from = Dict[Int, Int]()
         var closed = Dict[Int, Bool]()
+        if not result.report._admit(budget, 0, True):
+            return result^
         g[source] = 0
         open.push(0, source)
+        var last = Optional[Int](None)
         while len(open) > 0:
-            var current = open.pop()[1]
+            if not result.report._pop(budget):
+                break
+            var entry = open.pop()
+            var current = entry[1]
+            if current in closed:
+                result.report.stale += 1
+                continue
+            last = current
             if current == target:
                 if g[current] == _ROUTE_OVERFLOW:
                     raise Error("A route cost exceeds the signed 64-bit range")
-                var nodes = List[Int]()
-                nodes.append(current)
-                var n = current
-                while n != source:
-                    n = came_from[n]
-                    nodes.append(n)
-                # The list holds the target at least.
-                for i in range(len(nodes) - 1, -1, -1):  # pragma: no branch
-                    out.append(RouteNodeId(nodes[i]))
-                return out^
-            if current in closed:
-                continue
+                result.report.status = SEARCH_SUCCESS
+                break
+            if not result.report._expand(budget):
+                break
             closed[current] = True
             var g_current = g[current]
             for e in self._nodes[self._node_index[current]].out_edges:
+                if not result.report._edge(budget):
+                    break
                 var neighbor = self._edges[e].target.value
                 var cost = UInt64(self._edges[e].length)
-                # Saturation preserves reachability beyond the supported
-                # range. Every representable path sorts before this marker,
-                # so irrelevant overflow cannot hide a valid target route.
+                # Saturation keeps overflowing reachability after every
+                # supported cost, without blocking a valid target route.
                 var tentative = UInt64(_ROUTE_OVERFLOW)
                 if g_current <= UInt64(_MAX_ROUTE_COST) - cost:
                     tentative = g_current + cost
                 var known = g.get(neighbor)
                 if not Bool(known) or tentative < known.value():
+                    if not result.report._admit(
+                        budget, len(open), not Bool(known)
+                    ):
+                        break
                     g[neighbor] = tentative
                     came_from[neighbor] = current
                     open.push(tentative, neighbor)
-        return out^
+            if result.report.status == SEARCH_EXHAUSTED:
+                break
+        if result.report.status == SEARCH_SUCCESS or (
+            result.report.status == SEARCH_EXHAUSTED and Bool(last)
+        ):
+            var nodes = List[Int]()
+            var n = last.value()
+            nodes.append(n)
+            while n != source:
+                n = came_from[n]
+                nodes.append(n)
+            # The settled endpoint was appended before this loop.
+            for i in range(len(nodes) - 1, -1, -1):  # pragma: no branch
+                result.nodes.append(RouteNodeId(nodes[i]))
+        return result^
 
     def _successive_last_intersection_edge(
         self, index: Int, route: List[Int]
@@ -855,7 +986,11 @@ struct GlobalRoutePlanner(Movable):
         return closest
 
     def trace_route(
-        mut self, map: Map, origin: Vector3, destination: Vector3
+        mut self,
+        map: Map,
+        origin: Vector3,
+        destination: Vector3,
+        budget: NavigationSearchBudget = NavigationSearchBudget(),
     ) raises -> List[PlanItem]:
         """Return the waypoints of a route and their road options,
         `trace_route`.
@@ -864,15 +999,16 @@ struct GlobalRoutePlanner(Movable):
             map: The map the planner was built on.
             origin: Where the route starts.
             destination: Where it ends.
+            budget: The finite graph-search policy, excluding localization.
 
         Returns:
             The plan. Empty when no route joins the two points.
 
         Raises:
-            Error: If a map query fails.
+            Error: If a map query fails, or the search budget is exhausted.
         """
         var out = List[PlanItem]()
-        var nodes = self.path_search(map, origin, destination)
+        var nodes = self.path_search(map, origin, destination, budget)
         var route = List[Int]()
         for n in nodes:
             route.append(n.value)

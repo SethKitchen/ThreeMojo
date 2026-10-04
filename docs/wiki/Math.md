@@ -52,6 +52,10 @@ Rotation tests inspect only the linear 3-by-3 block. They refuse a nonfinite
 axis or tolerance and a negative tolerance. Extreme finite uniform scales
 still qualify as scaled rotations.
 
+`Box2.distance_to_point` uses the shared length calculation. A finite gap
+can have a representable distance even when its squared distance overflows.
+A distance beyond the `Float32` range returns infinity.
+
 Squared lengths and dot products return their direct arithmetic result. They
 can overflow or underflow even when a length or unit direction is representable.
 
@@ -60,6 +64,10 @@ can overflow or underflow even when a length or unit direction is representable.
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
 
 `Vector2` has the same members in two dimensions, except the ones that need a third. It adds `cross(other) -> Float32`, which is the one component a cross product has in a plane. It is positive when `other` lies to the left of `self`. It also adds `angle()`, the angle from +x, and `rotate_around(center, angle)`. The curves asked for the first members; see [Curves and paths](Curves).
+
+`Vector2.angle()` returns zero for two positive zero components. Signed zeros
+follow `atan2`; two negative zero components give a half turn. `angle_to`
+returns a right angle when either vector is zero.
 
 A method that changes the vector changes `self` in place, as in three.js.
 
@@ -225,6 +233,23 @@ corners equal.
 
 A contraction larger than a finite box extent leaves an empty box. This also holds when rounded corners would be equal. Exact half-extent contraction still leaves a nonempty point or face.
 
+`Box2.center` and `Box3.center` add finite coordinates in `Float64` before
+they divide by two. They then round once to `Float32`. This keeps a finite
+midpoint when a `Float32` sum would overflow.
+
+`Box3.bounding_sphere` measures corner distances from that stored center.
+It includes a proved arithmetic error bound and rounds the radius outward. Thus
+rounding cannot put a finite corner outside the sphere. The radius can be
+one `Float32` step larger than the smallest enclosing radius. For subnormal
+radii, that step can be a large share of the radius.
+
+A full `size()` component can overflow while the radius remains finite. A radius that
+cannot fit in `Float32` is infinity. Empty and nonfinite bounds keep their
+prior behavior.
+
+If outward arithmetic overflows, an exact corner test checks the largest
+finite radius first. This preserves bounds just inside the type limit.
+
 Expanding an empty bound by a point gives the bound of that one point. A union with one changes nothing. An overlap test with one is false. A transform leaves one empty.
 
 A question that needs a point of an empty bound raises: `clamp_point`, `distance_to_point` and `distance_to_sphere`.
@@ -240,7 +265,7 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 | `contains_point(p)`, `clamp_point(p)`, `distance_to_point(p)` | The faces count as inside. |
 | `intersects_box(other)`, `intersects_sphere(s)` | Touching counts. |
 | `apply_matrix4(m)` | Transform the eight corners and bound them again, in place. |
-| `bounding_sphere() -> Sphere` | The sphere through the corners. |
+| `bounding_sphere() -> Sphere` | A sphere enclosing the corners, with an outward-rounded radius. |
 | `Box3.from_center_and_size(c, s)` | The box of size `s` centered on `c`. |
 | `expand_by_vector(v)`, `expand_by_scalar(f)`, `translate(v)` | Move each face out, or move the box. |
 | `intersect(other)` | Keep what both boxes hold. Boxes that do not overlap give the empty box. |
@@ -279,6 +304,58 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 | `a == b` | Normals and constants equal. |
 
 A plane refuses a zero normal. Three points on one line do not make a plane.
+
+Three-point plane and triangle normal queries retain finite coordinate products
+before normalization. This corrects range loss in three.js 0.180-style direct
+cross products. For example, the points `(0, 0, 7)`, `(2**100, 0, 7)`, and
+`(0, 2**100, 7)` have unit normal `(0, 0, 1)` and plane constant `-7`.
+The raw Float32 cross product overflows, but these results are representable.
+The same direction survives at the minimum subnormal coordinate scale.
+
+A cold fallback sums original coordinate products with exact sign and zero.
+It also handles cancellation that widening only the edge differences misses.
+The plane constant uses the original coordinate determinant. Ordinary,
+well-conditioned crosses keep their Float32 arithmetic. Nonfinite coordinates
+keep direct IEEE behavior. This is a range correction, not a guarantee of
+correctly rounded normals for every input.
+
+The three-point factory also uses original coordinates when raw dot products
+lose range, or its constant approaches cancellation or the Float32 limit. Its separate range guard covers
+512 steps below the maximum finite output; it includes edge and cross-product
+rounding. The normal-and-point factory has a smaller guard because its given
+normal components are already the original inputs. Stored Float32 plane
+coefficients can still give a small nonzero distance at an original corner.
+The fallback cannot remove this final representation error.
+
+A coordinate plane through the origin keeps the fast path when all three
+original x, y, or z coordinates are zero. Computed zeros alone do not permit
+this shortcut.
+
+Exact zero cross components in the fallback use positive zero. In the fallback,
+an exact zero plane constant uses negative zero. These zero signs do not change the geometry.
+
+Plane construction scales the normal and constant together, including subnormal
+normals and finite normals whose length exceeds `Float32`. The fallback divides
+in `Float64` before it stores the result. A normalized constant beyond the
+`Float32` range returns infinity. Nonfinite inputs retain direct IEEE behavior.
+
+`from_normal_and_point` widens raw dot products that lose range or approach
+cancellation. An exact-product expansion keeps small terms between cancelling
+large terms before division. A normalized result near the finite limit also triggers this
+fallback. The guard covers the last 32 `Float32` steps before the maximum
+finite value, plus nonfinite results. It prevents spurious overflow and finite
+saturation at this boundary.
+
+For example, `(1e-10, 0, 0)` through `(1e-36, 0, 0)`
+has constant `-1e-36`; an intermediate product rounded to zero cannot erase it.
+
+An exactly zero expansion gives a negative-zero factory constant. Its sign bit
+can differ from the direct dot product. The represented plane is unchanged.
+The direct constructor preserves signed zeros.
+
+These range corrections differ from three.js 0.180. Ordinary inputs keep their
+existing arithmetic order. Coplanar-point construction still forms its cross
+product in `Float32`; its extreme-range limits remain separate.
 
 ## Frustum
 
@@ -322,9 +399,11 @@ The renderer builds its frustum with `from_camera`. A far plane read back off a 
 
 ## Ray
 
-`math/ray.mojo`. A `Ray` is an origin and a unit direction: a half-line. The constructor makes the direction unit length and refuses a zero one. Every answer below assumes it.
+`math/ray.mojo`. A `Ray` is an origin and a unit direction: a half-line. The constructor makes the direction unit length and refuses a zero one. Segment queries require that unit direction. Sphere, box, and point-distance queries support a finite nonzero stored direction.
 
 A hit is an `Optional`. A miss is `None`. Every hit is forward of the origin. A ray inside a sphere or a box hits where it leaves.
+
+Sphere queries use the actual stored direction, including a finite nonunit direction. For finite inputs and a nonzero direction, a roundoff bound filters clear hits and misses. Ambiguous cases use exact polynomial signs from the stored Float32 values. An exact tangent counts as a hit. An origin on the sphere returns that origin, not the opposite surface. Returned coordinates remain rounded Float32 values.
 
 | Member | Meaning |
 |---|---|
@@ -341,6 +420,12 @@ A hit is an `Optional`. A miss is `None`. Every hit is forward of the origin. A 
 An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only when it lies in it. A ray in a triangle's plane misses the triangle, and so does a degenerate triangle.
 
 `apply_matrix4` raises for a projection, and for a matrix that flattens the direction to nothing. `look_at` raises for the origin itself.
+
+`look_at` widens extreme point differences before normalization. Opposite finite
+positions can have a difference beyond `Float32` and still give a valid direction.
+For example, `(-3e38, 0, 0)` aimed at `(3e38, 3e38, 0)` follows direction `(2, 1, 0)`.
+This correction differs from three.js 0.180 range behavior. Ordinary directions
+keep their existing arithmetic order. This does not add new nonfinite-input errors.
 
 `core.raycaster` carries a ray through a scene. See [Raycasting](Raycasting).
 
@@ -378,6 +463,12 @@ Normalized device space is unitless. World space is meters and screen space is p
 | `closest_point_to_point(point) -> Vector3` | The nearest point on the face, an edge or a corner. |
 
 Barycentric queries use widened signed-area products. Thin triangles keep their nonzero area instead of losing it to a difference of dot products. Off-plane queries use the orthogonal projection onto the plane. Octree containment uses the same calculation.
+
+`is_degenerate` tests exact collinearity of finite stored corners. It applies
+no area tolerance. `raw_normal` and `area` still return their direct Float32
+arithmetic results. They can underflow to zero or overflow even when the unit
+normal is representable. Their rounded output does not define degeneracy.
+Barycentric and intersection queries retain their separate arithmetic limits.
 
 A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
 
@@ -426,3 +517,110 @@ The floor accepts every positive `Int`, including `Int.MAX`.
 `SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform. The core generator and Clearwater share one 32-bit step in `math/random.mojo`.
 
 For finite bounds with `low < high`, `float_in` returns a finite value at least `low` and below `high`. Equal finite bounds return that bound. Each call uses one draw. The conversion handles intervals whose width overflows and clamps rounding at the upper end. `Vector2.random` and `Vector3.random` use this same conversion for each component.
+
+### Periodic scalar helpers
+
+`euclidean_modulo(n, m)` accepts Float32 inputs. For finite inputs and a
+nonzero divisor, its result has the divisor's sign and a magnitude below
+`abs(m)`. Exact multiples return a zero with the divisor's sign. The exact
+mathematical result is rounded to Float32. If that reaches the excluded
+endpoint, the result is the adjacent Float32 toward zero. A zero divisor,
+an infinite operand, or a NaN operand returns NaN.
+
+`pingpong(x, length)` accepts every finite Float32 input and positive finite
+length. Its result is from zero to the length, with positive zero at period
+boundaries. It constructs the period in Float64 and folds the exact binary
+remainder before the final Float32 rounding. It keeps small phases and cannot
+overflow for a positive finite length.
+
+A negative length keeps three.js's
+extension from `2 * length` to `length`. This negative extension can round to
+negative infinity when its result does not fit Float32. Zero lengths and
+nonfinite operands return NaN.
+
+`math/remainder.mojo` provides `remainder_float64(n, m)`. It returns the exact
+truncating remainder for every finite binary64 pair with a nonzero divisor.
+The sign, including a zero's sign, comes from the dividend. A finite dividend
+and infinite divisor return the dividend. Zero divisors, infinite dividends,
+and NaN operands return NaN. NaN payloads are not preserved.
+
+The shared primitive uses integer significands and powers of two. It does not
+use a floating-point quotient, floating-point `%`, or a host library. Its
+integer residual stays below a 53-bit divisor. Each shift is at most ten bits,
+so the intermediate fits UInt64. There are at most 205 shifts. The final exact
+remainder fits the input binary64 lattice, including subnormal values.
+
+`tools/reference_remainders.py` decodes inputs to exact Python fractions. It
+uses rational floor division and rounds directly to the target format. The
+saved controls cover every finite exponent field, both signs, subnormals,
+exact multiples, representable neighbors, and seeded random pairs. Run
+`python3 tools/reference_remainders.py --check` to check the controls. Use
+`--write` only for an intentional fixture change. The native suite compares
+bits, without a tolerance.
+
+CPU evidence does not verify GPU runtime behavior.
+
+#### Differences from three.js
+
+The upstream baseline is three.js 0.180.0, `src/math/MathUtils.js`. Its
+Euclidean formula is `((n % m) + m) % m`. In Mojo 1.1.0, Float32 bits
+`0x71800000` are exactly `2^100`. Both native Float32 and widened Float64 `%`
+return zero for a divisor of `1.5`. Exact rational arithmetic gives one.
+The shared primitive returns one.
+
+This is a reproduced API counterexample;
+it does not identify the compiler's internal cause.
+
+The unconditional upstream add-divisor step can erase a small positive
+remainder or overflow. The pingpong formula can overflow its Float32 period
+or erase a small folded phase. These cases now follow the mathematical wave.
+Opposite-sign endpoint rounding uses the adjacent value toward zero, rather
+than wrapping to zero. Ordinary three.js fixtures remain covered. These
+corrections can change a caller's phase or replay at the affected boundaries.
+
+The caller audit found no other direct calls to these two helpers in the
+frozen source. The animation mixer has its own quotient-based loop counter
+and phase reduction. Its counter range and large-step behavior need a separate
+contract; this change does not modify them. Integer texture wrapping and the
+large-angle sine reducer use separate arithmetic and are unchanged.
+
+## Large-angle sine regressions
+
+`tests/test_sine.mojo` checks representable neighbors around large multiples of
+`pi/2` and the nearest-quadrant boundaries `(k + 1/2) * pi/2`.
+It tests both signs in nine exponent bands, from 13 through 126.
+Each target has two adjacent Float32 values below it and two above it.
+The 72 targets give 288 positive cases and 576 signed sine checks.
+
+`tools/reference_sine_phases.py` constructs the targets with Python Decimal.
+It computes pi with Machin's convergent arctangent series.
+An integer binary search selects the neighbors from exact Float32 values.
+A full-turn reduction and Taylor series compute each reference sine.
+
+The generator rounds references directly to Float32 with ties-to-even.
+It checks that 140-digit and 200-digit calculations give the same fixtures.
+It does not import the shared sine or its reduction constants.
+
+Run `python3 tools/reference_sine_phases.py --check` to check the saved fixtures.
+Use `--write` to replace the generated block after an intentional fixture change.
+
+The CPU test checks the nearest quadrant, the reduced remainder, and the sine.
+It compares the sine to both the saved high-precision reference and host libm.
+The sine tolerance stays at `2e-6`. The five-second test limit stays in effect.
+The ordinary Cody-Waite arithmetic does not change.
+
+For midpoint targets at exponent 23 and below, the inner neighbor pair isolates
+one nearest-quadrant increment. At higher exponents, one Float32 spacing can cross many quadrants.
+The targets can then share neighbors. The oracle checks the actual stored
+angles and their actual quadrants. It does not assign the target's phase to a
+rounded input.
+
+Every finite binary value is rational. A nonzero integer multiple of `pi/2`
+is irrational. A midpoint `(2*k + 1) * pi/4` is also irrational.
+An exact nonzero finite binary input therefore cannot equal either boundary.
+A rounded approximation to pi does not create an exact midpoint test.
+
+`test_shared_sine_large_angle_phase_neighbors_match_bits` in
+`tests/test_gpu.mojo` compares host and device sine bits for the same signed
+inputs. A GPU-target build checks compilation only. It does not establish that
+the test ran on a physical device. Use the device test result for that claim.

@@ -14,8 +14,8 @@ Commands:
 
     python3 assets/carla/tools/carla_assets.py check
     python3 assets/carla/tools/carla_assets.py status
-    python3 assets/carla/tools/carla_assets.py fetch [ID ...] [--pin]
-    python3 assets/carla/tools/carla_assets.py verify
+    python3 assets/carla/tools/carla_assets.py fetch [ID ...] [--pin | --offline]
+    python3 assets/carla/tools/carla_assets.py verify [ID ...] [--strict]
     python3 assets/carla/tools/carla_assets.py credits [--all] [--output FILE]
 
 Rules the fetch keeps:
@@ -34,6 +34,11 @@ Rules the fetch keeps:
   next fetch verifies it and extracts it.
 - A Google Drive share link is downloaded through Drive's download link.
   A web page sent in place of a file is refused.
+- With `--offline`, fetch uses only pinned files already in the cache.
+  It verifies archives before extracting missing members and never opens
+  a URL. Missing or unpinned files fail the command, as do mismatches.
+- With `--strict`, verify fails for missing or unpinned files as well as
+  mismatches. Both commands can select entries by id.
 """
 
 import argparse
@@ -332,15 +337,28 @@ def _extract(archive, item, cache):
             os.replace(partial, target)
 
 
-def fetch_file(item, cache, pin=False):
+def fetch_file(item, cache, pin=False, offline=False):
     """Bring one manifest file into the cache, and return what happened.
 
     Returns one of "kept" (already there and matching), "fetched",
     "pinned" (fetched and its sum recorded in `item`), "unhosted" (no URL
     and not in the cache), "unpinned" (no sum and no `--pin`, so not
     fetched) or "mismatch" (a cached file whose sum differs, left alone). A download whose sum differs raises `FetchError`
-    and leaves nothing behind.
+    and leaves nothing behind. Offline recovery also returns "missing"
+    when a file is absent; it never downloads or pins bytes.
+
+    Args:
+        item: The manifest file record.
+        cache: The cache root path.
+        pin: Trust and record the first bytes of an unpinned file.
+        offline: Use only cached files with existing sums.
+    Returns:
+        The status described above.
+    Raises:
+        FetchError: Verification fails, or pin and offline are both set.
     """
+    if offline and pin:
+        raise FetchError('offline recovery cannot pin files')
     target = cache / item['path']
     expected = item.get('sha256')
     if target.exists():
@@ -357,6 +375,8 @@ def fetch_file(item, cache, pin=False):
         if item['role'] == 'archive':
             _extract(target, item, cache)
         return status
+    if offline:
+        return 'missing' if expected is not None else 'unpinned'
     if item['url'] is None:
         return 'unhosted'
     if expected is None and not pin:
@@ -384,22 +404,36 @@ def fetch_file(item, cache, pin=False):
     return status
 
 
-def fetch(manifest, cache, ids=None, pin=False):
-    """Fetch every file of the named entries, or of every entry.
-
-    Returns a list of (entry id, path, status). Raises `ManifestError` for
-    an id the manifest does not have.
-    """
+def _selected_entries(manifest, ids):
+    """Validate every requested id before returning the selected entries."""
     known = {entry['id'] for entry in manifest['entries']}
     for wanted in ids or []:
         if wanted not in known:
             raise ManifestError(f'no entry {wanted!r}')
+    return [entry for entry in manifest['entries'] if not ids or entry['id'] in ids]
+
+
+def fetch(manifest, cache, ids=None, pin=False, offline=False):
+    """Fetch every file of the named entries, or of every entry.
+
+    Args:
+        manifest: A checked manifest.
+        cache: The cache root path.
+        ids: Entry ids to select, or None for every entry.
+        pin: Trust and record the first bytes of an unpinned file.
+        offline: Verify and extract cached files without opening URLs.
+    Returns:
+        A list of (entry id, path, status).
+    Raises:
+        ManifestError: An id is not in the manifest.
+        FetchError: Verification fails, or pin and offline are both set.
+    """
+    if offline and pin:
+        raise FetchError('offline recovery cannot pin files')
     report = []
-    for entry in manifest['entries']:
-        if ids and entry['id'] not in ids:
-            continue
+    for entry in _selected_entries(manifest, ids):
         for item in entry['files']:
-            report.append((entry['id'], item['path'], fetch_file(item, cache, pin)))
+            report.append((entry['id'], item['path'], fetch_file(item, cache, pin, offline)))
     return report
 
 
@@ -414,11 +448,21 @@ def cached(entry, cache):
     return True
 
 
-def verify(manifest, cache):
-    """Re-hash every cached file that has a sum. Return a list of
-    (path, status) with status "ok", "mismatch", "missing" or "unpinned"."""
+def verify(manifest, cache, ids=None):
+    """Re-hash selected cached files and compare their extracted members.
+
+    Args:
+        manifest: A checked manifest.
+        cache: The cache root path.
+        ids: Entry ids to select, or None for every entry.
+    Returns:
+        A list of (path, status), with status "ok", "mismatch",
+        "missing" or "unpinned".
+    Raises:
+        ManifestError: An id is not in the manifest.
+    """
     report = []
-    for entry in manifest['entries']:
+    for entry in _selected_entries(manifest, ids):
         for item in entry['files']:
             target = cache / item['path']
             if item.get('sha256') is None:
@@ -498,9 +542,15 @@ def main(argv=None):
     commands.add_parser('status', help='show which entries the cache holds')
     getter = commands.add_parser('fetch', help='download and verify entries')
     getter.add_argument('ids', nargs='*')
-    getter.add_argument('--pin', action='store_true',
+    source = getter.add_mutually_exclusive_group()
+    source.add_argument('--pin', action='store_true',
                         help='trust the first download of a file with no sum, and record its sum')
-    commands.add_parser('verify', help='re-hash the cached files')
+    source.add_argument('--offline', action='store_true',
+                        help='verify and extract cached files only; fail if missing or unpinned')
+    verifier = commands.add_parser('verify', help='re-hash the cached files')
+    verifier.add_argument('ids', nargs='*')
+    verifier.add_argument('--strict', action='store_true',
+                          help='also fail when a selected file is missing or unpinned')
     teller = commands.add_parser('credits', help='print the attribution list')
     teller.add_argument('--all', action='store_true', help='also credit the CC0 entries')
     teller.add_argument('--output', type=Path)
@@ -516,19 +566,20 @@ def main(argv=None):
     if args.command == 'fetch':
         failed = False
         try:
-            report = fetch(manifest, args.cache, args.ids, args.pin)
+            report = fetch(manifest, args.cache, args.ids, args.pin, args.offline)
         finally:
             if args.pin:
                 save_manifest(manifest, args.manifest)
         for entry_id, path, state in report:
             print(f'{state:9} {entry_id}: {path}')
-            failed = failed or state == 'mismatch'
+            failed = failed or state == 'mismatch' or (args.offline and state != 'kept')
         return 1 if failed else 0
     if args.command == 'verify':
-        report = verify(manifest, args.cache)
+        report = verify(manifest, args.cache, args.ids)
         for path, state in report:
             print(f'{state:9} {path}')
-        return 1 if any(state == 'mismatch' for _, state in report) else 0
+        return 1 if any(state == 'mismatch' or (args.strict and state != 'ok')
+                        for _, state in report) else 0
     text = credits(manifest, args.all)
     if args.output:
         args.output.write_text(text, encoding='utf-8')
