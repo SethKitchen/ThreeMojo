@@ -13,11 +13,18 @@ per speed.
 
 from std.math import pi
 from units.quantity import Quantity, Unit
-from units.si import AngularAccelerationUnit, AngularVelocityUnit, VelocityUnit
+from units.si import (
+    AngularAccelerationUnit,
+    AngularVelocityUnit,
+    Energy,
+    JOULE,
+    NEWTON_METER,
+    NEWTON_PER_METER,
+    VelocityUnit,
+)
 
 # Force times length: a torque, or the kinetic energy of a body.
 comptime Torque = Quantity[2, 1, -2, 0]
-comptime Energy = Quantity[2, 1, -2, 0]
 # Mass times speed: a linear momentum, or an impulse.
 comptime Momentum = Quantity[1, 1, -1, 0]
 # Force per length: a spring rate.
@@ -33,26 +40,23 @@ comptime StiffnessUnit = Unit[0, 1, -2, 0]
 comptime DampingRateUnit = Unit[0, 1, -1, 0]
 comptime CorneringStiffnessUnit = Unit[1, 1, -2, -1]
 
-comptime NEWTON_METER = TorqueUnit(1.0, "N m")
-comptime JOULE = TorqueUnit(1.0, "J")
 comptime NEWTON_SECOND = MomentumUnit(1.0, "N s")
-comptime NEWTON_PER_METER = StiffnessUnit(1.0, "N/m")
 # CARLA's lengths are in centimeters, so a spring rate is in N/cm.
 comptime NEWTON_PER_CENTIMETER = StiffnessUnit(100.0, "N/cm")
 comptime NEWTON_SECOND_PER_METER = DampingRateUnit(1.0, "N s/m")
 comptime NEWTON_PER_DEGREE = CorneringStiffnessUnit(
-    Float32(180.0 / pi), "N/deg"
+    Float64(180.0 / pi), "N/deg"
 )
 
 # An engine speed. One revolution is two pi radians.
 comptime REVOLUTION_PER_MINUTE = AngularVelocityUnit(
-    Float32(2.0 * pi / 60.0), "rpm"
+    Float64(2.0 * pi / 60.0), "rpm"
 )
 # How fast an engine speed falls, CARLA's `rev_down_rate`.
 comptime REVOLUTION_PER_MINUTE_PER_SECOND = AngularAccelerationUnit(
-    Float32(2.0 * pi / 60.0), "rpm/s"
+    Float64(2.0 * pi / 60.0), "rpm/s"
 )
-comptime KILOMETER_PER_HOUR = VelocityUnit(Float32(1.0 / 3.6), "km/h")
+comptime KILOMETER_PER_HOUR = VelocityUnit(Float64(1.0 / 3.6), "km/h")
 # Exact: 1609.344 m per 3600 s.
 comptime MILE_PER_HOUR = VelocityUnit(0.44704, "mph")
 # Length per second cubed: how fast an acceleration changes.
