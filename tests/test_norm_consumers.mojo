@@ -321,6 +321,10 @@ def test_vector2_zero_angle_obeys_signed_atan2() raises:
     assert_equal(Vector2(-0.0, -0.0).angle().to(RADIAN), Float32(pi))
     assert_equal(Vector2(-0.0, 0.0).angle().to(RADIAN), Float32(pi))
     assert_equal(Vector2(0.0, -0.0).angle().to(RADIAN), 2 * Float32(pi))
+    # Only one zero component takes the ordinary atan2 path.
+    assert_almost_equal(
+        Vector2(0.0, 1.0).angle().to(RADIAN), Float32(pi) / 2, atol=1e-6
+    )
 
 
 def test_vector2_nonzero_axes_keep_their_angles() raises:
