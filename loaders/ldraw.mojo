@@ -29,8 +29,16 @@ conditional edges one `Line` a color group, the conditional ones
 not counted when deciding whether to split normals at the ends of lines,
 as three.js's loop over them never runs. A part built once is kept and
 copied for each placement. A group's last run is as long as there is.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import _ordinary_squared, length3, normalized3, normalized_cross3
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry, MaterialIndex
@@ -61,7 +69,7 @@ from objects.line import CONTROL0, CONTROL1, DIRECTION, Line, SEGMENTS
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
 from render.srgb import linear_to_srgb
-from std.math import sqrt
+from std.math import isfinite, sqrt
 from std.pathlib import Path
 
 # A group that runs to the end, three.js's `Infinity`.
@@ -271,7 +279,7 @@ def _determinant(te: List[Float64]) -> Float64:
 
 
 def _length(x: Float64, y: Float64, z: Float64) -> Float64:
-    return sqrt(x * x + y * y + z * z)
+    return length3(x, y, z)
 
 
 def _decompose(te: List[Float64], mut node: LDrawNode):
@@ -279,18 +287,28 @@ def _decompose(te: List[Float64], mut node: LDrawNode):
     var sx = _length(te[0], te[1], te[2])
     var sy = _length(te[4], te[5], te[6])
     var sz = _length(te[8], te[9], te[10])
-    if _determinant(te) < 0:
+    var first = normalized3(te[0], te[1], te[2])
+    var second = normalized3(te[4], te[5], te[6])
+    var third = normalized3(te[8], te[9], te[10])
+    var determinant = (
+        first[0] * (second[1] * third[2] - second[2] * third[1])
+        - second[0] * (first[1] * third[2] - first[2] * third[1])
+        + third[0] * (first[1] * second[2] - first[2] * second[1])
+    )
+    var sign = Float64(1)
+    if determinant < 0:
         sx = -sx
+        sign = -1
     node.position = Vec(te[12], te[13], te[14], 0)
-    var m11 = te[0] / sx
-    var m21 = te[1] / sx
-    var m31 = te[2] / sx
-    var m12 = te[4] / sy
-    var m22 = te[5] / sy
-    var m32 = te[6] / sy
-    var m13 = te[8] / sz
-    var m23 = te[9] / sz
-    var m33 = te[10] / sz
+    var m11 = first[0] * sign
+    var m21 = first[1] * sign
+    var m31 = first[2] * sign
+    var m12 = second[0]
+    var m22 = second[1]
+    var m32 = second[2]
+    var m13 = third[0]
+    var m23 = third[1]
+    var m33 = third[2]
     var trace = m11 + m22 + m33
     var q: Vec
     if trace > 0:
@@ -311,8 +329,11 @@ def _decompose(te: List[Float64], mut node: LDrawNode):
 
 def _unit(v: Vec) -> Vec:
     """Return three.js's `normalize`: divided by its length, or by one."""
-    var length = _length(v[0], v[1], v[2])
-    return v * (1 / (length if length != 0 and length == length else 1))
+    var squared = v[0] * v[0] + v[1] * v[1] + v[2] * v[2]
+    if _ordinary_squared(squared):
+        return v * (1 / sqrt(squared))
+    var unit = normalized3(v[0], v[1], v[2])
+    return Vec(unit[0], unit[1], unit[2], 0)
 
 
 def _cross(a: Vec, b: Vec) -> Vec:
@@ -331,7 +352,14 @@ def _dot(a: Vec, b: Vec) -> Float64:
 def _face_normal(vertices: List[Vec]) -> Vec:
     """Port three.js's face normal: the cross product of the first two edges,
     normalized."""
-    return _unit(_cross(vertices[1] - vertices[0], vertices[2] - vertices[1]))
+    var a = vertices[1] - vertices[0]
+    var b = vertices[2] - vertices[1]
+    if not (isfinite(a[0]) and isfinite(a[1]) and isfinite(a[2])):
+        a = vertices[1] * 0.5 - vertices[0] * 0.5
+    if not (isfinite(b[0]) and isfinite(b[1]) and isfinite(b[2])):
+        b = vertices[2] * 0.5 - vertices[1] * 0.5
+    var unit = normalized_cross3(a[0], a[1], a[2], b[0], b[1], b[2])
+    return Vec(unit[0], unit[1], unit[2], 0)
 
 
 # --- smooth normals -------------------------------------------------------------
