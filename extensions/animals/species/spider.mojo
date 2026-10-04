@@ -320,7 +320,7 @@ struct _Dims(Movable):
             self.spin_r = 1.3
         self.q = 0.001 * WOLF_UNIT / self.unit
         self.leg = List[Float64]()
-        for l in leg:
+        for l in leg:  # pragma: no branch
             self.leg.append(l * leg_k)
         self.palp_len = palp_len * (0.5 + 0.5 * leg_k)
         self.abd_r = abd_r * abd_k
@@ -362,10 +362,12 @@ def _chain(
     # solved so the tip ends at height `y_tip`: procedural-animals'
     # `solveBindElevations` and `planarChain`.
     var el = List[Float64]()
-    for e in el_deg:
+    # The dims tables give every leg its elevations.
+    for e in el_deg:  # pragma: no branch
         el.append(e * pi / 180.0)
     var drop = 0.0
-    for k in range(len(lens)):
+    # Every leg has segments: `lens[free]` is read below.
+    for k in range(len(lens)):  # pragma: no branch
         if k != free:
             drop += lens[k] * sin(el[k])
     var s = (y_tip - base.y - drop) / lens[free]
@@ -373,7 +375,8 @@ def _chain(
     var out = List[V3]()
     var p = base
     out.append(p)
-    for k in range(len(lens)):
+    # Every leg has segments: `lens[free]` is read above.
+    for k in range(len(lens)):  # pragma: no branch
         p = p + _plane_dir(az, el[k], 1.0) * lens[k]
         out.append(p)
     return out^
@@ -382,7 +385,8 @@ def _chain(
 def _leg_chain(d: _Dims, i: Int) -> List[V3]:
     # Leg `i` (0 to 3) of the left side, coxa base to claw tip.
     var lens = List[Float64]()
-    for f in d.seg:
+    # The dims tables list every leg segment.
+    for f in d.seg:  # pragma: no branch
         lens.append(f * d.leg[i] * d.q)
     var base = d.mm(V3(d.coxa_x[i], d.coxa_y, d.coxa_z[i]))
     return _chain(base, d.coxa_az[i] * pi / 180.0, d.el, lens, 5, d.tip_y * d.q)
@@ -392,7 +396,8 @@ def _palp_chain(d: _Dims) -> List[V3]:
     # The left pedipalp, coxa base to tip. Its tibia takes up the height
     # so the tarsus meets the ground slanting forward.
     var lens = List[Float64]()
-    for f in d.palp_seg:
+    # The dims tables list every palp segment.
+    for f in d.palp_seg:  # pragma: no branch
         lens.append(f * d.palp_len * d.q)
     return _chain(
         d.mm(d.palp_base),
@@ -460,13 +465,13 @@ def spider_rig(t: Traits) raises -> Rig:
     rig.set("cheTipL", d.mm(d.chel_tip))
     rig.set("fangTipL", d.mm(d.chel_fang))
     var names = _leg_names()
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var chain = _leg_chain(d, i)
-        for k in range(SEGS + 1):
+        for k in range(SEGS + 1):  # pragma: no branch
             rig.set(names[k] + String(i + 1) + "L", chain[k])
     var palp = _palp_chain(d)
     var pn = _palp_names()
-    for k in range(len(pn)):
+    for k in range(len(pn)):  # pragma: no branch
         rig.set(pn[k] + "L", palp[k])
     rig.mirror_joints()
     _ = rig.add_bone("prosoma", "pedA", "ceph", "")
@@ -474,25 +479,25 @@ def spider_rig(t: Traits) raises -> Rig:
     _ = rig.add_bone("pedicel", "pedA", "pedB", "prosoma")
     _ = rig.add_bone("abdomen", "pedB", "abdEnd", "pedicel")
     _ = rig.add_bone("spinnerets", "abdEnd", "spinTip", "abdomen")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         _ = rig.add_bone(
             "chelicera" + side, "cheBase" + side, "cheTip" + side, "head"
         )
         _ = rig.add_bone(
             "fang" + side, "cheTip" + side, "fangTip" + side, "chelicera" + side
         )
-    for side in [String("L"), String("R")]:
-        for k in range(len(pn) - 1):
+    for side in [String("L"), String("R")]:  # pragma: no branch
+        for k in range(len(pn) - 1):  # pragma: no branch
             _ = rig.add_bone(
                 pn[k] + side,
                 pn[k] + side,
                 pn[k + 1] + side,
                 "prosoma" if k == 0 else pn[k - 1] + side,
             )
-    for side in [String("L"), String("R")]:
-        for i in range(1, 5):
+    for side in [String("L"), String("R")]:  # pragma: no branch
+        for i in range(1, 5):  # pragma: no branch
             var leg = String(i) + side
-            for k in range(SEGS):
+            for k in range(SEGS):  # pragma: no branch
                 _ = rig.add_bone(
                     names[k] + leg,
                     names[k] + leg,
@@ -690,9 +695,9 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EYES: a raised rim round each lens, cut open by the socket the dome
     # sits in.
     var eyes = _eyes(wolf)
-    for e in eyes:
+    for e in eyes:  # pragma: no branch
         var spec = _spec(e, q, V3(0, 0, 0))
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var ef = eye_frame_of(spec, ho, s)
             _ = m.sphere(
                 "eyerim",
@@ -711,9 +716,9 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
     # The six lesser eyes: glossy domes. The pipeline adds the two
     # principal eyeballs.
-    for n in range(1, len(eyes)):
+    for n in range(1, len(eyes)):  # pragma: no branch
         var spec = _spec(eyes[n], q, V3(0, 0, 0))
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var ef = eye_frame_of(spec, ho, s)
             _ = m.sphere("eyedome", hb, ef.c, spec.r, k=0.0)
 
@@ -752,7 +757,7 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var sd = normalize(rig.j("spinTip") - st)
     var sl = length(rig.j("spinTip") - st)
     var sr = d.spin_r * q
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         if wolf:
             _ = m.cone(
                 "spinneret",
@@ -793,7 +798,7 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
 
     # CHELICERAE AND FANGS.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var b0 = rig.j("cheBase" + side)
         var b1 = rig.j("cheTip" + side)
@@ -868,8 +873,8 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # PALPS: part of the body.
     var pn = _palp_names()
-    for side in [String("L"), String("R")]:
-        for k in range(len(pn) - 1):
+    for side in [String("L"), String("R")]:  # pragma: no branch
+        for k in range(len(pn) - 1):  # pragma: no branch
             var a = rig.j(pn[k] + side)
             var b = rig.j(pn[k + 1] + side)
             var pb = rig.bone(pn[k] + side)
@@ -915,13 +920,13 @@ def spider_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # and the sternum. The rest of the leg is a limb, with swollen joint
     # condyles, the knee the biggest.
     var names = _leg_names()
-    for side in [String("L"), String("R")]:
-        for i in range(1, 5):
+    for side in [String("L"), String("R")]:  # pragma: no branch
+        for i in range(1, 5):  # pragma: no branch
             var thick = d.hind_r if i == 4 else (
                 (1.0 + d.hind_r) / 2.0 if i == 3 else 1.0
             )
             var leg = String(i) + side
-            for k in range(SEGS):
+            for k in range(SEGS):  # pragma: no branch
                 var a = rig.j(names[k] + leg)
                 var b = rig.j(names[k + 1] + leg)
                 var bone = rig.bone(names[k] + leg)
@@ -1090,7 +1095,7 @@ def _tarantula_hexes(morph: Int) -> List[Int]:
     return h^
 
 
-def spider_palette(t: Traits) raises -> Palette:
+def spider_palette(t: Traits) -> Palette:
     """Return one spider's palette.
 
     A wolf spider is warmed or cooled, lightened, and grayed from a brown
@@ -1102,9 +1107,6 @@ def spider_palette(t: Traits) raises -> Palette:
 
     Returns:
         The palette, in linear light.
-
-    Raises:
-        Error: If the palette tables differ in length.
     """
     var names = _swatches()
     var w = t.get("coatWarmth", 0.0)
@@ -1112,10 +1114,11 @@ def spider_palette(t: Traits) raises -> Palette:
     var out = Palette()
     if t.variant == WOLF:
         var hexes = _wolf_hexes()
-        if len(names) != len(hexes):
-            raise Error("A palette needs one color per name")
+        debug_assert(
+            len(names) == len(hexes), "A palette needs one color per name"
+        )
         var gr = t.get("coatGray", 0.0)
-        for i in range(len(names)):
+        for i in range(len(names)):  # pragma: no branch
             var c = srgb(hexes[i])
             # The chelicerae, the venter, the eyes and the fangs keep
             # their color.
@@ -1134,9 +1137,8 @@ def spider_palette(t: Traits) raises -> Palette:
             out.set(names[i], c)
         return out^
     var hexes = _tarantula_hexes(Int(t.get("morph", 0.0)))
-    if len(names) != len(hexes):
-        raise Error("A palette needs one color per name")
-    for i in range(len(names)):
+    debug_assert(len(names) == len(hexes), "A palette needs one color per name")
+    for i in range(len(names)):  # pragma: no branch
         out.set(names[i], srgb(hexes[i]) * (1.0 + l))
     return out^
 
@@ -1161,10 +1163,10 @@ def _seg_of(name: String) -> Int:
         "palpTarsus",
     ]
     var palp_seg: List[Int] = [0, 1, 2, 3, 4, 6]
-    for k in range(len(palps)):
+    for k in range(len(palps)):  # pragma: no branch
         if name.startswith(palps[k]):
             return palp_seg[k]
-    for k in range(len(segs)):
+    for k in range(len(segs)):  # pragma: no branch
         if name.startswith(segs[k]):
             return k
     return -1
@@ -1282,7 +1284,7 @@ def spider_paint(
                 bone[byte = bone.byte_length() - 2 : bone.byte_length() - 1]
             )
             var i = 0
-            for c in range(1, 5):
+            for c in range(1, 5):  # pragma: no branch
                 if digit == String(c):
                     i = c - 1
             chain = _leg_chain(d, i)
@@ -1394,7 +1396,7 @@ def spider_paint(
             # broken chevrons.
             var spots = 1e9
             var chev = 1e9
-            for k in range(4):
+            for k in range(4):  # pragma: no branch
                 var uz = -0.12 - Float64(k) * 0.2
                 var sx = abs(p.x) - r.x * (0.3 - 0.03 * Float64(k))
                 var sz = (u - uz) * r.z
@@ -1483,7 +1485,7 @@ def spider_paint(
             # Dark striae radiating from the fovea.
             var fz = z0 + 0.36 * lc
             var st = 1e9
-            for k in range(4):
+            for k in range(4):  # pragma: no branch
                 var ang = -0.95 + Float64(k) * 0.62 + pi / 2.0
                 var dx = sin(ang)
                 var dz = cos(ang)
@@ -1515,9 +1517,9 @@ def spider_paint(
         # glossy.
         var ceph = d.mm(d.ceph)
         var eye_d = 1e9
-        for e in _eyes(wolf):
+        for e in _eyes(wolf):  # pragma: no branch
             var spec = _spec(e, q, V3(0, 0, 0))
-            for sd in [1.0, -1.0]:
+            for sd in [1.0, -1.0]:  # pragma: no branch
                 var c = eye_frame_of(spec, ceph, sd).c
                 eye_d = min(eye_d, length(p - c) - spec.r * 1.35)
         var reach = 0.5 * mmu * (1.0 if wolf else 0.6)

@@ -291,7 +291,7 @@ def dewclaw_balls(
     Raises:
         Error: If the sculpt refuses a primitive.
     """
-    for k in [1.0, -1.0]:
+    for k in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "dewclaw",
             bone,

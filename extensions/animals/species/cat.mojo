@@ -171,7 +171,7 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
         Error: If the requested coat is not one of the seven.
     """
     var m = hashed_stream(options.seed, 0x2C1B3C6D, 0x297A2D39, 0x1B873593)
-    for _ in range(3):
+    for _ in range(3):  # pragma: no branch
         _ = m.next()
     var weights: List[Float64] = [0.22, 0.12, 0.14, 0.14, 0.14, 0.11, 0.13]
     var variant = pick_variant(options.variant.value, weights, m.next())
@@ -191,10 +191,10 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var stocky = variant == GRAY
     var longhair = m.next() < 0.18
     var v = hashed_stream(options.seed, 0x5BD1E995, 0x27D4EB2D, 0x165667B1)
-    for _ in range(3):
+    for _ in range(3):  # pragma: no branch
         _ = v.next()
     var vv = List[Float64]()
-    for _ in range(10):
+    for _ in range(10):  # pragma: no branch
         vv.append(v.next())
     var solid = variant == BLACK or variant == GRAY or variant == TUXEDO
     var cob = (0.1 if vv[0] < 0.2 else 0.6 + 0.4 * vv[1]) if stocky else 0.0
@@ -219,7 +219,8 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var x = m.next()
     var acc = 0.0
     var found = False
-    for i in range(len(order)):
+    # Every coat lists its iris colors.
+    for i in range(len(order)):  # pragma: no branch
         acc += shares[order[i]] if order[i] <= COPPER else 0.0
         var hit = not found and x < acc
         if hit:
@@ -298,7 +299,7 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     t.warps.add(
         scale_about_warp(HEAD_O, head, 0.035, 0.11 if juv > 0.0 else 0.075)
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         t.warps.add(
             scale_about_warp(
                 _hl(V3(0.037 * s, 0.041, -0.016)), ear_k, 0.012, 0.03
@@ -306,7 +307,7 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
         )
     if juv > 0.0:
         # Kittens have big paws.
-        for paw in [
+        for paw in [  # pragma: no branch
             V3(0.027, 0.01, 0.053),
             V3(-0.027, 0.01, 0.053),
             V3(0.03, 0.01, -0.161),
@@ -387,7 +388,7 @@ def cat_rig(t: Traits) raises -> Rig:
     rig.set("earTipL", _hl(V3(0.047, 0.061, -0.0195)))
     var tk = t.get("tail")
     var lens = List[Float64]()
-    for l in _tail_lens():
+    for l in _tail_lens():  # pragma: no branch
         lens.append(l * tk)
     tail_chain(rig, "tailBase", _tail_angles(), lens)
     rig.mirror_joints()
@@ -525,7 +526,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _ = m.ell(
         "croup", b, V3(0, 0.203, -0.146), V3(0.026, 0.017, 0.042), k=0.014
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "rump",
             b,
@@ -611,7 +612,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.0055,
         k=0.007,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _e3(m, h, "temple", V3(14 * s, 7, -18), V3(17, 16, 24), 12)
         _e3(m, h, "brow", V3(17 * s, 10, 8.5), V3(11, 5.5, 7.5), 6)
         _e3(m, h, "brow", V3(26 * s, 8, -2), V3(9, 7, 11), 8)
@@ -678,7 +679,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, 0.2, 1)),
     )
     _e3(m, h, "philtrum", V3(0, -23.5, 29.5), V3(3.5, 4, 3), 3)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         # The lids: a thin shell hugging the eyeball, cut open along an
         # almond aperture.
         var ef = eye_frame_of(eye, HEAD_O, s)
@@ -737,7 +738,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jb,
@@ -766,7 +767,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
 
     # EARS: tall triangular pinnae, thin, cupped forward.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var e = _ear_frame(rig.j("earBase" + side), rig.j("earTip" + side), s)
         var eb = rig.bone("ear" + side)
@@ -825,7 +826,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS: thick and short, on round paws.
     var lt = t.get("limb")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         _fore_leg(m, rig, side, s, lt)
         _hind_leg(m, rig, side, s, lt, lh)
@@ -841,7 +842,7 @@ def cat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _tail_radius(0.08, tb),
         k=0.013,
     )
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -936,7 +937,7 @@ def _fore_leg(
     _ = m.sphere("pad", fpaw, mc + V3(0, -0.0068, 0.0028), 0.0054, k=0.003)
     var tx = _toes()
     var tz = _toes_z()
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             fpaw,
@@ -1050,7 +1051,7 @@ def _hind_leg(
     _ = m.sphere("pad", hpaw, mt + V3(0, -0.0068, 0.0026), 0.0051, k=0.003)
     var tx = _toes()
     var tz = _toes_z()
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             hpaw,
@@ -1115,12 +1116,12 @@ def cat_look(t: Traits) -> EyeLook:
     var base = _iris(eye)
     var tone = t.get("eyeTone", 0.0)
     var c = List[V3]()
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         c.append(srgb(base[i]))
     var leans = eye <= COPPER
     if leans:
         var other = _iris(_near(eye, tone > 0.0))
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             c[i] = mix3(c[i], srgb(other[i]), 0.45 * abs(tone))
     return EyeLook(c[0], c[1], c[3], V3(0.25, 0.2, 0.16), 0.3, 3.0)
 
@@ -1278,7 +1279,7 @@ def cat_palette(t: Traits) raises -> Palette:
     var k = t.get("coatWarmth", 0.0)
     var l = t.get("coatLightness", 0.0)
     var out = Palette()
-    for i in range(len(names)):
+    for i in range(len(names)):  # pragma: no branch
         var c = srgb(hexes[i])
         var name = names[i]
         # The coat's own fur takes the individual's warmth and lightness.
@@ -1323,10 +1324,10 @@ def _tail_at(t: Traits, bone: String, p: V3) -> V3:
     var lens = _tail_lens()
     var tk = t.get("tail")
     var total = 0.0
-    for l in lens:
+    for l in lens:  # pragma: no branch
         total += l * tk
     var seg = 0
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         if bone == "tail" + String(i):
             seg = i
     var a = TAIL_BASE
@@ -1373,12 +1374,12 @@ def _axial(p: V3) -> _Axial:
     var pts = _axial_points()
     var arc = List[Float64]()
     arc.append(0.0)
-    for i in range(1, len(pts)):
+    for i in range(1, len(pts)):  # pragma: no branch
         arc.append(arc[i - 1] + length(pts[i] - pts[i - 1]))
     var best = 1e9
     var s = 0.0
     var theta = 0.0
-    for i in range(len(pts) - 1):
+    for i in range(len(pts) - 1):  # pragma: no branch
         var a = pts[i]
         var ab = pts[i + 1] - a
         var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
@@ -1421,7 +1422,8 @@ def _dist_line(p: V3, n: V3, pts: List[V3], w: List[Float64]) -> Float64:
     # The distance from a skin point to a polyline with half widths,
     # measured in the skin's tangent plane, negative inside.
     var best = 1e9
-    for i in range(len(pts) - 1):
+    # Its one caller passes six points.
+    for i in range(len(pts) - 1):  # pragma: no branch
         var a = pts[i]
         var ab = pts[i + 1] - a
         var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
@@ -1452,7 +1454,8 @@ def _line(
         _mm(f.x * s, f.y, f.z),
     ]
     var ws = List[Float64]()
-    for x in w:
+    # Each caller passes six widths.
+    for x in w:  # pragma: no branch
         ws.append(x * 0.001)
     return _dist_line(p, n, pts, ws)
 
@@ -1812,7 +1815,7 @@ def _face(pal: Palette, t: Traits, p: V3, n: V3, region: Int) -> V3:
     # The pale ring hugging the lid margin.
     var eye = cat_eye(t)
     var d_eye = 1.0
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         d_eye = min(d_eye, length(p - ef.c) - 0.0112)
     var tabby = (

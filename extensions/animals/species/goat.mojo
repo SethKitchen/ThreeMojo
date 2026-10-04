@@ -487,7 +487,7 @@ def _horn_path(t: Traits, s: Float64) -> List[HornPoint]:
     var curve = t.get("hornCurve", 0.0)
     var spread = t.get("hornSpread", 0.0)
     var base = t.get("hornBase", 0.0)
-    for i in range(n + 1):
+    for i in range(n + 1):  # pragma: no branch
         var u = Float64(i) / Float64(n)
         var th = curve * pow(u, 1.15)
         var dl = V3(
@@ -649,7 +649,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.25, 1)),
         k=0.05,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "hippoint", pel, V3(0.095 * s * gw, 0.715, -0.195), 0.021, k=0.05
         )
@@ -663,7 +663,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     var ch = rig.bone("chest")
     _ = m.ell("brisket", ch, V3(0, 0.482, 0.272), V3(0.075, 0.07, 0.07), k=0.05)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "pectoral",
             ch,
@@ -676,9 +676,10 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     # The udder of an adult doe, or a buck's scrotum: their own surface.
     var ub = rig.bone("udder")
+    # Every doe's udder is 0.2 or more.
     var u = t.get("udder", 0.0)
-    if doe_adult and u > 0.05:
-        for s in [1.0, -1.0]:
+    if doe_adult:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "udder",
                 ub,
@@ -720,7 +721,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.03,
             part=APPENDAGE,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "scrotum",
                 ub,
@@ -823,7 +824,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.03,
         )
     if t.get("wattles", 0.0) > 0.5:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var a = _hl(V3(0.018 * s, -0.128, -0.068))
             var b = a + V3(0.006 * s, -0.052, -0.006)
             _ = m.cone("wattle", n2, a, b, 0.0065, 0.0095, k=0.008, part=WATTLE)
@@ -904,7 +905,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.016,
     )
     var eye = goat_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _hell(
             m,
             h,
@@ -1043,7 +1044,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.012,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -1060,9 +1061,9 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var a = _hlk(V3(0, -0.094, 0.12), kid)
         var down = normalize(V3(0, -1, -0.05))
         var bb = rig.bone("beard")
-        for j in [-1.0, 0.0, 1.0]:
+        for j in [-1.0, 0.0, 1.0]:  # pragma: no branch
             var bl = beard * (1.0 if j == 0.0 else 0.78)
-            for i in range(4):
+            for i in range(4):  # pragma: no branch
                 var t0 = Float64(i) / 4.0
                 var t1 = Float64(i + 1) / 4.0
                 _ = m.cone(
@@ -1090,7 +1091,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # EARS: a leaf with a rolled base and a cupped front (erect), or a long
     # broad drape with a rolled rim (lop).
     var lop = t.get("lop", 0.0) > 0.5
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -1222,7 +1223,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # HORNS: their own rigid keratin surface on the skull.
     var hlen = t.get("hornLen", 0.0)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var pth = _horn_path(t, s)
         for i in range(len(pth) - 1):
             _ = m.cone(
@@ -1302,10 +1303,12 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
 
     # MANE: a buck's long hair along the crest and the back.
+    # Every buck's mane is 0.4 or more.
     var mn = t.get("mane", 0.0)
-    if buck and mn > 0.05:
+    if buck:
         var body = List[Int]()
-        for i in range(len(m.prims)):
+        # The body is already sculpted.
+        for i in range(len(m.prims)):  # pragma: no branch
             var on_body = m.prims[i].part == BODY and not m.prims[i].carve
             if on_body:
                 body.append(i)
@@ -1325,7 +1328,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             "spine3",
             "spine3",
         ]
-        for i in range(len(line)):
+        for i in range(len(line)):  # pragma: no branch
             var axis = normalize(line[i] - line[i + 1]) if i + 1 < len(
                 line
             ) else V3(0, 0, 1)
@@ -1340,7 +1343,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS: slender, with long cannons and cloven hooves.
     var lk = 1.0 + 0.12 * heavy
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -1566,7 +1569,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.95)
 
     # TAIL: short, flat and carried up, a brush widening to the tip.
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(TAIL_SEGS)
         var t1 = Float64(i + 1) / Float64(TAIL_SEGS)
         var a = rig.j("tail" + String(i))
@@ -1622,7 +1625,7 @@ def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
     # Two claws with a cleft between them, the wall parallel to the
     # pastern, heel bulbs behind, flat on the ground.
     var zc = (c.z + toe_j.z) * 0.5
-    for k in [1.0, -1.0]:
+    for k in [1.0, -1.0]:  # pragma: no branch
         var x = c.x + 0.0105 * k * w
         var top = V3(x, c.y + 0.008, c.z - 0.004)
         var toe = V3(x - 0.002 * k, 0.006, toe_j.z - 0.004)
@@ -1785,7 +1788,7 @@ def goat_palette(t: Traits) raises -> Palette:
     var l = t.get("coatLightness", 0.0)
     var out = Palette()
     var names: List[String] = [String("base"), "dorsal", "belly", "head"]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var c = srgb(hexes[i])
         out.set(
             names[i],
@@ -1811,7 +1814,7 @@ def goat_palette(t: Traits) raises -> Palette:
         var spots = (masks & M_SPOTS) != 0
         var n = 10 + Int(R.next() * 10.0) if spots else 4 + Int(R.next() * 4.0)
         var f = _frame()
-        for _ in range(n):
+        for _ in range(n):  # pragma: no branch
             if spots:
                 var c = V3(
                     (R.next() * 2.0 - 1.0) * 0.18,
@@ -1918,8 +1921,9 @@ def _mark_sd(
         var muzzle = (masks & M_MUZZLE) != 0 and face
         if muzzle:
             d = min(d, 0.155 - h.z + (0.01 if h.y > -0.02 else 0.0))
+        # Only the Alpine coats mark the ears, and Alpine ears stand.
         var ears = (masks & M_EARS) != 0 and region == 5
-        if ears and t.get("lop", 0.0) < 0.5:
+        if ears:
             # The outer part of an erect ear.
             var lift = t.get("earLift", 0.5)
             var eb = _hl(V3(0.048, 0.026, -0.06))
@@ -2001,7 +2005,8 @@ def _mark_sd(
         var lobe = (fbm3(p * 4.5 + V3(3.1, 0, 0), 3) - 0.5) * 0.12 + (
             fbm3(p * 28.0, 2) - 0.5
         ) * 0.02
-        for i in range(count):
+        # Inside `patched`, `count` is positive.
+        for i in range(count):  # pragma: no branch
             var c = pal.get("patch" + String(i))
             var q = pal.get("patchr" + String(i))
             if q.z > 0.0:

@@ -52,6 +52,7 @@ from extensions.sdf.mesher import (
     _checked_count,
     _check_grid_sizes,
     _faces,
+    _mesh_part,
     _number_vertices,
     _sample_band,
     _wake,
@@ -520,6 +521,29 @@ def test_mesh_a_ball() raises:
         workers=0,
     )
     assert_equal(all.vertex_count(), mesh.vertex_count())
+
+
+def test_spill_wakes_the_blocks_a_thin_first_pass_misses() raises:
+    # With no margin, the first pass wakes only the blocks whose corners
+    # straddle the surface. The lattice's block faces lie at multiples of
+    # 0.5 m, so this ball's cap bulges 5 cm past the face at x = 1 into a
+    # block whose corners all lie 1.061 m from its center, outside it. The
+    # cap crosses that face at a sample of the awake block beside it, so
+    # the spill wakes the block and the cap is meshed. A cap that crosses
+    # no awake face cannot be seen this way: that is what the usual
+    # margin is for.
+    var m = SdfModel()
+    _ = m.sphere("ball", BoneId(0), V3(0, 0.25, 0.25), 1.05, k=0.0)
+    var low = V3(-1, -1, -1)
+    var high = V3(1.5, 1.5, 1.5)
+    var cell = Length(0.25, METER)
+    var usual = mesh_part(m, [0], low, high, cell, block=2)
+    var thin = _mesh_part(m, [0], low, high, cell, 2, 1, 0.0)
+    var cap = 0
+    for v in range(thin.vertex_count()):
+        cap += Int(thin.vertex(v).x > 1.0)
+    assert_true(cap > 0)
+    assert_true(thin.vertex_count() <= usual.vertex_count())
 
 
 def test_mesh_winding_faces_out() raises:

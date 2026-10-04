@@ -168,13 +168,13 @@ def horse_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var heights: List[Float64] = [0.0, 0.085, 0.13, 0.24, 0.45]
     var sock_w: List[Float64] = [60, 8, 10, 14, 8]
     var socks = List[Float64]()
-    for _ in range(4):
+    for _ in range(4):  # pragma: no branch
         socks.append(heights[pick_weighted(r, sock_w)])
     if r.next() < 0.3:
         var hind = max(socks[2], socks[3])
         socks[2] = hind
         socks[3] = hind
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         t.set("sock" + String(i), socks[i])
     t.set("gelding", 1.0 if gelding else 0.0)
     if male:
@@ -385,7 +385,7 @@ def _head(mut m: SdfModel, h: BoneId) raises:
         k=0.025,
     )
     var eye = _eye()
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         # The masseter, and the mandible's lower border to the chin.
         _ = head_ell(
             m,
@@ -448,7 +448,8 @@ def _head(mut m: SdfModel, h: BoneId) raises:
 def _bone_list(m: SdfModel, h: BoneId) -> List[Int]:
     # The primitives on one bone that are not on the jaw, carvers too.
     var ids = List[Int]()
-    for i in range(len(m.prims)):
+    # Both callers pass the head, sculpted just before.
+    for i in range(len(m.prims)):  # pragma: no branch
         var keep = m.prims[i].bone == h and m.prims[i].part != JAW
         if keep:
             ids.append(i)
@@ -469,7 +470,7 @@ def _skin_along(m: SdfModel, ids: List[Int], o: V3, d: V3) -> V3:
     var hf = _hf()
     var lo = 0.0
     var hi = 0.12
-    for _ in range(30):
+    for _ in range(30):  # pragma: no branch
         var t = 0.5 * (lo + hi)
         var inside = m.eval_list(ids, hf.at(o + d * t)) < 0.0
         lo = t if inside else lo
@@ -560,7 +561,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.12, 1)),
         k=0.08,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere("hippoint", pb, V3(0.235 * s, 1.44, -0.43), 0.065, k=0.08)
         _ = m.ell(
             "rump", pb, V3(0.13 * s, 1.33, -0.72), V3(0.13, 0.19, 0.12), k=0.08
@@ -568,7 +569,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # The pectorals: a broad, rounded breast between the forelegs.
     var cb = rig.bone("chest")
     _ = m.ell("brisket", cb, V3(0, 1.08, 0.64), V3(0.17, 0.16, 0.17), k=0.08)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "pectoral",
             cb,
@@ -602,7 +603,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var neck_w: List[Float64] = [0.2, 0.155, 0.12, 0.095]
     var neck_d: List[Float64] = [0.27, 0.215, 0.17, 0.13]
     var neck_l: List[Float64] = [0.2, 0.2, 0.18, 0.14]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.ell(
             "neck",
             n1 if i < 2 else n2,
@@ -616,7 +617,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var cd = normalize(poll_t - withers)
     var crest_t: List[Float64] = [0.3, 0.62, 0.86]
     var crest_r: List[Float64] = [0.075, 0.06, 0.05]
-    for i in range(3):
+    for i in range(3):  # pragma: no branch
         var r0 = crest_r[i]
         _ = m.ell(
             "crest",
@@ -657,7 +658,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # opening low and the false nostril rising up and out. The carvers
     # sit a measured depth under the skin.
     var muzzle = _bone_list(m, h)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var n_l = normalize(V3(0.6 * s, 0.05, 0.8))
         var no = _nostril(m, muzzle, s)
         _ = head_ell(
@@ -707,7 +708,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.02,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -720,7 +721,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
 
     # EARS: long, cupped and pointed.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -770,7 +771,8 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var mane_side = t.get("maneSide", -1.0)
     var mane_len = 0.05 if foal else t.get("maneLen", 0.2)
     var neck_ids = List[Int]()
-    for i in range(len(m.prims)):
+    # The body is already sculpted.
+    for i in range(len(m.prims)):  # pragma: no branch
         var keep = (
             m.prims[i].part != JAW
             and m.prims[i].bone != h
@@ -779,7 +781,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         if keep:
             neck_ids.append(i)
     var nl = 22
-    for i in range(nl):
+    for i in range(nl):  # pragma: no branch
         var tt = _t_at(i, nl)
         var lift = n_up * (0.028 * crest * sin(pi * min(1.0, tt * 1.15)))
         var p = _crest_top(withers, poll_t, n_up, tt) + lift
@@ -803,7 +805,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     if not foal:
         var ns = 16
         var down = normalize(-n_up + V3(0, 0, -0.15))
-        for i in range(ns):
+        for i in range(ns):  # pragma: no branch
             var tt = _t_at(i, ns)
             var lift = n_up * (0.028 * crest * sin(pi * min(1.0, tt * 1.15)))
             var p = _crest_top(withers, poll_t, n_up, tt) + lift
@@ -826,9 +828,9 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             # the crest's far edge.
             var depths: List[Float64] = [0.02, 0.02 + (ln - 0.02) * 0.5, ln]
             var sk = List[V3]()
-            for d in depths:
+            for d in depths:  # pragma: no branch
                 sk.append(_skin_x(m, neck_ids, mane_side, p + down * d))
-            for j in range(2):
+            for j in range(2):  # pragma: no branch
                 var a0 = sk[j]
                 var a1 = sk[j + 1]
                 var ax = normalize(a1 - a0)
@@ -849,7 +851,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var count = 7
         var z0 = -0.2
         var z1 = -0.035
-        for i in range(count):
+        for i in range(count):  # pragma: no branch
             var u = Float64(i) / Float64(count - 1)
             var z = z0 + (z1 - z0) * u
             var zb = z + 0.3 * (z1 - z0) / Float64(count - 1)
@@ -870,12 +872,12 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
 
     # LEGS.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         _foreleg(m, rig, side)
         _hind_leg(m, rig, side)
 
     # TAIL: the dock, then the hair as one tapered volume to the hocks.
-    for i in range(DOCK_SEGS):
+    for i in range(DOCK_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(DOCK_SEGS)
         var t1 = Float64(i + 1) / Float64(DOCK_SEGS)
         _ = m.cone(
@@ -888,7 +890,7 @@ def horse_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.06 if i == 0 else 0.01,
         )
     var n_hair = DOCK_SEGS if foal else TAIL_SEGS
-    for i in range(n_hair):
+    for i in range(n_hair):  # pragma: no branch
         var a = rig.j("tail" + String(i))
         if i == 0:
             a = lerp(rig.j("tail0"), rig.j("tail1"), 0.4)
@@ -1142,7 +1144,7 @@ def _skin_x(m: SdfModel, ids: List[Int], side: Float64, q: V3) -> V3:
     # The neck's skin on the mane side at the height and depth of `q`.
     var lo = 0.0
     var hi = 0.45
-    for _ in range(28):
+    for _ in range(28):  # pragma: no branch
         var x = 0.5 * (lo + hi)
         var inside = m.eval_list(ids, V3(side * x, q.y, q.z)) < 0.0
         lo = x if inside else lo
@@ -1155,7 +1157,7 @@ def _skin_y(m: SdfModel, ids: List[Int], z: Float64) -> Float64:
     var hf = _hf()
     var lo = 0.0
     var hi = 0.2
-    for _ in range(30):
+    for _ in range(30):  # pragma: no branch
         var y = 0.5 * (lo + hi)
         var inside = m.eval_list(ids, hf.at(V3(0, y, z))) < 0.0
         lo = y if inside else lo
@@ -1264,7 +1266,7 @@ def horse_palette(t: Traits) raises -> Palette:
         "belly",
         "head",
     ]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var c = srgb(hex[i])
         pal.set(
             tinted[i],
@@ -1282,7 +1284,7 @@ def horse_palette(t: Traits) raises -> Palette:
         var g = t.get("grayLevel", 0.4)
         var lift = srgb(0xE4E2DC)
         var amounts: List[Float64] = [0.8, 0.75, 0.8, 0.85]
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             pal.set(tinted[i], mix3(pal.get(tinted[i]), lift, g * amounts[i]))
         pal.set("points", mix3(pal.get("points"), lift, g * 0.6))
         pal.set("mane", mix3(pal.get("mane"), lift, g * 0.5))
@@ -1297,7 +1299,8 @@ def horse_palette(t: Traits) raises -> Palette:
     var head = SdfModel()
     _head(head, BoneId(0))
     var ids = List[Int]()
-    for i in range(len(head.prims)):
+    # `_head` has just sculpted the head.
+    for i in range(len(head.prims)):  # pragma: no branch
         ids.append(i)
     var no = _nostril(head, ids, 1.0)
     pal.set("nostril", no[0])

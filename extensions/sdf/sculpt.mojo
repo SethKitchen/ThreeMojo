@@ -133,6 +133,7 @@ def cone_or_ball(
     rb: Float64,
     k: Float64,
     thin: Bool = False,
+    part: SurfacePart = SurfacePart(0),
 ) raises -> Int:
     """Add a round cone, or its bigger ball when that ball holds the other.
 
@@ -149,6 +150,7 @@ def cone_or_ball(
         rb: The radius at `b`.
         k: The blend radius.
         thin: Whether coarse meshes must inflate it to stay visible.
+        part: The surface it belongs to.
 
     Returns:
         Its index.
@@ -159,5 +161,5 @@ def cone_or_ball(
     var nested = abs(ra - rb) >= length(b - a)
     if nested:
         var c = a if ra >= rb else b
-        return m.sphere(tag, bone, c, max(ra, rb), k=k, thin=thin)
-    return m.cone(tag, bone, a, b, ra, rb, k=k, thin=thin)
+        return m.sphere(tag, bone, c, max(ra, rb), k=k, part=part, thin=thin)
+    return m.cone(tag, bone, a, b, ra, rb, k=k, part=part, thin=thin)

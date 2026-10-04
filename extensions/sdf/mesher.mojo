@@ -33,6 +33,11 @@ from units.si import METER, Length
 comptime SUPER = 4
 # Maximum sample-and-spill rounds. Exhaustion must not emit a partial mesh.
 comptime SPILL_ROUNDS = 8
+# A block wakes at first when a corner is this many half-diagonals from
+# the surface or nearer. Each field is exact or a lower bound, so the
+# surface cannot reach a block whose corners are all farther than one; the
+# rest is slack. The spill wakes any block the first pass still missed.
+comptime ACTIVE_MARGIN = 1.15
 # A sample value no field takes: "not sampled".
 comptime UNSAMPLED = Float32(3.0e38)
 
@@ -427,6 +432,22 @@ def mesh_part(
             a grid size cannot fit in addressable storage, or the spill
             budget is exhausted.
     """
+    return _mesh_part(
+        model, part, low, high, cell, block, workers, ACTIVE_MARGIN
+    )
+
+
+def _mesh_part(
+    model: SdfModel,
+    part: List[Int],
+    low: V3,
+    high: V3,
+    cell: Length,
+    block: Int,
+    workers: Int,
+    margin: Float64,
+) raises -> SurfaceMesh:
+    # `mesh_part` with the first pass's margin, in half-diagonals.
     check_cell(cell, block)
     if not (
         isfinite(low.x)
@@ -458,7 +479,7 @@ def mesh_part(
     )
     _check_grid_sizes(lattice)
     var grid = _Grid(lattice)
-    _find_active(model, part, grid, kmax)
+    _find_active(model, part, grid, kmax, margin)
     _sample_band(model, part, grid, kmax, threads)
     var out = SurfaceMesh()
     var cells = List[Int]()
@@ -520,7 +541,11 @@ def _sample_band(
 
 
 def _find_active(
-    model: SdfModel, part: List[Int], mut grid: _Grid, kmax: Float64
+    model: SdfModel,
+    part: List[Int],
+    mut grid: _Grid,
+    kmax: Float64,
+    margin: Float64,
 ):
     """Sample the block corners and keep the blocks near the surface."""
     var lt = grid.lattice
@@ -555,7 +580,7 @@ def _find_active(
                     super_lists[s],
                     lt.point(i * lt.block, j * lt.block, k * lt.block),
                 )
-    var reach = big * sqrt(3.0) * 1.15 * 0.5
+    var reach = big * sqrt(3.0) * margin * 0.5
     var rho = big * sqrt(3.0) * 0.5
     for k in range(lt.bz):  # pragma: no branch
         for j in range(lt.by):  # pragma: no branch

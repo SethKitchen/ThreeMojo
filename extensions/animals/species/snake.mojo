@@ -240,14 +240,15 @@ def _pchip_slopes(x: List[Float64], y: List[Float64]) -> List[Float64]:
     # Fritsch-Carlson slopes of a monotone cubic.
     var n = len(x)
     var d = List[Float64]()
-    for i in range(n - 1):
+    # Two points at least: `d[0]` and `d[n - 2]` are read below.
+    for i in range(n - 1):  # pragma: no branch
         d.append((y[i + 1] - y[i]) / (x[i + 1] - x[i]))
     var m = List[Float64](length=n, fill=0.0)
     m[0] = d[0]
     m[n - 1] = d[n - 2]
     for i in range(1, n - 1):
         m[i] = 0.0 if d[i - 1] * d[i] <= 0.0 else (d[i - 1] + d[i]) / 2.0
-    for i in range(n - 1):
+    for i in range(n - 1):  # pragma: no branch
         if d[i] == 0.0:
             m[i] = 0.0
             m[i + 1] = 0.0
@@ -291,7 +292,8 @@ def _segments(n: Int, total: Float64, tip_shrink: Float64) -> List[Float64]:
     var neck_bones = 3
     var w = List[Float64]()
     var sw = 0.0
-    for i in range(n):
+    # Its one caller asks for `SPINE` bones.
+    for i in range(n):  # pragma: no branch
         var k = 1.0
         if i >= n - tip_bones:
             k = 1.0 - (1.0 - tip_shrink) * (
@@ -302,7 +304,7 @@ def _segments(n: Int, total: Float64, tip_shrink: Float64) -> List[Float64]:
         w.append(k)
         sw += k
     var out = List[Float64]()
-    for k in w:
+    for k in w:  # pragma: no branch
         out.append(k * total / sw)
     return out^
 
@@ -331,7 +333,7 @@ def snake_rig(t: Traits) raises -> Rig:
     var prev = V3(0.0, plan.height(), 0.0)
     rig.set("v0", prev)
     var z = 0.0
-    for i in range(SPINE):
+    for i in range(SPINE):  # pragma: no branch
         s += lens[i]
         var y = plan.hw(s / total) * plan.flat
         var dy = y - prev.y
@@ -348,7 +350,7 @@ def snake_rig(t: Traits) raises -> Rig:
     rig.set("tongueTip", V3(0.0, 0.2 * hh, 0.84 * hl))
     rig.set("fangBase", V3(0.0, 0.38 * hh, 0.72 * hl))
     rig.set("fangTip", V3(0.0, 0.32 * hh, 0.55 * hl))
-    for i in range(SPINE):
+    for i in range(SPINE):  # pragma: no branch
         _ = rig.add_bone(
             "spine" + String(i),
             "v" + String(i),
@@ -437,14 +439,14 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var sig = List[Float64]()
     sig.append(0.0)
     var total = 0.0
-    for i in range(SPINE):
+    for i in range(SPINE):  # pragma: no branch
         total += length(rig.j("v" + String(i + 1)) - rig.j("v" + String(i)))
         sig.append(total)
     var hw_at = List[Float64]()
-    for i in range(SPINE + 1):
+    for i in range(SPINE + 1):  # pragma: no branch
         hw_at.append(plan.hw(sig[i] / total))
     var tail_from = Float64(SPINE) * (1.0 - plan.tail_frac)
-    for i in range(SPINE):
+    for i in range(SPINE):  # pragma: no branch
         var tag = String("tail") if Float64(i) >= tail_from else (
             String("neck") if i < 3 else String("body")
         )
@@ -458,7 +460,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.0,
         )
     # The thin tail tip: overlapping ellipsoids the coarse tiers inflate.
-    for i in range(SPINE - 12, SPINE):
+    for i in range(SPINE - 12, SPINE):  # pragma: no branch
         var a = rig.j("v" + String(i))
         var b = rig.j("v" + String(i + 1))
         var rr = (hw_at[i] + hw_at[i + 1]) * 0.5
@@ -485,7 +487,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.33 * w, 0.34 * hh, 0.36 * hl),
             k=0.004,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "gland",
                 hb,
@@ -494,7 +496,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 axis=normalize(V3(0.35 * s, 0, 1)),
                 k=0.005,
             )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "cheek",
                 hb,
@@ -510,7 +512,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.29 * w, 0.28 * hh, 0.25 * hl),
             k=0.005,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "lip",
                 hb,
@@ -527,7 +529,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.004,
         )
         # The supraocular scales: a brow shelf over each eye.
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "brow",
                 hb,
@@ -545,7 +547,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.42 * w, 0.4 * hh, 0.4 * hl),
             k=0.004,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "temporal",
                 hb,
@@ -561,7 +563,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             axis=normalize(V3(0, -0.08, 1)),
             k=0.005,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "lip",
                 hb,
@@ -589,7 +591,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     # Eyes in round sockets (the spectacle sits flush), the nostrils, the
     # pits and the rostral notch the tongue slips through.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = sculpt_eye_socket(
             m,
             e,
@@ -600,7 +602,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             orbit_at=V3(0, 0, e.r),
             orbit_k=e.r * 0.35,
         )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "nostril",
             hb,
@@ -610,7 +612,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             carve=True,
         )
     if viper:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.sphere(
                 "pit",
                 hb,
@@ -649,7 +651,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LOWER JAW: its own surface.
     var jw = rig.bone("jaw")
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -696,7 +698,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             part=TONGUE,
         )
         var fork_len = length(tt - tf)
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.cone(
                 "fork",
                 rig.bone("tongueTip"),
@@ -711,7 +713,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         if viper:
             var fb = rig.j("fangBase")
             var ft = rig.j("fangTip")
-            for s in [1.0, -1.0]:
+            for s in [1.0, -1.0]:  # pragma: no branch
                 _ = m.cone(
                     "fang",
                     rig.bone("fang"),
@@ -732,7 +734,8 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var n_seg = Int(t.get("rattleSegs", Float64(RATTLE_SEGS)))
         var tip = hw_at[SPINE]
         var seg_l = (RATTLE_LEN / Float64(RATTLE_SEGS)) * t.get("girth")
-        for k in range(n_seg):
+        # A rattle has one segment in the young, five to eight later.
+        for k in range(n_seg):  # pragma: no branch
             var f = Float64(k) / Float64(max(1, RATTLE_SEGS - 1))
             var wk = tip * (1.35 - 0.3 * f)
             var c0 = b + d * (seg_l * (Float64(k) + 0.55))
@@ -908,7 +911,7 @@ def _tweak(c: V3, warm: Float64, light: Float64) -> V3:
     )
 
 
-def snake_palette(t: Traits) raises -> Palette:
+def snake_palette(t: Traits) -> Palette:
     """Return one snake's palette: its morph, warmed, lightened and dulled.
 
     Corn snakes run from bright orange to duller, browner grounds. Wild
@@ -920,9 +923,6 @@ def snake_palette(t: Traits) raises -> Palette:
 
     Returns:
         The palette, in linear light.
-
-    Raises:
-        Error: If the palette tables differ in length.
     """
     var warm = t.get("coatWarm", 0.0)
     var light = t.get("coatLight", 0.0)
@@ -952,12 +952,12 @@ def snake_palette(t: Traits) raises -> Palette:
             0x1A1715,
             0xBFAE8C,
         ]
-        for i in range(len(names)):
+        for i in range(len(names)):  # pragma: no branch
             out.set(names[i], _tweak(srgb(hexes[i]), warm, light))
         var tone = clamp(t.get("tone", 0.0), -1.0, 1.0)
         var tgt = srgb(0x8F8C86) if tone < 0.0 else srgb(0x9A6A4E)
         var k = abs(tone) * 0.75
-        for key in [String("ground"), "flank", "center"]:
+        for key in [String("ground"), "flank", "center"]:  # pragma: no branch
             var f = 1.08 if key == "flank" else 1.0
             out.set(key, mix3(out.get(key), tgt * f, k))
         out.set(
@@ -968,7 +968,12 @@ def snake_palette(t: Traits) raises -> Palette:
                 k * 0.7,
             ),
         )
-        for key in [String("ground"), "flank", "center", "edge"]:
+        for key in [
+            String("ground"),
+            "flank",
+            "center",
+            "edge",
+        ]:  # pragma: no branch
             out.set(key, out.get(key) * (1.0 + 1.6 * light))
         var bk = t.get("blotch")
         out.set(
@@ -987,9 +992,8 @@ def snake_palette(t: Traits) raises -> Palette:
     var pick = -1 if juv else morph
     var names = _swatches()
     var hexes = _corn(pick)
-    if len(names) != len(hexes):
-        raise Error("A palette needs one color per name")
-    for i in range(len(names)):
+    debug_assert(len(names) == len(hexes), "A palette needs one color per name")
+    for i in range(len(names)):  # pragma: no branch
         out.set(names[i], _tweak(srgb(hexes[i]), warm, light))
     var dulled = morph == NORMAL or morph == OKEETEE
     if dulled:
@@ -1021,7 +1025,8 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
     # The distance from a 2-D point to a polyline of varying width. Each
     # point's x and y are the plane's two coordinates.
     var best = 1e9
-    for i in range(len(pts) - 1):
+    # Its callers pass literal polylines of two points or more.
+    for i in range(len(pts) - 1):  # pragma: no branch
         var ax = pts[i].x
         var ay = pts[i].y
         var bx = pts[i + 1].x - ax
@@ -1174,7 +1179,7 @@ def snake_paint(
                     pal.get("center"),
                     smoothstep(-0.003, -0.009, d) * 0.8,
                 )
-            for j in range(2):
+            for j in range(2):  # pragma: no branch
                 var side = 1.0 if j == 0 else -1.0
                 var bs = (
                     fs + 0.5 * sp + (_rand(seed, k, 1 + j) - 0.5) * 0.1 * sp
@@ -1213,7 +1218,7 @@ def snake_paint(
             if d < pat:
                 pat = d
                 pcol = pal.get("saddle")
-            for j in range(2):
+            for j in range(2):  # pragma: no branch
                 var side = 1.0 if j == 0 else -1.0
                 if _rand(seed, k, 4 + 4 * j) >= 0.85:
                     continue

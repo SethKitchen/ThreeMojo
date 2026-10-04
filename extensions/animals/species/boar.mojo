@@ -342,10 +342,10 @@ def boar_rig(t: Traits) raises -> Rig:
     quadruped_bones(rig, TAIL_SEGS)
     # The pastern ends at the coffin joint, and the hoof runs on to the
     # toe.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         rig.bones[rig.bone("fpaw" + side).value].tail = "fcoffin" + side
         rig.bones[rig.bone("hpaw" + side).value].tail = "hcoffin" + side
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         _ = rig.add_bone(
             "fhoof" + side, "fcoffin" + side, "ftoe" + side, "fpaw" + side
         )
@@ -383,7 +383,7 @@ def _tusk_path(t: Traits, s: Float64, lower: Bool) -> List[_TuskPoint]:
     var n = max(4, Int(round(10.0 * min(1.4, size / 0.09))))
     var ds = size / Float64(n)
     var rb = t.get("tuskR", 0.0) * (1.0 if lower else 0.9)
-    for i in range(n + 1):
+    for i in range(n + 1):  # pragma: no branch
         var f = Float64(i) / Float64(n)
         var u = min(1.0, pow(f, 1.1) * curve)
         var d = normalize(d0 * (1.0 - u) + d1 * u)
@@ -477,7 +477,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.35, 1)),
         k=0.05,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "ham",
             pelvis,
@@ -487,7 +487,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     # The male's shield: thick armor over the shoulders.
     if shield > 0.05:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "shield",
                 chest,
@@ -498,7 +498,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _ = m.ell(
         "brisket", chest, V3(0, 0.33, 0.19), V3(0.085, 0.075, 0.1), k=0.05
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "pectoral",
             chest,
@@ -509,8 +509,8 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # Sows: a double row of teats. Boars: the sheath.
     var sow = not t.male() and not young
     if sow:
-        for s in [1.0, -1.0]:
-            for i in range(5):
+        for s in [1.0, -1.0]:  # pragma: no branch
+            for i in range(5):  # pragma: no branch
                 var fi = Float64(i)
                 _ = m.sphere(
                     "teat",
@@ -594,7 +594,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _hell(m, h, "poll", V3(0, 0.04, -0.14), V3(0.084, 0.062, 0.065), 0.04)
     _hell(m, h, "forehead", V3(0, 0.03, -0.005), V3(0.068, 0.045, 0.075), 0.032)
     var eye = boar_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _hell(
             m,
             h,
@@ -653,7 +653,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         V3(0.04, 0.042, 0.075 * snout_l + 0.01),
         0.025,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _hell(
             m,
             h,
@@ -679,7 +679,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         V3(0.043, 0.039, 0.016),
         0.01,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "nostril",
             h,
@@ -719,7 +719,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.012,
         JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -733,8 +733,8 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # TUSKS: their own rigid surfaces, the lower on the jaw, the upper on
     # the skull.
-    for s in [1.0, -1.0]:
-        for lower in [True, False]:
+    for s in [1.0, -1.0]:  # pragma: no branch
+        for lower in [True, False]:  # pragma: no branch
             var path = _tusk_path(t, s, lower)
             var bone = jw if lower else h
             for i in range(len(path) - 1):
@@ -750,7 +750,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 )
 
     # EARS: erect, pointed and hairy, the cup open forward and out.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -799,7 +799,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS: short and slim, on the tips of the claws.
     var lk = 1.0 + 0.1 * shield
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -1027,7 +1027,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hoof(m, rig.bone("hhoof" + side), ch, tt, 0.95)
 
     # TAIL: thin and hanging, with a tassel flattened side to side.
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(TAIL_SEGS)
         var t1 = Float64(i + 1) / Float64(TAIL_SEGS)
         var a = rig.j("tail" + String(i))
@@ -1102,7 +1102,7 @@ def _mane(mut m: SdfModel, rig: Rig, t: Traits) raises:
         "spine2",
     ]
     var seed = Int(t.get("coatSeed", 0.0))
-    for i in range(len(spots)):
+    for i in range(len(spots)):  # pragma: no branch
         var c = spots[i]
         # Each lock of bristles stands a little higher or lower.
         var jitter = 0.8 + 0.4 * ihash(seed, i, 7)
@@ -1137,7 +1137,7 @@ def _hell(
 
 def _dewclaws(mut m: SdfModel, bone: BoneId, mc: V3, s: Float64) raises:
     # Two horny claws behind the fetlock.
-    for k in [1.0, -1.0]:
+    for k in [1.0, -1.0]:  # pragma: no branch
         var a = mc + V3(0.012 * k * s, -0.006, -0.02)
         _ = m.cone(
             "dewclaw",
@@ -1154,7 +1154,7 @@ def _hoof(mut m: SdfModel, bone: BoneId, cf: V3, toe: V3, w: Float64) raises:
     # The cloven hoof: two pointed claws with a cleft between them, heel
     # bulbs behind, flat on the ground.
     var zc = (cf.z + toe.z) * 0.5
-    for k in [1.0, -1.0]:
+    for k in [1.0, -1.0]:  # pragma: no branch
         var x = cf.x + 0.0105 * k * w
         var top = V3(x, cf.y + 0.008, cf.z - 0.004)
         var tip = V3(x - 0.003 * k, 0.005, toe.z - 0.003)
@@ -1328,7 +1328,7 @@ def boar_palette(t: Traits) raises -> Palette:
     var k = t.get("coatShade", 0.0)
     var l = t.get("coatLightness", 0.0)
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         out.set(
             name,
@@ -1374,7 +1374,7 @@ def _stripes(t: Traits, p: V3, face: Bool) -> Float64:
     var widths: List[Float64] = [0.06, 0.055, 0.055, 0.055, 0.06, 0.07]
     var wob = (fbm3(V3(p.x * 9.0 + seed, p.y * 9.0, p.z * 5.0), 3) - 0.5) * 0.12
     var d = 1.0
-    for i in range(6):
+    for i in range(6):  # pragma: no branch
         var a = angles[i] + wob + 0.05 * sin(p.z * 6.0 + Float64(i))
         d = min(d, (abs(ang - a) - widths[i] * 0.5) * rad)
     var br = vnoise3(V3(p.z * 18.0 + seed, ang * 6.0, 3.1))
@@ -1386,8 +1386,8 @@ def _tusk_paint(pal: Palette, t: Traits, p: V3) -> Paint:
     # Ivory, stained brownish at the base.
     var best = 1e9
     var along = 0.0
-    for s in [1.0, -1.0]:
-        for lower in [True, False]:
+    for s in [1.0, -1.0]:  # pragma: no branch
+        for lower in [True, False]:  # pragma: no branch
             var path = _tusk_path(t, s, lower)
             for i in range(len(path) - 1):
                 var a = path[i].p

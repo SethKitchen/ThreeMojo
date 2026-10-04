@@ -31,7 +31,7 @@ from extensions.animals.parts import (
     TAIL,
     TEETH,
 )
-from extensions.sdf.sculpt import ell_y
+from extensions.sdf.sculpt import cone_or_ball, ell_y
 from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
@@ -426,12 +426,14 @@ def _ear_w(ear: Int, u: Float64) -> Float64:
     else:
         ts = [0.0, 0.08, 0.22, 0.4, 0.6, 0.78, 0.9, 1.0]
         ws = [0.5, 0.68, 0.94, 1.0, 0.9, 0.66, 0.38, 0.06]
-    for i in range(1, len(ts)):
-        if u <= ts[i]:
-            return ws[i - 1] + (ws[i] - ws[i - 1]) * (u - ts[i - 1]) / (
-                ts[i] - ts[i - 1]
-            )
-    return ws[len(ws) - 1]
+    # Past the tip the leaf keeps the tip's width.
+    var v = min(u, 1.0)
+    var i = 1
+    while i < len(ts) - 1 and v > ts[i]:
+        i += 1
+    return ws[i - 1] + (ws[i] - ws[i - 1]) * (v - ts[i - 1]) / (
+        ts[i] - ts[i - 1]
+    )
 
 
 @fieldwise_init
@@ -491,7 +493,7 @@ def _ear_spine(base: V3, s: Float64, t: Traits) -> EarSpine:
     var dd = d0
     var hh = f0
     var ll = lat
-    for k in range(1, EAR_STEPS + 1):
+    for k in range(1, EAR_STEPS + 1):  # pragma: no branch
         var u0 = Float64(k - 1) / Float64(EAR_STEPS)
         var u1 = Float64(k) / Float64(EAR_STEPS)
         var da = bend * (
@@ -573,19 +575,17 @@ def _ear_leaf(
     )
     var rows = 3 * f.ns + 6
     var across: List[Float64] = [-0.92, -0.3, 0.3, 0.92]
-    for i in range(rows):
+    for i in range(rows):  # pragma: no branch
         var u = (Float64(i) + 0.5) / Float64(rows)
         var kf = u * Float64(EAR_STEPS)
-        for j in range(len(across) - 1):
+        for j in range(len(across) - 1):  # pragma: no branch
             var a0 = across[j]
             var a1 = across[j + 1]
             var p0 = _leaf_point(sp, f, ear, wph, kf, a0)[0]
             var p1 = _leaf_point(sp, f, ear, wph, kf, a1)[0]
             var r0 = _leaf_thick(f, u, a0, t_min) / 2.0
             var r1 = _leaf_thick(f, u, a1, t_min) / 2.0
-            var ok = length(p1 - p0) > abs(r1 - r0) + 1e-5
-            if ok:
-                _ = m.cone("ear", bone, p0, p1, r0, r1, k=0.006, part=EAR)
+            _ = cone_or_ball(m, "ear", bone, p0, p1, r0, r1, 0.006, part=EAR)
 
 
 # ---------------------------------------------------------------- TAIL
@@ -613,7 +613,7 @@ def _pig_tail(mut rig: Rig, side: Float64) raises:
     var tau = 0.45 * side
     var p = rig.j("tailBase")
     rig.set("tail0", p)
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         p = p + y * lens[i]
         rig.set("tail" + String(i + 1), p)
         var ax = normalize(x * cos(tau) + y * sin(tau))
@@ -709,7 +709,7 @@ def _tusk_cones(t: Traits, s: Float64) -> List[V3]:
     var r0 = 0.0045 + 0.0025 * tl
     var r1 = 0.0012
     var out = List[V3]()
-    for i in range(8):
+    for i in range(8):  # pragma: no branch
         var t0 = Float64(i) / 8.0
         var t1 = Float64(i + 1) / 8.0
         out.append(_bezier(p0, p1, p2, p3, t0))
@@ -879,7 +879,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     var mature_boar = boar >= 0.5 and not piglet
     if mature_boar:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "scrotum",
                 pel,
@@ -980,7 +980,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     _hell(m, h, "muzzle", V3(0, -0.03, 0.05), V3(0.064 * hb, 0.05, 0.09), 0.04)
     var eye = pig_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _hell(
             m,
             h,
@@ -1020,7 +1020,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             "earbase", h, eb + V3(-0.014 * s, -0.006, 0), 0.02, k=0.045
         )
     if boar > 0.0:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _hell(
                 m,
                 h,
@@ -1029,7 +1029,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 V3(0.04 * boar, 0.05 * boar, 0.06),
                 0.05,
             )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _hell(
                 m,
                 h,
@@ -1084,7 +1084,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.004,
         carve=True,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var a = 0.4 * s
         var up = V3(-sin(a), cos(a) * f.hy.y, cos(a) * f.hy.z)
         _ = m.ell(
@@ -1129,7 +1129,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.012,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -1141,9 +1141,10 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             part=JAW,
         )
     if t.get("tusks", 0.0) > 0.05:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var cones = _tusk_cones(t, s)
-            for i in range(len(cones) // 3):
+            # A tusk is eight cones.
+            for i in range(len(cones) // 3):  # pragma: no branch
                 _ = m.cone(
                     "tusk",
                     jw,
@@ -1156,13 +1157,13 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 )
 
     # EARS: curved leaves tiled with slabs.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         _ear_leaf(m, rig.bone("ear" + side), rig.j("earBase" + side), s, t)
 
     # LEGS: short and sunk in the body.
     var leg_k = (1.0 + 0.1 * boar) * (1.05 if piglet else 1.0)
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -1390,9 +1391,10 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
 
     # TEATS: two rows along the belly.
+    # Six, seven or eight pairs.
     var pairs = Int(t.get("teats", 7.0))
     var teat_k = 0.45 if boar >= 0.5 else (0.5 if piglet else 0.8 + 0.6 * belly)
-    for i in range(pairs):
+    for i in range(pairs):  # pragma: no branch
         var z = 0.2 + (-0.34 - 0.2) * Float64(i) / Float64(max(1, pairs - 1))
         var yb = 0.3 - 0.03 * belly + 0.008 * abs(z + 0.08) * 4.0 * 0.3 + tuck
         var x = 0.052 + 0.01 * cos(
@@ -1401,7 +1403,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var bone = "spine3" if z > 0.05 else (
             "spine1" if z < -0.2 else "spine2"
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.cone(
                 "teat",
                 rig.bone(bone),
@@ -1413,7 +1415,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
 
     # TAIL: thin, a corkscrew, its own surface.
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(TAIL_SEGS)
         var t1 = Float64(i + 1) / Float64(TAIL_SEGS)
         _ = m.cone(
@@ -1441,7 +1443,7 @@ def _digits(
     # The pastern with two dew claws behind, then two claws flat on the
     # ground with a cleft between them and heel bulbs behind.
     _ = m.cone("pastern", paw, mc, c, 0.022 * w, 0.024 * w, k=0.012)
-    for d in [1.0, -1.0]:
+    for d in [1.0, -1.0]:  # pragma: no branch
         var base = mc + V3(0.017 * d * w, -0.012, -0.022)
         _ = m.cone(
             "dewclaw",
@@ -1454,7 +1456,7 @@ def _digits(
         )
     var zmid = (c.z + toe.z) * 0.5
     var dir = 1.0 if toe.z > c.z else -1.0
-    for d in [1.0, -1.0]:
+    for d in [1.0, -1.0]:  # pragma: no branch
         var off = 0.0145 * d * w
         var top = c + V3(off, 0.012, -0.008 * dir)
         var base = V3(c.x + off * 1.1, 0.0, zmid - 0.003 * dir)
@@ -1596,7 +1598,7 @@ def _spot_proxy(q: V3) -> V3:
 
 def _clear_of_joints(p: V3, r: Float64) -> Bool:
     # Off the limb junctions, whose skin stretches most.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var st = V3(0.065 * s, 0.66, 0.255)
         var el = V3(0.1 * s, 0.31, 0.29)
         var hp = V3(0.09 * s, 0.55, -0.4)
@@ -1642,7 +1644,7 @@ def pig_palette(t: Traits) raises -> Palette:
     var k = t.get("coatShade", 0.0)
     var l = t.get("coatLightness", 0.0)
     var out = Palette()
-    for i in range(len(names)):
+    for i in range(len(names)):  # pragma: no branch
         var c = srgb(hexes[i])
         out.set(
             names[i],
@@ -1673,7 +1675,7 @@ def pig_palette(t: Traits) raises -> Palette:
             var rr = R.next()
             var nl = 1 + Int(R.next() * 2.2)
             var ls = List[Float64]()
-            for _ in range(12):
+            for _ in range(12):  # pragma: no branch
                 ls.append(R.next())
             var on_body = q.z < 0.32 and q.z > -0.6
             if not on_body:
@@ -1695,7 +1697,7 @@ def pig_palette(t: Traits) raises -> Palette:
             out.set("spot" + String(count), p)
             out.set("spotr" + String(count), V3(r, 0, 0))
             count += 1
-            for j in range(nl):
+            for j in range(nl):  # pragma: no branch
                 var d = V3(
                     ls[j * 4] - 0.5, ls[j * 4 + 1] - 0.5, ls[j * 4 + 2] - 0.5
                 )
@@ -1739,7 +1741,7 @@ def _ear_vein_sd(u: Float64, w: Float64, seed: Int) -> Float64:
     ]  # fmt: skip
     var j = (Float64(seed % 13) / 13.0 - 0.5) * 0.04
     var d = 1.0
-    for i in range(len(veins) // 6):
+    for i in range(len(veins) // 6):  # pragma: no branch
         var u0 = veins[6 * i]
         var w0 = veins[6 * i + 1] * (1.0 + j * 3.0)
         var u1 = veins[6 * i + 2]

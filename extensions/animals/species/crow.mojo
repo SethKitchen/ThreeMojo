@@ -225,7 +225,7 @@ def _feathers() -> List[Feather]:
         [0.91, 0.200, 0.022, 12, 1, 1],
         [1.00, 0.122, 0.019, 5, 0.5, 0.6],
     ]
-    for i in range(len(p)):
+    for i in range(len(p)):  # pragma: no branch
         ref q = p[i]
         out.append(primary(i, len(p), q[0], q[1], q[2], q[3], q[4], emarg=q[5]))
     var s: List[List[Float64]] = [
@@ -239,7 +239,7 @@ def _feathers() -> List[Feather]:
         [0.81, 0.122, 0.031, 116, 178],
         [0.92, 0.108, 0.030, 125, 179],
     ]
-    for i in range(len(s)):
+    for i in range(len(s)):  # pragma: no branch
         ref q = s[i]
         out.append(secondary(i, len(s), len(p), q[0], q[1], q[2], q[3], q[4]))
     var rc: List[List[Float64]] = [
@@ -250,7 +250,7 @@ def _feathers() -> List[Feather]:
         [0.010, 0.158, 0.030, 47, 2.5, -4],
         [0.012, 0.150, 0.029, 58, 3, -5],
     ]
-    for i in range(len(rc)):
+    for i in range(len(rc)):  # pragma: no branch
         ref q = rc[i]
         out.append(rectrix(i, len(rc), q[0], q[1], q[2], q[3], q[4], bend=q[5]))
     return out^
@@ -385,7 +385,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0.0, 0.1, 1.0)),
         k=0.012,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "flankfold",
             pelvis,
@@ -414,14 +414,14 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # NECK: tapering from 30 mm at the base to 19 mm at the skull.
     var nj = List[String]()
     nj.append("neckBase")
-    for i in range(1, NECK_SEGS):
+    for i in range(1, NECK_SEGS):  # pragma: no branch
         nj.append("neck" + String(i))
     nj.append("occiput")
     var nr = List[Float64]()
-    for i in range(NECK_SEGS + 1):
+    for i in range(NECK_SEGS + 1):  # pragma: no branch
         var u = Float64(i) / Float64(NECK_SEGS)
         nr.append(0.03 - 0.011 * pow(u, 0.8))
-    for i in range(NECK_SEGS):
+    for i in range(NECK_SEGS):  # pragma: no branch
         _ = m.cone(
             "neck",
             rig.bone("neck" + String(i)),
@@ -482,7 +482,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.012,
     )
     var eye = crow_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "cheek",
             h,
@@ -566,7 +566,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
 
     # LEGS: feathered trousers, then the bare tibia, the tarsus and toes.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var kn = rig.j("knee" + side)
         var an = rig.j("ankle" + side)
         var mt = rig.j("mtp" + side)
@@ -593,7 +593,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone("shank", tib, lerp(kn, an, 0.7), an, 0.0055, 0.0045, k=0.004)
         _ = m.cone("tarsus", tar, an, mt, 0.0044, 0.0036, k=0.003)
         _ = m.sphere("pad", tar, mt + V3(0.0, -0.0015, 0.001), 0.0045, k=0.003)
-        for toe in range(1, 5):
+        for toe in range(1, 5):  # pragma: no branch
             var ts = String(toe)
             var b = rig.j("t" + ts + "m" + side)
             var c = rig.j("t" + ts + "t" + side)
@@ -605,7 +605,7 @@ def crow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             _ = m.cone("claw", tb, lerp(b, c, 0.65), c, 0.0015, 0.0003, k=0.001)
 
     # WINGS: the arm. The flight feathers follow as fins.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var sh = rig.j("shoulder" + side)
         var el = rig.j("elbow" + side)

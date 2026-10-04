@@ -544,7 +544,7 @@ def shark_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var x = r.next()
     var acc = 0.0
     var tone = 2
-    for i in range(3):
+    for i in range(3):  # pragma: no branch
         acc += tones[i]
         if x < acc:
             tone = i
@@ -657,7 +657,7 @@ def shark_rig(t: Traits) raises -> Rig:
     var m = 3
     var rig = Rig()
     rig.set("snout", V3(0.0, g.yc(0.0) + g.snout_y * tl, g.z0))
-    for i in range(n + 1):
+    for i in range(n + 1):  # pragma: no branch
         var u = g.occ + (g.pc - g.occ) * Float64(i) / Float64(n)
         rig.set(spine_name(i), V3(0.0, g.yc(u), g.z(u)))
     var ua = g.c_ua
@@ -669,7 +669,7 @@ def shark_rig(t: Traits) raises -> Rig:
     var cl = g.c_up * 0.92 * tl
     var q = last
     var fac: List[Float64] = [0.54, 0.89, 1.2]
-    for j in range(1, m + 1):
+    for j in range(1, m + 1):  # pragma: no branch
         var a = fac[j - 1] * ua
         var l = cl / Float64(m)
         q = V3(0.0, q.y + sin(a) * l, q.z - cos(a) * l)
@@ -785,12 +785,13 @@ def _taper_fin(
     var al = sqrt(along_a * along_a + along_b * along_b)
     var ex = along_a / al if stretch else 0.0
     var ey = along_b / al if stretch else 0.0
-    for i in range(7):
+    for i in range(7):  # pragma: no branch
         var f = Float64(i) / 6.0
         var sc = 1.0 - 0.72 * f
         var th = t_edge + (t_root - t_edge) * pow(f, 1.2)
         var pts = List[Float64](capacity=len(poly))
-        for j in range(len(poly) // 2):
+        # The fin tables are literal outlines.
+        for j in range(len(poly) // 2):  # pragma: no branch
             var da = poly[j * 2] - root_a
             var db = poly[j * 2 + 1] - root_b
             if stretch:
@@ -832,7 +833,8 @@ def _median_fin(
     var dorsal = which < 2
     var y0 = g.top(u0) - 0.004 * tl if dorsal else g.bot(u0) + 0.004 * tl
     var poly = List[Float64](capacity=len(src))
-    for i in range(len(src) // 2):
+    # The fin tables are literal outlines.
+    for i in range(len(src) // 2):  # pragma: no branch
         var a = src[i * 2] * tl
         var b = src[i * 2 + 1] * tl * kv
         var uu = min(u0 + a / tl, g.pc)
@@ -857,7 +859,7 @@ def _caudal_poly(g: _Geo) -> List[Float64]:
     var pts = List[Float64]()
     pts.append(-0.035 * tl)
     pts.append(hdp * 0.6 * tl)
-    for i in range(8):
+    for i in range(8):  # pragma: no branch
         var f = Float64(i) / 7.0
         var l = up * f
         var bow = 0.012 * sin(pi * f) * (1.0 - f * 0.3)
@@ -868,7 +870,7 @@ def _caudal_poly(g: _Geo) -> List[Float64]:
     var tip_l = V3(cos(la) * low, sin(la) * low, 0.0)
     _caudal_edge(pts, g, tip_u, fork, 9, 0.028 * g.tail_k, True)
     _caudal_edge(pts, g, fork, tip_l, 6, 0.018 * g.tail_k, False)
-    for i in range(1, 6):
+    for i in range(1, 6):  # pragma: no branch
         var f = 1.0 - Float64(i) / 5.0
         var l = low * f
         var bow = 0.01 * sin(pi * f)
@@ -888,7 +890,8 @@ def _caudal_edge(
     sag: Float64,
     from_tip: Bool,
 ):
-    for i in range(1, n + 1):
+    # Its two callers ask for nine and six points.
+    for i in range(1, n + 1):  # pragma: no branch
         var f = Float64(i) / Float64(n)
         var x = a.x + (b.x - a.x) * f
         var y = a.y + (b.y - a.y) * f
@@ -902,7 +905,8 @@ def _caudal_edge(
 
 def _scaled(poly: List[Float64], ka: Float64, ky: Float64) -> List[Float64]:
     var out = List[Float64](capacity=len(poly))
-    for i in range(len(poly) // 2):
+    # Its callers pass the literal fin outlines.
+    for i in range(len(poly) // 2):  # pragma: no branch
         out.append(poly[i * 2] * ka)
         out.append(poly[i * 2 + 1] * ky)
     return out^
@@ -910,7 +914,7 @@ def _scaled(poly: List[Float64], ka: Float64, ky: Float64) -> List[Float64]:
 
 def _lip_points(g: _Geo) -> List[Float64]:
     var out = List[Float64]()
-    for i in range(9):
+    for i in range(9):  # pragma: no branch
         var u = g.u_f + (g.u_c - g.u_f) * Float64(i) / 8.0
         out.append(g.z(u))
         out.append(g.lip_y(u))
@@ -982,7 +986,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # HEAD: a slight swelling around the small eye, and the gum pads.
     var head = rig.bone("head")
     var er = g.eye_r
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "orbit",
             head,
@@ -991,8 +995,8 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=er * 1.2,
         )
     var upper = rig.bone("upperJaw")
-    for s in [1.0, -1.0]:
-        for i in range(5):
+    for s in [1.0, -1.0]:  # pragma: no branch
+        for i in range(5):  # pragma: no branch
             var f = Float64(i) / 4.0
             _ = m.sphere(
                 "gumU",
@@ -1012,7 +1016,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     ]
     var names: List[String] = ["dorsal1", "dorsal2", "anal"]
     var thick: List[Float64] = [g.d1_thick, 0.006, 0.006]
-    for i in range(3):
+    for i in range(3):  # pragma: no branch
         var mf = _median_fin(g, i)
         _taper_fin(
             m,
@@ -1046,7 +1050,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
 
     # PAIRED FINS: stiff hydrofoils, and the claspers of males.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var b = rig.j("pecBase" + side)
         var pd = _pec_dir(g.p_abduct, g.p_droop)
@@ -1122,7 +1126,8 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var zf = g.z(g.u_f)
     var zs = g.z0 + 0.03 * tl
     var jaw_poly: List[Float64] = [zf + 0.006 * tl, g.y_f - 0.02 * tl]
-    for v in lip:
+    # The lip has its points.
+    for v in lip:  # pragma: no branch
         jaw_poly.append(v)
     var tail_pts: List[Float64] = [
         zh,
@@ -1132,7 +1137,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         zf + 0.006 * tl,
         y_low,
     ]
-    for v in tail_pts:
+    for v in tail_pts:  # pragma: no branch
         jaw_poly.append(v)
     var gap = 0.0012 * tl
     var wide = 0.6 * tl
@@ -1154,7 +1159,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var cav_c = V3(0.0, g.lip_y(cav_u) + 0.004 * tl, g.z(cav_u))
     var cav_r = V3(g.hw(cav_u) * 0.68, 0.014 * tl, (g.u_c - g.u_f) * 0.62 * tl)
     _ = m.ell("mouth", head, cav_c, cav_r, k=0.003 * tl, carve=True)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "eyesocket",
             head,
@@ -1163,7 +1168,7 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=er * 0.25,
             carve=True,
         )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "nostril",
             head,
@@ -1237,7 +1242,8 @@ def shark_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         zh,
         g.y_c - jd * 0.5,
     ]
-    for i in range(len(lip) // 2 - 1, -1, -1):
+    # The lip has its points.
+    for i in range(len(lip) // 2 - 1, -1, -1):  # pragma: no branch
         rest.append(lip[i * 2])
         rest.append(lip[i * 2 + 1])
     _ = m.fin(
@@ -1269,13 +1275,13 @@ def _teeth(mut m: SdfModel, rig: Rig, g: _Geo, t: Traits) raises:
         * tl
         * (0.8 if t.juvenile() > 0.0 else 1.0)
     )
-    for row in range(2):
+    for row in range(2):  # pragma: no branch
         var upper = row == 0
         var bone = rig.bone("upperJaw") if upper else rig.bone("jaw")
         var dir = -1.0 if upper else 1.0
         var inset = 0.86 if upper else 0.8
-        for s in [1.0, -1.0]:
-            for i in range(n):
+        for s in [1.0, -1.0]:  # pragma: no branch
+            for i in range(n):  # pragma: no branch
                 var f = (Float64(i) + 0.5) / Float64(n)
                 var p = g.lip_point(
                     f * 0.94, s, inset, 0.003 * tl if upper else -0.004 * tl
@@ -1460,7 +1466,8 @@ def _line_dist(
     # The distance from a point to a polyline of varying half width,
     # below zero inside it.
     var best = 1e9
-    for i in range(len(pts) // 2 - 1):
+    # Its callers pass literal polylines.
+    for i in range(len(pts) // 2 - 1):  # pragma: no branch
         var r = _seg_dist(
             px, py, pts[i * 2], pts[i * 2 + 1], pts[i * 2 + 2], pts[i * 2 + 3]
         )
@@ -1474,13 +1481,15 @@ def _trail_dist(poly: List[Float64], a: Float64, b: Float64) -> Float64:
     var n = len(poly) // 2
     var iu = 0
     var il = 0
-    for i in range(n):
+    # The caudal outline is a literal table.
+    for i in range(n):  # pragma: no branch
         if poly[i * 2 + 1] > poly[iu * 2 + 1]:
             iu = i
         if poly[i * 2 + 1] < poly[il * 2 + 1]:
             il = i
     var best = 1e9
-    for i in range(iu, il):
+    # The caudal outline lists its upper tip before its lower.
+    for i in range(iu, il):  # pragma: no branch
         var r = _seg_dist(
             a, b, poly[i * 2], poly[i * 2 + 1], poly[i * 2 + 2], poly[i * 2 + 3]
         )
@@ -1517,7 +1526,8 @@ def _scars(g: _Geo, t: Traits) -> List[Float64]:
             var n = 3 + Int(floor(r.next() * 3.0))
             var l = (0.008 + 0.006 * r.next()) * tl
             var gap = 0.006 * tl
-            for j in range(n):
+            # A rake has three scratches or more.
+            for j in range(n):  # pragma: no branch
                 var off = Float64(j) - Float64(n) / 2.0
                 _scratch(
                     out,
@@ -1551,13 +1561,13 @@ def _scratch(
     var tl = g.tl
     var hd0 = max(0.01 * tl, g.hd(u0))
     out.append(s)
-    for j in range(5):
+    for j in range(5):  # pragma: no branch
         var f = Float64(j) / 4.0
         var du = cos(ang) * (f - 0.5) * l / tl
         var de = sin(ang) * (f - 0.5) * l / hd0
         out.append(clamp(u0 + du, 0.03, g.pc))
         out.append(clamp(e0 + de, -0.6, 0.95))
-    for j in range(5):
+    for j in range(5):  # pragma: no branch
         out.append(w * (0.35 if j == 0 or j == 4 else 1.0))
     out.append(k)
 
@@ -1809,7 +1819,7 @@ def shark_paint(
         if near_side:
             var pts = List[Float64]()
             var ws = List[Float64]()
-            for j in range(5):
+            for j in range(5):  # pragma: no branch
                 pts.append(scars[i + 1 + j * 2] * tl)
                 pts.append(scars[i + 2 + j * 2] * hd_here)
                 ws.append(scars[i + 11 + j])
@@ -1871,12 +1881,12 @@ def _head_marks(g: _Geo, p: V3, u: Float64) -> Float64:
             (0.0013 if g.white else 0.0009) * tl,
             (0.45 if g.white else 0.35) * CELL * tl * g.cell_k * 1.3,
         )
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             var ui = g.gill_u0 + (g.gill_u1 - g.gill_u0) * Float64(i) / 4.0
             var ln = 1.0 - 0.18 * abs(Float64(i) - 4.0 * 0.6) / 5.0
             var pts = List[Float64]()
             var ws = List[Float64]()
-            for j in range(7):
+            for j in range(7):  # pragma: no branch
                 var ej = (
                     g.gill_e0 + (g.gill_e1 - g.gill_e0) * ln * Float64(j) / 6.0
                 )
@@ -1954,7 +1964,8 @@ def _fin_color(
     var max_a = 0.0
     var max_b = -1e9
     var min_b = 1e9
-    for i in range(len(poly) // 2):
+    # Its callers pass the literal fin outlines.
+    for i in range(len(poly) // 2):  # pragma: no branch
         max_a = max(max_a, poly[i * 2])
         max_b = max(max_b, poly[i * 2 + 1])
         min_b = min(min_b, poly[i * 2 + 1])

@@ -111,7 +111,7 @@ def fox_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var sex = pick_sex(options.sex, r)
     var age = pick_age(options.age)
     var m = hashed_stream(options.seed, 0x3C6EF372, 0x9E3779B1, 0x5BE0CD19)
-    for _ in range(3):
+    for _ in range(3):  # pragma: no branch
         _ = m.next()
     var weights: List[Float64] = [0.7, 0.12, 0.08, 0.1]
     var variant = pick_variant(options.variant.value, weights, m.next())
@@ -171,7 +171,7 @@ def fox_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     )
     if juv > 0.0:
         # Big kit paws.
-        for paw in [
+        for paw in [  # pragma: no branch
             V3(0.028, 0.015, 0.2),
             V3(-0.028, 0.015, 0.2),
             V3(0.033, 0.015, -0.2),
@@ -276,10 +276,10 @@ def fox_rig(t: Traits) raises -> Rig:
     var tk = t.get("tail") * 0.4
     var w = _tail_weights()
     var ws = 0.0
-    for x in w:
+    for x in w:  # pragma: no branch
         ws += x
     var lens = List[Float64]()
-    for x in w:
+    for x in w:  # pragma: no branch
         lens.append(x / ws * tk)
     tail_chain(rig, "tailBase", _tail_angles(), lens)
     rig.mirror_joints()
@@ -385,7 +385,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _ = m.ell(
         "croup", b, V3(0, 0.36, -0.165), V3(0.028 * slim, 0.022, 0.06), k=0.025
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "rump",
             b,
@@ -470,7 +470,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.3, 1)),
         k=0.025,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "brow",
             h,
@@ -576,7 +576,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hr(t, V3(0.008, 0.011, 0.008)),
         k=0.007,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         _ = ell_y(
             m,
@@ -635,7 +635,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -657,7 +657,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: big, erect, triangular, deeply cupped in front.
     var ek = t.get("ear")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -727,7 +727,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: long and thin, with small neat paws.
     var bk = t.get("boneK")
     var pk = t.get("pawK")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         _fore_leg(m, rig, side, s, bk, pk)
         _hind_leg(m, rig, side, s, bk, pk)
@@ -743,7 +743,7 @@ def fox_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _tail_radius(0.1, tb),
         k=0.022,
     )
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -833,7 +833,7 @@ def _fore_leg(
     _ = m.sphere("pad", fpaw, mc + V3(0, -0.0125, 0.006), 0.0065 * pk, k=0.006)
     var toe_x: List[Float64] = [-0.0105, -0.0036, 0.0036, 0.0105]
     var toe_z: List[Float64] = [-0.0055, 0, 0, -0.0055]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             fpaw,
@@ -845,7 +845,7 @@ def _fore_leg(
             0.0058 * pk,
             k=0.004,
         )
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var x = toe.x + toe_x[i] * pk * s * 0.95
         _ = m.cone(
             "claw",
@@ -973,7 +973,7 @@ def _hind_leg(
     _ = m.sphere("pad", hpaw, mt + V3(0, -0.0125, 0.005), 0.006 * pk, k=0.006)
     var toe_x: List[Float64] = [-0.0105, -0.0036, 0.0036, 0.0105]
     var toe_z: List[Float64] = [-0.0055, 0, 0, -0.0055]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             hpaw,
@@ -985,7 +985,7 @@ def _hind_leg(
             0.0054 * pk,
             k=0.004,
         )
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var x = tt.x + toe_x[i] * pk * 0.88 * s
         _ = m.cone(
             "claw",
@@ -1178,7 +1178,7 @@ def fox_palette(t: Traits) raises -> Palette:
     var juv = t.juvenile()
     var kit = srgb(0x7A6450) * (0.45 if t.variant == SILVER else 1.0)
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         var pale = (
             name == "white"
@@ -1244,11 +1244,11 @@ def _tail_at(t: Traits, bone: String, p: V3) -> V3:
     var angles = _tail_angles()
     var w = _tail_weights()
     var ws = 0.0
-    for x in w:
+    for x in w:  # pragma: no branch
         ws += x
     var tk = 0.4 * t.get("tail")
     var seg = 0
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         if bone == "tail" + String(i):
             seg = i
     var a = TAIL_BASE

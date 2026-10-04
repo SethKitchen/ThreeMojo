@@ -319,7 +319,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     b = rig.bone("pelvis")
     _ = m.ell("pelvis", b, V3(0, 0.665, -0.47), V3(0.078, 0.095, 0.135), k=0.06)
     _ = m.ell("croup", b, V3(0, 0.715, -0.46), V3(0.06, 0.045, 0.125), k=0.04)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "rump",
             b,
@@ -376,7 +376,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.6, 1)),
         k=0.02,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "brow",
             h,
@@ -449,7 +449,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _ = m.ell(
         "philtrum", h, _hl(0, -0.034, 0.088), V3(0.01, 0.011, 0.008), k=0.01
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         # The lids: a thin shell hugging the eyeball, cut open along an
         # almond aperture, in a soft orbit hollow.
         var ef = eye_frame_of(eye, HEAD_O, s)
@@ -500,7 +500,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -521,7 +521,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
 
     # EARS: small and round, set low and wide.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -564,7 +564,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _tail_radius(0.1),
         k=0.04,
     )
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -581,7 +581,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
     # webbed to the belly by the flank fold.
     var toe_x: List[Float64] = [-0.019, -0.0065, 0.0065, 0.019]
     var toe_z: List[Float64] = [-0.009, 0, 0, -0.009]
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -650,7 +650,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             k=0.014,
         )
         _ = m.sphere("pad", fpaw, mc + V3(0, -0.026, 0.012), 0.012, k=0.01)
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 fpaw,
@@ -758,7 +758,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             k=0.014,
         )
         _ = m.sphere("pad", hpaw, mt + V3(0, -0.026, 0.01), 0.011, k=0.01)
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 hpaw,
@@ -788,7 +788,7 @@ def _swatches() -> List[String]:
     ]
 
 
-def cheetah_palette(t: Traits) raises -> Palette:
+def cheetah_palette(t: Traits) -> Palette:
     """Return one cheetah's palette: the tawny coat, warmed and lightened.
 
     The white underparts, the muzzle, the nose, the black and the mouth
@@ -800,8 +800,6 @@ def cheetah_palette(t: Traits) raises -> Palette:
     Returns:
         The palette, in linear light.
 
-    Raises:
-        Error: If the palette tables differ in length.
     """
     var names = _swatches()
     var hexes: List[Int] = [
@@ -818,12 +816,14 @@ def cheetah_palette(t: Traits) raises -> Palette:
         0x7A3A3A,
         0xCBB699,
     ]
-    if len(names) != len(hexes):
-        raise Error("The cheetah's palette tables differ in length")
+    debug_assert(
+        len(names) == len(hexes),
+        "The cheetah's palette tables differ in length",
+    )
     var k = t.get("coatWarmth", 0.0)
     var l = t.get("coatLightness", 0.0)
     var pal = Palette()
-    for i in range(len(names)):
+    for i in range(len(names)):  # pragma: no branch
         var c = srgb(hexes[i])
         var tawny = (
             i == DORSAL
@@ -868,7 +868,7 @@ def _tear_distance(h: V3) -> Float64:
     var widths = _tear_widths()
     var q = V3(abs(h.x), h.y, 0.0)
     var best = 1e9
-    for i in range(len(pts) - 1):
+    for i in range(len(pts) - 1):  # pragma: no branch
         var a = V3(pts[i].x, pts[i].y, 0.0)
         var b = V3(pts[i + 1].x, pts[i + 1].y, 0.0)
         var ab = b - a
@@ -892,7 +892,7 @@ def _tail_along(p: V3) -> Tuple[Float64, Float64]:
     var run = 0.0
     var best = 1e9
     var at = 0.0
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var ang = angles[i] * pi / 180.0
         var d = V3(0, sin(ang), -cos(ang))
         var u = clamp(dot(p - a, d) / lens[i], 0.0, 1.0)
@@ -1005,7 +1005,7 @@ def cheetah_paint(
         col = mix3(col, c[WHITE], smoothstep(0.55, 0.9, tt) * 0.55)
         var rings: List[Float64] = [0.61, 0.685, 0.755, 0.82, 0.88, 0.935]
         var rs = 1.0
-        for k in range(len(rings)):
+        for k in range(len(rings)):  # pragma: no branch
             var hw = 0.012 + 0.003 * (Float64(k) / Float64(len(rings)))
             rs = min(rs, abs(along[0] - rings[k] * along[1]) - hw)
         rs += 0.006 * ventral

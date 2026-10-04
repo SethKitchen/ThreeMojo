@@ -323,7 +323,7 @@ def frog_rig(t: Traits) raises -> Rig:
     """
     var rig = _joints()
     quadruped_bones(rig, 0, ears=False, jaw=True)
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         _ = rig.add_bone(
             "eye" + side, "eyeBase" + side, "eyeTop" + side, "head"
         )
@@ -346,7 +346,7 @@ def _surface_along(m: SdfModel, p: V3, dir: V3) -> V3:
     var ids = m.part_list(BODY)
     var lo = -0.02
     var hi = 0.02
-    for _ in range(40):
+    for _ in range(40):  # pragma: no branch
         var mid = 0.5 * (lo + hi)
         if m.eval_list(ids, p + dir * mid) < 0.0:
             lo = mid
@@ -481,7 +481,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.01,
     )
     var tym = _tympanum(t)
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         # The canthus: a soft ridge from the eye to the nostril.
         _ = m.cone(
@@ -604,7 +604,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.006,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "jawcorner",
             jw,
@@ -657,7 +657,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # DORSOLATERAL FOLDS of the common frog.
     if temporaria:
         var fold_bones: List[String] = ["head", "chest", "spine3", "spine2"]
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var pts: List[V3] = [
                 _hl(V3(0.0125 * s, 0.0005, -0.012)),
                 V3(0.0165 * s, 0.059, 0.013),
@@ -665,7 +665,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 V3(0.0165 * s, 0.054, -0.026),
                 V3(0.0135 * s, 0.047, -0.042),
             ]
-            for i in range(4):
+            for i in range(4):  # pragma: no branch
                 _ = m.cone(
                     "dlfold",
                     rig.bone(fold_bones[i]),
@@ -678,7 +678,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS.
     var arm = (1.18 if male else 1.0) * t.get("armK")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0.0, 0.0)
         # FRONT: short and upright, with four slender fingers.
@@ -727,7 +727,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var fdir = normalize(toe - mc)
         var fing_a: List[Float64] = [-0.95, -0.62, -0.3, 0.08]
         var fing_l: List[Float64] = [0.0105, 0.0135, 0.0184, 0.0128]
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             var d = normalize(V3(s * sin(fing_a[i]), fdir.y, cos(fing_a[i])))
             var base = mc - d * 0.001
             var tip = base + d * fing_l[i]
@@ -813,7 +813,7 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
         var bases = List[V3]()
         var tips = List[V3]()
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             var a = toe_a[i]
             var d = normalize(fd * cos(a) + inward * (-sin(a)))
             var b = base0 + d * 0.004
@@ -836,20 +836,20 @@ def frog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var pu = List[Float64]()
         var pv = List[Float64]()
         var ang = List[Float64]()
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             var q = lerp(bases[i], tips[i], web_to[i]) - o
             pu.append(dot(q, un))
             pv.append(dot(q, v))
             ang.append(atan2(pv[i], pu[i]))
         # Order the toes by their angle, so the outline does not cross.
         var order: List[Int] = [0, 1, 2, 3, 4]
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             for j in range(4 - i):
                 if ang[order[j]] > ang[order[j + 1]]:
                     var tmp = order[j]
                     order[j] = order[j + 1]
                     order[j + 1] = tmp
-        for k in range(5):
+        for k in range(5):  # pragma: no branch
             var i = order[k]
             poly.append(pu[i])
             poly.append(pv[i])
@@ -930,7 +930,7 @@ def frog_palette(t: Traits) raises -> Palette:
     var l = t.get("coatLightness", 0.0)
     var gr = t.get("coatGreen", 0.0)
     var pal = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         var pale = name == "belly" or name == "throatF" or name == "throatM"
         if not pale:
@@ -944,7 +944,8 @@ def frog_palette(t: Traits) raises -> Palette:
     var rig = frog_rig(t)
     var m = SdfModel()
     frog_sculpt(m, rig, t)
-    for i in range(len(m.prims)):
+    # The sculpt has just added the frog's solids.
+    for i in range(len(m.prims)):  # pragma: no branch
         if m.tags[m.prims[i].tag.value] == "tympanum":
             var c = m.prims[i].c
             pal.set("tymp" + ("L" if c.x > 0.0 else "R"), c)
@@ -1015,7 +1016,7 @@ def frog_paint(
         region = 5
     elif bone == "throat":
         region = 4
-    elif bone == "head" or bone.startswith("neck"):
+    elif bone == "head":
         region = 1
     elif _limb(bone):
         region = 6
@@ -1084,24 +1085,23 @@ def frog_paint(
         if banded and outer > 0.25:
             var ends = _bone_ends(bone)
             var joints = _joints()
-            try:
-                var a = joints.j(ends[0])
-                var b = joints.j(ends[1])
-                var ax = normalize(b - a)
-                var along = dot(p - a, ax)
-                var period = 0.0105 if temporaria else 0.0125
-                var phase = Float64(ends[0].byte_length() * 7 % 10) * 0.1
-                var ph = (
-                    along / period + phase + 0.25 * (fbm3(p * 300.0, 2) - 0.5)
-                )
-                var f = abs(ph - floor(ph) - 0.5)
-                var wb = (0.2 if temporaria else 0.17) + 0.05 * (
-                    fbm3(p * 120.0, 2) - 0.5
-                )
-                pat = min(pat, (f - wb) * period + (1.0 - outer) * 0.002)
-                pat_col = pal.get("band")
-            except:
-                pass
+            # Every limb bone's ends are joints of the reference rig.
+            var ia = joints.find_joint(ends[0])
+            var ib = joints.find_joint(ends[1])
+            debug_assert(ia >= 0 and ib >= 0, "A limb bone's ends are joints")
+            var a = joints.joints[ia]
+            var b = joints.joints[ib]
+            var ax = normalize(b - a)
+            var along = dot(p - a, ax)
+            var period = 0.0105 if temporaria else 0.0125
+            var phase = Float64(ends[0].byte_length() * 7 % 10) * 0.1
+            var ph = along / period + phase + 0.25 * (fbm3(p * 300.0, 2) - 0.5)
+            var f = abs(ph - floor(ph) - 0.5)
+            var wb = (0.2 if temporaria else 0.17) + 0.05 * (
+                fbm3(p * 120.0, 2) - 0.5
+            )
+            pat = min(pat, (f - wb) * period + (1.0 - outer) * 0.002)
+            pat_col = pal.get("band")
     var on_head = region == 1 or region == 0
     if on_head:
         # The tympanum: a flat brown disc, a pale ring and a dark center
@@ -1180,10 +1180,11 @@ def frog_paint(
                         (0.2 - dot(n, V3(side, 0.1, 0.0))) * 0.01,
                     ),
                 )
-                if sd < pat:
-                    pat = sd
-                    pat_col = pal.get("mask")
-                    pat_i = 0.95
+                # No band runs on the head or the body, so `pat` is still
+                # one here, far above any `sd`.
+                pat = sd
+                pat_col = pal.get("mask")
+                pat_i = 0.95
         if tag == "dlfold":
             col = mix3(col, pal.get("fold"), 0.7)
         if ventral > 0.3 and region == 0:

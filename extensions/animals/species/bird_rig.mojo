@@ -562,7 +562,7 @@ def neck_chain(mut rig: Rig, segs: Int, t0: V3, t1: V3, bulge: Float64) raises:
     var p2 = b - t1 * (d * bulge)
     comptime N = 200
     var pts = List[V3](capacity=N + 1)
-    for i in range(N + 1):
+    for i in range(N + 1):  # pragma: no branch
         var t = Float64(i) / Float64(N)
         var u = 1.0 - t
         pts.append(
@@ -572,7 +572,7 @@ def neck_chain(mut rig: Rig, segs: Int, t0: V3, t1: V3, bulge: Float64) raises:
             + b * (t * t * t)
         )
     var s: List[Float64] = [0.0]
-    for i in range(1, N + 1):
+    for i in range(1, N + 1):  # pragma: no branch
         s.append(s[i - 1] + length(pts[i] - pts[i - 1]))
     for j in range(1, segs):
         var target = s[N] * Float64(j) / Float64(segs)
@@ -766,7 +766,7 @@ def bird_bones(mut rig: Rig, neck_segs: Int, feathers: List[Feather]) raises:
     add_sided(rig, "femur{S}", "hip{S}", "knee{S}", "pelvis")
     add_sided(rig, "tibia{S}", "knee{S}", "ankle{S}", "femur{S}")
     add_sided(rig, "tarsus{S}", "ankle{S}", "mtp{S}", "tibia{S}")
-    for j in range(1, 5):
+    for j in range(1, 5):  # pragma: no branch
         var t = String(j)
         add_sided(
             rig, "toe" + t + "a{S}", "mtp{S}", "t" + t + "m{S}", "tarsus{S}"
@@ -926,7 +926,7 @@ def card_outline(
         edge tip to root.
     """
     var out = List[Float64]()
-    for side in [1.0, -1.0]:
+    for side in [1.0, -1.0]:  # pragma: no branch
         for j in range(samples + 1):
             var q = Float64(j) / Float64(samples)
             if side < 0.0:
@@ -1052,7 +1052,8 @@ def feather_fins(
         if cond1:
             cards.append(cov)
         var ln0 = f.len * (tail_k if f.kind == RECTRIX else 1.0)
-        for card in cards:
+        # The feather's own card is always first.
+        for card in cards:  # pragma: no branch
             var ln = ln0 * card.len_k
             var w = f.width * card.width_k * width_k
             var sh = card.shape
@@ -1064,7 +1065,7 @@ def feather_fins(
             # An arched rachis is a chain of pieces. A gently curved one is
             # one piece along its chord.
             var pieces = 1 + Int(sh.arc / 0.3)
-            for q in range(pieces):
+            for q in range(pieces):  # pragma: no branch
                 var t0 = Float64(q) / Float64(pieces)
                 var t1 = Float64(q + 1) / Float64(pieces)
                 var tm = 0.5 * (t0 + t1)
@@ -1097,7 +1098,7 @@ def feather_fins(
                     + "/"
                     + String(Int(ln * 1e5))
                 )
-                for side in [String("L"), String("R")]:
+                for side in [String("L"), String("R")]:  # pragma: no branch
                     var s = 1.0 if side == "L" else -1.0
                     var fr = frames[i]
                     var root = (
@@ -1225,13 +1226,15 @@ def tail_fan(
     var cx0 = 0.0
     var cy0 = 0.0
     var count = 0
-    for i in ids:
+    # The early return leaves at least one straight rectrix.
+    for i in ids:  # pragma: no branch
         var f = feathers[i]
         var fr = frames[i]
         var ftv = normalize(cross(fr.normal, fr.axis))
         var poly = card_outline(f, f.len * tail_k, f.width, 4)
         var flat = List[Float64]()
-        for e in range(0, len(poly), 2):
+        # Four samples an edge make ten points.
+        for e in range(0, len(poly), 2):  # pragma: no branch
             var q = fr.root + fr.axis * poly[e] + ftv * poly[e + 1] - o
             flat.append(dot(q, a))
             flat.append(dot(q, tv))
@@ -1246,14 +1249,16 @@ def tail_fan(
     var hi_x = -1e9
     var lo_y = 1e9
     var hi_y = -1e9
-    for e in range(0, len(union), 2):
+    # Forty rays make forty points.
+    for e in range(0, len(union), 2):  # pragma: no branch
         lo_x = min(lo_x, union[e])
         hi_x = max(hi_x, union[e])
         lo_y = min(lo_y, union[e + 1])
         hi_y = max(hi_y, union[e + 1])
     var cx = 0.5 * (lo_x + hi_x)
     var cy = 0.5 * (lo_y + hi_y)
-    for e in range(0, len(union), 2):
+    # Forty rays make forty points.
+    for e in range(0, len(union), 2):  # pragma: no branch
         union[e] -= cx
         union[e + 1] -= cy
     var tag = (
@@ -1265,7 +1270,7 @@ def tail_fan(
         + String(Int(ln_max * 1e5))
     )
     var bone = feather_bone(feathers[ids[0]])
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var oo = o
         var aa = a
@@ -1396,7 +1401,7 @@ def plume(p: V3, size: Float64, flow: V3) -> Plume:
     var next = 9.0
     var off = V3(0.0, 0.0, 0.0)
     var id = 0.0
-    for n in range(8):
+    for n in range(8):  # pragma: no branch
         var cx = xi + n % 2
         var cy = yi + (n // 2) % 2
         var cz = zi + n // 4

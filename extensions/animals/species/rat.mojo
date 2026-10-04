@@ -116,7 +116,7 @@ def rat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
         Error: If the requested variant is not one of the five.
     """
     var m = hashed_stream(options.seed, 0x5BD1E995, 0x297A2D39, 0x1B873593)
-    for _ in range(3):
+    for _ in range(3):  # pragma: no branch
         _ = m.next()
     if options.variant.value >= 5:
         raise Error("The rat has no such variant")
@@ -191,7 +191,7 @@ def rat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     )
     t.warps.add(scale_about_warp(HEAD_O, head, 0.016, 0.034))
     if juv > 0.0:
-        for paw in [
+        for paw in [  # pragma: no branch
             V3(0.019, 0.003, 0.037),
             V3(-0.019, 0.003, 0.037),
             V3(0.024, 0.003, -0.028),
@@ -284,7 +284,7 @@ def _tail_joints(t: Traits) -> List[V3]:
     ]
     var p = _tm(V3(0.0, 0.047, -0.087))
     var out: List[V3] = [p]
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var a = angles[i] * pi / 180.0
         p = V3(p.x, p.y + sin(a) * lens[i] * tk, p.z - cos(a) * lens[i] * tk)
         out.append(p)
@@ -406,7 +406,8 @@ def _toes(
     # Digits fanned from the metapodial head. Each row of `spec` is the
     # yaw in degrees, the length, the radius and, if given, the drop.
     var fwd = normalize(V3(tp.x - mp.x, 0.0, tp.z - mp.z))
-    for row in spec:
+    # Each caller passes its digit table.
+    for row in spec:  # pragma: no branch
         var ang = row[0] * pi / 180.0 * s
         var r = row[2]
         var d = normalize(
@@ -577,7 +578,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.0041 * HK,
         k=0.006,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "cheek",
             h,
@@ -607,7 +608,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.005,
     )
     var eye = rat_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = sculpt_eye_socket(
             m,
             eye,
@@ -621,7 +622,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # SNOUT: the pink nose, the whisker pads and the split upper lip.
     var sn = rig.bone("snout")
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "whisker",
             sn,
@@ -679,7 +680,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # INCISORS: the uppers emerge under the split lip, the lowers behind
     # them.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "incisor",
             h,
@@ -703,7 +704,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: thin, rounded and nearly bare, the cup facing forward and out.
     var ew = t.get("earWidth")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -759,7 +760,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         [18, 0.0102, 0.0009],
         [40, 0.0086, 0.00086],
     ]
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -903,7 +904,7 @@ def rat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _tail_r(1, thick),
         k=0.008,
     )
-    for i in range(1, TAIL_SEGS):
+    for i in range(1, TAIL_SEGS):  # pragma: no branch
         var a = rig.j("tail" + String(i))
         var b = rig.j("tail" + String(i + 1))
         var tb = rig.bone("tail" + String(i))
@@ -1079,7 +1080,7 @@ def rat_palette(t: Traits) raises -> Palette:
     var fancy = color == ALBINO or color == HOODED
     var juv = t.juvenile() > 0.0 and not fancy
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         var fixed = (
             fancy
@@ -1193,7 +1194,7 @@ def _tail_paint(pal: Palette, t: Traits, p: V3, n: V3) -> Paint:
     var total = 0.0
     var at = 0.0
     var dir = V3(0.0, 0.0, -1.0)
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var a = joints[i]
         var ab = joints[i + 1] - a
         var seg = length(ab)

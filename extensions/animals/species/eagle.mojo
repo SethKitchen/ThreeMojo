@@ -275,7 +275,7 @@ def _feathers() -> List[Feather]:
         [0.90, 0.43, 0.052, 12, 1, 1, 5],
         [1.00, 0.35, 0.046, 3, 0.5, 1, 5],
     ]
-    for i in range(len(p)):
+    for i in range(len(p)):  # pragma: no branch
         ref q = p[i]
         out.append(
             primary(
@@ -305,7 +305,7 @@ def _feathers() -> List[Feather]:
         [0.84, 0.28, 0.068, 124, 147.5],
         [0.93, 0.265, 0.068, 140, 148],
     ]
-    for i in range(len(s)):
+    for i in range(len(s)):  # pragma: no branch
         ref q = s[i]
         out.append(secondary(i, len(s), len(p), q[0], q[1], q[2], q[3], q[4]))
     var rc: List[List[Float64]] = [
@@ -316,7 +316,7 @@ def _feathers() -> List[Feather]:
         [0.020, 0.28, 0.07, 43, 2.5, -4],
         [0.024, 0.268, 0.068, 53, 3, -5],
     ]
-    for i in range(len(rc)):
+    for i in range(len(rc)):  # pragma: no branch
         ref q = rc[i]
         out.append(rectrix(i, len(rc), q[0], q[1], q[2], q[3], q[4], bend=q[5]))
     return out^
@@ -475,7 +475,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=-td,
         k=0.024,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "flankfold",
             pelvis,
@@ -494,7 +494,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
 
     # NECK: thick and hackled.
-    for i in range(NECK_SEGS):
+    for i in range(NECK_SEGS):  # pragma: no branch
         var a = String("neckBase") if i == 0 else "neck" + String(i)
         var b = String("occiput") if i + 1 == NECK_SEGS else "neck" + String(
             i + 1
@@ -569,7 +569,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.02,
     )
     var eye = eagle_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "cheek",
             h,
@@ -639,7 +639,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.0012,
         k=0.004,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "nostril",
             h,
@@ -680,7 +680,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
 
     # LEGS: loose feathered trousers, scaled tarsi, huge talons.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var kn = rig.j("knee" + side)
         var an = rig.j("ankle" + side)
         var mt = rig.j("mtp" + side)
@@ -721,7 +721,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
         _ = m.cone("tarsus", tar, an, mt, 0.0115, 0.0098, k=0.006)
         _ = m.sphere("pad", tar, mt + V3(0.0, -0.001, 0.003), 0.0105, k=0.005)
-        for toe in range(1, 5):
+        for toe in range(1, 5):  # pragma: no branch
             var ts = String(toe)
             var b = rig.j("t" + ts + "m" + side)
             var c = rig.j("t" + ts + "t" + side)
@@ -740,7 +740,7 @@ def eagle_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             _ = m.cone("claw", tb, q1, q2, tr * 0.62, 0.0008, k=0.0015)
 
     # WINGS: the arm. The flight feathers follow.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var sh = rig.j("shoulder" + side)
         var el = rig.j("elbow" + side)

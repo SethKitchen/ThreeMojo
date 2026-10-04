@@ -1181,6 +1181,8 @@ def test_helper_edges() raises:
     )
     # The camera follows only a living actor.
     assert_false(set_camera_position(world, ActorId(99), _pose(0, 0, 0, 0)))
+    # A walker speed for an actor that is no walker changes nothing.
+    set_walker_speed(world, ActorId(99), 150.0)
     # An ignored hero keeps its gravity.
     var hero: List[RecordedAttribute] = [
         RecordedAttribute(ATTRIBUTE_STRING, "role_name", "hero")

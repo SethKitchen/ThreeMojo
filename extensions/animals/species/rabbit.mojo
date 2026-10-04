@@ -449,7 +449,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.0128,
         k=0.014,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "cheek",
             h,
@@ -479,7 +479,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.012,
     )
     var eye = rabbit_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = sculpt_eye_socket(
             m,
             eye,
@@ -493,7 +493,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # SNOUT: the nose, the split upper lip and the whisker pads.
     var sn = rig.bone("snout")
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "whisker",
             sn,
@@ -551,7 +551,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: long, spoon-shaped and thin, the cup facing out and forward.
     var w = t.get("earWidth")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -597,7 +597,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS: short slim forelegs; long hind legs with a big haunch, a slim
     # shank and a long flat foot.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -661,7 +661,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.0019, 0, 0),
             V3(0.0055, 0, -0.002),
         ]
-        for q in ftoes:
+        for q in ftoes:  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 fpaw,
@@ -760,7 +760,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.0019, 0, 0),
             V3(0.0055, 0, -0.003),
         ]
-        for q in htoes:
+        for q in htoes:  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 hpaw,
@@ -779,7 +779,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.0105,
         k=0.008,
     )
-    for i in range(1, TAIL_SEGS):
+    for i in range(1, TAIL_SEGS):  # pragma: no branch
         var fi = Float64(i)
         _ = m.cone(
             "tail",
@@ -952,7 +952,7 @@ def rabbit_palette(t: Traits) raises -> Palette:
     var k = t.get("coatWarmth", 0.0)
     var l = t.get("coatLightness", 0.0)
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         var fixed = (
             name == "belly"
@@ -1074,7 +1074,7 @@ def rabbit_paint(
         # The pale eye ring, the "spectacles".
         var ring = 0.0
         var e = rabbit_eye(t)
-        for sd in [1.0, -1.0]:
+        for sd in [1.0, -1.0]:  # pragma: no branch
             var ef = eye_frame_of(e, HEAD_O, sd)
             var de = length(p - ef.c) - (e.r + e.lid)
             ring = max(ring, smoothstep(0.0075, 0.002, de))

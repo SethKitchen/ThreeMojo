@@ -48,6 +48,7 @@ from extensions.sdf.vector import (
     clamp,
     cross,
     dot,
+    frame_zy,
     length,
     lerp,
     mix,
@@ -214,7 +215,7 @@ def lion_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     if juv > 0.0:
         # A cub's short muzzle and big eyes, before the other warps.
         t.warps.add(length_warp(0.7, 0.878, 1.03))
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var c = eye_frame_of(lion_eye(t), HEAD_O, s).c
             t.warps.add(scale_about_warp(c, 1.15, 0.026, 0.05))
     t.warps.add(legs_warp(legs, 0.55))
@@ -466,7 +467,7 @@ def lion_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         "spine2",
         "spine1",
     ]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.cone(
             "spine",
             rig.bone(spine_bones[i]),
@@ -476,7 +477,7 @@ def lion_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             0.024,
             k=0.03,
         )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "ilium",
             b,
@@ -550,7 +551,7 @@ def lion_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _tail_radius(0.1),
         k=0.06,
     )
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -639,7 +640,7 @@ def _sculpt_mane(mut m: SdfModel, rig: Rig, t: Traits, g: Float64) raises:
         )
     )
     # The face ruff behind the cheeks, and the crown behind the ears.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         base.append(
             m.ell(
                 "mane",
@@ -675,14 +676,15 @@ def _sculpt_mane(mut m: SdfModel, rig: Rig, t: Traits, g: Float64) raises:
     var a1 = _hl(0, 0, -0.07)
     var fc = _hl(0, -0.03, 0.02)
     var locks = Int(14.0 + 20.0 * g + 0.5)
-    for _ in range(locks):
+    # A lion with a mane grows fourteen locks or more.
+    for _ in range(locks):  # pragma: no branch
         var u = 0.62 * pow(rl.next(), 0.8)
         var th = (rl.next() * 2.0 - 1.0) * pi * 0.9
         var ax = lerp(a0, a1, u)
         var dir = normalize(V3(sin(th), cos(th), 0.25 * (u - 0.4)))
         var lo = 0.0
         var hi = 0.8
-        for _ in range(22):
+        for _ in range(22):  # pragma: no branch
             var mid = (lo + hi) / 2.0
             var inside = m.eval_list(base, ax + dir * mid) < 0.0
             lo = mid if inside else lo
@@ -702,15 +704,15 @@ def _sculpt_mane(mut m: SdfModel, rig: Rig, t: Traits, g: Float64) raises:
             normalize(V3(0, -0.9, -0.55)) * (1.0 - ruff)
             + normalize(normalize(p - fc) + V3(0, -0.3, -0.4)) * ruff
         )
-        fl = fl - n * dot(fl, n)
-        if length(fl) < 1e-3:
-            continue
-        fl = normalize(fl)
+        # The flow laid on the skin. Where it runs along the normal, the
+        # frame seeds a direction on the skin from world +x.
+        fl = frame_zy(n, fl).y
         var rt = (0.022 + 0.016 * rl.next()) * (0.75 + 0.45 * g)
         var rlen = rt * (1.8 + 0.9 * rl.next())
         var bone = n1
         var bd = 1e9
-        for q in base:
+        # The collar is the first solid in the list.
+        for q in base:  # pragma: no branch
             var dq = m.distance(q, p)
             var closer = dq < bd
             bd = dq if closer else bd
@@ -764,7 +766,7 @@ def _sculpt_head(
         up=normalize(V3(0, 1, -lean)),
         k=0.055,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "temporal",
             h,
@@ -780,7 +782,7 @@ def _sculpt_head(
         _fr(0.76, 0.5, 0.36, hw),
         k=0.04,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "brow",
             h,
@@ -926,7 +928,7 @@ def _sculpt_head(
         k=0.014,
     )
     var eye = lion_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         _ = ell_y(
             m,
@@ -978,7 +980,7 @@ def _sculpt_head(
             thin=True,
         )
     # The upper lip's edge, deep inside the lip, on the lip bone.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         _ = m.ell(
             "lipedge",
@@ -1000,7 +1002,7 @@ def _sculpt_head(
     # JAW: its own surface, so the mouth can open.
     var jw = rig.bone("jaw")
     var er = FACE_E * HS
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -1045,7 +1047,7 @@ def _sculpt_head(
         k=0.02,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "canine",
             jw,
@@ -1082,7 +1084,7 @@ def _sculpt_ears(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
     # Short, rounded ears cupped forward, set on the sides of the crown:
     # a stack of discs leaning toward the midline, narrowing to a round
     # tip, with a shallow bowl carved in front.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -1165,7 +1167,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
     var paw_l = 1.0 + 0.25 * juv
     var toe_x: List[Float64] = [-0.033, -0.011, 0.011, 0.033]
     var toe_z: List[Float64] = [-0.018, 0, 0, -0.018]
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -1263,7 +1265,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             0.02 * paw_k,
             k=0.015,
         )
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 fpaw,
@@ -1381,7 +1383,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig, male: Float64, juv: Float64) raises:
             0.018 * paw_k,
             k=0.015,
         )
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 hpaw,
@@ -1519,7 +1521,7 @@ def _white_amount(i: Int) -> Float64:
     )
 
 
-def lion_palette(t: Traits) raises -> Palette:
+def lion_palette(t: Traits) -> Palette:
     """Return one lion's palette: the tawny coat, warmed and lightened.
 
     A cub's body colors fade toward a grayer natal coat. The white lion
@@ -1531,14 +1533,12 @@ def lion_palette(t: Traits) raises -> Palette:
 
     Returns:
         The palette, in linear light.
-
-    Raises:
-        Error: If the palette tables differ in length.
     """
     var names = _swatches()
     var hexes = _hexes()
-    if len(names) != len(hexes):
-        raise Error("The lion's palette tables differ in length")
+    debug_assert(
+        len(names) == len(hexes), "The lion's palette tables differ in length"
+    )
     var k = t.get("coatWarmth", 0.0)
     var l = t.get("coatLightness", 0.0)
     var juv = t.juvenile()
@@ -1546,7 +1546,7 @@ def lion_palette(t: Traits) raises -> Palette:
     var cub = srgb(hexes[CUB_BODY])
     var cream = srgb(hexes[WHITE_BODY])
     var pal = Palette()
-    for i in range(len(names)):
+    for i in range(len(names)):  # pragma: no branch
         var c = srgb(hexes[i])
         if not _bare(i):
             c = V3(
@@ -1607,7 +1607,7 @@ def _mask_half(y: Float64, male: Bool) -> Float64:
         ws = [0.88, 0.92, 0.92, 0.84, 0.72, 0.64, 0.56, 0.5]
     if y >= ys[0]:
         return ws[0]
-    for i in range(1, len(ys)):
+    for i in range(1, len(ys)):  # pragma: no branch
         if y >= ys[i]:
             return ws[i] + (ws[i - 1] - ws[i]) * (y - ys[i]) / (
                 ys[i - 1] - ys[i]
@@ -1653,12 +1653,12 @@ def _tail_along(p: V3) -> Tuple[Float64, V3]:
     var a = TAIL_BASE
     var run = 0.0
     var total = 0.0
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         total += lens[i]
     var best = 1e9
     var at = 0.0
     var dir = V3(0, 0, -1)
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var ang = angles[i] * pi / 180.0
         var d = V3(0, sin(ang), -cos(ang))
         var b = a + d * lens[i]
@@ -2181,9 +2181,9 @@ def _paint_face(
     # The whisker-base dots: four rows of small black spots on each pad.
     if whisker > 0.15:
         var dd = 1.0
-        for row in range(4):
+        for row in range(4):  # pragma: no branch
             var dots = 5 if row == 1 or row == 3 else (4 if row == 0 else 6)
-            for i in range(dots):
+            for i in range(dots):  # pragma: no branch
                 var x = 0.12 + 0.022 * Float64(row) + 0.058 * Float64(i)
                 var y = -0.98 - 0.086 * Float64(row) - 0.1 * (x - 0.13)
                 var dx = (ax - x) * FACE_X * hw * HS

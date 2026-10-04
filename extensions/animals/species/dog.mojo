@@ -149,7 +149,7 @@ def dog_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var juv = t.juvenile()
     var male = t.male()
     var m = hashed_stream(options.seed, 0x2B7E1516, 0x9E3779B1, 0x68E31DA4)
-    for _ in range(3):
+    for _ in range(3):  # pragma: no branch
         _ = m.next()
     var color = pick_cumulative(m.next(), _colors(variant))
     t.set("color", Float64(color))
@@ -226,7 +226,7 @@ def dog_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     if juv > 0.0:
         # Chubby pups with big paws.
         t.warps.add(girth_warp(1.12, 0.42, -0.3, 0.42, 0.1))
-        for paw in [
+        for paw in [  # pragma: no branch
             V3(0.046, 0.025, 0.26),
             V3(-0.046, 0.025, 0.26),
             V3(0.052, 0.025, -0.28),
@@ -459,10 +459,10 @@ def dog_rig(t: Traits) raises -> Rig:
     var tk = t.get("tail") * tail_len
     var w: List[Float64] = [1.14, 1.09, 1.04, 0.99, 0.95, 0.91, 0.86, 0.82]
     var ws = 0.0
-    for x in w:
+    for x in w:  # pragma: no branch
         ws += x
     var lens = List[Float64]()
-    for x in w:
+    for x in w:  # pragma: no branch
         lens.append(x / ws * tk)
     tail_chain(rig, "tailBase", angles, lens)
     rig.mirror_joints()
@@ -604,7 +604,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, (tail_base.y - ls.y) * 3.0, -0.25)),
         k=0.035,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "rump",
             b,
@@ -704,7 +704,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hr(t, V3(0.016, 0.013, 0.048)),
         k=0.03,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "brow",
             h,
@@ -801,7 +801,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.01,
     )
     var er = eye.r / 0.0108
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         _ = ell_y(
             m,
@@ -860,7 +860,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -919,7 +919,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS by type.
     var ear_type = Int(t.get("earType", 0.0))
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -1007,7 +1007,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: bone and paw substance by variant.
     var leg_k = t.get("boneK")
     var pk = t.get("pawK")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         _fore_leg(m, rig, side, s, leg_k, pk, ruff)
         _hind_leg(m, rig, side, s, leg_k, pk, ruff)
@@ -1026,7 +1026,7 @@ def dog_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.035,
     )
     var tk = 0.012 if tail_type == SHEPHERD else 0.022
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -1200,7 +1200,7 @@ def _fore_leg(
     _ = m.sphere("pad", fpaw, mc + V3(0, -0.016, 0.01), 0.011 * pk, k=0.009)
     var toe_x: List[Float64] = [-0.0175, -0.006, 0.006, 0.0175]
     var toe_z: List[Float64] = [-0.009, 0, 0, -0.009]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             fpaw,
@@ -1212,7 +1212,7 @@ def _fore_leg(
             0.0096 * pk,
             k=0.006,
         )
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var x = toe.x + toe_x[i] * pk * s * 0.95
         _ = m.cone(
             "claw",
@@ -1340,7 +1340,7 @@ def _hind_leg(
     _ = m.sphere("pad", hpaw, mt + V3(0, -0.018, 0.008), 0.01 * pk, k=0.009)
     var toe_x: List[Float64] = [-0.0175, -0.006, 0.006, 0.0175]
     var toe_z: List[Float64] = [-0.009, 0, 0, -0.009]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             hpaw,
@@ -1352,7 +1352,7 @@ def _hind_leg(
             0.0088 * pk,
             k=0.006,
         )
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var x = tt.x + toe_x[i] * pk * 0.88 * s
         _ = m.cone(
             "claw",
@@ -1610,7 +1610,7 @@ def dog_palette(t: Traits) raises -> Palette:
     var l = t.get("coatLightness", 0.0)
     var juv = t.juvenile()
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         var patch = name.startswith("patch")
         var kk = 2.2 * k if key == KEY_YELLOW else (
@@ -1757,10 +1757,10 @@ def _tail_at(t: Traits, bone: String, p: V3) -> V3:
         base = V3(0.0, 0.468, -0.285)
     var w: List[Float64] = [1.14, 1.09, 1.04, 0.99, 0.95, 0.91, 0.86, 0.82]
     var ws = 0.0
-    for x in w:
+    for x in w:  # pragma: no branch
         ws += x
     var seg = 0
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         if bone == "tail" + String(i):
             seg = i
     var a = base

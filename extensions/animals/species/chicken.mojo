@@ -183,7 +183,7 @@ def chicken_traits(
     """
     if options.variant.value >= 6:
         raise Error("The chicken has no such breed")
-    for _ in range(5):
+    for _ in range(5):  # pragma: no branch
         _ = r.next()
     var r0 = r.next()
     var r1 = r.next()
@@ -351,7 +351,7 @@ def _feathers(t: Traits) -> List[Feather]:
         [0.87, 0.172, 14, 1],
         [0.98, 0.15, 6, 0.5],
     ]
-    for i in range(10):
+    for i in range(10):  # pragma: no branch
         ref q = p[i]
         var f = primary(
             i,
@@ -388,7 +388,7 @@ def _feathers(t: Traits) -> List[Feather]:
         [0.93, 0.108],
     ]
     var st: List[Float64] = [1, 1, 1, 1, 1, 1, 0.9, 0.7, 0.62, 0.55]
-    for i in range(10):
+    for i in range(10):  # pragma: no branch
         var ln = s[i][1]
         if chick:
             ln = min(ln, 0.122) * st[i]
@@ -422,7 +422,7 @@ def _feathers(t: Traits) -> List[Feather]:
         [0.014, 0.096, 32, -24],
     ]
     var n = 9 if sickles > 0.0 else 7
-    for i in range(7):
+    for i in range(7):  # pragma: no branch
         ref q = rc[i]
         var tw = 80.0 if i == 0 else (
             74.0 if i == 1 else 72.0 - 2.0 * Float64(i)
@@ -660,8 +660,8 @@ struct _Stack(Movable):
         var iy0 = Int(floor(y - _Y0 + 0.5))
         var rr = Int(ceil(r))
         var m = -1e30
-        for iy in range(iy0 - rr, iy0 + rr + 1):
-            for ix in range(ix0 - rr, ix0 + rr + 1):
+        for iy in range(iy0 - rr, iy0 + rr + 1):  # pragma: no branch
+            for ix in range(ix0 - rr, ix0 + rr + 1):  # pragma: no branch
                 var out = ix < 0 or iy < 0 or ix >= _NX or iy >= _NY
                 if out:
                     continue
@@ -724,12 +724,12 @@ def _raster(
     comptime NT = 24
     comptime NC = 6
     var g = List[V3](capacity=(NT + 1) * (NC + 1))
-    for i in range(NT + 1):
+    for i in range(NT + 1):  # pragma: no branch
         var t = Float64(i) / Float64(NT)
         var vw = vane_width(shape, min(t, 0.999), w)
         var cu = shape.curve * ln * t * t
         var dr = shape.droop * ln * t * t
-        for j in range(NC + 1):
+        for j in range(NC + 1):  # pragma: no branch
             var c = -1.0 + 2.0 * Float64(j) / Float64(NC)
             var ww = vw[0] if c < 0.0 else vw[1]
             var p = (
@@ -746,8 +746,8 @@ def _raster(
                     dot(q, n_ax) * 1000.0,
                 )
             )
-    for i in range(NT):
-        for j in range(NC):
+    for i in range(NT):  # pragma: no branch
+        for j in range(NC):  # pragma: no branch
             var pa = g[i * (NC + 1) + j]
             var pb = g[(i + 1) * (NC + 1) + j]
             var pc = g[(i + 1) * (NC + 1) + j + 1]
@@ -766,7 +766,7 @@ def _wing_stack(t: Traits) -> _Stack:
     var ls = _lengths(t)
     var feathers = _feathers(t)
     var cov = _coverts(t)
-    for e in states:
+    for e in states:  # pragma: no branch
         var cfg = lerp_pose(fold, glide, min(1.0, e))
         var fr = wing_fk(1.0, ls, cfg)
         var e_h = min(
@@ -782,7 +782,8 @@ def _wing_stack(t: Traits) -> _Stack:
         var p0 = fr.wrist
         var t_ax = normalize(cross(fr.n_u, fr.d_u))
         var x_ax = -fr.d_u
-        for f in feathers:
+        # The chicken's feather table lists every flight feather.
+        for f in feathers:  # pragma: no branch
             if f.kind == 0:
                 var ff = feather_frame(
                     p0,
@@ -833,7 +834,8 @@ def _inside(poly: List[Float64], x: Float64, y: Float64) -> Bool:
     var c = False
     var n = len(poly) // 2
     var j = n - 1
-    for i in range(n):
+    # Its callers pass the literal comb and lid outlines.
+    for i in range(n):  # pragma: no branch
         var ax = poly[i * 2]
         var ay = poly[i * 2 + 1]
         var bx = poly[j * 2]
@@ -849,7 +851,8 @@ def _inside(poly: List[Float64], x: Float64, y: Float64) -> Bool:
 def _box(poly: List[Float64]) -> Tuple[V3, V3]:
     var lo = V3(1e9, 1e9, 0.0)
     var hi = V3(-1e9, -1e9, 0.0)
-    for i in range(0, len(poly), 2):
+    # Its callers pass the literal comb and lid outlines.
+    for i in range(0, len(poly), 2):  # pragma: no branch
         lo = V3(min(lo.x, poly[i]), min(lo.y, poly[i + 1]), 0.0)
         hi = V3(max(hi.x, poly[i]), max(hi.y, poly[i + 1]), 0.0)
     return (lo, hi)
@@ -915,7 +918,7 @@ def _shield(t: Traits) -> _Shield:
         -3,
         1,
     ]
-    for i in range(len(core)):
+    for i in range(len(core)):  # pragma: no branch
         core[i] *= wk
     var bx_ = _box(core)
     var need = List[V3]()
@@ -936,10 +939,12 @@ def _shield(t: Traits) -> _Shield:
         var by = -0.2
         while by <= 0.2001:
             var a = -1e300
-            for q in need:
+            # The outline encloses hundreds of lattice points at any wing size.
+            for q in need:  # pragma: no branch
                 a = max(a, q.z - bx * q.x - by * q.y)
             var m = 0.0
-            for q in need:
+            # The outline encloses hundreds of lattice points at any wing size.
+            for q in need:  # pragma: no branch
                 m += a + bx * q.x + by * q.y - q.z
             if m < best_m:
                 best_m = m
@@ -947,7 +952,7 @@ def _shield(t: Traits) -> _Shield:
             by += 0.005
         bx += 0.005
     var t_max = 0.0
-    for i in range(0, len(core), 2):
+    for i in range(0, len(core), 2):  # pragma: no branch
         t_max = max(
             t_max, best.x + best.y * core[i] + best.z * core[i + 1] + 2.0
         )
@@ -969,7 +974,7 @@ def _shield(t: Traits) -> _Shield:
         44,
         -18,
     ]
-    for i in range(len(lid)):
+    for i in range(len(lid)):  # pragma: no branch
         lid[i] *= wk
     var lb = _box(lid)
     var lneed = List[V3]()
@@ -993,10 +998,12 @@ def _shield(t: Traits) -> _Shield:
         var by = -0.4
         while by <= 0.4001:
             var a = -1e300
-            for q in lneed:
+            # The lid encloses hundreds of lattice points at any wing size.
+            for q in lneed:  # pragma: no branch
                 a = max(a, q.z - bx * q.x - by * q.y)
             var m = 0.0
-            for q in lpts:
+            # The lid encloses hundreds of lattice points at any wing size.
+            for q in lpts:  # pragma: no branch
                 var d = (
                     a
                     + bx * q.x
@@ -1064,7 +1071,8 @@ def _plate(
     if dot(np, f.n) < 0.0:
         np = -np
     var flat = List[Float64]()
-    for i in range(0, len(poly), 2):
+    # Its callers pass card outlines of ten points or more.
+    for i in range(0, len(poly), 2):  # pragma: no branch
         var x = poly[i]
         var y = poly[i + 1]
         var q = f.q(x, y, plane.x + plane.y * x + plane.z * y) - q0
@@ -1131,7 +1139,7 @@ def _flank_ell(
             + tt * (c.y * 0.001 * wk)
             + n * ((r.z - under) * 0.001 * wk)
         )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var cc = c0 if s > 0.0 else mirror(c0)
         var ax = -d if s > 0.0 else mirror(-d)
         var up = n if s > 0.0 else mirror(n)
@@ -1150,12 +1158,13 @@ def _wing_pocket(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var fr = wing_fk(1.0, ls, _fold(t))
     var p0 = rig.j("shoulderL") + fr.wrist
     var cov = _coverts(t)
-    for row in range(3):
+    for row in range(3):  # pragma: no branch
         var frames = List[FeatherFrame]()
         var shapes = List[Feather]()
         var lens = List[Float64]()
         var widths = List[Float64]()
-        for f in _feathers(t):
+        # The chicken's feather table lists every flight feather.
+        for f in _feathers(t):  # pragma: no branch
             var cond2 = row < 2 and f.kind == 0
             var cond3 = row == 2 and f.kind == 1
             if cond2:
@@ -1206,7 +1215,8 @@ def _bed(
     var o = V3(0.0, 0.0, 0.0)
     var sa = V3(0.0, 0.0, 0.0)
     var sn = V3(0.0, 0.0, 0.0)
-    for f in frames:
+    # Its callers pass one frame per tail feather.
+    for f in frames:  # pragma: no branch
         o = o + f.root
         sa = sa + f.axis
         sn = sn + f.normal
@@ -1219,7 +1229,8 @@ def _bed(
     var cx = 0.0
     var cy = 0.0
     var count = 0
-    for i in range(len(frames)):
+    # Its callers pass one frame per tail feather.
+    for i in range(len(frames)):  # pragma: no branch
         ref ff = frames[i]
         ref f = shapes[i]
         var ln = lens[i]
@@ -1229,7 +1240,7 @@ def _bed(
         low = min(low, dot(ff.root - o, n) - G - drop)
         var front = List[Float64]()
         var back = List[Float64]()
-        for j in range(9):
+        for j in range(9):  # pragma: no branch
             var tt = 0.04 + 0.96 * Float64(j) / 8.0
             var vw = vane_width(f, min(tt, 0.99), w)
             var cu = f.curve * ln * tt * tt
@@ -1255,14 +1266,15 @@ def _bed(
             pts.append(back[j * 2])
             pts.append(back[j * 2 + 1])
             j -= 1
-        for e in range(0, len(pts), 2):
+        # The front and back edges both have points.
+        for e in range(0, len(pts), 2):  # pragma: no branch
             cx += pts[e]
             cy += pts[e + 1]
             count += 1
         polys.append(pts^)
     var union = star_union(polys, cx / Float64(count), cy / Float64(count), 20)
     var o0 = o + n * (low + T / 2.0)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.fin(
             "wingPocket",
             rig.bone("chest"),
@@ -1360,7 +1372,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.02, 0.02, 0.02),
             k=0.03,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "flankfold",
                 pelvis,
@@ -1473,7 +1485,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             V3(0.034, 0.034, 0.03),
             0.03,
         )
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _e(
                 m,
                 rig,
@@ -1507,7 +1519,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
         if male:
             # The saddle hackles hang from the back over the wing tips.
-            for s in [1.0, -1.0]:
+            for s in [1.0, -1.0]:  # pragma: no branch
                 _e(
                     m,
                     rig,
@@ -1580,7 +1592,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # NECK, with its hackles.
     var r0 = (0.03 if juv else 0.036) * (1.08 if male else 1.0)
     var r1 = 0.0175 * hk
-    for i in range(NECK_SEGS):
+    for i in range(NECK_SEGS):  # pragma: no branch
         var a = String("neckBase") if i == 0 else "neck" + String(i)
         var b = String("occiput") if i + 1 == NECK_SEGS else "neck" + String(
             i + 1
@@ -1657,7 +1669,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.008,
     )
     var eye = chicken_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "face",
             h,
@@ -1675,7 +1687,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = sculpt_eye_socket(m, eye, HEAD_O, s, h)
     # The upper mandible: stout, triangular in profile; the lores taper the
     # face into it.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "lores",
             h,
@@ -1710,7 +1722,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.0008 * hb,
         k=0.003,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "nostril",
             h,
@@ -1769,7 +1781,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             part=WATTLE,
             thin=True,
         )
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             var u = (Float64(i) + 0.5) / 5.0
             var ph = (0.012 + 0.009 * sin(pi * (0.15 + 0.8 * u))) * ch
             var z = z0 + (z1 - z0) * (0.08 + 0.78 * u)
@@ -1787,7 +1799,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
         # The wattles: two rounded lobes under the bill.
         var wl = t.get("wattle")
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "wattle",
                 h,
@@ -1800,7 +1812,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
         # The earlobes: flat ovals below and behind the eye.
         var el = t.get("earlobe")
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "earlobe",
                 h,
@@ -1815,7 +1827,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # LEGS: feathered drumsticks, scaled shanks and toes.
     var toe_r = t.get("toeR")
     var spur = t.get("spur", 0.0)
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var kn = rig.j("knee" + side)
         var an = rig.j("ankle" + side)
@@ -1861,7 +1873,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 0.0009,
                 k=0.0025,
             )
-        for toe in range(1, 5):
+        for toe in range(1, 5):  # pragma: no branch
             var ts = String(toe)
             var b = rig.j("t" + ts + "m" + side)
             var c = rig.j("t" + ts + "t" + side)
@@ -1905,7 +1917,7 @@ def chicken_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     if not juv:
         shield = _shield(t)
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var sh = rig.j("shoulder" + side)
         var el = rig.j("elbow" + side)
@@ -2182,7 +2194,7 @@ def chicken_palette(t: Traits) raises -> Palette:
             0xE3CBBD,
             0xD8C6A0,
         ]
-    for i in range(len(names)):
+    for i in range(len(names)):  # pragma: no branch
         out.set(names[i], srgb(hexes[i]))
     out.set("comb", srgb(0xC41F2A))
     out.set("wattle", srgb(0xB81D24))
@@ -2238,7 +2250,7 @@ def chicken_palette(t: Traits) raises -> Palette:
         "tail",
         "flight",
     ]
-    for name in toned:
+    for name in toned:  # pragma: no branch
         out.set(name, out.get(name) * tone)
     return out^
 

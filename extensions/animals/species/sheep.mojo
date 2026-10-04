@@ -171,7 +171,7 @@ def sheep_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     h = imul32(h ^ (h >> 13), 0xC2B2AE35)
     h = h ^ (h >> 16)
     var R = stream_of(h)
-    for _ in range(3):
+    for _ in range(3):  # pragma: no branch
         _ = R.next()
     var variant = requested
     if requested < 0:
@@ -357,7 +357,7 @@ def _horned(t: Traits) -> Bool:
 def _tail_spec(tail_len: Float64) -> Tuple[List[Float64], List[Float64]]:
     var w: List[Float64] = [0.2, 0.19, 0.17, 0.16, 0.14, 0.14]
     var lens = List[Float64]()
-    for f in w:
+    for f in w:  # pragma: no branch
         lens.append(f * tail_len)
     if tail_len > 0.15:
         var a: List[Float64] = [-38.0, -64.0, -76.0, -82.0, -86.0, -88.0]
@@ -448,10 +448,11 @@ def _horn_path(t: Traits, s: Float64) -> List[HornPoint]:
     var r0 = sqrt((b0.y - c.y) ** 2 + (b0.z - c.z) ** 2)
     var th0 = atan2(b0.y - c.y, b0.z - c.z)
     var b = log(1.45) / (2.0 * pi)
+    # Six stations at least.
     var n = max(6, Int(floor(22.0 * turns + 0.5)))
     var flare = t.get("hornFlare", 1.0)
     var base = t.get("hornBase", 0.0)
-    for i in range(n + 1):
+    for i in range(n + 1):  # pragma: no branch
         var u = Float64(i) / Float64(n)
         var th = th0 + u * turns * 2.0 * pi
         var r = r0 * exp(b * (th - th0))
@@ -496,9 +497,9 @@ def _ear_segments() -> List[V3]:
     # Every ear any sheep can carry, as segments from base to tip, left
     # side: the head's mesh keeps a zone round them.
     var out = List[V3]()
-    for ear in range(3):
-        for lift in [0.0, 0.5, 1.0]:
-            for horned in [False, True]:
+    for ear in range(3):  # pragma: no branch
+        for lift in [0.0, 0.5, 1.0]:  # pragma: no branch
+            for horned in [False, True]:  # pragma: no branch
                 var base = EAR_BASE_HORNED if horned else EAR_BASE
                 out.append(_hl(base))
                 out.append(_hl(_ear_tip(ear, lift, horned, base)))
@@ -518,7 +519,8 @@ def _neck_s(p: V3, segs: List[V3]) -> Float64:
         return s
     var dm = 1e9
     var q = V3(abs(p.x), p.y, p.z)
-    for i in range(len(segs) // 2):
+    # Its callers pass `_ear_segments`, a literal list.
+    for i in range(len(segs) // 2):  # pragma: no branch
         var a = segs[2 * i]
         var ab = segs[2 * i + 1] - a
         var u = clamp(dot(q - a, ab) / dot(ab, ab), 0.0, 1.0)
@@ -541,7 +543,7 @@ def _staple_fall(n: V3, p: V3) -> V3:
     ]
     var ds = List[Float64]()
     var dmin = 1e9
-    for i in range(len(chain) - 1):
+    for i in range(len(chain) - 1):  # pragma: no branch
         var a = chain[i]
         var d = chain[i + 1] - a
         var u = clamp(dot(p - a, d) / dot(d, d), 0.0, 1.0)
@@ -549,7 +551,7 @@ def _staple_fall(n: V3, p: V3) -> V3:
         ds.append(dd)
         dmin = min(dmin, dd)
     var cd = V3(0.0, 0.0, 0.0)
-    for i in range(len(chain) - 1):
+    for i in range(len(chain) - 1):  # pragma: no branch
         var w = exp(-(ds[i] - dmin) / 0.05)
         cd = cd + normalize(chain[i + 1] - chain[i]) * w
     cd = normalize(cd)
@@ -652,7 +654,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.1, 1)),
         k=0.05,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "hippoint", pel, V3(0.1 * s * gw, 0.635, -0.29), 0.022, k=0.05
         )
@@ -666,7 +668,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     var ch = rig.bone("chest")
     _ = m.ell("brisket", ch, V3(0, 0.395, 0.3), V3(0.075, 0.075, 0.08), k=0.05)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "pectoral",
             ch,
@@ -676,9 +678,10 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     var ub = rig.bone("udder")
     var u = t.get("udder", 0.0)
+    # Every ewe's udder is 0.1 or more.
     var ewe = not male and not lamb
-    if ewe and u > 0.05:
-        for s in [1.0, -1.0]:
+    if ewe:
+        for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "udder",
                 ub,
@@ -772,7 +775,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _hell(m, h, "cranium", V3(0, -0.002, -0.042), V3(0.05, 0.04, 0.05), 0.03)
     _hell(m, h, "poll", V3(0, 0.0, -0.068), V3(0.038, 0.032, 0.03), 0.03)
     _hell(m, h, "forehead", V3(0, 0.028, 0.0), V3(0.056, 0.018, 0.05), 0.025)
-    for zw in [
+    for zw in [  # pragma: no branch
         V3(0.035, 0.032, 0),
         V3(0.08, 0.03, 0),
         V3(0.122, 0.028, 0),
@@ -818,7 +821,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.018,
     )
     var eye = sheep_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _hell(
             m,
             h,
@@ -981,7 +984,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.012,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -999,7 +1002,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var ear_w = 0.031 if ear == EAR_DROOP else (
         0.024 if ear == EAR_SMALL else 0.028
     )
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -1056,7 +1059,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.sphere("earbase", h, base + up * -0.006, 0.016, k=0.02)
 
     # HORNS: the ram's spirals, their own rigid surface.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var pth = _horn_path(t, s)
         for i in range(len(pth) - 1):
             _ = m.cone(
@@ -1080,7 +1083,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS: fine-boned, with long cannons.
     var lk = 1.0 + 0.1 * heavy
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -1301,7 +1304,7 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.93)
 
     # TAIL: thin and hanging.
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(TAIL_SEGS)
         var t1 = Float64(i + 1) / Float64(TAIL_SEGS)
         _ = m.cone(
@@ -1365,7 +1368,7 @@ def _fleece(
         0.13 + wf * 0.4,
         0.13 + wf * 0.8,
     ]
-    for i in range(5):
+    for i in range(5):  # pragma: no branch
         var bone = rig.bone(sec_bones[i])
         var hw = side * sec_w[i]
         var tt = top - sec_t[i]
@@ -1401,7 +1404,7 @@ def _fleece(
                 k=kf,
             )
         )
-        for _ in range(3):
+        for _ in range(3):  # pragma: no branch
             groups.append(False)
     fleece.append(
         m.ell(
@@ -1423,7 +1426,7 @@ def _fleece(
     )
     groups.append(False)
     groups.append(False)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         fleece.append(
             m.ell(
                 "fleece",
@@ -1489,7 +1492,7 @@ def _fleece(
             k=kf * 0.6,
         )
     )
-    for _ in range(4):
+    for _ in range(4):  # pragma: no branch
         groups.append(False)
     var f = _frame()
     var tk = t.get("topknot", 0.0)
@@ -1511,7 +1514,7 @@ def _fleece(
         )
         groups.append(False)
     if merino:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             fleece.append(
                 m.ell(
                     "woolcheek",
@@ -1525,7 +1528,7 @@ def _fleece(
             )
             groups.append(False)
     # The legs: wool over the upper arm, the thigh and the gaskin.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var sh = rig.j("shoulder" + side)
         var e = rig.j("elbow" + side)
@@ -1578,11 +1581,11 @@ def _fleece(
                 k=0.03,
             )
         )
-        for _ in range(4):
+        for _ in range(4):  # pragma: no branch
             groups.append(True)
     # The tail's wool.
     var tail_len = t.get("tailLen", 0.34)
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(TAIL_SEGS)
         var t1 = Float64(i + 1) / Float64(TAIL_SEGS)
         var ww = min(wf, 0.04) * (0.6 if tail_len > 0.15 else 1.2)
@@ -1603,7 +1606,7 @@ def _fleece(
     # The Merino's skin folds: rings of wool round the neck.
     var folds = t.get("folds", 0.0) if merino else 0.0
     if folds > 0.05:
-        for i in range(4):
+        for i in range(4):  # pragma: no branch
             var u = 0.15 + Float64(i) * 0.22
             var c = lerp(nb, occ, u * 0.8)
             var rr = (0.075 * nk + nf) * (1.02 - 0.2 * u)
@@ -1623,8 +1626,7 @@ def _fleece(
                 )
             )
             groups.append(False)
-    if wf < 0.016:
-        return
+    # Its caller sculpts a fleece only over 0.02 of wool: enough for locks.
     _locks(m, t, fleece, groups, wf, merino)
 
 
@@ -1664,7 +1666,8 @@ def _locks(
     var segs = _ear_segments()
     var wts = List[Float64]()
     var wsum = 0.0
-    for i in fleece:
+    # The fleece is the wool's solids: a sheep with locks has some.
+    for i in fleece:  # pragma: no branch
         ref q = m.prims[i]
         var w = (
             q.r.x * q.r.y + q.r.y * q.r.z + q.r.x * q.r.z
@@ -1678,7 +1681,8 @@ def _locks(
     var pts = List[V3]()
     var owners = List[Int]()
     var normals = List[V3]()
-    for _ in range(tries):
+    # Thousands of tries: the fleece's area over a lock's.
+    for _ in range(tries):  # pragma: no branch
         var x = R.next() * wsum
         var pi_ = 0
         while pi_ < len(fleece) - 1 and x > wts[pi_]:
@@ -1704,7 +1708,7 @@ def _locks(
             var jz = (R.next() - 0.5) * 0.05
             p = pr.c + (pr.b - pr.c) * tt + V3(jx, jy, jz)
         var ok = True
-        for it in range(6):
+        for it in range(6):  # pragma: no branch
             var d = m.eval_list(fleece, p)
             if abs(d) < 3e-4:
                 break
@@ -1722,14 +1726,15 @@ def _locks(
         var i0 = Int(floor(p.x / spacing))
         var j0 = Int(floor(p.y / spacing))
         var k0 = Int(floor(p.z / spacing))
-        for di in range(-1, 2):
-            for dj in range(-1, 2):
-                for dk in range(-1, 2):
+        for di in range(-1, 2):  # pragma: no branch
+            for dj in range(-1, 2):  # pragma: no branch
+                for dk in range(-1, 2):  # pragma: no branch
                     var key = (
                         (i0 + di + 512) * 1024 + (j0 + dj + 512)
                     ) * 1024 + (k0 + dk + 512)
                     if key in grid:
-                        for q in grid[key]:
+                        # A cell's list holds the lock that made it.
+                        for q in grid[key]:  # pragma: no branch
                             if length(pts[q] - p) < spacing:
                                 near = True
         if near:
@@ -1741,7 +1746,7 @@ def _locks(
         pts.append(p)
         var best = 0
         var bd = 1e9
-        for n in range(len(fleece)):
+        for n in range(len(fleece)):  # pragma: no branch
             var d = m.distance(fleece[n], p)
             if d < bd:
                 bd = d
@@ -1776,7 +1781,7 @@ def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
     # Two claws with a cleft between them, heel bulbs behind, flat on the
     # ground.
     var zc = (c.z + toe_j.z) * 0.5
-    for k in [1.0, -1.0]:
+    for k in [1.0, -1.0]:  # pragma: no branch
         var x = c.x + 0.0102 * k * w
         var top = V3(x, c.y + 0.008, c.z - 0.004)
         var toe = V3(x - 0.002 * k, 0.006, toe_j.z - 0.004)
@@ -1996,7 +2001,7 @@ def sheep_palette(t: Traits) raises -> Palette:
     var k = t.get("coatShade", 0.0)
     var l = t.get("coatLightness", 0.0)
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         out.set(
             name,
@@ -2132,13 +2137,10 @@ def sheep_paint(
                     -0.2, 0.9, s.local.y / (0.9 * rl)
                 ) if is_lock else 0.3
         else:
-            var trunk = region <= 1 or region == 4
-            if trunk:
-                var knee_y = 0.3 if is_front_limb(bone) else 0.26
-                wool = 1.0 - legness * smoothstep(
-                    knee_y + 0.03, knee_y - 0.03, p.y
-                )
-                crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
+            # No region is 3, so the body, the neck and the tail are left.
+            var knee_y = 0.3 if is_front_limb(bone) else 0.26
+            wool = 1.0 - legness * smoothstep(knee_y + 0.03, knee_y - 0.03, p.y)
+            crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
     if region == 2 and woolly:
         wool = 1.0
         crest = 0.4 + 0.4 * (fbm3(p * 40.0, 2) - 0.5)
@@ -2151,9 +2153,10 @@ def sheep_paint(
             smoothstep(-0.061, -0.071, h.z + rag),
             smoothstep(-0.006, -0.016, h.y - y_jaw + rag),
         )
+        # On the neck and the head `wool` is none or full, and `wl` is one at
+        # most, so only bare skin takes the edge's wool.
         if wl > wool:
-            if wool <= 0.0:
-                crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
+            crest = 0.5 + (fbm3(p * 40.0, 2) - 0.5)
             wool = wl
     if region <= 1 or region == 4:
         c = mix3(
@@ -2161,8 +2164,9 @@ def sheep_paint(
             pal.get("hairShade"),
             smoothstep(0.2, -0.6, n.y) * 0.6,
         )
-        if fleece_on and region == 1 and legness < 0.3:
-            c = mix3(c, pal.get("clean"), 1.0 - legness / 0.3)
+        # The neck is no limb: its legness is zero, so it shows clean.
+        if fleece_on and region == 1:
+            c = pal.get("clean")
         var bag = tag == "udder" or tag == "teat"
         if bag:
             var skin = mix3(

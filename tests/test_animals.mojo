@@ -26,10 +26,14 @@ from extensions.sdf.sculpt import (
     ell_y,
     tube,
 )
+from extensions.animals.gait import spine_count
 from extensions.animals.kit import (
     EyeSpec,
+    aperture_tilt_along,
     eye_frame_of,
     head_local,
+    pick_cumulative,
+    pick_weighted,
     sculpt_eye_socket,
 )
 from extensions.sdf.mesher import (
@@ -123,7 +127,7 @@ from extensions.animals.warp import (
     scale_warp,
     shift_warp,
 )
-from std.math import pi, sqrt
+from std.math import atan2, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -289,6 +293,10 @@ def test_mutated_bone_ids_are_refused_before_indexing() raises:
 
 def test_warps_move_points() raises:
     _near(apply_warp(scale_warp(2.0), V3(1, 2, 3)), V3(2, 4, 6))
+    # A uniform scale carries a direction along, twice as long.
+    var grow = Warps()
+    grow.add(scale_warp(2.0))
+    _near(grow.push(V3(1, 2, 3), V3(0, 0, 1)), V3(0, 0, 2), 1e-6)
     # Legs: below the belly line, height stretches.
     var legs = legs_warp(1.1, 0.5)
     _near(apply_warp(legs, V3(0, 0.2, 0)), V3(0, 0.22, 0), 1e-12)
@@ -512,6 +520,20 @@ def test_kit_helpers() raises:
     )
     var left = eye_frame_of(eye, V3(0, 1, 0), 1.0)
     var right = eye_frame_of(eye, V3(0, 1, 0), -1.0)
+    # An axis turned more than a quarter turn from the almond's long axis
+    # folds back: the roll stays within a quarter turn of upright.
+    var flat = eye
+    flat.tilt = 0.0
+    var f = eye_frame_of(flat, V3(0, 1, 0), 1.0)
+    for s in [1.0, -1.0]:
+        var roll = aperture_tilt_along(
+            eye, V3(0, 1, 0), f.x * -1.0 + f.y * (0.2 * s)
+        )
+        assert_almost_equal(roll, atan2(0.2 * s, -1.0) - pi * s, atol=1e-9)
+    # An axis along the long axis needs no roll.
+    assert_almost_equal(
+        aperture_tilt_along(eye, V3(0, 1, 0), f.x), 0.0, atol=1e-9
+    )
     assert_almost_equal(left.c.x, -right.c.x, atol=1e-12)
     assert_true(left.z.x > 0.0)
     _near(left.at(0, 0, 0), left.c)
@@ -560,6 +582,13 @@ def test_empty_inputs() raises:
     assert_equal(len(none.warp_model(SdfModel()).prims), 0)
     var empty = List[Float64]()
     assert_equal(pick_variant(-1, empty, 0.3), 0)
+    # No weights pick no entry; a draw past the sum takes the last one.
+    var r = body_random(3)
+    assert_equal(pick_weighted(r, empty), -1)
+    assert_equal(pick_cumulative(0.3, empty), -1)
+    var halves: List[Float64] = [0.5, 0.5]
+    assert_equal(pick_cumulative(2.0, halves), 1)
+    assert_equal(spine_count(Rig()), 0)
 
 
 def test_valid_warps_pass_their_checks() raises:

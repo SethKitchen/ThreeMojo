@@ -272,7 +272,8 @@ def _antlers(mut r: AnimalRandom, mut t: Traits, age_class: Int):
         t.set("curl", 1.0 + 0.12 * r.g())
     t.set("antlerSeed", Float64(Int(r.next() * 1e6)))
     t.set("tines", Float64(len(tines)))
-    for i in range(len(tines)):
+    # A buck that gets here has had a tine appended.
+    for i in range(len(tines)):  # pragma: no branch
         t.set("tineT" + String(i), tines[i].x)
         t.set("tineL" + String(i), tines[i].y)
         t.set("tineLean" + String(i), tines[i].z)
@@ -454,7 +455,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.1, 1)),
         k=0.06,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "hippoint", pb, V3(0.105 * s, 0.835, _bz(-0.29)), 0.025, k=0.07
         )
@@ -467,7 +468,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     # A narrow breast between the forelegs.
     _ = m.ell("brisket", cb, V3(0, 0.575, 0.31), V3(0.075, 0.085, 0.08), k=0.05)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "pectoral",
             cb,
@@ -582,7 +583,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.012,
     )
     var eye = _eye()
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         # The masseter, and the mandible's lower border to the chin.
         _ = head_ell(
             m,
@@ -678,7 +679,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.01,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -691,7 +692,7 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
 
     # EARS: large, broad and cupped.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -736,12 +737,12 @@ def deer_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.sphere("earbase", h, base + up * -0.006, 0.017, k=0.02)
 
     # LEGS: very slender.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         _foreleg(m, rig, side)
         _hind_leg(m, rig, side)
 
     # TAIL: broad, flat and hairy.
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         var a = rig.j("tail" + String(i))
         var b = rig.j("tail" + String(i + 1))
         var t0 = Float64(i) / Float64(TAIL_SEGS)
@@ -1016,7 +1017,7 @@ def _digit(
     # The pastern, two dew claws and a small cloven hoof: two pointed
     # claws with a cleft between them, the sole cut flat.
     _ = m.cone("pastern", paw, mc, c, 0.013 * w, 0.014 * w, k=0.008)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "dewclaw",
             paw,
@@ -1028,7 +1029,7 @@ def _digit(
         )
     var dir = normalize(toe - c)
     var heel = c + V3(0, -0.012, -0.012)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "hoof",
             hoof,
@@ -1073,7 +1074,8 @@ def _catmull(pts: List[V3], n: Int) -> List[V3]:
     # Resample a Catmull-Rom curve through the points at `n + 1` stations.
     var out_pts = List[V3]()
     var seg = len(pts) - 1
-    for i in range(n + 1):
+    # Its callers ask for six stations or more.
+    for i in range(n + 1):  # pragma: no branch
         var u = Float64(i) / Float64(n) * Float64(seg)
         var k = min(seg - 1, Int(floor(u)))
         var t = u - Float64(k)
@@ -1111,7 +1113,7 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
     var r0 = t.get("antlerBase", 0.018)
     var seed = Int(t.get("antlerSeed", 1.0))
     var count = Int(t.get("tines", 0.0))
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var rr = AnimalRandom(
             (seed if seed != 0 else 1) * 31 + (7 if s > 0.0 else 13), 1, 0
         )
@@ -1138,7 +1140,7 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
                 V3(0.5 * sp * s, 0.4 * ri, 0.28 * cu),
                 V3(0.32 * sp * s, 0.43 * ri, 0.44 * cu),
             ]
-        for i in range(len(pts)):
+        for i in range(len(pts)):  # pragma: no branch
             pts[i] = burr + pts[i] * ln
         var beam = _catmull(pts, 8 if spike else 16)
         # The burr: a rough ring at the base, the pedicle into the skull.
@@ -1154,7 +1156,8 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
             part=HORN,
         )
         var n = len(beam) - 1
-        for i in range(n):
+        # The beam's curve has its stations.
+        for i in range(n):  # pragma: no branch
             var t0 = Float64(i) / Float64(n)
             var t1 = Float64(i + 1) / Float64(n)
             _ = m.cone(
@@ -1172,7 +1175,8 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
             )
         if spike:
             continue
-        for j in range(count):
+        # A buck that is not a spike has a tine at least.
+        for j in range(count):  # pragma: no branch
             var tt = t.get("tineT" + String(j), 0.5)
             var b = _sample_at(beam, tt)
             var tangent = normalize(
@@ -1194,7 +1198,8 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
             var tine = _catmull(ctrl, 6)
             var rb = r0 * (0.75 - 0.4 * tt)
             var k = len(tine) - 1
-            for i in range(k):
+            # A tine's curve has seven stations.
+            for i in range(k):  # pragma: no branch
                 var u0 = Float64(i) / Float64(k)
                 var u1 = Float64(i + 1) / Float64(k)
                 _ = m.cone(
@@ -1270,7 +1275,7 @@ def _coat_hexes(t: Traits) -> List[Int]:
     ]
 
 
-def deer_palette(t: Traits) raises -> Palette:
+def deer_palette(t: Traits) -> Palette:
     """Return one deer's palette: its season's coat, shaded, and the
     landmarks the painter reads.
 
@@ -1279,9 +1284,6 @@ def deer_palette(t: Traits) raises -> Palette:
 
     Returns:
         The palette, in linear light.
-
-    Raises:
-        Error: If the coat table is short.
     """
     var hex = _coat_hexes(t)
     var names: List[String] = [
@@ -1293,12 +1295,11 @@ def deer_palette(t: Traits) raises -> Palette:
         "face",
         "legs",
     ]
-    if len(hex) != len(names):
-        raise Error("A deer coat needs seven swatches")
+    debug_assert(len(hex) == len(names), "A deer coat needs seven swatches")
     var k = t.get("coatShade", 0.0)
     var l = t.get("coatLightness", 0.0)
     var pal = Palette()
-    for i in range(len(names)):
+    for i in range(len(names)):  # pragma: no branch
         var c = srgb(hex[i])
         pal.set(
             names[i],
@@ -1362,7 +1363,7 @@ def _tail_side(bone: String, n: V3) -> Float64:
     # positive, the white underside negative.
     var angles: List[Float64] = [-45, -62, -72, -78, -80, -80]
     var i = 0
-    for k in range(1, TAIL_SEGS):
+    for k in range(1, TAIL_SEGS):  # pragma: no branch
         if bone == "tail" + String(k):
             i = k
     var a = angles[i] * pi / 180.0

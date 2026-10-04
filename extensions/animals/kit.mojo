@@ -361,7 +361,8 @@ def pick_weighted(mut r: AnimalRandom, weights: List[Float64]) -> Int:
         weights: Each entry's weight. They need not sum to one.
 
     Returns:
-        The index drawn. The last entry when rounding leaves a rest.
+        The index drawn. The last entry when rounding leaves a rest, and
+        minus one when there are no weights.
     """
     var total = 0.0
     for w in weights:
@@ -383,7 +384,7 @@ def pick_cumulative(x: Float64, weights: List[Float64]) -> Int:
 
     Returns:
         The first index whose running sum exceeds `x`. The last entry
-        when `x` is past the sum.
+        when `x` is past the sum, and minus one when there are no weights.
     """
     var acc = 0.0
     for i in range(len(weights)):

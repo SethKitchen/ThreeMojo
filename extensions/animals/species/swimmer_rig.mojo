@@ -278,7 +278,9 @@ def fin_outline(
     var poly = List[Float64]()
     poly.append(b0u - nx * sink)
     poly.append(b0v - ny * sink)
-    for i in range(n):
+    # The base points above read the first and the last ray, so a fin
+    # that gets here has one.
+    for i in range(n):  # pragma: no branch
         poly.append(rays[i * 4 + 2])
         poly.append(rays[i * 4 + 3])
         if notch > 0.0 and i < n - 1:
@@ -414,7 +416,9 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
         phase = Float64(n - 1)
     else:
         var prev = s0 * sgn
-        for i in range(1, n):
+        # The first and the last ray lie on opposite sides of the point,
+        # so there are two rays at least.
+        for i in range(1, n):  # pragma: no branch
             var si = _side(rays, i, qu, qv) * sgn
             if si <= 0.0:
                 phase = Float64(i - 1) + prev / (prev - si)

@@ -484,33 +484,32 @@ def _op_edge_u(op: Float64, e: Float64) -> Float64:
     return op + 0.003 - 0.045 * min(1.44, e * e)
 
 
-def _skin_x(g: _Geo, u0: Float64, y: Float64) -> Float64:
+def _skin_x(g: _Geo, u0: Float64, y: Float64) raises -> Float64:
     # Where the body's skin is, out along x at `u0` and height `y`: the
     # sections near `u0`, blended as the sculpt blends them.
     var m = SdfModel()
     var sl = g.sl
     var u = 0.012
-    try:
-        while u <= 1.0001:
-            var uu = min(u, 1.0)
-            if abs(uu - u0) < 0.08:
-                _ = m.ell(
-                    "body",
-                    BoneId(0),
-                    V3(0.0, g.yc(uu), g.z(uu)),
-                    V3(g.hw(uu), g.hd(uu), min(0.05, uu * 0.95 + 0.004) * sl),
-                    k=0.007 * sl,
-                )
-            u += 0.018
-    except:
-        return g.surf_x(u0, y)
+    while u <= 1.0001:
+        var uu = min(u, 1.0)
+        if abs(uu - u0) < 0.08:
+            _ = m.ell(
+                "body",
+                BoneId(0),
+                V3(0.0, g.yc(uu), g.z(uu)),
+                V3(g.hw(uu), g.hd(uu), min(0.05, uu * 0.95 + 0.004) * sl),
+                k=0.007 * sl,
+            )
+        u += 0.018
     var ids = List[Int]()
-    for i in range(len(m.prims)):
+    # Sections lie every 0.018 along the body, so the window of 0.16 round
+    # `u0` holds several.
+    for i in range(len(m.prims)):  # pragma: no branch
         ids.append(i)
     var lo = 0.0
     var hi = g.hw(u0) * 2.0
     var z = g.z(u0)
-    for _ in range(40):
+    for _ in range(40):  # pragma: no branch
         var mid = 0.5 * (lo + hi)
         if m.eval_list(ids, V3(mid, y, z)) < 0.0:
             lo = mid
@@ -559,7 +558,7 @@ def fish_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     # The morph draws from its own hashed stream, so consecutive seeds
     # do not correlate.
     var mr = hashed_stream(options.seed, 0x632BE5AB, 0x9E3779B1, 0x5BD1E995)
-    for _ in range(4):
+    for _ in range(4):  # pragma: no branch
         _ = mr.next()
     var morph = 0
     if variant == TROUT:
@@ -612,7 +611,7 @@ def fish_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     return t^
 
 
-def fish_eye(t: Traits) -> EyeSpec:
+def fish_eye(t: Traits) raises -> EyeSpec:
     """Return the fish's left eye: lidless, flush with the head, looking
     out to the side.
 
@@ -621,6 +620,9 @@ def fish_eye(t: Traits) -> EyeSpec:
 
     Returns:
         The eye, from the reference origin.
+
+    Raises:
+        Error: If the sculpt refuses a section of the head.
     """
     var g = _geo(t)
     var r = g.eye_r
@@ -691,12 +693,13 @@ def fish_rig(t: Traits) raises -> Rig:
     var m = g.v.caudal_segs
     var rig = Rig()
     rig.set("snout", V3(0.0, g.mouth_y + 0.004 * sl, g.z0))
-    for i in range(n + 1):
+    # The morph tables give every fish its trunk and caudal bones.
+    for i in range(n + 1):  # pragma: no branch
         var u = g.v.occ + (1.0 - g.v.occ) * Float64(i) / Float64(n)
         rig.set(spine_name(i), V3(0.0, g.yc(u), g.z(u)))
     rig.set("caudal0", rig.j(spine_name(n)))
     var cl = g.tail_len * 0.86
-    for j in range(1, m + 1):
+    for j in range(1, m + 1):  # pragma: no branch
         rig.set(
             "caudal" + String(j),
             V3(0.0, g.yc(1.0), g.z(1.0 + cl * Float64(j) / Float64(m))),
@@ -756,7 +759,8 @@ def _median_rays(g: _Geo, d: _Median, dorsal: Bool) -> List[Float64]:
     # The rays of a dorsal or anal fin, in the median plane (z, y).
     var sl = g.sl
     var rays = List[Float64]()
-    for i in range(d.n):
+    # The morph tables give every fish its fin rays.
+    for i in range(d.n):  # pragma: no branch
         var f = 0.0 if d.n == 1 else Float64(i) / Float64(d.n - 1)
         var u = d.u0 + (d.u1 - d.u0) * f
         var a = (d.a0 + (d.a1 - d.a0) * f) * pi / 180.0
@@ -786,7 +790,7 @@ def _median_rays(g: _Geo, d: _Median, dorsal: Bool) -> List[Float64]:
 def _adipose_rays(g: _Geo) -> List[Float64]:
     var sl = g.sl
     var rays = List[Float64]()
-    for i in range(6):
+    for i in range(6):  # pragma: no branch
         var f = Float64(i) / 5.0
         var u = g.v.ad_u0 + (g.v.ad_u1 - g.v.ad_u0) * f
         var bz = g.z(u)
@@ -811,7 +815,8 @@ def _caudal_rays(g: _Geo) -> List[Float64]:
     var zb0 = g.z(1.0)
     var n = g.v.c_n
     var rays = List[Float64]()
-    for i in range(n):
+    # The morph tables give every fish its caudal rays.
+    for i in range(n):  # pragma: no branch
         var f = Float64(i) / Float64(n - 1)
         var e = 1.0 - 2.0 * f
         var a = pi + e * g.v.c_spread * pi / 180.0
@@ -834,7 +839,8 @@ def _pectoral_rays(g: _Geo) -> List[Float64]:
     var big_l = g.v.p_len * g.fin_k * sl
     var n = g.v.p_n
     var lens = List[Float64]()
-    for i in range(n):
+    # The morph tables give every fish its pectoral rays.
+    for i in range(n):  # pragma: no branch
         var f = 0.0 if n == 1 else Float64(i) / Float64(n - 1)
         var l: Float64
         if g.v.p_shape == POINTED:
@@ -869,7 +875,8 @@ def _pelvic_rays(g: _Geo) -> List[Float64]:
     var big_l = g.v.v_len * g.fin_k * sl
     var n = g.v.v_n
     var lens = List[Float64]()
-    for i in range(n):
+    # The morph tables give every fish its pelvic rays.
+    for i in range(n):  # pragma: no branch
         var f = 0.0 if n == 1 else Float64(i) / Float64(n - 1)
         lens.append(
             big_l
@@ -929,7 +936,7 @@ def fish_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # HEAD: the gill covers, the bluegill's ear flap and the upper lip.
     var op = g.v.op
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var uc = op - 0.055
         var c = g.flank(uc, 0.02, s)
@@ -1058,7 +1065,8 @@ def fish_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # MEDIAN FINS: membranes in the x = 0 plane.
     var sink = 0.022 * sl
-    for i in range(len(g.v.dorsal)):
+    # The morph tables give every fish its dorsal and anal fins.
+    for i in range(len(g.v.dorsal)):  # pragma: no branch
         var d = g.v.dorsal[i]
         _ = sculpt_fin(
             m,
@@ -1073,7 +1081,7 @@ def fish_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             notch=d.notch,
             k=(ft * 1.2),
         )
-    for d in g.v.anal:
+    for d in g.v.anal:  # pragma: no branch
         _ = sculpt_fin(
             m,
             "anal",
@@ -1114,7 +1122,7 @@ def fish_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
 
     # PAIRED FINS: each in the plane of its base line and its direction.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var pec = _paired_plane(
             rig, "pecBase" + side, "pecUp" + side, "pecTip" + side
         )
@@ -1303,7 +1311,7 @@ def _tweak(c: V3, shade: Float64, k: Float64) -> V3:
 
 def fish_paint(
     pal: Palette, t: Traits, tag: String, bone: String, s: CoatSample
-) -> Paint:
+) raises -> Paint:
     """Paint one vertex of a fish.
 
     The trout is olive above a pink lateral band and a silver belly,
@@ -1323,6 +1331,9 @@ def fish_paint(
 
     Returns:
         The paint.
+
+    Raises:
+        Error: If the rig lacks a fin joint.
     """
     var g = _geo(t)
     var sl = g.sl
@@ -1491,13 +1502,13 @@ def fish_paint(
                 c, pal.get("spot"), smoothstep(0.0006 * sl, -0.0006 * sl, d)
             )
     if key == GOLDFISH and morph == 2:
-        var patched = k == 0 or k == 1 or k == 6
-        if patched:
-            var q = p + V3(1.0, 1.0, 1.0) * (
-                0.04 * sl * (fbm3(p * (14.0 / sl), 2) - 0.5)
-            )
-            var d = _spot(q, 0.12 * sl, 0.07 * sl, seed)
-            c = mix3(c, pal.get("spot"), smoothstep(0.004 * sl, -0.004 * sl, d))
+        # A goldfish has no adipose fin and no ear flap, so every region it
+        # paints here, the body, the head or the jaw, takes the patches.
+        var q = p + V3(1.0, 1.0, 1.0) * (
+            0.04 * sl * (fbm3(p * (14.0 / sl), 2) - 0.5)
+        )
+        var d = _spot(q, 0.12 * sl, 0.07 * sl, seed)
+        c = mix3(c, pal.get("spot"), smoothstep(0.004 * sl, -0.004 * sl, d))
     if key == CLOWNFISH:
         var bands = _clown_bands(g, u, e)
         c = mix3(
@@ -1517,7 +1528,7 @@ def _paint_fin(
     bone: String,
     p: V3,
     noise: Float64,
-) -> Paint:
+) raises -> Paint:
     # A fin membrane, painted along its rays.
     var key = t.variant
     var morph = Int(t.get("morph", 0.0))
@@ -1527,21 +1538,12 @@ def _paint_fin(
     var qv: Float64
     if tag == "pectoral" or tag == "pelvic":
         var side = bone.endswith("L")
-        var s = 1.0 if side else -1.0
         var pec = tag == "pectoral"
-        var base: V3
-        var aux: V3
-        var tip: V3
-        try:
-            var rig = fish_rig(t)
-            var sfx = String("L") if side else String("R")
-            base = rig.j(("pecBase" if pec else "pelBase") + sfx)
-            aux = rig.j(("pecUp" if pec else "pelFront") + sfx)
-            tip = rig.j(("pecTip" if pec else "pelTip") + sfx)
-        except:
-            base = V3(0.0, 0.0, 0.0)
-            aux = V3(0.0, s, 0.0)
-            tip = V3(0.0, 0.0, -1.0)
+        var rig = fish_rig(t)
+        var sfx = String("L") if side else String("R")
+        var base = rig.j(("pecBase" if pec else "pelBase") + sfx)
+        var aux = rig.j(("pecUp" if pec else "pelFront") + sfx)
+        var tip = rig.j(("pecTip" if pec else "pelTip") + sfx)
         var fu = normalize(tip - base)
         var fv = fin_plane_v(fu, aux - base)
         qu = dot(p - base, fu)

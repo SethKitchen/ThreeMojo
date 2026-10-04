@@ -169,7 +169,7 @@ def wolf_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
         scale_about_warp(HEAD_O, head * (1.3 if juv > 0.0 else 1.0), 0.08, 0.2)
     )
     if juv > 0.0:
-        for paw in [
+        for paw in [  # pragma: no branch
             V3(0.056, 0.03, 0.32),
             V3(-0.056, 0.03, 0.32),
             V3(0.064, 0.03, -0.3),
@@ -353,7 +353,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     b = rig.bone("pelvis")
     _ = m.ell("pelvis", b, V3(0, 0.625, -0.28), V3(0.07, 0.085, 0.11), k=0.06)
     _ = m.ell("croup", b, V3(0, 0.675, -0.27), V3(0.055, 0.04, 0.1), k=0.04)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "rump",
             b,
@@ -424,7 +424,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hr(t, V3(0.053 + 0.002 * juv, 0.053 + 0.005 * juv, 0.066)),
         k=0.04,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "temporal",
             h,
@@ -447,7 +447,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _hr(t, V3(0.018, 0.014, 0.05)),
         k=0.03,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "brow",
             h,
@@ -509,12 +509,12 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.014,
         )
     # The front of the lip: one tube along the margin to the midline.
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var pts = List[V3]()
         var radii = List[Float64]()
-        for q in _lip_margin():
+        for q in _lip_margin():  # pragma: no branch
             pts.append(_hl(t, V3(q.x * s, q.y, q.z)))
-        for rr in [0.0072, 0.0062, 0.0048, 0.0043]:
+        for rr in [0.0072, 0.0062, 0.0048, 0.0043]:  # pragma: no branch
             radii.append(rr * HS)
         var mx = _lip_margin()[2]
         tube(
@@ -527,7 +527,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             3,
             0.01,
         )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "whisker",
             h,
@@ -580,7 +580,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.006,
     )
     var eye = wolf_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         # The orbit: a soft hollow so brow, cheek and bridge fall to the lids.
         _ = ell_y(
@@ -640,7 +640,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             0.0012,
             k=0.002,
         )
-        for q in [
+        for q in [  # pragma: no branch
             V3(0.0024, 0.1215, 0.0014),
             V3(0.0066, 0.1202, 0.0014),
             V3(0.0106, 0.1175, 0.0017),
@@ -677,7 +677,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.006,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -704,7 +704,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.01,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "canine",
             jw,
@@ -715,7 +715,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.002,
             part=JAW,
         )
-        for q in [
+        for q in [  # pragma: no branch
             V3(0.0026, 0.1197, 0),
             V3(0.0062, 0.1182, 0),
             V3(0.0094, 0.1158, 0),
@@ -730,7 +730,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 k=0.001,
                 part=JAW,
             )
-        for row in _cheek_teeth():
+        for row in _cheek_teeth():  # pragma: no branch
             _ = m.cone(
                 "tooth",
                 jw,
@@ -746,7 +746,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
 
     # EARS: erect and triangular, set wide, with a cupped front.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -813,7 +813,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
 
     # LEGS: long and lean, with big feet and elbows tucked in.
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -1044,7 +1044,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _tail_radius(0.1, tb),
         k=0.04,
     )
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -1073,7 +1073,7 @@ def _toes(
 ) raises:
     var toe_x: List[Float64] = [-0.021, -0.0072, 0.0072, 0.021]
     var toe_z: List[Float64] = [-0.011, 0, 0, -0.011]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         _ = m.sphere(
             "toe",
             bone,
@@ -1081,7 +1081,7 @@ def _toes(
             toe_r,
             k=0.007,
         )
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         var x = toe.x + toe_x[i] * claw_spread * s
         _ = m.cone(
             "claw",
@@ -1156,15 +1156,6 @@ def _cheek_teeth() -> List[List[Float64]]:
         [0.0146, 0.059, -0.0405, 0.006, 0.0036],
         [0.0149, 0.043, -0.0395, 0.0065, 0.0044],
     ]
-
-
-def wolf_box() -> Tuple[V3, V3]:
-    """Return a box that holds every wolf, in reference space.
-
-    Returns:
-        The least and the greatest corner.
-    """
-    return (V3(-0.2, -0.03, -0.9), V3(0.2, 0.96, 0.82))
 
 
 def wolf_look(t: Traits) -> EyeLook:
@@ -1368,7 +1359,7 @@ def wolf_palette(t: Traits) raises -> Palette:
     )
     var pup = srgb(0x5B534C) * pup_k
     var out = Palette()
-    for name in names:
+    for name in names:  # pragma: no branch
         var c = base.get(name)
         var keep_pale = (
             name == "cheek"

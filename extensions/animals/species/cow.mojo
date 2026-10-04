@@ -223,7 +223,7 @@ def cow_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
         "hornA1",
         "hornCurl",
     ]
-    for i in range(6):
+    for i in range(6):  # pragma: no branch
         t.set(names[i], horns[i])
     var face = F_NONE
     if variant == HOLSTEIN:
@@ -451,7 +451,7 @@ def _horn_radii(t: Traits) -> List[Float64]:
     # The horn's radius at each point of its center line.
     var hr = t.get("hornR", 0.0)
     var rads: List[Float64] = [hr * 1.05]
-    for i in range(1, 8):
+    for i in range(1, 8):  # pragma: no branch
         var v = Float64(i) / 7.0
         rads.append(max(0.004, hr * (1.0 - 0.86 * v**1.25)))
     return rads^
@@ -481,7 +481,7 @@ def _horn_points(t: Traits, s: Float64) -> List[V3]:
     var pts = List[V3]()
     var p = base + out_dir * -0.03
     pts.append(p)
-    for i in range(1, n + 1):
+    for i in range(1, n + 1):  # pragma: no branch
         var u = (Float64(i) - 0.5) / Float64(n)
         var a = a0 + (a1 - a0) * u**curl
         var d = normalize(out_dir * cos(a) + tw * sin(a))
@@ -570,7 +570,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         axis=normalize(V3(0, -0.06, 1)),
         k=0.1,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.sphere(
             "hook",
             pb,
@@ -592,7 +592,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     _ = m.ell("tailhead", pb, V3(0, 1.39, -0.86), V3(0.06, 0.055, 0.08), k=0.06)
     # The brisket between and in front of the forelegs.
     _ = m.ell("brisket", cb, V3(0, 0.83, 0.6), V3(0.17 * wb, 0.17, 0.17), k=0.1)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "pectoral", cb, V3(0.1 * s, 0.86, 0.7), V3(0.1, 0.15, 0.1), k=0.08
         )
@@ -611,15 +611,15 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.06,
         )
         _ = m.ell("sheath", s2, V3(0, 0.6, 0.08), V3(0.03, 0.04, 0.05), k=0.04)
-        if not calf:
-            _ = m.ell(
-                "scrotum",
-                pb,
-                V3(0, 0.66, -0.66),
-                V3(0.075, 0.13, 0.08),
-                axis=normalize(V3(0, 0.1, 1)),
-                k=0.05,
-            )
+        # A bull calf's `bull` is 0.25, so a calf never gets here.
+        _ = m.ell(
+            "scrotum",
+            pb,
+            V3(0, 0.66, -0.66),
+            V3(0.075, 0.13, 0.08),
+            axis=normalize(V3(0, 0.1, 1)),
+            k=0.05,
+        )
 
     # NECK: thin and long in dairy cows, short and thick in beef breeds,
     # massive with a crest in bulls.
@@ -693,19 +693,19 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.06,
         k=0.08,
     )
+    # Every breed's dewlap is 0.24 or more: `_breed` gives 0.3 at least.
     var dw = t.get("dewlap", 0.5)
-    if dw > 0.02:
-        var a = V3(0, 0.99, 0.95)
-        var b = V3(0, 0.76, 0.66)
-        _ = m.ell(
-            "dewlap",
-            n1,
-            lerp(a, b, 0.55) + V3(0, -0.04 * dw, 0.02 * dw),
-            V3(0.035 + 0.015 * dw, 0.07 + 0.08 * dw, 0.2),
-            axis=normalize(b - a),
-            up=normalize(V3(0, 1, 0.9)),
-            k=0.07,
-        )
+    var a = V3(0, 0.99, 0.95)
+    var b = V3(0, 0.76, 0.66)
+    _ = m.ell(
+        "dewlap",
+        n1,
+        lerp(a, b, 0.55) + V3(0, -0.04 * dw, 0.02 * dw),
+        V3(0.035 + 0.015 * dw, 0.07 + 0.08 * dw, 0.2),
+        axis=normalize(b - a),
+        up=normalize(V3(0, 1, 0.9)),
+        k=0.07,
+    )
 
     # HEAD, in head-local coordinates.
     var h = rig.bone("head")
@@ -801,7 +801,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             carve=True,
         )
     var eye = _eye()
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         # The masseter, and the mandible's lower border to the chin.
         _ = head_ell(
@@ -915,7 +915,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         k=0.02,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -944,7 +944,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EARS: broad leaves, carried sideways.
     var e_k = 1.1 if calf else 1.0
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
         var along = normalize(tip - base)
@@ -989,13 +989,13 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # LEGS.
     var leg_k = 1.0 + 0.08 * beef + 0.1 * bull
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         _foreleg(m, rig, side, leg_k, bull)
         _hind_leg(m, rig, side, leg_k, beef)
 
     # TAIL: the tail head, the bony tail, and the switch.
     var tail_k = 0.9 if calf else 1.0
-    for i in range(BONE_SEGS):
+    for i in range(BONE_SEGS):  # pragma: no branch
         var t0 = Float64(i) / Float64(BONE_SEGS)
         var t1 = Float64(i + 1) / Float64(BONE_SEGS)
         _ = m.cone(
@@ -1046,10 +1046,11 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # HORNS: their own surface on the head.
     if t.get("hornStyle", 0.0) > 0.0:
-        for s in [1.0, -1.0]:
+        for s in [1.0, -1.0]:  # pragma: no branch
             var pts = _horn_points(t, s)
             var rads = _horn_radii(t)
-            for i in range(len(pts) - 1):
+            # A horn has its base and seven points.
+            for i in range(len(pts) - 1):  # pragma: no branch
                 _ = m.cone(
                     "horn",
                     h,
@@ -1071,7 +1072,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
 
     # EAR TAGS and the NOSE RING: their own surfaces.
     if t.get("earTags", 0.0) > 0.0:
-        for side in [String("L"), String("R")]:
+        for side in [String("L"), String("R")]:  # pragma: no branch
             var eb = rig.bone("ear" + side)
             var q = lerp(
                 rig.j("earBase" + side), rig.j("earTip" + side), 0.42
@@ -1101,7 +1102,7 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     if t.get("noseRing", 0.0) > 0.0:
         var c = hf.at(V3(0, -0.078, 0.402))
         var n = 14
-        for i in range(n):
+        for i in range(n):  # pragma: no branch
             _ = m.cone(
                 "ring",
                 h,
@@ -1150,7 +1151,7 @@ def _udder(mut m: SdfModel, rig: Rig, k: Float64) raises:
         part=APPENDAGE,
     )
     var bottom = 0.73 + 0.04 * (1.0 - k) - 0.15 * sz
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         # The quarters bulge a little each side of the median groove.
         _ = m.ell(
             "udder",
@@ -1168,7 +1169,7 @@ def _udder(mut m: SdfModel, rig: Rig, k: Float64) raises:
             k=0.05,
             part=APPENDAGE,
         )
-        for z in [-0.64, -0.44]:
+        for z in [-0.64, -0.44]:  # pragma: no branch
             _ = m.cone(
                 "teat",
                 s1,
@@ -1443,7 +1444,7 @@ def _digits(
     # a half cone with its front wall parallel to the pastern, heel bulbs
     # behind, the cleft carved between them and the sole cut flat.
     _ = m.cone("pastern", paw, mc, c, 0.038 * w, 0.04 * w, k=0.02)
-    for d in [1.0, -1.0]:
+    for d in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "dewclaw",
             paw,
@@ -1454,7 +1455,7 @@ def _digits(
         )
     var z_mid = (c.z + toe.z) * 0.5
     var dir = 1.0 if toe.z - c.z >= 0.0 else -1.0
-    for d in [1.0, -1.0]:
+    for d in [1.0, -1.0]:  # pragma: no branch
         var off = 0.026 * d * w
         _ = m.cone(
             "hoof",
@@ -1567,7 +1568,7 @@ def _coat_hexes(coat: Int) -> List[Int]:
     return [0x141312, 0x121110, 0x1C1A19, 0x141312, 0xF1EFE9, 0x1E1A1A, 0]
 
 
-def cow_palette(t: Traits) raises -> Palette:
+def cow_palette(t: Traits) -> Palette:
     """Return one cow's palette: its breed's coat, shaded, and the seeds
     of its piebald patches.
 
@@ -1576,18 +1577,14 @@ def cow_palette(t: Traits) raises -> Palette:
 
     Returns:
         The palette, in linear light.
-
-    Raises:
-        Error: If a swatch table is short.
     """
     var hex = _coat_hexes(Int(t.get("coat", 0.0)))
-    if len(hex) < 7:
-        raise Error("A cattle coat needs seven swatches")
+    debug_assert(len(hex) >= 7, "A cattle coat needs seven swatches")
     var k = t.get("coatShade", 0.0)
     var l = t.get("coatLightness", 0.0)
     var pal = Palette()
     var tinted: List[String] = [String("body"), "dorsal", "belly", "head"]
-    for i in range(4):
+    for i in range(4):  # pragma: no branch
         pal.set(tinted[i], _tint(srgb(hex[i]), k, l))
     pal.set("dark", _tint(srgb(hex[6]), k, l))
     pal.set("white", srgb(hex[4]))

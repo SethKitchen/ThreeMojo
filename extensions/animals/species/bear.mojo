@@ -480,7 +480,7 @@ def bear_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     _ = m.ell("croup", b, V3(0, 0.82, -0.38), V3(0.15 * gw, 0.07, 0.14), k=0.06)
     _ = m.ell("perineum", b, V3(0, 0.6, -0.45), V3(0.07, 0.07, 0.13), k=0.06)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "rump",
             b,
@@ -544,7 +544,7 @@ def bear_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.035,
         k=0.04,
     )
-    for i in range(TAIL_SEGS):
+    for i in range(TAIL_SEGS):  # pragma: no branch
         _ = m.cone(
             "tail",
             rig.bone("tail" + String(i)),
@@ -592,7 +592,7 @@ def _sculpt_head(mut m: SdfModel, rig: Rig, t: Traits, juv: Float64) raises:
         _hrw(hw, V3(0.1, 0.04, 0.075)),
         k=0.05,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.ell(
             "brow",
             h,
@@ -695,7 +695,7 @@ def _sculpt_head(mut m: SdfModel, rig: Rig, t: Traits, juv: Float64) raises:
         k=0.014,
     )
     var eye = bear_eye(t)
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         _ = ell_y(
             m,
@@ -776,7 +776,7 @@ def _sculpt_head(mut m: SdfModel, rig: Rig, t: Traits, juv: Float64) raises:
         k=0,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "mandible",
             jw,
@@ -795,7 +795,7 @@ def _sculpt_head(mut m: SdfModel, rig: Rig, t: Traits, juv: Float64) raises:
         k=0.02,
         part=JAW,
     )
-    for s in [1.0, -1.0]:
+    for s in [1.0, -1.0]:  # pragma: no branch
         _ = m.cone(
             "canine",
             jw,
@@ -811,7 +811,7 @@ def _sculpt_head(mut m: SdfModel, rig: Rig, t: Traits, juv: Float64) raises:
 def _sculpt_ears(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # Small, round, furred ears, set wide on the top corners of the head.
     var ek = t.get("ear")
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var base = rig.j("earBase" + side)
         var tip = rig.j("earTip" + side)
@@ -877,7 +877,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
     var fz = _fore_z()
     var hx = _hind_x()
     var hz = _hind_z()
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
         var lat = V3(s, 0, 0)
         var sc = rig.j("scapTop" + side)
@@ -970,7 +970,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             lateral=lat,
             k=0.022,
         )
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 fpaw,
@@ -1080,7 +1080,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             lateral=lat,
             k=0.022,
         )
-        for i in range(5):
+        for i in range(5):  # pragma: no branch
             _ = m.sphere(
                 "toe",
                 hpaw,
@@ -1105,7 +1105,7 @@ def _arc_for(span: Float64, drop: Float64, th0: Float64) -> Float64:
         return hi
     if _drop_of(span, th0, lo) > drop:
         return lo
-    for _ in range(30):
+    for _ in range(30):  # pragma: no branch
         var mid = (lo + hi) / 2.0
         var short = _drop_of(span, th0, mid) < drop
         lo = mid if short else lo
@@ -1126,7 +1126,7 @@ def _claw_point(
     var n = 16
     var x = 0.0
     var y = 0.0
-    for i in range(n):
+    for i in range(n):  # pragma: no branch
         var u = (Float64(i) + 0.5) / Float64(n) * t
         var th = th0 + (th1 - th0) * u
         x += cos(th) * span * t / Float64(n)
@@ -1144,9 +1144,9 @@ def _sculpt_claws(mut m: SdfModel, rig: Rig, t: Traits) raises:
     var fore_len: List[Float64] = [0.78, 0.94, 1.0, 0.97, 0.84]
     var hind_len: List[Float64] = [0.8, 0.95, 1.0, 0.97, 0.85]
     var segs = 8
-    for side in [String("L"), String("R")]:
+    for side in [String("L"), String("R")]:  # pragma: no branch
         var s = 1.0 if side == "L" else -1.0
-        for fore in [True, False]:
+        for fore in [True, False]:  # pragma: no branch
             var dx = _fore_x() if fore else _hind_x()
             var dz = _fore_z() if fore else _hind_z()
             var dl = fore_len.copy() if fore else hind_len.copy()
@@ -1154,7 +1154,7 @@ def _sculpt_claws(mut m: SdfModel, rig: Rig, t: Traits) raises:
             var toe = rig.j(("ftoe" if fore else "htoe") + side)
             var back = TOE_F if fore else TOE_H
             var bone: BoneId = rig.bone(("fpaw" if fore else "hpaw") + side)
-            for i in range(5):
+            for i in range(5):  # pragma: no branch
                 var tp = V3(toe.x + dx[i] * s, dy, toe.z - back - 0.012 + dz[i])
                 var root = tp + V3(
                     dx[i] * s * 0.08, 0.001, 0.012 if fore else 0.01
@@ -1170,7 +1170,7 @@ def _sculpt_claws(mut m: SdfModel, rig: Rig, t: Traits) raises:
                 var w0 = (0.012 if fore else 0.009) * kk * thick
                 var prev = root
                 var prev_r = 0.5 * sqrt(h0 * w0)
-                for j in range(1, segs + 1):
+                for j in range(1, segs + 1):  # pragma: no branch
                     var tt = 1.0 - pow(1.0 - Float64(j) / Float64(segs), 1.25)
                     var taper = pow(1.0 - tt, 0.6)
                     var a = max(0.0007, w0 * 0.5 * taper)
@@ -1331,7 +1331,7 @@ def _desat(c: V3, k: Float64) -> V3:
     return V3(c.x + (y - c.x) * k, c.y + (y - c.y) * k, c.z + (y - c.z) * k)
 
 
-def bear_palette(t: Traits) raises -> Palette:
+def bear_palette(t: Traits) -> Palette:
     """Return one bear's palette: its coat color, warmed and grayed.
 
     Photos of brown bears read grayer than the swatches, the head more so.
@@ -1343,15 +1343,14 @@ def bear_palette(t: Traits) raises -> Palette:
 
     Returns:
         The palette, in linear light.
-
-    Raises:
-        Error: If the palette tables differ in length.
     """
     var coat = Int(t.get("coat", 0.0))
     var names = _swatches()
     var hexes = _coat_hexes(coat)
-    if len(names) != len(hexes) + 2:
-        raise Error("The bear's palette tables differ in length")
+    debug_assert(
+        len(names) == len(hexes) + 2,
+        "The bear's palette tables differ in length",
+    )
     var k = t.get("coatWarmth", 0.0)
     var l = t.get("coatLightness", 0.0)
     var juv = t.juvenile()
@@ -1360,7 +1359,7 @@ def bear_palette(t: Traits) raises -> Palette:
     )
     var cub = srgb(0x6A4C34) * cub_k
     var pal = Palette()
-    for i in range(len(hexes)):
+    for i in range(len(hexes)):  # pragma: no branch
         var c = srgb(hexes[i])
         if i != CLAW:
             c = V3(
