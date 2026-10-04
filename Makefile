@@ -32,13 +32,15 @@ LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
-TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo))
+# Import-only diagnostic adapters must not be compiled as CLI entry points.
+HELPER_LIBS  := tools/anatomy_pairs.mojo
+TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo)) $(HELPER_LIBS)
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
 # which is the point of them, so linting them would always fail.
-ENTRY_POINTS := $(shell find tests examples bench tools -name '*.mojo' \
+ENTRY_POINTS := $(filter-out $(HELPER_LIBS),$(shell find tests examples bench tools -name '*.mojo' \
                   -not -path 'tests/compile_fail/*' \
-                  -not -path 'bench/mojo10/*') $(TOOL_CLIS)
+                  -not -path 'bench/mojo10/*')) $(TOOL_CLIS)
 COMPILE_FAIL := $(wildcard tests/compile_fail/*.mojo)
 DOC_SOURCES  := $(LIB_SOURCES) $(TOOL_LIBS)
 TESTS        := $(wildcard tests/test_*.mojo)
@@ -128,9 +130,9 @@ $(info Affected since $(AFFECTED): $(words $(CPU_TESTS)) suites, \
   modules, $(words $(FORMATTED)) changed files.)
 endif
 # What the coverage build copies through uninstrumented: excluded libraries,
-# maintained benchmark helpers imported by tests, and in an AFFECTED run every
+# maintained benchmark and diagnostic helpers imported by tests, and in an AFFECTED run every
 # library the change does not reach. Explicitly measured helpers stay instrumented.
-COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) \
+COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) $(HELPER_LIBS) \
                          $(filter bench/%,$(ENTRY_POINTS)))
 
 # --- caching ----------------------------------------------------------------
