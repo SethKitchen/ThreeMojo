@@ -21,6 +21,8 @@ this type: the absence of a texture is a fact about textures.
 
 from render.texture import Texture
 
+from std.memory import ArcPointer
+
 
 @fieldwise_init
 struct TextureId(Equatable, ImplicitlyCopyable, Writable):
@@ -43,9 +45,15 @@ struct TextureStore(Movable):
 
     var textures: List[Texture]
 
+    # Retained allocation identity for resource caches. Moving this store
+    # preserves it; a fresh store gets a new identity. A cache retains the
+    # token, not this store's resources, so allocator address reuse is safe.
+    var _cache_owner: ArcPointer[Int]
+
     def __init__(out self):
         """Create an empty store."""
         self.textures = List[Texture]()
+        self._cache_owner = ArcPointer(Int(0))
 
     def count(self) -> Int:
         """Return how many textures the store holds."""

@@ -1,0 +1,78 @@
+{
+  "scope": "Historical provenance identifiers only; no record here is a replay dependency or replacement for scoped source pins.",
+  "integration_target": {
+    "pr": 594,
+    "parent_specified_base_tree": "3859956e3474cc35fa73b90c005e5cbfcad31c70"
+  },
+  "prior_table_artifact": {
+    "regenerate.py": {
+      "sha256": "6ab5a0bd2c761b0f9dc66c8d8dc72501850b34ef3e2ff9f674e197b57c89e4e3",
+      "bytes": 14236
+    },
+    "exact_coefficients.json": {
+      "sha256": "36f6afb064931eedf05430c9baa0dfae24833674bd70ea7a1a44ff220b634ea9",
+      "bytes": 1351288
+    },
+    "spiral_moment_words.be64": {
+      "sha256": "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446",
+      "bytes": 22528
+    },
+    "NATIVE-QUALIFICATION.json": {
+      "sha256": "8494f01af6a4fdade41ad1f7181b1891e8f52bcc9613e299f38c641a5edf95d2",
+      "bytes": 1172
+    }
+  },
+  "prior_independent_revision2": {
+    "derive_controls.py": {
+      "sha256": "cbc7d9733aa7d52c6934858d27dda7e1915dcbf687621de46b53e8331fd955a5",
+      "bytes": 27022
+    },
+    "oracle_results.json": {
+      "sha256": "35323518e8b3807655672bdcee29fbdc42edf18526a54b02fd1dc47c97a59b0f",
+      "bytes": 1406306
+    },
+    "CORRECTION.md": {
+      "sha256": "447b5bf8346e54fbdadd9c5d0047ca2c99c347738a2549f29275862da5dcd498",
+      "bytes": 5981
+    }
+  },
+  "prior_source_proof_design": {
+    "sha256": "78ebd05c7360700eed9e896e7ca524afa101e21303d8dcda226c09b8e080afce",
+    "bytes": 17346
+  },
+  "native_observations": {
+    "new_execution_by_portable_checker": false,
+    "prior_focused_tests_default": 107,
+    "prior_focused_tests_contraction_off": 107,
+    "prior_readonly_data_bytes": 22528,
+    "prior_dynamic_accessor_bytes": 71,
+    "scope": "Explicit previously pinned accessor probe only; not future callers or whole-map cost"
+  },
+  "data_migration": {
+    "previous_source_sha256": "8562b41343766f69a6a6c4db29b204321a751de118ea5a9702498e1611265f98",
+    "canonical_source_sha256": "2f984e1c7fb4846480feec7678437efc097f9d65bf3b3105c5fd4a10b5a2ca54",
+    "change": "Comment header only; complete declaration and trailing bytes unchanged",
+    "numerical_words_preserved": 2816
+  },
+  "portable_check": {
+    "exact_fraction_matches": 1408,
+    "endpoint_matches": 2816,
+    "zeroth_moment": "36028797018963971/36028797018963968",
+    "source_byte_replay": "Canonical complete source bytes, not word-only equivalence"
+  },
+  "remaining_obligations": [
+    "actual rounded geometry/error graphs and runtime guards",
+    "native and compiler qualification",
+    "full query correctness, budget, coverage and performance gates"
+  ],
+  "formatter_layout_migration": {
+    "previous_source_sha256": "2f984e1c7fb4846480feec7678437efc097f9d65bf3b3105c5fd4a10b5a2ca54",
+    "canonical_source_sha256": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+    "previous_source_bytes": 87600,
+    "canonical_source_bytes": 93232,
+    "change": "One UInt64 array element per line; whitespace only inside the declaration. Header, count labels, endpoint words and order are unchanged.",
+    "numerical_words_preserved": 2816,
+    "words_be64_sha256": "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446",
+    "formatter_evidence": "Canonical source is byte-identical to the retained formatted output. No formatter or native execution was run for this source-only delta."
+  }
+}

@@ -2836,6 +2836,8 @@ struct AnimationMixer(Movable):
         for index in range(len(self.actions)):  # pragma: no branch
             if self.uncached[index] or not self.actions[index].active:
                 continue
+            if not self.actions[index].blend_mode.is_valid():
+                raise Error("An action needs a blend mode that exists")
             var phase = Float32(0) if rewind else self.actions[index].phase
             var tick = self.actions[index]._plan_tick(elapsed, seconds, phase)
             if count == 0:
@@ -2878,8 +2880,6 @@ struct AnimationMixer(Movable):
                 self.actions[index].now = self.elapsed
                 self.actions[index].applied_weight = 0
                 continue
-            if not self.actions[index].blend_mode.is_valid():
-                raise Error("An action needs a blend mode that exists")
             var tick = (
                 prepared.first if action_count
                 == 0 else prepared.others[action_count - 1]

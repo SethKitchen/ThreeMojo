@@ -12,6 +12,8 @@ never reports an off-road result or a partially searched minimum.
 
 from extensions.carla.curve_bounds import (
     _lane_jet,
+    _lane_jet_capture,
+    _lane_jet_with_proof,
     _lane_width_box,
     _scaled_plan_width_box,
     _reference_work,
@@ -34,6 +36,7 @@ from extensions.carla.curve_interval import (
     _next_down,
     _next_up,
 )
+from extensions.carla.spiral_domain_proof import _SpiralRootCapture, _SpiralDomainProof
 from extensions.carla.geometry import ARC, LINE
 from extensions.carla.curve_rounded_arc import _rounded_arc_context
 from extensions.carla.polynomial import CubicPolynomial
@@ -669,6 +672,7 @@ def _refine_lane_certificate(
     max_nodes: Int = 16384,
     max_terms: Int = 2000000,
     max_depth: Int = 96,
+    spiral_proof: Optional[_SpiralDomainProof] = None,
 ) raises -> _LaneCertificate:
     if not (isfinite(low) and isfinite(high) and isfinite(seed)):
         raise Error("Lane refinement needs finite parameter bounds")
@@ -746,6 +750,7 @@ def _refine_lane_certificate(
         max_nodes,
         max_terms,
         max_depth,
+        spiral_proof,
     )
     return certificate^
 
@@ -891,6 +896,7 @@ def _resume_lane_certificate(
     max_nodes: Int = 16384,
     max_terms: Int = 2000000,
     max_depth: Int = 96,
+    spiral_proof: Optional[_SpiralDomainProof] = None,
 ) raises:
     # Internal precondition: same road snapshot, lane, query, and original
     # parameter domain as the certificate. Old strict exclusions stay valid.
@@ -968,6 +974,7 @@ def _resume_lane_certificate(
         max_nodes,
         max_terms,
         max_depth,
+        spiral_proof,
     )
 
 
@@ -986,6 +993,7 @@ def _run_lane_search(
     max_nodes: Int,
     max_terms: Int,
     max_depth: Int,
+    spiral_proof: Optional[_SpiralDomainProof] = None,
 ) raises:
     # Fresh and resumed refinement share one solver. Counters and improved
     # incumbents are published immediately, including on an exception.
@@ -1081,7 +1089,9 @@ def _run_lane_search(
                     "Lane refinement exhausted its quadrature work limit"
                 )
             certificate.terms += work
-            var point_domain = _lane_jet(road, section, lane, lo, hi)
+            var point_domain = _lane_jet_with_proof(
+                road, section, lane, lo, hi, low, high, spiral_proof
+            )
             var natural = _scaled_point_distance_box(
                 point_domain, location, scale
             ).low
@@ -1297,6 +1307,27 @@ def _chord_error(
 
 
 def _chord_certificate(
+    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    start: Vector3, end: Vector3, max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    var captured = _SpiralRootCapture()
+    return _chord_certificate_impl[False](
+        road, section, lane, low, high, start, end, captured, max_terms
+    )
+
+
+def _chord_certificate_capture(
+    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    start: Vector3, end: Vector3, mut captured: _SpiralRootCapture,
+    max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    captured = _SpiralRootCapture()
+    return _chord_certificate_impl[True](
+        road, section, lane, low, high, start, end, captured, max_terms
+    )
+
+
+def _chord_certificate_impl[capture: Bool](
     road: Road,
     section: Int,
     lane: Int,
@@ -1304,13 +1335,17 @@ def _chord_certificate(
     high: Float64,
     start: Vector3,
     end: Vector3,
+    mut captured: _SpiralRootCapture,
     max_terms: Int = 2000000,
 ) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
     var work = _reference_work(road, low, high)
     var point = _unknown_point()
     var spent = 0
     if work >= 0 and work <= max_terms:
-        point = _lane_jet(road, section, lane, low, high)
+        comptime if capture:
+            point = _lane_jet_capture(road, section, lane, low, high, captured)
+        else:
+            point = _lane_jet(road, section, lane, low, high)
         spent = work
     var box = (
         point[0].rounded_value(),

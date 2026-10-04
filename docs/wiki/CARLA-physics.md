@@ -39,6 +39,8 @@ The rigid-body core lives in [Shared physics](Physics). Its CARLA import paths r
 
 `CarlaPhysics.tick` advances the world by CARLA's `fixed_delta_seconds`. It can cut the step into substeps. Each substep updates every vehicle and walker, and then steps the world. External forces and torques applied before the tick act through every substep. They are cleared after the tick.
 
+The [tick-force benchmark](Tick-force-restoration) retains all-body snapshots after comparing dynamic-only alternatives. Static and kinematic forces are consumed without acceleration. Ghost dynamic bodies still receive their forces.
+
 ```mojo
 from extensions.carla.physics.shape import PhysicsMaterial
 from extensions.carla.physics.simulation import CarlaPhysics

@@ -831,13 +831,19 @@ struct Ray(ImplicitlyCopyable):
         )
         if discriminant < -guard:
             return False
-        var boundary = (
-            bitcast[DType.uint64](distance)
-            - bitcast[DType.uint64](radius)
-            + UInt64(16)
-        )
-        if discriminant > guard and boundary > UInt64(32):
-            return outside < 0 or projection >= 0
+        # A certified crossing with a forward projection already meets the
+        # half-line. Only a backward projection needs the origin-side filter
+        # to distinguish a containing sphere from one behind the ray.
+        if discriminant > guard:
+            if projection >= 0:
+                return True
+            var boundary = (
+                bitcast[DType.uint64](distance)
+                - bitcast[DType.uint64](radius)
+                + UInt64(16)
+            )
+            if boundary > UInt64(32):
+                return outside < 0
         if (
             distance < inf[DType.float64]()
             and norm > 0

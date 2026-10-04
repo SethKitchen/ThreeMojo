@@ -11,7 +11,7 @@ square. This is point-distance arithmetic, not a global curve certificate.
 """
 
 from extensions.carla.curve_interval import _Interval
-from std.math import inf, isfinite
+from std.math import inf, isfinite, sqrt
 from std.memory import bitcast
 
 comptime _WORDS = 132
@@ -271,3 +271,56 @@ def _point_gap_scale(
     while (bits & (bits - UInt64(1))) != 0:
         bits = bits & (bits - UInt64(1))
     return bitcast[DType.float64](bits)
+
+
+def _distance_overflow_result(
+    point: Array[Float64, 3], query: Array[Float64, 3]
+) raises -> Float64:
+    # The scaled norm can round above the finite limit even when the exact
+    # norm is in range. Reuse the bounded product kernel to check that edge.
+    # All inputs are finite before this private helper is called.
+    var positive = Array[UInt64, _WORDS](fill=0)
+    var negative = Array[UInt64, _WORDS](fill=0)
+    var axis = 0
+    while axis < 3:
+        _signed_product(positive, negative, point[axis], point[axis], 0, False)
+        _signed_product(positive, negative, query[axis], query[axis], 0, False)
+        _signed_product(positive, negative, point[axis], query[axis], 1, True)
+        axis += 1
+    var limit = Float64(1.7976931348623157e308)
+    _signed_product(positive, negative, limit, limit, 0, True)
+    if _exact_sign(positive, negative) > 0:
+        raise Error("Lane distance exceeds the finite Float64 range")
+    return limit
+
+
+def _wide_distance(
+    point: Array[Float64, 3], query: Array[Float64, 3]
+) raises -> Float64:
+    """Approximate the stored-point norm without a false zero or overflow.
+
+    Selection must use _wide_point_order instead of this rounded output.
+    """
+    _finite_point(point)
+    _finite_point(query)
+    var gaps = Array[Float64, 3](fill=0.0)
+    var scale = Float64(0)
+    var axis = 0
+    while axis < 3:
+        gaps[axis] = abs(point[axis] - query[axis])
+        scale = max(scale, gaps[axis])
+        axis += 1
+    if scale == 0.0:
+        return 0.0
+    if not isfinite(scale):
+        return _distance_overflow_result(point, query)
+    var sum = Float64(0)
+    axis = 0
+    while axis < 3:
+        var part = gaps[axis] / scale
+        sum += part * part
+        axis += 1
+    var distance = scale * sqrt(sum)
+    if not isfinite(distance):
+        return _distance_overflow_result(point, query)
+    return distance

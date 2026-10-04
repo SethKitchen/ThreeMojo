@@ -452,7 +452,7 @@ def game_build_settings(
         A value snapshot independent of the canonical spec.
 
     Raises:
-        Error: If the hair style is unnamed or a value is not finite.
+        Error: If the hair style is unnamed.
     """
     if not hair_style.is_valid():
         raise Error("Game build settings require a named hair style")

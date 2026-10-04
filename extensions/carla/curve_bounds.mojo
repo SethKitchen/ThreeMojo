@@ -42,6 +42,12 @@ from extensions.carla.geometry import (
     _GL_NODES,
     _GL_WEIGHTS,
 )
+from extensions.carla.spiral_domain_proof import (
+    _SpiralRootCapture,
+    _SpiralDomainProof,
+    _spiral_proof_matches,
+    _spiral_proof_branch,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import info_index
@@ -294,6 +300,14 @@ def _arc_offset_jet(
 def _reference_jet(
     geometry: RoadGeometry, distance: _Jet, translation: Vector3
 ) -> Tuple[_Jet, _Jet, _Jet]:
+    var captured = _SpiralRootCapture()
+    return _reference_jet_capture[False](geometry, distance, translation, captured)
+
+
+def _reference_jet_capture[capture: Bool](
+    geometry: RoadGeometry, distance: _Jet, translation: Vector3,
+    mut captured: _SpiralRootCapture,
+) -> Tuple[_Jet, _Jet, _Jet]:
     var d = _geometry_distance(geometry, distance)
     if geometry.kind == LINE:
         # These coefficients are fixed across this LINE's parameter domain.
@@ -314,16 +328,32 @@ def _reference_jet(
         if counts[0] < 1 or counts[1] - counts[0] > 1:
             return _unknown_point()
         if counts[0] == counts[1]:
-            return _spiral_jet(geometry, d, counts[0], translation)
+            var point = _spiral_jet(geometry, d, counts[0], translation)
+            comptime if capture:
+                captured.d = d
+                captured.first_count = counts[0]
+                captured.last_count = counts[1]
+                captured.first_x_error = point[0].error
+                captured.first_y_error = point[1].error
+                captured.last_x_error = point[0].error
+                captured.last_y_error = point[1].error
+            return point
         # A piece-count transition is an actual evaluator discontinuity.
         # Its union discards both branches' derivatives. Evaluate the same
         # value/error graphs without that derivative arithmetic. Keep the
         # clamped ideal value and its error separate at this boundary.
         var source = _without_derivatives(d)
-        return _union_points(
-            _spiral_expression(geometry, source, counts[0], translation),
-            _spiral_expression(geometry, source, counts[1], translation),
-        )
+        var first = _spiral_expression(geometry, source, counts[0], translation)
+        var last = _spiral_expression(geometry, source, counts[1], translation)
+        comptime if capture:
+            captured.d = d
+            captured.first_count = counts[0]
+            captured.last_count = counts[1]
+            captured.first_x_error = first[0].error
+            captured.first_y_error = first[1].error
+            captured.last_x_error = last[0].error
+            captured.last_y_error = last[1].error
+        return _union_points(first, last)
     if len(geometry.samples) < 2:
         return _unknown_point()
     var domain = d.rounded_value()
@@ -364,6 +394,68 @@ def _lane_jet_model(
     low: Float64,
     high: Float64,
     translation: Vector3,
+) raises -> Tuple[_Jet, _Jet, _Jet]:
+    var captured = _SpiralRootCapture()
+    return _lane_jet_model_proof[False](
+        road, section, lane, low, high, translation, None, low, high, captured
+    )
+
+
+def _lane_jet_capture(
+    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    mut captured: _SpiralRootCapture,
+) raises -> Tuple[_Jet, _Jet, _Jet]:
+    captured = _SpiralRootCapture()
+    return _lane_jet_model_proof[True](
+        road, section, lane, low, high, Vector3(0, 0, 0), None, low, high, captured
+    )
+
+
+def _lane_jet_with_proof(
+    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    root_low: Float64, root_high: Float64,
+    proof: Optional[_SpiralDomainProof],
+) raises -> Tuple[_Jet, _Jet, _Jet]:
+    var captured = _SpiralRootCapture()
+    return _lane_jet_model_proof[False](
+        road, section, lane, low, high, Vector3(0, 0, 0), proof,
+        root_low, root_high, captured,
+    )
+
+
+def _finite_spiral_moment_jet(value: _Jet) -> Bool:
+    # Trusted producers retain finite nonnegative X/Y errors and reconstruct
+    # fresh heading with the original graph. A finite rounded enclosure
+    # therefore also establishes finite ideal value; do not check it twice.
+    return (
+        value.first.is_finite()
+        and value.second.is_finite()
+        and value.rounded_value().is_finite()
+    )
+
+
+def _finite_spiral_moment_branch(point: Tuple[_Jet, _Jet, _Jet]) -> Bool:
+    # Inspect each smooth fixed-count branch BEFORE the intentional count
+    # union discards derivatives. Reordering can overflow intermediates even
+    # when the original node-scaled GL expression has finite derivatives.
+    return (
+        _finite_spiral_moment_jet(point[0])
+        and _finite_spiral_moment_jet(point[1])
+        and _finite_spiral_moment_jet(point[2])
+    )
+
+
+def _lane_jet_model_proof[capture: Bool](
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    translation: Vector3,
+    proof: Optional[_SpiralDomainProof],
+    root_low: Float64,
+    root_high: Float64,
+    mut captured: _SpiralRootCapture,
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
     var geometry_at = info_index(road.info.geometries, low)
     var elevation_at = info_index(road.info.elevations, low)
@@ -410,9 +502,52 @@ def _lane_jet_model(
         road.info.lane_offsets[offset_at].polynomial, s
     )
     ref record = road.info.geometries[geometry_at]
-    var point = _reference_jet(
-        record.geometry, s - _Jet.constant(record.s), translation
-    )
+    var reused: Optional[Tuple[_Jet, _Jet, _Jet]] = None
+    comptime if not capture:
+        if proof:
+            # A proof is zero-translation only. Generic translated expansion
+            # retains its existing operation graph and infinite final error.
+            if (
+                record.geometry.kind == SPIRAL
+                and proof.value().record_at == geometry_at
+                and translation.x == 0.0
+                and translation.y == 0.0
+                and translation.z == 0.0
+            ):
+                var d = _geometry_distance(
+                    record.geometry, s - _Jet.constant(record.s)
+                )
+                var counts = _spiral_counts(record.geometry, d)
+                if _spiral_proof_matches(
+                    proof.value(), record.geometry, geometry_at, low, high,
+                    root_low, root_high, d, counts,
+                ):
+                    var first = _spiral_proof_branch(
+                        proof.value(), record.geometry, d, counts[0]
+                    )
+                    if _finite_spiral_moment_branch(first):
+                        if counts[0] == counts[1]:
+                            reused = first
+                        else:
+                            var last = _spiral_proof_branch(
+                                proof.value(), record.geometry, d, counts[1]
+                            )
+                            if _finite_spiral_moment_branch(last):
+                                reused = _union_points(first, last)
+                    # A nonfinite reordered branch leaves reuse absent. The
+                    # original reference below runs under the same already
+                    # reserved/debited work; no altered error or union is used.
+    var point: Tuple[_Jet, _Jet, _Jet]
+    if reused:
+        point = reused.value()
+    else:
+        point = _reference_jet_capture[capture](
+            record.geometry, s - _Jet.constant(record.s), translation, captured
+        )
+    comptime if capture:
+        captured.record_at = geometry_at
+        captured.low = low
+        captured.high = high
     if record.geometry.kind == ARC:
         var d = _geometry_distance(record.geometry, s - _Jet.constant(record.s))
         var arc = _arc_offset_jet(record.geometry, d, offset, translation)

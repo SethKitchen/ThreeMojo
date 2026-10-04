@@ -200,7 +200,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--mojo', default=str(ROOT / '.venv/bin/mojo'))
     args = parser.parse_args(argv)
-    mojo = shutil.which(args.mojo) or str(Path(args.mojo).resolve())
+    # Absolute, because the last run uses the temporary folder as its cwd.
+    mojo = str(Path(shutil.which(args.mojo) or args.mojo).resolve())
     assets = (ROOT / 'assets').resolve()
     with tempfile.TemporaryDirectory(prefix='threemojo-portability-') as temporary:
         folder = Path(temporary).resolve()

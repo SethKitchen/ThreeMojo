@@ -80,7 +80,11 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 2</summary>
+<summary>Implemented: 4</summary>
+
+- [x] [Static primitive index benchmark and design](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#static-primitive-index-design): bounded snapshot experiments, allocation costs, exact contact/ray oracles and a deferred production ownership contract [#288](https://github.com/SethKitchen/ThreeMojo/issues/288)
+
+- [x] [Tick-force restoration decision](https://github.com/SethKitchen/ThreeMojo/wiki/Tick-force-restoration): measured mixed-body CPU and allocation costs, with body-mode and ghost lifetime regressions [#287](https://github.com/SethKitchen/ThreeMojo/issues/287)
 
 - [x] [Tires on moving supports](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-physics#moving-supports): relative contact velocity, shared support response and two-body effective mass [#296](https://github.com/SethKitchen/ThreeMojo/issues/296)
 
@@ -455,7 +459,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 34</summary>
+<summary>Implemented: 36</summary>
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
 - [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue [#313](https://github.com/SethKitchen/ThreeMojo/issues/313)
@@ -487,9 +491,13 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Minimum-cost CARLA routes](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#the-route-planner): exact sample-count search with zero-cost lane changes [#533](https://github.com/SethKitchen/ThreeMojo/issues/533)
 - [x] [Shared physics](https://github.com/SethKitchen/ThreeMojo/wiki/Physics): reusable bodies, contacts, integration and quantities; CARLA imports; mass-preserving mode transitions; finite atomic mass properties; momentum-preserving free rotation [#294](https://github.com/SethKitchen/ThreeMojo/issues/294) [#482](https://github.com/SethKitchen/ThreeMojo/issues/482) [#430](https://github.com/SethKitchen/ThreeMojo/issues/430)
 - [x] [Physics numerical contacts](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#numerical-contact-boundaries): preserve translated support points and finite friction means [#428](https://github.com/SethKitchen/ThreeMojo/issues/428), [#429](https://github.com/SethKitchen/ThreeMojo/issues/429)
+- [x] [Shared cached vehicle resources](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#share-cached-vehicle-resources): store-owned geometry and images, independent instance materials and pose, explicit cache invalidation, and failed-load rollback [#291](https://github.com/SethKitchen/ThreeMojo/issues/291)
+
+- [x] [Ground-truth override cache](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-rendering#ground-truth-override-cache): stable semantic/depth materials and exact mutable-texture invalidation without unchanged payload copies [#503](https://github.com/SethKitchen/ThreeMojo/issues/503)
 - [x] [Simulation-driven walker gait](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-rendering#walker-gait): alternating capsule limbs, smooth stops, capture-independent timing, and deterministic recorded playback [#290](https://github.com/SethKitchen/ThreeMojo/issues/290)
 
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
+- [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): wide stored-center comparisons and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)
 - [x] [Dimension-safe R-tree packing](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-geometry#find-the-nearest-segment): volume, area, and length costs keep planar and linear trees spatially packed [#583](https://github.com/SethKitchen/ThreeMojo/issues/583)
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 

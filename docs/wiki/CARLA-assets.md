@@ -80,6 +80,82 @@ pixels and mipmaps. A failed preload adds no partial cache entries.
 `texture_set` returns independent maps, so changing a set cannot change
 the registry's cached maps. This operation still copies texture data.
 
+## Share cached vehicle resources
+
+`ActorVisuals` reads each cached vehicle model once per geometry and texture
+store. Instances share geometry and image bytes. Each instance has its own
+nodes, paint, head lamps, tail lamps, and other materials. The cache keeps a
+private source graph. Changes to a live vehicle do not change that graph.
+
+For direct model placement, create a `ModelCache` from
+`extensions.carla.model_cache`. Call
+`cache.place(registry, index, scene, assets, parent, fit)` for each instance.
+`AssetRegistry.place_model` remains the uncached operation. The cache uses
+the same fit, forward axis, node hierarchy, and material tags. It also copies
+any line, point, or punctual-light instances. Skinned and instanced models
+remain unsupported by these CARLA placement operations.
+
+The key includes the cache root, entry id, and each declared file role,
+path, and digest. Blueprint aliases bound to the same entry share one model.
+The fit and forward axis are applied for each placement. They do not require
+another copy of the source bytes.
+
+### Resource lifetime and invalidation
+
+Treat shared geometry and textures as immutable. Do not replace or edit their
+contents while the cached model or its instances are in use. Materials and
+nodes are independent and can change.
+
+A cache retains each store's allocation identity, not its resource buffers.
+Moving a cache or store preserves its identity. These types cannot be copied.
+
+A new geometry or texture store gets a new identity. Replacing either store
+clears the cache before reuse. Retained identities prevent an old allocation
+address from matching a new store after destruction. Replacing the material
+store needs no resource reload because each placement copies material values.
+
+Call `visuals.cached_models.clear()` before a cache file changes in place.
+For a direct `ModelCache`, call `cache.clear()`. Changed declared paths or
+digests select a new template automatically. A byte change under an unchanged
+declaration requires `clear()`, even if the declaration includes a digest.
+Placement does not verify file bytes against the declared digest. Use the
+asset tool to verify downloaded files.
+
+Clearing a cache removes its private templates. Existing instances remain
+valid. Geometry and textures stay in the append-only stores. Rebuild the
+scene and stores to reclaim their resources. Create a new `ActorVisuals` at
+the same time: its existing actor, node, and material ids belong to that scene
+and those stores. A direct `ModelCache` can place into several scenes that
+use the same resource stores.
+
+A failed private model load commits no cache entry. It restores the resource
+counts from before the load. Retrying a failed cached vehicle spawn does not
+add unused actor nodes or paint and lamp materials.
+
+### Measure repeated spawns
+
+Generate a synthetic load-size fixture:
+
+```sh
+python3 bench/carla_model_cache_fixture.py /tmp/carla-model-bench
+.venv/bin/mojo build --Werror -I . bench/carla_model_cache_bench.mojo -o /tmp/carla-model-bench-run
+/tmp/carla-model-bench-run /tmp/carla-model-bench 32 batch
+/tmp/carla-model-bench-run /tmp/carla-model-bench 32 incremental
+```
+
+The fixture has 34,992 indexed triangles, six materials, and one 1024-square
+texture. It is a size proxy, not a CARLA source model. Run the same benchmark
+source on the base and candidate with the same fixture. Alternate their run
+order. Compare the checksums and resource counts before comparing times.
+
+The timer measures `ActorVisuals.sync`. Actor creation and fixture generation
+are outside it. The byte totals count geometry attributes and indices, and
+texture pixels with mipmaps. They do not count object or allocator overhead.
+Use a process-memory tool for peak resident memory.
+
+Materials and scene nodes still grow with the instance count. Scene updates still visit existing nodes,
+so total batch placement does not have a linear-time guarantee.
+
 ## Credit the assets
 
 The 41 vehicles and six towns are CC BY 4.0. Shared renders and asset

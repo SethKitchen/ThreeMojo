@@ -63,6 +63,9 @@ Right and left are as the lane's traffic sees them. A lane that runs against s f
 
 `LaneType` is a bit mask. A query takes a mask, such as `LANE_DRIVING | LANE_SHOULDER`, and keeps the lanes whose type shares a bit with it.
 
+`Road.nearest_lane` is the separate [fixed-s OpenDRIVE query](CARLA-fixed-s-nearest).
+Its centers and returned distance retain Float64 precision.
+
 ## Lane endpoints
 
 `generate_topology` keeps each dead-end driving lane. Its terminal waypoint uses the known road, section and lane with an s in double precision. It does not look the endpoint up again through `waypoint_xodr`. This keeps the endpoint in its own section when rounding would select the next section or reject the road end. Connected pairs keep their existing order.
@@ -142,6 +145,7 @@ The map functions are `generate_mesh`, `generate_chunked_mesh`, `generate_ordere
 This port keeps CARLA's numbers except for the corrections listed here.
 
 - Lane yaw and pitch follow the lane-center derivative. Yaw uses the tangent angle, rather than treating lateral slope as an angle. Pitch uses elevation change divided by horizontal lane-center speed. This includes changing widths and sampled-reference tangents. Uphill waypoints face uphill in either traffic direction. The sign follows the [corrected CARLA rotation basis](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rotation.h).
+- The fixed-s `Road.nearest_lane` query compares every eligible Float64 center before rounding. It returns a scale-safe Float64 distance in the OpenDRIVE frame. It removes CARLA's early-distance stop because rounded centers can make an outer lane closer. See [fixed-s query precision and limits](CARLA-fixed-s-nearest).
 - Nearest-waypoint queries minimize the lane-center distance. They do not treat distance along an offset chord as road s. Internal selection and strict on-road checks keep the Float64 center. Only the public transform narrows the position.
 - The nearest-waypoint index splits at record boundaries and for lane-center chord error. Its public count can differ from CARLA's heading-only partition. A required split without an interior Float64 road-s value raises a resolution error.
 - A width-record kink prevents the straight-lane mesh shortcut. The existing mesh resolution then adds rows through that section. MeshFactory does not use the nearest-waypoint index as its mesh partition.

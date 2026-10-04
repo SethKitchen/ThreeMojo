@@ -32,6 +32,12 @@ index. Its partition and count can change when the geometry requires more
 subdivision. Lane order and index tie rules remain deterministic. This
 corrects curved lane offsets and the treatment of lane distance as road s.
 
+The R-tree, full-center bounds, and optional sampled-curve box covers belong
+to the same construction snapshot. Queries do not update these proofs.
+As with the existing index, callers must rebuild the Map after editing its
+source road records. A cover stores only four complete interval boxes; it
+does not copy geometry or change the public segment partition.
+
 **Order.** CARLA keeps roads, junctions and signals in hash maps and
 walks them in hash order. This port walks them in order of id, so a list
 such as `generate_waypoints` holds the same waypoints in a fixed order.
@@ -55,6 +61,17 @@ and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 from extensions.carla.geo import GeoLocation, GeoProjection
 from extensions.carla.geometry import SPIRAL
 from extensions.carla.curve_interval import _Interval
+from extensions.carla.spiral_domain_proof import (
+    _SpiralRootCapture,
+    _SpiralDomainProof,
+    _find_spiral_proof,
+    _try_pack_spiral_proof,
+)
+from extensions.carla.lane_box_cover import (
+    _LaneBoxCover,
+    _lane_cover_can_improve,
+    _sampled_lane_box_cover,
+)
 from extensions.carla.curve_distance import (
     _finite_point,
     _wide_distance_upper,
@@ -63,7 +80,7 @@ from extensions.carla.curve_distance import (
 from extensions.carla.lane_refinement import (
     _LaneCertificate,
     _indexed_curve_lower,
-    _chord_certificate,
+    _chord_certificate_capture,
     _lane_certificate_contains,
     _lane_box_can_improve,
     _lane_certificate_dominates,
@@ -844,6 +861,8 @@ struct _Segment(ImplicitlyCopyable):
     var first: Waypoint
     var second: Waypoint
     var bounds: Tuple[_Interval, _Interval, _Interval]
+    # -1 means the optional construction proof is absent.
+    var cover_index: Int
 
 
 @fieldwise_init
@@ -1018,6 +1037,13 @@ struct Map(Movable):
     var geo_projection: GeoProjection
     var _road_index: Dict[Int, Int]
     var _segments: List[_Segment]
+    # Immutable after construction, under the existing index snapshot's
+    # source-record validity contract. No query-time geometry cache.
+    var _sampled_covers: List[_LaneBoxCover]
+    # Sparse, owner-local immutable proofs in public segment order. These
+    # follow the same source-record snapshot contract as the existing index.
+    var _spiral_proofs: List[_SpiralDomainProof]
+    var _spiral_proof_units: Int
     var _tree: SegmentCloudRtree
     var _curve_deviation: Float64
     var _endpoint_scale: Float64
@@ -1053,6 +1079,9 @@ struct Map(Movable):
         for i in range(len(self.roads)):
             self._road_index[self.roads[i].id.value] = i
         self._segments = List[_Segment]()
+        self._sampled_covers = List[_LaneBoxCover]()
+        self._spiral_proofs = List[_SpiralDomainProof]()
+        self._spiral_proof_units = 0
         self._tree = SegmentCloudRtree()
         self._curve_deviation = 0.0
         self._endpoint_scale = 0.0
@@ -1481,6 +1510,13 @@ struct Map(Movable):
                         segment.bounds, location, certificates[best].point
                     ):
                         continue
+                    if segment.cover_index >= 0:
+                        if not _lane_cover_can_improve(
+                            self._sampled_covers[segment.cover_index],
+                            location,
+                            certificates[best].point,
+                        ):
+                            continue
                 var result = self._nearest_on_segment_certificate(
                     index, location
                 )
@@ -1507,7 +1543,7 @@ struct Map(Movable):
             )
         if best < 0:
             return None
-        # Admission above is unchanged. Its strict exclusions remain valid
+        # Admission's strict full-domain exclusions remain valid
         # as these retained candidates improve their stored incumbents.
         var requested_gaps = List[Float64]()
         var requested_scales = List[Float64]()
@@ -1588,6 +1624,7 @@ struct Map(Movable):
             certificate,
             requested_gap,
             request_scale,
+            spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
         )
 
     def _nearest_on_segment(
@@ -1642,6 +1679,7 @@ struct Map(Movable):
             location,
             seed,
             0.0,
+            spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
         )
         waypoint.s = result.s
         return (waypoint, result^)
@@ -2842,11 +2880,30 @@ struct Map(Movable):
             high = first.s
             start = b.location
             end = a.location
-        var certificate = _chord_certificate(
-            self.roads[at[0]], at[1], at[2], low, high, start, end
+        var captured = _SpiralRootCapture()
+        var certificate = _chord_certificate_capture(
+            self.roads[at[0]], at[1], at[2], low, high, start, end, captured
         )
+        var construction_terms = certificate[2]
+        var cover = _sampled_lane_box_cover(
+            self.roads[at[0]], at[1], at[2], low, high, construction_terms
+        )
+        var cover_index = -1
+        if cover:
+            cover_index = len(self._sampled_covers)
+            self._sampled_covers.append(cover.value())
+        # Preserve the existing chord and sampled-cover construction work
+        # before spending ANY optional phase-proof/packing allowance.
+        var proof = _try_pack_spiral_proof(
+            self.roads[at[0]], low, high, len(self._segments), captured,
+            len(self._spiral_proofs), construction_terms, self._spiral_proof_units,
+        )
+        if proof:
+            self._spiral_proofs.append(proof.value())
         self._segments.append(
-            _Segment(a.location, b.location, first, second, certificate[1])
+            _Segment(
+                a.location, b.location, first, second, certificate[1], cover_index
+            )
         )
         self._curve_deviation = max(self._curve_deviation, certificate[0])
         self._endpoint_scale = max(

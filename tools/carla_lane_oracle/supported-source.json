@@ -1,8 +1,8 @@
 {
   "source_sha256": {
-    "extensions/carla/curve_trig.mojo": "1541efc0798b0921885cab5c20cfee13df9215765d95ce2b5e1bb2edddc44de4",
+    "extensions/carla/curve_trig.mojo": "b7966c5a30494145b8a0d5a0806e4fcabc41eeeed4b530ed9095752485f057e2",
     "extensions/carla/geometry.mojo": "964edeeea0722d365137b0aab25fa4e217565c2eba29d88bbd79f657a7204dab",
-    "extensions/carla/road.mojo": "418384a7a7d415f955b0f0624dcf0e2811ef3e0ea9bf740360fa999f21ec3062",
+    "extensions/carla/road.mojo": "2a6414ae495ba17e54e3270af0525f4532d8d6dc1eeb2de84c4442b93c5361b3",
     "assets/carla/town.xodr": "4130289eab48e8cc3c6cf928a054d6af15566e3cd1e5d6c95ecbe5d84377f797",
     "tools/carla_lane_oracle/constants.json": "31f1096a37e774523f90f92bc1f1d75c0b288bb74bf226e4cce227625119404c"
   },

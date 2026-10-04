@@ -118,3 +118,9 @@ Material mixing widens the friction product before its square root. This keeps a
 ## Verification boundary
 
 The shared solver includes the rotational integration described above. CARLA uses the same implementation. Other known model limitations remain. Shared code is not evidence that a model is validated for an engineering scenario. Select measured inputs, acceptance tolerances and validation cases for each use.
+
+## Static primitive index design
+
+The [static primitive benchmark](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/static-primitive-index-288.md) compares the current sweep with a bounded snapshot BVH. It measures 100, 1,000 and 10,000 static primitives, mixed moving participants and dense ray batches. The report includes allocation costs, brute-force checks and rebuild/refit rules.
+
+The production sweep and ray path stay unchanged. A retained query index needs an explicit snapshot or mutation contract because callers can edit bodies between steps. Prototype timings do not describe a production speedup. The owned snapshot and integration work is tracked in [#633](https://github.com/SethKitchen/ThreeMojo/issues/633).

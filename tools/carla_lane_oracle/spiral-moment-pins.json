@@ -1,0 +1,148 @@
+{
+  "schema": 1,
+  "scope": "Stored binary64 constants and the selected scalar/ideal expression blocks only. Changing pins requires renewed algebraic review; no automatic re-pin option.",
+  "arrays": {
+    "_GL_NODES": {
+      "path": "extensions/carla/geometry.mojo",
+      "words": [
+        "0xBFECFF6CE0533A69",
+        "0xBFE13B23FD99B705",
+        "0x0000000000000000",
+        "0x3FE13B23FD99B705",
+        "0x3FECFF6CE0533A69"
+      ]
+    },
+    "_GL_WEIGHTS": {
+      "path": "extensions/carla/geometry.mojo",
+      "words": [
+        "0x3FCE539EC36E038D",
+        "0x3FDEA1DA25AE415C",
+        "0x3FE23456789ABCDF",
+        "0x3FDEA1DA25AE415C",
+        "0x3FCE539EC36E038D"
+      ]
+    },
+    "_COS_COEFFICIENTS": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "words": [
+        "0x3FF0000000000000",
+        "0xBFE0000000000000",
+        "0x3FA5555555555555",
+        "0xBF56C16C16C16C17",
+        "0x3EFA01A01A01A01A",
+        "0xBE927E4FB7789F5C",
+        "0x3E21EED8EFF8D898",
+        "0xBDA93974A8C07C9D",
+        "0x3D2AE7F3E733B81F",
+        "0xBCA6827863B97D97",
+        "0x3C1E542BA4020225"
+      ]
+    },
+    "_SIN_COEFFICIENTS": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "words": [
+        "0x3FF0000000000000",
+        "0xBFC5555555555555",
+        "0x3F81111111111111",
+        "0xBF2A01A01A01A01A",
+        "0x3EC71DE3A556C734",
+        "0xBE5AE64567F544E4",
+        "0x3DE6124613A86D09",
+        "0xBD6AE7F3E733B81F",
+        "0x3CE952C77030AD4A",
+        "0xBC62F49B46814157",
+        "0x3BD71B8EF6DCF572"
+      ]
+    }
+  },
+  "scalars": {
+    "_PHASE_LIMIT": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "word": "0x4130000000000000"
+    },
+    "_INV_HALF_PI": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "word": "0x3FE45F306DC9C883"
+    },
+    "_HALF_PI_HIGH": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "word": "0x3FF921FB54400000"
+    },
+    "_HALF_PI_LOW": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "word": "0x3DD0B4611A626331"
+    }
+  },
+  "blocks": {
+    "geometry_trig_aliases": {
+      "path": "extensions/carla/geometry.mojo",
+      "begin": "from extensions.carla.curve_trig import (",
+      "end": "from std.math import ceil",
+      "normalized_source": "from extensions.carla.curve_trig import (\n    _curve_atan as atan,\n    _curve_atan2 as atan2,\n    _curve_cos as cos,\n    _curve_sin as sin,\n    _atan_derivative,\n    _atan2_derivative,\n    _curve_sincos,\n    _sincos_derivative,\n    _curve_sinc,\n    _sinc_derivative,\n)\n",
+      "sha256": "24c5ddbff4bc4c7c581c29ce03e5a8726bf822246058426457a8fc84874c12c7"
+    },
+    "scalar_spiral": {
+      "path": "extensions/carla/geometry.mojo",
+      "begin": "    def _spiral(self, d: Float64)",
+      "end": "    def _derivative_at(",
+      "normalized_source": "    def _spiral(self, d: Float64) -> DirectedPoint:\n        var k0 = self.curvature_start\n        var rate = (self.curvature_end - self.curvature_start) / self.length\n        var reach = max(abs(k0), abs(k0 + rate * d))\n        var pieces = 1 + Int(ceil(d * (1.0 + reach)))\n        var step = d / Float64(pieces)\n        var nodes = materialize[_GL_NODES]()\n        var weights = materialize[_GL_WEIGHTS]()\n        var x = Float64(0.0)\n        var y = Float64(0.0)\n        for piece in range(pieces):\n            var start = step * Float64(piece)\n            for i in range(5):\n                var t = start + step * 0.5 * (1.0 + nodes[i])\n                var theta = self.heading + t * (k0 + 0.5 * rate * t)\n                x += step * 0.5 * weights[i] * cos(theta)\n                y += step * 0.5 * weights[i] * sin(theta)\n        return DirectedPoint(\n            self.x + x,\n            self.y + y,\n            0.0,\n            self.heading + d * (k0 + 0.5 * rate * d),\n        )\n",
+      "sha256": "fb35746883516ceb4833466ecba905d59a8890f476eb85cb11ee7f0fc1e5c395"
+    },
+    "scalar_horner": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "begin": "def _scalar_polynomial[",
+      "end": "def _jet_polynomial[",
+      "normalized_source": "def _scalar_polynomial[\n    n: Int\n](coefficients: Array[Float64, n], x: Float64) -> Float64:\n    var result = coefficients[n - 1]\n    var i = n - 2\n    while i >= 0:\n        result = result * x + coefficients[i]\n        i -= 1\n    return result\n",
+      "sha256": "bf0c064e296966ce80c0f40ae1579aec0cada28bfe06ad89a1e330fe0f13cf61"
+    },
+    "scalar_sincos": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "begin": "def _curve_sincos(value: Float64)",
+      "end": "def _curve_sin(value: Float64)",
+      "normalized_source": "def _curve_sincos(value: Float64) -> Tuple[Float64, Float64]:\n    if not isfinite(value):\n        return (sin(value), cos(value))\n    if abs(value) > _PHASE_LIMIT:\n        return (\n            min(max(sin(value), -1.0), 1.0),\n            min(max(cos(value), -1.0), 1.0),\n        )\n    var quadrant = Int(floor(value * _INV_HALF_PI + 0.5))\n    var high = Float64(quadrant) * _HALF_PI_HIGH\n    var low = Float64(quadrant) * _HALF_PI_LOW\n    var reduced = (value - high) - low\n    var square = reduced * reduced\n    var sine = reduced * _scalar_polynomial(\n        materialize[_SIN_COEFFICIENTS](), square\n    )\n    var cosine = _scalar_polynomial(materialize[_COS_COEFFICIENTS](), square)\n    var mode = quadrant & 3\n    if mode == 0:\n        return (sine, cosine)\n    if mode == 1:\n        return (cosine, -sine)\n    if mode == 2:\n        return (-sine, -cosine)\n    return (-cosine, sine)\n",
+      "sha256": "045eb52b44f376b8f34e7a6791fad4a742949c8cdf5005b20a0824bb600bd430"
+    },
+    "scalar_trig_wrappers": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "begin": "def _curve_sin(value: Float64)",
+      "end": "@no_inline\ndef _curve_atan(",
+      "normalized_source": "def _curve_sin(value: Float64) -> Float64:\n    return _curve_sincos(value)[0]\ndef _curve_cos(value: Float64) -> Float64:\n    return _curve_sincos(value)[1]\n",
+      "sha256": "28620259ae57e84d366848fa2e1d1e33b52ba5f2a820114a8828cebfb098987c"
+    },
+    "ideal_sincos_selector": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "begin": "def _sincos_expression[",
+      "end": "def _constant_sincos_jet(",
+      "normalized_source": "def _sincos_expression[derivatives: Bool](\n    value: _JetExpression[derivatives]\n) -> Tuple[_JetExpression[derivatives], _JetExpression[derivatives]]:\n    comptime Expression = _JetExpression[derivatives]\n    var domain = value.rounded_value()\n    if not domain.is_finite():\n        return (\n            _uncertain_expression[derivatives](_Interval.whole()),\n            _uncertain_expression[derivatives](_Interval.whole()),\n        )\n    if domain.magnitude() > _PHASE_LIMIT:\n        if domain.low > _PHASE_LIMIT or domain.high < -_PHASE_LIMIT:\n            var unknown = _uncertain_expression[derivatives](\n                _Interval(-1.0, 1.0)\n            )\n            return (unknown, unknown)\n        return (\n            _uncertain_expression[derivatives](_Interval.whole()),\n            _uncertain_expression[derivatives](_Interval.whole()),\n        )\n    var selection = (\n        value * Expression.constant(_INV_HALF_PI) + Expression.constant(0.5)\n    ).rounded_value()\n    var low = Int(floor(selection.low))\n    var high = Int(floor(selection.high))\n    if low == high:\n        return _sincos_branch_expression(value, low)\n    if high - low > 4:\n        return (\n            _uncertain_expression[derivatives](_Interval.whole()),\n            _uncertain_expression[derivatives](_Interval.whole()),\n        )\n    var source = Expression.variable(domain.low, domain.high)\n    var result = _sincos_branch_expression(source, low)\n    var sine = result[0].rounded_value()\n    var cosine = result[1].rounded_value()\n    var quadrant = low + 1\n    while quadrant <= high:\n        var piece = _sincos_branch_expression(source, quadrant)\n        sine = sine.hull(piece[0].rounded_value())\n        cosine = cosine.hull(piece[1].rounded_value())\n        quadrant += 1\n    return (\n        _uncertain_expression[derivatives](sine),\n        _uncertain_expression[derivatives](cosine),\n    )\n",
+      "sha256": "56061b0775a4da91c0c6b472eea8ec0040a0cd528c873dc707a1a8473755ad72"
+    },
+    "ideal_horner": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "begin": "def _expression_polynomial[",
+      "end": "@no_inline\ndef _curve_sincos(",
+      "normalized_source": "def _expression_polynomial[n: Int, derivatives: Bool](\n    coefficients: Array[Float64, n], x: _JetExpression[derivatives]\n) -> _JetExpression[derivatives]:\n    comptime Expression = _JetExpression[derivatives]\n    var result = Expression.constant(coefficients[n - 1])\n    var i = n - 2\n    while i >= 0:\n        result = result * x + Expression.constant(coefficients[i])\n        i -= 1\n    return result\n",
+      "sha256": "64de25b06c5c1dfdff3a1e787abc30381bb3c4c36a631c217cdf94c0c1285e26"
+    },
+    "ideal_sincos_branch": {
+      "path": "extensions/carla/curve_trig.mojo",
+      "begin": "def _sincos_branch_expression[",
+      "end": "def _uncertain(value:",
+      "normalized_source": "def _sincos_branch_expression[derivatives: Bool](\n    value: _JetExpression[derivatives], quadrant: Int\n) -> Tuple[_JetExpression[derivatives], _JetExpression[derivatives]]:\n    comptime Expression = _JetExpression[derivatives]\n    var high = Float64(quadrant) * _HALF_PI_HIGH\n    var low = Expression.constant(Float64(quadrant)) * Expression.constant(\n        _HALF_PI_LOW\n    )\n    var reduced = (value - Expression.constant(high)) - low\n    var square = reduced * reduced\n    var sine = reduced * _expression_polynomial(\n        materialize[_SIN_COEFFICIENTS](), square\n    )\n    var cosine = _expression_polynomial(materialize[_COS_COEFFICIENTS](), square)\n    var mode = quadrant & 3\n    if mode == 0:\n        return (sine, cosine)\n    if mode == 1:\n        return (cosine, -sine)\n    if mode == 2:\n        return (-sine, -cosine)\n    return (-cosine, sine)\n",
+      "sha256": "efef6b1e8bdec16fe5f6575717d9893c16dced3dfd2d817c86d9e857e9438701"
+    },
+    "ideal_spiral": {
+      "path": "extensions/carla/curve_bounds.mojo",
+      "begin": "def _spiral_expression[",
+      "end": "def _sample_index(",
+      "normalized_source": "def _spiral_expression[derivatives: Bool](\n    geometry: RoadGeometry,\n    d: _JetExpression[derivatives],\n    pieces: Int,\n    translation: Vector3,\n) -> Tuple[\n    _JetExpression[derivatives],\n    _JetExpression[derivatives],\n    _JetExpression[derivatives],\n]:\n    comptime Expression = _JetExpression[derivatives]\n    var k0 = Expression.constant(geometry.curvature_start)\n    var rate = Expression.constant(\n        (geometry.curvature_end - geometry.curvature_start) / geometry.length\n    )\n    var step = d / Expression.constant(Float64(pieces))\n    var nodes = materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEIGHTS]()\n    var x = Expression.constant(0.0)\n    var y = Expression.constant(0.0)\n    var piece = 0\n    while piece < pieces:\n        var start = step * Expression.constant(Float64(piece))\n        var i = 0\n        while i < 5:\n            var t = (\n                start\n                + step * Expression.constant(0.5)\n                * Expression.constant(1.0 + nodes[i])\n            )\n            var theta = Expression.constant(geometry.heading) + t * (\n                k0 + Expression.constant(0.5) * rate * t\n            )\n            var trig = _sincos_expression(theta)\n            x = (\n                x\n                + step\n                * Expression.constant(0.5)\n                * Expression.constant(weights[i])\n                * trig[1]\n            )\n            y = (\n                y\n                + step\n                * Expression.constant(0.5)\n                * Expression.constant(weights[i])\n                * trig[0]\n            )\n            i += 1\n        piece += 1\n    var heading = Expression.constant(geometry.heading) + d * (\n        k0 + Expression.constant(0.5) * rate * d\n    )\n    return (\n        (\n            Expression.constant(geometry.x)\n            - Expression.constant(Float64(translation.x))\n        ) + x,\n        (\n            Expression.constant(geometry.y)\n            + Expression.constant(Float64(translation.y))\n        ) + y,\n        heading,\n    )\n",
+      "sha256": "c7f7228e845924163fc58ea584861145e84a26a90f5159e730e0a3cc2b6f28a6"
+    }
+  },
+  "rounded_node_sums": [
+    "0x3FB80498FD662CB8",
+    "0x3FDD89B804CC91F6",
+    "0x3FF0000000000000",
+    "0x3FF89D91FECCDB82",
+    "0x3FFE7FB670299D34"
+  ]
+}

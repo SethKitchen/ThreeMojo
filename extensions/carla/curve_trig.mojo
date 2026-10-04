@@ -502,7 +502,7 @@ def _atan2_jet(y: _Jet, x: _Jet) -> _Jet:
             return _Jet.constant(-_PI) + result
         # The negative-axis winding cut contains both one-sided headings.
         return _uncertain(_Interval(-_PI, _PI))
-    if by.low > bx.high and not dy.contains(0.0):
+    if by.low > bx.high:
         var result = _atan_jet(x / y)
         if dy.low > 0.0:
             return _Jet.constant(_HALF_PI) - result
