@@ -520,7 +520,7 @@ def _neck_s(p: V3, segs: List[V3]) -> Float64:
     var dm = 1e9
     var q = V3(abs(p.x), p.y, p.z)
     # Its callers pass `_ear_segments`, a literal list.
-    for i in range(len(segs) // 2):  # pragma: no branch
+    for i in range(len(segs) // 2):
         var a = segs[2 * i]
         var ab = segs[2 * i + 1] - a
         var u = clamp(dot(q - a, ab) / dot(ab, ab), 0.0, 1.0)
@@ -678,9 +678,8 @@ def sheep_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         )
     var ub = rig.bone("udder")
     var u = t.get("udder", 0.0)
-    # Every ewe's udder is 0.1 or more.
     var ewe = not male and not lamb
-    if ewe:
+    if ewe and u > 0.05:
         for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "udder",
@@ -1667,7 +1666,7 @@ def _locks(
     var wts = List[Float64]()
     var wsum = 0.0
     # The fleece is the wool's solids: a sheep with locks has some.
-    for i in fleece:  # pragma: no branch
+    for i in fleece:
         ref q = m.prims[i]
         var w = (
             q.r.x * q.r.y + q.r.y * q.r.z + q.r.x * q.r.z
@@ -1682,7 +1681,7 @@ def _locks(
     var owners = List[Int]()
     var normals = List[V3]()
     # Thousands of tries: the fleece's area over a lock's.
-    for _ in range(tries):  # pragma: no branch
+    for _ in range(tries):
         var x = R.next() * wsum
         var pi_ = 0
         while pi_ < len(fleece) - 1 and x > wts[pi_]:
