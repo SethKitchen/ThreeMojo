@@ -326,12 +326,12 @@ def voxel_at(volume: Pointer[Float32, Untracked], index: Int) -> Lanes:
         Its four floats.
     """
     var at = index * VOXEL_FLOATS
-    return Lanes(
-        volume[unsafe_offset=at],
-        volume[unsafe_offset=at + 1],
-        volume[unsafe_offset=at + 2],
-        volume[unsafe_offset=at + 3],
-    )
+    # Lane by lane: on Metal a SIMD built from loads in its constructor
+    # reads zeros (modular/modular#7158).
+    var voxel = Lanes(0)
+    for lane in range(4):  # pragma: no branch
+        voxel[lane] = volume[unsafe_offset=at + lane]
+    return voxel
 
 
 def _axis(coordinate: Float32, extent: Int) -> Tuple[Int, Int, Float32]:

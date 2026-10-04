@@ -1935,12 +1935,12 @@ struct ComputeSource(ImplicitlyCopyable, NodeSource):
                 self.table_at + statement * STATEMENT_FLOATS + STATEMENT_RESULT
             )
         )
-        return Lanes(
-            self.kept[unsafe_offset=at * 4],
-            self.kept[unsafe_offset=at * 4 + 1],
-            self.kept[unsafe_offset=at * 4 + 2],
-            self.kept[unsafe_offset=at * 4 + 3],
-        )
+        # Lane by lane: on Metal a SIMD built from loads in its constructor
+        # reads zeros (modular/modular#7158).
+        var value = Lanes(0)
+        for lane in range(4):  # pragma: no branch
+            value[lane] = self.kept[unsafe_offset=at * 4 + lane]
+        return value
 
     def keep(self, at: Int, value: Lanes):
         """Keep a value for the invocation's later statements.

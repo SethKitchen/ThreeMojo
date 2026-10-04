@@ -1871,14 +1871,14 @@ def _cube_through(
         )
         * 4
     )
+    # Lane by lane: on Metal a SIMD built from loads in its constructor
+    # reads zeros (modular/modular#7158).
+    var transmitted = SIMD[DType.float32, 4](0)
+    for lane in range(4):
+        transmitted[lane] = lights[unsafe_offset=texel + lane]
     return transmitted_shadow(
         _unweakened_cube_at(lights, block, position, normal),
-        SIMD[DType.float32, 4](
-            lights[unsafe_offset=texel],
-            lights[unsafe_offset=texel + 1],
-            lights[unsafe_offset=texel + 2],
-            lights[unsafe_offset=texel + 3],
-        ),
+        transmitted,
         lights[unsafe_offset=block + SHADOW_INTENSITY_AT],
     )
 
@@ -5198,6 +5198,11 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
         custom floats, from its lanes: the first end for the first corner,
         and the second for the others."""
         var at = self.base + (0 if context == CORNER_A else FLOATS_PER_VERTEX)
+        # Lane by lane: on Metal a SIMD built from loads in its constructor
+        # reads zeros (modular/modular#7158).
+        var custom = SIMD[DType.float32, 8](0)
+        for lane in range(8):
+            custom[lane] = self.segments[unsafe_offset=at + LANE_CUSTOM + lane]
         return NodeInputs(
             self.segments[unsafe_offset=at + LANE_U],
             self.segments[unsafe_offset=at + LANE_V],
@@ -5218,16 +5223,7 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
             ),
             Vector3(0, 0, 0),
             False,
-            SIMD[DType.float32, 8](
-                self.segments[unsafe_offset=at + LANE_CUSTOM],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 1],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 2],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 3],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 4],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 5],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 6],
-                self.segments[unsafe_offset=at + LANE_CUSTOM + 7],
-            ),
+            custom,
         )
 
 
@@ -5415,6 +5411,11 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
         """Return the point's coordinates, world position, normal, color
         and custom floats, from its lanes."""
         var at = self.base
+        # Lane by lane: on Metal a SIMD built from loads in its constructor
+        # reads zeros (modular/modular#7158).
+        var custom = SIMD[DType.float32, 8](0)
+        for lane in range(8):
+            custom[lane] = self.points[unsafe_offset=at + LANE_CUSTOM + lane]
         return NodeInputs(
             self.points[unsafe_offset=at + LANE_U],
             self.points[unsafe_offset=at + LANE_V],
@@ -5435,16 +5436,7 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
             ),
             Vector3(0, 0, 0),
             False,
-            SIMD[DType.float32, 8](
-                self.points[unsafe_offset=at + LANE_CUSTOM],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 1],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 2],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 3],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 4],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 5],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 6],
-                self.points[unsafe_offset=at + LANE_CUSTOM + 7],
-            ),
+            custom,
         )
 
 
@@ -12668,12 +12660,11 @@ def splat_kernel(
     if flags[unsafe_offset=slot] == 0:
         return
     var at = slot * 4
-    var pixel = Rgba(
-        colors[unsafe_offset=at],
-        colors[unsafe_offset=at + 1],
-        colors[unsafe_offset=at + 2],
-        colors[unsafe_offset=at + 3],
-    )
+    # Lane by lane: on Metal a SIMD built from loads in its constructor
+    # reads zeros (modular/modular#7158), which blended over black.
+    var pixel = Rgba(0)
+    for channel in range(4):
+        pixel[channel] = colors[unsafe_offset=at + channel]
     var stored = depth[unsafe_offset=slot]
     var mode = DepthMode(Int(depth_mode))
     var blended = 0
