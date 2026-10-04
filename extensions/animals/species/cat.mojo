@@ -1423,7 +1423,7 @@ def _dist_line(p: V3, n: V3, pts: List[V3], w: List[Float64]) -> Float64:
     # measured in the skin's tangent plane, negative inside.
     var best = 1e9
     # Its one caller passes six points.
-    for i in range(len(pts) - 1):  # pragma: no branch
+    for i in range(len(pts) - 1):
         var a = pts[i]
         var ab = pts[i + 1] - a
         var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
@@ -1455,7 +1455,7 @@ def _line(
     ]
     var ws = List[Float64]()
     # Each caller passes six widths.
-    for x in w:  # pragma: no branch
+    for x in w:
         ws.append(x * 0.001)
     return _dist_line(p, n, pts, ws)
 
