@@ -1,0 +1,177 @@
+{
+  "issue": 292,
+  "base_sha": "c9b2aaab7643f3314bc87f0d9e21990f4aa21527",
+  "date_utc": "2026-10-04",
+  "scope": "Opt-in bounded centered sphere/static-mesh CCD; not general moving-body or vehicle CCD",
+  "default_discrete_unchanged": true,
+  "toolchain": {
+    "mojo": "1.1.0",
+    "max": "26.6.0",
+    "python": "3.12.14",
+    "platform": "Linux-6.18.44-x86_64-with-glibc2.41",
+    "machine": "x86_64",
+    "telemetry": "false"
+  },
+  "native_focused_tests": {
+    "passed": 20,
+    "failed": 0,
+    "five_second_gate": true
+  },
+  "independent_decimal_hit_references": 23,
+  "reference_seed": 292,
+  "focused_complete_module_coverage": {
+    "extensions/physics/ccd.mojo": {
+      "lines": [
+        78,
+        78
+      ],
+      "branches": [
+        56,
+        56
+      ],
+      "mcdc": [
+        12,
+        12
+      ]
+    },
+    "extensions/physics/world.mojo": {
+      "lines": [
+        615,
+        615
+      ],
+      "branches": [
+        394,
+        394
+      ],
+      "mcdc": [
+        69,
+        69
+      ]
+    },
+    "total": [
+      1224,
+      1224
+    ],
+    "repository_wide_claim": false
+  },
+  "benchmark": {
+    "repeated_paired_runs": 3,
+    "steps_per_row": 20,
+    "warmup_steps": 1,
+    "statistic": "median of three per-run means; worst observed step across all runs",
+    "raw_file": "docs/validation/continuous-collision-292-timings.csv",
+    "summary": [
+      {
+        "scene": "vehicle-probe",
+        "triangles": 2048,
+        "spheres": 1,
+        "rays": 64,
+        "base_discrete_mean_step_ms": 0.0017470499999999996,
+        "candidate_discrete_mean_step_ms": 0.00167565,
+        "ccd_mean_step_ms": 0.13952045,
+        "ccd_mean_ray_batch_ms": 0.08205770000000001,
+        "ccd_worst_observed_step_ms": 0.385271,
+        "ccd_to_discrete_step_ratio": 83.26347984364276
+      },
+      {
+        "scene": "separated-fleet",
+        "triangles": 8192,
+        "spheres": 32,
+        "rays": 256,
+        "base_discrete_mean_step_ms": 0.10791980000000001,
+        "candidate_discrete_mean_step_ms": 0.1061785,
+        "ccd_mean_step_ms": 10.132395149999999,
+        "ccd_mean_ray_batch_ms": 1.33577845,
+        "ccd_worst_observed_step_ms": 15.568542,
+        "ccd_to_discrete_step_ratio": 95.42793644664408
+      },
+      {
+        "scene": "sensor-scale",
+        "triangles": 32768,
+        "spheres": 16,
+        "rays": 2048,
+        "base_discrete_mean_step_ms": 0.17473814999999998,
+        "candidate_discrete_mean_step_ms": 0.18627385,
+        "ccd_mean_step_ms": 19.112528100000002,
+        "ccd_mean_ray_batch_ms": 24.281156550000002,
+        "ccd_worst_observed_step_ms": 35.638261,
+        "ccd_to_discrete_step_ratio": 102.6044616568563
+      }
+    ],
+    "source_provenance": {
+      "classification": "post-run reconciliation of retained pre-format candidate, logs and binaries",
+      "contemporaneous_source_and_binary_build_manifest_found": false,
+      "reported_pre_format_source_sha256": {
+        "extensions/physics/ccd.mojo": "f0953322eba0092013115f4f4f2f2fbcf281065904fb4e63112db18a77ae1a1f",
+        "extensions/physics/world.mojo": "bc404b56ca56013011e513839451a1e6376af10b05859553c2edf01750a45e7a",
+        "extensions/carla/physics/world.mojo": "146e7488d6e53eea6f4c73b595edf4b7c9400195b05cd9dbf88a102b01e7b5eb",
+        "tests/test_physics_ccd.mojo": "31dc9926a81ee3b56386dec28214fdea02493afb9e0fb2dbbd21af3690e99206",
+        "bench/physics_ccd_bench.mojo": "3e31067a1a55bc18429d607337b13f2d1f5b37fdc743cf73674155d0534dec19",
+        "tools/physics_ccd_reference.py": "c7501360dc31240aba3012c9e953d77c696990a0f3cffd483bf43326deee99ef"
+      },
+      "final_integration_delta": "Pinned Mojo formatting split one diagnostic string into adjacent literals; message text and executable behavior are unchanged.",
+      "timings_rerun_for_final_integration": false,
+      "qualification_limit": "The retained benchmark is not a byte-identical final-tree build receipt."
+    }
+  },
+  "source_sha256": {
+    "extensions/physics/ccd.mojo": "9129780e4d6e7dcd50b109c163089958c1998f4ca53a83d412ab5d1932ca735a",
+    "extensions/physics/world.mojo": "bc404b56ca56013011e513839451a1e6376af10b05859553c2edf01750a45e7a",
+    "extensions/carla/physics/world.mojo": "146e7488d6e53eea6f4c73b595edf4b7c9400195b05cd9dbf88a102b01e7b5eb",
+    "tests/test_physics_ccd.mojo": "31dc9926a81ee3b56386dec28214fdea02493afb9e0fb2dbbd21af3690e99206",
+    "bench/physics_ccd_bench.mojo": "3e31067a1a55bc18429d607337b13f2d1f5b37fdc743cf73674155d0534dec19",
+    "tools/physics_ccd_reference.py": "c7501360dc31240aba3012c9e953d77c696990a0f3cffd483bf43326deee99ef"
+  },
+  "qualification_limits": [
+    "Linux x86-64 only in this local run",
+    "Focused full-module coverage is not repository-wide qualification",
+    "Complete affected aggregate and exact-head CI remain integration work",
+    "No generalized convex, capsule, offset-rotation or moving-pair CCD",
+    "No real-time capacity or calibrated vehicle dynamics claim",
+    "Retained benchmark source hashes were reconciled after the run; no contemporaneous source/binary build manifest was found."
+  ],
+  "integration_qualification": {
+    "date_utc": "2026-10-04",
+    "base_commit": "c9b2aaab7643f3314bc87f0d9e21990f4aa21527",
+    "ccd_direct_consumer_evidence_before_format_repair": {
+      "suites": 47,
+      "tests": 782,
+      "passed": 782,
+      "scope": "Authoritative writer records, all source and binary hashes reconciled before the formatter-only delta; no new execution claimed."
+    },
+    "official_affected_cpu_suite_counts": {
+      "ccd_only": 499,
+      "ccd_plus_tm_cleanup": 500
+    },
+    "official_affected_aggregate_run": false,
+    "combined_native_suites": 9,
+    "combined_native_tests": 206,
+    "combined_instrumented_suites": 13,
+    "combined_instrumented_tests": 248,
+    "combined_full_module_coverage": {
+      "modules": [
+        "extensions/physics/ccd",
+        "extensions/physics/world",
+        "extensions/carla/traffic_manager",
+        "extensions/carla/traffic_manager_parameters"
+      ],
+      "items_covered": 2238,
+      "items_total": 2238,
+      "new_exclusions": false
+    },
+    "ccd_negative_fixtures": 381,
+    "negative_harness_tests": 41,
+    "decimal_references_reproduced": 23,
+    "combined_negative_gate_scope": "The two negative fixtures importing changed TM modules plus the typed CCD fixture are rechecked on the final combined tree.",
+    "test_timeout_seconds": 5,
+    "warnings_as_errors": true,
+    "telemetry_enabled": false,
+    "issue_306_remains_open": true,
+    "followup_issues": [
+      635,
+      636
+    ],
+    "coverage_manifest_sha256": "dea1c1663c12e321965c892ad7e2e31418c1c4bad80fc341b90d04d49ee4cf50",
+    "coverage_report_sha256": "254ac8c3577152f5be51ec5ceabdd4a3e9c437ede7a797ebec5813ebbee26756"
+  }
+}
