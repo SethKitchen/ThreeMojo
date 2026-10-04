@@ -72,8 +72,9 @@ CARLA Team credit, source links and CC BY 4.0 link.
 
 Call `registry.preload(workers)` before building a town to decode each
 bound, cached texture map once per color space. A worker count of one
-or less decodes maps in order. Higher counts limit each batch to that
-many maps. CARLA and glTF use the same bounded result storage.
+or less decodes maps in order. Higher counts limit active decodes to that
+many maps. A free worker reads the next image without waiting for slower
+images. CARLA and glTF use the same [image decode queue](Image-decode-queue).
 
 Completed maps move into the registry without a second copy of their
 pixels and mipmaps. A failed preload adds no partial cache entries.
