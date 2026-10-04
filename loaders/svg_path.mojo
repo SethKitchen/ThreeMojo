@@ -24,8 +24,18 @@ radians.
 **Arithmetic.** `SvgCurve.point` is three.js's `getPoint` for each curve,
 term for term. `SvgSubPath.get_points` is `CurvePath.getPoints`, and
 `SvgMatrix` is `Matrix3`, with the same element order.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+
+from math.norm import length2, _ordinary_squared
 from math.curve import CUBIC, ELLIPSE, LINE, QUADRATIC, Curve, CurveKind
 from math.path import Path, Shape
 from math.vector2 import Vector2
@@ -857,7 +867,7 @@ def transform_scale_x(m: SvgMatrix) -> Float64:
     Returns:
         How much it scales x.
     """
-    return sqrt(m.e[0] * m.e[0] + m.e[1] * m.e[1])
+    return length2(m.e[0], m.e[1])
 
 
 def transform_scale_y(m: SvgMatrix) -> Float64:
@@ -869,7 +879,7 @@ def transform_scale_y(m: SvgMatrix) -> Float64:
     Returns:
         How much it scales y.
     """
-    return sqrt(m.e[3] * m.e[3] + m.e[4] * m.e[4])
+    return length2(m.e[3], m.e[4])
 
 
 def is_transform_skewed(m: SvgMatrix) -> Bool:
@@ -918,7 +928,7 @@ struct EigenDecomposition(Copyable, Movable):
 
 
 def eigen_decomposition(
-    a: Float64, b: Float64, c: Float64
+    var a: Float64, var b: Float64, var c: Float64
 ) -> EigenDecomposition:
     """Return the eigensystem of `[[a, b], [b, c]]`, three.js's
     `eigenDecomposition`.
@@ -934,11 +944,26 @@ def eigen_decomposition(
     Returns:
         The two eigenvalues and the first eigenvector.
     """
+    var scale = Float64(1)
+    var difference = a - c
+    var squared = difference * difference + 4 * b * b
+    var component = max(abs(a), max(abs(b), abs(c)))
+    if component > 0 and (
+        not isfinite(a + c)
+        or (
+            not _ordinary_squared(squared)
+            and (a != c or b != 0 or not _ordinary_squared(a + c))
+        )
+    ):
+        scale = component
+        a /= scale
+        b /= scale
+        c /= scale
     var rt1: Float64
     var rt2: Float64
     var sm = a + c
     var df = a - c
-    var rt = sqrt(df * df + 4 * b * b)
+    var rt = length2(df, 2 * b)
     var t: Float64
     if sm > 0:
         rt1 = 0.5 * (sm + rt)
@@ -971,7 +996,7 @@ def eigen_decomposition(
         t = cs
         cs = -sn
         sn = t
-    return EigenDecomposition(rt1, rt2, cs, sn)
+    return EigenDecomposition(rt1 * scale, rt2 * scale, cs, sn)
 
 
 def _transform_ellipse_generic(mut curve: SvgCurve, m: SvgMatrix):
