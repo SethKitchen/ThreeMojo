@@ -1,0 +1,178 @@
+{
+  "issue": 288,
+  "date_utc": "2026-10-04",
+  "baseline_commit": "8d9b700b753006b120a66d356228716822e442f4",
+  "baseline_tree": "d8a66e26f93a7749c9e38b51d2d3e9a77d30184d",
+  "target_draft": 632,
+  "production_changed": false,
+  "decision": "Do not install an implicit production cache; propose an explicit owned query-snapshot contract before integration.",
+  "toolchain": {
+    "mojo": "1.1.0 (8189361e)",
+    "max": "26.6.0",
+    "warnings_as_errors": true,
+    "telemetry": "process-local false"
+  },
+  "host": {
+    "os": "Linux x86_64",
+    "cpu": "AMD EPYC 9V74",
+    "cpu_isolated": false
+  },
+  "source_sha256": {
+    "bench/physics_static_bvh.mojo": "47996d0eefb2a711635c2c2d7c27cef2ee524b23af3819932d1cd5ffea849272",
+    "bench/physics_static_bench.mojo": "b741698a2866ff497256db691851b5b5e169468fc07688382896d993512dfc53",
+    "tests/test_physics_static_bvh.mojo": "62c11c04236a3ad99eaa94746c78e832abe11afeef116a6351a010af61663c15",
+    "bench/navigation_allocations.c": "81284b96df593c634cd4f1c73efcabe357b706910da5eed864778e48efa945a0"
+  },
+  "binary_sha256": {
+    "physics_static_bench": "bdb478516b86f0f180e3b17c7c970cb883be8adecffccfcab587ffdb4de4b308",
+    "allocation_hook": "832fcc5cd1a5f130d16e90ead4582bc42d6e12931a149426d3c0a5d2d619731e"
+  },
+  "csv_sha256": {
+    "native.csv": "67e45e33d3c896f5028c46a5e1e1e12113142e0a9ce2d3a3043b07064d491829",
+    "allocations.csv": "16276b00ae0790f61130cca15d681e28e7f2a1c3d4788832da4d75211909dcb4"
+  },
+  "matrix": {
+    "static": [
+      100,
+      1000,
+      10000
+    ],
+    "moving": [
+      1,
+      10,
+      100
+    ],
+    "layouts": [
+      "grid",
+      "overlapping_x",
+      "clusters",
+      "coincident"
+    ],
+    "native_repetitions": 3,
+    "allocation_repetitions": 1,
+    "rays_per_batch": 1024,
+    "ray_moving_count": 10,
+    "native_rows": 720,
+    "allocation_rows": 240
+  },
+  "coverage": {
+    "source": "bench/physics_static_bvh.mojo",
+    "lines": [
+      105,
+      105
+    ],
+    "branch_and_condition_outcomes": [
+      52,
+      52
+    ],
+    "mcdc": [
+      3,
+      3
+    ],
+    "total": [
+      160,
+      160
+    ]
+  },
+  "tests": {
+    "test_physics_static_bvh": {
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "test_timeout_seconds": 5,
+      "log_sha256": "3d97ff486123a571c896fbf8f1f2d2dc8f768e0b912a75e4ba76ca5658a8579e"
+    },
+    "test_carla_physics_world": {
+      "total": 23,
+      "passed": 23,
+      "failed": 0,
+      "skipped": 0,
+      "test_timeout_seconds": 5,
+      "log_sha256": "62b62c456593c84dd424c34f939dac5fbb5c1e5b060f72c1f945eb4e610667a7"
+    },
+    "test_carla_physics_regressions": {
+      "total": 5,
+      "passed": 5,
+      "failed": 0,
+      "skipped": 0,
+      "test_timeout_seconds": 5,
+      "log_sha256": "b2f85fdc2472bc2e7cd5778e88f2f95324019360e4b9c1118da6d66f4573a666"
+    },
+    "test_physics_modes": {
+      "total": 11,
+      "passed": 11,
+      "failed": 0,
+      "skipped": 0,
+      "test_timeout_seconds": 5,
+      "log_sha256": "90db0a4588e397839aeb1d74a4a78c1242d4e98270dfb2c5a50829dec33b388d"
+    },
+    "test_shared_physics": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "test_timeout_seconds": 5,
+      "log_sha256": "d9095ecdaf2fe6f951843b44e04d2caec4d2767d2ef3573023af34db7fb32e84"
+    }
+  },
+  "followup_issue": "https://github.com/SethKitchen/ThreeMojo/issues/633",
+  "artifact_provenance": {
+    "source_hash_capture": "post-run retained-artifact reconciliation",
+    "atomic_build_source_attestation": false,
+    "timed_benchmark_and_index_changed_after_measured_run": false,
+    "later_test_changes": "Extreme-finite/tiny-bounds case added after measurements; final test source rebuilt, rerun and re-covered."
+  },
+  "integration_qualification": {
+    "base_commit": "56c6649610b0e07706f4ea0a4a15e84e0c2c7864",
+    "historical_source_and_test_records": "source_sha256 and tests above record the isolated original packet; this section binds the final integrated test",
+    "final_test_sha256": "2f5f899bb60e23fbcce6075bf9210c829b78dbea06d589323aed18d943a4048f",
+    "benchmark_sources_unchanged": true,
+    "production_changed": false,
+    "coverage_import_fix": "Copy maintained benchmark modules through the standard coverage tree without changing the measured production set; preserve explicitly measured helper instrumentation",
+    "makefile_fixture_cases": 4,
+    "retained_initial_full_instrumentation_failures_seconds": [
+      5.972466,
+      5.776226
+    ],
+    "per_test_limit_seconds": 5,
+    "test_count": 14,
+    "assertion_call_sites": 52,
+    "continuous_trajectory_states": 8,
+    "fresh_independent_worlds": 4,
+    "ordered_bruteforce_pair_calls": 1529,
+    "ray_comparisons": 360,
+    "oracle_transform_cache": {
+      "lifetime": "one immutable oracle check; rebuilt after each world mutation",
+      "former_constructions": 3058,
+      "current_constructions": 259
+    },
+    "split": "Only the four fresh independent distribution worlds move to separate tests; continuous trajectory remains one unchanged test",
+    "equivalence_manifest_sha256": "1b81c1da3aa3d8e5b12b24f1cd72a937ba295977b3ea17343ec472dda1faa5db",
+    "aggregate_coverage_completion_claim": false,
+    "scenario_totals_scope": "the formerly combined stateful/four-world test",
+    "full_production_instrumentation": {
+      "modules": 773,
+      "passed_tests": 14,
+      "max_test_milliseconds": 2421.465,
+      "log_sha256": "b7126390e86a83cf948f24b9d9dda76a7039fd58a3236826f4cb63b8f36480b0",
+      "coverage_completion_claim": false
+    },
+    "native": {
+      "tests_passed": 14,
+      "skipped": 0,
+      "max_test_milliseconds": 5.819,
+      "log_sha256": "a67f9bb5d31abda6c40bbd72bae86cec36866fbb7a60addb64a860da8f8d922c"
+    },
+    "prototype_instrumented": {
+      "tests_passed": 14,
+      "skipped": 0,
+      "max_test_milliseconds": 272.533,
+      "log_sha256": "0c5b8060839574ba887daf32ef78df7132f443c03581c53a42357b5b899955ea"
+    },
+    "fresh_full_prototype_coverage": [
+      160,
+      160
+    ]
+  }
+}

@@ -127,9 +127,11 @@ $(info Affected since $(AFFECTED): $(words $(CPU_TESTS)) suites, \
   $(words $(CPU_ENTRY_POINTS)) entry points, $(words $(COVERED)) measured \
   modules, $(words $(FORMATTED)) changed files.)
 endif
-# What the coverage build copies through uninstrumented: the excluded module,
-# and in an AFFECTED run every module the change does not reach.
-COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES))
+# What the coverage build copies through uninstrumented: excluded libraries,
+# maintained benchmark helpers imported by tests, and in an AFFECTED run every
+# library the change does not reach. Explicitly measured helpers stay instrumented.
+COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) \
+                         $(filter bench/%,$(ENTRY_POINTS)))
 
 # --- caching ----------------------------------------------------------------
 # A task's result is keyed on the content of every file that can affect it, so

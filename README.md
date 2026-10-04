@@ -80,7 +80,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 3</summary>
+<summary>Implemented: 4</summary>
+
+- [x] [Static primitive index benchmark and design](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#static-primitive-index-design): bounded snapshot experiments, allocation costs, exact contact/ray oracles and a deferred production ownership contract [#288](https://github.com/SethKitchen/ThreeMojo/issues/288)
 
 - [x] [Tick-force restoration decision](https://github.com/SethKitchen/ThreeMojo/wiki/Tick-force-restoration): measured mixed-body CPU and allocation costs, with body-mode and ghost lifetime regressions [#287](https://github.com/SethKitchen/ThreeMojo/issues/287)
 
