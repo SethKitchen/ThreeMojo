@@ -35,8 +35,16 @@ has no `id` or a coordinate or a vertex index is missing. This port
 refuses these, and a value that is not a number, which three.js reads
 as `NaN`, and a vertex index past the last vertex. An empty value is
 zero, as JavaScript's `Number("")` is.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized3, _ordinary_squared
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
@@ -501,12 +509,20 @@ def _place_mesh(
         x /= scale
         y /= scale
         z /= scale
-        var length = sqrt(x * x + y * y + z * z)
-        if length == 0:
-            length = 1
-        normals.append(Float32(x / length))
-        normals.append(Float32(y / length))
-        normals.append(Float32(z / length))
+        var unit = normalized3(x, y, z)
+        if (
+            not _ordinary_squared(x * x + y * y + z * z)
+            and isfinite(mesh.normals[k])
+            and isfinite(mesh.normals[k + 1])
+            and isfinite(mesh.normals[k + 2])
+        ):
+            # AMF units use a positive scale, which cannot change direction.
+            unit = normalized3(
+                mesh.normals[k], mesh.normals[k + 1], mesh.normals[k + 2]
+            )
+        normals.append(Float32(unit[0]))
+        normals.append(Float32(unit[1]))
+        normals.append(Float32(unit[2]))
     var count = len(mesh.vertices) // 3
     var mismatched = len(normals) > 0 and len(normals) != len(mesh.vertices)
     if mismatched:
