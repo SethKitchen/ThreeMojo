@@ -1075,7 +1075,7 @@ def _catmull(pts: List[V3], n: Int) -> List[V3]:
     var out_pts = List[V3]()
     var seg = len(pts) - 1
     # Its callers ask for six stations or more.
-    for i in range(n + 1):  # pragma: no branch
+    for i in range(n + 1):
         var u = Float64(i) / Float64(n) * Float64(seg)
         var k = min(seg - 1, Int(floor(u)))
         var t = u - Float64(k)
@@ -1176,7 +1176,7 @@ def _sculpt_antlers(mut m: SdfModel, h: BoneId, t: Traits) raises:
         if spike:
             continue
         # A buck that is not a spike has a tine at least.
-        for j in range(count):  # pragma: no branch
+        for j in range(count):
             var tt = t.get("tineT" + String(j), 0.5)
             var b = _sample_at(beam, tt)
             var tangent = normalize(
