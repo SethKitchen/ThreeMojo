@@ -38,6 +38,13 @@ restitution threshold: slower hits do not bounce, so a resting body does
 not jitter.
 """
 
+from extensions.physics.ccd import (
+    CollisionDetection,
+    DISCRETE,
+    SPHERE_MESH_CCD,
+    _sweep_triangle,
+    _sweep_domain,
+)
 from extensions.physics.body import (
     BodyId,
     BodyKind,
@@ -62,6 +69,11 @@ from extensions.physics.shape import (
     any_perpendicular,
     cross,
     unit_or,
+    _wide,
+    _wide_cross,
+    _wide_dot,
+    _finite_vector,
+    _narrow_finite,
 )
 from math.bounds import Box3, Sphere
 from math.octree import Octree
@@ -128,10 +140,34 @@ struct _Manifold(Copyable, Movable):
     var points: List[_Point]
 
 
+@fieldwise_init
+struct _StepState(ImplicitlyCopyable):
+    var position: Vector3
+    var rotation: Quaternion
+    var velocity: Vector3
+    var angular: Vector3
+    var force: Vector3
+    var torque: Vector3
+    var push: Vector3
+    var push_angular: Vector3
+
+
+@fieldwise_init
+struct _CCDImpact(ImplicitlyCopyable):
+    var time: Float64
+    var body: Int
+    var triangle: Int
+    var impulse: Vector3
+
+
 struct PhysicsWorld(Movable):
     """Bodies, static meshes, and the solver that steps them."""
 
     var bodies: List[RigidBody]
+    # Discrete by default. CCD refuses unsupported colliding worlds.
+    var collision_detection: CollisionDetection
+    # Per sphere and step. Exhaustion rolls back the complete step.
+    var ccd_max_impacts: Int
     # In m/s^2.
     var gravity: Vector3
     var velocity_iterations: Int
@@ -159,6 +195,8 @@ struct PhysicsWorld(Movable):
     def __init__(out self):
         """Create an empty world with standard gravity."""
         self.bodies = List[RigidBody]()
+        self.collision_detection = DISCRETE
+        self.ccd_max_impacts = 16
         self.gravity = Vector3(0, 0, -9.8)
         self.velocity_iterations = 10
         self.position_iterations = 4
@@ -273,10 +311,58 @@ struct PhysicsWorld(Movable):
         # Validate the complete batch before any body or pending force changes.
         for body in self.bodies:
             body.validate()
+        if not self.collision_detection.is_valid():
+            raise Error("Collision detection mode is not valid")
+        if self.collision_detection == DISCRETE:
+            self._step(h)
+            return
+        # CCD is transactional, including pending forces and prior reports.
+        var states = List[_StepState]()
+        for body in self.bodies:
+            states.append(
+                _StepState(
+                    body.position,
+                    body.rotation,
+                    body.linear_velocity,
+                    body.angular_velocity,
+                    body.force,
+                    body.torque,
+                    body.push_velocity,
+                    body.push_angular,
+                )
+            )
+        var events = self.events.copy()
+        var order = self._order.copy()
+        var count = self.contact_count
+        var dirty = self._dirty
+        try:
+            self._validate_ccd()
+            self._step(h)
+        except error:
+            for i in range(len(states)):
+                self.bodies[i].position = states[i].position
+                self.bodies[i].rotation = states[i].rotation
+                self.bodies[i].linear_velocity = states[i].velocity
+                self.bodies[i].angular_velocity = states[i].angular
+                self.bodies[i].force = states[i].force
+                self.bodies[i].torque = states[i].torque
+                self.bodies[i].push_velocity = states[i].push
+                self.bodies[i].push_angular = states[i].push_angular
+            self.events = events^
+            self._order = order^
+            self.contact_count = count
+            self._dirty = dirty
+            raise error
+
+    def _step(mut self, h: Float32) raises:
         self._integrate_velocities(h)
+        if self.collision_detection == SPHERE_MESH_CCD:
+            self._ccd_separation(h)
         if self._dirty:
             self._rebuild()
         var manifolds = self._find_contacts()
+        if self.collision_detection == SPHERE_MESH_CCD:
+            manifolds = self._ccd_contacts(manifolds, h)
         self._prepare(manifolds, h)
         for _ in range(self.velocity_iterations):
             for m in range(len(manifolds)):
@@ -286,8 +372,299 @@ struct PhysicsWorld(Movable):
         for _ in range(self.position_iterations):
             for m in range(len(manifolds)):
                 self._solve_push(manifolds[m], h)
-        self._integrate_positions(h)
+        var impacts = List[_CCDImpact]()
+        if self.collision_detection == SPHERE_MESH_CCD:
+            impacts = self._ccd_positions(h)
+        else:
+            self._integrate_positions(h)
         self._report(manifolds)
+        for impact in impacts:
+            var owner = self._triangle_body[impact.triangle]
+            self.contact_count += 1
+            self.events.append(
+                CollisionEvent(
+                    BodyId(impact.body), BodyId(owner), impact.impulse
+                )
+            )
+            self.events.append(
+                CollisionEvent(
+                    BodyId(owner), BodyId(impact.body), -impact.impulse
+                )
+            )
+
+    def _validate_ccd(self) raises:
+        if not (isfinite(self.margin) and self.margin >= 0):
+            raise Error("CCD contact margin must be finite and nonnegative")
+        if not (isfinite(self.slop) and self.slop >= 0):
+            raise Error("CCD contact slop must be finite and nonnegative")
+        if not (isfinite(self.push_factor) and self.push_factor >= 0):
+            raise Error("CCD push factor must be finite and nonnegative")
+        if self.ccd_max_impacts < 1 or self.ccd_max_impacts > 1024:
+            raise Error("CCD impact limit must be between 1 and 1024")
+        _finite_vector(self.gravity)
+        if not (isfinite(self.bounce_threshold) and self.bounce_threshold >= 0):
+            raise Error("CCD bounce threshold must be finite and nonnegative")
+        for body in self.bodies:
+            _ccd_coordinate(body.position)
+            _ccd_rotation(body.rotation)
+            _ccd_rotation(body.shape_rotation)
+            _finite_vector(body.linear_velocity)
+            _finite_vector(body.angular_velocity)
+            _finite_vector(body.force)
+            _finite_vector(body.torque)
+            _finite_vector(body.push_velocity)
+            _finite_vector(body.push_angular)
+            body.material.check()
+            if not body.collides:
+                continue
+            if body.shape.kind == MESH:
+                if body.linear_velocity != Vector3(
+                    0, 0, 0
+                ) or body.angular_velocity != Vector3(0, 0, 0):
+                    raise Error("CCD requires motionless static meshes")
+                continue
+            if body.kind() != DYNAMIC or body.shape.kind != SPHERE:
+                raise Error(
+                    "CCD supports dynamic spheres against static meshes only"
+                )
+            if body.shape_position != Vector3(
+                0, 0, 0
+            ) or body.center_of_mass != Vector3(0, 0, 0):
+                raise Error(
+                    "CCD requires a sphere centered on its body and mass"
+                )
+            var inverse = body.inverse_inertia()
+            var isotropic = inverse
+            for k in range(9):  # pragma: no branch
+                isotropic.elements[k] = 0
+            isotropic.elements[0] = inverse.elements[0]
+            isotropic.elements[4] = inverse.elements[0]
+            isotropic.elements[8] = inverse.elements[0]
+            if inverse != isotropic or inverse.elements[0] <= 0:
+                raise Error("CCD requires positive isotropic sphere inertia")
+            if not (
+                isfinite(body.shape.radius)
+                and body.shape.radius >= 0.0001
+                and body.shape.radius <= 10000
+            ):
+                raise Error(
+                    "CCD sphere radius must be between 0.0001 and 10000 meters"
+                )
+            _ccd_position(body.position, body.shape.radius)
+        for t in range(len(self._triangles)):
+            var triangle = self._triangles[t]
+            _ccd_coordinate(triangle.a)
+            _ccd_coordinate(triangle.b)
+            _ccd_coordinate(triangle.c)
+            var normal = _wide_cross(
+                _wide(triangle.b) - _wide(triangle.a),
+                _wide(triangle.c) - _wide(triangle.a),
+            )
+            var ab = _wide(triangle.b) - _wide(triangle.a)
+            var ac = _wide(triangle.c) - _wide(triangle.a)
+            var bc = _wide(triangle.c) - _wide(triangle.b)
+            var edge = max(
+                _wide_dot(ab, ab), max(_wide_dot(ac, ac), _wide_dot(bc, bc))
+            )
+            if (
+                _wide_dot(normal, normal) == 0
+                or triangle.raw_normal() == Vector3(0, 0, 0)
+                or _wide_dot(normal, normal) * 1099511627776 < edge * edge
+            ):
+                raise Error(
+                    "CCD requires resolved, well-conditioned static triangles"
+                )
+
+    def _ccd_separation(self, h: Float32) raises:
+        # A total-energy bound includes friction transferring spin to travel.
+        # Disjoint reachable balls ensure there are no moving-body contacts,
+        # including after an arbitrary number of static-mesh rebounds.
+        var reach = List[Float64](length=len(self.bodies), fill=-1)
+        for i in range(len(self.bodies)):
+            ref body = self.bodies[i]
+            _finite_vector(body.linear_velocity)
+            _finite_vector(body.angular_velocity)
+            if not body.collides or body.kind() != DYNAMIC:
+                continue
+            var v = _wide(body.linear_velocity)
+            var w = _wide(body.angular_velocity)
+            var speed = sqrt(
+                _wide_dot(v, v)
+                + _wide_dot(w, w)
+                * Float64(body.inverse_mass())
+                / Float64(body.inverse_inertia().elements[0])
+            )
+            var push = _wide(body.push_velocity)
+            reach[i] = Float64(body.shape.radius) + Float64(h) * (
+                speed + sqrt(_wide_dot(push, push))
+            )
+            if reach[i] > Float64(body.shape.radius) * 1048576:
+                raise Error(
+                    "CCD travel exceeds the radius-relative precision bound"
+                )
+            for t in range(len(self._triangles)):
+                if self.bodies[self._triangle_body[t]].collides:
+                    _ = _sweep_domain(
+                        _wide(body.position),
+                        SIMD[DType.float64, 4](0),
+                        Float64(body.shape.radius),
+                        reach[i] + Float64(self.margin),
+                        self._triangles[t],
+                    )
+            for j in range(i):
+                if reach[j] < 0:
+                    continue
+                var offset = _wide(body.position) - _wide(
+                    self.bodies[j].position
+                )
+                var limit = reach[i] + reach[j] + Float64(self.margin)
+                if _wide_dot(offset, offset) <= limit * limit:
+                    raise Error(
+                        "CCD moving-sphere reachable regions must be disjoint"
+                    )
+
+    def _ccd_contacts(
+        self, manifolds: List[_Manifold], h: Float32
+    ) -> List[_Manifold]:
+        var out = List[_Manifold]()
+        for manifold in manifolds:
+            var points = List[_Point]()
+            for point in manifold.points:  # pragma: no branch
+                var travel = -Float64(
+                    self.bodies[manifold.b].linear_velocity.dot(
+                        point.contact.normal
+                    )
+                ) * Float64(h)
+                # Keep slow speculative contacts unchanged. A fast body
+                # must reach the surface before restitution acts on it.
+                if point.contact.depth < 0 and travel > Float64(self.margin):
+                    continue
+                points.append(point)
+            if len(points) > 0:
+                out.append(
+                    _Manifold(
+                        manifold.a, manifold.b, manifold.material, points^
+                    )
+                )
+        return out^
+
+    def _ccd_positions(mut self, h: Float32) raises -> List[_CCDImpact]:
+        self._ccd_separation(h)
+        var impacts = List[_CCDImpact]()
+        var positions = List[Vector3]()
+        var rotations = List[Quaternion]()
+        # Split correction remains the original pose-only correction. The
+        # analytic sweep follows the physical, post-solve velocity from it.
+        for i in range(len(self.bodies)):
+            ref body = self.bodies[i]
+            positions.append(body.position)
+            rotations.append(body.rotation)
+            if not body.collides or body.kind() != DYNAMIC:
+                continue
+            var result = self._ccd_sphere(i, h, impacts)
+            positions[i] = result[0]
+            rotations[i] = result[1]
+        self._integrate_positions(h)
+        for i in range(len(self.bodies)):
+            for impact in impacts:
+                if impact.body == i:
+                    self.bodies[i].position = positions[i]
+                    self.bodies[i].rotation = rotations[i]
+                    break
+            _ccd_coordinate(self.bodies[i].position)
+            _ccd_rotation(self.bodies[i].rotation)
+            if self.bodies[i].collides and self.bodies[i].kind() == DYNAMIC:
+                _ccd_position(
+                    self.bodies[i].position, self.bodies[i].shape.radius
+                )
+            _finite_vector(self.bodies[i].linear_velocity)
+            _finite_vector(self.bodies[i].angular_velocity)
+        # Stable time order, then body insertion order and triangle order.
+        for i in range(1, len(impacts)):
+            var j = i
+            while j > 0 and impacts[j - 1].time > impacts[j].time:
+                impacts.swap_elements(j - 1, j)
+                j -= 1
+        return impacts^
+
+    def _ccd_sphere(
+        mut self, i: Int, h: Float32, mut impacts: List[_CCDImpact]
+    ) raises -> Tuple[Vector3, Quaternion]:
+        var rotation = self.bodies[i].rotation
+        var push_angular = _wide(self.bodies[i].push_angular)
+        var at = _wide(self.bodies[i].position) + _wide(
+            self.bodies[i].push_velocity
+        ) * Float64(h)
+        var velocity = _wide(self.bodies[i].linear_velocity)
+        var angular = _wide(self.bodies[i].angular_velocity)
+        var radius = Float64(self.bodies[i].shape.radius)
+        var remaining = Float64(h)
+        var count = 0
+        while remaining > 0:
+            var fraction = Float64(2)
+            var normal = SIMD[DType.float64, 4](0)
+            var triangle = -1
+            var travel = velocity * remaining
+            for t in range(len(self._triangles)):
+                if not self.bodies[self._triangle_body[t]].collides:
+                    continue
+                var hit = _sweep_triangle(
+                    at, travel, radius, self._triangles[t]
+                )
+                if hit.fraction < fraction:
+                    fraction = hit.fraction
+                    normal = hit.normal
+                    triangle = t
+            if triangle < 0:
+                at += travel
+                rotation = _ccd_rotate(
+                    rotation, angular + push_angular, remaining
+                )
+                break
+            if count == self.ccd_max_impacts:
+                raise Error("CCD impact limit exhausted; step rolled back")
+            at += travel * fraction
+            rotation = _ccd_rotate(
+                rotation, angular + push_angular, remaining * fraction
+            )
+            remaining *= 1 - fraction
+            var material = self.bodies[i].material.combine(
+                self.bodies[self._triangle_body[triangle]].material
+            )
+            var approach = _wide_dot(velocity, normal)
+            var restitution = Float64(0)
+            if approach <= -Float64(self.bounce_threshold):
+                restitution = Float64(material.restitution)
+            var inverse_mass = Float64(self.bodies[i].inverse_mass())
+            var inverse_inertia = Float64(
+                self.bodies[i].inverse_inertia().elements[0]
+            )
+            var normal_impulse = -(1 + restitution) * approach / inverse_mass
+            velocity += normal * (normal_impulse * inverse_mass)
+            var arm = -normal * radius
+            var slip = velocity + _wide_cross(angular, arm)
+            var tangent = slip - normal * _wide_dot(slip, normal)
+            var speed = sqrt(_wide_dot(tangent, tangent))
+            if speed > 0:
+                var impulse = min(
+                    speed / (inverse_mass + radius * radius * inverse_inertia),
+                    Float64(material.friction) * normal_impulse,
+                )
+                var friction = -tangent * (impulse / speed)
+                velocity += friction * inverse_mass
+                angular += _wide_cross(arm, friction) * inverse_inertia
+            impacts.append(
+                _CCDImpact(
+                    Float64(h) - remaining,
+                    i,
+                    triangle,
+                    _ccd_narrow(normal * normal_impulse),
+                )
+            )
+            count += 1
+        self.bodies[i].linear_velocity = _ccd_narrow(velocity)
+        self.bodies[i].angular_velocity = _ccd_narrow(angular)
+        return (_ccd_narrow(at), rotation)
 
     def _integrate_velocities(mut self, h: Float32):
         for i in range(len(self.bodies)):
@@ -396,6 +773,17 @@ struct PhysicsWorld(Movable):
             var owner = self._triangle_body[t]
             if not self.bodies[owner].collides:
                 continue
+            if self.collision_detection == SPHERE_MESH_CCD:
+                var triangle = self._triangles[t]
+                var normal = _wide_cross(
+                    _wide(triangle.b) - _wide(triangle.a),
+                    _wide(triangle.c) - _wide(triangle.a),
+                )
+                if (
+                    _wide_dot(_wide(shape.start) - _wide(triangle.a), normal)
+                    < 0
+                ):
+                    continue
             var points = mesh_contacts(self._triangles[t], shape, self.margin)
             if len(points) == 0:
                 continue
@@ -823,3 +1211,55 @@ def _polyhedron_hit(
     if not entered or enter > leave:
         return None
     return RaycastHit(BodyId(i), ray.at(enter), normal, enter, material)
+
+
+def _ccd_narrow(value: SIMD[DType.float64, 4]) raises -> Vector3:
+    return Vector3(
+        _narrow_finite(value[0]),
+        _narrow_finite(value[1]),
+        _narrow_finite(value[2]),
+    )
+
+
+def _ccd_rotate(
+    rotation: Quaternion, angular: SIMD[DType.float64, 4], h: Float64
+) raises -> Quaternion:
+    var w = _ccd_narrow(angular * h)
+    var spin = Quaternion(w.x, w.y, w.z, 0) * rotation
+    var out = Quaternion(
+        rotation.x + spin.x * 0.5,
+        rotation.y + spin.y * 0.5,
+        rotation.z + spin.z * 0.5,
+        rotation.w + spin.w * 0.5,
+    )
+    out.normalize()
+    return out
+
+
+def _ccd_coordinate(value: Vector3) raises:
+    _finite_vector(value)
+    if max(abs(value.x), max(abs(value.y), abs(value.z))) > 1000000:
+        raise Error(
+            "CCD coordinates must stay within one million meters of the origin"
+        )
+
+
+def _ccd_rotation(value: Quaternion) raises:
+    var norm = (
+        Float64(value.x) ** 2
+        + Float64(value.y) ** 2
+        + Float64(value.z) ** 2
+        + Float64(value.w) ** 2
+    )
+    if not (isfinite(norm) and abs(norm - 1) <= 0.00001):
+        raise Error("CCD requires finite unit quaternions")
+
+
+def _ccd_position(value: Vector3, radius: Float32) raises:
+    if (
+        Float64(max(abs(value.x), max(abs(value.y), abs(value.z))))
+        > Float64(radius) * 65536
+    ):
+        raise Error(
+            "CCD sphere coordinates exceed the radius-relative pose bound"
+        )
