@@ -115,6 +115,7 @@ mkdir -p out
 | `water.mojo` | `water.png` | [Water](Water) |
 | `animals.mojo` | `animals.png` | [Animals](Animals) |
 | `walk.mojo` | `walk.png` | [Animals](Animals) |
+| `animal_anatomy.mojo` | `animal_anatomy.png` | [Animal anatomy](Animal-anatomy) |
 | `carla.mojo` | `carla.png` | [CARLA](CARLA) |
 | `carla_town.mojo` | `carla_town.png` | [CARLA rendering](CARLA-rendering) |
 

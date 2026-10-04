@@ -67,6 +67,7 @@
 - [Extensions](Extensions)
 - [Water](Water)
 - [Animals](Animals)
+  - [Animal anatomy](Animal-anatomy)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)

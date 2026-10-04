@@ -6,7 +6,7 @@ The first subject is the humanoid. The leg bones are the femur, tibia, fibula an
 
 The water subject ports Clearwater. See [Water](Water).
 
-The animals subject ports procedural-animals: 24 species sculpted as distance fields, posed and painted. See [Animals](Animals). Its distance field sculpting and meshing live in `extensions/sdf/`, so other subjects can use them.
+The animals subject ports procedural-animals: 24 species sculpted as distance fields, posed and painted. See [Animals](Animals). Its distance field sculpting and meshing live in `extensions/sdf/`, so other subjects can use them. Its anatomy, mass and muscles build on `extensions/anatomy/`, which the humanoid shares. See [Animal anatomy](Animal-anatomy).
 
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
@@ -67,6 +67,11 @@ extensions/
   anatomy/
     tissue.mojo      bone density, porosity and moduli
     soft_tissue.mojo named hydrated-tissue density
+    inertia.mojo     mass, center and inertia, tallied cell by cell
+    muscle.mojo      Hill-type muscle, Thelen's curves, moment arms
+    locomotion.mojo  Froude number, stride length and frequency
+    mode.mojo        game mode and engineering mode
+    evidence.mojo    how far a published value was checked
   sdf/
     vector.mojo    Vec3d helpers, frames and rigid transforms
     ids.mojo       primitive kinds, bones, tags and surface parts
@@ -83,6 +88,8 @@ extensions/
     gait.mojo      the walk cycle
     registry.mojo  the 24 species
     species/       one sculpt, rig and coat per species
+    anatomy/       published sizes, tissues, mass, muscles, standing
+                   loads, bulging bellies, engineering layers, physics
   water/
     spectrum.mojo  ocean spectrum and dispersion
     ripple.mojo    local wave equation

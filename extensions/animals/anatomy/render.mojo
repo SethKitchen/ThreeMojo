@@ -31,7 +31,6 @@ from core.buffer_geometry import (
     MaterialIndex,
 )
 from extensions.animals.anatomy.body import species_body
-from extensions.animals.anatomy.flex import fiber_ratio
 from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import (
     COAT,
@@ -47,7 +46,18 @@ from extensions.animals.anatomy.tissue import (
     segment_of,
     tissue_of,
 )
-from extensions.animals.build import Animal, part_box
+from extensions.anatomy.mode import (
+    ENGINEERING_MODE,
+    AnatomyMode,
+    require_mode,
+)
+from extensions.animals.anatomy.flex import fiber_ratio, flexed_animal
+from extensions.animals.build import (
+    Animal,
+    animal_materials,
+    mesh_animal,
+    part_box,
+)
 from extensions.animals.rig import Pose
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import CONE, BoneId, SURFACE_PART_COUNT, SurfacePart
@@ -335,4 +345,61 @@ def anatomy_materials() raises -> List[Material]:
             vertex_colors=True,
         )
     )
+    return out^
+
+
+def mesh_in_mode(
+    animal: Animal,
+    muscles: List[AnimalMuscle],
+    pose: Pose,
+    mode: AnatomyMode,
+    workers: Int = 0,
+) raises -> List[BufferGeometry]:
+    """Mesh an individual in game mode or in engineering mode.
+
+    Game mode gives one painted mesh, its muscle bellies shaped for the
+    pose. Engineering mode gives the skin, the skeleton and the muscles.
+
+    Args:
+        animal: The individual.
+        muscles: Its muscles. Game mode can take none.
+        pose: The pose.
+        mode: `GAME_MODE` or `ENGINEERING_MODE`.
+        workers: How many threads mesh it. Zero or less means one per
+            logical core.
+
+    Returns:
+        The meshes. Draw them with `materials_in_mode`.
+
+    Raises:
+        Error: If the mode is not named, or the layers cannot be meshed.
+    """
+    require_mode(mode)
+    if mode == ENGINEERING_MODE:
+        return anatomy_layers(animal, muscles, pose, workers)
+    var out = List[BufferGeometry]()
+    out.append(mesh_animal(flexed_animal(animal, muscles, pose), pose, workers))
+    return out^
+
+
+def materials_in_mode(mode: AnatomyMode) raises -> List[List[Material]]:
+    """Return the materials of each mesh `mesh_in_mode` gives.
+
+    Args:
+        mode: `GAME_MODE` or `ENGINEERING_MODE`.
+
+    Returns:
+        One material list per mesh, in the same order.
+
+    Raises:
+        Error: If the mode is not named, or a material refuses its
+            settings.
+    """
+    require_mode(mode)
+    var out = List[List[Material]]()
+    if mode == ENGINEERING_MODE:
+        for m in anatomy_materials():  # pragma: no branch
+            out.append([m.copy()])
+        return out^
+    out.append(animal_materials())
     return out^

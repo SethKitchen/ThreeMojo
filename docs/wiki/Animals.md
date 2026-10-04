@@ -114,7 +114,9 @@ Near a joint, the colors of the two bones blend over the blend radius of their s
 
 `Pose` turns bones about their head joints. A child bone rides its parent. `Pose.root` moves the whole animal.
 
-`walk_pose` gives the lateral-sequence walk of procedural-animals' wolf. Each foot is on the ground for 70 % of the stride. Two-bone inverse kinematics put each foot on its path, so a planted foot stays still. The back bobs twice in a stride. The tail swings once. A rig without four legs gets its bind pose.
+`walk_pose` gives the lateral-sequence walk of procedural-animals' wolf. The stride is the one dynamic similarity gives the hip height at a Froude number, 0.25 by default. See [Animal anatomy](Animal-anatomy#gait-timing).
+
+Each foot is on the ground for 70 % of the stride. Two-bone inverse kinematics put each foot on its path, so a planted foot stays still. The back bobs twice in a stride. The tail swings once. A rig without four legs gets its bind pose.
 
 ## Differences from procedural-animals
 
@@ -134,6 +136,10 @@ These changes improve the result in the software renderer.
 - The behavior, action and steering engines. `walk_pose` is one gait.
 - Web workers and baked `.animal` files. A build runs on threads.
 - Dual-quaternion skinning. Poses re-mesh instead.
+
+## Anatomy
+
+Each animal also has a skeleton, Hill-type muscles, segment mass and inertia, and an engineering mode. See [Animal anatomy](Animal-anatomy).
 
 ## Types and checks
 
