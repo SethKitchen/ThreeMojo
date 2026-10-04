@@ -29,6 +29,7 @@ from generators.utils import Vec3d
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Duration64,
     HOUR,
     HeatFlux64,
@@ -156,7 +157,7 @@ def declination_cooper(day: Int) raises -> Angle64:
     """
     _check_day(day)
     var degrees = 23.45 * sin(2 * pi * Float64(284 + day) / 365.0)
-    return Angle64(degrees, DEGREE)
+    return Angle64(degrees, DEGREE64)
 
 
 def solar_time(
@@ -181,7 +182,7 @@ def solar_time(
         Error: If the day is out of range.
     """
     var meridian = 15.0 * time_zone.to(HOUR)
-    var shift = Duration64(4.0 * (longitude.to(DEGREE) - meridian), MINUTE)
+    var shift = Duration64(4.0 * (longitude.to(DEGREE64) - meridian), MINUTE)
     return clock + shift + equation_of_time(day)
 
 

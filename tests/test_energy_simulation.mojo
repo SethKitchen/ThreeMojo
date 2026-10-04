@@ -74,6 +74,7 @@ from units.si import (
     Angle64,
     Area64,
     DEGREE,
+    DEGREE64,
     Duration64,
     Frequency64,
     HOUR,
@@ -105,15 +106,15 @@ def _area(v: Float64) -> Area64:
 
 def _site() -> Site:
     return Site(
-        Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(1600), Angle64(0)
+        Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(1600), Angle64(0)
     )
 
 
 def _location() -> WeatherLocation:
     return WeatherLocation(
         "Golden",
-        Angle64(39.74, DEGREE),
-        Angle64(-105.18, DEGREE),
+        Angle64(39.74, DEGREE64),
+        Angle64(-105.18, DEGREE64),
         Duration64(-7, HOUR),
         _m(1829),
     )
@@ -550,7 +551,7 @@ def test_result_and_options_refuse() raises:
     with assert_raises(contains="weather step"):
         _ = simulate(model, still, options)
     var lost = _constant_weather(0, 3)
-    lost.location.latitude = Angle64(-91, DEGREE)
+    lost.location.latitude = Angle64(-91, DEGREE64)
     with assert_raises(contains="latitude"):
         _ = simulate(model, lost, options)
     var odd = Weather(_location(), Duration64(1, HOUR), [_record(1, 0, 1)])

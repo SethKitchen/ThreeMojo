@@ -30,7 +30,7 @@ from renderers.renderer import Renderer, available_workers
 from std.math import cos, pi, sin, sqrt
 from std.pathlib import Path
 from std.sys import argv
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, DEGREE64, METER, Angle, Length
 from extensions.building.construction import Construction, Layer, double_glazing
 from extensions.building.generate.openings import (
     WindowOptions,
@@ -297,8 +297,8 @@ def main() raises:
     var building = assemble(
         "office floor",
         Site(
-            Angle64(40.7, DEGREE),
-            Angle64(-74.0, DEGREE),
+            Angle64(40.7, DEGREE64),
+            Angle64(-74.0, DEGREE64),
             m.scaled(10),
             Angle64(0),
         ),
@@ -332,8 +332,8 @@ def main() raises:
     var weather = design_day(
         WeatherLocation(
             "New York",
-            Angle64(40.7, DEGREE),
-            Angle64(-74.0, DEGREE),
+            Angle64(40.7, DEGREE64),
+            Angle64(-74.0, DEGREE64),
             Duration64(-5, HOUR),
             m.scaled(10),
         ),

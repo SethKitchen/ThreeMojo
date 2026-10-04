@@ -38,6 +38,7 @@ from extensions.energy.solar import SunPosition, day_of_year, sun_position
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Duration64,
     HOUR,
     HeatFlux64,
@@ -93,8 +94,8 @@ struct WeatherLocation(Copyable, Movable):
                 longitude outside -180 to 180, the time zone outside -12 to
                 14 hours, or the elevation is not finite.
         """
-        var lat = self.latitude.to(DEGREE)
-        var lon = self.longitude.to(DEGREE)
+        var lat = self.latitude.to(DEGREE64)
+        var lon = self.longitude.to(DEGREE64)
         var zone = self.time_zone.to(HOUR)
         if not (lat >= -90 and lat <= 90):
             raise Error("A latitude must be from -90 to 90 degrees")
@@ -225,8 +226,8 @@ def parse_epw(text: String) raises -> Weather:
         raise _at(1, "The first line must be LOCATION with 10 fields")
     var location = WeatherLocation(
         String(head[1].strip()),
-        Angle64(_number(head[6], "The latitude", 1), DEGREE),
-        Angle64(_number(head[7], "The longitude", 1), DEGREE),
+        Angle64(_number(head[6], "The latitude", 1), DEGREE64),
+        Angle64(_number(head[7], "The longitude", 1), DEGREE64),
         Duration64(_number(head[8], "The time zone", 1), HOUR),
         Length64(_number(head[9], "The elevation", 1), METER),
     )
@@ -303,7 +304,7 @@ def parse_epw(text: String) raises -> Weather:
                 HeatFlux64(flux[0], WATT_PER_SQUARE_METER),
                 HeatFlux64(flux[1], WATT_PER_SQUARE_METER),
                 HeatFlux64(flux[2], WATT_PER_SQUARE_METER),
-                Angle64(direction, DEGREE),
+                Angle64(direction, DEGREE64),
                 Velocity64(speed, METER_PER_SECOND),
             )
         )

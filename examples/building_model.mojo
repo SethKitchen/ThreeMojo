@@ -23,7 +23,7 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, DEGREE64, METER, Angle, Length
 from extensions.building.construction import Construction, Layer, double_glazing
 from extensions.building.ids import (
     ConstructionId,
@@ -127,7 +127,7 @@ def _model() raises -> Building:
     plans.append(StoreyPlan("first", _m(3), first^))
     var b = assemble(
         "example",
-        Site(Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(0), Angle64(0)),
+        Site(Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(0), Angle64(0)),
         _m(0),
         plans,
         materials^,

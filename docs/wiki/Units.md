@@ -61,7 +61,7 @@ var coarse = span.cast[DType.float32]()      # a Length
 
 Two quantities combine only when their `dtype` is the same. A `Length64` plus a `Length` is a compile error. Use `cast` to change the float type.
 
-A `Unit` holds its factor as a `Float64`. A `Float32` quantity rounds the factor once, when it reads or writes a value. A `Float64` quantity keeps the exact factor.
+A `Unit` holds its factor as a `Float32` by default, so it is safe in GPU code, which has no `Float64`. A unit of either float type converts a quantity of either float type. `FOOT64`, `INCH64` and `DEGREE64` are `Float64` units for factors that a `Float32` rounds. Use them where a `Float64` quantity must keep every digit.
 
 ## Units
 

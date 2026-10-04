@@ -67,6 +67,7 @@ from units.si import (
     Angle64,
     Area64,
     DEGREE,
+    DEGREE64,
     Frequency64,
     HeatCapacity64,
     HeatFlux64,
@@ -91,7 +92,7 @@ def _m(v: Float64) -> Length64:
 
 def _site() -> Site:
     return Site(
-        Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(1600), Angle64(0)
+        Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(1600), Angle64(0)
     )
 
 
@@ -345,7 +346,7 @@ def test_model_adds_and_finds() raises:
 
 def test_model_refuses() raises:
     var bad_site = _site()
-    bad_site.latitude = Angle64(100, DEGREE)
+    bad_site.latitude = Angle64(100, DEGREE64)
     with assert_raises(contains="latitude"):
         _ = ZoneModel(bad_site, _materials(), _constructions())
     var bad_materials = _materials()

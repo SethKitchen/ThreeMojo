@@ -32,7 +32,8 @@ The float is a `Float32` unless the `dtype` parameter says otherwise. Graphics
 code keeps the default. Engineering code, where a stiffness matrix loses
 digits in `Float32`, names `DType.float64`; `units.si` has a `64` alias for
 each dimension, such as `Length64`. Two quantities combine only when their
-`dtype` matches. `cast` changes it explicitly.
+`dtype` matches. `cast` changes it explicitly. A unit has a `dtype` too, a
+`Float32` by default, and converts quantities of either float type.
 
 Angle is treated as a base dimension here, which strict SI does not do: a
 radian is properly dimensionless. Carrying it anyway is what makes passing
@@ -45,17 +46,27 @@ from std.math import sqrt as float_sqrt
 
 @fieldwise_init
 struct Unit[
-    length: Int, mass: Int, time: Int, angle: Int, temperature: Int = 0
+    length: Int,
+    mass: Int,
+    time: Int,
+    angle: Int,
+    temperature: Int = 0,
+    dtype: DType = DType.float32,
 ](ImplicitlyCopyable):
     """A named scale factor on one particular dimension.
 
     `scale` is how many canonical units one of these is worth, so `FOOT` holds
     0.3048. The dimension exponents are part of the type, which is what stops
-    a length being converted to seconds. The scale is a `Float64`, so a
-    `Float64` quantity keeps every digit of an exact factor.
+    a length being converted to seconds.
+
+    The scale is a `Float32` unless `dtype` says otherwise, so a unit is
+    safe in GPU code, which has no `Float64`. A unit of either float type
+    converts a quantity of either float type. Declare a `Float64` unit
+    where a `Float64` quantity must keep every digit of an inexact factor,
+    such as the foot's 0.3048.
     """
 
-    var scale: Float64
+    var scale: Scalar[Self.dtype]
     var symbol: StaticString
 
 
@@ -70,27 +81,53 @@ struct Quantity[
 ](Absable, ImplicitlyCopyable):
     """A value measured in the dimension given by the exponents."""
 
-    # The units this quantity can be written in.
-    comptime UnitType = Unit[
-        Self.length, Self.mass, Self.time, Self.angle, Self.temperature
-    ]
-
     var value: Scalar[Self.dtype]
 
-    def __init__(out self, value: Scalar[Self.dtype], unit: Self.UnitType):
+    def __init__[
+        unit_dtype: DType
+    ](
+        out self,
+        value: Scalar[Self.dtype],
+        unit: Unit[
+            Self.length,
+            Self.mass,
+            Self.time,
+            Self.angle,
+            Self.temperature,
+            unit_dtype,
+        ],
+    ):
         """Create a quantity from a value expressed in `unit`.
 
         The unit's dimensions must match this quantity's, which the type
         system enforces at the call site.
 
+        Parameters:
+            unit_dtype: The unit's float type.
+
         Args:
             value: The magnitude in `unit`.
             unit: The unit the magnitude is written in.
         """
-        self.value = value * Scalar[Self.dtype](unit.scale)
+        self.value = value * unit.scale.cast[Self.dtype]()
 
-    def to(self, unit: Self.UnitType) -> Scalar[Self.dtype]:
+    def to[
+        unit_dtype: DType
+    ](
+        self,
+        unit: Unit[
+            Self.length,
+            Self.mass,
+            Self.time,
+            Self.angle,
+            Self.temperature,
+            unit_dtype,
+        ],
+    ) -> Scalar[Self.dtype]:
         """Return this quantity's magnitude expressed in `unit`.
+
+        Parameters:
+            unit_dtype: The unit's float type.
 
         Args:
             unit: The unit to read the magnitude in.
@@ -98,7 +135,7 @@ struct Quantity[
         Returns:
             The magnitude in `unit`.
         """
-        return self.value / Scalar[Self.dtype](unit.scale)
+        return self.value / unit.scale.cast[Self.dtype]()
 
     def cast[
         target: DType

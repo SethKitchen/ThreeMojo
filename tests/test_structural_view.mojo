@@ -71,6 +71,7 @@ from units.si import (
     Acceleration64,
     Angle64,
     DEGREE,
+    DEGREE64,
     KILOPASCAL,
     Length64,
     METER,
@@ -127,7 +128,7 @@ def _building(roof_beams: Bool) raises -> Building:
     plans.append(StoreyPlan("first", _m(3), first^))
     var b = assemble(
         "frame",
-        Site(Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(0), Angle64(0)),
+        Site(Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(0), Angle64(0)),
         _m(0),
         plans,
         materials^,
@@ -298,7 +299,7 @@ def _single_storey(outline: List[Point2], frame: Bool) raises -> Building:
     var all = ConstructionId(0)
     var b = assemble(
         "single",
-        Site(Angle64(0, DEGREE), Angle64(0, DEGREE), _m(0), Angle64(0)),
+        Site(Angle64(0, DEGREE64), Angle64(0, DEGREE64), _m(0), Angle64(0)),
         _m(0),
         plans,
         materials^,

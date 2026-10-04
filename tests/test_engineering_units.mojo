@@ -6,7 +6,7 @@
 """Tests for the temperature exponent, the `Float64` quantities and the
 thermal and structural units of `units.si` and `units.temperature`."""
 
-from std.math import inf, nan
+from std.math import inf, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -15,7 +15,11 @@ from std.testing import (
     assert_true,
 )
 from units.si import (
+    Angle64,
     Area64,
+    DEGREE64,
+    FOOT64,
+    INCH64,
     Energy64,
     HeatCapacity64,
     Scalar64,
@@ -70,10 +74,15 @@ from units.temperature import (
 )
 
 
-def test_a_float64_length_keeps_every_digit_of_an_exact_factor() raises:
-    # 0.3048 has no exact Float32; the Float64 scale keeps it.
-    assert_equal(Length64(1.0, FOOT).value, Float64(0.3048))
+def test_a_float64_unit_keeps_every_digit_of_its_factor() raises:
+    # 0.3048 has no exact Float32. FOOT rounds it; FOOT64 keeps it.
+    assert_equal(Length64(1.0, FOOT64).value, Float64(0.3048))
+    assert_equal(Length64(1.0, INCH64).to(INCH64), 1.0)
     assert_equal(Length(1.0, FOOT).value, Float32(0.3048))
+    assert_equal(Length64(1.0, FOOT).value, Float64(Float32(0.3048)))
+    # A Float64 unit converts a Float32 quantity too.
+    assert_equal(Length(1.0, FOOT64).value, Float32(0.3048))
+    assert_equal(Angle64(180, DEGREE64).value, pi)
 
 
 def test_cast_changes_the_float_type_and_keeps_the_dimension() raises:

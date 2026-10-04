@@ -92,6 +92,7 @@ from generators.skyscraper import SkyscraperParameters
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Length,
     Length64,
     METER,
@@ -493,7 +494,7 @@ def test_add_furnishing_checks_its_place() raises:
         SHELF,
         SpaceId(0),
         Point2(3.8, 2),
-        Angle64(90, DEGREE),
+        Angle64(90, DEGREE64),
         _m(1),
         _m(0.4),
         _m(1.8),

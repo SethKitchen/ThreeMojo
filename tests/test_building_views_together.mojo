@@ -43,6 +43,7 @@ from generators.skyscraper import SkyscraperParameters
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Duration64,
     HOUR,
     Length,
@@ -85,8 +86,8 @@ def test_one_tower_serves_every_view() raises:
     var weather = design_day(
         WeatherLocation(
             "New York",
-            Angle64(40.7, DEGREE),
-            Angle64(-74.0, DEGREE),
+            Angle64(40.7, DEGREE64),
+            Angle64(-74.0, DEGREE64),
             Duration64(-5, HOUR),
             Length64(10, METER),
         ),

@@ -57,6 +57,7 @@ from extensions.topology.ids import FaceId
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Duration64,
     HOUR,
     Length64,
@@ -119,7 +120,9 @@ def _building() raises -> Building:
     plans.append(StoreyPlan("first", _m(3), first^))
     return assemble(
         "thermal test",
-        Site(Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(1600), Angle64(0)),
+        Site(
+            Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(1600), Angle64(0)
+        ),
         _m(0),
         plans,
         materials^,
@@ -345,8 +348,8 @@ def test_view_simulates() raises:
     var weather = design_day(
         WeatherLocation(
             "Golden",
-            Angle64(39.74, DEGREE),
-            Angle64(-105.18, DEGREE),
+            Angle64(39.74, DEGREE64),
+            Angle64(-105.18, DEGREE64),
             Duration64(-7, HOUR),
             _m(1829),
         ),

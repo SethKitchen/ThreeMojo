@@ -96,6 +96,7 @@ from generators.utils import Vec3d
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Density64,
     GIGAPASCAL,
     JOULE_PER_KILOGRAM_KELVIN,
@@ -487,8 +488,8 @@ def write_ifc(building: Building, timestamp: String) raises -> String:
     )
     # The site and the building.
     var site_place = w.local(0, world)
-    var lat = _compound(building.site.latitude.to(DEGREE))
-    var lon = _compound(building.site.longitude.to(DEGREE))
+    var lat = _compound(building.site.latitude.to(DEGREE64))
+    var lon = _compound(building.site.longitude.to(DEGREE64))
     var lat_values = List[Int]()
     var lon_values = List[Int]()
     for i in range(4):  # pragma: no branch
@@ -1428,8 +1429,8 @@ def _read_site(r: _Reader) raises -> Site:
                 for k in range(min(4, len(parts))):
                     total += Float64(r.f.as_integer(parts[k])) / scales[k]
             angles.append(total)
-        site.latitude = Angle64(angles[0], DEGREE)
-        site.longitude = Angle64(angles[1], DEGREE)
+        site.latitude = Angle64(angles[0], DEGREE64)
+        site.longitude = Angle64(angles[1], DEGREE64)
         if not r.is_unset(s, 11):
             site.elevation = Length64(r.real_arg(s, 11), METER)
         var exact = r.values(s, "ThreeMojo_Site")

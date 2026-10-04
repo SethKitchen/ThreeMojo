@@ -56,6 +56,7 @@ from std.pathlib import Path
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     Duration64,
     HOUR,
     HeatFlux64,
@@ -71,7 +72,7 @@ from units.temperature import CELSIUS, Temperature64
 
 
 def _deg(v: Float64) -> Angle64:
-    return Angle64(v, DEGREE)
+    return Angle64(v, DEGREE64)
 
 
 def _flux(v: Float64) -> HeatFlux64:
@@ -167,7 +168,7 @@ def test_equation_of_time_example_1_5_1() raises:
     )
     assert_almost_equal(solar.to(MINUTE), 10 * 60 + 19, atol=0.2)
     assert_almost_equal(
-        hour_angle(Duration64(9.5, HOUR)).to(DEGREE), -37.5, atol=1e-12
+        hour_angle(Duration64(9.5, HOUR)).to(DEGREE64), -37.5, atol=1e-12
     )
 
 
@@ -193,11 +194,11 @@ def test_declination_table_1_6_1() raises:
     ]
     for i in range(len(days)):
         assert_almost_equal(
-            declination_cooper(days[i]).to(DEGREE), table[i], atol=0.06
+            declination_cooper(days[i]).to(DEGREE64), table[i], atol=0.06
         )
     assert_true(declination(80).value < 0 and declination(81).value > 0)
     assert_true(declination(266).value > 0 and declination(267).value < 0)
-    assert_almost_equal(declination(172).to(DEGREE), 23.44, atol=0.05)
+    assert_almost_equal(declination(172).to(DEGREE64), 23.44, atol=0.05)
     for bad in [0, 367]:
         with assert_raises(contains="day of the year"):
             _ = declination(bad)
@@ -225,12 +226,12 @@ def test_zenith_and_azimuth_example_1_6_2() raises:
     degrees; at 18:30 on July 1 (delta = 23.1 degrees) theta_z = 79.6 and
     gamma_s = 112.0 degrees."""
     var morning = sun_angles(_deg(43), _deg(-14), _deg(-37.5))
-    assert_almost_equal(morning.zenith.to(DEGREE), 66.5, atol=0.05)
-    assert_almost_equal(morning.azimuth.to(DEGREE), -40.0, atol=0.1)
+    assert_almost_equal(morning.zenith.to(DEGREE64), 66.5, atol=0.05)
+    assert_almost_equal(morning.azimuth.to(DEGREE64), -40.0, atol=0.1)
     var evening = sun_angles(_deg(43), _deg(23.1), _deg(97.5))
-    assert_almost_equal(evening.zenith.to(DEGREE), 79.6, atol=0.05)
-    assert_almost_equal(evening.azimuth.to(DEGREE), 112.0, atol=0.05)
-    assert_almost_equal(evening.altitude().to(DEGREE), 10.4, atol=0.05)
+    assert_almost_equal(evening.zenith.to(DEGREE64), 79.6, atol=0.05)
+    assert_almost_equal(evening.azimuth.to(DEGREE64), 112.0, atol=0.05)
+    assert_almost_equal(evening.altitude().to(DEGREE64), 10.4, atol=0.05)
     assert_true(evening.is_up())
 
 
@@ -239,7 +240,7 @@ def test_sun_at_zenith_and_pole() raises:
     assert_almost_equal(overhead.zenith.value, 0, atol=1e-7)
     assert_equal(overhead.azimuth.value, 0)
     var pole = sun_angles(_deg(90), _deg(10), _deg(45))
-    assert_almost_equal(pole.zenith.to(DEGREE), 80, atol=1e-9)
+    assert_almost_equal(pole.zenith.to(DEGREE64), 80, atol=1e-9)
     assert_equal(pole.azimuth.value, 0)
     var night = sun_angles(_deg(40), _deg(0), _deg(180))
     assert_false(night.is_up())
@@ -261,26 +262,26 @@ def test_sun_position_noon() raises:
     var sun = sun_position(
         _deg(40), _deg(-105), Duration64(-7, HOUR), day, clock
     )
-    var delta = declination(day).to(DEGREE)
-    assert_almost_equal(sun.zenith.to(DEGREE), 40 - delta, atol=1e-6)
+    var delta = declination(day).to(DEGREE64)
+    assert_almost_equal(sun.zenith.to(DEGREE64), 40 - delta, atol=1e-6)
     with assert_raises(contains="day of the year"):
         _ = sun_position(_deg(40), _deg(0), Duration64(0), 0, clock)
 
 
 def test_orientation() raises:
     var south = orientation(Vec3d(0, -1, 0), _deg(0))
-    assert_almost_equal(south.slope.to(DEGREE), 90, atol=1e-12)
-    assert_almost_equal(south.azimuth.to(DEGREE), 0, atol=1e-12)
+    assert_almost_equal(south.slope.to(DEGREE64), 90, atol=1e-12)
+    assert_almost_equal(south.azimuth.to(DEGREE64), 0, atol=1e-12)
     var east = orientation(Vec3d(2, 0, 0), _deg(0))
-    assert_almost_equal(east.azimuth.to(DEGREE), -90, atol=1e-12)
+    assert_almost_equal(east.azimuth.to(DEGREE64), -90, atol=1e-12)
     var up = orientation(Vec3d(0, 0, 1), _deg(30))
     assert_equal(up.slope.value, 0)
     assert_equal(up.azimuth.value, 0)
     var down = orientation(Vec3d(0, 0, -1), _deg(0))
-    assert_almost_equal(down.slope.to(DEGREE), 180, atol=1e-12)
+    assert_almost_equal(down.slope.to(DEGREE64), 180, atol=1e-12)
     # True north along model -x: the model's +y axis faces east.
     var turned = orientation(Vec3d(0, 1, 0), _deg(90))
-    assert_almost_equal(turned.azimuth.to(DEGREE), -90, atol=1e-12)
+    assert_almost_equal(turned.azimuth.to(DEGREE64), -90, atol=1e-12)
     with assert_raises(contains="normal"):
         _ = orientation(Vec3d(0, 0, 0), _deg(0))
     with assert_raises(contains="normal"):
@@ -329,8 +330,8 @@ def test_tilted_irradiance_isotropic_sky() raises:
 def test_read_epw_fixture() raises:
     var w = read_epw("assets/energy/fixture.epw")
     assert_equal(w.location.name, "Testville")
-    assert_almost_equal(w.location.latitude.to(DEGREE), 40, atol=1e-12)
-    assert_almost_equal(w.location.longitude.to(DEGREE), -105, atol=1e-12)
+    assert_almost_equal(w.location.latitude.to(DEGREE64), 40, atol=1e-12)
+    assert_almost_equal(w.location.longitude.to(DEGREE64), -105, atol=1e-12)
     assert_almost_equal(w.location.time_zone.to(HOUR), -7, atol=1e-12)
     assert_almost_equal(w.location.elevation.to(METER), 1600, atol=1e-12)
     assert_equal(len(w.records), 24)
@@ -348,7 +349,7 @@ def test_read_epw_fixture() raises:
     assert_almost_equal(r.global_horizontal.value, 499, atol=1e-9)
     assert_almost_equal(r.direct_normal.value, 834, atol=1e-9)
     assert_almost_equal(r.diffuse_horizontal.value, 58, atol=1e-9)
-    assert_almost_equal(r.wind_direction.to(DEGREE), 260, atol=1e-9)
+    assert_almost_equal(r.wind_direction.to(DEGREE64), 260, atol=1e-9)
     assert_almost_equal(r.wind_speed.to(METER_PER_SECOND), 2.2, atol=1e-12)
 
 

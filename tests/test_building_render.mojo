@@ -72,7 +72,7 @@ from generators.skyscraper import SkyscraperParameters
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
 from extensions.topology.ids import CellId
-from units.si import Angle64, DEGREE, Length, Length64, METER
+from units.si import Angle64, DEGREE, DEGREE64, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:
@@ -115,7 +115,7 @@ def _building() raises -> Building:
     plans.append(StoreyPlan("first", _m(3), first^))
     var b = assemble(
         "render test",
-        Site(Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(0), Angle64(0)),
+        Site(Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(0), Angle64(0)),
         _m(0),
         plans,
         materials^,

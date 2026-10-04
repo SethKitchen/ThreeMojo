@@ -238,3 +238,13 @@ comptime METER_TO_THE_FOURTH = SecondMomentOfAreaUnit(1.0, "m^4")
 # --- flow -------------------------------------------------------------------
 comptime CUBIC_METER_PER_SECOND = VolumeFlowRateUnit(1.0, "m^3/s")
 comptime KILOGRAM_PER_SECOND = MassFlowRateUnit(1.0, "kg/s")
+
+# --- exact factors for Float64 quantities -------------------------------------
+# A unit's factor is a Float32 by default, which suits GPU code. These keep
+# every digit of a factor that a Float32 rounds, for Float64 engineering
+# input.
+comptime FOOT64 = Unit[1, 0, 0, 0, 0, DType.float64](0.3048, "ft")
+comptime INCH64 = Unit[1, 0, 0, 0, 0, DType.float64](0.0254, "in")
+comptime DEGREE64 = Unit[0, 0, 0, 1, 0, DType.float64](
+    0.017453292519943295, "deg"
+)

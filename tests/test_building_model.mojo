@@ -87,6 +87,7 @@ from extensions.topology.ids import FaceId
 from units.si import (
     Angle64,
     DEGREE,
+    DEGREE64,
     GIGAPASCAL,
     JOULE_PER_KELVIN,
     Length64,
@@ -106,7 +107,7 @@ def _m(v: Float64) -> Length64:
 
 def _site() -> Site:
     return Site(
-        Angle64(40, DEGREE), Angle64(-105, DEGREE), _m(1600), Angle64(0)
+        Angle64(40, DEGREE64), Angle64(-105, DEGREE64), _m(1600), Angle64(0)
     )
 
 
@@ -422,17 +423,17 @@ def test_section_check_refuses() raises:
 def test_site_check_refuses() raises:
     _site().check()
     var s = _site()
-    s.latitude = Angle64(91, DEGREE)
+    s.latitude = Angle64(91, DEGREE64)
     with assert_raises(contains="latitude"):
         s.check()
-    s.latitude = Angle64(-91, DEGREE)
+    s.latitude = Angle64(-91, DEGREE64)
     with assert_raises(contains="latitude"):
         s.check()
     var t = _site()
-    t.longitude = Angle64(181, DEGREE)
+    t.longitude = Angle64(181, DEGREE64)
     with assert_raises(contains="longitude"):
         t.check()
-    t.longitude = Angle64(-181, DEGREE)
+    t.longitude = Angle64(-181, DEGREE64)
     with assert_raises(contains="longitude"):
         t.check()
     var u = _site()
@@ -712,7 +713,7 @@ def test_validate_refuses_bad_parts() raises:
     with assert_raises(contains="storey id"):
         k.validate()
     var m = _two_storeys()
-    m.site.latitude = Angle64(100, DEGREE)
+    m.site.latitude = Angle64(100, DEGREE64)
     with assert_raises(contains="latitude"):
         m.validate()
 
@@ -724,7 +725,7 @@ def test_assemble_refuses() raises:
     plans.append(StoreyPlan("g", _m(3), ground^))
     var tol = Length64(1e-6, METER)
     var bad_site = _site()
-    bad_site.latitude = Angle64(95, DEGREE)
+    bad_site.latitude = Angle64(95, DEGREE64)
     with assert_raises(contains="latitude"):
         _ = assemble(
             "x",

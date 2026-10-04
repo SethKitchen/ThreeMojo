@@ -80,7 +80,7 @@ from extensions.building.generate.tower import TowerOptions, generate_tower
 from generators.skyscraper import SkyscraperParameters
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
-from units.si import Angle64, DEGREE, Length, Length64, METER
+from units.si import Angle64, DEGREE, DEGREE64, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:
@@ -128,10 +128,10 @@ def _building() raises -> Building:
     var b = assemble(
         "IFC test",
         Site(
-            Angle64(39.7392, DEGREE),
-            Angle64(-104.9903, DEGREE),
+            Angle64(39.7392, DEGREE64),
+            Angle64(-104.9903, DEGREE64),
             _m(1609),
-            Angle64(12, DEGREE),
+            Angle64(12, DEGREE64),
         ),
         _m(0.15),
         plans,

@@ -34,7 +34,7 @@ from extensions.building.kinds import (
     WINDOW,
 )
 from extensions.building.ids import ElementId
-from units.si import DEGREE, Length64, METER
+from units.si import DEGREE, DEGREE64, Length64, METER
 
 
 def _foreign() -> String:
@@ -242,8 +242,8 @@ def test_a_foreign_file_reads() raises:
     assert_true(b.spaces[1].use == OFFICE)
     assert_true(b.spaces[2].use == OFFICE)
     assert_equal(b.spaces[2].name, "")
-    assert_almost_equal(b.site.latitude.to(DEGREE), 51.5, atol=1e-12)
-    assert_almost_equal(b.site.longitude.to(DEGREE), -0.125, atol=1e-12)
+    assert_almost_equal(b.site.latitude.to(DEGREE64), 51.5, atol=1e-12)
+    assert_almost_equal(b.site.longitude.to(DEGREE64), -0.125, atol=1e-12)
     assert_equal(b.site.north.value, 0)
     # A timber name without properties takes the timber values; an unknown
     # name takes concrete, with the density the file gives.

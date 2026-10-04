@@ -4861,7 +4861,7 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: unexpected argument",
-      "candidate not viable: value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(1), Int(0), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0)]'"
+      "candidate not viable: value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(1), Int(0), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0), dtype=unit_dtype]'"
     ]
   },
   "tests/compile_fail/convert_length_to_seconds.mojo": {
@@ -4869,7 +4869,7 @@
       {
         "line": 12,
         "column": 33,
-        "message": "invalid call to 'to': value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(0), Int(1), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0)]'"
+        "message": "invalid call to 'to': value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(0), Int(1), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0), dtype=unit_dtype]'"
       }
     ],
     "notes": [

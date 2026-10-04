@@ -58,6 +58,7 @@ from units.si import (
     Angle64,
     Area64,
     DEGREE,
+    DEGREE64,
     Length64,
     METER,
     RADIAN,
@@ -87,8 +88,8 @@ struct Site(ImplicitlyCopyable):
             Error: If the latitude is outside -90 to 90 degrees, the
                 longitude outside -180 to 180, or a value is not finite.
         """
-        var lat = self.latitude.to(DEGREE)
-        var lon = self.longitude.to(DEGREE)
+        var lat = self.latitude.to(DEGREE64)
+        var lon = self.longitude.to(DEGREE64)
         if not (lat >= -90 and lat <= 90):
             raise Error("A latitude must be from -90 to 90 degrees")
         if not (lon >= -180 and lon <= 180):

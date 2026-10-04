@@ -75,7 +75,7 @@ from generators.skyscraper import (
     build_footprint,
     pick_building_color,
 )
-from units.si import Angle64, DEGREE, Length64, METER
+from units.si import Angle64, DEGREE, DEGREE64, Length64, METER
 
 
 struct TowerOptions(Copyable, Movable):
@@ -315,8 +315,8 @@ def generate_tower(options: TowerOptions) raises -> Building:
     var building = assemble(
         String("tower ", p.seed),
         Site(
-            Angle64(40.7, DEGREE),
-            Angle64(-74.0, DEGREE),
+            Angle64(40.7, DEGREE64),
+            Angle64(-74.0, DEGREE64),
             Length64(10, METER),
             Angle64(0),
         ),

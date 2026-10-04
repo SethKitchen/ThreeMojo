@@ -45,18 +45,18 @@ comptime NEWTON_SECOND = MomentumUnit(1.0, "N s")
 comptime NEWTON_PER_CENTIMETER = StiffnessUnit(100.0, "N/cm")
 comptime NEWTON_SECOND_PER_METER = DampingRateUnit(1.0, "N s/m")
 comptime NEWTON_PER_DEGREE = CorneringStiffnessUnit(
-    Float64(180.0 / pi), "N/deg"
+    Float32(180.0 / pi), "N/deg"
 )
 
 # An engine speed. One revolution is two pi radians.
 comptime REVOLUTION_PER_MINUTE = AngularVelocityUnit(
-    Float64(2.0 * pi / 60.0), "rpm"
+    Float32(2.0 * pi / 60.0), "rpm"
 )
 # How fast an engine speed falls, CARLA's `rev_down_rate`.
 comptime REVOLUTION_PER_MINUTE_PER_SECOND = AngularAccelerationUnit(
-    Float64(2.0 * pi / 60.0), "rpm/s"
+    Float32(2.0 * pi / 60.0), "rpm/s"
 )
-comptime KILOMETER_PER_HOUR = VelocityUnit(Float64(1.0 / 3.6), "km/h")
+comptime KILOMETER_PER_HOUR = VelocityUnit(Float32(1.0 / 3.6), "km/h")
 # Exact: 1609.344 m per 3600 s.
 comptime MILE_PER_HOUR = VelocityUnit(0.44704, "mph")
 # Length per second cubed: how fast an acceleration changes.
