@@ -4645,5 +4645,15 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/collision_detection_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 33,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'CollisionDetection'"
+      }
+    ],
+    "notes": []
   }
 }
