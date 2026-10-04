@@ -29,8 +29,16 @@ The passes run on the host. Each one's arithmetic for one pixel is a
 function of its own, `bokeh_pixel`, `glitch_pixel`, `halftone_pixel`,
 `texture_pixel` and `lut_pixel`, which the GPU backend's kernels call as
 well; see `render.gpu.GpuComposer`.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from core.layers import Layers
 from math.arc_tangent import atan2_float32
 from math.sine import fraction, noise_scale, sin_float32
@@ -815,7 +823,7 @@ def check_halftone(settings: HalftoneSettings) raises:
 
 def _hypot(x: Float32, y: Float32) -> Float32:
     """Return the length of (x, y): the shader's `hypot`."""
-    return sqrt(x * x + y * y)
+    return length2(x, y)
 
 
 def _glsl_mod(x: Float32, y: Float32) -> Float32:
@@ -1984,7 +1992,7 @@ def bokeh2_pixel(
     if settings.vignetting:
         var du = u - 0.5
         var dv = v - 0.5
-        var dist = sqrt(du * du + dv * dv)
+        var dist = length2(du, dv)
         var fade = settings.fstop / _VIGN_FADE
         var shade = min(
             max(
