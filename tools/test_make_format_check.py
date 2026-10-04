@@ -43,16 +43,19 @@ class FormatRecipeTests(unittest.TestCase):
                     path.write_text('original\n')
             mutation = ('path.write_text("")' if str(delete_manifest_stage).startswith('truncate-')
                         else 'path.unlink()')
-            if delete_manifest_stage in ('copy', 'truncate-copy'):
-                scripts = root / 'bin'
-                scripts.mkdir()
-                mktemp = scripts / 'mktemp'
-                mktemp.write_text(
-                    '#!/usr/bin/env python3\nfrom pathlib import Path\n'
-                    'import tempfile\n'
-                    f'for path in Path("cache").glob("*inputs-*"): {mutation}\n'
-                    'print(tempfile.mkdtemp())\n')
-                mktemp.chmod(0o700)
+            scripts = root / 'bin'
+            scripts.mkdir()
+            mktemp = scripts / 'mktemp'
+            # Avoid platform-dependent TMPDIR handling. Pass the fixture path
+            # explicitly so spaces and byte-budget padding always reach make.
+            mktemp.write_text(
+                '#!/usr/bin/env python3\nfrom pathlib import Path\n'
+                'import sys, tempfile\n'
+                'assert sys.argv[1:] == ["-d"]\n'
+                f'if {delete_manifest_stage in ("copy", "truncate-copy")!r}:\n'
+                f'    for path in Path("cache").glob("*inputs-*"): {mutation}\n'
+                f'print(tempfile.mkdtemp(dir={str(scratch)!r}))\n')
+            mktemp.chmod(0o700)
             unrelated = root / 'unselected.mojo'
             unrelated.write_text('unselected\n')
             (root / 'formatter.py').write_text(
@@ -82,9 +85,7 @@ class FormatRecipeTests(unittest.TestCase):
             (root / 'Makefile').write_text(makefile)
             environment = {key: value for key, value in os.environ.items()
                            if key not in MAKE_ENVIRONMENT}
-            environment['TMPDIR'] = str(scratch)
-            if delete_manifest_stage in ('copy', 'truncate-copy'):
-                environment['PATH'] = str(root / 'bin') + os.pathsep + environment['PATH']
+            environment['PATH'] = str(scripts) + os.pathsep + environment['PATH']
             if check_manifest_commands:
                 preview = subprocess.run(['make', '-n', 'fmt-check'], cwd=root,
                                          text=True, capture_output=True, env=environment)
@@ -150,6 +151,26 @@ class FormatRecipeTests(unittest.TestCase):
         result, selected, calls, stamped = self.run_recipe(paths, scratch_padding='x' * 180)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(selected, paths)
+        self.assertLess(len(calls[0]), 64)
+        self.assertTrue(all(sum(len(os.fsencode(path)) + 1 for path in call) <= 8192
+                            for call in calls))
+        self.assertTrue(stamped)
+
+    def test_scratch_path_survives_subprocess_tmpdir_reset(self):
+        run = subprocess.run
+
+        def reset_tmpdir(*args, **kwargs):
+            environment = kwargs['env'].copy()
+            environment['TMPDIR'] = tempfile.gettempdir()
+            return run(*args, **dict(kwargs, env=environment))
+
+        paths = [f'src/{index:03d}.mojo' for index in range(70)]
+        with patch.object(subprocess, 'run', side_effect=reset_tmpdir):
+            result, selected, calls, stamped = self.run_recipe(
+                paths, scratch_padding='x' * 180)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(selected, paths)
+        self.assertIn('scratch files ', calls[0][0])
         self.assertLess(len(calls[0]), 64)
         self.assertTrue(all(sum(len(os.fsencode(path)) + 1 for path in call) <= 8192
                             for call in calls))
