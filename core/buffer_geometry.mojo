@@ -75,8 +75,28 @@ or in vertices. `drawn_run` intersects it with a group, as three.js's
 `renderBufferDirect` does, and the renderer and the raycaster read every
 run through it. A line or a points object draws the vertices that
 `drawn_vertices` names.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.matrix_determinant import _sum_products as _exact_products
+
+from math.vector3 import _ordinary_transform, _wide_linear_transform
+
+from math.triangle_normal import _difference_product_wide
+
+from math.triangle_normal import (
+    _ordinary_triangle_cross,
+    _triangle_cross_wide,
+    _finite_triangle,
+)
+
+from math.norm import _ordinary_squared, length3, normalized3
 from core.buffer_attribute import BufferAttribute
 from core.interleaved_buffer import InterleavedBuffer
 from core.user_data import UserData
@@ -1132,6 +1152,8 @@ struct BufferGeometry(Movable):
         """
         var count = self.vertex_count()
         var sums = List[Float32](length=count * 3, fill=0.0)
+        var wide_sums = List[Float64](length=count * 3, fill=0.0)
+        var use_wide = List[Bool](length=count, fill=False)
         for triangle in range(self.triangle_count()):
             var a = self.corner_index(triangle, 0)
             var b = self.corner_index(triangle, 1)
@@ -1139,15 +1161,42 @@ struct BufferGeometry(Movable):
             var origin = self.corner(triangle, 0)
             var normal = self.corner(triangle, 1) - origin
             normal.cross(self.corner(triangle, 2) - origin)
+            var second = self.corner(triangle, 1)
+            var third = self.corner(triangle, 2)
+            var wide = SIMD[DType.float64, 4](
+                Float64(normal.x), Float64(normal.y), Float64(normal.z), 0
+            )
+            var needs_wide = not _ordinary_triangle_cross(
+                second - origin, third - origin, normal
+            ) and _finite_triangle(origin, second, third)
+            if needs_wide:
+                wide = _triangle_cross_wide(origin, second, third)
+            var nx = wide[0]
+            var ny = wide[1]
+            var nz = wide[2]
             for vertex in [a, b, c]:  # pragma: no branch
                 sums[vertex * 3] += normal.x
                 sums[vertex * 3 + 1] += normal.y
                 sums[vertex * 3 + 2] += normal.z
+                use_wide[vertex] = use_wide[vertex] or needs_wide
+                wide_sums[vertex * 3] += nx
+                wide_sums[vertex * 3 + 1] += ny
+                wide_sums[vertex * 3 + 2] += nz
         for vertex in range(count):
             var unit = Vector3(
                 sums[vertex * 3], sums[vertex * 3 + 1], sums[vertex * 3 + 2]
             )
-            unit.normalize()
+            if _ordinary_squared(unit.length_sq()) and not use_wide[vertex]:
+                unit.normalize()
+            else:
+                var wide = normalized3(
+                    wide_sums[vertex * 3],
+                    wide_sums[vertex * 3 + 1],
+                    wide_sums[vertex * 3 + 2],
+                )
+                unit = Vector3(
+                    Float32(wide[0]), Float32(wide[1]), Float32(wide[2])
+                )
             sums[vertex * 3] = unit.x
             sums[vertex * 3 + 1] = unit.y
             sums[vertex * 3 + 2] = unit.z
@@ -1306,22 +1355,52 @@ struct BufferGeometry(Movable):
             var turn = Matrix3.normal_matrix(matrix)
             # Apply the same linear map and base-normal scale to each target.
             # Normalizing a delta on its own changes the blended direction.
-            var scales = List[Float32]()
+            var scales = List[Float64]()
+            var wide_scales = List[Bool]()
             if normal_slot >= 0:
                 ref normals = self.values[normal_slot]
                 for vertex in range(normals.count()):
-                    var normal = turn.transform(normals.vector3(vertex))
-                    var length = normal.length()
-                    var scale = 1 / length if length > 0 else Float32(1)
+                    var source = normals.vector3(vertex)
+                    var normal = turn.transform(source)
+                    var ordinary = _ordinary_transform(
+                        source, normal, turn.elements
+                    )
+                    var scale: Float64
+                    if ordinary:
+                        var inverse = 1 / normal.length()
+                        scale = Float64(inverse)
+                        normal = normal * inverse
+                    else:
+                        var wide = _wide_normal(turn, source)
+                        var magnitude = length3(wide[0], wide[1], wide[2])
+                        scale = 1 / magnitude if magnitude > 0 else Float64(1)
+                        var unit = normalized3(wide[0], wide[1], wide[2])
+                        normal = Vector3(
+                            Float32(unit[0]), Float32(unit[1]), Float32(unit[2])
+                        )
                     if len(self.morph_normals) > 0:
                         scales.append(scale)
-                    normals._put3(vertex, normal * scale)
+                        wide_scales.append(not ordinary)
+                    normals._put3(vertex, normal)
             for target in range(len(self.morph_normals)):
                 ref normals = self.morph_normals[target]
                 for vertex in range(normals.count()):
                     var normal = turn.transform(normals.vector3(vertex))
                     if vertex < len(scales):
-                        normal = normal * scales[vertex]
+                        if wide_scales[vertex] or not _ordinary_transform(
+                            normals.vector3(vertex), normal, turn.elements
+                        ):
+                            var wide = (
+                                _wide_normal(turn, normals.vector3(vertex))
+                                * scales[vertex]
+                            )
+                            normal = Vector3(
+                                Float32(wide[0]),
+                                Float32(wide[1]),
+                                Float32(wide[2]),
+                            )
+                        else:
+                            normal = normal * Float32(scales[vertex])
                     normals._put3(vertex, normal)
         var tangent_slot = self._slot(String(TANGENT))
         if tangent_slot >= 0:
@@ -1659,11 +1738,35 @@ struct BufferGeometry(Movable):
                 var v_b = uvs.component(b, 1) - v_a
                 var u_c = uvs.component(c, 0) - u_a
                 var v_c = uvs.component(c, 1) - v_a
-                var scale = 1 / (u_b * v_c - u_c * v_b)
-                if not isfinite(scale):
-                    continue
-                var u_way = (edge_b * v_c - edge_c * v_b) * scale
-                var v_way = (edge_c * u_b - edge_b * u_c) * scale
+                var area = u_b * v_c - u_c * v_b
+                var scale = 1 / area
+                if not isfinite(scale) or abs(u_b * v_c) + abs(
+                    u_c * v_b
+                ) > 4 * abs(area):
+                    self.set_attribute(
+                        String(TANGENT),
+                        BufferAttribute(_wide_tangents(self), 4),
+                    )
+                    return
+                var u_numerator = edge_b * v_c - edge_c * v_b
+                var v_numerator = edge_c * u_b - edge_b * u_c
+                var u_way = u_numerator * scale
+                var v_way = v_numerator * scale
+                if not (
+                    _conditioned_difference(
+                        u_numerator, edge_b * v_c, edge_c * v_b
+                    )
+                    and _conditioned_difference(
+                        v_numerator, edge_c * u_b, edge_b * u_c
+                    )
+                    and _ordinary_squared(u_way.length_sq())
+                    and _ordinary_squared(v_way.length_sq())
+                ):
+                    self.set_attribute(
+                        String(TANGENT),
+                        BufferAttribute(_wide_tangents(self), 4),
+                    )
+                    return
                 for vertex in [a, b, c]:  # pragma: no branch
                     along_u[vertex].add(u_way)
                     along_v[vertex].add(v_way)
@@ -1676,6 +1779,16 @@ struct BufferGeometry(Movable):
                 var normal = normals.vector3(vertex)
                 var u_way = along_u[vertex]
                 var tangent = u_way - normal * normal.dot(u_way)
+                if not _ordinary_squared(
+                    tangent.length_sq()
+                ) or not _conditioned_difference(
+                    tangent, u_way, normal * normal.dot(u_way)
+                ):
+                    self.set_attribute(
+                        String(TANGENT),
+                        BufferAttribute(_wide_tangents(self), 4),
+                    )
+                    return
                 tangent.normalize()
                 var turned = normal
                 turned.cross(u_way)
@@ -1687,3 +1800,118 @@ struct BufferGeometry(Movable):
                 tangents[vertex * 4 + 2] = tangent.z
                 tangents[vertex * 4 + 3] = handedness
         self.set_attribute(String(TANGENT), BufferAttribute(tangents^, 4))
+
+
+def _wide_tangents(geometry: BufferGeometry) raises -> List[Float32]:
+    """Rebuild tangent sums from original Float32 inputs in Float64.
+
+    This fallback widens before edge and UV differences, products, and
+    division. No finite Float32 input product or quotient here exhausts
+    Float64. The ordinary path keeps its existing Float32 rounding.
+    """
+    comptime Wide = SIMD[DType.float64, 4]
+    var count = geometry.vertex_count()
+    var runs = geometry._runs()
+    var total = geometry.stream_length()
+    var along_u = List[Wide](length=count, fill=Wide(0))
+    var along_v = List[Wide](length=count, fill=Wide(0))
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    ref uvs = geometry.attribute_view(String(UV))
+    for run in runs:  # pragma: no branch
+        if run.start < 0 or run.count < 0:
+            raise Error("A group cannot start or run a negative distance")
+        var end = _run_end(run.start, run.count, total)
+        for slot in range(min(run.start, total), end - 2, 3):
+            var a = geometry.vertex_at(slot)
+            var b = geometry.vertex_at(slot + 1)
+            var c = geometry.vertex_at(slot + 2)
+            var origin = positions.vector3(a)
+            var second = positions.vector3(b)
+            var third = positions.vector3(c)
+            var ua = Float64(uvs.component(a, 0))
+            var va = Float64(uvs.component(a, 1))
+            var ub = Float64(uvs.component(b, 0))
+            var vb = Float64(uvs.component(b, 1))
+            var uc = Float64(uvs.component(c, 0))
+            var vc = Float64(uvs.component(c, 1))
+            var area = _difference_product_wide(ua, ub, uc, va, vb, vc)
+            if area == 0 or not isfinite(area):
+                continue
+            var u = Wide(0)
+            var v = Wide(0)
+            var pa = [Float64(origin.x), Float64(origin.y), Float64(origin.z)]
+            var pb = [Float64(second.x), Float64(second.y), Float64(second.z)]
+            var pc = [Float64(third.x), Float64(third.y), Float64(third.z)]
+            for axis in range(3):  # pragma: no branch
+                u[axis] = (
+                    _difference_product_wide(
+                        pa[axis], pb[axis], pc[axis], va, vb, vc
+                    )
+                    / area
+                )
+                v[axis] = (
+                    -_difference_product_wide(
+                        pa[axis], pb[axis], pc[axis], ua, ub, uc
+                    )
+                    / area
+                )
+            for vertex in [a, b, c]:  # pragma: no branch
+                along_u[vertex] += u
+                along_v[vertex] += v
+    var result = List[Float32](length=count * 4, fill=0)
+    for run in runs:  # pragma: no branch
+        var end = _run_end(run.start, run.count, total)
+        for slot in range(min(run.start, total), end):
+            var vertex = geometry.vertex_at(slot)
+            var normal = normals.vector3(vertex)
+            var u = along_u[vertex]
+            var normal64 = [
+                Float64(normal.x),
+                Float64(normal.y),
+                Float64(normal.z),
+            ]
+            var projected = Wide(0)
+            for axis in range(3):  # pragma: no branch
+                var ni = normal64[axis]
+                projected[axis] = _exact_products[4](
+                    [
+                        Float64(1),
+                        -ni * normal64[0],
+                        -ni * normal64[1],
+                        -ni * normal64[2],
+                    ],
+                    [u[axis], u[0], u[1], u[2]],
+                )
+            var tangent = normalized3(projected[0], projected[1], projected[2])
+            var v = along_v[vertex]
+            var un = normalized3(u[0], u[1], u[2])
+            var vn = normalized3(v[0], v[1], v[2])
+            var handed = (
+                (Float64(normal.y) * un[2] - Float64(normal.z) * un[1]) * vn[0]
+                + (Float64(normal.z) * un[0] - Float64(normal.x) * un[2])
+                * vn[1]
+                + (Float64(normal.x) * un[1] - Float64(normal.y) * un[0])
+                * vn[2]
+            )
+            result[vertex * 4] = Float32(tangent[0])
+            result[vertex * 4 + 1] = Float32(tangent[1])
+            result[vertex * 4 + 2] = Float32(tangent[2])
+            result[vertex * 4 + 3] = -1 if handed < 0 else 1
+    return result^
+
+
+def _wide_normal(matrix: Matrix3, source: Vector3) -> SIMD[DType.float64, 4]:
+    """Apply a normal map without overflowing finite Float32 products."""
+    return _wide_linear_transform(source, matrix.elements)
+
+
+def _conditioned_difference(
+    result: Vector3, first: Vector3, second: Vector3
+) -> Bool:
+    """Certify a direct tangent difference before normalizing its direction."""
+    var products = max(
+        abs(first.x) + abs(second.x),
+        max(abs(first.y) + abs(second.y), abs(first.z) + abs(second.z)),
+    )
+    return products <= 4 * max(abs(result.x), max(abs(result.y), abs(result.z)))
