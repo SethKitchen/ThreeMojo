@@ -7,7 +7,8 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 This batch starts from main `8d9b700b753006b120a66d356228716822e442f4`, after [PR #572](https://github.com/SethKitchen/ThreeMojo/pull/572).
 The issue inventory was checked on October 4, 2026.
-It contains 28 issues for this main-backed batch and two animal issues in a separate draft.
+The initial inventory contains 28 issues for this main-backed batch and two animal issues in a separate draft.
+Follow-up #633 was added after that snapshot.
 
 ## Lane queries
 
@@ -25,8 +26,9 @@ The held implementation in [PR #594](https://github.com/SethKitchen/ThreeMojo/pu
 
 Keep workloads and numerical contracts fixed when comparing designs.
 
-- [#288](https://github.com/SethKitchen/ThreeMojo/issues/288): benchmark and design a static-primitive spatial index
+- [#288](https://github.com/SethKitchen/ThreeMojo/issues/288): benchmark/design decision completed; production snapshot work continues in #633
 - [#292](https://github.com/SethKitchen/ThreeMojo/issues/292): prevent high-speed tunneling through static meshes
+- [#633](https://github.com/SethKitchen/ThreeMojo/issues/633): define owned physics query snapshots and their mutation contract
 
 ## Assets and CARLA state
 
