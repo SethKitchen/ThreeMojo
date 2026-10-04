@@ -49,7 +49,7 @@ Hosting work requires a specified destination and verified source material.
 Keep existing accuracy and resource limits.
 Measure ordinary-case costs as well as boundary correctness.
 
-- [#348](https://github.com/SethKitchen/ThreeMojo/issues/348): finish scale-safe normalization and angle consumers
+- [#348](https://github.com/SethKitchen/ThreeMojo/issues/348): scale-safe normalization and remaining norm consumers implemented; 134 focused CPU tests and three Metal kernel compile checks pass, with full batch validation pending
 - [#538](https://github.com/SethKitchen/ThreeMojo/issues/538): add exact predicates for extreme convex-hull inputs
 - [#550](https://github.com/SethKitchen/ThreeMojo/issues/550): recover remaining ray-query throughput
 - [#560](https://github.com/SethKitchen/ThreeMojo/issues/560): preserve arbitrary Boolable behavior in coverage probes
@@ -92,11 +92,12 @@ Compile changed code and run focused regressions for each complete issue impleme
 Run full coverage and aggregate checks after all in-scope issues are implemented.
 Keep this base draft until that point.
 Regenerate the anatomy report on the final batch source.
+
 Its current source binding is stale after the decode-queue changes.
 Building-extension work and related issues are outside this batch.
 Keep CPU tests, GPU compilation and actual GPU execution as separate evidence.
 Each issue remains open until its complete acceptance criteria are verified.
 
 The earlier bounded slices for #297, #303, #309, #348, #550 and #614 are already on main.
-Their remaining work is listed above.
+The #348 remainder is implemented in this batch; the others remain listed above.
 Optional bulk gallery recompression remains excluded.
