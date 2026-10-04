@@ -180,7 +180,7 @@ def test_standing_loads_balance_the_weight() raises:
                 rtol=1e-5,
             )
     # A crouching rat stands on its hind feet alone.
-    var rat_cal = calibrate(RAT, Variant(-1))
+    var rat_cal = calibrate(RAT, Variant(-1), allow_estimates=True)
     var rat0 = create_animal(
         RAT, animal_options(1, quality=CROWD, sex=MALE, age=ADULT)
     )

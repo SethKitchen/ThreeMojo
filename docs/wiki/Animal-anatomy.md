@@ -24,7 +24,8 @@ from extensions.animals.gait import walk_pose
 from extensions.animals.options import Variant, animal_options
 from extensions.animals.registry import HORSE
 
-var cal = calibrate(HORSE, Variant(-1))
+# The selected body parameters are an explicit template estimate.
+var cal = calibrate(HORSE, Variant(-1), allow_estimates=True)
 var base = create_animal(HORSE, animal_options(3))
 var horse = calibrated_animal(base, cal)
 var mass = calibrated_mass(base, cal)
@@ -83,7 +84,7 @@ The calibration records its species and reference morph. It refuses use on anoth
 
 `calibrated_animal` scales the sculpt, the rig and the cells. The coat still paints. `calibrated_mass` scales the densities by the density factor. Each segment keeps the share of mass that the geometry gives it. An individual keeps its own size relative to the canonical one, so a juvenile stays small and light.
 
-An unmatched morph or unverified reference input requires `calibrate(..., allow_estimates=True)`. Without that explicit opt-in the boundary refuses it. The dog reference is unverified and needs this opt-in. Opt-in permits inspection of a template estimate; it does not mark the result validated.
+Every current selected body template has `DESIGN` parameter evidence and requires `calibrate(..., allow_estimates=True)`. A matched morph and `FROM_TEXT` source excerpts do not bypass this gate. Unmatched morphs and unverified reference inputs also require opt-in. Opt-in permits inspection of a template estimate; it does not mark the result validated. Raw visual and game construction remains available without this calibration opt-in.
 
 An unmatched morph gets its own length factor but no mass correction from a different reference kind. For example, the bear reference describes a black bear. A grizzly has `Calibration.matched` False. `matched` means only that the named reference kind agrees, not that anatomy or accuracy was validated.
 
@@ -219,7 +220,9 @@ Ellipsoid factors have product one. Cone radii change while endpoints stay fixed
 
 ## Species
 
-| Species | Kind | Male, female mass | Reference length | Grade |
+All selected masses and reference lengths below are `DESIGN` parameters. The final column records only the cited excerpt’s grade.
+
+| Species | Kind | Selected male, female mass | Selected reference length | Excerpt grade |
 |---|---|---|---|---|
 | Bear | American black bear | 100, 60 kg | 0.90 m shoulder | `FROM_TEXT` |
 | Boar | Central European wild boar | 85, 70 kg | 0.75 m shoulder | `FROM_TEXT` |

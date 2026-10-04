@@ -18,8 +18,8 @@ whole animal weighs what the published animal weighs. This prescribes the canoni
 the sculpt or segment parameters. An individual keeps its own proportions and size relative to the
 canonical one: a juvenile stays small and light.
 
-An unmatched morph or an unverified size reference requires explicit
-`allow_estimates=True`. It gets its own length factor but no unrelated
+A selected DESIGN template, unmatched morph or unverified reference
+requires explicit `allow_estimates=True`, even if an excerpt is sourced. It gets its own length factor but no unrelated
 mass correction. `matched` describes reference identity, not validated
 anatomy. Source excerpts and derived DESIGN templates are distinct.
 """
@@ -44,6 +44,27 @@ from units.si import KILOGRAM, METER, Length, Mass
 
 # Canonical samples per reference length.
 comptime CANON_CELLS = 40.0
+
+
+def _check_reference_support(
+    matched: Bool,
+    mass_excerpt: Evidence,
+    length_excerpt: Evidence,
+    parameters: Evidence,
+    allow_estimates: Bool,
+) raises:
+    # Reading a source does not upgrade a selected or derived parameter.
+    var supported = (
+        matched
+        and mass_excerpt.is_measured()
+        and length_excerpt.is_measured()
+        and parameters.is_measured()
+    )
+    if not supported and not allow_estimates:
+        raise Error(
+            "Unsupported reference: pass allow_estimates=True for a template"
+            " estimate"
+        )
 
 
 @fieldwise_init
@@ -97,16 +118,13 @@ struct Calibration(ImplicitlyCopyable, Writable):
             raise Error(
                 "A calibration match must agree with its reference morph"
             )
-        var supported = (
-            matches
-            and body.mass_source.evidence.is_measured()
-            and body.length_source.evidence.is_measured()
+        _check_reference_support(
+            matches,
+            body.mass_source.evidence,
+            body.length_source.evidence,
+            body.model_evidence(),
+            self.allow_estimates,
         )
-        if not supported and not self.allow_estimates:
-            raise Error(
-                "Unsupported reference: pass allow_estimates=True for a"
-                " template estimate"
-            )
         if not (isfinite(self.scale) and self.scale > 0.0 and self.scale < 1e3):
             raise Error("A calibration scale must be positive and finite")
         if not (isfinite(self.density_factor) and self.density_factor > 0.0):
@@ -178,7 +196,8 @@ def calibrate(
         variant: The morph. A morph that is not the published one gets
             no mass correction.
         allow_estimates: Explicitly permit a template when reference inputs
-            are unverified or the morph is unmatched. This is not validation.
+            are selected DESIGN values, unverified or unmatched. A sourced
+            excerpt does not upgrade the selected template. This is not validation.
 
     Returns:
         The length factor, the density factor and what they came from.
@@ -195,16 +214,13 @@ def calibrate(
     if morph < 0:
         morph = max(body.variant, 0)
         matched = True
-    var supported = (
-        matched
-        and body.mass_source.evidence.is_measured()
-        and body.length_source.evidence.is_measured()
+    _check_reference_support(
+        matched,
+        body.mass_source.evidence,
+        body.length_source.evidence,
+        body.model_evidence(),
+        allow_estimates,
     )
-    if not supported and not allow_estimates:
-        raise Error(
-            "Unsupported reference: pass allow_estimates=True for a template"
-            " estimate"
-        )
     var canon = create_animal(
         species,
         animal_options(

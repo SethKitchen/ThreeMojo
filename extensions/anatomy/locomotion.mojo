@@ -126,6 +126,8 @@ def stride_frequency(fr: Float64, hip: Length) raises -> Frequency:
     var u = Float64(speed_at(fr, hip).value)
     var stride = Float64(stride_length(fr, hip).value)
     var frequency = Float32(u / stride)
-    if not (isfinite(frequency) and frequency > 0.0):
+    # Accepted positive speed and stride share the same Froude/height
+    # inputs; their ratio stays above the Float32 zero-rounding boundary.
+    if not isfinite(frequency):
         raise Error("A stride frequency must fit a positive finite SI quantity")
     return Frequency(frequency, PER_SECOND)

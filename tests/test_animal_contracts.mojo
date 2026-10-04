@@ -3,7 +3,7 @@
 
 """Public anatomy boundaries, reference identity and finite-model controls."""
 
-from extensions.anatomy.evidence import DESIGN
+from extensions.anatomy.evidence import DESIGN, FROM_TEXT, Evidence
 from extensions.animals.anatomy.body import (
     BODY_LENGTH,
     TOTAL_LENGTH,
@@ -15,6 +15,7 @@ from extensions.animals.anatomy.axial import axial_muscles
 from extensions.animals.anatomy.density import solid_densities, solid_roles
 from extensions.animals.anatomy.engineering import (
     calibrate,
+    _check_reference_support,
     calibrated_animal,
     calibrated_mass,
 )
@@ -37,7 +38,7 @@ from extensions.animals.options import (
     Variant,
     animal_options,
 )
-from extensions.animals.registry import DOG, RAT, SPIDER
+from extensions.animals.registry import DOG, RAT, SPIDER, HORSE
 from extensions.sdf.field import SdfModel
 from extensions.animals.parts import BODY, EYEBALL
 from extensions.sdf.ids import BoneId, TagId, SurfacePart, PrimitiveKind
@@ -75,7 +76,7 @@ def test_calibration_refuses_unsupported_reference_without_explicit_opt_in() rai
 
 
 def test_calibration_binds_species_morph_and_canonical_mass_sampling() raises:
-    var cal = calibrate(SPIDER, Variant(-1))
+    var cal = calibrate(SPIDER, Variant(-1), allow_estimates=True)
     var base = create_animal(
         SPIDER,
         animal_options(
@@ -350,6 +351,71 @@ def test_physics_export_rejects_negative_or_nonfinite_mass() raises:
         mass.bones[0].mass = value
         with assert_raises(contains="mass"):
             _ = segment_bodies(a, mass)
+
+
+def test_matched_sourced_excerpts_cannot_bypass_template_estimate_gate() raises:
+    for species in [SPIDER, RAT, HORSE]:
+        var body = species_body(species)
+        assert_equal(body.mass_source.evidence, FROM_TEXT)
+        assert_equal(body.length_source.evidence, FROM_TEXT)
+        assert_equal(body.model_evidence(), DESIGN)
+        with assert_raises(contains="allow_estimates"):
+            _ = calibrate(species, Variant(-1))
+        var estimate = calibrate(species, Variant(-1), allow_estimates=True)
+        assert_equal(estimate.allow_estimates, True)
+        assert_equal(estimate.matched, True)
+        assert_equal(estimate.model_evidence(), DESIGN)
+        assert_equal(estimate.species, species)
+        estimate.check()
+        estimate.allow_estimates = False
+        with assert_raises(contains="allow_estimates"):
+            estimate.check()
+    assert_equal(species_body(SPIDER).mass_source.source, "Mendoza")
+    assert_equal(species_body(RAT).mass_source.source, "ADW")
+    assert_equal(species_body(HORSE).mass_source.source, "TBMorph")
+
+
+def test_reference_support_policy_checks_all_evidence_grades() raises:
+    # This is only a policy truth table. It does not create a measured
+    # SpeciesBody or claim that the built-in DESIGN rows are supported.
+    for matched in [False, True]:
+        for mass in range(-1, 6):
+            for length in range(-1, 6):
+                for parameters in range(-1, 6):
+                    var expected = (
+                        matched
+                        and mass >= 0
+                        and mass <= 2
+                        and length >= 0
+                        and length <= 2
+                        and parameters >= 0
+                        and parameters <= 2
+                    )
+                    if expected:
+                        _check_reference_support(
+                            matched,
+                            Evidence(mass),
+                            Evidence(length),
+                            Evidence(parameters),
+                            False,
+                        )
+                    else:
+                        with assert_raises(contains="allow_estimates"):
+                            _check_reference_support(
+                                matched,
+                                Evidence(mass),
+                                Evidence(length),
+                                Evidence(parameters),
+                                False,
+                            )
+                    # Explicit estimate permission does not upgrade the grades.
+                    _check_reference_support(
+                        matched,
+                        Evidence(mass),
+                        Evidence(length),
+                        Evidence(parameters),
+                        True,
+                    )
 
 
 def main() raises:

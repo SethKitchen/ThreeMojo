@@ -451,7 +451,9 @@ def isometric_equilibrium(
     var strain = (unit - reach - slack) / slack
     var factor = tendon_force(strain)
     var residual = _mismatch(arch, activation, unit, reach)
-    if not (isfinite(residual) and abs(residual) <= 1e-8 * (1.0 + abs(factor))):
+    # The finite tendon factor gives a finite tolerance. This comparison
+    # also rejects NaN and infinities, without a redundant finite guard.
+    if not (abs(residual) <= 1e-8 * (1.0 + abs(factor))):
         raise Error("The available precision cannot resolve equilibrium")
     var value = Float64(arch.max_force().value) * factor
     var force = Force(Float32(value))
@@ -462,7 +464,9 @@ def isometric_equilibrium(
         raise Error(
             "Equilibrium fiber length must fit a positive finite SI length"
         )
-    if not (isfinite(Float32(unit - reach)) and Float32(unit - reach) > 0.0):
+    # The bisection bounds keep this at most the finite SI unit length.
+    # Cancellation can still collapse it to zero.
+    if not (Float32(unit - reach) > 0.0):
         raise Error(
             "Equilibrium tendon length must fit a positive finite SI length"
         )

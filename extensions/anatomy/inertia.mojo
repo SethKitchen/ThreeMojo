@@ -94,7 +94,7 @@ struct SegmentInertia(ImplicitlyCopyable):
             raise Error("A segment must have finite positive mass")
         if not (isfinite(self.length.value) and self.length.value >= 0.0):
             raise Error("A segment length must be finite and nonnegative")
-        for value in [
+        var values: List[Float32] = [
             self.center.x,
             self.center.y,
             self.center.z,
@@ -104,8 +104,9 @@ struct SegmentInertia(ImplicitlyCopyable):
             self.xy.value,
             self.xz.value,
             self.yz.value,
-        ]:
-            if not isfinite(value):
+        ]
+        comptime for axis in range(9):
+            if not isfinite(values[axis]):
                 raise Error("Segment mass properties must be finite")
         if min(self.xx.value, min(self.yy.value, self.zz.value)) < 0.0:
             raise Error("An inertia diagonal must be nonnegative")
@@ -172,7 +173,7 @@ struct InertiaTally(Copyable, Movable):
         """
         if not (isfinite(m) and m >= 0.0):
             raise Error("A cell mass must be finite and nonnegative")
-        for axis in range(3):
+        comptime for axis in range(3):
             if not isfinite(p.get_component(axis)):
                 raise Error("A cell center must be finite")
             var w = widths.get_component(axis)
@@ -223,17 +224,17 @@ struct InertiaTally(Copyable, Movable):
     def _check_sums(self) raises:
         if not (isfinite(self.mass) and self.mass >= 0.0):
             raise Error("A tally mass must be finite and nonnegative")
-        for axis in range(3):
+        comptime for axis in range(3):
             if not isfinite(self.first[axis]):
                 raise Error("Tally first moments must be finite")
-        for axis in range(6):
+        comptime for axis in range(6):
             if not isfinite(self.second[axis]):
                 raise Error("Tally second moments must be finite")
         if self.mass == 0.0:
-            for axis in range(3):
+            comptime for axis in range(3):
                 if self.first[axis] != 0.0:
                     raise Error("A zero-mass tally cannot hold first moments")
-            for axis in range(6):
+            comptime for axis in range(6):
                 if self.second[axis] != 0.0:
                     raise Error("A zero-mass tally cannot hold second moments")
 
@@ -254,7 +255,8 @@ struct InertiaTally(Copyable, Movable):
         if not (isfinite(length) and length >= 0.0):
             raise Error("A segment length must be finite and nonnegative")
         var mass = self.mass
-        if not isfinite(mass) or mass <= 0:
+        # _check_sums already established finite nonnegative mass.
+        if mass == 0.0:
             raise Error("A sampled segment must have finite positive mass")
         var c = self.first / mass
         # Second moments about the center, by the parallel-axis theorem.

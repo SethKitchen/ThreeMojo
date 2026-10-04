@@ -369,7 +369,7 @@ def test_sampled_mass_is_the_sum_of_bones_and_converges() raises:
 
 
 def test_calibration_scales_to_the_published_size() raises:
-    var cal = calibrate(SPIDER, Variant(-1))
+    var cal = calibrate(SPIDER, Variant(-1), allow_estimates=True)
     assert_true(cal.matched)
     assert_almost_equal(Float64(cal.published.value), 0.055, rtol=1e-6)
     assert_almost_equal(
