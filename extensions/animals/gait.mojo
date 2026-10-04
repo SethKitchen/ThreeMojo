@@ -17,12 +17,14 @@ A pose turns bones, and the sculpt is meshed again in it, so the joints
 keep their shape however far they bend.
 """
 
+from extensions.anatomy.locomotion import WALK_FROUDE, stride_length
 from extensions.animals.rig import Pose, Rig
 from extensions.sdf.vector import (
     V3,
     smoothstep,
 )
 from std.math import atan2, acos, cos, pi, sin, sqrt
+from units.si import METER, Length
 
 # Each foot's phase offset in the lateral-sequence walk: left fore, right
 # fore, left hind, right hind, as procedural-animals' wolf walk.
@@ -155,20 +157,28 @@ def _leg(
     )
 
 
-def walk_pose(rig: Rig, phase: Float64) raises -> Pose:
+def walk_pose(
+    rig: Rig, phase: Float64, froude: Float64 = WALK_FROUDE
+) raises -> Pose:
     """Return the walk at one phase of the stride.
 
-    A rig without the standard quadruped legs gets its bind pose.
+    The stride is the one dynamic similarity gives the hip height at
+    the Froude number: `2.3 Fr^0.3 h`. Each foot is planted for `DUTY`
+    of it, so it sweeps back that share of the stride under the body.
+    See `extensions/anatomy/locomotion.mojo`. A rig without the standard
+    quadruped legs gets its bind pose.
 
     Args:
-        rig: The animal's rig.
+        rig: The animal's rig, in meters.
         phase: How far through the stride, in `[0, 1)`. It wraps.
+        froude: The walk's Froude number. 0.25 is a comfortable walk.
 
     Returns:
         The pose.
 
     Raises:
-        Error: If the rig has quadruped legs but lacks a bone they need.
+        Error: If the rig has quadruped legs but lacks a bone they need,
+            or the Froude number is not positive.
     """
     var pose = Pose(len(rig.bones))
     if not is_quadruped(rig):
@@ -178,7 +188,8 @@ def walk_pose(rig: Rig, phase: Float64) raises -> Pose:
         >= 0.0 else phase - Float64(Int(phase)) + 1.0
     )
     var hip = rig.j("hipL").y
-    var stride = 0.42 * hip
+    var cycle = stride_length(froude, Length(Float32(hip), METER))
+    var stride = DUTY * Float64(cycle.to(METER))
     var lift = 0.11 * hip
     _leg(pose, rig, "L", True, _wrap(p + WALK_FL), stride, lift)
     _leg(pose, rig, "R", True, _wrap(p + WALK_FR), stride, lift)
