@@ -31,8 +31,16 @@ and the flags in step.
 **Where this differs.** three.js keys a split edge by a number, or by a
 string when the number could overflow a double; the key here is an `Int`,
 which holds the product of any two vertex counts a list can hold.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2, length3, reciprocal_normalized3
 from geometries.sculptor_mesh import SculptorMesh
 from geometries.sculptor_utils import (
     Point3,
@@ -185,11 +193,10 @@ def _sub_fill_triangles(
 def _unit_or_x(n: Point3) -> Point3:
     """Return a normal made unit; a zero normal becomes (1, 0, 0), as
     three.js's `halfEdgeSplit` has it."""
-    var length = n.x * n.x + n.y * n.y + n.z * n.z
-    if length == 0:
+    if n.x == 0 and n.y == 0 and n.z == 0:
         return Point3(1, n.y, n.z)
-    length = 1 / sqrt(length)
-    return Point3(n.x * length, n.y * length, n.z * length)
+    var unit = reciprocal_normalized3(n.x, n.y, n.z)
+    return Point3(unit[0], unit[1], unit[2])
 
 
 def _half_edge_split(
@@ -227,8 +234,8 @@ def _half_edge_split(
         return
     var p1 = point_of(mesh.vertices, v1)
     var p2 = point_of(mesh.vertices, v2)
-    var n1 = point_of(mesh.normals, v1)
-    var n2 = point_of(mesh.normals, v2)
+    var n1 = mesh._normal_at(v1)
+    var n2 = mesh._normal_at(v2)
     var sum = Point3(n1.x + n2.x, n1.y + n2.y, n1.z + n2.z)
     _set_point(mesh.normals, mid, Point3(sum.x * 0.5, sum.y * 0.5, sum.z * 0.5))
     var u1 = _unit_or_x(n1)
@@ -238,7 +245,7 @@ def _half_edge_split(
     var ex = p1.x - p2.x
     var ey = p1.y - p2.y
     var ez = p1.z - p2.z
-    var offset = angle * 0.12 * sqrt(ex * ex + ey * ey + ez * ez)
+    var offset = angle * 0.12 * length3(ex, ey, ez)
     var length = sum.x * sum.x + sum.y * sum.y + sum.z * sum.z
     offset = offset / sqrt(length) if length > 0 else offset
     var turn = ex * (u1.x - u2.x) + ey * (u1.y - u2.y) + ez * (u1.z - u2.z)
@@ -574,8 +581,8 @@ def _dec_edge_collapse(
         return
     dec.verts_decimated.append(v1)
     dec.verts_decimated.append(v2)
-    var n1 = point_of(mesh.normals, v1)
-    var n2 = point_of(mesh.normals, v2)
+    var n1 = mesh._normal_at(v1)
+    var n2 = mesh._normal_at(v2)
     var n = _unit_or_x(Point3(n1.x + n2.x, n1.y + n2.y, n1.z + n2.z))
     _set_point(mesh.normals, v1, n)
     remove_element(mesh.vert_ring_face[v1], tri1)
@@ -862,12 +869,11 @@ def smooth_tangent_verts(
     for i in range(len(vertices)):
         var vertex = vertices[i]
         var v = point_of(mesh.vertices, vertex)
-        var n = point_of(mesh.normals, vertex)
-        var length = n.x * n.x + n.y * n.y + n.z * n.z
-        if length == 0:
+        var n = mesh._normal_at(vertex)
+        if n.x == 0 and n.y == 0 and n.z == 0:
             continue
-        length = 1 / sqrt(length)
-        n = Point3(n.x * length, n.y * length, n.z * length)
+        var unit = reciprocal_normalized3(n.x, n.y, n.z)
+        n = Point3(unit[0], unit[1], unit[2])
         var s = point_of(smooth, i)
         var d = n.x * (s.x - v.x) + n.y * (s.y - v.y) + n.z * (s.z - v.z)
         _set_point(
@@ -897,7 +903,7 @@ def get_front_vertices(
     """
     var front = List[Int]()
     for vertex in vertices:  # pragma: no branch
-        var n = point_of(mesh.normals, vertex)
+        var n = mesh._normal_at(vertex)
         if n.x * eye_dir.x + n.y * eye_dir.y + n.z * eye_dir.z <= 0:
             front.append(vertex)
     return front^
@@ -916,13 +922,12 @@ def area_normal(mesh: SculptorMesh, vertices: List[Int]) -> Optional[Point3]:
     """
     var sum = Point3(0, 0, 0)
     for vertex in vertices:
-        var n = point_of(mesh.normals, vertex)
+        var n = mesh._normal_at(vertex)
         sum = Point3(sum.x + n.x, sum.y + n.y, sum.z + n.z)
-    var length = sqrt(sum.x * sum.x + sum.y * sum.y + sum.z * sum.z)
-    if length == 0:
+    if sum.x == 0 and sum.y == 0 and sum.z == 0:
         return None
-    var inverse = 1.0 / length
-    return Point3(sum.x * inverse, sum.y * inverse, sum.z * inverse)
+    var unit = reciprocal_normalized3(sum.x, sum.y, sum.z)
+    return Point3(unit[0], unit[1], unit[2])
 
 
 def area_center(mesh: SculptorMesh, vertices: List[Int]) -> Point3:
@@ -952,7 +957,7 @@ def _reach(
     var dx = p.x - center.x
     var dy = p.y - center.y
     var dz = p.z - center.z
-    return sqrt(dx * dx + dy * dy + dz * dz) / radius
+    return length3(dx, dy, dz) / radius
 
 
 # --- tools -----------------------------------------------------------------
@@ -1073,8 +1078,8 @@ def tool_inflate(
         if dist >= 1.0:
             continue
         var fall_off = falloff(dist) * deform
-        var n = point_of(mesh.normals, vertex)
-        var n_len = sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
+        var n = mesh._normal_at(vertex)
+        var n_len = length3(n.x, n.y, n.z)
         fall_off = fall_off / n_len if n_len > 0 else fall_off
         var p = point_of(mesh.vertices, vertex)
         _set_point(
@@ -1138,7 +1143,7 @@ def tool_pinch(
         var dx = center.x - p.x
         var dy = center.y - p.y
         var dz = center.z - p.z
-        var dist = sqrt(dx * dx + dy * dy + dz * dz) / radius
+        var dist = length3(dx, dy, dz) / radius
         var fall_off = falloff(dist) * deform
         _set_point(
             mesh.vertices,
@@ -1179,7 +1184,7 @@ def tool_crease(
         var dx = center.x - p.x
         var dy = center.y - p.y
         var dz = center.z - p.z
-        var dist = sqrt(dx * dx + dy * dy + dz * dz) / radius
+        var dist = length3(dx, dy, dz) / radius
         if dist >= 1.0:
             continue
         var fall_off = falloff(dist)
@@ -1253,9 +1258,7 @@ def tool_scale(
         var dx = p.x - center.x
         var dy = p.y - center.y
         var dz = p.z - center.z
-        var fall_off = (
-            falloff(sqrt(dx * dx + dy * dy + dz * dz) / radius) * scale
-        )
+        var fall_off = falloff(length3(dx, dy, dz) / radius) * scale
         _set_point(
             mesh.vertices,
             vertex,

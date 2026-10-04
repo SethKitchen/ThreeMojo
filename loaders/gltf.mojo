@@ -157,7 +157,16 @@ as three.js's plugin reads it.
 names one is refused, as three.js refuses it, and one that only uses an
 extension is read without it. A primitive of triangle strips or fans is
 refused, and so is a point or a line on a skinned or an instanced node.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import length3, normalized3, _ordinary_squared
 
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from animation.animation_clip import AnimationClip
@@ -3826,24 +3835,17 @@ def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
     var sx = _column_length(matrix, 0)
     var sy = _column_length(matrix, 4)
     var sz = _column_length(matrix, 8)
-    if m.determinant() < 0:
-        sx = -sx
     if sx == 0 or sy == 0 or sz == 0:
-        raise Error("glTF: a node matrix that flattens an axis")
-    var rotation = Matrix4()
-    for row in range(3):  # pragma: no branch
-        rotation.elements[row] = matrix[row] / sx
-        rotation.elements[4 + row] = matrix[4 + row] / sy
-        rotation.elements[8 + row] = matrix[8 + row] / sz
-    node.set_position(matrix[12], matrix[13], matrix[14])
-    node.set_quaternion(Quaternion.from_matrix(rotation))
-    node.set_scale(sx, sy, sz)
+        raise Error("glTF" + ": a node matrix that flattens an axis")
+    var position = Vector3(0, 0, 0)
+    var rotation = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    m.decompose(position, rotation, scale)
+    node.set_position(position.x, position.y, position.z)
+    node.set_quaternion(rotation)
+    node.set_scale(scale.x, scale.y, scale.z)
 
 
 def _column_length(matrix: List[Float32], start: Int) -> Float32:
     """Return the length of a column's first three entries."""
-    return sqrt(
-        matrix[start] * matrix[start]
-        + matrix[start + 1] * matrix[start + 1]
-        + matrix[start + 2] * matrix[start + 2]
-    )
+    return length3(matrix[start], matrix[start + 1], matrix[start + 2])

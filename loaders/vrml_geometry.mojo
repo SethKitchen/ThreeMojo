@@ -14,8 +14,17 @@ not a whole number, it reads `undefined`, which becomes `NaN`. These
 functions give `NaN` there too, and `loaders.vrml` refuses a geometry
 that holds one. Each product that feeds a sum is rounded on its own, as
 JavaScript rounds it.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+from math.norm import _ordinary_squared, normalized3, normalized_cross3
 from geometries.earcut import triangulate_shape
 from std.math import acos, cos, floor, isnan, pi, sin, sqrt
 from std.utils.numerics import nan
@@ -361,9 +370,12 @@ struct _Vector(ImplicitlyCopyable):
     def normalized(self) -> Self:
         """Return three.js's `normalize`, which multiplies by one over the
         length: a zero vector stays zero."""
-        var length = sqrt(self.length_sq())
-        var inverse = 1 / (length if length != 0 else Float64(1))
-        return Self(self.x * inverse, self.y * inverse, self.z * inverse)
+        var squared = self.length_sq()
+        if _ordinary_squared(squared):
+            var inverse = 1 / sqrt(squared)
+            return Self(self.x * inverse, self.y * inverse, self.z * inverse)
+        var unit = normalized3(self.x, self.y, self.z)
+        return Self(unit[0], unit[1], unit[2])
 
     def dot(self, other: Self) -> Float64:
         """Return three.js's `dot`."""
@@ -375,10 +387,22 @@ struct _Vector(ImplicitlyCopyable):
 
     def angle_to(self, other: Self) -> Float64:
         """Return three.js's `angleTo`."""
-        var denominator = sqrt(product(self.length_sq(), other.length_sq()))
-        if denominator == 0:
-            return pi / 2
-        var theta = self.dot(other) / denominator
+        var first_squared = self.length_sq()
+        var second_squared = other.length_sq()
+        var squared = product(first_squared, second_squared)
+        var theta: Float64
+        if (
+            _ordinary_squared(first_squared)
+            and _ordinary_squared(second_squared)
+            and _ordinary_squared(squared)
+        ):
+            theta = self.dot(other) / sqrt(squared)
+        else:
+            if (self.x == 0 and self.y == 0 and self.z == 0) or (
+                other.x == 0 and other.y == 0 and other.z == 0
+            ):
+                return pi / 2
+            theta = self.normalized().dot(other.normalized())
         return acos(min(max(theta, -1.0), 1.0))
 
 
@@ -427,12 +451,20 @@ def normal_attribute(
         var c = _point(coord, faces[f * 3 + 2])
         var cb = _Vector(c.x - b.x, c.y - b.y, c.z - b.z)
         var ab = _Vector(a.x - b.x, a.y - b.y, a.z - b.z)
-        var cross = _Vector(
-            product(cb.y, ab.z) - product(cb.z, ab.y),
-            product(cb.z, ab.x) - product(cb.x, ab.z),
-            product(cb.x, ab.y) - product(cb.y, ab.x),
-        )
-        face_normals.append(cross.normalized())
+        if not (isfinite(cb.x) and isfinite(cb.y) and isfinite(cb.z)):
+            cb = _Vector(
+                c.x * 0.5 - b.x * 0.5,
+                c.y * 0.5 - b.y * 0.5,
+                c.z * 0.5 - b.z * 0.5,
+            )
+        if not (isfinite(ab.x) and isfinite(ab.y) and isfinite(ab.z)):
+            ab = _Vector(
+                a.x * 0.5 - b.x * 0.5,
+                a.y * 0.5 - b.y * 0.5,
+                a.z * 0.5 - b.z * 0.5,
+            )
+        var cross = normalized_cross3(cb.x, cb.y, cb.z, ab.x, ab.y, ab.z)
+        face_normals.append(_Vector(cross[0], cross[1], cross[2]))
         # Three corners. The loop always runs.
         for k in range(3):  # pragma: no branch
             at_point[faces[f * 3 + k]].append(f)

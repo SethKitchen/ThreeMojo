@@ -37,8 +37,17 @@ obviously, plain `Int` — the compiler asks for a fixed-width type instead.
 
 Whether this is *faster* than the CPU is a separate question, and the answer
 is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized3
+from lights.lighting import light_vector
 from render.color_spaces import (
     ColorSpaceId,
     OUTPUT_FLOATS,
@@ -2542,13 +2551,22 @@ def _arriving[
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
         # From the surface to the bulb: how far, and which way.
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
-        var lambert = (nx * dx + ny * dy + nz * dz) / distance
+        var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
         if lambert <= 0:
             continue
         var bare = lambert * falloff(
@@ -2602,10 +2620,19 @@ def _arriving[
     var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         # The cosine of the angle off the cone's axis, and from it how far
@@ -2614,13 +2641,13 @@ def _arriving[
             dx * lights[unsafe_offset=at + 3]
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
-        var lambert = (nx * dx + ny * dy + nz * dz) / distance
+        var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
         if lambert <= 0:
             continue
         var bare = (
@@ -2747,14 +2774,26 @@ def _toon_arriving[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var tone = _toon_tone(
-            texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
+            texels,
+            start,
+            tones,
+            (nx * dx + ny * dy + nz * dz) / direction_length,
         )
         var bare = tone * falloff(
             distance,
@@ -2806,24 +2845,36 @@ def _toon_arriving[
     var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             dx * lights[unsafe_offset=at + 3]
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
         var tone = _toon_tone(
-            texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
+            texels,
+            start,
+            tones,
+            (nx * dx + ny * dy + nz * dz) / direction_length,
         )
         var bare = (
             tone
@@ -2928,15 +2979,20 @@ def _highlight[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
-        var lambert = normal.dot(toward) / distance
+        var lambert = normal.dot(toward) / direction_length
         if lambert <= 0:
             continue
         var bare = lambert * falloff(
@@ -2957,25 +3013,30 @@ def _highlight[
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             toward.x * lights[unsafe_offset=at + 3]
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
-        var lambert = normal.dot(toward) / distance
+        var lambert = normal.dot(toward) / direction_length
         if lambert <= 0:
             continue
         var bare = (
@@ -3074,12 +3135,17 @@ def _scattered[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var bare = falloff(
@@ -3102,19 +3168,24 @@ def _scattered[
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             toward.x * lights[unsafe_offset=at + 3]
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
@@ -3193,15 +3264,17 @@ def _volume_light(
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = (
+        var ray = light_vector(
             Vector3(
                 lights[unsafe_offset=at],
                 lights[unsafe_offset=at + 1],
                 lights[unsafe_offset=at + 2],
-            )
-            - place
+            ),
+            place,
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
@@ -3212,7 +3285,7 @@ def _volume_light(
                     lights[unsafe_offset=at + 5],
                 )
             )
-            / distance
+            / direction_length
         )
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, place
@@ -3619,18 +3692,25 @@ def _physical[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - position.x,
-            lights[unsafe_offset=at + 1] - position.y,
-            lights[unsafe_offset=at + 2] - position.z,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            position,
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
-        var lambert = max(Float32(0), normal.dot(toward) / distance)
+        var lambert = max(Float32(0), normal.dot(toward) / direction_length)
         var coat_lambert = Float32(0)
         if clearcoat > 0:
-            coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
+            coat_lambert = max(
+                Float32(0), coat_normal.dot(toward) / direction_length
+            )
         if lambert == 0 and coat_lambert == 0:
             continue
         var bare = falloff(
@@ -3663,28 +3743,35 @@ def _physical[
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - position.x,
-            lights[unsafe_offset=at + 1] - position.y,
-            lights[unsafe_offset=at + 2] - position.z,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            position,
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             toward.x * lights[unsafe_offset=at + 3]
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, position
         )
         if rim <= 0:
             continue
-        var lambert = max(Float32(0), normal.dot(toward) / distance)
+        var lambert = max(Float32(0), normal.dot(toward) / direction_length)
         var coat_lambert = Float32(0)
         if clearcoat > 0:
-            coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
+            coat_lambert = max(
+                Float32(0), coat_normal.dot(toward) / direction_length
+            )
         if lambert == 0 and coat_lambert == 0:
             continue
         var bare = rim * falloff(
@@ -6494,11 +6581,10 @@ def rasterize_kernel(
                 + corners[unsafe_offset=b_base + LANE_NZ] * share_b
                 + corners[unsafe_offset=c_base + LANE_NZ] * share_c
             )
-            var unit = sqrt(nx * nx + ny * ny + nz * nz)
-            if unit != 0:
-                nx /= unit
-                ny /= unit
-                nz /= unit
+            var unit = normalized3(nx, ny, nz)
+            nx = unit[0]
+            ny = unit[1]
+            nz = unit[2]
             # Where this fragment is in the world, for the lights that have
             # a position, and for the direction a reflection turns back.
             var wx = Float32(0)

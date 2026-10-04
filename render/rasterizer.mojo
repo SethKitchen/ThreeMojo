@@ -21,8 +21,22 @@ Which pixels a triangle covers is decided by `render.fillrule`, in exact
 integer arithmetic, and that module explains why. It is shared with the GPU
 kernel so that both answer identically — the property `tests/test_gpu.mojo`
 asserts pixel for pixel.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.scaled_products import (
+    _Scaled,
+    _sum_products as _scaled_products,
+    _common_scale,
+)
+
+from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -1997,10 +2011,66 @@ def tangent_frame(
         q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
     )
     var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
-    var frame = Float32(0)
-    if extent != 0:
-        frame = 1 / sqrt(extent)
-    return TangentFrame(tangent * frame, bitangent * frame)
+    var position_scale = max(
+        max(abs(along_x.x), max(abs(along_x.y), abs(along_x.z))),
+        max(abs(along_y.x), max(abs(along_y.y), abs(along_y.z))),
+    )
+    var uv_scale = max(
+        max(abs(uv_along_x.x), abs(uv_along_x.y)),
+        max(abs(uv_along_y.x), abs(uv_along_y.y)),
+    )
+    var component = max(
+        max(abs(tangent.x), max(abs(tangent.y), abs(tangent.z))),
+        max(abs(bitangent.x), max(abs(bitangent.y), abs(bitangent.z))),
+    )
+    var product_bound = (
+        position_scale
+        * uv_scale
+        * max(abs(normal.x), max(abs(normal.y), abs(normal.z)))
+    )
+    if _ordinary_squared(extent) and product_bound <= 4 * component:
+        var frame = 1 / sqrt(extent)
+        return TangentFrame(tangent * frame, bitangent * frame)
+    var ax = [along_x.x, along_x.y, along_x.z]
+    var ay = [along_y.x, along_y.y, along_y.z]
+    var n = [normal.x, normal.y, normal.z]
+    var finite = (
+        isfinite(uv_along_x.x)
+        and isfinite(uv_along_x.y)
+        and isfinite(uv_along_y.x)
+        and isfinite(uv_along_y.y)
+    )
+    for axis in range(3):  # pragma: no branch
+        finite = (
+            finite
+            and isfinite(ax[axis])
+            and isfinite(ay[axis])
+            and isfinite(n[axis])
+        )
+    if not finite:
+        var frame = 1 / sqrt(extent) if extent != 0 else Float32(0)
+        return TangentFrame(tangent * frame, bitangent * frame)
+    var sums = Array[_Scaled[DType.float32], 6](
+        fill=_Scaled[DType.float32](0, 0)
+    )
+    for axis in range(3):  # pragma: no branch
+        var j = (axis + 1) % 3
+        var k = (axis + 2) % 3
+        var a = [ay[j], -ay[k], n[j], -n[k]]
+        var b = [n[k], n[j], ax[k], ax[j]]
+        sums[axis] = _scaled_products[DType.float32, 4](
+            a, b, [uv_along_x.x, uv_along_x.x, uv_along_y.x, uv_along_y.x]
+        )
+        sums[axis + 3] = _scaled_products[DType.float32, 4](
+            a, b, [uv_along_x.y, uv_along_x.y, uv_along_y.y, uv_along_y.y]
+        )
+    var scaled = _common_scale[DType.float32, 6](sums)
+    var t = Vector3(scaled[0], scaled[1], scaled[2])
+    var b = Vector3(scaled[3], scaled[4], scaled[5])
+    var magnitude = max(t.length(), b.length())
+    if magnitude == 0:
+        return TangentFrame(Vector3(0, 0, 0), Vector3(0, 0, 0))
+    return TangentFrame(t / magnitude, b / magnitude)
 
 
 def mapped_normal(
@@ -2320,8 +2390,17 @@ def mip_level(
     """
     var across = Float32(width)
     var down = Float32(height)
+    if not (
+        isfinite(along_x.x * across)
+        and isfinite(along_x.y * down)
+        and isfinite(along_y.x * across)
+        and isfinite(along_y.y * down)
+    ):
+        return anisotropic_footprint(along_x, along_y, width, height, 1).level
     var in_x = _length(along_x.x * across, along_x.y * down)
     var in_y = _length(along_y.x * across, along_y.y * down)
+    if not isfinite(in_x) or not isfinite(in_y):
+        return anisotropic_footprint(along_x, along_y, width, height, 1).level
     var longest = in_x
     if in_y > longest:
         longest = in_y
@@ -2332,7 +2411,7 @@ def mip_level(
 
 def _length(x: Float32, y: Float32) -> Float32:
     """Return the length of a two-component vector."""
-    return sqrt(x * x + y * y)
+    return length2(x, y)
 
 
 def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:

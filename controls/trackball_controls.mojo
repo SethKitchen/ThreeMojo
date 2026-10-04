@@ -33,8 +33,16 @@ Differences from three.js: touch input is not ported. `update` takes the
 time the frame took only to age the keys held; three.js's takes none.
 An orthographic camera's pan measures both directions by the view's width,
 as three.js's does.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from controls.held_keys import HOLD_TIMEOUT, HeldKeys, physical_key
@@ -544,7 +552,7 @@ struct TrackballControls(Copyable, Movable):
         """
         var dx = self._move_curr_x - self._move_prev_x
         var dy = self._move_curr_y - self._move_prev_y
-        var angle = sqrt(dx * dx + dy * dy)
+        var angle = length2(dx, dy)
         if angle > 0:
             var eye_direction = eye
             eye_direction.normalize()

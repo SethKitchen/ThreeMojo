@@ -85,8 +85,17 @@ a texel in `data` and reads them as they are. Everything past the fetch --
 the wrap, the filter, the chain's weighted average, the footprint -- is the
 same arithmetic on the same `FloatColor`, which is why one `_texel_at` is
 the only place the two differ. See `float_texture`.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import exp2
+from math.norm import length2, _ordinary_squared
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -1927,7 +1936,24 @@ def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
     var c = v.x * v.x + v.y * v.y
     var half_sum = (a + c) / 2
     var half_difference = (a - c) / 2
-    var spread = sqrt(half_difference * half_difference + b * b)
+    var spread_squared = half_difference * half_difference + b * b
+    var scale = Float32(1)
+    var largest_component = max(
+        max(abs(u.x), abs(u.y)), max(abs(v.x), abs(v.y))
+    )
+    if largest_component > 0 and (
+        not _ordinary_squared(a + c)
+        or (not _ordinary_squared(spread_squared) and spread_squared != 0)
+    ):
+        scale = largest_component
+        var su = u / scale
+        var sv = v / scale
+        a = su.dot(su)
+        b = su.dot(sv)
+        c = sv.dot(sv)
+        half_sum = (a + c) / 2
+        half_difference = (a - c) / 2
+    var spread = length2(half_difference, b)
     # Clamped with `max` rather than with an `if`. Neither can go below
     # zero in exact arithmetic -- `spread` is at most `half_sum`, because
     # the Gram matrix of two real vectors is positive semidefinite -- so a
@@ -1935,10 +1961,12 @@ def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
     # a branch no test could take.
     var larger = max(Float32(0), half_sum + spread)
     var smaller = max(Float32(0), half_sum - spread)
-    return Vector2(sqrt(larger), sqrt(smaller))
+    return Vector2(sqrt(larger) * scale, sqrt(smaller) * scale)
 
 
-def _major_direction(u: Vector2, v: Vector2, major: Float32) -> Vector2:
+def _major_direction(
+    var u: Vector2, var v: Vector2, var major: Float32
+) -> Vector2:
     """Return the unit direction of the footprint's long axis, in texels.
 
     The long axis lives in the derivative matrix's *output* space, so it is
@@ -1963,6 +1991,11 @@ def _major_direction(u: Vector2, v: Vector2, major: Float32) -> Vector2:
         A unit vector along the long axis, in texel space. Its sign is
         arbitrary: the taps are centered, so both ends span one line.
     """
+    var scale = max(max(abs(u.x), abs(u.y)), max(abs(v.x), abs(v.y)))
+    if scale > 0 and not _ordinary_squared(u.dot(u) + v.dot(v)):
+        u = u / scale
+        v = v / scale
+        major = _principal_axes(u, v).x
     var q = u.x * u.y + v.x * v.y
     var p = u.x * u.x + v.x * v.x
     var r = u.y * u.y + v.y * v.y
@@ -1985,10 +2018,7 @@ def _major_direction(u: Vector2, v: Vector2, major: Float32) -> Vector2:
     var first = Vector2(q, eigenvalue - p)
     var second = Vector2(eigenvalue - r, q)
     var chosen = first
-    if (
-        second.x * second.x + second.y * second.y
-        > first.x * first.x + first.y * first.y
-    ):
+    if second.length() > first.length():
         chosen = second
     # No guard on the length, where `q` above guards the diagonal case.
     # `first` is `(q, ...)` and `q` is not zero on this path, so `first` is
@@ -1996,8 +2026,53 @@ def _major_direction(u: Vector2, v: Vector2, major: Float32) -> Vector2:
     # caller reaches this only when it took more than one tap, which needs
     # a major axis above one texel, so nothing here is near the range
     # where a square could underflow to zero.
-    var length = sqrt(chosen.x * chosen.x + chosen.y * chosen.y)
-    return Vector2(chosen.x / length, chosen.y / length)
+    chosen.normalize()
+    return chosen
+
+
+def _scaled_footprint(
+    along_x: Vector2, along_y: Vector2, width: Int, height: Int, anisotropy: Int
+) -> Footprint:
+    """Keep a finite derivative's length in log space when texel products overflow.
+    """
+    var derivative_scale = max(
+        max(abs(along_x.x), abs(along_x.y)), max(abs(along_y.x), abs(along_y.y))
+    )
+    var size = max(Float32(width), Float32(height))
+    if derivative_scale == 0:
+        return Footprint(0, 1, Vector2(0, 0))
+    var u = Vector2(
+        (along_x.x / derivative_scale) * (Float32(width) / size),
+        (along_x.y / derivative_scale) * (Float32(height) / size),
+    )
+    var v = Vector2(
+        (along_y.x / derivative_scale) * (Float32(width) / size),
+        (along_y.y / derivative_scale) * (Float32(height) / size),
+    )
+    var log_scale = log2(derivative_scale) + log2(size)
+    var longest = max(u.length(), v.length())
+    var level = log2(longest) + log_scale
+    if anisotropy <= 1 or level <= 0 or not isfinite(level):
+        return Footprint(level, 1, Vector2(0, 0))
+    var allowed = min(anisotropy, MAX_ANISOTROPY)
+    var axes = _principal_axes(u, v)
+    var effective_minor = max(
+        max(axes.y, axes.x / Float32(allowed)), exp2(-log_scale)
+    )
+    var taps = max(1, min(Int(ceil(axes.x / effective_minor)), allowed))
+    if taps == 1:
+        return Footprint(level, 1, Vector2(0, 0))
+    var direction = _major_direction(u, v, axes.x)
+    var step = axes.x / Float32(taps)
+    return Footprint(
+        log2(effective_minor) + log_scale,
+        taps,
+        Vector2(
+            derivative_scale * ((direction.x * step) * (size / Float32(width))),
+            derivative_scale
+            * ((direction.y * step) * (size / Float32(height))),
+        ),
+    )
 
 
 def anisotropic_footprint(
@@ -2059,8 +2134,10 @@ def anisotropic_footprint(
     """
     var u = Vector2(along_x.x * Float32(width), along_x.y * Float32(height))
     var v = Vector2(along_y.x * Float32(width), along_y.y * Float32(height))
-    var in_x = sqrt(u.x * u.x + u.y * u.y)
-    var in_y = sqrt(v.x * v.x + v.y * v.y)
+    if not _ordinary_squared(u.dot(u) + v.dot(v)):
+        return _scaled_footprint(along_x, along_y, width, height, anisotropy)
+    var in_x = u.length()
+    var in_y = v.length()
     var longest = in_x
     if in_y > in_x:
         longest = in_y

@@ -96,7 +96,12 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Numerical range
 
-- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, finite three-point normals, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+<details>
+<summary>Implemented: 1</summary>
+
+- [x] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Norm-consumers): finite directions, angles, geometry normals and tangents, loader axes, lighting, and texture footprints across scalar ranges [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+
+</details>
 
 ### Numeric correctness
 

@@ -29,8 +29,17 @@ three.js does not divide -- stand in the same ratio to lit ones as there.
 the multiply a fragment does, and a scale would make it something else.
 `blinn_phong` itself drops its factor of pi and `specular_at` applies the
 scale, so the highlight and the diffuse term move together.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+from math.norm import _ordinary_squared
 from core.layers import Layers
 from core.object3d import NO_PARENT
 from core.scene import Scene
@@ -153,6 +162,45 @@ def view_direction(direction: Vector3, up: Vector3, back: Vector3) -> Vector3:
     return Vector3(direction.dot(right), direction.dot(up), direction.dot(back))
 
 
+def light_vector(
+    target: Vector3, origin: Vector3
+) -> Tuple[Vector3, Float32, Float32]:
+    """Return a light offset, its distance, and its directional divisor.
+
+    Ordinary offsets keep dot-then-divide rounding on both backends. At
+    range limits the offset is already a unit direction and its divisor
+    is one. Its physical distance remains separate for attenuation.
+
+    Args:
+        target: The light or eye position.
+        origin: The surface position.
+
+    Returns:
+        The offset, physical distance, and divisor for directional dots.
+        Coincident points have zero distance. Nonfinite inputs retain
+        their direct IEEE result.
+    """
+    var offset = target - origin
+    var distance = offset.length()
+    if _ordinary_squared(offset.dot(offset)):
+        return offset, distance, distance
+    if not (
+        isfinite(target.x)
+        and isfinite(target.y)
+        and isfinite(target.z)
+        and isfinite(origin.x)
+        and isfinite(origin.y)
+        and isfinite(origin.z)
+    ):
+        return offset, distance, distance
+    if not (isfinite(offset.x) and isfinite(offset.y) and isfinite(offset.z)):
+        # A finite Float32 subtraction can overflow. Halve BEFORE subtracting;
+        # the true distance is already known to be unrepresentable.
+        offset = target * Float32(0.5) - origin * Float32(0.5)
+    offset.normalize()
+    return offset, distance, Float32(1)
+
+
 def toward_eye_at(
     eye: Vector3, parallel: Vector3, position: Vector3
 ) -> Vector3:
@@ -184,8 +232,9 @@ def toward_eye_at(
     """
     if parallel.length() != 0:
         return parallel
-    var toward = eye - position
-    if toward.length() == 0:
+    var ray = light_vector(eye, position)
+    var toward = ray[0]
+    if ray[1] == 0:
         return Vector3(0, 0, 0)
     toward.normalize()
     return toward^
@@ -1912,14 +1961,16 @@ struct Lighting(Movable):
             )
         for index in range(len(self.positions)):
             # From the surface to the bulb: how far, and which way.
-            var toward = self.positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             # A surface exactly on the bulb has no direction to be lit from.
             if distance == 0:
                 continue
             # The dot and then the divide, in that order, because it is the
             # order the kernel uses and the two must round alike.
-            var lambert = normal.dot(toward) / distance
+            var lambert = normal.dot(toward) / direction_length
             if lambert <= 0:
                 continue
             var bare = lambert * falloff(
@@ -1952,18 +2003,22 @@ struct Lighting(Movable):
                 total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
             )
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
             # The cosine of the angle between the way to the bulb and the
             # cone's axis, and from it how far inside the cone this is:
             # three.js's `getSpotAttenuation`.
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
-            var lambert = normal.dot(toward) / distance
+            var lambert = normal.dot(toward) / direction_length
             if lambert <= 0:
                 continue
             var bare = (
@@ -2045,12 +2100,14 @@ struct Lighting(Movable):
                 1.0,
             )
         for index in range(len(self.positions)):
-            var toward = self.positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             # A surface exactly on the bulb has no direction to be lit from.
             if distance == 0:
                 continue
-            var tone = toon_tone(normal.dot(toward) / distance, ramp)
+            var tone = toon_tone(normal.dot(toward) / direction_length, ramp)
             var bare = tone * falloff(
                 distance, self.decays[index], self.cutoffs[index]
             )
@@ -2079,15 +2136,19 @@ struct Lighting(Movable):
                 total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
             )
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
-            var tone = toon_tone(normal.dot(toward) / distance, ramp)
+            var tone = toon_tone(normal.dot(toward) / direction_length, ramp)
             var bare = (
                 tone
                 * rim
@@ -2179,11 +2240,13 @@ struct Lighting(Movable):
             green += light.g * (lambert * through.y) * sent.y
             blue += light.b * (lambert * through.z) * sent.z
         for index in range(len(self.positions)):
-            var toward = self.positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var lambert = normal.dot(toward) / distance
+            var lambert = normal.dot(toward) / direction_length
             if lambert <= 0:
                 continue
             var bare = lambert * falloff(
@@ -2201,15 +2264,19 @@ struct Lighting(Movable):
             green += bulb.g * (bare * through.y) * sent.y
             blue += bulb.b * (bare * through.z) * sent.z
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
-            var lambert = normal.dot(toward) / distance
+            var lambert = normal.dot(toward) / direction_length
             if lambert <= 0:
                 continue
             var bare = (
@@ -2326,8 +2393,10 @@ struct Lighting(Movable):
             green += light.g * (sent * shadowed.y)
             blue += light.b * (sent * shadowed.z)
         for index in range(len(self.positions)):
-            var toward = self.positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
             var bare = falloff(
@@ -2351,11 +2420,15 @@ struct Lighting(Movable):
             green += bulb.g * (sent * (bare * shadowed.y))
             blue += bulb.b * (sent * (bare * shadowed.z))
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
@@ -2406,7 +2479,7 @@ struct Lighting(Movable):
         for index in range(len(self.positions)):
             # A step on the bulb is lit by `falloff`'s floor, as three.js's
             # `getDistanceAttenuation` lights it: no direction is read.
-            var distance = (self.positions[index] - position).length()
+            var distance = light_vector(self.positions[index], position)[1]
             ref bulb = self.point_radiances[index]
             total = total + shadowed_twice(
                 Vector3(bulb.r, bulb.g, bulb.b),
@@ -2416,11 +2489,15 @@ struct Lighting(Movable):
                 ),
             )
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
@@ -2455,11 +2532,13 @@ struct Lighting(Movable):
         """
         var total = FloatColor(0.0, 0.0, 0.0, 1.0)
         for index in range(len(self.positions)):
-            var toward = self.positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var lambert = normal.dot(toward) / distance
+            var lambert = normal.dot(toward) / direction_length
             if lambert <= 0:
                 continue
             var reach = lambert * falloff(
@@ -2473,13 +2552,17 @@ struct Lighting(Movable):
                 1.0,
             )
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
-            var lambert = normal.dot(toward) / distance
+            var lambert = normal.dot(toward) / direction_length
             if rim <= 0 or lambert <= 0:
                 continue
             var reach = (
@@ -2629,15 +2712,17 @@ struct Lighting(Movable):
                 layers,
             )
         for index in range(len(self.positions)):
-            var toward = self.positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var lambert = max(Float32(0), normal.dot(toward) / distance)
+            var lambert = max(Float32(0), normal.dot(toward) / direction_length)
             var coat_lambert = Float32(0)
             if clearcoat > 0:
                 coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / distance
+                    Float32(0), coat_normal.dot(toward) / direction_length
                 )
             if lambert == 0 and coat_lambert == 0:
                 continue
@@ -2668,19 +2753,23 @@ struct Lighting(Movable):
                 layers,
             )
         for index in range(len(self.spot_positions)):
-            var toward = self.spot_positions[index] - position
-            var distance = toward.length()
+            var ray = light_vector(self.spot_positions[index], position)
+            var toward = ray[0]
+            var distance = ray[1]
+            var direction_length = ray[2]
             if distance == 0:
                 continue
-            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var angle_cos = (
+                toward.dot(self.spot_directions[index]) / direction_length
+            )
             var rim = self.spot_attenuation(index, angle_cos, position)
             if rim <= 0:
                 continue
-            var lambert = max(Float32(0), normal.dot(toward) / distance)
+            var lambert = max(Float32(0), normal.dot(toward) / direction_length)
             var coat_lambert = Float32(0)
             if clearcoat > 0:
                 coat_lambert = max(
-                    Float32(0), coat_normal.dot(toward) / distance
+                    Float32(0), coat_normal.dot(toward) / direction_length
                 )
             if lambert == 0 and coat_lambert == 0:
                 continue

@@ -3,14 +3,25 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A 3D vector, ported from three.js `src/math/Vector3.js`."""
+"""A 3D vector, ported from three.js `src/math/Vector3.js`.
 
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
+"""
+
+from math.matrix_determinant import _sum_products
+
+from std.math import isfinite
 from math.euler import Euler
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.utils import SeededRandom
-from math.norm import length3, normalized3, _ordinary_squared
+from math.norm import _ordinary_product, length3, normalized3, _ordinary_squared
 from std.math import acos, ceil, cos, floor, pi, sin, sqrt, trunc
 from units.si import Angle, RADIAN
 
@@ -362,8 +373,17 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             matrix: The normal matrix, from `Matrix3.normal_matrix`.
         """
-        self.apply_matrix3(matrix)
-        self.normalize()
+        var turned = matrix.transform(self)
+        if _ordinary_transform(self, turned, matrix.elements):
+            turned.normalize()
+            self = turned
+            return
+        var wide = _wide_linear_transform(self, matrix.elements)
+        var x = wide[0]
+        var y = wide[1]
+        var z = wide[2]
+        var unit = normalized3(x, y, z)
+        self = Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
 
     def apply_quaternion(mut self, quaternion: Quaternion):
         """Turn this vector by a rotation, three.js's `applyQuaternion`.
@@ -403,8 +423,17 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         Args:
             matrix: The transform. Its translation is ignored.
         """
-        self = matrix.transform_direction(self)
-        self.normalize()
+        var turned = matrix.transform_direction(self)
+        if _ordinary_transform(self, turned, matrix.elements):
+            turned.normalize()
+            self = turned
+            return
+        var wide = _wide_linear_transform(self, matrix.elements)
+        var x = wide[0]
+        var y = wide[1]
+        var z = wide[2]
+        var unit = normalized3(x, y, z)
+        self = Vector3(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
 
     def project(mut self, view: Matrix4, projection: Matrix4):
         """Carry this world-space point into normalized device space,
@@ -541,11 +570,30 @@ struct Vector3(Equatable, ImplicitlyCopyable):
             other: The vector to project onto. A zero vector gives a zero
                 vector, as in three.js.
         """
-        var denominator = other.length_sq()
-        if denominator == 0:
+        if other.x == 0 and other.y == 0 and other.z == 0:
             self = Vector3(0, 0, 0)
             return
-        self = other * (other.dot(self) / denominator)
+        var denominator = other.length_sq()
+        if (
+            _ordinary_squared(denominator)
+            and _ordinary_squared(self.length_sq())
+            and isfinite(other.dot(self) / denominator)
+        ):
+            self = other * (other.dot(self) / denominator)
+            return
+        var unit = normalized3(
+            Float64(other.x), Float64(other.y), Float64(other.z)
+        )
+        var along = (
+            Float64(self.x) * unit[0]
+            + Float64(self.y) * unit[1]
+            + Float64(self.z) * unit[2]
+        )
+        self = Vector3(
+            Float32(unit[0] * along),
+            Float32(unit[1] * along),
+            Float32(unit[2] * along),
+        )
 
     def project_on_plane(mut self, normal: Self):
         """Remove the part of this vector along `normal`, three.js's
@@ -667,3 +715,56 @@ struct Vector3(Equatable, ImplicitlyCopyable):
         return Vector3(
             Float32(c * cos(theta)), Float32(u), Float32(c * sin(theta))
         )
+
+
+def _ordinary_transform[
+    size: Int
+](source: Vector3, result: Vector3, e: Array[Float32, size]) -> Bool:
+    """Certify that product rounding cannot dominate a normalized direction."""
+    if not _ordinary_squared(result.length_sq()):
+        return False
+    comptime stride = 3 if size == 9 else 4
+    var products = Float32(0)
+    for row in range(3):  # pragma: no branch
+        if not (
+            _ordinary_product(e[row], source.x)
+            and _ordinary_product(e[stride + row], source.y)
+            and _ordinary_product(e[2 * stride + row], source.z)
+        ):
+            return False
+        products = max(
+            products,
+            abs(e[row] * source.x)
+            + abs(e[stride + row] * source.y)
+            + abs(e[2 * stride + row] * source.z),
+        )
+    return products <= 4 * max(abs(result.x), max(abs(result.y), abs(result.z)))
+
+
+def _wide_linear_transform[
+    size: Int
+](source: Vector3, e: Array[Float32, size]) -> SIMD[DType.float64, 4]:
+    """Retain original-coordinate cancellation in finite Float32 products."""
+    comptime stride = 3 if size == 9 else 4
+    var out = SIMD[DType.float64, 4](0)
+    var right = [Float64(source.x), Float64(source.y), Float64(source.z)]
+    for row in range(3):  # pragma: no branch
+        var left = [
+            Float64(e[row]),
+            Float64(e[stride + row]),
+            Float64(e[2 * stride + row]),
+        ]
+        if (
+            isfinite(left[0])
+            and isfinite(left[1])
+            and isfinite(left[2])
+            and isfinite(right[0])
+            and isfinite(right[1])
+            and isfinite(right[2])
+        ):
+            out[row] = _sum_products[3](left, right)
+        else:
+            out[row] = (
+                left[0] * right[0] + left[1] * right[1] + left[2] * right[2]
+            )
+    return out

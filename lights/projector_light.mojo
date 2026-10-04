@@ -30,8 +30,16 @@ arithmetic, and both backends call it.
 **The frame.** The shadow camera is three.js's `SpotLightShadow`: twice
 the cone's angle times `focus` high, `aspect` times as wide. The
 renderer builds it; see `lights.spot_profile`.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from core.object3d import NO_PARENT, NodeId
 from lights.light import (
     ASPECT_FROM_MAP,
@@ -70,7 +78,7 @@ def sd_box(x: Float32, y: Float32, half: Float32) -> Float32:
     var dy = abs(y) - half
     var ox = max(dx, Float32(0))
     var oy = max(dy, Float32(0))
-    return sqrt(ox * ox + oy * oy) + min(max(dx, dy), Float32(0))
+    return length2(ox, oy) + min(max(dx, dy), Float32(0))
 
 
 def projector_attenuation(

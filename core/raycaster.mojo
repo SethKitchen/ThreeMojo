@@ -105,8 +105,20 @@ three.js's `LineSegments2.raycast`: a segment is struck when the ray
 passes within half the line's width of it, measured in the world or on the
 image as the width is. A width on the image needs a camera and an image
 size, which `intersect_scene` does not have, so it leaves wide lines out.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
+
+from math.triangle_normal import normal_or_zero
+
+from math.norm import _ordinary_squared
 from cameras.camera import Camera
 from core.assets import Assets
 from core.deform import (
@@ -1299,9 +1311,9 @@ struct Raycaster(ImplicitlyCopyable, RayQuery):
             # renderer finds a geometric normal; turned back for a mirrored
             # mesh, whose winding the reflection reversed.
             var first = world.transform_point(a)
-            var normal = world.transform_point(b) - first
-            normal.cross(world.transform_point(c) - first)
-            normal.normalize()
+            var normal = normal_or_zero(
+                first, world.transform_point(b), world.transform_point(c)
+            )
             if mirrored:
                 normal = -normal
             var hit = Hit(
@@ -1563,9 +1575,34 @@ def _within_on_image(
     # three.js divides by the length unguarded, and a segment that is a
     # point on the image gives it nothing to divide by. It is measured to
     # as the point it is.
-    var share = (target - from_point).dot(
-        span
-    ) / length_sq if length_sq > 0 else Float32(0)
+    var share: Float32
+    if _ordinary_squared(length_sq):
+        share = (target - from_point).dot(span) / length_sq
+    else:
+        var ax = Float64(near_end.x) * Float64(half_x)
+        var ay = Float64(near_end.y) * Float64(half_y)
+        var bx = Float64(far_end.x) * Float64(half_x)
+        var by = Float64(far_end.y) * Float64(half_y)
+        var sx = bx - ax
+        var sy = by - ay
+        var squared = sx * sx + sy * sy
+        var fraction = Float64(0)
+        if squared > 0:
+            fraction = (
+                (Float64(target.x) - ax) * sx + (Float64(target.y) - ay) * sy
+            ) / squared
+        fraction = min(max(fraction, Float64(0)), Float64(1))
+        var cx = (1 - fraction) * ax + fraction * bx
+        var cy = (1 - fraction) * ay + fraction * by
+        var depth = (1 - fraction) * Float64(near_end.z) + fraction * Float64(
+            far_end.z
+        )
+        return (
+            depth >= -1
+            and depth <= 1
+            and length2(Float64(target.x) - cx, Float64(target.y) - cy)
+            < Float64(reach)
+        )
     share = min(max(share, Float32(0)), Float32(1))
     var closest = from_point + span * share
     var depth = near_end.z + (far_end.z - near_end.z) * share

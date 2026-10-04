@@ -59,6 +59,10 @@ A distance beyond the `Float32` range returns infinity.
 Squared lengths and dot products return their direct arithmetic result. They
 can overflow or underflow even when a length or unit direction is representable.
 
+The completed [consumer audit](Norm-consumers) lists geometry, loader, render,
+control, and postprocessing consumers. It records range corrections and the
+bounded or already-wide arithmetic that remains unchanged.
+
 ## Vector2 and Vector3
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.

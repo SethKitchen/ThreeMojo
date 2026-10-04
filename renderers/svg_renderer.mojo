@@ -42,8 +42,18 @@ to the last. A path is crisp only if it was first made at low quality.
 ported, and `SvgImage` holds what three.js writes into its element. The
 precision is checked when it is set, where three.js throws when it
 writes a number.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized_difference2
+
+from math.norm import length3, normalized2, normalized3, _ordinary_squared
 from cameras.camera import Camera
 from core.assets import Assets
 from core.background import COLOR_BACKGROUND
@@ -249,11 +259,14 @@ def _expand(mut a: Vec, mut b: Vec, pixels: Float64):
     var x = b[0] - a[0]
     var y = b[1] - a[1]
     var det = x * x + y * y
-    if det == 0:
-        return
-    var idet = pixels / sqrt(det)
-    x *= idet
-    y *= idet
+    if _ordinary_squared(det):
+        var idet = pixels / sqrt(det)
+        x *= idet
+        y *= idet
+    else:
+        var unit = normalized_difference2(a[0], a[1], b[0], b[1])
+        x = unit[0] * pixels
+        y = unit[1] * pixels
     b[0] += x
     b[1] += y
     a[0] -= x
@@ -716,8 +729,11 @@ def _dot(a: Vec, b: Vec) -> Float64:
 
 def _unit(v: Vec) -> Vec:
     """Return a direction scaled to length one, three.js's `normalize`."""
-    var length = sqrt(_dot(v, v))
-    return v * (1 / (length if length != 0 and length == length else 1))
+    var squared = _dot(v, v)
+    if _ordinary_squared(squared):
+        return v * (1 / sqrt(squared))
+    var unit = normalized3(v[0], v[1], v[2])
+    return Vec(unit[0], unit[1], unit[2], 0)
 
 
 def _light(scene: Scene, light: Light, center: Vec, normal: Vec) raises -> Vec:
@@ -746,7 +762,7 @@ def _light(scene: Scene, light: Light, center: Vec, normal: Vec) raises -> Vec:
         if light.distance != 0:
             var gap = center - toward
             amount *= 1 - min(
-                sqrt(_dot(gap, gap)) / Float64(light.distance), 1.0
+                length3(gap[0], gap[1], gap[2]) / Float64(light.distance), 1.0
             )
         if amount == 0:
             return Vec(0)

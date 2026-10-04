@@ -31,8 +31,16 @@ distance from the box, so grids can blend. `grid_falloff` is that weight.
 This module lives in `lights/`, beside `light_probe.mojo`. three.js's
 `lighting/` directory has no counterpart here, and a new top-level
 package would change the build for every other package.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length3
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SH_COUNT, SphericalHarmonics3
 from math.vector3 import Vector3
@@ -171,7 +179,7 @@ def grid_falloff(
     var dz = max(low.z - position.z, Float32(0)) + max(
         position.z - high.z, Float32(0)
     )
-    return 1 - smoothstep(0, falloff, sqrt(dx * dx + dy * dy + dz * dz))
+    return 1 - smoothstep(0, falloff, length3(dx, dy, dz))
 
 
 def _default_probes(size: Length) raises -> Int:

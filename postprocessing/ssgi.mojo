@@ -34,8 +34,16 @@ color for it: `frame * ao + frame * gi`. The SSS pass multiplies the
 frame's light by the shadow. The AO is stored in eight bits, as three.js's
 `RedFormat` target stores it. The indirect light is kept as a float, where
 three.js packs it into 11, 11 and 10 bits.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from animation.keyframe_track import LightIndex
 from core.scene import NO_PARENT, Scene
 from math.matrix4 import Matrix4
@@ -707,7 +715,7 @@ def sss_pixel(
     var d1y = (1 - (clip.y * 0.5 + 0.5)) * h
     var x_len = d1x - d0x
     var y_len = d1y - d0y
-    var total = sqrt(x_len * x_len + y_len * y_len)
+    var total = length2(x_len, y_len)
     var steps = Int(
         max(abs(x_len), abs(y_len)) * min(max(settings.quality, 0), 1)
     )
@@ -728,7 +736,7 @@ def sss_pixel(
         var there = _view_z_of(inputs.view, inputs.depth(px / w, py / h))
         var dx = px - d0x
         var dy = py - d0y
-        var s = sqrt(dx * dx + dy * dy) / total
+        var s = length2(dx, dy) / total
         var ray_z = start.z + (end.z - start.z) * s
         var delta = there - ray_z
         if delta > 0 and delta < settings.thickness.value:

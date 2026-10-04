@@ -36,7 +36,20 @@ the scene. `god_rays_light` runs the chain.
 
 Each effect's arithmetic for one pixel is a function the GPU backend's
 kernels call as well; see `render.gpu.GpuComposer`.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from std.math import isfinite
+
+from math.norm import normalized_difference2, _ordinary_product
+
+from math.norm import length2
 
 from math.arc_tangent import atan2_float32
 from math.matrix4 import Matrix4
@@ -694,7 +707,7 @@ def sobel_pixel(source: LightView, u: Float32, v: Float32) -> FloatColor:
     # `Gx` and `Gy`, column-major, with their zero entries left out.
     var gx = -t00 - 2 * t01 - t02 + t20 + 2 * t21 + t22
     var gy = -t00 + t02 - 2 * t10 + 2 * t12 - t20 + t22
-    var g = sqrt(gx * gx + gy * gy)
+    var g = length2(gx, gy)
     return FloatColor(g, g, g, 1)
 
 
@@ -909,7 +922,7 @@ def kaleido_pixel(
     """
     var px = u - 0.5
     var py = v - 0.5
-    var r = sqrt(px * px + py * py)
+    var r = length2(px, py)
     var a = atan2_float32(py, px) + angle.value
     var wedge = KALEIDO_TAU / sides
     a = _glsl_mod(a, wedge)
@@ -1400,6 +1413,30 @@ def god_rays_sun(projection_view: Matrix4, sun: Vector3) -> Vector3:
     return Vector3((x / w + 1) / 2, (y / w + 1) / 2, z)
 
 
+def _god_ray_step(
+    u: Float32, v: Float32, sun: Vector3, step: Float32
+) -> Tuple[Float32, Float32, Float32]:
+    """Separate physical distance from a scale-safe sampling direction."""
+    var dx = sun.x - u
+    var dy = sun.y - v
+    var dist = length2(dx, dy)
+    var sx = Float32(0)
+    var sy = Float32(0)
+    if dist > 0:
+        if (
+            isfinite(dist)
+            and _ordinary_product(step, dx)
+            and _ordinary_product(step, dy)
+        ):
+            sx = step * dx / dist
+            sy = step * dy / dist
+        else:
+            var unit = normalized_difference2(u, v, sun.x, sun.y)
+            sx = step * unit[0]
+            sy = step * unit[1]
+    return dist, sx, sy
+
+
 def god_rays_generate_pixel(
     source: LightView, u: Float32, v: Float32, sun: Vector3, step: Float32
 ) -> FloatColor:
@@ -1422,14 +1459,10 @@ def god_rays_generate_pixel(
         by zero; this walks nowhere, and only the first tap counts, as
         only it is within `iters` of zero.
     """
-    var dx = sun.x - u
-    var dy = sun.y - v
-    var dist = sqrt(dx * dx + dy * dy)
-    var sx = Float32(0)
-    var sy = Float32(0)
-    if dist > 0:
-        sx = step * dx / dist
-        sy = step * dy / dist
+    var walk = _god_ray_step(u, v, sun, step)
+    var dist = walk[0]
+    var sx = walk[1]
+    var sy = walk[2]
     var iters = dist / step
     var f = min(Float32(1), max(sun.z / GOD_RAYS_FADE_DEPTH, Float32(0)))
     var tu = u
@@ -1473,7 +1506,7 @@ def fake_sun_color(
     var dy = v - sun.y
     var prop = min(
         Float32(1),
-        max(Float32(0), sqrt(dx * dx + dy * dy) / GOD_RAYS_SUN_REACH),
+        max(Float32(0), length2(dx, dy) / GOD_RAYS_SUN_REACH),
     )
     var k = 1 - prop
     prop = GOD_RAYS_SUN_PEAK * k * k * k

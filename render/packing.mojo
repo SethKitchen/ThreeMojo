@@ -22,8 +22,16 @@ rounds it.
 Both rasterizers call `packed_depth_fragment` and `normalized_distance`,
 the host from `render.rasterizer.rasterize_shaded` and the device from the
 pixel kernel, so the two agree by construction.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import floor, isfinite, max, min, sqrt
@@ -265,7 +273,7 @@ def normalized_distance(
     var dx = world.x - reference.x
     var dy = world.y - reference.y
     var dz = world.z - reference.z
-    var dist = sqrt(dx * dx + dy * dy + dz * dz)
+    var dist = length3(dx, dy, dz)
     var fraction = (dist - near) / (far - near)
     return min(max(fraction, Float32(0)), Float32(1))
 

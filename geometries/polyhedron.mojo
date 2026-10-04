@@ -25,8 +25,16 @@ the side its face's middle is on, a corner at a pole takes its face's
 longitude, and a face that straddles the seam has its low corners moved a
 turn on. That last repair is why a coordinate can exceed one; the wrap mode
 reads it as the same place.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
@@ -108,7 +116,7 @@ def _azimuth(point: Vector3) -> Float32:
 
 def _inclination(point: Vector3) -> Float32:
     """Return a point's latitude, negative toward +y, as three.js has it."""
-    return atan2(-point.y, sqrt(point.x * point.x + point.z * point.z))
+    return atan2(-point.y, length2(point.x, point.z))
 
 
 def _correct_uv(
