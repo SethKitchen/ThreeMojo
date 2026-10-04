@@ -107,6 +107,10 @@ def test_bellies_keep_their_shape_standing_and_bulge_when_short() raises:
     # Without muscles, nothing changes shape.
     var none = flexed(rat, List[AnimalMuscle](), crouch)
     assert_equal(len(none.prims), len(rat.model.prims))
+    # A sculpt with no solids has nothing to check or shape.
+    var bare = _rat()
+    bare.model = SdfModel()
+    assert_equal(len(flexed(bare, List[AnimalMuscle](), crouch).prims), 0)
     # A lens or a fin keeps its shape even where a belly shows.
     var odd = _rat()
     var lens = -1

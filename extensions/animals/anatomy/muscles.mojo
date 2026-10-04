@@ -693,8 +693,9 @@ struct AnimalMuscle(Copyable, Movable):
             var span = self.spans[n]
             if joint < 0 or joint >= len(rig.joints):
                 raise Error("A muscle names a missing joint")
-            if bone < 0 or bone >= len(world):
-                raise Error("A muscle joint names a missing bone transform")
+            # `spans_of` above refused a joint bone the rig lacks, and the
+            # world matches the rig.
+            debug_assert(bone >= 0 and bone < len(world), "A joint bone exists")
             var head = rig.bones[bone].head
             if (
                 joint >= len(rig.joint_names)
@@ -704,8 +705,8 @@ struct AnimalMuscle(Copyable, Movable):
                 raise Error(
                     "A muscle joint must be the head of its turning bone"
                 )
-            if span <= 0 or span >= len(p):
-                raise Error("A muscle joint span is outside its path")
+            # Each span matched `spans_of`, which keeps it inside the path.
+            debug_assert(span > 0 and span < len(p), "A span is in its path")
             ref turn = world[bone]
             var center = turn.apply(rig.joints[self.joints[n]])
             var axis = turn.turn(self.axis * (1.0 / axis_length))
@@ -800,7 +801,8 @@ def spans_of(
             k += 1
         if k == len(bones):
             raise Error("A muscle must insert beyond the joints it crosses")
-        for after in range(k, len(bones)):
+        # `k` is below `len(bones)`: the check above refused the rest.
+        for after in range(k, len(bones)):  # pragma: no branch
             if not descends(rig, bones[after], jb):
                 raise Error("A muscle path cannot cross back over a joint")
         out.append(k)

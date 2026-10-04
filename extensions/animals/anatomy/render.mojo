@@ -274,7 +274,7 @@ def _skin_layer(
     # Preserve the game's part boundaries. A jaw carver must not cut the
     # body, and surfaces that are separate must not form smooth unions.
     var surface = SurfaceMesh()
-    for part in range(SURFACE_PART_COUNT):
+    for part in range(SURFACE_PART_COUNT):  # pragma: no branch
         var ids = List[Int]()
         for i in posed.part_list(SurfacePart(part)):
             ref p = posed.prims[i]

@@ -111,7 +111,7 @@ from extensions.sdf.vector import (
     length,
     rotation_about,
 )
-from std.math import floor, pi
+from std.math import floor, isfinite, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -552,6 +552,31 @@ def test_two_bone_scales_without_squared_overflow() raises:
         _ = solve_two_bone(
             V3(0, 1e308, 0), V3(0, 9e307, 0), V3(0, 8e307, 0), V3(0, -1e308, 0)
         )
+
+
+def test_two_bone_refuses_unrepresentable_ratios_and_solutions() raises:
+    # The upper link is too small beside the lower for their ratio.
+    with assert_raises(contains="numeric range"):
+        _ = solve_two_bone(
+            V3(0, 0, 0), V3(0, 1e-150, 0), V3(0, 1e200, 0), V3(0, 0, 0)
+        )
+    # The solved middle joint lands past the largest Float64, in y and
+    # then in z alone.
+    for axis in [V3(0, 1, 0), V3(0, 0, 1)]:
+        with assert_raises(contains="finite coordinates"):
+            _ = solve_two_bone(
+                axis * 1.5e308, axis * 6e307, axis * -2e307, axis * 1.79e308
+            )
+
+
+def test_equal_links_walk_without_an_inner_radius() raises:
+    var wolf = create_animal(WOLF, animal_options(3, quality=CROWD))
+    var x = wolf.rig.j("shoulderL").x
+    wolf.rig.set("shoulderL", V3(x, 0.75, 0.5))
+    wolf.rig.set("elbowL", V3(x, 0.5, 0.625))
+    wolf.rig.set("wristL", V3(x, 0.25, 0.5))
+    var stride = Float64(walk_stride(wolf.rig).to(METER))
+    assert_true(stride >= 0.0 and isfinite(stride))
 
 
 def test_walk_stance_feet_hold_height_for_each_quadruped() raises:

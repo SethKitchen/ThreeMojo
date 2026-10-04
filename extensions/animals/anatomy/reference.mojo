@@ -53,7 +53,8 @@ def _extent(
     if p.kind == FIN:
         var low = 1e300
         var high = -1e300
-        for i in range(p.first, p.first + p.count):
+        # The model was checked first: a fin has three points at least.
+        for i in range(p.first, p.first + p.count):  # pragma: no branch
             var u = outline[2 * i]
             var v = outline[2 * i + 1]
             var q = center + dot(p.ax, direction) * u + dot(p.ay, direction) * v

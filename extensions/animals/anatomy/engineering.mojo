@@ -131,12 +131,13 @@ struct Calibration(ImplicitlyCopyable, Writable):
             raise Error(
                 "A calibration density factor must be positive and finite"
             )
-        for value in [
+        var values = [
             self.measured.value,
             self.published.value,
             self.predicted_mass.value,
             self.published_mass.value,
-        ]:
+        ]
+        for value in values:  # pragma: no branch
             if not (isfinite(value) and value > 0.0):
                 raise Error(
                     "Calibration reference quantities must be positive and"

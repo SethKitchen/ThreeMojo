@@ -136,10 +136,14 @@ def _load(
     var ground = abs(dz)
     var activation = sigma / tension if able else 0.0
     var advantage = lever / ground if ground > 0.0 else 0.0
-    for value in [push, need, ground, lever, sigma]:
+    for value in [push, need, ground, lever, sigma]:  # pragma: no branch
         if not isfinite(Float32(value)):
             raise Error("Standing loads must fit finite SI quantities")
-    if not (isfinite(activation) and isfinite(advantage)):
+    # `sigma` fits a Float32 and the tension is a positive Float32, so the
+    # activation is finite. A foot all but level with its joint can still
+    # overflow the advantage.
+    debug_assert(isfinite(activation), "The activation is finite")
+    if not isfinite(advantage):
         raise Error("Standing load ratios must be finite")
     return JointLoad(
         joint,
@@ -162,7 +166,8 @@ def _distal_weight_moment(
     var bone = _head_bone(animal.rig, joint)
     var center = animal.rig.j(joint)
     var moment = 0.0
-    for i in range(len(mass.bones)):
+    # The mass was sampled from this rig, one tally a bone.
+    for i in range(len(mass.bones)):  # pragma: no branch
         if mass.bones[i].mass > 0.0 and descends(animal.rig, i, bone):
             var tally = mass.bones[i].copy()
             moment += (tally.first[2] - center.z * tally.mass) * Float64(

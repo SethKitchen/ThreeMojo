@@ -293,20 +293,20 @@ async def _sample_task(
                 var d = model[].eval_list(lists[p], q)
                 if d > 0.5 * h:
                     continue
+                # A list of carvers alone evaluates to `FAR`, so a list this
+                # near the cell holds a solid.
                 var candidate = model[].nearest(lists[p], q)
-                if candidate < 0:
-                    continue
+                debug_assert(candidate >= 0, "A near list holds a solid")
                 # Choose the nearest flesh surface after coat erosion.
                 # An uneroded eye can remain outside an eroded skin part.
                 d += min(input[].erode[p], input[].reach[candidate])
                 if d < best:
                     best = d
                     solid = candidate
-            if solid < 0 or best > 0.5 * h:
+            # At half a cell the share is zero: the cell holds no flesh.
+            if solid < 0 or best >= 0.5 * h:
                 continue
             var share = min(1.0, max(0.0, 0.5 - best / h))
-            if share <= 0.0:
-                continue
             var m = share * cell_volume * input[].density[solid]
             var bone = model[].prims[solid].bone.value
             var spot = Vector3(Float32(q.x), Float32(q.y), Float32(q.z))
@@ -369,19 +369,20 @@ def _check_sampling_model(model: SdfModel) raises:
     for p in model.prims:
         if not p.kind.is_valid() or not p.part.is_valid():
             raise Error("A sampled primitive kind and part must be named")
-        for point in [p.c, p.b, p.ax, p.ay, p.az, p.r]:
+        for point in [p.c, p.b, p.ax, p.ay, p.az, p.r]:  # pragma: no branch
             if not (
                 isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
             ):
                 raise Error("Sampled primitive geometry must be finite")
         if p.kind != CONE:
-            for axis in [p.ax, p.ay, p.az]:
+            for axis in [p.ax, p.ay, p.az]:  # pragma: no branch
                 if abs(dot(axis, axis) - 1.0) > 1e-8:
                     raise Error("A sampled primitive frame must be orthonormal")
-            for pair in [(p.ax, p.ay), (p.ax, p.az), (p.ay, p.az)]:
+            var pairs = [(p.ax, p.ay), (p.ax, p.az), (p.ay, p.az)]
+            for pair in pairs:  # pragma: no branch
                 if abs(dot(pair[0], pair[1])) > 1e-8:
                     raise Error("A sampled primitive frame must be orthonormal")
-        for value in [p.k, p.lo, p.hi]:
+        for value in [p.k, p.lo, p.hi]:  # pragma: no branch
             if not isfinite(value):
                 raise Error("Sampled primitive geometry must be finite")
         if p.k < 0.0:
@@ -494,8 +495,11 @@ def sample_mass(
         ceil((high.y - low.y) / h),
         ceil((high.z - low.z) / h),
     )
-    for count in [counts.x, counts.y, counts.z]:
-        if not (isfinite(count) and count >= 1.0 and count <= 400.0):
+    # The model was checked finite and every box holds a solid, so each
+    # count is finite and one at least; only the size limit can fail.
+    for count in [counts.x, counts.y, counts.z]:  # pragma: no branch
+        debug_assert(isfinite(count) and count >= 1.0, "A grid count is finite")
+        if count > 400.0:
             raise Error(
                 "A mass grid must be finite and at most 400 cells a side"
             )

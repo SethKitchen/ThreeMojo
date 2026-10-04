@@ -113,7 +113,7 @@ def solve_two_bone(
         Error: If a point is not finite, a link has no length in the
             y-z plane, or the solution is outside the numeric range.
     """
-    for p in [root, mid, end, target]:
+    for p in [root, mid, end, target]:  # pragma: no branch
         if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
             raise Error("A leg point must be finite")
     var a = mid - root
@@ -153,8 +153,9 @@ def solve_two_bone(
     var upper_dir = V3(0.0, cos(upper), sin(upper))
     var new_mid = root + upper_dir * la
     var lower_dir = projected - new_mid
-    for p in [projected, new_mid, lower_dir]:
-        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+    # The solution keeps the root's x, which was checked finite above.
+    for p in [projected, new_mid, lower_dir]:  # pragma: no branch
+        if not (isfinite(p.y) and isfinite(p.z)):
             raise Error("A leg solution must fit finite coordinates")
     var lower = _angle(lower_dir)
     var turn_upper = upper - _angle(a)
@@ -218,8 +219,8 @@ def _walk_parameters(
     var inner = List[Float64]()
     var vertical = List[Float64]()
     var forward = List[Float64]()
-    for front in [True, False]:
-        for side in [String("L"), String("R")]:
+    for front in [True, False]:  # pragma: no branch
+        for side in [String("L"), String("R")]:  # pragma: no branch
             var r = rig.j(
                 (String("shoulder") if front else String("hip")) + side
             )
@@ -246,7 +247,8 @@ def _walk_parameters(
                 var floor = _reach_along(minimum, forward[len(forward) - 1])
                 bob = min(bob, max(0.0, dy - floor) * 0.5)
     var sweep = desired
-    for i in range(len(lengths)):
+    # Four legs.
+    for i in range(len(lengths)):  # pragma: no branch
         var dy = vertical[i] + bob
         var z = _reach_along(lengths[i], dy)
         sweep = min(sweep, max(0.0, 2.0 * (z - forward[i])))

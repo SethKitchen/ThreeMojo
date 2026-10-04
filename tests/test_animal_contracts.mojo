@@ -24,11 +24,16 @@ from extensions.animals.anatomy.muscles import (
     AnimalMuscle,
     animal_muscles,
     descends,
+    plan_muscles,
     spans_of,
 )
 from extensions.animals.anatomy.physics import segment_bodies
 from extensions.animals.anatomy.reference import reference_length
-from extensions.animals.anatomy.stance import _load, _distal_weight_moment
+from extensions.animals.anatomy.stance import (
+    _load,
+    _distal_weight_moment,
+    standing_loads,
+)
 from extensions.animals.anatomy.tissue import tissue_of
 from extensions.animals.build import Animal, create_animal
 from extensions.animals.options import (
@@ -42,7 +47,7 @@ from extensions.animals.registry import DOG, RAT, SPIDER, HORSE
 from extensions.sdf.field import SdfModel
 from extensions.animals.parts import BODY, EYEBALL
 from extensions.sdf.ids import BoneId, TagId, SurfacePart, PrimitiveKind
-from extensions.sdf.vector import V3
+from extensions.sdf.vector import V3, Rigid, identity
 from std.math import inf, nan, pi
 from std.testing import (
     TestSuite,
@@ -234,6 +239,125 @@ def test_paths_refuse_malformed_arrays_indexes_and_degenerate_segments() raises:
     a.rig.bones[leg].parent = BoneId(leg)
     with assert_raises(contains="earlier"):
         _ = descends(a.rig, leg, 0)
+
+
+def _still(count: Int) -> List[Rigid]:
+    var out = List[Rigid](capacity=count)
+    for _ in range(count):
+        out.append(identity())
+    return out^
+
+
+def test_paths_refuse_each_coordinate_and_unrepresentable_lengths() raises:
+    var a = _rat()
+    var muscles = animal_muscles(a.rig, MAMMAL, Mass(0.3))
+    assert_equal(plan_muscles(MAMMAL)[0].model_evidence(), DESIGN)
+    var still = _still(len(a.rig.bones))
+    var m = muscles[0].copy()
+    m.points = [m.points[0]]
+    m.bones = [m.bones[0]]
+    with assert_raises(contains="paired"):
+        _ = m.path(still)
+    # One coordinate alone overflows: a pure translation keeps the others.
+    for axis in [V3(0, 1, 0), V3(0, 0, 1)]:
+        m = muscles[0].copy()
+        var moved = still.copy()
+        moved[m.bones[0]].t = axis * 1e308
+        m.points[0] = axis * 1e308
+        with assert_raises(contains="finite points"):
+            _ = m.path(moved)
+    # Finite points can still be an unrepresentable distance apart.
+    m = muscles[0].copy()
+    m.points[0] = V3(0, 1e308, 0)
+    m.points[1] = V3(0, -1e308, 0)
+    with assert_raises(contains="positive length"):
+        _ = m.path(still)
+    # A path too long or too short for a Float32 SI length.
+    for scale in [Float64(1e45), Float64(1e-50)]:
+        m = muscles[0].copy()
+        for k in range(len(m.points)):
+            m.points[k] = m.points[k] * scale
+        with assert_raises(contains="positive finite SI length"):
+            _ = m.unit_length(still)
+    m = muscles[0].copy()
+    for k in range(len(m.points)):
+        m.points[k] = m.points[k] * 1e45
+    with assert_raises(contains="moment arm"):
+        _ = m.moment_arms(a.rig, still)
+
+
+def test_moment_arms_refuse_each_mismatched_mapping() raises:
+    var a = _rat()
+    var muscles = animal_muscles(a.rig, MAMMAL, Mass(0.3))
+    var world = a.bind_pose().world(a.rig)
+    var m = muscles[0].copy()
+    var short = world.copy()
+    _ = short.pop()
+    with assert_raises(contains="transforms must match"):
+        _ = m.moment_arms(a.rig, short)
+    m.joint_bones.append(0)
+    with assert_raises(contains="paired"):
+        _ = m.moment_arms(a.rig, world)
+    m = muscles[0].copy()
+    m.axis = V3(nan[DType.float64](), 0, 0)
+    with assert_raises(contains="axis"):
+        _ = m.moment_arms(a.rig, world)
+    # A muscle that crosses no joint has no moment arms.
+    m = muscles[0].copy()
+    m.joints.clear()
+    m.joint_bones.clear()
+    m.spans.clear()
+    assert_equal(len(m.moment_arms(a.rig, world)), 0)
+    # The joint table is shorter than the joint list.
+    m = muscles[0].copy()
+    var joint = m.joints[0]
+    var rig = a.rig.copy()
+    while len(rig.joint_names) > joint:
+        _ = rig.joint_names.pop()
+    with assert_raises(contains="head"):
+        _ = m.moment_arms(rig, world)
+    # The name lookup points at another joint.
+    rig = a.rig.copy()
+    rig.joint_at[rig.joint_names[joint]] = joint + 1
+    with assert_raises(contains="head"):
+        _ = m.moment_arms(rig, world)
+    var leg = a.rig.bone("tibiaL").value
+    with assert_raises(contains="cross back"):
+        _ = spans_of(a.rig, [0, leg, 0], [leg])
+    rig = a.rig.copy()
+    rig.bones[leg].parent = BoneId(-2)
+    with assert_raises(contains="earlier"):
+        _ = descends(rig, leg, 0)
+
+
+def test_standing_support_needs_ordered_finite_feet() raises:
+    var a = _rat()
+    var mass = sample_mass(a, a.bind_pose(), Length(0.01))
+    var muscles = animal_muscles(a.rig, MAMMAL, Mass(0.3))
+    for joint in [String("mcpL"), String("mtpL")]:
+        var b = _rat()
+        var p = b.rig.j(joint)
+        b.rig.set(joint, V3(p.x, p.y, nan[DType.float64]()))
+        with assert_raises(contains="ordered finite feet"):
+            _ = standing_loads(b, mass, muscles)
+    # The fore feet behind the hind feet.
+    var b = _rat()
+    for joint in [String("mcpL"), String("ftoeL")]:
+        var p = b.rig.j(joint)
+        b.rig.set(joint, V3(p.x, p.y, -10))
+    with assert_raises(contains="ordered finite feet"):
+        _ = standing_loads(b, mass, muscles)
+
+
+def test_standing_advantage_refuses_a_foot_level_with_its_joint() raises:
+    # A joint at z = 0 lets the foot sit a subnormal distance from it.
+    var a = _rat()
+    var knee = a.rig.j("kneeL")
+    a.rig.set("kneeL", V3(knee.x, knee.y, 0))
+    var muscles = animal_muscles(a.rig, MAMMAL, Mass(0.3))
+    var foot = V3(knee.x, knee.y - 0.1, 1e-320)
+    with assert_raises(contains="ratios must be finite"):
+        _ = _load(a, muscles, "kneeL", foot, 10, -10)
 
 
 def test_stance_capacity_is_independent_of_muscle_order() raises:
