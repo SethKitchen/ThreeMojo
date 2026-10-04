@@ -2,6 +2,8 @@
 
 `extensions/topology/` builds a cell complex from storey plans. Each room is a cell. Two rooms that share a wall share one face, and a floor is one face with a room above and a room below. The building model, the structural view and the thermal view read adjacency from this complex.
 
+![The rooms of a three-storey cell complex, pulled apart, turn in the dark](out/building-topology.png)
+
 ## Modules
 
 | Module | What it gives |

@@ -66,10 +66,13 @@ from extensions.building.views.render import (
     RenderOptions,
     add_building,
 )
+from extensions.building.generate.plan import RESIDENTIAL_FLOOR
+from extensions.building.generate.tower import TowerOptions, generate_tower
+from generators.skyscraper import SkyscraperParameters
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
 from extensions.topology.ids import CellId
-from units.si import Angle64, DEGREE, Length64, METER
+from units.si import Angle64, DEGREE, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:
@@ -265,6 +268,26 @@ def test_empty_and_setback_buildings() raises:
     )
     var out = add_building(scene, assets, b, RenderOptions.default())
     assert_true(out.triangles > 0)
+    # A cutaway at the shaft drops the crown and the shaft's roof.
+    var cut = add_building(scene, assets, b, RenderOptions(FULL, 0))
+    assert_true(cut.triangles < out.triangles)
+
+
+def test_furniture_draws_in_full_detail() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var params = SkyscraperParameters()
+    params.total_height = Length(12, METER)
+    var options = TowerOptions(params^)
+    options.shaft = RESIDENTIAL_FLOOR
+    var homes = generate_tower(options)
+    var full = add_building(scene, assets, homes, RenderOptions.default())
+    homes.furnishings.clear()
+    var empty = add_building(scene, assets, homes, RenderOptions.default())
+    assert_true(full.triangles > empty.triangles)
+    var offices = generate_tower(TowerOptions(SkyscraperParameters()))
+    var cut = add_building(scene, assets, offices, RenderOptions(FULL, 1))
+    assert_true(cut.triangles > 0)
 
 
 def main() raises:

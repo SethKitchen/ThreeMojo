@@ -752,6 +752,15 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/vxgi.png $(OUT_DIR)/lighting.png \
            $(OUT_DIR)/lofts.png $(OUT_DIR)/generators.png \
            $(OUT_DIR)/computenodes.png \
+           $(OUT_DIR)/building-model.png \
+           $(OUT_DIR)/building-topology.png \
+           $(OUT_DIR)/ifc-exchange.png \
+           $(OUT_DIR)/procedural-towers.png \
+           $(OUT_DIR)/floor-plans-and-interiors.png \
+           $(OUT_DIR)/frame-analysis.png \
+           $(OUT_DIR)/shell-analysis.png \
+           $(OUT_DIR)/building-energy.png \
+           $(OUT_DIR)/numerics.png \
            $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
            $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
            $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
@@ -1257,6 +1266,69 @@ $(OUT_DIR)/lighting.png: $(EXAMPLE_INPUTS_sunlight)
 $(OUT_DIR)/lofts.png: $(EXAMPLE_INPUTS_vase)
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vase.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A small building model, cut away above its ground floor.
+$(OUT_DIR)/building-model.png: $(EXAMPLE_INPUTS_building_model)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/building_model.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# The cells of a cell complex, pulled apart.
+$(OUT_DIR)/building-topology.png: $(EXAMPLE_INPUTS_room_cells)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/room_cells.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A tower read back from its IFC file.
+$(OUT_DIR)/ifc-exchange.png: $(EXAMPLE_INPUTS_exchange)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/exchange.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A seeded tower as a building model.
+$(OUT_DIR)/procedural-towers.png: $(EXAMPLE_INPUTS_towers)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/towers.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A furnished floor of homes, cut away.
+$(OUT_DIR)/floor-plans-and-interiors.png: $(EXAMPLE_INPUTS_interiors)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/interiors.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A tower frame swaying in its first mode.
+$(OUT_DIR)/frame-analysis.png: $(EXAMPLE_INPUTS_frame_modes)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/frame_modes.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A plate bending under a pressure.
+$(OUT_DIR)/shell-analysis.png: $(EXAMPLE_INPUTS_plate)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/plate.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Rooms through a summer day, by temperature.
+$(OUT_DIR)/building-energy.png: $(EXAMPLE_INPUTS_heat)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/heat.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# The lowest modes of a chain of springs.
+$(OUT_DIR)/numerics.png: $(EXAMPLE_INPUTS_spring_modes)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/spring_modes.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 

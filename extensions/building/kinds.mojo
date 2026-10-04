@@ -3,8 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The kinds of a building model: elements, openings, space uses and
-section shapes."""
+"""The kinds of a building model: elements, openings, space uses, section
+shapes and furniture."""
 
 
 @fieldwise_init
@@ -161,3 +161,59 @@ comptime RECTANGLE = SectionShape(0)
 comptime I_SHAPE = SectionShape(1)
 # A solid circle: the width is the diameter.
 comptime CIRCLE = SectionShape(2)
+
+
+@fieldwise_init
+struct FurnitureKind(Equatable, ImplicitlyCopyable, Writable):
+    """What a piece of furniture is."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the 13 kinds.
+
+        Returns:
+            Whether the value is 0 to 12.
+        """
+        return self.value >= 0 and self.value < 13
+
+    def name(self) -> String:
+        """Return the kind's name, in lowercase.
+
+        Returns:
+            The name, or "unknown" for a value that is not valid.
+        """
+        if not self.is_valid():
+            return "unknown"
+        var names: List[String] = [
+            "desk",
+            "chair",
+            "table",
+            "bed",
+            "nightstand",
+            "wardrobe",
+            "sofa",
+            "coffee_table",
+            "shelf",
+            "counter",
+            "toilet",
+            "sink",
+            "cabinet",
+        ]
+        return names[self.value]
+
+
+comptime DESK = FurnitureKind(0)
+comptime CHAIR = FurnitureKind(1)
+comptime TABLE = FurnitureKind(2)
+comptime BED = FurnitureKind(3)
+comptime NIGHTSTAND = FurnitureKind(4)
+comptime WARDROBE = FurnitureKind(5)
+comptime SOFA = FurnitureKind(6)
+comptime COFFEE_TABLE = FurnitureKind(7)
+comptime SHELF = FurnitureKind(8)
+# A kitchen counter with its cabinets.
+comptime COUNTER = FurnitureKind(9)
+comptime TOILET = FurnitureKind(10)
+comptime SINK = FurnitureKind(11)
+comptime CABINET = FurnitureKind(12)

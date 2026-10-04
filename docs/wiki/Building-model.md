@@ -10,14 +10,15 @@ Coordinates are meters, z up. The x axis points east and the y axis points north
 
 | Module | What it gives |
 |---|---|
-| `ids` | `StoreyId`, `SpaceId`, `ElementId`, `OpeningId`, `MaterialId` and `ConstructionId` |
-| `kinds` | `ElementKind`, `OpeningKind`, `SpaceUse` and `SectionShape` |
+| `ids` | `StoreyId`, `SpaceId`, `ElementId`, `OpeningId`, `FurnishingId`, `MaterialId` and `ConstructionId` |
+| `kinds` | `ElementKind`, `OpeningKind`, `SpaceUse`, `SectionShape` and `FurnitureKind` |
 | `material` | `BuildingMaterial`, `Look` and the library: `concrete`, `steel`, `timber`, `brick`, `gypsum_board`, `mineral_wool`, `glass` and `aluminum` |
 | `construction` | `Construction`, `Layer`, `Glazing`, `FlowDirection` and the ISO 6946 film resistances |
-| `model` | `Building`, `assemble`, `Site`, `Storey`, `Space`, `Element`, `Opening`, `Section`, `WallFrame`, `SpacePlan`, `StoreyPlan` and `ConstructionSet` |
+| `model` | `Building`, `assemble`, `Site`, `Storey`, `Space`, `Element`, `Opening`, `Furnishing`, `Section`, `WallFrame`, `SpacePlan`, `StoreyPlan`, `ConstructionSet` and `quads_apart` |
 | `fingerprint` | `fingerprint`, a 64-bit hash of the model's content |
 | `views/render` | `add_building`, which adds meshes to a scene |
 | `ifc` | [IFC exchange](IFC-exchange) |
+| `generate` | [Floor plans and interiors](Floor-plans-and-interiors) and [procedural towers](Procedural-towers) |
 
 ## Assemble a model
 
@@ -50,8 +51,9 @@ Then add frame members and openings:
 | `add_column(storey, at, section, material)` | A column from the storey's floor to the floor above. Its depth runs along x. |
 | `add_beam(storey, start, end, section, material)` | A beam whose axis lies at the top of the storey |
 | `add_opening(kind, wall, offset, sill, width, height, glazing)` | A door or a window in a wall, placed in the wall's frame |
+| `add_furnishing(kind, space, center, rotation, width, depth, height)` | A piece of furniture: a box on the space's floor |
 
-`add_opening` refuses an opening that does not fit its wall, overlaps another opening, or is a door that does not start at the floor. A window needs a `Glazing`.
+`add_opening` refuses an opening that does not fit its wall, overlaps another opening, or is a door that does not start at the floor. A window needs a `Glazing`. `add_furnishing` refuses a piece that leaves its space or overlaps another piece in it.
 
 ## Read the model
 
@@ -95,9 +97,11 @@ A `Section` is a rectangle, a doubly symmetric I or a circle. It gives the area,
 |---|---|
 | `RenderOptions(FULL, -1)` | Every element, with doors and windows cut through their walls |
 | `RenderOptions(MASSING, -1)` | Exterior walls, roofs and exposed slabs only, with flush window panes |
-| `RenderOptions(FULL, k)` | Storeys up to `k` only, for a cutaway |
+| `RenderOptions(FULL, k)` | Storeys up to `k` only, without the roof of storey `k`, for a cutaway |
 
-Each vertex carries an `elementId` attribute: the element index, or the opening index plus the element count. The building node's user data records `model`, `fingerprint`, `detail`, `topStorey` and `dropped`. A game can compare the fingerprint with the model's fingerprint to tell whether a baked mesh is current.
+Each vertex carries an `elementId` attribute. It is the element index for an element. It is the opening index plus the element count for a door or window. It is the furnishing index plus the element and opening counts for furniture. Full detail draws each piece of furniture as a few boxes in wood, fabric, ceramic or metal.
+
+The building node's user data records `model`, `fingerprint`, `detail`, `topStorey` and `dropped`. A game can compare the fingerprint with the model's fingerprint to tell whether a baked mesh is current.
 
 The model is z up and the scene is y up. A model point (x, y, z) is the scene point (x, z, -y).
 

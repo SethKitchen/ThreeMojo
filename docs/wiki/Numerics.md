@@ -2,6 +2,8 @@
 
 `extensions/numerics/` solves the linear algebra of engineering analysis in `Float64`. It gives dense and sparse matrices, a conjugate-gradient solver, a skyline direct solver and a generalized eigensolver. The structural and thermal solvers of the building extension share it.
 
+![Three rows of masses on springs move in the three lowest modes](out/numerics.png)
+
 ## Modules
 
 | Module | What it gives |

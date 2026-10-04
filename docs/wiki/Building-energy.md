@@ -2,6 +2,8 @@
 
 `extensions/energy/` simulates the heat balance of the thermal zones of a building, step by step. It gives the air temperature of each zone and the ideal heating and cooling power that holds its setpoints. `extensions/building/views/thermal.mojo` makes the zone model from a `Building`.
 
+![The rooms of an office floor warm and cool through a summer day](out/building-energy.png)
+
 ## Modules
 
 | Module | What it gives |

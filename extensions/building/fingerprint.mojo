@@ -11,7 +11,7 @@ fingerprint of the model it has, to tell whether the view is current.
 
 The fingerprint is the 64-bit FNV-1a hash of the model's content: storey
 levels, space outlines and uses, element kinds, faces, constructions,
-sections and axes, openings, materials and constructions. Two models with
+sections and axes, openings, furnishings, materials and constructions. Two models with
 the same content have the same fingerprint. A change to any of those
 values changes it, except with the small chance of a hash collision. It
 is not a cryptographic hash.
@@ -131,6 +131,17 @@ def fingerprint(building: Building) -> UInt64:
         h.add_float(opening.sill.value)
         h.add_float(opening.width.value)
         h.add_float(opening.height.value)
+    h.add_int(len(building.furnishings))
+    for i in range(len(building.furnishings)):
+        ref item = building.furnishings[i]
+        h.add_int(item.kind.value)
+        h.add_int(item.space.value)
+        h.add_float(item.center.x)
+        h.add_float(item.center.y)
+        h.add_float(item.rotation.value)
+        h.add_float(item.width.value)
+        h.add_float(item.depth.value)
+        h.add_float(item.height.value)
     h.add_int(len(building.materials))
     for i in range(len(building.materials)):
         ref m = building.materials[i]

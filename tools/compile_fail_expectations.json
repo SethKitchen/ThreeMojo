@@ -1046,6 +1046,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_floor_program_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FloorProgram'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_flow_direction_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -1189,6 +1199,26 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_furnishing_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FurnishingId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_furniture_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FurnitureKind'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_gear_is_not_a_bare_int.mojo": {
     "errors": [

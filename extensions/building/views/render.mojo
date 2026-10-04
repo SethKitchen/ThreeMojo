@@ -15,7 +15,8 @@ pane in an aluminum frame, and a door is a timber leaf.
 
 Every vertex carries an `elementId` attribute: the index of the element it
 came from in the model, or of the opening plus the element count for a door
-or window. A picking ray can read it back. The building node's user data
+or window, or of the furnishing plus the element and opening counts for a
+piece of furniture. Furniture is a few boxes per piece, in full detail. A picking ray can read it back. The building node's user data
 records the model's name and fingerprint, the detail and what the view
 drops, so a baked copy can be checked against its model.
 
@@ -33,11 +34,20 @@ from extensions.building.fingerprint import fingerprint
 from extensions.building.ids import ElementId, StoreyId
 from extensions.building.kinds import (
     BEAM,
+    BED,
+    CHAIR,
     CIRCLE,
+    COFFEE_TABLE,
     COLUMN,
+    COUNTER,
+    DESK,
     DOOR,
     ROOF,
+    SINK,
     SLAB,
+    SOFA,
+    TABLE,
+    TOILET,
     WALL,
 )
 from extensions.building.material import Look, aluminum, glass, timber
@@ -81,7 +91,7 @@ struct RenderOptions(ImplicitlyCopyable):
 
     var detail: RenderDetail
     # Draw storeys up to this one and nothing above it, for a cutaway; or
-    # -1 for every storey.
+    # -1 for every storey. A cutaway leaves out the top storey's roof.
     var top_storey: Int
 
     @staticmethod
@@ -118,6 +128,10 @@ struct RenderedBuilding(Movable):
 comptime _GLASS = -1
 comptime _FRAME = -2
 comptime _DOOR = -3
+comptime _WOOD = -4
+comptime _FABRIC = -5
+comptime _CERAMIC = -6
+comptime _METAL = -7
 
 
 struct _Bucket(Movable):
@@ -252,8 +266,14 @@ def _look(building: Building, look: Int) -> Look:
         return glass().look
     if look == _FRAME:
         return aluminum().look
-    if look == _DOOR:
+    if look == _DOOR or look == _WOOD:
         return timber().look
+    if look == _FABRIC:
+        return Look(0.24, 0.3, 0.38, 0.95, 0, 0)
+    if look == _CERAMIC:
+        return Look(0.93, 0.93, 0.92, 0.2, 0, 0)
+    if look == _METAL:
+        return aluminum().look
     return building.materials[look].look
 
 
@@ -606,6 +626,273 @@ def _member(
     _box(mesher, b, o, depth_dir * d, width_dir * w, axis, id)
 
 
+def _part(
+    mut mesher: _Mesher,
+    b: Int,
+    origin: Vec3d,
+    right: Vec3d,
+    front: Vec3d,
+    x0: Float64,
+    x1: Float64,
+    y0: Float64,
+    y1: Float64,
+    z0: Float64,
+    z1: Float64,
+    id: Int,
+):
+    """Add one box of a piece of furniture, given in the piece's frame."""
+    var corner = origin + right * x0 + front * y0 + Vec3d(0, 0, z0)
+    _box(
+        mesher,
+        b,
+        corner,
+        right * (x1 - x0),
+        front * (y1 - y0),
+        Vec3d(0, 0, z1 - z0),
+        id,
+    )
+
+
+def _legs(
+    mut mesher: _Mesher,
+    b: Int,
+    origin: Vec3d,
+    right: Vec3d,
+    front: Vec3d,
+    hw: Float64,
+    hd: Float64,
+    top: Float64,
+    id: Int,
+):
+    """Add four legs under a top."""
+    var t = 0.05
+    var xs = [-hw + 0.03, hw - 0.03 - t]
+    var ys = [-hd + 0.03, hd - 0.03 - t]
+    for i in range(2):  # pragma: no branch
+        for k in range(2):  # pragma: no branch
+            _part(
+                mesher,
+                b,
+                origin,
+                right,
+                front,
+                xs[i],
+                xs[i] + t,
+                ys[k],
+                ys[k] + t,
+                0,
+                top,
+                id,
+            )
+
+
+def _furniture(
+    mut mesher: _Mesher, building: Building, index: Int, storey: Int
+) raises:
+    """Add one piece of furniture as a few boxes."""
+    ref item = building.furnishings[index]
+    var id = len(building.elements) + len(building.openings) + index
+    var angle = item.rotation.value
+    var right = Vec3d(cos(angle), sin(angle), 0)
+    var front = Vec3d(-sin(angle), cos(angle), 0)
+    var z = building.storeys[storey].elevation.value
+    var origin = Vec3d(item.center.x, item.center.y, z)
+    var hw = item.width.value / 2
+    var hd = item.depth.value / 2
+    var h = item.height.value
+    var wood = mesher.bucket(storey, _WOOD)
+    var kind = item.kind
+    if kind == DESK or kind == TABLE or kind == COFFEE_TABLE:
+        _part(
+            mesher,
+            wood,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            hd,
+            h - 0.04,
+            h,
+            id,
+        )
+        var metal = mesher.bucket(storey, _METAL)
+        _legs(mesher, metal, origin, right, front, hw, hd, h - 0.04, id)
+    elif kind == CHAIR:
+        var fabric = mesher.bucket(storey, _FABRIC)
+        _part(
+            mesher,
+            fabric,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            hd,
+            0.42,
+            0.47,
+            id,
+        )
+        _part(
+            mesher,
+            fabric,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            -hd + 0.06,
+            0.47,
+            h,
+            id,
+        )
+        var metal = mesher.bucket(storey, _METAL)
+        _legs(mesher, metal, origin, right, front, hw, hd, 0.42, id)
+    elif kind == BED:
+        _part(mesher, wood, origin, right, front, -hw, hw, -hd, hd, 0, 0.3, id)
+        _part(
+            mesher,
+            wood,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            -hd + 0.06,
+            0.3,
+            1.0,
+            id,
+        )
+        var fabric = mesher.bucket(storey, _FABRIC)
+        _part(
+            mesher,
+            fabric,
+            origin,
+            right,
+            front,
+            -hw + 0.03,
+            hw - 0.03,
+            -hd + 0.06,
+            hd - 0.03,
+            0.3,
+            h,
+            id,
+        )
+    elif kind == SOFA:
+        var fabric = mesher.bucket(storey, _FABRIC)
+        _part(
+            mesher, fabric, origin, right, front, -hw, hw, -hd, hd, 0, 0.42, id
+        )
+        _part(
+            mesher,
+            fabric,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            -hd + 0.2,
+            0.42,
+            h,
+            id,
+        )
+        _part(
+            mesher,
+            fabric,
+            origin,
+            right,
+            front,
+            -hw,
+            -hw + 0.15,
+            -hd + 0.2,
+            hd,
+            0.42,
+            0.6,
+            id,
+        )
+        _part(
+            mesher,
+            fabric,
+            origin,
+            right,
+            front,
+            hw - 0.15,
+            hw,
+            -hd + 0.2,
+            hd,
+            0.42,
+            0.6,
+            id,
+        )
+    elif kind == TOILET:
+        var ceramic = mesher.bucket(storey, _CERAMIC)
+        _part(
+            mesher,
+            ceramic,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd + 0.2,
+            hd,
+            0,
+            0.4,
+            id,
+        )
+        _part(
+            mesher,
+            ceramic,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            -hd + 0.2,
+            0,
+            h,
+            id,
+        )
+    elif kind == SINK or kind == COUNTER:
+        _part(
+            mesher,
+            wood,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            hd,
+            0,
+            h - 0.05,
+            id,
+        )
+        var ceramic = mesher.bucket(storey, _CERAMIC)
+        _part(
+            mesher,
+            ceramic,
+            origin,
+            right,
+            front,
+            -hw,
+            hw,
+            -hd,
+            hd,
+            h - 0.05,
+            h,
+            id,
+        )
+    else:
+        _part(mesher, wood, origin, right, front, -hw, hw, -hd, hd, 0, h, id)
+
+
 def add_building(
     mut scene: Scene,
     mut assets: Assets,
@@ -636,7 +923,11 @@ def add_building(
     for i in range(len(building.elements)):
         ref element = building.elements[i]
         var storey = element.storey.value
-        if top >= 0 and storey > top:
+        # A cutaway leaves out what is above its top storey, and the top
+        # storey's roof, which would hide its rooms.
+        if top >= 0 and (
+            storey > top or (storey == top and element.kind == ROOF)
+        ):
             continue
         var id = ElementId(i)
         if options.detail == MASSING:
@@ -653,6 +944,14 @@ def add_building(
             _slab(mesher, building, id, storey)
         else:
             _member(mesher, building, id, storey)
+    if options.detail == FULL:
+        for i in range(len(building.furnishings)):
+            var storey = building.spaces[
+                building.furnishings[i].space.value
+            ].storey.value
+            if top >= 0 and storey > top:
+                continue
+            _furniture(mesher, building, i, storey)
     var root_node = Object3D()
     root_node.name = building.name
     root_node.user_data.set_string("model", building.name)
@@ -666,7 +965,7 @@ def add_building(
     root_node.user_data.set_string(
         "dropped",
         (
-            "furniture, layers inside constructions, physical properties,"
+            "layers inside constructions, physical properties,"
             " structural and thermal data; walls are centered on faces"
         ),
     )

@@ -525,4 +525,13 @@ struct CellComplex(Movable):
                 var u = entry.key // 4294967296
                 var v = entry.key % 4294967296
                 if (v * 4294967296 + u) not in directed:
-                    raise Error("A cell is not closed")
+                    raise Error(
+                        String(
+                            "A cell is not closed: cell ",
+                            c,
+                            " edge ",
+                            u,
+                            " ",
+                            v,
+                        )
+                    )

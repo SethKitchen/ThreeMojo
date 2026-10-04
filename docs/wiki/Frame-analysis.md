@@ -2,6 +2,8 @@
 
 `extensions/structure/` analyzes linear-elastic frames and flat shells in three dimensions. It gives static displacements, support reactions, member end forces and natural modes. `extensions/building/views/structural.mojo` turns a building model into a frame with gravity loads. This page covers frames and the building view. [Shell analysis](Shell-analysis) covers the shell element.
 
+![A generated tower frame sways in its first natural mode](out/frame-analysis.png)
+
 ## Modules
 
 | Module | What it gives |

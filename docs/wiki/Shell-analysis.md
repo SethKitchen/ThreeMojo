@@ -2,6 +2,8 @@
 
 `extensions/structure/shell.mojo` gives a three-node flat shell for linear-elastic analysis. It adds a constant-strain membrane, the discrete Kirchhoff plate triangle of Batoz, Bathe and Ho, and a small drilling stiffness. Shells and frame members share nodes in one `StructuralModel`. [Frame analysis](Frame-analysis) covers the model, the solvers and the units.
 
+![A simply supported square plate bends under a growing pressure](out/shell-analysis.png)
+
 ## Add shells
 
 Add three nodes, then a shell over them. The normal follows the right hand rule over the three corners.

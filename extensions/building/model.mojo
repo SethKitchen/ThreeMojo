@@ -24,6 +24,7 @@ from extensions.building.construction import Construction, Glazing
 from extensions.building.ids import (
     ConstructionId,
     ElementId,
+    FurnishingId,
     MaterialId,
     OpeningId,
     SpaceId,
@@ -31,6 +32,7 @@ from extensions.building.ids import (
 )
 from extensions.building.kinds import (
     BEAM,
+    FurnitureKind,
     CIRCLE,
     COLUMN,
     DOOR,
@@ -46,12 +48,12 @@ from extensions.building.kinds import (
     WINDOW,
 )
 from extensions.building.material import BuildingMaterial
-from extensions.topology.arrangement import Point2, Region
+from extensions.topology.arrangement import Point2, Region, contains
 from extensions.topology.complex import HORIZONTAL, VERTICAL
 from extensions.topology.ids import CellId, FaceId, RegionId
 from extensions.topology.storeys import StoreyComplex, build_storeys
 from generators.utils import Vec3d
-from std.math import pi
+from std.math import cos, pi, sin
 from units.si import (
     Angle64,
     Area64,
@@ -415,6 +417,138 @@ struct Opening(Copyable, Movable):
         self.glazing = glazing
 
 
+struct Furnishing(Copyable, Movable):
+    """A piece of furniture: a box standing on its space's floor.
+
+    The box is `width` along its own x axis, `depth` along its own y axis
+    and `height` up. Its front faces its own +y axis. `rotation` turns it
+    counterclockwise about its center, seen from above.
+    """
+
+    var name: String
+    var kind: FurnitureKind
+    var space: SpaceId
+    var center: Point2
+    var rotation: Angle64
+    var width: Length64
+    var depth: Length64
+    var height: Length64
+
+    def __init__(
+        out self,
+        var name: String,
+        kind: FurnitureKind,
+        space: SpaceId,
+        center: Point2,
+        rotation: Angle64,
+        width: Length64,
+        depth: Length64,
+        height: Length64,
+    ):
+        """Create a furnishing. `Building.add_furnishing` makes these.
+
+        Args:
+            name: A name for people and for exchange files.
+            kind: What it is.
+            space: The space it stands in.
+            center: Its center in plan, in meters.
+            rotation: Its turn about its center, counterclockwise.
+            width: Its size along its own x axis.
+            depth: Its size along its own y axis, front to back.
+            height: Its height.
+        """
+        self.name = name^
+        self.kind = kind
+        self.space = space
+        self.center = center
+        self.rotation = rotation
+        self.width = width
+        self.depth = depth
+        self.height = height
+
+    def corners(self) -> List[Point2]:
+        """Return the corners of its footprint, counterclockwise.
+
+        Returns:
+            Four plan points, in meters.
+        """
+        var c = cos(self.rotation.to(RADIAN))
+        var s = sin(self.rotation.to(RADIAN))
+        var hw = self.width.to(METER) / 2
+        var hd = self.depth.to(METER) / 2
+        var local: List[Point2] = [
+            Point2(-hw, -hd),
+            Point2(hw, -hd),
+            Point2(hw, hd),
+            Point2(-hw, hd),
+        ]
+        var out = List[Point2](capacity=4)
+        for i in range(4):  # pragma: no branch
+            var p = local[i]
+            out.append(
+                Point2(
+                    self.center.x + c * p.x - s * p.y,
+                    self.center.y + s * p.x + c * p.y,
+                )
+            )
+        return out^
+
+
+def quads_apart(a: List[Point2], b: List[Point2]) -> Bool:
+    """Return True if two convex quadrilaterals do not overlap.
+
+    By the separating axis theorem, they are apart when the projections on
+    the normal of some edge do not overlap. Touching is not overlap.
+
+    Args:
+        a: The first quadrilateral's four corners, in order.
+        b: The second quadrilateral's four corners, in order.
+
+    Returns:
+        Whether they share no interior point.
+    """
+    for pass_index in range(2):  # pragma: no branch
+        ref shape = a if pass_index == 0 else b
+        for i in range(4):  # pragma: no branch
+            var p = shape[i]
+            var q = shape[(i + 1) % 4]
+            var nx = q.y - p.y
+            var ny = p.x - q.x
+            var a_low = Float64.MAX
+            var a_high = -Float64.MAX
+            var b_low = Float64.MAX
+            var b_high = -Float64.MAX
+            for k in range(4):  # pragma: no branch
+                var pa = a[k].x * nx + a[k].y * ny
+                var pb = b[k].x * nx + b[k].y * ny
+                a_low = min(a_low, pa)
+                a_high = max(a_high, pa)
+                b_low = min(b_low, pb)
+                b_high = max(b_high, pb)
+            var scale = abs(nx) + abs(ny)
+            if a_high <= b_low + 1e-9 * scale or b_high <= a_low + 1e-9 * scale:
+                return True
+    return False
+
+
+def _inside(outline: List[Point2], p: Point2, tolerance: Float64) -> Bool:
+    """Return True if a point is inside a polygon or within a tolerance of
+    its boundary."""
+    if contains(outline, p):
+        return True
+    var n = len(outline)
+    for i in range(n):  # pragma: no branch
+        var a = outline[i]
+        var b = outline[(i + 1) % n]
+        var d = b - a
+        var t = max(0.0, min(1.0, (p - a).dot(d) / d.dot(d)))
+        var foot = Point2(a.x + t * d.x, a.y + t * d.y)
+        var offset = p - foot
+        if offset.dot(offset) <= tolerance * tolerance:
+            return True
+    return False
+
+
 @fieldwise_init
 struct WallFrame(ImplicitlyCopyable):
     """A wall face's own frame.
@@ -511,6 +645,7 @@ struct Building(Movable):
     var spaces: List[Space]
     var elements: List[Element]
     var openings: List[Opening]
+    var furnishings: List[Furnishing]
     var materials: List[BuildingMaterial]
     var constructions: List[Construction]
     var topology: StoreyComplex
@@ -540,6 +675,7 @@ struct Building(Movable):
         self.spaces = List[Space]()
         self.elements = List[Element]()
         self.openings = List[Opening]()
+        self.furnishings = List[Furnishing]()
         self.materials = materials^
         self.constructions = constructions^
         self.topology = topology^
@@ -594,6 +730,18 @@ struct Building(Movable):
         """
         if not id.is_valid() or id.value >= len(self.openings):
             raise Error("An opening id is out of range")
+
+    def check_furnishing(self, id: FurnishingId) raises:
+        """Refuse a furnishing id that is not in range.
+
+        Args:
+            id: The id.
+
+        Raises:
+            Error: If it is negative or past the last furnishing.
+        """
+        if not id.is_valid() or id.value >= len(self.furnishings):
+            raise Error("A furnishing id is out of range")
 
     def check_material(self, id: MaterialId) raises:
         """Refuse a material id that is not in range.
@@ -832,6 +980,72 @@ struct Building(Movable):
         )
         return OpeningId(len(self.openings) - 1)
 
+    def add_furnishing(
+        mut self,
+        kind: FurnitureKind,
+        space: SpaceId,
+        center: Point2,
+        rotation: Angle64,
+        width: Length64,
+        depth: Length64,
+        height: Length64,
+    ) raises -> FurnishingId:
+        """Add a piece of furniture to a space.
+
+        Args:
+            kind: What it is.
+            space: The space it stands in.
+            center: Its center in plan, in meters.
+            rotation: Its turn about its center, counterclockwise.
+            width: Its size along its own x axis.
+            depth: Its size along its own y axis, front to back.
+            height: Its height.
+
+        Returns:
+            The new furnishing.
+
+        Raises:
+            Error: If the kind is not valid, the space id is out of range, a
+                size is not positive and finite, the position or rotation is
+                not finite, the footprint leaves the space, or it overlaps
+                another furnishing.
+        """
+        if not kind.is_valid():
+            raise Error("A furniture kind is not valid")
+        self.check_space(space)
+        var sizes = [width.to(METER), depth.to(METER), height.to(METER)]
+        for i in range(3):  # pragma: no branch
+            if not (sizes[i] > 0 and isfinite(sizes[i])):
+                raise Error("A furnishing's size must be positive and finite")
+        if not (
+            isfinite(center.x)
+            and isfinite(center.y)
+            and isfinite(rotation.to(RADIAN))
+        ):
+            raise Error("A furnishing's place must be finite")
+        var item = Furnishing(
+            String(kind.name(), " ", len(self.furnishings)),
+            kind,
+            space,
+            center,
+            rotation,
+            width,
+            depth,
+            height,
+        )
+        var corners = item.corners()
+        ref outline = self.spaces[space.value].outline
+        for i in range(4):  # pragma: no branch
+            if not _inside(outline, corners[i], 1e-9):
+                raise Error("A furnishing must stand inside its space")
+        for i in range(len(self.furnishings)):
+            if self.furnishings[i].space != space:
+                continue
+            if not quads_apart(corners, self.furnishings[i].corners()):
+                raise Error("Two furnishings must not overlap")
+        self.furnishings.append(item^)
+        return FurnishingId(len(self.furnishings) - 1)
+
     # --- queries ----------------------------------------------------------
 
     def element_of_face(self, face: FaceId) raises -> Optional[ElementId]:
@@ -1024,6 +1238,10 @@ struct Building(Movable):
                 self.check_material(element.material.value())
         for i in range(len(self.openings)):
             self.check_element(self.openings[i].host)
+        for i in range(len(self.furnishings)):
+            self.check_space(self.furnishings[i].space)
+            if not self.furnishings[i].kind.is_valid():
+                raise Error("A furniture kind is not valid")
 
 
 def assemble(

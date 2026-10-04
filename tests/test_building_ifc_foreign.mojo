@@ -200,6 +200,18 @@ DATA;
 #156=IFCWINDOW('000000000000000000001G',$,'w5',$,$,#154,$,$,0.5,0.5,.WINDOW.,.SINGLE_PANEL.,$);
 #157=IFCRELVOIDSELEMENT('000000000000000000001H',$,$,$,#72,#155);
 #158=IFCRELFILLSELEMENT('000000000000000000001I',$,$,$,#155,#156);
+#170=IFCCARTESIANPOINT((1.,1.5,0.));
+#171=IFCAXIS2PLACEMENT3D(#170,$,#96);
+#172=IFCLOCALPLACEMENT(#15,#171);
+#173=IFCRECTANGLEPROFILEDEF(.AREA.,$,#62,1.,0.6);
+#174=IFCEXTRUDEDAREASOLID(#173,#5,#31,0.75);
+#175=IFCSHAPEREPRESENTATION(#6,'Body','SweptSolid',(#174));
+#176=IFCPRODUCTDEFINITIONSHAPE($,$,(#175));
+#177=IFCFURNITURE('000000000000000000001J',$,'desk',$,'Desk',#172,#176,$,$);
+#178=IFCFURNITURE('000000000000000000001K',$,'lamp',$,'Lamp',#172,#176,$,$);
+#179=IFCFURNITURE('000000000000000000001L',$,'stool',$,'Chair',#172,#81,$,$);
+#180=IFCFURNITURE('000000000000000000001M',$,'stray',$,'Table',#172,#176,$,$);
+#181=IFCRELCONTAINEDINSPATIALSTRUCTURE('000000000000000000001N',$,$,$,(#177,#178,#179),#35);
 #144=IFCRELAGGREGATES('0000000000000000000019',$,$,$,#10,());
 #145=IFCRELCONTAINEDINSPATIALSTRUCTURE('000000000000000000001A',$,$,$,(),#16);
 #146=IFCRELASSOCIATESMATERIAL('000000000000000000001B',$,$,$,(),#52);
@@ -263,6 +275,10 @@ def test_a_foreign_file_reads() raises:
             members += 1
     assert_equal(members, 2)
     assert_equal(len(b.openings), 3)
+    # Only the desk is read: the lamp has no kind, the stool's profile is a
+    # circle and the table is in no space.
+    assert_equal(len(b.furnishings), 1)
+    assert_almost_equal(b.furnishings[0].center.y, 1.5, atol=1e-12)
     assert_true(b.openings[0].kind == WINDOW)
     assert_equal(b.openings[0].glazing.value().solar_heat_gain, 0.4)
     assert_true(b.openings[1].kind == DOOR)

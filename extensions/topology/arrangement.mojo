@@ -30,7 +30,7 @@ See de Berg, Cheong, van Kreveld and Overmars, "Computational Geometry:
 Algorithms and Applications" (3rd edition, 2008), chapter 2.
 """
 
-from std.math import atan2, isfinite
+from std.math import atan2, isfinite, sqrt
 from extensions.topology.ids import NO_REGION, RegionId
 from extensions.topology.weld import Welder
 from generators.utils import Vec3d
@@ -267,6 +267,18 @@ def _segments_cross(a: Point2, b: Point2, c: Point2, d: Point2) -> Bool:
     return t > 0 and t < 1 and u > 0 and u < 1
 
 
+def _collinear(
+    a: Point2, b: Point2, c: Point2, d: Point2, tolerance: Float64
+) -> Bool:
+    """Return True if both ends of c to d lie within a tolerance of the
+    line through a and b."""
+    var r = b - a
+    var length = sqrt(r.dot(r))
+    var near_c = abs(r.cross(c - a)) <= tolerance * length
+    var near_d = abs(r.cross(d - a)) <= tolerance * length
+    return near_c and near_d
+
+
 def _check_region(region: Region, layers: Int, tolerance: Float64) raises:
     """Refuse a region that is not a simple polygon on a known layer."""
     if region.layer < 0 or region.layer >= layers:
@@ -404,13 +416,17 @@ def arrange(
                 if t >= 0:
                     split_t[j].append(t)
                     split_p[j].append(others[e])
-            # A proper crossing.
-            if _segments_cross(a, b, c, d):
+            # A proper crossing. Segments on one line within the tolerance
+            # meet only at their ends, which the checks above found;
+            # crossing them would put a vertex anywhere along the line.
+            if _segments_cross(a, b, c, d) and not _collinear(a, b, c, d, tol):
                 var r = b - a
                 var s = d - c
                 var t = (c - a).cross(s) / r.cross(s)
                 var p = Point2(a.x + t * r.x, a.y + t * r.y)
-                var u = (p - c).dot(s) / s.dot(s)
+                # Rounding can put the projection a hair outside the
+                # segment; the crossing is inside it.
+                var u = min(1.0, max(0.0, (p - c).dot(s) / s.dot(s)))
                 split_t[i].append(t)
                 split_p[i].append(p)
                 split_t[j].append(u)

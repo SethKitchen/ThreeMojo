@@ -2,7 +2,7 @@
 
 `extensions/building/ifc/` writes the [building model](Building-model) as an IFC4 STEP file and reads one back. A model written and read back has the same fingerprint: every storey, space, element, opening, material and construction returns exactly.
 
-![A two-storey building, cut away above its ground floor, turns under a lamp](out/building-model.png)
+![A small tower read back from its IFC file, cut away above its first storey, turns under a lamp](out/ifc-exchange.png)
 
 ## Modules
 
@@ -37,11 +37,12 @@ var back = read_ifc(text, Length64(1e-6, METER))
 | Opening | `IfcOpeningElement`, `IfcRelVoidsElement` and `IfcRelFillsElement` |
 | Door and window | `IfcDoor` and `IfcWindow` with their overall sizes |
 | Glazing | `Pset_WindowCommon` and `Pset_DoorWindowGlazingType` |
+| Furniture | `IfcFurniture` in its space: an extruded rectangle, with its kind as the object type |
 | Material | `IfcMaterial` with `Pset_MaterialCommon`, `Pset_MaterialMechanical` and `Pset_MaterialThermal` |
 | Construction | `IfcMaterialLayerSet`, associated with each wall and slab |
 | Containment | `IfcRelAggregates` and `IfcRelContainedInSpatialStructure` |
 
-Three property sets keep values that IFC4 has no exact place for. `ThreeMojo_Material` keeps the strength and the look. `ThreeMojo_Member` keeps the exact plan points of a column or beam axis. `ThreeMojo_Site` keeps the exact latitude, longitude and north angle. A reader that does not know them ignores them.
+Four property sets keep values that IFC4 has no exact place for. `ThreeMojo_Material` keeps the strength and the look. `ThreeMojo_Member` keeps the exact plan points of a column or beam axis. `ThreeMojo_Furnishing` keeps the exact center and rotation of a piece of furniture. `ThreeMojo_Site` keeps the exact latitude, longitude and north angle. A reader that does not know them ignores them.
 
 ## Read a file from another program
 
@@ -56,7 +57,7 @@ Three property sets keep values that IFC4 has no exact place for. `ThreeMojo_Mat
 | A material layer set | It makes one concrete construction, 0.2 m thick. |
 | A window's glazing | It uses 1.6 W/(m² K), a solar heat gain coefficient of 0.4 and a visible transmittance of 0.7. |
 
-A wall or slab that matches no face of the rebuilt complex keeps the first construction. An opening in such a wall is skipped.
+A wall or slab that matches no face of the rebuilt complex keeps the first construction. An opening in such a wall is skipped. The reader skips a piece of furniture that is not in a space or has no rectangle profile. It also skips one whose object type is not a furniture kind.
 
 ## STEP files
 

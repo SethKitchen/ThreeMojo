@@ -76,9 +76,11 @@ from extensions.building.model import (
     i_shape,
     rectangle,
 )
+from extensions.building.generate.tower import TowerOptions, generate_tower
+from generators.skyscraper import SkyscraperParameters
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
-from units.si import Angle64, DEGREE, Length64, METER
+from units.si import Angle64, DEGREE, Length, Length64, METER
 
 
 def _m(v: Float64) -> Length64:
@@ -490,6 +492,15 @@ def test_step_end_of_file_cases() raises:
     assert_equal(f.as_real(f.argument(1, 1)), 1000)
     _ = f.add("Z", List[Int]())
     assert_true(f.write().find("=Z();") >= 0)
+
+
+def test_a_furnished_tower_round_trips() raises:
+    var params = SkyscraperParameters()
+    params.total_height = Length(8, METER)
+    var tower = generate_tower(TowerOptions(params^))
+    var back = read_ifc(write_ifc(tower, "t"), Length64(1e-6, METER))
+    assert_equal(len(back.furnishings), len(tower.furnishings))
+    assert_equal(fingerprint(back), fingerprint(tower))
 
 
 def main() raises:

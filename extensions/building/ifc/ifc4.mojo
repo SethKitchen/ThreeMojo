@@ -40,6 +40,7 @@ from extensions.building.ids import (
     ConstructionId,
     ElementId,
     MaterialId,
+    SpaceId,
     StoreyId,
 )
 from extensions.building.ifc.step import (
@@ -54,6 +55,7 @@ from extensions.building.ifc.step import (
 )
 from extensions.building.kinds import (
     BEAM,
+    FurnitureKind,
     CIRCLE,
     COLUMN,
     DOOR,
@@ -741,6 +743,8 @@ def write_ifc(building: Building, timestamp: String) raises -> String:
     for _ in range(len(building.storeys)):
         storey_spaces.append(List[Int]())
         storey_elements.append(List[Int]())
+    var space_ids = List[Int]()
+    var space_places = List[Int]()
     for sp in range(len(building.spaces)):
         ref space = building.spaces[sp]
         var s = space.storey.value
@@ -769,6 +773,8 @@ def write_ifc(building: Building, timestamp: String) raises -> String:
             ],
         )
         storey_spaces[s].append(id)
+        space_ids.append(id)
+        space_places.append(place)
     for s in range(len(building.storeys)):
         if len(storey_spaces[s]) > 0:
             _ = w.relation(
@@ -1031,6 +1037,63 @@ def write_ifc(building: Building, timestamp: String) raises -> String:
             [w.f.reference(void_id), w.f.reference(filler)],
         )
         storey_elements[building.elements[host].storey.value].append(filler)
+    # Furniture, contained in its space.
+    var space_furniture = List[List[Int]]()
+    for _ in range(len(building.spaces)):
+        space_furniture.append(List[Int]())
+    for f in range(len(building.furnishings)):
+        ref item = building.furnishings[f]
+        var sp = item.space.value
+        var angle = item.rotation.value
+        var axes = w.placement3(
+            Vec3d(item.center.x, item.center.y, 0),
+            Vec3d(0, 0, 1),
+            Vec3d(cos(angle), sin(angle), 0),
+        )
+        var place = w.local(space_places[sp], axes)
+        var profile = w.rectangle(0, 0, item.width.value, item.depth.value)
+        var position = w.placement3(
+            Vec3d(0, 0, 0), Vec3d(0, 0, 1), Vec3d(1, 0, 0)
+        )
+        var solid = w.extrusion(profile, position, item.height.value)
+        var id = w.product(
+            "IFCFURNITURE",
+            item.name,
+            item.kind.name(),
+            place,
+            w.body(solid),
+            [w.f.unset(), w.f.unset()],
+        )
+        var exact = w.f.add(
+            "IFCPROPERTYSET",
+            [
+                w.guid(),
+                w.f.unset(),
+                w.f.string("ThreeMojo_Furnishing"),
+                w.f.unset(),
+                w.f.references(
+                    [
+                        w.single("CenterX", "IFCLENGTHMEASURE", item.center.x),
+                        w.single("CenterY", "IFCLENGTHMEASURE", item.center.y),
+                        w.single("Rotation", "IFCPLANEANGLEMEASURE", angle),
+                    ]
+                ),
+            ],
+        )
+        _ = w.relation(
+            "IFCRELDEFINESBYPROPERTIES",
+            [w.f.references([id]), w.f.reference(exact)],
+        )
+        space_furniture[sp].append(id)
+    for sp in range(len(building.spaces)):
+        if len(space_furniture[sp]) > 0:
+            _ = w.relation(
+                "IFCRELCONTAINEDINSPATIALSTRUCTURE",
+                [
+                    w.f.references(space_furniture[sp]),
+                    w.f.reference(space_ids[sp]),
+                ],
+            )
     for s in range(len(building.storeys)):
         if len(storey_elements[s]) > 0:
             _ = w.relation(
@@ -1461,6 +1524,7 @@ def read_ifc(text: String, tolerance: Length64) raises -> Building:
     for _ in range(len(order)):
         space_plans.append(List[SpacePlan]())
         space_depth.append(0)
+    var file_spaces = List[Int]()
     for id in r.f.all_of("IFCSPACE"):
         var parent = r.parent_of.get(id, -1)
         if parent not in storey_of:
@@ -1478,6 +1542,7 @@ def read_ifc(text: String, tolerance: Length64) raises -> Building:
         space_depth[s] = max(space_depth[s], r.real_arg(solid, 3))
         var use = _use_by_name(r.name_arg(id, 4))
         space_plans[s].append(SpacePlan(r.name_arg(id, 2), use, outline^))
+        file_spaces.append(id)
     # Storey heights: the gross height, or the gap to the next storey, or
     # the depth of its spaces.
     var plans = List[StoreyPlan]()
@@ -1521,6 +1586,7 @@ def read_ifc(text: String, tolerance: Length64) raises -> Building:
     )
     _read_members(r, building, storey_of, material_index)
     _read_openings(r, building, file_wall)
+    _read_furniture(r, building, file_spaces, storey_of)
     building.validate()
     return building^
 
@@ -1720,3 +1786,59 @@ def _section(r: _Reader, profile: Int) raises -> Section:
             zero,
         )
     raise Error(String("Unsupported member profile ", kind))
+
+
+def _read_furniture(
+    r: _Reader,
+    mut building: Building,
+    file_spaces: List[Int],
+    storey_of: Dict[Int, Int],
+) raises:
+    """Add the file's furniture to the spaces that contain it."""
+    # Model spaces are in cell order: by storey, then in file order.
+    var model_space = Dict[Int, Int]()
+    var counts = List[Int]()
+    for _ in range(len(storey_of)):
+        counts.append(0)
+    var firsts = List[Int]()
+    var running = 0
+    for s in range(len(building.storeys)):
+        firsts.append(running)
+        for sp in range(len(building.spaces)):
+            if building.spaces[sp].storey.value == s:
+                running += 1
+    for i in range(len(file_spaces)):
+        var s = storey_of[r.parent_of[file_spaces[i]]]
+        model_space[file_spaces[i]] = firsts[s] + counts[s]
+        counts[s] += 1
+    for id in r.f.all_of("IFCFURNITURE"):
+        var space = model_space.get(r.container.get(id, -1), -1)
+        if space < 0:
+            continue
+        var solid = r.solid(id)
+        var at = r.solid_frame(id, solid)
+        var profile = r.ref_arg(solid, 0)
+        if r.name(profile) != "IFCRECTANGLEPROFILEDEF":
+            continue
+        var kind = FurnitureKind(-1)
+        var type_name = r.name_arg(id, 4).lower()
+        for k in range(13):  # pragma: no branch
+            if FurnitureKind(k).name() == type_name:
+                kind = FurnitureKind(k)
+        if not kind.is_valid():
+            continue
+        var exact = r.values(id, "ThreeMojo_Furnishing")
+        var center = Point2(
+            _get(exact, "CenterX", at.origin.x),
+            _get(exact, "CenterY", at.origin.y),
+        )
+        var rotation = _get(exact, "Rotation", atan2(at.x.y, at.x.x))
+        _ = building.add_furnishing(
+            kind,
+            SpaceId(space),
+            center,
+            Angle64(rotation, RADIAN),
+            Length64(r.real_arg(profile, 3), METER),
+            Length64(r.real_arg(profile, 4), METER),
+            Length64(r.real_arg(solid, 3), METER),
+        )

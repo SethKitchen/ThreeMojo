@@ -99,3 +99,18 @@ struct ConstructionId(Equatable, ImplicitlyCopyable, Writable):
             Whether the value is zero or more.
         """
         return self.value >= 0
+
+
+@fieldwise_init
+struct FurnishingId(Equatable, ImplicitlyCopyable, Writable):
+    """The index of a furnishing in a `Building`."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if the index can name a furnishing.
+
+        Returns:
+            Whether the value is zero or more.
+        """
+        return self.value >= 0
