@@ -33,6 +33,7 @@ The results live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 """
 
+from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import mix_point
@@ -138,40 +139,6 @@ comptime THIGH = LimbSegment(0)
 comptime SHANK = LimbSegment(1)
 # Below the lateral malleolus.
 comptime FOOT_SEGMENT = LimbSegment(2)
-
-
-@fieldwise_init
-struct SegmentInertia(ImplicitlyCopyable):
-    """The inertial properties of one segment.
-
-    The inertia tensor is about the center of mass, along the leg
-    frame's axes: `xx`, `yy` and `zz` on the diagonal and the products
-    `xy`, `xz` and `yz` off it, with the sign convention of a tensor,
-    so an off-diagonal entry is minus the product of inertia.
-    """
-
-    var mass: Mass
-    # The center of mass in the leg frame, in meters.
-    var center: Vector3
-    var xx: MomentOfInertia
-    var yy: MomentOfInertia
-    var zz: MomentOfInertia
-    var xy: MomentOfInertia
-    var xz: MomentOfInertia
-    var yz: MomentOfInertia
-    # The segment's length, joint center to joint center, or heel to toe.
-    var length: Length
-
-    def gyration(self, moment: MomentOfInertia) -> Length:
-        """Return the radius of gyration of one principal moment.
-
-        Args:
-            moment: `xx`, `yy` or `zz`.
-
-        Returns:
-            The square root of the moment over the mass.
-        """
-        return Length(sqrt(moment.value / self.mass.value), METER)
 
 
 @fieldwise_init
@@ -334,9 +301,7 @@ def segment_estimate(
     var flesh = muscle_tissue().wet_density.value
     var cord = tendon_tissue().wet_density.value
     var grid = SampleGrid(box.low, box.high, step)
-    var mass = Float64(0)
-    var first = SIMD[DType.float64, 4](0)
-    var second = SIMD[DType.float64, 8](0)
+    var tally = InertiaTally()
     var volumes = SIMD[DType.float64, 8](0)
     var masses = SIMD[DType.float64, 8](0)
     var densities = SIMD[DType.float32, 8](
@@ -380,9 +345,9 @@ def segment_estimate(
                 var m = Float64(densities[region.value]) * cell
                 volumes[region.value] += cell
                 masses[region.value] += m
-                _add_cell(mass, first, second, m, p, widths)
+                tally.add_cell(m, p, widths)
     return SegmentEstimate(
-        _inertia(mass, first, second, length),
+        tally.result(length),
         volumes,
         masses,
         box.low,
@@ -404,66 +369,6 @@ def _occupied_region(
     if fill == EMPTY:
         return soft
     return TRABECULAR_REGION
-
-
-def _add_cell(
-    mut mass: Float64,
-    mut first: SIMD[DType.float64, 4],
-    mut second: SIMD[DType.float64, 8],
-    m: Float64,
-    p: Vector3,
-    widths: Vector3,
-):
-    """Accumulate a constant-density cuboid, including its own inertia."""
-    var r = SIMD[DType.float64, 4](Float64(p.x), Float64(p.y), Float64(p.z), 0)
-    var w = SIMD[DType.float64, 4](
-        Float64(widths.x), Float64(widths.y), Float64(widths.z), 0
-    )
-    mass += m
-    first += r * m
-    second += (
-        SIMD[DType.float64, 8](
-            r[0] * r[0] + w[0] * w[0] / 12,
-            r[1] * r[1] + w[1] * w[1] / 12,
-            r[2] * r[2] + w[2] * w[2] / 12,
-            r[0] * r[1],
-            r[0] * r[2],
-            r[1] * r[2],
-            0,
-            0,
-        )
-        * m
-    )
-
-
-def _inertia(
-    mass: Float64,
-    first: SIMD[DType.float64, 4],
-    second: SIMD[DType.float64, 8],
-    length: Float32,
-) raises -> SegmentInertia:
-    """Return the tensor about the center of mass from raw moments."""
-    if not isfinite(mass) or mass <= 0:
-        raise Error("A sampled segment must have finite positive mass")
-    var c = first / mass
-    # Second moments about the center, by the parallel-axis theorem.
-    var sxx = second[0] - mass * c[0] * c[0]
-    var syy = second[1] - mass * c[1] * c[1]
-    var szz = second[2] - mass * c[2] * c[2]
-    var sxy = second[3] - mass * c[0] * c[1]
-    var sxz = second[4] - mass * c[0] * c[2]
-    var syz = second[5] - mass * c[1] * c[2]
-    return SegmentInertia(
-        Mass(Float32(mass), KILOGRAM),
-        Vector3(Float32(c[0]), Float32(c[1]), Float32(c[2])),
-        MomentOfInertia(Float32(syy + szz), KILOGRAM_SQUARE_METER),
-        MomentOfInertia(Float32(sxx + szz), KILOGRAM_SQUARE_METER),
-        MomentOfInertia(Float32(sxx + syy), KILOGRAM_SQUARE_METER),
-        MomentOfInertia(Float32(-sxy), KILOGRAM_SQUARE_METER),
-        MomentOfInertia(Float32(-sxz), KILOGRAM_SQUARE_METER),
-        MomentOfInertia(Float32(-syz), KILOGRAM_SQUARE_METER),
-        Length(length, METER),
-    )
 
 
 def _bone_fill(

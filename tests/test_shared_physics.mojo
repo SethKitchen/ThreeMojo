@@ -10,7 +10,7 @@ from extensions.carla.physics.body import RigidBody as CarlaRigidBody
 from extensions.carla.physics.quantities import Torque as CarlaTorque
 from extensions.carla.physics.shape import Shape as CarlaShape
 from extensions.carla.physics.world import PhysicsWorld as CarlaPhysicsWorld
-from extensions.humanoid.skeleton.limb.inertia import SegmentInertia
+from extensions.anatomy.inertia import SegmentInertia
 from extensions.physics.body import BodyId, DYNAMIC, RigidBody
 from extensions.physics.quantities import NEWTON_METER, Torque
 from extensions.physics.shape import Shape
