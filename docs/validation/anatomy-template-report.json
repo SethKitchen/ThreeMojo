@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "ac4298223e5cc0c6ac3e6e7e5ac1b4809c10357d99b05eb84a678adfe3b964a4",
+    "source_sha256": "9fa070843122bc9a6c84153f9dc3498b36b22d7982931f4c525bf6426accc215",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "a198e643306b304354fac24f758511d3748a837699c657244272e2a8f7addc20"
+    "binary_sha256": "670f529f6224cb62d8d81f5d701737158aaeefb5e5310ee193f8d620ab1b9e94"
   },
   "source_file_sha256": {
     "extensions/humanoid/athleticism.mojo": "e9452e65b527c6f0ccd9c30663f1d0466dbd506753fb8346d8f663bd805a3735",
