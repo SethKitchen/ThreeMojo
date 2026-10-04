@@ -17,7 +17,7 @@ The held implementation in [PR #594](https://github.com/SethKitchen/ThreeMojo/pu
 
 - [#302](https://github.com/SethKitchen/ThreeMojo/issues/302): index curved lane offsets correctly
 - [#485](https://github.com/SethKitchen/ThreeMojo/issues/485): derive heading from the lane centerline tangent
-- [#487](https://github.com/SethKitchen/ThreeMojo/issues/487): include reverse-running curves in junction bounds
+- [#487](https://github.com/SethKitchen/ThreeMojo/issues/487): direction-independent complete-section junction bounds implemented; 147 focused tests pass, with full batch validation pending
 - [#577](https://github.com/SethKitchen/ThreeMojo/issues/577): support border-only lane widths and centerlines
 - [#580](https://github.com/SethKitchen/ThreeMojo/issues/580): bound subdivision and nearest-query work
 - [#604](https://github.com/SethKitchen/ThreeMojo/issues/604): preserve wide centers in fixed-parameter road queries
