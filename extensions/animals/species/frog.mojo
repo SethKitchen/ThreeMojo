@@ -1016,7 +1016,7 @@ def frog_paint(
         region = 5
     elif bone == "throat":
         region = 4
-    elif bone == "head":
+    elif bone == "head" or bone.startswith("neck"):
         region = 1
     elif _limb(bone):
         region = 6
@@ -1085,23 +1085,25 @@ def frog_paint(
         if banded and outer > 0.25:
             var ends = _bone_ends(bone)
             var joints = _joints()
-            # Every limb bone's ends are joints of the reference rig.
             var ia = joints.find_joint(ends[0])
             var ib = joints.find_joint(ends[1])
-            debug_assert(ia >= 0 and ib >= 0, "A limb bone's ends are joints")
-            var a = joints.joints[ia]
-            var b = joints.joints[ib]
-            var ax = normalize(b - a)
-            var along = dot(p - a, ax)
-            var period = 0.0105 if temporaria else 0.0125
-            var phase = Float64(ends[0].byte_length() * 7 % 10) * 0.1
-            var ph = along / period + phase + 0.25 * (fbm3(p * 300.0, 2) - 0.5)
-            var f = abs(ph - floor(ph) - 0.5)
-            var wb = (0.2 if temporaria else 0.17) + 0.05 * (
-                fbm3(p * 120.0, 2) - 0.5
-            )
-            pat = min(pat, (f - wb) * period + (1.0 - outer) * 0.002)
-            pat_col = pal.get("band")
+            # A caller may supply a limb name outside the reference rig.
+            if ia >= 0 and ib >= 0:
+                var a = joints.joints[ia]
+                var b = joints.joints[ib]
+                var ax = normalize(b - a)
+                var along = dot(p - a, ax)
+                var period = 0.0105 if temporaria else 0.0125
+                var phase = Float64(ends[0].byte_length() * 7 % 10) * 0.1
+                var ph = (
+                    along / period + phase + 0.25 * (fbm3(p * 300.0, 2) - 0.5)
+                )
+                var f = abs(ph - floor(ph) - 0.5)
+                var wb = (0.2 if temporaria else 0.17) + 0.05 * (
+                    fbm3(p * 120.0, 2) - 0.5
+                )
+                pat = min(pat, (f - wb) * period + (1.0 - outer) * 0.002)
+                pat_col = pal.get("band")
     var on_head = region == 1 or region == 0
     if on_head:
         # The tympanum: a flat brown disc, a pale ring and a dark center
