@@ -183,11 +183,11 @@ The afterimage's trail stays in the composer on the host. Both backends then sha
 
 ## Device memory on Metal
 
-Every device pointer in `render/gpu.mojo` must be a `DevicePointer`. A `DevicePointer` is a mutable pointer in the global address space.
+The rasterizer and its converted device helpers in `render/gpu.mojo` use `DevicePointer` to preserve the global address space across calls and struct fields. A `DevicePointer` is a mutable pointer in that address space. Other kernel signatures still use `MutPointer`; emitted call and callee types must agree at every boundary.
 
 Metal has no generic address space. When a generic device pointer crosses a function call or is held in a struct, Mojo can drop its address space. The call then does not match the function it calls. Apple's `air-lld` linker crashes on that call, and Mojo reports only "Metal Compiler failed to compile metallib". See [modular/modular#7238](https://github.com/modular/modular/issues/7238).
 
-Follow these rules in kernel code:
+Follow these rules in the converted rasterizer and device-helper code:
 
 - Declare the pointer parameters of a helper as `DevicePointer[T]`.
 - Declare the pointer fields of a device struct as `DevicePointer[T, Self.origin]`.
@@ -195,7 +195,13 @@ Follow these rules in kernel code:
 - Cast to a generic pointer only where kernel code calls a module that the CPU shares, for example `output_from`.
 - Read a `SIMD` value from device memory one lane at a time. A `SIMD` built from several loads in one constructor call reads zeros on Metal. See [modular/modular#7158](https://github.com/modular/modular/issues/7158).
 
-`make check-gpu-air` emits each Metal kernel as AIR and fails on a call whose types do not match the function it calls. It needs MAX, but it needs no GPU and no Apple toolchain. CI runs it.
+`make check-gpu-air` requires one nonempty AIR module for each discovered, plainly named kernel launch. Each generated record prints `function_name` and AIR from the same compiler result. `!air.kernel` metadata must select a complete, `metal.kernel`-marked definition with that exact symbol. Missing, duplicate or reused entry names fail the check.
+
+Source-name prefixes can be ambiguous because the pinned emitter truncates names and includes specialization text. The check uses the exact compiler-returned symbol. Other metadata forms fail closed.
+
+The checker compares direct-call argument and return types with definitions or declarations, including quoted symbols. It supports scalar, opaque-pointer and literal aggregate types. Signatures and calls must each occupy one line. Missing signatures fail the check. Indirect calls, `invoke`, `callbr`, varargs and named types also fail the check.
+
+This check covers supported call types. It does not validate every LLVM rule or execute GPU code. It needs MAX, but it needs no GPU and no Apple toolchain. CI runs it.
 
 The first compile of a changed `rasterize_kernel` takes about 15 minutes on an Apple M4 Max. Metal caches the result, and a later compile of the same kernel takes seconds.
 
