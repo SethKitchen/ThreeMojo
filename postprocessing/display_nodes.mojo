@@ -27,7 +27,16 @@ and the lens flare are added to the frame, as three.js's examples add
 them to the scene pass. A node that renders into a smaller target,
 three.js's `resolutionScale` and `downSampleRatio`, is worked out at that
 size and read back bilinear at the frame's.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import length2
 
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -808,7 +817,7 @@ def chromatic_aberration_pixel(
     var v = v_of(y, source.height)
     var du = u - settings.center_u
     var dv = v - settings.center_v
-    var distance = sqrt(du * du + dv * dv)
+    var distance = length2(du, dv)
     var push = settings.scale * 0.02 * settings.strength
     var aberration = settings.strength * distance
     var red_scale = 1 + push
@@ -971,7 +980,7 @@ def lensflare_light(mut frame: RenderTarget, settings: DisplaySettings):
                 var sv = _fract(tv + gv * Float32(i))
                 var du = su - 0.5
                 var dv = sv - 0.5
-                var d = sqrt(du * du + dv * dv)
+                var d = length2(du, dv)
                 var weight = pow(1 - d, settings.ghost_attenuation)
                 var tap = view.sample(su, sv).unpremultiplied()
                 r += (
