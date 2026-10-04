@@ -1765,8 +1765,8 @@ def test_tiny_straight_section() raises:
 
 
 def test_junction_box_of_a_long_road() raises:
-    # On a road this long the tenth step of the box overshoots the lane's
-    # end by rounding and finds no waypoint; the box keeps the ninth.
+    # A long straight lane retains its complete endpoints. Junction bounds
+    # do not accumulate traversal steps or follow a successor on overshoot.
     var b = MapBuilder()
     _ = _flat_road(
         b, 20, 0, 0, 0, 733.3, 9, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]
