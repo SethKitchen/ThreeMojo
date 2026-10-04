@@ -250,7 +250,7 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
   && touch $(CACHE_DIR)/$(1)-$(HASH)
 endef
 
-.PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
+.PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host check-gpu-air \
         docs-check wiki-publish test-tools test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
@@ -264,6 +264,7 @@ help:
 	@echo "  make check-cpu  the standard-library-only half ($(words $(CPU_TESTS)) suites)"
 	@echo "  make check-gpu  the optional MAX backend ($(words $(GPU_TESTS)) suites)"
 	@echo "  make test-gpu-host  the MAX backend's layout suites, no GPU needed"
+	@echo "  make check-gpu-air  every Metal kernel call matches its callee, no GPU needed"
 	@echo "  make compile-gpu  build GPU entry points without running them"
 	@echo "  make ci         check, ignoring the cache"
 	@echo "  make test       run every tests/test_*.mojo suite"
@@ -299,7 +300,7 @@ check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-c
 # The complete GPU check needs MAX and an accelerator. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
 # for one that ran them. Use compile-gpu for a build-only check without a GPU.
-check-gpu: gpu-status test-gpu-host
+check-gpu: gpu-status test-gpu-host check-gpu-air
 	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) lint-gpu test-gpu-device; \
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
@@ -1485,5 +1486,11 @@ test-coverage-tool:
 	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.
+# Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's
+# toolchain. A call whose types differ from its callee's crashes Apple's
+# linker with only "failed to compile metallib" (modular/modular#7238).
+check-gpu-air:
+	@python3 tools/check_air_calls.py --mojo $(MOJO)
+
 test-portability:
 	@python3 tools/check_portability.py --mojo $(MOJO)

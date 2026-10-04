@@ -181,6 +181,24 @@ The afterimage's trail stays in the composer on the host. Both backends then sha
 
 `tests/test_gpu.mojo` runs each pass on both backends after a render pass and compares the images. The images agree within one level per channel. The film, glitch and halftone passes read a sine hash, and they agree within two levels. A device `sin` can differ from the host's in the last place, and the hash magnifies the difference. Each test also checks `round_trips`, so a pass with a kernel cannot fall back to the host without a failure.
 
+## Device memory on Metal
+
+Every device pointer in `render/gpu.mojo` must be a `DevicePointer`. A `DevicePointer` is a mutable pointer in the global address space.
+
+Metal has no generic address space. When a generic device pointer crosses a function call or is held in a struct, Mojo can drop its address space. The call then does not match the function it calls. Apple's `air-lld` linker crashes on that call, and Mojo reports only "Metal Compiler failed to compile metallib". See [modular/modular#7238](https://github.com/modular/modular/issues/7238).
+
+Follow these rules in kernel code:
+
+- Declare the pointer parameters of a helper as `DevicePointer[T]`.
+- Declare the pointer fields of a device struct as `DevicePointer[T, Self.origin]`.
+- Pass a buffer to a kernel that takes a `DevicePointer` with `_device(buffer)`.
+- Cast to a generic pointer only where kernel code calls a module that the CPU shares, for example `output_from`.
+- Read a `SIMD` value from device memory one lane at a time. A `SIMD` built from several loads in one constructor call reads zeros on Metal. See [modular/modular#7158](https://github.com/modular/modular/issues/7158).
+
+`make check-gpu-air` emits each Metal kernel as AIR and fails on a call whose types do not match the function it calls. It needs MAX, but it needs no GPU and no Apple toolchain. CI runs it.
+
+The first compile of a changed `rasterize_kernel` takes about 15 minutes on an Apple M4 Max. Metal caches the result, and a later compile of the same kernel takes seconds.
+
 ## Teardown
 
 `GpuRenderer.__deinit__` and `GpuComposer.__deinit__` wait for the queue, release every buffer, and then release the context. That order prevents a hang under CUDA. See [The CUDA teardown hang](The-CUDA-teardown-hang).

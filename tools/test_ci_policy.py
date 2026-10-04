@@ -126,6 +126,8 @@ class CiPolicyTests(unittest.TestCase):
         self.assertEqual(commands, [
             'make -B compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
             'make -B test-gpu-host',
+            # Metal kernel AIR, checked without a GPU (modular/modular#7238).
+            'make check-gpu-air',
         ])
         self.assertNotIn('continue-on-error:', job)
         self.assertNotRegex(job, r'(?m)^      -?\s*if:')

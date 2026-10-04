@@ -303,6 +303,9 @@ jobs:
       - name: test-gpu-host
         run: make -B test-gpu-host
 
+      - name: check-gpu-air (Metal AIR, no GPU)
+        run: make check-gpu-air
+
   # The wiki is generated from docs/wiki/ so the two cannot drift. GitHub
   # creates the wiki repository when its first page is saved in the browser;
   # until then this job warns and does nothing, so a missing wiki does not
