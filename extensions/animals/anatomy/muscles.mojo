@@ -12,52 +12,67 @@ moves them with their bones, so the muscle-tendon length and the moment
 arm about every joint it crosses follow the pose.
 
 A body plan gives every species of that plan the same muscles.
-`species_specs` then puts in the species' own measured table where one
-exists. The sources are in the wiki page `Animal-anatomy`, by key, with
-the table and the page of each value.
+`species_specs` replaces selected inputs with reference rows. Some rows
+come from another breed or species. Each resulting template remains
+`DESIGN`. The wiki page `Animal-anatomy` lists each source by key.
 
-**Mammal hind limb.** The masses are anchored on the greyhound's biceps
-femoris, 485 g of a 31.8 kg dog, 1.53% of body mass (Williams et al.
-2008a, Table 1, p. 364, and Methods, p. 362, `CROSS_CHECKED`). The other
-five muscles keep the rat's ratios to the biceps femoris: rectus femoris
-0.354, vastus lateralis 0.483, gastrocnemius (both heads) 0.704, soleus
-0.050 and tibialis anterior 0.248 (Eng et al. 2008, Table 1, p. 2339,
-`CROSS_CHECKED`: `PCSA = m cos a / (rho L)` holds for each row). The
-optimal fiber length is the rat's share of the segment it lies along,
-against the rat rig's 41 mm femur and 46.2 mm tibia: 0.83, 0.28 and
-0.48 of the femur for the thigh muscles; 0.34, 0.43 and 0.36 of the
-tibia for the shank muscles. The pennation angles are the rat's.
+**Mammal hind limb.** The template divides the greyhound biceps
+femoris mean mass, 485 g, by the mean body mass, 31.8 kg, from six
+cadavers: about 1.53% a side (Williams2008a, Table 1 and Methods,
+`FROM_TEXT`). Other mass shares use the rat's ratios to biceps femoris
+(Eng2008, Table 1, `FROM_TEXT`). These are ratios of means. No sample
+variation is propagated.
+
+Eng2008 gives fiber lengths normalized to a 2.4 micrometer sarcomere
+length. It does not give the 41.0 and 46.2 mm bone lengths that this
+template uses as denominators. Their source remains untraced. They are
+not the current rat rig's authored 36 and 41 mm limb lengths. The
+fiber-to-bone ratios remain DESIGN: 0.83, 0.28 and 0.48 for the thigh;
+0.34, 0.43 and 0.35 for the shank. `fiber_source` cites the numerator.
+The rig supplies each individual's segment length. The plan uses the
+rat's nonzero pennation angles; applying them across species is DESIGN.
+Reading a table and reproducing its arithmetic is not an independent
+source check.
 
 **Mammal fore limb.** The greyhound's (Williams et al. 2008b, Table 1,
-p. 375, 31.4 kg dogs, `CROSS_CHECKED`): the long head of the triceps
+p. 375, 31.4 kg dogs, `FROM_TEXT`): the long head of the triceps
 brachii, the one head that crosses both the shoulder and the elbow, 341
 g; the biceps brachii 54.1 g; the supraspinatus 150 g; and the
 superficial digital flexor 18.3 g. Their fiber lengths are shares of
 the dogs' 19.75 cm humerus and 22.75 cm radius (Table 3, p. 376,
 `FROM_TEXT`).
 
-**Species tables.** The dog takes the greyhound's hind limb (Williams
-et al. 2008a), with the soleus from Hudson et al. 2011a. The cheetah
-takes its own hind and fore limbs (Hudson et al. 2011a, Table 3, p. 367;
-2011b, Table 2, p. 378; 33.1 kg, Table 1), with the greyhound's
-pennation, because those tables give none. The horse takes its own hind
-limb (Payne et al. 2005, Table 4, p. 561; 510 kg, Table 3), and the rat
+**Species tables.** Every dog uses greyhound reference muscles
+(Williams2008a and Williams2008b), including a German Shepherd body
+template. This breed transfer is DESIGN. Its soleus mass and fiber
+length come from Hudson2011a. The cheetah takes hind- and forelimb
+inputs from Hudson2011a, Table 3, and Hudson2011b, Table 2. Its 33.1 kg
+normalization mass is the mean of the five subjects with known mass;
+the muscle tables include more subjects. These are reference choices,
+not paired individual measurements. The cheetah uses greyhound
+pennation proxies except for the soleus. Dog and cheetah soleus keep
+the plan's rat angle, 3.9 degrees, explicitly graded DESIGN. The horse
+takes its own hind limb (Payne et al. 2005, Table 4, p. 561; 510 kg, Table 3), and the rat
 its own (Eng et al. 2008). A muscle of two or three heads sums their
-masses, takes the mass-weighted harmonic mean of their fiber lengths so
-that the PCSA is the sum of theirs, and the mass-weighted mean of their
-pennation. A species' fiber length is absolute: it scales with the cube
-root of body mass from the source's mean (geometric similarity, as
-Payne et al. 2005, Table 5, normalize it).
+masses and takes a mass-weighted harmonic mean of their fiber lengths.
+This makes volume over fiber length additive before rounding. Pennation
+uses a mass-weighted mean. These reductions and cube-root scaling of
+fiber length with body mass remain DESIGN. They do not preserve each
+head's force direction. Payne2005, Table 5, uses geometric similarity
+for comparisons, not validation of the generated template.
 
-**Bird.** The pectoralis and the supracoracoideus are the medians of
-Hartman 1961, Table 3, p. 89: 15.05% and 1.5% of body mass, both sides,
-so 7.5% and 0.75% a side (`FROM_TEXT`). The species take their own rows
-of Hartman's Table 1. The White Leghorn's pectoral muscles are 10.6% (20
-birds, p. 45), split 8.78 : 3.50 as in the one bird weighed by muscle.
+**Bird.** The template uses medians of the 42 rows in Hartman1961,
+Table 3, p. 89: pectoralis 14.875% and supracoracoideus 1.415% of body
+mass for both sides. Each is halved for one side. These summaries are
+DESIGN choices from FROM_TEXT inputs. Species rows use Table 1 inputs,
+with the transfers described below. The White Leghorn's pectoral
+muscles are 10.6% (20 birds, p. 45), split 8.78 : 3.50 as in the one bird weighed by muscle.
 The American crow's are 14.2% (3 birds, p. 71), split as in
 *Cyanocorax affinis* on the same page. Hartman has no golden eagle, so
-the eagle takes the mean of five accipitrids on p. 43. Hartman weighed
-both sides.
+the eagle takes the mean of five accipitrids on p. 43. These splits
+and cross-species means are DESIGN choices. Hartman's totals include
+both sides: Methods, p. 2, describes initial bilateral measurements
+and later doubling of one-sided measurements.
 
 **Frog.** The hind limbs hold 33% of body mass in *Litoria nasuta*
 (James and Wilson 2008, abstract); the plantaris is 19.4% of it
@@ -75,7 +90,6 @@ The fish, shark, snake and spider muscles are in
 """
 
 from extensions.anatomy.evidence import (
-    CROSS_CHECKED,
     DESIGN,
     FROM_TEXT,
     Cited,
@@ -146,6 +160,7 @@ struct MuscleSpec(Copyable, Movable):
     # `source_kg` is positive.
     var fiber_ratio: Float64
     var fiber_bone: String
+    # Citation for the fiber input; model_evidence grades the ratio.
     var fiber_source: Cited
     # When positive, the optimal fiber length is `fiber_m` meters in an
     # animal of `source_kg`, and scales with the cube root of mass.
@@ -168,12 +183,12 @@ struct MuscleSpec(Copyable, Movable):
         """Return DESIGN for the architecture template derived from references.
 
         Returns:
-            DESIGN. share_source and fiber_source describe excerpt inputs;
+            DESIGN. share_source and fiber_source describe source inputs;
             applying them to another species is not a measured architecture.
         """
         return DESIGN
 
-    def fiber_length(self, reach: Float64, body_kg: Float64) -> Float64:
+    def fiber_length(self, reach: Float64, body_kg: Float64) raises -> Float64:
         """Return the optimal fiber length in one individual.
 
         Args:
@@ -181,20 +196,42 @@ struct MuscleSpec(Copyable, Movable):
             body_kg: Its body mass, in kilograms.
 
         Returns:
-            The fiber length, in meters.
+            A finite positive fiber length, in meters.
+
+        Raises:
+            Error: If reach or body mass is not finite and positive, the
+                source mass is invalid, the active fiber parameter is
+                invalid, or the result is not finite and positive.
         """
+        if not (isfinite(reach) and reach > 0.0):
+            raise Error("Fiber reach must be finite and positive")
+        if not (isfinite(body_kg) and body_kg > 0.0):
+            raise Error("Fiber body mass must be finite and positive")
+        if not (isfinite(self.source_kg) and self.source_kg >= 0.0):
+            raise Error("Fiber source mass must be finite and nonnegative")
+        var fiber: Float64
         if self.source_kg > 0.0:
-            return self.fiber_m * pow(body_kg / self.source_kg, 1.0 / 3.0)
-        return self.fiber_ratio * reach
+            if not (isfinite(self.fiber_m) and self.fiber_m > 0.0):
+                raise Error(
+                    "Reference fiber length must be finite and positive"
+                )
+            fiber = self.fiber_m * pow(body_kg / self.source_kg, 1.0 / 3.0)
+        else:
+            if not (isfinite(self.fiber_ratio) and self.fiber_ratio > 0.0):
+                raise Error("Fiber ratio must be finite and positive")
+            fiber = self.fiber_ratio * reach
+        if not (isfinite(fiber) and fiber > 0.0):
+            raise Error("Fiber result must be finite and positive")
+        return fiber
 
 
 @fieldwise_init
 struct MuscleRow(Copyable, Movable):
-    """One muscle of one species' own table."""
+    """Reference inputs selected for one species template."""
 
     # The plan's muscle it replaces.
     var name: String
-    # The mean belly mass, one side, and the mean body mass it is of.
+    # The mean belly mass, one side, and the selected normalization mass.
     var mass_kg: Float64
     var source_kg: Float64
     # The mean optimal fiber length, or zero to keep the plan's.
@@ -260,55 +297,55 @@ def _mammal() -> List[MuscleSpec]:
     out.append(_spec("biceps femoris",
         _at("pelvis", "hip{S}", "hip{S}", 0.0, V3(0.0, 0.05, -0.45)),
         _at("tibia{S}", "knee{S}", "hock{S}", 0.25, V3(0.0, 0.0, -0.12)),
-        bf, CROSS_CHECKED, "Williams2008a", 34.0 / 41.0, "femur{S}", CROSS_CHECKED, "Eng2008",
-        3.6, CROSS_CHECKED, "Eng2008", ["hip{S}", "knee{S}"], ["hamstring", "breeches"]))
+        bf, FROM_TEXT, "Williams2008a", 34.0 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
+        3.6, FROM_TEXT, "Eng2008", ["hip{S}", "knee{S}"], ["hamstring", "breeches"]))
     out.append(_spec("rectus femoris",
         _at("pelvis", "hip{S}", "hip{S}", 0.0, V3(0.0, 0.05, 0.15)),
         _at("tibia{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, -0.05, 0.15)),
-        bf * 945.33 / 2670.83, CROSS_CHECKED, "Eng2008", 11.6 / 41.0, "femur{S}", CROSS_CHECKED, "Eng2008",
-        25.4, CROSS_CHECKED, "Eng2008", ["hip{S}", "knee{S}"], ["thighfront"]))
+        bf * 945.33 / 2670.83, FROM_TEXT, "Eng2008", 11.6 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
+        25.4, FROM_TEXT, "Eng2008", ["hip{S}", "knee{S}"], ["thighfront"]))
     out.append(_spec("vastus lateralis",
         _at("femur{S}", "hip{S}", "knee{S}", 0.15, V3(0.0, 0.0, 0.10)),
         _at("tibia{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, -0.05, 0.15)),
-        bf * 1288.83 / 2670.83, CROSS_CHECKED, "Eng2008", 19.6 / 41.0, "femur{S}", CROSS_CHECKED, "Eng2008",
-        10.0, CROSS_CHECKED, "Eng2008", ["knee{S}"], ["thigh", "thighmuscle"]))
+        bf * 1288.83 / 2670.83, FROM_TEXT, "Eng2008", 19.6 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
+        10.0, FROM_TEXT, "Eng2008", ["knee{S}"], ["thigh", "thighmuscle"]))
     out.append(_spec("gastrocnemius",
         _at("femur{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, 0.05, -0.10)),
         _at("metatarsus{S}", "hock{S}", "hock{S}", 0.0, V3(0.0, 0.0, -0.25)),
-        bf * 1880.34 / 2670.83, CROSS_CHECKED, "Eng2008", 15.82 / 46.2, "tibia{S}", CROSS_CHECKED, "Eng2008",
-        14.1, CROSS_CHECKED, "Eng2008", ["knee{S}", "hock{S}"], ["calf", "gaskin"]))
+        bf * 1880.34 / 2670.83, FROM_TEXT, "Eng2008", 15.82 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
+        14.1, FROM_TEXT, "Eng2008", ["knee{S}", "hock{S}"], ["calf", "gaskin"]))
     out.append(_spec("soleus",
         _at("tibia{S}", "knee{S}", "hock{S}", 0.15, V3(0.0, 0.0, -0.08)),
         _at("metatarsus{S}", "hock{S}", "hock{S}", 0.0, V3(0.0, 0.0, -0.25)),
-        bf * 134.67 / 2670.83, CROSS_CHECKED, "Eng2008", 19.7 / 46.2, "tibia{S}", CROSS_CHECKED, "Eng2008",
-        3.9, CROSS_CHECKED, "Eng2008", ["hock{S}"], []))
+        bf * 134.67 / 2670.83, FROM_TEXT, "Eng2008", 19.7 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
+        3.9, FROM_TEXT, "Eng2008", ["hock{S}"], []))
     out.append(_spec("tibialis anterior",
         _at("tibia{S}", "knee{S}", "hock{S}", 0.15, V3(0.0, 0.0, 0.08)),
         _at("metatarsus{S}", "hock{S}", "mtp{S}", 0.2, V3(0.0, 0.0, 0.06)),
-        bf * 662.17 / 2670.83, CROSS_CHECKED, "Eng2008", 16.4 / 46.2, "tibia{S}", CROSS_CHECKED, "Eng2008",
-        12.8, CROSS_CHECKED, "Eng2008", ["hock{S}"], ["shin"]))
+        bf * 662.17 / 2670.83, FROM_TEXT, "Eng2008", 16.4 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
+        12.8, FROM_TEXT, "Eng2008", ["hock{S}"], ["shin"]))
     # Fore limb: Williams et al. 2008b, Table 1, p. 375, in g, cm and
     # degrees; the bones are Table 3's.
     out.append(_spec("triceps brachii",
         _at("scapula{S}", "scapTop{S}", "shoulder{S}", 0.7, V3(0.0, 0.0, -0.15)),
         _at("radius{S}", "elbow{S}", "elbow{S}", 0.0, V3(0.0, 0.02, -0.20)),
-        341.0 / dog, CROSS_CHECKED, "Williams2008b", 0.065 / hum, "humerus{S}", FROM_TEXT, "Williams2008b",
-        31.0, CROSS_CHECKED, "Williams2008b", ["shoulder{S}", "elbow{S}"], ["triceps"]))
+        341.0 / dog, FROM_TEXT, "Williams2008b", 0.065 / hum, "humerus{S}", FROM_TEXT, "Williams2008b",
+        31.0, FROM_TEXT, "Williams2008b", ["shoulder{S}", "elbow{S}"], ["triceps"]))
     out.append(_spec("biceps brachii",
         _at("scapula{S}", "shoulder{S}", "shoulder{S}", 0.0, V3(0.0, 0.10, 0.10)),
         _at("radius{S}", "elbow{S}", "wrist{S}", 0.12, V3(0.0, 0.0, 0.08)),
-        54.1 / dog, CROSS_CHECKED, "Williams2008b", 0.018 / hum, "humerus{S}", FROM_TEXT, "Williams2008b",
-        41.0, CROSS_CHECKED, "Williams2008b", ["shoulder{S}", "elbow{S}"], ["upperarm"]))
+        54.1 / dog, FROM_TEXT, "Williams2008b", 0.018 / hum, "humerus{S}", FROM_TEXT, "Williams2008b",
+        41.0, FROM_TEXT, "Williams2008b", ["shoulder{S}", "elbow{S}"], ["upperarm"]))
     out.append(_spec("supraspinatus",
         _at("scapula{S}", "scapTop{S}", "shoulder{S}", 0.4, V3(0.0, 0.0, 0.10)),
         _at("humerus{S}", "shoulder{S}", "shoulder{S}", 0.0, V3(0.0, 0.05, 0.12)),
-        150.0 / dog, CROSS_CHECKED, "Williams2008b", 0.059 / hum, "humerus{S}", FROM_TEXT, "Williams2008b",
-        18.0, CROSS_CHECKED, "Williams2008b", ["shoulder{S}"], ["scapmuscle"]))
+        150.0 / dog, FROM_TEXT, "Williams2008b", 0.059 / hum, "humerus{S}", FROM_TEXT, "Williams2008b",
+        18.0, FROM_TEXT, "Williams2008b", ["shoulder{S}"], ["scapmuscle"]))
     out.append(_spec("superficial digital flexor",
         _at("humerus{S}", "elbow{S}", "elbow{S}", 0.0, V3(0.0, 0.0, -0.10)),
         _at("fpaw{S}", "mcp{S}", "ftoe{S}", 0.3, V3(0.0, -0.03, -0.02)),
-        18.3 / dog, CROSS_CHECKED, "Williams2008b", 0.012 / GREYHOUND_RADIUS, "radius{S}", FROM_TEXT, "Williams2008b",
-        41.0, CROSS_CHECKED, "Williams2008b", ["elbow{S}", "wrist{S}", "mcp{S}"], ["forearmmuscle"],
+        18.3 / dog, FROM_TEXT, "Williams2008b", 0.012 / GREYHOUND_RADIUS, "radius{S}", FROM_TEXT, "Williams2008b",
+        41.0, FROM_TEXT, "Williams2008b", ["elbow{S}", "wrist{S}", "mcp{S}"], ["forearmmuscle"],
         V3(1.0, 0.0, 0.0),
         # Its tendon runs behind the carpus and over the sesamoids.
         [
@@ -325,12 +362,12 @@ def _bird() -> List[MuscleSpec]:
     out.append(_spec("pectoralis",
         _at("chest", "shoulder{S}", "shoulder{S}", 0.0, V3(-0.9, -0.9, 0.3)),
         _at("humerus{S}", "shoulder{S}", "elbow{S}", 0.25, V3(0.0, -0.12, 0.0)),
-        0.1505 / 2.0, FROM_TEXT, "Hartman1961", 0.8, "humerus{S}", DESIGN, "",
+        0.14875 / 2.0, FROM_TEXT, "Hartman1961", 0.8, "humerus{S}", DESIGN, "",
         0.0, DESIGN, "", ["shoulder{S}"], ["breast"], V3(0.0, 0.0, 1.0)))
     out.append(_spec("supracoracoideus",
         _at("chest", "shoulder{S}", "shoulder{S}", 0.0, V3(-0.8, -0.6, 0.2)),
         _at("humerus{S}", "shoulder{S}", "elbow{S}", 0.05, V3(0.0, 0.10, 0.0)),
-        0.015 / 2.0, FROM_TEXT, "Hartman1961", 0.5, "humerus{S}", DESIGN, "",
+        0.01415 / 2.0, FROM_TEXT, "Hartman1961", 0.5, "humerus{S}", DESIGN, "",
         0.0, DESIGN, "", ["shoulder{S}"], [], V3(0.0, 0.0, 1.0),
         # Its tendon turns over the triosseal canal, above the shoulder,
         # and lifts the wing from there.
@@ -423,7 +460,7 @@ def _share(name: String, percent: Float64) -> MuscleRow:
 
 
 def species_table(species: SpeciesId) raises -> List[MuscleRow]:
-    """Return the muscles a species' own published table replaces.
+    """Return reference rows selected for a species template.
 
     Args:
         species: The species.
@@ -437,7 +474,6 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
     if not species.is_valid():
         raise Error("No such species")
     var t = List[MuscleRow]()
-    var x = CROSS_CHECKED
     var f = FROM_TEXT
     var d = DESIGN
     # fmt: off
@@ -447,12 +483,12 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
         # (45.1 g, 2.1 cm, 36) heads. Their soleus is in Hudson et al.
         # 2011a, Table 3, p. 367: three greyhounds of 27.3 kg (Table 1).
         var w = String("Williams2008a")
-        t.append(_row("biceps femoris", 485.0, 31.8, 14.3, 0.0, x, w, x, w))
-        t.append(_row("rectus femoris", 267.0, 31.8, 9.6, 20.0, x, w, x, w))
-        t.append(_row("vastus lateralis", 137.0, 31.8, 12.8, 12.0, x, w, x, w))
-        t.append(_row("gastrocnemius", 86.0, 31.8, 1.889, 30.8, x, w, x, w))
-        t.append(_row("soleus", 9.5, 27.33, 1.8, -1.0, f, "Hudson2011a", d, ""))
-        t.append(_row("tibialis anterior", 25.2, 31.8, 6.0, 20.0, x, w, x, w))
+        t.append(_row("biceps femoris", 485.0, 31.8, 14.3, 0.0, f, w, f, w))
+        t.append(_row("rectus femoris", 267.0, 31.8, 9.6, 20.0, f, w, f, w))
+        t.append(_row("vastus lateralis", 137.0, 31.8, 12.8, 12.0, f, w, f, w))
+        t.append(_row("gastrocnemius", 86.0, 31.8, 1.889, 30.8, f, w, f, w))
+        t.append(_row("soleus", 9.5, 27.33, 1.8, -1.0, f, "Hudson2011a", d, "Eng2008"))
+        t.append(_row("tibialis anterior", 25.2, 31.8, 6.0, 20.0, f, w, f, w))
     elif species == CHEETAH:
         # Hudson et al. 2011a, Table 3, p. 367, and 2011b, Table 2,
         # p. 378: the mean of the five weighed cheetahs is 33.1 kg
@@ -467,7 +503,7 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
         t.append(_row("rectus femoris", 160.0, 33.1, 5.4, 20.0, f, h, d, wh))
         t.append(_row("vastus lateralis", 214.0, 33.1, 7.6, 12.0, f, h, d, wh))
         t.append(_row("gastrocnemius", 78.2, 33.1, 2.672, 30.8, f, h, d, wh))
-        t.append(_row("soleus", 16.0, 33.1, 2.4, -1.0, f, h, d, ""))
+        t.append(_row("soleus", 16.0, 33.1, 2.4, -1.0, f, h, d, "Eng2008"))
         t.append(_row("tibialis anterior", 39.3, 33.1, 8.8, 20.0, f, h, d, wh))
         t.append(_row("triceps brachii", 255.4, 33.1, 6.0, 31.0, f, g, d, wf))
         t.append(_row("biceps brachii", 88.8, 33.1, 3.6, 41.0, f, g, d, wf))
@@ -480,21 +516,21 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
         # 245 mm, 39) heads; the gastrocnemius its medial (817 g, 48 mm,
         # 36) and lateral (808 g, 56 mm, 34) heads.
         var p = String("Payne2005")
-        t.append(_row("biceps femoris", 7928.0, 510.0, 25.37, 36.1, x, p, x, p))
-        t.append(_row("rectus femoris", 2291.0, 510.0, 9.8, 40.0, x, p, x, p))
-        t.append(_row("vastus lateralis", 1734.0, 510.0, 15.5, 36.0, x, p, x, p))
-        t.append(_row("gastrocnemius", 1625.0, 510.0, 5.167, 35.0, x, p, x, p))
-        t.append(_row("soleus", 6.0, 510.0, 12.1, 22.0, x, p, x, p))
-        t.append(_row("tibialis anterior", 309.0, 510.0, 4.0, 41.0, x, p, x, p))
+        t.append(_row("biceps femoris", 7928.0, 510.0, 25.37, 36.1, f, p, f, p))
+        t.append(_row("rectus femoris", 2291.0, 510.0, 9.8, 40.0, f, p, f, p))
+        t.append(_row("vastus lateralis", 1734.0, 510.0, 15.5, 36.0, f, p, f, p))
+        t.append(_row("gastrocnemius", 1625.0, 510.0, 5.167, 35.0, f, p, f, p))
+        t.append(_row("soleus", 6.0, 510.0, 12.1, 22.0, f, p, f, p))
+        t.append(_row("tibialis anterior", 309.0, 510.0, 4.0, 41.0, f, p, f, p))
     elif species == RAT:
         # Eng et al. 2008, Table 1, p. 2339: rats of 323 g (p. 2337).
         var e = String("Eng2008")
-        t.append(_row("biceps femoris", 2.67083, 0.323, 3.40, 3.6, x, e, x, e))
-        t.append(_row("rectus femoris", 0.94533, 0.323, 1.16, 25.4, x, e, x, e))
-        t.append(_row("vastus lateralis", 1.28883, 0.323, 1.96, 10.0, x, e, x, e))
-        t.append(_row("gastrocnemius", 1.88034, 0.323, 1.582, 14.1, x, e, x, e))
-        t.append(_row("soleus", 0.13467, 0.323, 1.97, 3.9, x, e, x, e))
-        t.append(_row("tibialis anterior", 0.66217, 0.323, 1.64, 12.8, x, e, x, e))
+        t.append(_row("biceps femoris", 2.67083, 0.323, 3.40, 3.6, f, e, f, e))
+        t.append(_row("rectus femoris", 0.94533, 0.323, 1.16, 25.4, f, e, f, e))
+        t.append(_row("vastus lateralis", 1.28883, 0.323, 1.96, 10.0, f, e, f, e))
+        t.append(_row("gastrocnemius", 1.88034, 0.323, 1.582, 14.1, f, e, f, e))
+        t.append(_row("soleus", 0.13467, 0.323, 1.97, 3.9, f, e, f, e))
+        t.append(_row("tibialis anterior", 0.66217, 0.323, 1.64, 12.8, f, e, f, e))
     elif species == CHICKEN:
         # Hartman 1961, Table 1, p. 45: White Leghorns.
         t.append(_share("pectoralis", 10.6 * 8.78 / 12.28))
@@ -515,14 +551,14 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
 
 
 def species_specs(species: SpeciesId) raises -> List[MuscleSpec]:
-    """Return a species' limb muscles: its plan's, with its own table.
+    """Return a species template's muscles with selected reference rows.
 
     Args:
         species: The species.
 
     Returns:
-        The plan's muscles, one side, each replaced where the species'
-        own table has a row of that name.
+        The plan's muscles, one side, replaced by selected reference
+        rows where available. The resulting template remains DESIGN.
 
     Raises:
         Error: If the species is not named.
@@ -542,6 +578,9 @@ def species_specs(species: SpeciesId) raises -> List[MuscleSpec]:
                 s.fiber_source = row.source.copy()
             if row.pennation_degrees >= 0.0:
                 s.pennation_degrees = row.pennation_degrees
+                s.pennation_source = row.pennation_source.copy()
+            elif row.pennation_source.source != "":
+                # A missing angle can retain a named DESIGN proxy.
                 s.pennation_source = row.pennation_source.copy()
     return specs^
 
@@ -578,7 +617,7 @@ struct AnimalMuscle(Copyable, Movable):
         """Return DESIGN for this individual's generated muscle architecture.
 
         Returns:
-            DESIGN, distinct from the retained excerpt reference grades.
+            DESIGN, distinct from the retained source reference grades.
         """
         return DESIGN
 
@@ -884,8 +923,8 @@ def species_muscles(
 ) raises -> List[AnimalMuscle]:
     """Return an individual's limb muscles from its species, both sides.
 
-    The species' own table replaces the plan's muscles where it has
-    them. See `species_specs`.
+    Selected reference rows replace the plan's muscle inputs where
+    available. These may be breed or species proxies. See `species_specs`.
 
     Args:
         rig: The individual's rig, in real meters.
