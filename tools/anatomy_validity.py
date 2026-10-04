@@ -186,10 +186,13 @@ def annotate_diagnostics(groups):
     seen = set()
     for group, rows in groups.items():
         for row in rows:
+            row['frame_id'] = SPINE_FRAME if group == 'spine' else PAIR_FRAME
             if row.get('record') == 'pair':
                 components = sorted((row['first'].replace(' ', '_'), row['second'].replace(' ', '_')))
                 identity = 'canonical/' + group + '/' + '|'.join(components)
                 row['pair_id'] = identity
+                if row.get('samples') == 0:
+                    row['signed_field_witness_m'] = None
                 row['allowlist_applied'] = False
                 row['geometry_kind'] = 'implicit component envelope intersection'
                 row['contact_intent'] = 'unclassified; an anatomical attachment is not an established volume allowance'
@@ -319,6 +322,250 @@ def probe_rows(probe, mode, part, step, args):
     return rows
 
 
+# Counts are an explicit catalog contract. A changed named-part enumerator must
+# update the contract and its tests, rather than silently change report scope.
+PAIR_FAMILIES = {'bone': 30, 'knee': 5, 'muscle': 49, 'ligament': 10,
+                 'vascular': 19, 'nerve': 13, 'lymphatic': 8}
+PAIR_REGION_COUNTS = {
+    'leg': {'bone': 4, 'knee': 5, 'muscle': 28, 'vascular': 10, 'nerve': 6, 'lymphatic': 4},
+    'foot': {'bone': 26, 'muscle': 21, 'ligament': 10, 'vascular': 9, 'nerve': 7, 'lymphatic': 4}}
+PAIR_FRAME = 'canonical/selected-side/lower-limb/knee-origin'
+SPINE_FRAME = 'canonical/spine/hip-midpoint-origin'
+PAIR_SCOPES = ('full', 'representative')
+PAIR_COMPONENT_IDS = {
+    f'{region}/{family}/{part}'
+    for region, families in PAIR_REGION_COUNTS.items()
+    for family, count in families.items()
+    for part in (('femur', 'tibia', 'fibula', 'patella') if (region, family) == ('leg', 'bone')
+                 else ('cartilage', 'medial', 'lateral', 'mcl', 'lcl') if family == 'knee'
+                 else range(count))}
+
+
+def validate_catalog(rows):
+    """Refuse incomplete catalogs, aliases, invalid bounds and frame drift."""
+    if len(rows) != sum(PAIR_FAMILIES.values()):
+        raise ValueError('canonical pair catalog must contain all 134 named components')
+    counts = {region: {} for region in PAIR_REGION_COUNTS}
+    identities, labels = set(), set()
+    for index, row in enumerate(rows):
+        identity = row.get('component_id', '')
+        if not isinstance(identity, str):
+            raise ValueError('component identity must be text')
+        region = identity.split('/')[0]
+        family = row.get('family')
+        if (row.get('record') != 'component' or type(row.get('index')) is not int or row.get('index') != index
+                or region not in counts or family not in PAIR_FAMILIES
+                or not identity.startswith(f'{region}/{family}/')
+                or identity in identities or row.get('label') in labels
+                or not isinstance(row.get('label'), str) or not row['label']):
+            raise ValueError('invalid or duplicate canonical component identity')
+        low, high = [vector(row.get(key), key) for key in ('low_m', 'high_m')]
+        if any(lo >= hi for lo, hi in zip(low, high)):
+            raise ValueError('canonical component bounds must be strictly ordered')
+        translation = vector(row.get('translation_m'), 'translation_m')
+        # Leg muscles, knee tissues and neural/vascular/lymphatic fields
+        # are already in the knee frame. Only local bones and foot translate.
+        if region == 'leg' and family != 'bone' and translation != [0, 0, 0]:
+            raise ValueError('unexpected canonical frame translation')
+        row['frame_id'] = PAIR_FRAME
+        row['geometry_source'] = 'canonical physical field, not display field'
+        counts[region][family] = counts[region].get(family, 0) + 1
+        identities.add(identity)
+        labels.add(row['label'])
+    if counts != PAIR_REGION_COUNTS or identities != PAIR_COMPONENT_IDS:
+        raise ValueError('canonical pair catalog does not match the named-part contract')
+    ankles = {tuple(r['translation_m']) for r in rows if r['component_id'].startswith('foot/')}
+    if len(ankles) != 1:
+        raise ValueError('all foot fields must use the same assembled ankle translation')
+    return rows
+
+
+def pair_identity(first, second):
+    """Build a label-independent, order-independent canonical pair identity."""
+    return 'canonical/lower-limb/' + '|'.join(sorted((first['component_id'], second['component_id'])))
+
+
+def pair_box(first, second):
+    low = [max(a, b) for a, b in zip(first['low_m'], second['low_m'])]
+    high = [min(a, b) for a, b in zip(first['high_m'], second['high_m'])]
+    return low, high
+
+
+def pair_box_volume(first, second):
+    low, high = pair_box(first, second)
+    return math.prod(max(0, b-a) for a, b in zip(low, high))
+
+
+def legacy_pair_group(first, second):
+    families = {first['family'], second['family']}
+    if families == {'bone'}:
+        return 'bones'
+    if families == {'knee'} or (families == {'bone', 'knee'}
+            and all(r['component_id'].startswith('leg/') for r in (first, second))):
+        return 'knee'
+    return None
+
+
+def pair_plan(catalog, scope):
+    """Enumerate every unordered pair; representative selection is explicit."""
+    if scope not in PAIR_SCOPES:
+        raise ValueError('unknown pair scope')
+    plan, representatives = [], {}
+    for i, first in enumerate(catalog):
+        for j in range(i+1, len(catalog)):
+            second = catalog[j]
+            family = '|'.join(sorted((first['family'], second['family'])))
+            old = legacy_pair_group(first, second)
+            entry = {'pair_id': pair_identity(first, second), 'first_id': first['component_id'],
+                     'second_id': second['component_id'], 'class': family,
+                     'status': 'checked', 'indices': (i, j), 'legacy_group': old}
+            plan.append(entry)
+            if not old:
+                regions = '|'.join(sorted((first['component_id'].split('/')[0], second['component_id'].split('/')[0])))
+                key = (family, regions)
+                score = pair_box_volume(first, second)
+                # Prefer the largest intersecting box in each region/class.
+                # Ties keep catalog order. This is reproducible, not a claim
+                # that this pair is the worst physical overlap.
+                if key not in representatives or score > representatives[key][0]:
+                    representatives[key] = (score, entry['pair_id'])
+    selected = {item[1] for item in representatives.values()}
+    for entry in plan:
+        if scope == 'representative' and not entry['legacy_group'] and entry['pair_id'] not in selected:
+            entry['status'] = 'intentionally_omitted'
+            entry['reason'] = 'representative run; executable in full scope'
+    return plan
+
+
+def pair_batches(plan, catalog, step_mm):
+    """Bound each process request; the native preflight is authoritative."""
+    step = finite(step_mm, 'pair step')/1000
+    if not 0.002 <= step <= 0.020:
+        raise ValueError('pair grid step must be 2 through 20 mm')
+    batches, batch, work = [], [], 0
+    for entry in plan:
+        if entry['status'] != 'checked' or entry['legacy_group']:
+            continue
+        i, j = entry['indices']
+        low, high = pair_box(catalog[i], catalog[j])
+        cells = 0 if any(b <= a for a, b in zip(low, high)) else math.prod(math.ceil((b-a)/step) for a, b in zip(low, high))
+        if cells > 2_000_000:
+            raise ValueError(f'pair exceeds the work budget: {entry["pair_id"]}; no complete report was produced')
+        contiguous = batch and batch[-1]['indices'] == (i, j-1)
+        if batch and (not contiguous or len(batch) >= 16 or work+cells > 250_000):
+            batches.append(batch)
+            batch, work = [], 0
+        batch.append(entry)
+        work += cells
+    if batch:
+        batches.append(batch)
+    return batches
+
+
+def validate_pair_row(row, first, second):
+    """Validate probe protocol and retain unmeasured witnesses as unknown."""
+    if (row.get('record') != 'pair' or row.get('first_id') != first['component_id']
+            or row.get('second_id') != second['component_id']
+            or row.get('first') != first['label'] or row.get('second') != second['label']):
+        raise ValueError('pair probe returned a different component')
+    for key in ('samples', 'overlap_samples'):
+        value = row.get(key)
+        if type(value) is not int or not 0 <= value <= 2_000_000:
+            raise ValueError('pair counts must be bounded integers')
+    if row['overlap_samples'] > row['samples']:
+        raise ValueError('overlap count exceeds sampled count')
+    gap = finite(row.get('bounds_gap_m'), 'bounds gap')
+    volume = finite(row.get('overlap_volume_m3'), 'overlap volume')
+    witness = finite(row.get('signed_field_witness_m'), 'field witness')
+    box_volume = pair_box_volume(first, second)
+    if gap < 0 or volume < 0 or volume > box_volume*(1+2e-5)+1e-12:
+        raise ValueError('pair evidence exceeds its conservative box')
+    if ((row['samples'] == 0) != (box_volume == 0)
+            or (row['samples'] == 0 and (row['overlap_samples'] != 0 or volume != 0 or witness != 0))
+            or (row['samples'] > 0 and (witness < 0) != (row['overlap_samples'] > 0))
+            or (row['overlap_samples'] == 0 and volume != 0)
+            or (row['overlap_samples'] > 0 and (volume <= 0 or witness >= 0))
+            or (gap > 0 and row['samples'] != 0)):
+        raise ValueError('inconsistent pair evidence')
+    if row['samples'] == 0:
+        row['signed_field_witness_m'] = None
+    row['frame_id'] = PAIR_FRAME
+    row['pair_id'] = pair_identity(first, second)
+    row['allowlist_applied'] = False
+    row['allowed_positive_overlap_volume_m3'] = 0
+    row['geometry_kind'] = 'implicit component envelope intersection'
+    row['contact_intent'] = 'unknown; attachment or shared centerline does not establish a volume allowance'
+    return row
+
+
+def collect_pair_diagnostics(probe, step_mm, args, legacy):
+    """Execute a complete selected plan or fail, never drop costly pairs."""
+    catalog = validate_catalog(probe_rows(probe, 'pairs', 'catalog', step_mm, args))
+    scope = getattr(args, 'pair_scope', 'full')
+    plan = pair_plan(catalog, scope)
+    legacy_rows = {group: {tuple(sorted((r['first'], r['second']))): r
+                    for r in legacy[group] if r['record'] == 'pair'} for group in ('bones', 'knee')}
+    used = {group: set() for group in legacy_rows}
+    for entry in plan:
+        if entry['legacy_group']:
+            i, j = entry['indices']
+            key = tuple(sorted((catalog[i]['label'], catalog[j]['label'])))
+            group = entry['legacy_group']
+            if key not in legacy_rows[group]:
+                raise ValueError('legacy diagnostic inventory is incomplete')
+            entry['diagnostic_id'] = legacy_rows[group][key]['pair_id']
+            used[group].add(key)
+    if any(used[g] != set(legacy_rows[g]) for g in used):
+        raise ValueError('legacy diagnostic inventory contains unplanned pairs')
+    rows = []
+    for batch in pair_batches(plan, catalog, step_mm):
+        i, j = batch[0]['indices']
+        request = f'{i}:{j}:{batch[-1]["indices"][1]+1}'
+        found = probe_rows(probe, 'pairs', request, step_mm, args)
+        if len(found) != len(batch):
+            raise ValueError('pair batch omitted or added a measurement')
+        for row, entry in zip(found, batch):
+            a, b = entry['indices']
+            rows.append(validate_pair_row(row, catalog[a], catalog[b]))
+    classes = {}
+    for entry in plan:
+        counts = classes.setdefault(entry['class'], {'checked': 0, 'intentionally_omitted': 0, 'unsupported': 0})
+        counts[entry['status']] += 1
+        del entry['indices']
+        del entry['legacy_group']
+    inventory = {
+        'schema_version': 1, 'scope': 'all unordered distinct pairs among 134 named selected-side lower-limb canonical component fields',
+        'run_scope': scope, 'frame_id': PAIR_FRAME, 'components': catalog, 'pairs': plan,
+        'total_pairs': len(plan), 'classes': classes,
+        'additional_checked_diagnostics': [
+            {'diagnostic_id': r['pair_id'] if r['record'] == 'pair' else r['endplane_id'],
+             'record': r['record'], 'status': 'checked', 'frame_id': SPINE_FRAME}
+            for r in legacy.get('spine', [])],
+        'all_catalog_pairs_checked': all(e['status'] == 'checked' for e in plan),
+        'selected_execution_complete': True,
+        'positive_volume_attachment_allowances': [],
+        'unknowns': ['Individual dermis/fat material interfaces are not modeled by these fields.',
+                     'Anatomical attachment volumes and biological calibration tolerances are unknown.',
+                     'Thin overlap can be missed even when conservative boxes intersect.'],
+        'excluded_domains': [
+            {'id': 'self-construction-unions', 'status': 'intentionally_omitted',
+             'selection': 'each catalog component paired with itself or its internal primitives',
+             'reason': 'One named field already represents its construction union. This rule never exempts two distinct catalog fields.',
+             'allowance_bound': 'inside that one named field only; zero exemption for distinct-pair positive volume'},
+            {'id': 'skin-envelope-domain', 'status': 'intentionally_omitted',
+             'selection': 'skin envelope against its contained components and the leg/foot envelope union',
+             'reason': 'The envelope is an occupancy domain, not a separate internal material. Containment is not independently validated here.',
+             'allowance_bound': 'domain bookkeeping only; no dermis collision or clearance allowance'},
+            {'id': 'unresolved-material-interfaces', 'status': 'unsupported',
+             'selection': 'dermis/fat partitions, hair, individual primitives inside named grouped fields',
+             'reason': 'No separate canonical pair contract is supplied; this does not count as checked coverage.'},
+            {'id': 'outside-lower-limb-and-neighbor-spine', 'status': 'unsupported',
+             'selection': 'other body regions, cross-region whole-body pairs, nonneighbor spine pairs, dynamic and visual/rig/bake pairs',
+             'reason': 'Outside this static selected-side catalog; no whole-body, contact, clinical or safety claim.'}]
+    }
+    return rows, inventory
+
+
 def report(args):
     steps = grid_steps(args.steps_mm)
     if not 1.2 <= finite(args.stature_m, 'stature') <= 2.5:
@@ -347,20 +594,24 @@ def report(args):
             rows.append(row)
         segments[segment] = {'grids': rows, 'sampling_sensitivity': sampling_sensitivity(rows)}
     diagnostics = annotate_diagnostics({mode: probe_rows(probe, mode, 'none', min(steps), args) for mode in ('bones', 'knee', 'spine')})
-    result = {'schema_version': 1, 'result_label': 'template estimate', 'gate': use_gate(args.use),
+    additional, pair_inventory = collect_pair_diagnostics(probe, min(steps), args, diagnostics)
+    diagnostics['lower_limb_tissues'] = additional
+    result = {'schema_version': 2, 'result_label': 'template estimate', 'gate': use_gate(args.use),
               'build_provenance': provenance,
               'source_file_sha256': {path: snapshot[1][path] for path in source_files},
               'report_logic_sha256': snapshot[1]['tools/anatomy_validity.py'],
               'inventory_sha256': snapshot[1]['docs/validation/anatomy-provenance.json'],
-              'follow_ups': ['https://github.com/SethKitchen/ThreeMojo/issues/595', 'https://github.com/SethKitchen/ThreeMojo/issues/596'],
+              'follow_ups': ['https://github.com/SethKitchen/ThreeMojo/issues/595', 'https://github.com/SethKitchen/ThreeMojo/issues/297'],
               'spec': {'stature_m': args.stature_m, 'sex': args.sex, 'side': args.side, 'athleticism': args.athleticism, 'genome': 'template'},
               'frame': {'origin': 'tibiofemoral joint line', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'},
+              'diagnostic_frames': {PAIR_FRAME: {'origin': 'tibiofemoral joint line', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'},
+                                    SPINE_FRAME: {'origin': 'midpoint of the two hip joint centers', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'}},
               'tensor_convention': {'order': ['xx','yy','zz','xy','xz','yz'], 'reference': 'center of mass', 'off_diagonal': 'negative products of inertia'},
-              'controls': controls[0], 'segments': segments,
+              'controls': controls[0], 'segments': segments, 'pair_inventory': pair_inventory,
               'composition': compose_segments([segments[s]['grids'][-1] for s in SEGMENTS]),
               'diagnostics': diagnostics, 'geometry_findings': diagnostic_findings(diagnostics),
               'diagnostic_limits': {'step_m': min(steps)/1000, 'absence_of_hits_proves_clearance': False, 'field_values_are_true_clearance': False, 'bone_fields_are_disjoint_material_regions': False,
-                'not_evaluated': ['muscle-to-muscle and muscle-to-bone pairs', 'foot ligaments', 'vascular, nerve and lymphatic pairs', 'whole-body overlap', 'dynamic contact', 'visual/rig/bake mapping (#297)']},
+                'not_evaluated': ['whole-body overlap', 'dynamic contact', 'visual/rig/bake mapping (#297)', 'separate dermis/fat material interfaces']},
               'accounting': {'exclusive_density_precedence': list(REGIONS), 'bone_precedence': ['femur','tibia','fibula','patella'] + [r['second'] for r in diagnostics['bones'] if r['first'] == 'femur' and r['second'].startswith('foot/')],
                 'soft_precedence': 'First leg muscle/tendon, then first foot muscle/tendon, then unresolved fat proxy.',
                 'do_not_add': ['individual bone/soft-part mass reports','skin envelope mass a second time','SweepField.volume totals'],
@@ -383,6 +634,8 @@ def main(argv=None):
     parser.add_argument('--side', choices=('right','left'), default='right')
     parser.add_argument('--athleticism', choices=('untoned','toned'), default='untoned')
     parser.add_argument('--use', choices=USES, default='template-estimate')
+    parser.add_argument('--pair-scope', choices=PAIR_SCOPES, default='full',
+                        help='full named lower-limb catalog, or explicit representative subset')
     args = parser.parse_args(argv)
     try:
         result = report(args)
