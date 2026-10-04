@@ -159,6 +159,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_boundary_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BoundaryKind'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_bvh_channel_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3123,6 +3133,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_surface_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SurfaceId'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_surface_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3824,6 +3844,16 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/a_window_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'WindowId'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_wood_finish_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3919,6 +3949,16 @@
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'method' cannot be converted from 'IntLiteral[8]' to 'ZipMethod'"
     ]
+  },
+  "tests/compile_fail/a_zone_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ZoneId'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/add_illuminance_to_luminance.mojo": {
     "errors": [
