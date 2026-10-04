@@ -371,6 +371,7 @@ struct Warps(Movable):
         out.tags = model.tags.copy()
         out.tag_at = model.tag_at.copy()
         out.outline = model.outline.copy()
+        out.visual_only = model.visual_only
         for p in model.prims:
             out.prims.append(self._warp_primitive(p, out.outline))
         return out^

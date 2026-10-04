@@ -185,6 +185,8 @@ def solid_densities(animal: Animal) raises -> List[Float64]:
         flesh = Float64(whole_body_density(animal.species).value)
     var out = List[Float64](capacity=len(animal.model.prims))
     for p in animal.model.prims:  # pragma: no branch
+        animal.rig.check(p.bone)
+        _ = animal.model.tag_name(p.tag)
         var bone = animal.rig.bones[p.bone.value].name
         var tissue = tissue_of(p.part, animal.model.tags[p.tag.value], bone)
         var segment = segment_of(plan, bone)
@@ -224,6 +226,8 @@ def solid_roles(animal: Animal) raises -> List[Int]:
     var plan = species_body(animal.species).plan
     var out = List[Int](capacity=len(animal.model.prims))
     for p in animal.model.prims:  # pragma: no branch
+        animal.rig.check(p.bone)
+        _ = animal.model.tag_name(p.tag)
         var bone = animal.rig.bones[p.bone.value].name
         var tag = animal.model.tags[p.tag.value]
         var segment = segment_of(plan, bone)

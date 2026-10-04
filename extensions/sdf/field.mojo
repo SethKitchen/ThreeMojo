@@ -24,6 +24,7 @@ from extensions.sdf.ids import (
     SurfacePart,
     TagId,
     require_part,
+    require_kind,
 )
 from extensions.sdf.vector import (
     Rigid,
@@ -35,7 +36,7 @@ from extensions.sdf.vector import (
     normalize,
 )
 from std.collections import Dict
-from std.math import sqrt
+from std.math import isfinite, sqrt
 
 # The value of an empty field: far outside everything.
 comptime FAR = 1e9
@@ -249,6 +250,9 @@ struct SdfModel(Movable):
     var outline: List[Float64]
     var tags: List[String]
     var tag_at: Dict[String, Int]
+    # Visual deformation provenance. False does not establish physical
+    # validity; True excludes this shape from canonical tissue sampling.
+    var visual_only: Bool
 
     def __init__(out self):
         """Make an empty sculpt."""
@@ -256,6 +260,21 @@ struct SdfModel(Movable):
         self.outline = List[Float64]()
         self.tags = List[String]()
         self.tag_at = Dict[String, Int]()
+        self.visual_only = False
+
+    def copy(self) -> SdfModel:
+        """Return an independent copy, including visual-only provenance.
+
+        Returns:
+            The copied primitives, outlines, tags and provenance.
+        """
+        var out = SdfModel()
+        out.prims = self.prims.copy()
+        out.outline = self.outline.copy()
+        out.tags = self.tags.copy()
+        out.tag_at = self.tag_at.copy()
+        out.visual_only = self.visual_only
+        return out^
 
     def tag(mut self, name: String) -> TagId:
         """Return the id of a tag, adding the tag when it is new.
@@ -366,10 +385,17 @@ struct SdfModel(Movable):
 
         Raises:
             Error: If a radius is not positive, `bone` is negative, `k` is
-                negative or `part` is not a named part.
+                negative, `part` is not named, the axis is zero or
+                nonfinite, or the up hint is nonfinite.
         """
         if not min(r.x, min(r.y, r.z)) > 0.0:
             raise Error("An ellipsoid's radii must be positive")
+        if not (isfinite(axis.x) and isfinite(axis.y) and isfinite(axis.z)):
+            raise Error("An ellipsoid axis must be finite and nonzero")
+        if max(abs(axis.x), max(abs(axis.y), abs(axis.z))) == 0.0:
+            raise Error("An ellipsoid axis must be finite and nonzero")
+        if not (isfinite(up.x) and isfinite(up.y) and isfinite(up.z)):
+            raise Error("An ellipsoid up hint must be finite")
         var f = frame_zy(axis, up)
         return self._push(
             ELLIPSOID, tag, bone, c, c, f.x, f.y, f.z, r, k, carve, part, thin
@@ -826,14 +852,20 @@ struct SdfModel(Movable):
             The posed sculpt.
 
         Raises:
-            Error: If a primitive's bone has no transform.
+            Error: If a primitive's bone has no transform, a tag is
+                missing, or a primitive kind or surface part is invalid.
         """
         var out = SdfModel()
         out.outline = self.outline.copy()
         out.tags = self.tags.copy()
         out.tag_at = self.tag_at.copy()
+        out.visual_only = self.visual_only
         for p in self.prims:
-            if p.bone.value >= len(transforms):
+            require_kind(p.kind)
+            require_part(p.part)
+            if not p.tag.is_valid() or p.tag.value >= len(self.tags):
+                raise Error("Tag id names no tag of this sculpt")
+            if not p.bone.is_valid() or p.bone.value >= len(transforms):
                 raise Error("A primitive's bone has no transform")
             out.prims.append(p.moved(transforms[p.bone.value]))
         return out^

@@ -27,7 +27,7 @@ from extensions.sdf.vector import V3, length
 from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import pi, sqrt
+from std.math import isfinite, pi, sqrt
 from units.si import KILOGRAM, METER, Length, Mass
 
 
@@ -75,7 +75,7 @@ def _into_body(world: Matrix3, turn: Quaternion) -> Matrix3:
     var r = rotation_matrix(turn)
     var out = Matrix3()
     for i in range(3):  # pragma: no branch
-        for j in range(3):  # pragma: no branch
+        for j in range(i, 3):  # pragma: no branch
             var value = Float64(0)
             for k in range(3):  # pragma: no branch
                 for l in range(3):  # pragma: no branch
@@ -85,6 +85,7 @@ def _into_body(world: Matrix3, turn: Quaternion) -> Matrix3:
                         * Float64(r.elements[3 * j + l])
                     )
             out.elements[3 * j + i] = Float32(value)
+            out.elements[3 * i + j] = Float32(value)
     return out
 
 
@@ -106,7 +107,9 @@ def segment_bodies(animal: Animal, mass: BodyMass) raises -> List[RigidBody]:
         raise Error("The mass was sampled from another rig")
     var out = List[RigidBody]()
     for i in range(len(animal.rig.bones)):  # pragma: no branch
-        if mass.bones[i].mass <= 0.0:
+        if not (isfinite(mass.bones[i].mass) and mass.bones[i].mass >= 0.0):
+            raise Error("A segment mass must be finite and nonnegative")
+        if mass.bones[i].mass == 0.0:
             continue
         ref b = animal.rig.bones[i]
         var head = animal.rig.j(b.head)

@@ -43,7 +43,7 @@ from extensions.animals.anatomy.muscles import AnimalMuscle
 from extensions.animals.anatomy.tissue import ABDOMEN, TAIL, segment_of
 from extensions.animals.rig import Rig
 from extensions.sdf.vector import V3, cross, length, lerp, normalize
-from std.math import sqrt
+from std.math import isfinite, sqrt
 from units.si import (
     DEGREE,
     KILOGRAM,
@@ -105,6 +105,7 @@ def _muscle(
         tension,
         muscle_density(),
     )
+    arch.check()
     var joint = rig.find_joint(rig.bones[child].head)
     return AnimalMuscle(
         name,
@@ -229,6 +230,15 @@ def axial_muscles(
         raise Error("A body plan must be named")
     if len(mass.bones) != len(rig.bones):
         raise Error("The mass was sampled from another rig")
+    for i in range(len(rig.bones)):
+        var parent = rig.bones[i].parent.value
+        if parent < -1 or parent >= i:
+            raise Error(
+                "An axial bone parent must be a root or an earlier bone"
+            )
+    for tally in mass.bones:
+        if not (isfinite(tally.mass) and tally.mass >= 0.0):
+            raise Error("An axial muscle needs finite nonnegative segment mass")
     if plan == TELEOST or plan == SHARK_PLAN or plan == SERPENT:
         return _trunk(rig, plan, mass)
     if plan == ARACHNID:

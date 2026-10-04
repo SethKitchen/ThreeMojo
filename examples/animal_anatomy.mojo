@@ -7,12 +7,14 @@
 
     mojo run -I . examples/animal_anatomy.mojo [path.png]
 
-Each row is one species, scaled to its published shoulder height and
-weighed. The left tile is game mode: the painted coat, with the muscle
+Each row is one species, scaled to a reference shoulder height and
+sampled for mass. This gallery explicitly opts into design estimates. The left tile is game mode: the painted coat, with the muscle
 bellies bulging as they shorten. The right tile is engineering mode:
 the translucent skin over the skeleton and the muscles, each belly its
-own volume. Both walk at a Froude number of 0.25, so each stride takes
-the time dynamic similarity gives the animal's hip height. The program
+own volume. Both sample the same physical timeline, with each
+animal's reference frequency at a Froude number of 0.25. The visual
+stride is capped by the rig's reach. This is an in-place kinematic
+illustration, not a validated physical gait. The program
 prints each animal's mass, center of mass, stride, and the static load
 on each joint of its standing limbs.
 """
@@ -49,7 +51,7 @@ from extensions.animals.build import (
     create_animal,
     mesh_animal,
 )
-from extensions.animals.gait import walk_pose
+from extensions.animals.gait import walk_pose_at, walk_stride
 from extensions.animals.options import (
     ADULT,
     MALE,
@@ -69,12 +71,13 @@ from renderers.renderer import Renderer, available_workers
 from std.math import max
 from std.pathlib import Path
 from std.sys import argv
-from units.si import DEGREE, METER, Angle, Length
+from units.si import DEGREE, METER, SECOND, Angle, Duration, Length
 
 comptime DEFAULT_OUTPUT = "out/animal_anatomy.png"
 comptime TILE_W = 320
 comptime TILE_H = 240
 comptime FRAMES = 10
+comptime DELAY_MS = 100
 comptime SEED = 3
 comptime BACKGROUND = Color(170, 190, 215)
 
@@ -160,11 +163,10 @@ def main() raises:
     var sheets = List[Framebuffer]()
     for _ in range(FRAMES):
         sheets.append(Framebuffer(TILE_W * 2, TILE_H * len(names), BACKGROUND))
-    var delay = 100
     for row in range(len(names)):
         var id = species_of(names[row])
         var body = species_body(id)
-        var cal = calibrate(id, Variant(-1))
+        var cal = calibrate(id, Variant(-1), allow_estimates=True)
         var base = create_animal(
             id,
             animal_options(
@@ -187,13 +189,21 @@ def main() raises:
             total.mass.value,
             "kg; center of mass",
             total.center.y,
-            "m up; walk",
+            "m up; reference walk",
             speed_at(WALK_FROUDE, hip).value,
             "m/s, stride",
             stride_length(WALK_FROUDE, hip).value,
             "m at",
             f.value,
             "Hz",
+        )
+        var visual_stride = walk_stride(real.rig)
+        print(
+            "  reach-limited visual stride",
+            visual_stride.value,
+            "m; equivalent translation speed",
+            visual_stride.value * f.value,
+            "m/s (in-place illustration)",
         )
         for load in standing_loads(real, mass, muscles):
             print(
@@ -207,13 +217,12 @@ def main() raises:
                 load.activation,
                 "; held" if load.held else "; passive",
             )
-        if row == 0:
-            delay = Int(1000.0 / (Float64(f.value) * Float64(FRAMES)))
         var reach = Float32(0)
         var center = Vector3(0, 0, 0)
         var floor_y = Float32(0)
         for frame in range(FRAMES):
-            var pose = walk_pose(real.rig, Float64(frame) / Float64(FRAMES))
+            var elapsed = Duration(Float32(frame * DELAY_MS) / 1000.0, SECOND)
+            var pose = walk_pose_at(real.rig, elapsed)
             var game = mesh_animal(flexed_animal(real, muscles, pose), pose)
             if frame == 0:
                 var box = game.bounding_box()
@@ -229,7 +238,7 @@ def main() raises:
                 Length(reach * 30.0, METER),
             )
             camera.place(
-                center + Vector3(1.35, 0.25, 0.35) * (reach * 1.1), center
+                center + Vector3(1.35, 0.25, 0.35) * (reach * 1.4), center
             )
             var assets = Assets()
             var game_meshes: List[BufferGeometry] = [game^]
@@ -266,5 +275,7 @@ def main() raises:
                 TILE_W,
                 row * TILE_H,
             )
-    Path(destination).write_bytes(encode(sheets, delay_ms=delay))
+    # The species have different periods. Play this shared-time clip once
+    # instead of jumping every species back to phase zero at a loop seam.
+    Path(destination).write_bytes(encode(sheets, delay_ms=DELAY_MS, plays=1))
     print("Wrote", destination)

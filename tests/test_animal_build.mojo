@@ -38,12 +38,19 @@ from extensions.animals.coat import (
 )
 from extensions.animals.gait import (
     DUTY,
+    _reach_along,
+    WALK_FL,
+    WALK_FR,
+    WALK_HL,
+    WALK_HR,
     foot_offset,
     is_quadruped,
     solve_two_bone,
     spine_count,
     undulate_pose,
     walk_pose,
+    walk_pose_at,
+    walk_stride,
 )
 from extensions.sdf.ids import (
     BoneId,
@@ -93,11 +100,18 @@ from extensions.animals.registry import (
 from extensions.animals.rig import Pose, Rig
 from extensions.sdf.field import SdfModel
 from extensions.animals.traits import Traits
+from extensions.anatomy.locomotion import (
+    WALK_FROUDE,
+    stride_frequency,
+    stride_length,
+)
+from units.si import METER, SECOND, Duration, Length
 from extensions.sdf.vector import (
     V3,
     length,
+    rotation_about,
 )
-from std.math import pi
+from std.math import floor, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -477,6 +491,185 @@ def test_walk_cycle() raises:
     _ = rig.add_bone("head", "a", "b", "")
     assert_false(is_quadruped(rig))
     assert_equal(len(walk_pose(rig, 0.5).local), 1)
+
+
+def test_two_bone_reaches_the_projected_target() raises:
+    var root = V3(0, 1, 0)
+    var mid = V3(0, 0.5, 0.1)
+    var end = V3(0, 0, 0)
+    for target in [V3(0, 0.1, 0.1), V3(0, -5, 0), root]:
+        var turns = solve_two_bone(root, mid, end, target)
+        var upper = rotation_about(root, V3(1, 0, 0), turns[0])
+        var lower = rotation_about(mid, V3(1, 0, 0), turns[1]).then(upper)
+        var actual = lower.apply(end)
+        var offset = target - root
+        var distance = length(offset)
+        var reach = min(distance, length(mid - root) + length(end - mid))
+        var expected = root if distance == 0.0 else root + offset * (
+            reach / distance
+        )
+        assert_almost_equal(actual.y, expected.y, atol=1e-9)
+        assert_almost_equal(actual.z, expected.z, atol=1e-9)
+    # Unequal links cannot reach inside their inner radius either.
+    var bent = V3(0, 0.7, 0)
+    var target = V3(0, 0.9, 0)
+    var turns = solve_two_bone(root, bent, end, target)
+    var upper = rotation_about(root, V3(1, 0, 0), turns[0])
+    var lower = rotation_about(bent, V3(1, 0, 0), turns[1]).then(upper)
+    assert_almost_equal(lower.apply(end).y, 0.6, atol=1e-9)
+    with assert_raises(contains="planar length"):
+        _ = solve_two_bone(root, root, end, target)
+    with assert_raises(contains="planar length"):
+        _ = solve_two_bone(root, mid, mid, target)
+    with assert_raises(contains="planar length"):
+        _ = solve_two_bone(
+            V3(0, 1e308, 0), V3(0, 0, 0), V3(0, -1e308, 0), target
+        )
+    var inf = 1e300 * 1e300
+    for bad in [V3(inf, 0, 0), V3(0, inf, 0), V3(0, 0, inf)]:
+        with assert_raises(contains="finite"):
+            _ = solve_two_bone(root, mid, end, bad)
+
+
+def test_two_bone_scales_without_squared_overflow() raises:
+    # Angles are scale invariant. Raw squared lengths overflow at this
+    # scale even though every input and the requested solution is finite.
+    var a = V3(0, 1, 0)
+    var b = V3(0, 0.5, 0.1)
+    var c = V3(0, 0, 0)
+    var target = V3(0, 0.1, 0.1)
+    var ordinary = solve_two_bone(a, b, c, target)
+    var large = solve_two_bone(a * 1e160, b * 1e160, c, target * 1e160)
+    assert_almost_equal(large[0], ordinary[0], atol=1e-12)
+    assert_almost_equal(large[1], ordinary[1], atol=1e-12)
+    var tiny = solve_two_bone(a * 1e-160, b * 1e-160, c, target * 1e-160)
+    assert_almost_equal(tiny[0], ordinary[0], atol=1e-12)
+    assert_almost_equal(tiny[1], ordinary[1], atol=1e-12)
+    assert_almost_equal(_reach_along(5e160, 3e160) / 1e160, 4.0, atol=1e-12)
+    assert_almost_equal(_reach_along(5e-160, 3e-160) / 1e-160, 4.0, atol=1e-12)
+    # Finite endpoints can still have an unrepresentable displacement.
+    with assert_raises(contains="target displacement"):
+        _ = solve_two_bone(
+            V3(0, 1e308, 0), V3(0, 9e307, 0), V3(0, 8e307, 0), V3(0, -1e308, 0)
+        )
+
+
+def test_walk_stance_feet_hold_height_for_each_quadruped() raises:
+    # Check actual forward kinematics, not just nonzero joint angles.
+    # All species are built, but this test does not mesh their surfaces.
+    for species in range(SPECIES_COUNT):
+        var animal = create_animal(
+            SpeciesId(species), animal_options(3, quality=CROWD)
+        )
+        if not is_quadruped(animal.rig):
+            continue
+        var stride = Float64(walk_stride(animal.rig).to(METER))
+        var hip = Length(Float32(animal.rig.j("hipL").y), METER)
+        assert_true(stride >= 0.0)
+        assert_true(
+            stride <= Float64(stride_length(WALK_FROUDE, hip).to(METER)) + 1e-6
+        )
+        for frame in range(32):
+            var phase = Float64(frame) / 32.0
+            var pose = walk_pose(animal.rig, phase)
+            var world = pose.world(animal.rig)
+            for foot in range(4):
+                var front = foot < 2
+                var side = String("L") if foot % 2 == 0 else String("R")
+                var phases: List[Float64] = [WALK_FL, WALK_FR, WALK_HL, WALK_HR]
+                var local = phase + phases[foot]
+                local -= floor(local)
+                if local >= DUTY:
+                    continue
+                var bone = animal.rig.bone(
+                    (String("metacarpus") if front else String("metatarsus"))
+                    + side
+                )
+                var point = animal.rig.j(
+                    (String("mcp") if front else String("mtp")) + side
+                )
+                var actual = world[bone.value].apply(point)
+                assert_almost_equal(actual.y, point.y, atol=1e-7)
+                var offset = foot_offset(local, stride * DUTY, 0.0)
+                assert_almost_equal(actual.z, point.z + offset.z, atol=1e-7)
+
+
+def test_walk_respects_the_inner_reach_of_folded_legs() raises:
+    var animal = create_animal(WOLF, animal_options(3, quality=CROWD))
+    var rig = animal.rig.copy()
+    for front in [True, False]:
+        for side in [String("L"), String("R")]:
+            var x = 0.1 if side == "L" else -0.1
+            rig.set(
+                (String("shoulder") if front else String("hip")) + side,
+                V3(x, 1.0, 0.0),
+            )
+            rig.set(
+                (String("elbow") if front else String("knee")) + side,
+                V3(x, 0.2, 0.1),
+            )
+            rig.set(
+                (String("wrist") if front else String("hock")) + side,
+                V3(x, 0.9, 0.1),
+            )
+    var sweep = DUTY * Float64(walk_stride(rig).value)
+    assert_true(sweep > 0.0 and sweep < 0.2)
+    for frame in range(32):
+        var phase = Float64(frame) / 32.0
+        var world = walk_pose(rig, phase).world(rig)
+        for foot in range(4):
+            var front = foot < 2
+            var side = String("L") if foot % 2 == 0 else String("R")
+            var phases: List[Float64] = [WALK_FL, WALK_FR, WALK_HL, WALK_HR]
+            var local = phase + phases[foot]
+            local -= floor(local)
+            if local >= DUTY:
+                continue
+            var bone = rig.bone(
+                (String("metacarpus") if front else String("metatarsus")) + side
+            )
+            var p = rig.j((String("mcp") if front else String("mtp")) + side)
+            var moved = world[bone.value].apply(p)
+            assert_almost_equal(moved.y, p.y, atol=1e-7)
+            assert_almost_equal(
+                moved.z, p.z + foot_offset(local, sweep, 0.0).z, atol=1e-7
+            )
+
+
+def test_walk_time_uses_each_animals_frequency_and_wraps() raises:
+    var frequencies = List[Float64]()
+    for name in [String("horse"), String("dog")]:
+        var animal = create_animal(
+            species_of(name), animal_options(3, quality=CROWD)
+        )
+        var hip = Length(Float32(animal.rig.j("hipL").y), METER)
+        var f = Float64(stride_frequency(WALK_FROUDE, hip).value)
+        frequencies.append(f)
+        var timed = walk_pose_at(animal.rig, Duration(0.25, SECOND))
+        var expected = walk_pose(animal.rig, 0.25 * f)
+        var a = timed.world(animal.rig)
+        var b = expected.world(animal.rig)
+        for i in range(len(a)):
+            assert_almost_equal(a[i].t.y, b[i].t.y, atol=1e-12)
+            assert_almost_equal(a[i].t.z, b[i].t.z, atol=1e-12)
+        # The foot paths and world transforms meet at the cycle seam.
+        var before = walk_pose(animal.rig, -1e-8)
+        var after = walk_pose(animal.rig, 1e-8)
+        var left = before.world(animal.rig)
+        var right = after.world(animal.rig)
+        for i in range(len(left)):
+            assert_almost_equal(left[i].t.y, right[i].t.y, atol=1e-6)
+            assert_almost_equal(left[i].t.z, right[i].t.z, atol=1e-6)
+    assert_true(frequencies[1] > frequencies[0])
+    var bare = Rig()
+    assert_equal(walk_stride(bare).value, Float32(0.0))
+    assert_equal(len(walk_pose_at(bare, Duration(0.25, SECOND)).local), 0)
+    var inf = 1e300 * 1e300
+    with assert_raises(contains="time must be finite"):
+        _ = walk_pose_at(bare, Duration(Float32(inf), SECOND))
+    var wolf = create_animal(WOLF, animal_options(3, quality=CROWD))
+    with assert_raises(contains="phase must be finite"):
+        _ = walk_pose(wolf.rig, inf)
 
 
 def test_undulation() raises:

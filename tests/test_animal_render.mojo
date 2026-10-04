@@ -14,7 +14,9 @@ from extensions.animals.anatomy.flex import (
     flexed_animal,
 )
 from extensions.animals.anatomy.muscles import AnimalMuscle, animal_muscles
+from extensions.animals.anatomy.mass import sample_mass
 from extensions.animals.anatomy.render import (
+    _skin_layer,
     BONE_LAYER,
     MUSCLE_LAYER,
     SKIN_LAYER,
@@ -29,8 +31,12 @@ from extensions.animals.build import Animal, create_animal, mesh_animal
 from extensions.animals.gait import walk_pose
 from extensions.animals.options import ADULT, CROWD, MALE, animal_options
 from extensions.animals.registry import RAT, species_of
-from extensions.sdf.ids import CONE, ELLIPSOID, LENS
+from extensions.sdf.ids import CONE, ELLIPSOID, LENS, BoneId, TagId
+from extensions.sdf.field import SdfModel
+from extensions.animals.parts import BODY, JAW
+from core.buffer_geometry import NORMAL, POSITION
 from extensions.sdf.vector import V3
+from extensions.animals.warp import Warps
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -87,6 +93,16 @@ def test_bellies_keep_their_shape_standing_and_bulge_when_short() raises:
         if p.r.x != before.x or p.r.y != before.y or p.r.z != before.z:
             changed += 1
             assert_true(p.kind == ELLIPSOID or p.kind == CONE)
+            if p.kind == ELLIPSOID:
+                assert_almost_equal(
+                    p.r.x * p.r.y * p.r.z,
+                    before.x * before.y * before.z,
+                    rtol=1e-12,
+                )
+            else:
+                # The visual cone bulge changes radii, not its endpoints.
+                assert_equal(p.c.y, rat.model.prims[i].c.y)
+                assert_equal(p.b.y, rat.model.prims[i].b.y)
     assert_true(changed > 0)
     # Without muscles, nothing changes shape.
     var none = flexed(rat, List[AnimalMuscle](), crouch)
@@ -102,7 +118,12 @@ def test_bellies_keep_their_shape_standing_and_bulge_when_short() raises:
     var kept = flexed(odd, muscles, crouch)
     assert_equal(kept.prims[lens].r.x, odd.model.prims[lens].r.x)
     var walk = walk_pose(rat.rig, 0.4)
-    var mesh = mesh_animal(flexed_animal(rat, muscles, walk), walk)
+    var visual = flexed_animal(rat, muscles, walk)
+    assert_equal(visual.traits.get("anatomy_visual_flex", 0.0), 1.0)
+    assert_equal(rat.traits.get("anatomy_visual_flex", 0.0), 0.0)
+    with assert_raises(contains="Visual flex"):
+        _ = sample_mass(visual, walk, Length(0.02, METER))
+    var mesh = mesh_animal(visual, walk)
     assert_true(mesh.vertex_count() > 100)
 
 
@@ -154,6 +175,54 @@ def test_skeleton_and_muscles_are_solids() raises:
     assert_almost_equal(volume, muscles[0].arch.volume_m3(), rtol=1e-6)
 
 
+def test_flex_refuses_closed_belly_direction() raises:
+    var rat = _rat()
+    var muscles = animal_muscles(rat.rig, MAMMAL, Mass(0.3, KILOGRAM))
+    # Every segment is nonzero, but the bind path returns to its origin.
+    # Such a path has no direction along which the surface can bulge.
+    muscles[0].points.append(muscles[0].points[0])
+    muscles[0].bones.append(muscles[0].bones[0])
+    with assert_raises(contains="distinct bind endpoints"):
+        _ = flexed(rat, muscles, rat.bind_pose())
+
+
+def test_direct_flex_provenance_survives_model_operations() raises:
+    var animal = _rat()
+    var muscles = animal_muscles(animal.rig, MAMMAL, Mass(0.3, KILOGRAM))
+    var pose = animal.bind_pose()
+    animal.model = flexed(animal, muscles, pose)
+    assert_true(animal.model.visual_only)
+    assert_equal(animal.traits.get("anatomy_visual_flex", 0.0), 0.0)
+    with assert_raises(contains="Visual flex"):
+        _ = sample_mass(animal, pose, Length(0.02, METER))
+    var world = pose.world(animal.rig)
+    var warps = Warps()
+    var copies = List[SdfModel]()
+    copies.append(animal.model.copy())
+    copies.append(animal.model.moved(world))
+    copies.append(warps.warp_model(animal.model))
+    for _ in range(3):
+        var copied = _rat()
+        copied.model = copies.pop(0)
+        assert_true(copied.model.visual_only)
+        with assert_raises(contains="Visual flex"):
+            _ = sample_mass(copied, copied.bind_pose(), Length(0.02, METER))
+
+
+def test_flex_checks_mutated_bone_and_tag_ids() raises:
+    for id in [-1, 10000]:
+        var animal = _rat()
+        animal.model.prims[0].bone = BoneId(id)
+        with assert_raises(contains="names no bone"):
+            _ = flexed(animal, List[AnimalMuscle](), animal.bind_pose())
+        var tagged = _rat()
+        tagged.model.prims[0].tag = TagId(id)
+        with assert_raises(contains="names no tag"):
+            _ = mesh_in_mode(
+                tagged, List[AnimalMuscle](), tagged.bind_pose(), GAME_MODE
+            )
+
+
 def test_engineering_layers_mesh_and_light() raises:
     var rat = _rat()
     var muscles = animal_muscles(rat.rig, MAMMAL, Mass(0.3, KILOGRAM))
@@ -177,6 +246,42 @@ def test_engineering_layers_mesh_and_light() raises:
     assert_equal(len(looks), 3)
     assert_true(looks[SKIN_LAYER].transparent)
     assert_true(looks[SKIN_LAYER].opacity < 1.0)
+
+
+def test_engineering_skin_preserves_game_surface_parts() raises:
+    var animal = _rat()
+    animal.cell = 0.1
+    animal.eye_cell = 0.1
+    animal.model = SdfModel()
+    var bone = animal.rig.bone("pelvis")
+    _ = animal.model.sphere("body", bone, V3(0, 0, 0), 0.4, k=0.0, part=BODY)
+    # A carver in an otherwise empty JAW part must not cut BODY.
+    _ = animal.model.sphere(
+        "mouth", bone, V3(0, 0.3, 0), 0.3, k=0.0, carve=True, part=JAW
+    )
+    var bind = animal.bind_pose()
+    var posed = animal.model.moved(bind.world(animal.rig))
+    var skin = _skin_layer(animal, posed, 1)
+    var game = mesh_animal(animal, bind)
+    assert_equal(skin.vertex_count(), game.vertex_count())
+    ref skin_positions = skin.attribute_view(String(POSITION))
+    ref game_positions = game.attribute_view(String(POSITION))
+    for i in range(skin.vertex_count()):
+        for axis in range(3):
+            assert_equal(
+                skin_positions.component(i, axis),
+                game_positions.component(i, axis),
+            )
+    # Separate additive parts stay separate too, with global indices and
+    # normals preserved by the surface merge.
+    _ = animal.model.sphere("jaw", bone, V3(0, -0.3, 0), 0.2, k=0.1, part=JAW)
+    posed = animal.model.moved(bind.world(animal.rig))
+    var layered = _skin_layer(animal, posed, 1)
+    var painted = mesh_animal(animal, bind)
+    assert_equal(layered.vertex_count(), painted.vertex_count())
+    for i in layered.index:
+        assert_true(i >= 0 and i < layered.vertex_count())
+    assert_true(layered.has_attribute(String(NORMAL)))
 
 
 def main() raises:

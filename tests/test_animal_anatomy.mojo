@@ -400,7 +400,7 @@ def test_calibration_scales_to_the_published_size() raises:
     var small = calibrated_mass(young, cal, 40.0)
     assert_true(small.total().mass < m.total().mass)
     # Another morph keeps the length but not the mass correction.
-    var wolf_spider = calibrate(SPIDER, Variant(0))
+    var wolf_spider = calibrate(SPIDER, Variant(0), allow_estimates=True)
     assert_false(wolf_spider.matched)
     assert_equal(wolf_spider.density_factor, 1.0)
     var bad = cal

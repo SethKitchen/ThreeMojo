@@ -369,13 +369,18 @@ struct Pose(Movable):
             One transform per bone.
 
         Raises:
-            Error: If the pose is for a rig with another bone count.
+            Error: If the pose is for a rig with another bone count, or
+                a parent does not name an earlier bone.
         """
         if len(self.local) != len(rig.bones):
             raise Error("The pose is for another rig")
         var out = List[Rigid](capacity=len(rig.bones))
         for i in range(len(rig.bones)):
             var parent = rig.bones[i].parent
+            if parent != NO_BONE and (
+                not parent.is_valid() or parent.value >= i
+            ):
+                raise Error("A bone parent must name an earlier bone")
             var above = self.root if parent == NO_BONE else out[parent.value]
             out.append(self.local[i].then(above))
         return out^

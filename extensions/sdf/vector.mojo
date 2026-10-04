@@ -11,7 +11,7 @@ Coordinates are meters.
 """
 
 from generators.utils import Vec3d
-from std.math import cos, sin, sqrt
+from std.math import cos, isfinite, sin, sqrt
 
 # A point or a direction, in meters.
 comptime V3 = Vec3d
@@ -190,19 +190,42 @@ struct Frame(ImplicitlyCopyable):
 def frame_zy(z_dir: V3, up_hint: V3) -> Frame:
     """Return a frame whose `z` follows `z_dir` and whose `y` is near `up_hint`.
 
-    When the hint is parallel to `z_dir`, world +x seeds the frame.
+    An unusable forward direction gives the canonical identity frame.
+    A zero, nonfinite or nearly parallel hint uses the cardinal axis
+    least aligned with the normalized forward direction. Valid finite
+    directions are normalized without overflowing or losing subnormals.
+    This tolerant visual fallback is not physical-orientation validation.
 
     Args:
         z_dir: The direction of the frame's z axis.
         up_hint: A direction near the frame's y axis.
 
     Returns:
-        The right-handed frame.
+        The right-handed unit frame, or the identity frame when `z_dir`
+        is zero or has a nonfinite component.
     """
+    var x_axis = V3(1.0, 0.0, 0.0)
+    var y_axis = V3(0.0, 1.0, 0.0)
+    var z_axis = V3(0.0, 0.0, 1.0)
+    if not (isfinite(z_dir.x) and isfinite(z_dir.y) and isfinite(z_dir.z)):
+        return Frame(x_axis, y_axis, z_axis)
+    if max(abs(z_dir.x), max(abs(z_dir.y), abs(z_dir.z))) == 0.0:
+        return Frame(x_axis, y_axis, z_axis)
     var z = normalize(z_dir)
-    var x = cross(up_hint, z)
+    var up = V3(0.0, 0.0, 0.0)
+    if isfinite(up_hint.x) and isfinite(up_hint.y) and isfinite(up_hint.z):
+        var scale = max(abs(up_hint.x), max(abs(up_hint.y), abs(up_hint.z)))
+        if scale > 0.0:
+            up = V3(up_hint.x / scale, up_hint.y / scale, up_hint.z / scale)
+    var x = cross(up, z)
     if length(x) < 1e-6:
-        x = cross(V3(1.0, 0.0, 0.0), z)
+        var ax = abs(z.x)
+        var ay = abs(z.y)
+        var az = abs(z.z)
+        var seed = x_axis if ax <= ay and ax <= az else (
+            y_axis if ay <= az else z_axis
+        )
+        x = cross(seed, z)
     x = normalize(x)
     return Frame(x, cross(z, x), z)
 

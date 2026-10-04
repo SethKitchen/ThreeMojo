@@ -13,7 +13,9 @@ middle but over their soles, as in a crouching rat, puts all the weight
 on the hind feet. Each foot pushes up with
 half its pair's share. About each limb joint that push has a moment,
 `-dz F`, with `dz` the foot's fore-aft distance from the joint; the
-muscles that cross the joint must balance it.
+muscles that cross the joint must balance it and the downward weight
+of every distal segment. This is a symmetric sagittal-plane template.
+It is not a three-dimensional stability or passive-tissue model.
 
 The muscles whose moment arm opposes the load share it at one stress,
 as an optimizer that minimizes the peak stress would share it:
@@ -24,16 +26,21 @@ The effective mechanical advantage is the muscles' mean moment arm,
 weighted by their forces, over the ground's moment arm, `r / R`
 (Biewener 1989). A joint that no muscle here can hold, such as a
 horse's fetlock, or one they could hold only above full activation,
-reports `held` False: tendons and ligaments, such as a horse's stay
-apparatus, hold it.
+reports `held` False. This calculation does not model passive tissues
+or prove that they can support the missing moment.
 """
 
 from extensions.animals.anatomy.body import MAMMAL, species_body
 from extensions.animals.anatomy.mass import BodyMass
-from extensions.animals.anatomy.muscles import AnimalMuscle
+from extensions.animals.anatomy.muscles import (
+    AnimalMuscle,
+    descends,
+    _head_bone,
+)
 from extensions.animals.build import Animal
 from extensions.physics.quantities import NEWTON_METER, Torque
 from extensions.sdf.vector import V3
+from std.math import cos, isfinite
 from units.si import (
     METER,
     NEWTON,
@@ -55,7 +62,8 @@ struct JointLoad(Copyable, Movable, Writable):
     # The moment the muscles must make, positive by the right-hand rule
     # about the animal's left.
     var moment: Torque
-    # The ground reaction's fore-aft lever about the joint.
+    # The ground reaction's fore-aft lever about the joint. The net
+    # muscle moment also includes distal segment weight.
     var ground_lever: Length
     # The holding muscles' force-weighted moment arm.
     var muscle_lever: Length
@@ -66,7 +74,7 @@ struct JointLoad(Copyable, Movable, Writable):
     # That stress over the specific tension.
     var activation: Float64
     # Whether the muscles here can make the moment at full activation
-    # or less. If not, tendons and ligaments hold the joint.
+    # or less. False does not establish passive support or stability.
     var held: Bool
 
 
@@ -80,14 +88,17 @@ def _load(
     joint: String,
     foot: V3,
     push: Float64,
+    distal_weight_moment: Float64 = 0.0,
 ) raises -> JointLoad:
+    if not (isfinite(push) and push >= 0.0 and isfinite(distal_weight_moment)):
+        raise Error("Standing loads must have finite force and moment inputs")
     var rig = animal.rig.copy()
     var world = animal.bind_pose().world(rig)
     var index = rig.find_joint(joint)
     var center = rig.joints[index]
     var dz = foot.z - center.z
     # The ground pushes up at the foot; the muscles must cancel it.
-    var need = dz * push
+    var need = dz * push - distal_weight_moment
     var lever_force = 0.0
     var force = 0.0
     var pcsa_lever = 0.0
@@ -99,8 +110,12 @@ def _load(
             var r = Float64(m.moment_arms(rig, world)[n].value)
             if r * need <= 0.0:
                 continue
-            pcsa_lever += abs(r) * Float64(m.arch.pcsa().value)
-            tension = Float64(m.arch.specific_tension.value)
+            var area = Float64(m.arch.pcsa().value) * cos(
+                Float64(m.arch.pennation.value)
+            )
+            pcsa_lever += abs(r) * area
+            var limit = Float64(m.arch.specific_tension.value)
+            tension = min(tension, limit) if tension > 0.0 else limit
     var able = pcsa_lever > 0.0
     var sigma = abs(need) / pcsa_lever if able else 0.0
     for m in muscles:
@@ -110,22 +125,50 @@ def _load(
             var r = Float64(m.moment_arms(rig, world)[n].value)
             if r * need <= 0.0:
                 continue
-            var f = sigma * Float64(m.arch.pcsa().value)
+            var f = (
+                sigma
+                * Float64(m.arch.pcsa().value)
+                * cos(Float64(m.arch.pennation.value))
+            )
             force += f
             lever_force += abs(r) * f
     var lever = lever_force / force if force > 0.0 else 0.0
     var ground = abs(dz)
+    var activation = sigma / tension if able else 0.0
+    var advantage = lever / ground if ground > 0.0 else 0.0
+    for value in [push, need, ground, lever, sigma]:
+        if not isfinite(Float32(value)):
+            raise Error("Standing loads must fit finite SI quantities")
+    if not (isfinite(activation) and isfinite(advantage)):
+        raise Error("Standing load ratios must be finite")
     return JointLoad(
         joint,
         Force(Float32(push), NEWTON),
         Torque(Float32(need), NEWTON_METER),
         Length(Float32(ground), METER),
         Length(Float32(lever), METER),
-        lever / ground if ground > 0.0 else 0.0,
+        advantage,
         Pressure(Float32(sigma), PASCAL),
-        sigma / tension if able else 0.0,
-        able and sigma <= tension,
+        activation,
+        need == 0.0 or (able and sigma <= tension),
     )
+
+
+def _distal_weight_moment(
+    animal: Animal, mass: BodyMass, joint: String
+) raises -> Float64:
+    # Sum the downward weights of every segment distal to this joint.
+    # A segment at z relative to the joint has external x moment +z*m*g.
+    var bone = _head_bone(animal.rig, joint)
+    var center = animal.rig.j(joint)
+    var moment = 0.0
+    for i in range(len(mass.bones)):
+        if mass.bones[i].mass > 0.0 and descends(animal.rig, i, bone):
+            var tally = mass.bones[i].copy()
+            moment += (tally.first[2] - center.z * tally.mass) * Float64(
+                STANDARD_GRAVITY.value
+            )
+    return moment
 
 
 def standing_loads(
@@ -147,6 +190,8 @@ def standing_loads(
     """
     if species_body(animal.species).plan != MAMMAL:
         raise Error("Standing loads are for quadruped mammals")
+    if len(mass.bones) != len(animal.rig.bones):
+        raise Error("The mass was sampled from another rig")
     var total = mass.total()
     var weight = Float64(total.mass.value) * Float64(STANDARD_GRAVITY.value)
     var rig = animal.rig.copy()
@@ -155,6 +200,8 @@ def standing_loads(
     var fore = (rig.j("mcpL") + rig.j("ftoeL")) * 0.5
     var hind = (rig.j("mtpL") + rig.j("htoeL")) * 0.5
     var heel = min(rig.j("hockL").z, rig.j("mtpL").z)
+    if not (isfinite(fore.z) and isfinite(hind.z) and fore.z > hind.z):
+        raise Error("Standing support needs ordered finite feet")
     var zc = Float64(total.center.z)
     if not (zc > heel and zc < fore.z):
         raise Error("The center of mass is not over the feet")
@@ -166,12 +213,24 @@ def standing_loads(
     var out = List[JointLoad]()
     for name in materialize[_FORE]():  # pragma: no branch
         out.append(
-            _load(animal, muscles, name + "L", fore, 0.5 * share * weight)
+            _load(
+                animal,
+                muscles,
+                name + "L",
+                fore,
+                0.5 * share * weight,
+                _distal_weight_moment(animal, mass, name + "L"),
+            )
         )
     for name in materialize[_HIND]():  # pragma: no branch
         out.append(
             _load(
-                animal, muscles, name + "L", hind, 0.5 * (1.0 - share) * weight
+                animal,
+                muscles,
+                name + "L",
+                hind,
+                0.5 * (1.0 - share) * weight,
+                _distal_weight_moment(animal, mass, name + "L"),
             )
         )
     return out^

@@ -35,11 +35,18 @@ from extensions.animals.build import Animal, part_box
 from extensions.animals.parts import EYEBALL, HORN, TEETH, TONGUE, WATTLE
 from extensions.animals.rig import Pose
 from extensions.sdf.field import SdfModel
-from extensions.sdf.ids import SURFACE_PART_COUNT, SurfacePart
-from extensions.sdf.vector import V3
+from extensions.sdf.ids import (
+    CONE,
+    ELLIPSOID,
+    FIN,
+    LENS,
+    SURFACE_PART_COUNT,
+    SurfacePart,
+)
+from extensions.sdf.vector import V3, dot
 from math.vector3 import Vector3
 from render.tasks import TaskGroup
-from std.math import ceil, sqrt
+from std.math import ceil, isfinite, sqrt
 from std.sys import num_logical_cores
 from units.si import CUBIC_METER, METER, Length, Volume
 
@@ -103,21 +110,28 @@ struct BodyMass(Movable):
 
         Returns:
             The shoulder height above the ground, the body length or
-            the total length.
+            the total length from occupied surface cells. These are not
+            the separate analytic template landmarks used for calibration.
 
         Raises:
             Error: If the kind is not named, or the sculpt has no
-                withers to measure.
+                withers to measure, or an extent is absent or under-resolved.
         """
         if not kind.is_valid():
             raise Error("A reference length must be named")
         if kind == SHOULDER_HEIGHT:
             if self.withers.value < self.ground.value:
                 raise Error("The sculpt has no withers")
-            return self.withers - self.ground
-        if kind == BODY_LENGTH:
-            return self.body_length
-        return self.total_length
+            var height = self.withers - self.ground
+            if not (isfinite(height.value) and height.value > 0.0):
+                raise Error("The sampled withers are absent or under-resolved")
+            return height
+        var value = (
+            self.body_length if kind == BODY_LENGTH else self.total_length
+        )
+        if not (isfinite(value.value) and value.value > 0.0):
+            raise Error("The sampled reference is absent or under-resolved")
+        return value
 
     def total(self) raises -> SegmentInertia:
         """Return the whole body's mass, center of mass and inertia.
@@ -274,23 +288,31 @@ async def _sample_task(
                     s[TOTAL_LOW] = min(s[TOTAL_LOW], q.z + d)
                     s[TOTAL_HIGH] = max(s[TOTAL_HIGH], q.z - d)
             var best = 1e30
-            var at = -1
+            var solid = -1
             for p in range(len(lists)):  # pragma: no branch
                 var d = model[].eval_list(lists[p], q)
+                if d > 0.5 * h:
+                    continue
+                var candidate = model[].nearest(lists[p], q)
+                if candidate < 0:
+                    continue
+                # Choose the nearest flesh surface after coat erosion.
+                # An uneroded eye can remain outside an eroded skin part.
+                d += min(input[].erode[p], input[].reach[candidate])
                 if d < best:
                     best = d
-                    at = p
-            if best > 0.5 * h:
+                    solid = candidate
+            if solid < 0 or best > 0.5 * h:
                 continue
-            var solid = model[].nearest(lists[at], q)
-            best += min(input[].erode[at], input[].reach[solid])
             var share = min(1.0, max(0.0, 0.5 - best / h))
             if share <= 0.0:
                 continue
             var m = share * cell_volume * input[].density[solid]
             var bone = model[].prims[solid].bone.value
             var spot = Vector3(Float32(q.x), Float32(q.y), Float32(q.z))
-            tallies[unsafe_offset=task * bones + bone].add_cell(m, spot, widths)
+            tallies[unsafe_offset=task * bones + bone]._add_cell(
+                m, spot, widths
+            )
             s[VOLUME] += share * cell_volume
             if best >= 0.0 or best < -h:
                 continue
@@ -338,6 +360,55 @@ def _launch(
     group.wait()
 
 
+def _check_sampling_model(model: SdfModel) raises:
+    # Mutable models are checked before culling, integer grid conversion,
+    # pointer-indexed worker writes or unchecked tally accumulation.
+    for value in model.outline:
+        if not isfinite(value):
+            raise Error("A sampled outline must be finite")
+    for p in model.prims:
+        if not p.kind.is_valid() or not p.part.is_valid():
+            raise Error("A sampled primitive kind and part must be named")
+        for point in [p.c, p.b, p.ax, p.ay, p.az, p.r]:
+            if not (
+                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
+            ):
+                raise Error("Sampled primitive geometry must be finite")
+        if p.kind != CONE:
+            for axis in [p.ax, p.ay, p.az]:
+                if abs(dot(axis, axis) - 1.0) > 1e-8:
+                    raise Error("A sampled primitive frame must be orthonormal")
+            for pair in [(p.ax, p.ay), (p.ax, p.az), (p.ay, p.az)]:
+                if abs(dot(pair[0], pair[1])) > 1e-8:
+                    raise Error("A sampled primitive frame must be orthonormal")
+        for value in [p.k, p.lo, p.hi]:
+            if not isfinite(value):
+                raise Error("Sampled primitive geometry must be finite")
+        if p.k < 0.0:
+            raise Error("A sampled blend radius must be nonnegative")
+        if p.kind == ELLIPSOID:
+            if min(p.r.x, min(p.r.y, p.r.z)) <= 0.0:
+                raise Error("Sampled ellipsoid radii must be positive")
+        elif p.kind == CONE:
+            var span = (p.b - p.c).length()
+            if not (isfinite(span) and span > abs(p.r.x - p.r.y)):
+                raise Error("A sampled cone must have distinct valid ends")
+            if min(p.r.x, p.r.y) < 0.0:
+                raise Error("Sampled cone radii must be nonnegative")
+        elif p.kind == LENS:
+            if not (p.r.x > abs(p.r.y) and p.hi > p.lo):
+                raise Error("A sampled lens must have a valid arc and depth")
+        else:
+            if (
+                p.first < 0
+                or p.count < 3
+                or p.first > len(model.outline) // 2 - p.count
+            ):
+                raise Error("A sampled fin outline is outside the model")
+            if not (p.r.x > 0.0 and p.r.y >= 0.0):
+                raise Error("A sampled fin must have positive thickness")
+
+
 def sample_mass(
     animal: Animal, pose: Pose, step: Length, workers: Int = 0
 ) raises -> BodyMass:
@@ -347,8 +418,8 @@ def sample_mass(
         animal: The individual.
         pose: How its bones are turned. The bind pose stands it on the
             ground.
-        step: The cell side. A fortieth of the reference length gives
-            the mass to a few percent.
+        step: The cell side. Error depends on the species, pose, coat and
+            grid. Compare resolutions before using a sampled estimate.
         workers: How many threads sample it. Zero or less means one per
             logical core. The result does not depend on the count, up
             to rounding.
@@ -361,18 +432,30 @@ def sample_mass(
             larger than 400 cells a side, the pose is for another rig,
             or the sculpt has no flesh.
     """
+    if (
+        animal.model.visual_only
+        or animal.traits.get("anatomy_visual_flex", 0.0) != 0.0
+    ):
+        raise Error(
+            "Visual flex geometry is not canonical tissue for mass sampling"
+        )
     var h = Float64(step.to(METER))
     if not (h > 0.0 and h < 1e3):
         raise Error("A mass step must be positive and finite")
     var body = species_body(animal.species)
     var coat = Float64(body.coat_depth.to(METER))
-    var world = pose.world(animal.rig)
-    var posed = animal.model.moved(world)
     var input = _Input()
     input.density = solid_densities(animal)
     input.role = solid_roles(animal)
+    var world = pose.world(animal.rig)
+    var posed = animal.model.moved(world)
+    _check_sampling_model(posed)
     for p in posed.prims:  # pragma: no branch
-        input.reach.append(COAT_SHARE * min(p.r.x, min(p.r.y, p.r.z)))
+        var radius = min(p.r.x, min(p.r.y, p.r.z))
+        if p.kind == CONE:
+            # r.z is unused for a cone, not a zero physical radius.
+            radius = min(p.r.x, p.r.y)
+        input.reach.append(COAT_SHARE * max(0.0, radius))
     var low = V3(1e30, 1e30, 1e30)
     var high = V3(-1e30, -1e30, -1e30)
     for part in range(SURFACE_PART_COUNT):  # pragma: no branch
@@ -406,11 +489,19 @@ def sample_mass(
         high = V3(
             max(high.x, box[1].x), max(high.y, box[1].y), max(high.z, box[1].z)
         )
-    var nx = Int(ceil((high.x - low.x) / h))
-    var ny = Int(ceil((high.y - low.y) / h))
-    var nz = Int(ceil((high.z - low.z) / h))
-    if max(nx, max(ny, nz)) > 400:
-        raise Error("A mass grid must be at most 400 cells a side")
+    var counts = V3(
+        ceil((high.x - low.x) / h),
+        ceil((high.y - low.y) / h),
+        ceil((high.z - low.z) / h),
+    )
+    for count in [counts.x, counts.y, counts.z]:
+        if not (isfinite(count) and count >= 1.0 and count <= 400.0):
+            raise Error(
+                "A mass grid must be finite and at most 400 cells a side"
+            )
+    var nx = Int(counts.x)
+    var ny = Int(counts.y)
+    var nz = Int(counts.z)
     var grid = _Grid(
         low,
         h,

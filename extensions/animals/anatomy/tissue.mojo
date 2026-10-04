@@ -19,7 +19,7 @@ from extensions.animals.anatomy.body import (
     BodyPlan,
 )
 from extensions.animals.parts import EYEBALL, HORN, TEETH
-from extensions.sdf.ids import SurfacePart
+from extensions.sdf.ids import SurfacePart, require_part
 
 
 @fieldwise_init
@@ -160,7 +160,9 @@ def _listed(tag: String, names: List[StaticString]) -> Bool:
     return False
 
 
-def tissue_of(part: SurfacePart, tag: String, bone: String) -> BodyTissue:
+def tissue_of(
+    part: SurfacePart, tag: String, bone: String
+) raises -> BodyTissue:
     """Return what a solid is made of.
 
     Args:
@@ -170,7 +172,11 @@ def tissue_of(part: SurfacePart, tag: String, bone: String) -> BodyTissue:
 
     Returns:
         Its tissue.
+
+    Raises:
+        Error: If the surface part is unnamed.
     """
+    require_part(part)
     if part == EYEBALL:
         return EYE
     if part == TEETH:

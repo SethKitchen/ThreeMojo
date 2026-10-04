@@ -5,14 +5,18 @@
 
 """Muscle bellies that bulge as they shorten.
 
-Muscle is nearly incompressible, so a belly keeps its volume: when its
-fibers shorten by a factor `f`, it grows `f^(-1/2)` across. In a pose,
-each muscle's fiber length is its path length less its tendon's slack
-length, a rigid tendon. The sculpt's solids that show the belly, by tag
-and by side, shrink by `f^w` along the muscle's line and grow by
-`f^(-w/2)` across it. `w`, the share of the change that reaches the
-surface through skin and fat, is 0.5: a `DESIGN` value. `f` is held to
-0.6 to 1.4, the span of the active force-length curve that matters.
+The surface response is a visual design model. In a pose, each muscle's
+fiber length is its path length less its rigid tendon's slack length.
+An ellipsoid belly shrinks by `f^w` on its nearest longitudinal axis and
+grows by `f^(-w/2)` on the other two axes. This preserves that primitive's
+volume. A round cone only widens across: its endpoints stay fixed, so
+its volume is not conserved. Overlapping unions need not keep their
+volume even when each ellipsoid does.
+
+`w`, the response seen through skin and fat, is 0.5: a `DESIGN` value.
+`f` is held to 0.6 to 1.4. These visual sculpts are not conserved tissue
+mass models. The engineering layer's separate ellipsoid muscle bellies
+use their explicitly specified volumes.
 
 The bind pose leaves every solid as it is: there each muscle's fibers
 are at their optimal length.
@@ -30,7 +34,7 @@ from std.math import pow
 comptime BULGE_SHARE = 0.5
 
 
-def fiber_ratio(muscle: AnimalMuscle, world: List[Rigid]) -> Float64:
+def fiber_ratio(muscle: AnimalMuscle, world: List[Rigid]) raises -> Float64:
     """Return a muscle's fiber length over its optimal length, in a pose.
 
     Args:
@@ -39,7 +43,11 @@ def fiber_ratio(muscle: AnimalMuscle, world: List[Rigid]) -> Float64:
 
     Returns:
         The ratio with a rigid tendon, held to `[0.6, 1.4]`.
+
+    Raises:
+        Error: If the muscle architecture or path is invalid.
     """
+    muscle.arch.check()
     var unit = Float64(muscle.unit_length(world).value)
     var fiber = unit - Float64(muscle.arch.tendon_slack.value)
     var f = fiber / Float64(muscle.arch.fiber_length.value)
@@ -52,6 +60,7 @@ def flexed(
     """Return the sculpt with each muscle's belly shaped for a pose.
 
     The sculpt stays in the bind pose; mesh it moved by the same pose.
+    It is a visual surface, not a conserved tissue-mass field.
 
     Args:
         animal: The individual.
@@ -65,11 +74,14 @@ def flexed(
         Error: If the pose is for another rig.
     """
     var world = pose.world(animal.rig)
-    var model = SdfModel()
-    model.tags = animal.model.tags.copy()
-    model.tag_at = animal.model.tag_at.copy()
-    model.outline = animal.model.outline.copy()
-    model.prims = animal.model.prims.copy()
+    var model = animal.model.copy()
+    model.visual_only = True
+    # Primitives are mutable. Validate IDs before any belly selection can
+    # index the rig or the tag table, including the direct flexed API.
+    for p in model.prims:
+        animal.rig.check(p.bone)
+        if not p.tag.is_valid() or p.tag.value >= len(model.tags):
+            raise Error("Tag id names no tag of this sculpt")
     for m in muscles:
         if len(m.bellies) == 0:
             continue
@@ -77,7 +89,10 @@ def flexed(
         var along = pow(f, BULGE_SHARE)
         var across = pow(f, -0.5 * BULGE_SHARE)
         var line = m.points[len(m.points) - 1] - m.points[0]
-        var d = line * (1.0 / length(line))
+        var span = length(line)
+        if not span > 0.0:
+            raise Error("A muscle belly needs distinct bind endpoints")
+        var d = line * (1.0 / span)
         for i in range(len(model.prims)):  # pragma: no branch
             ref p = model.prims[i]
             var bone = animal.rig.bones[p.bone.value].name
@@ -104,6 +119,7 @@ def flexed_animal(
     """Return the individual with its bellies shaped for a pose.
 
     Mesh it with the same pose: `mesh_animal(flexed_animal(a, m, p), p)`.
+    The result is marked visual-only; tissue mass sampling refuses it.
 
     Args:
         animal: The individual.
@@ -116,10 +132,12 @@ def flexed_animal(
     Raises:
         Error: If the pose is for another rig.
     """
+    var traits = animal.traits.copy()
+    traits.set("anatomy_visual_flex", 1.0)
     return Animal(
         animal.species,
         animal.options,
-        animal.traits.copy(),
+        traits^,
         animal.rig.copy(),
         flexed(animal, muscles, pose),
         animal.palette.copy(),

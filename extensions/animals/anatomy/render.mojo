@@ -61,7 +61,7 @@ from extensions.animals.build import (
 from extensions.animals.rig import Pose
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import CONE, BoneId, SURFACE_PART_COUNT, SurfacePart
-from extensions.sdf.mesher import SurfaceMesh, mesh_part
+from extensions.sdf.mesher import SurfaceMesh, merge, mesh_part
 from extensions.sdf.vector import V3, length
 from materials.material import LAMBERT, PHONG, Material
 from render.framebuffer import Color
@@ -217,6 +217,15 @@ def _layer(
         Length(Float32(cell), METER),
         workers=threads,
     )
+    return _layer_geometry(model, surface, tissue, tendon)
+
+
+def _layer_geometry(
+    model: SdfModel,
+    surface: SurfaceMesh,
+    tissue: Tuple[Float64, Float64, Float64],
+    tendon: Tuple[Float64, Float64, Float64],
+) raises -> BufferGeometry:
     var count = surface.vertex_count()
     var colors = List[Float32](capacity=count * 3)
     for v in range(count):  # pragma: no branch
@@ -243,6 +252,36 @@ def _layer(
     g.set_index(index^)
     g.add_group(0, n, MaterialIndex(0))
     return g^
+
+
+def _skin_layer(
+    animal: Animal, posed: SdfModel, threads: Int
+) raises -> BufferGeometry:
+    # Preserve the game's part boundaries. A jaw carver must not cut the
+    # body, and surfaces that are separate must not form smooth unions.
+    var surface = SurfaceMesh()
+    for part in range(SURFACE_PART_COUNT):
+        var ids = List[Int]()
+        for i in posed.part_list(SurfacePart(part)):
+            ref p = posed.prims[i]
+            var bone = animal.rig.bones[p.bone.value].name
+            if tissue_of(p.part, posed.tags[p.tag.value], bone) != COAT:
+                ids.append(i)
+        if len(ids) == 0:
+            continue
+        var box = part_box(posed, ids)
+        if box[0].x > box[1].x:
+            continue
+        var piece = mesh_part(
+            posed,
+            ids,
+            box[0],
+            box[1],
+            Length(Float32(animal.cell), METER),
+            workers=threads,
+        )
+        merge(surface, piece)
+    return _layer_geometry(posed, surface, SKIN_COLOR, SKIN_COLOR)
 
 
 def anatomy_layers(
@@ -273,16 +312,7 @@ def anatomy_layers(
     var cell = animal.cell * FINE
     # The skin: every solid but the coat, in its pose.
     var posed = animal.model.moved(world)
-    var skin = List[Int]()
-    for part in range(SURFACE_PART_COUNT):  # pragma: no branch
-        for i in posed.part_list(SurfacePart(part)):
-            ref p = posed.prims[i]
-            var bone = animal.rig.bones[p.bone.value].name
-            if tissue_of(p.part, posed.tags[p.tag.value], bone) != COAT:
-                skin.append(i)
-    var skin_layer = _layer(
-        posed, skin, animal.cell, threads, SKIN_COLOR, SKIN_COLOR
-    )
+    var skin_layer = _skin_layer(animal, posed, threads)
     var bones = skeleton_model(animal).moved(world)
     var all_bones = List[Int]()
     for i in range(len(bones.prims)):  # pragma: no branch

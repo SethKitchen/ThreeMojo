@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The measured size of each species, with its sources.
+"""Selected reference sizes of each species, with excerpt provenance.
 
 Each species has a body plan, an adult mass for each sex, and one
 reference length that a field biologist measures: shoulder height for a
@@ -101,11 +101,22 @@ struct SpeciesBody(Copyable, Movable):
     var variant: Int
     var male_mass: Mass
     var female_mass: Mass
+    # Evidence for the reference excerpt, not for individual anatomy.
     var mass_source: Cited
     var reference: ReferenceKind
     var reference_length: Length
+    # Evidence for the reference excerpt, not for individual anatomy.
     var length_source: Cited
     var coat_depth: Length
+
+    def model_evidence(self) -> Evidence:
+        """Return the evidence grade of the selected reference template.
+
+        Returns:
+            DESIGN. Excerpt evidence stays in mass_source and length_source;
+            representative values are not measurements of this individual.
+        """
+        return DESIGN
 
 
 def _body(

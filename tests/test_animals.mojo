@@ -261,6 +261,32 @@ def test_pose_turns_children() raises:
         _ = wrong.world(rig)
 
 
+def test_mutated_bone_ids_are_refused_before_indexing() raises:
+    var rig = _leg_rig()
+    var pose = Pose(len(rig.bones))
+    for invalid in [-2, 1, 2]:
+        rig.bones[1].parent = BoneId(invalid)
+        with assert_raises(contains="earlier bone"):
+            _ = pose.world(rig)
+    var model = _ball()
+    model.prims[0].bone = BoneId(-1)
+    with assert_raises(contains="has no transform"):
+        _ = model.moved([identity()])
+    for invalid in [-1, 1]:
+        var tagged = _ball()
+        tagged.prims[0].tag = TagId(invalid)
+        with assert_raises(contains="names no tag"):
+            _ = tagged.moved([identity()])
+    var wrong_kind = _ball()
+    wrong_kind.prims[0].kind = PrimitiveKind(-1)
+    with assert_raises(contains="kind"):
+        _ = wrong_kind.moved([identity()])
+    var wrong_part = _ball()
+    wrong_part.prims[0].part = SurfacePart(-1)
+    with assert_raises(contains="part"):
+        _ = wrong_part.moved([identity()])
+
+
 def test_warps_move_points() raises:
     _near(apply_warp(scale_warp(2.0), V3(1, 2, 3)), V3(2, 4, 6))
     # Legs: below the belly line, height stretches.

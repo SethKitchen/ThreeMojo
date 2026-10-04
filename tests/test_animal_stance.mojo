@@ -55,7 +55,7 @@ from units.si import METER, STANDARD_GRAVITY, Length
 
 def _real(id: SpeciesId) raises -> Animal:
     var body = species_body(id)
-    var cal = calibrate(id, Variant(-1))
+    var cal = calibrate(id, Variant(-1), allow_estimates=True)
     var a = create_animal(
         id,
         animal_options(
@@ -154,7 +154,7 @@ def test_paths_wrap_behind_joints() raises:
 
 def test_standing_loads_balance_the_weight() raises:
     var id = DOG
-    var cal = calibrate(id, Variant(-1))
+    var cal = calibrate(id, Variant(-1), allow_estimates=True)
     var base = create_animal(
         id, animal_options(1, quality=CROWD, sex=MALE, age=ADULT)
     )
@@ -190,14 +190,23 @@ def test_standing_loads_balance_the_weight() raises:
         rat, rat_mass, animal_muscles(rat.rig, MAMMAL, rat_mass.total().mass)
     )
     assert_equal(rat_loads[0].reaction.value, 0.0)
-    assert_false(rat_loads[0].held)
-    # Without muscles, no joint is held.
+    # Zero fore-foot reaction does not remove the hanging limb's weight.
+    assert_true(abs(rat_loads[0].moment.value) > 0.0)
+    # Without muscles, only a joint with zero required moment is held.
     for l in standing_loads(rat, rat_mass, List[AnimalMuscle]()):
-        assert_false(l.held)
+        assert_equal(l.held, l.moment.value == 0.0)
     # A body whose weight hangs ahead of or behind its feet falls.
     for shift in [10.0, -10.0]:
         var tipped = rat_mass.bones.copy()
         for i in range(len(tipped)):
+            # Translate the whole distribution, including second moments.
+            # Moving only its first moment is not a realizable mass tensor.
+            tipped[i].second[2] += (
+                2.0 * shift * tipped[i].first[2]
+                + shift * shift * tipped[i].mass
+            )
+            tipped[i].second[4] += shift * tipped[i].first[0]
+            tipped[i].second[5] += shift * tipped[i].first[1]
             tipped[i].first[2] += shift * tipped[i].mass
         var keep = rat_mass.bones.copy()
         rat_mass.bones = tipped^

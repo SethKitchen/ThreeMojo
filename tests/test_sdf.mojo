@@ -44,10 +44,17 @@ from extensions.animals.kit import (
 )
 from extensions.sdf.mesher import (
     Lattice,
+    SPILL_ROUNDS,
     SurfaceMesh,
     UNSAMPLED,
     _Grid,
+    _blocks,
+    _checked_count,
+    _check_grid_sizes,
     _faces,
+    _number_vertices,
+    _sample_band,
+    _wake,
     check_cell,
     merge,
     mesh_part,
@@ -134,7 +141,7 @@ from extensions.animals.warp import (
     scale_warp,
     shift_warp,
 )
-from std.math import pi, sqrt
+from std.math import inf, nan, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -571,6 +578,96 @@ def test_mesh_refusals() raises:
         )
 
 
+def test_mesh_checks_part_indexes() raises:
+    var model = _ball()
+    var invalid: List[Int] = [-1, len(model.prims), Int.MAX]
+    for index in invalid:
+        with assert_raises(contains="index names no primitive"):
+            _ = mesh_part(
+                model,
+                [0, index],
+                V3(-1, -1, -1),
+                V3(1, 1, 1),
+                Length(0.4, METER),
+            )
+    # A repeated valid index keeps its existing meaning; it is not refused.
+    var repeated = mesh_part(
+        model, [0, 0], V3(-1, -1, -1), V3(1, 1, 1), Length(0.4, METER)
+    )
+    assert_true(repeated.vertex_count() > 0)
+
+
+def test_mesh_refuses_nonfinite_bounds() raises:
+    var model = _ball()
+    var invalid: List[Float64] = [
+        inf[DType.float64](),
+        -inf[DType.float64](),
+        nan[DType.float64](),
+    ]
+    for bad in invalid:
+        var points: List[V3] = [V3(bad, 0, 0), V3(0, bad, 0), V3(0, 0, bad)]
+        for point in points:
+            with assert_raises(contains="finite coordinates"):
+                _ = mesh_part(model, [0], point, V3(1, 1, 1), Length(1, METER))
+            with assert_raises(contains="finite coordinates"):
+                _ = mesh_part(
+                    model, [0], V3(-1, -1, -1), point, Length(1, METER)
+                )
+
+
+def test_mesh_refuses_unrepresentable_cell_counts() raises:
+    var model = _ball()
+    with assert_raises(contains="cell count cannot fit"):
+        _ = mesh_part(
+            model,
+            [0],
+            V3(-1e308, 0, 0),
+            V3(1e308, 1, 1),
+            Length(1, METER),
+        )
+    with assert_raises(contains="cell count cannot fit"):
+        _ = mesh_part(model, [0], V3(0, 0, 0), V3(1e20, 1, 1), Length(1, METER))
+    with assert_raises(contains="cell count cannot fit"):
+        _ = mesh_part(
+            model, [0], V3(0, 0, 0), V3(1, 1, 1), Length(1e-30, METER)
+        )
+    with assert_raises(contains="cell count cannot fit"):
+        _ = _blocks(Float64(Int.MAX), 1.0, 2)
+    with assert_raises(contains="cell count cannot fit"):
+        _ = _blocks(-1.0, 1.0, 2)
+    assert_equal(_blocks(1.0, 1.0, 2), 3)
+
+
+def test_mesh_checks_grid_products_before_allocation() raises:
+    var model = _ball()
+    with assert_raises(contains="addressable storage"):
+        _ = mesh_part(
+            model,
+            [0],
+            V3(0, 0, 0),
+            V3(1e8, 1e8, 1e8),
+            Length(1, METER),
+            block=2,
+        )
+    # The corner count fits Int, but its Float64 allocation does not.
+    with assert_raises(contains="addressable storage"):
+        _check_grid_sizes(
+            Lattice(V3(0, 0, 0), 1.0, 2, 1_000_000_000, 1_000_000_000, 1)
+        )
+    # Sparse storage does not remove the limit on linear fine-cell indexes.
+    with assert_raises(contains="addressable storage"):
+        _check_grid_sizes(Lattice(V3(0, 0, 0), 1.0, 16, 1 << 52, 1, 1))
+    assert_equal(_checked_count(0, 8), 0)
+    assert_equal(_checked_count(Int.MAX, 1), Int.MAX)
+    assert_equal(_checked_count(Int.MAX // 8, 8), Int.MAX - 7)
+    with assert_raises(contains="addressable storage"):
+        _ = _checked_count(Int.MAX // 8 + 1, 8)
+    with assert_raises(contains="nonnegative count"):
+        _ = _checked_count(-1, 1)
+    with assert_raises(contains="positive factor"):
+        _ = _checked_count(0, 0)
+
+
 def test_tube_of_single_spans() raises:
     var m = SdfModel()
     var points: List[V3] = [V3(0, 0, 0), V3(0, 0, 1), V3(0, 1, 1)]
@@ -604,6 +701,61 @@ def test_mesh_cut_by_its_box() raises:
         block=2,
     )
     assert_true(open.vertex_count() > 0)
+
+
+def _spill_cylinder() raises -> SdfModel:
+    # A narrow cylinder crosses each x face at its center sample only.
+    # One active block wakes exactly one more block in each spill round.
+    var model = SdfModel()
+    _ = model.cone(
+        "cylinder",
+        BoneId(0),
+        V3(0, 1, 1),
+        V3(Float64(2 * (SPILL_ROUNDS + 1)), 1, 1),
+        0.75,
+        0.75,
+        k=0.0,
+    )
+    return model^
+
+
+def _spill_grid(model: SdfModel, blocks: Int) -> _Grid:
+    var grid = _Grid(Lattice(V3(0, 0, 0), 1.0, 2, blocks, 1, 1))
+    _wake(model, [0], grid, 0.0, 0, 0, 0)
+    return grid^
+
+
+def test_spill_budget_refuses_an_unsampled_frontier() raises:
+    var model = _spill_cylinder()
+    var grid = _spill_grid(model, SPILL_ROUNDS + 1)
+    with assert_raises(contains="spill budget exhausted"):
+        _sample_band(model, [0], grid, 0.0, 1)
+    # The last wake added a block, but not its 27 samples. The old loop
+    # continued into vertex numbering and read beyond this sample list.
+    assert_equal(len(grid.active), SPILL_ROUNDS + 1)
+    assert_equal(len(grid.samples), SPILL_ROUNDS * 27)
+    assert_equal(len(grid.vertex_of), 0)
+
+
+def test_spill_can_converge_on_the_last_round() raises:
+    var model = _spill_cylinder()
+    var one = _spill_grid(model, SPILL_ROUNDS)
+    _sample_band(model, [0], one, 0.0, 1)
+    assert_equal(len(one.active), SPILL_ROUNDS)
+    assert_equal(len(one.samples), SPILL_ROUNDS * 27)
+    # Every cell touches the center line and a positive corner. Numbering
+    # all eight cells per block must preserve each vertex's block slot.
+    var cells = List[Int]()
+    var blocks = List[Int]()
+    _number_vertices(one, cells, blocks)
+    assert_equal(len(cells), SPILL_ROUNDS * 8)
+    for v in range(len(blocks)):
+        assert_equal(blocks[v], v // 8)
+    var two = _spill_grid(model, SPILL_ROUNDS)
+    _sample_band(model, [0], two, 0.0, 2)
+    assert_equal(len(two.samples), len(one.samples))
+    for i in range(len(one.samples)):
+        assert_equal(two.samples[i], one.samples[i])
 
 
 def _plane_grid() -> _Grid:

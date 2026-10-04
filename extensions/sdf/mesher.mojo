@@ -25,13 +25,13 @@ from extensions.sdf.vector import (
     length,
 )
 from render.tasks import TaskGroup
-from std.math import ceil, sqrt
-from std.sys import num_logical_cores
+from std.math import ceil, isfinite, sqrt
+from std.sys import num_logical_cores, size_of
 from units.si import METER, Length
 
 # Coarse blocks per side of a super-block, the unit of the first cull.
 comptime SUPER = 4
-# How many times sleeping blocks can be woken, at most.
+# Maximum sample-and-spill rounds. Exhaustion must not emit a partial mesh.
 comptime SPILL_ROUNDS = 8
 # A sample value no field takes: "not sampled".
 comptime UNSAMPLED = Float32(3.0e38)
@@ -146,10 +146,35 @@ struct SurfaceMesh(Movable):
         )
 
 
-def _blocks(span: Float64, cell: Float64, block: Int) -> Int:
-    # Room for two padding cells a side.
-    var cells = Int(ceil(span / cell)) + 4
+def _blocks(span: Float64, cell: Float64, block: Int) raises -> Int:
+    var fine = ceil(span / cell)
+    # Float64(Int.MAX) rounds up to 2**63. An exclusive bound keeps the
+    # conversion defined and leaves room for padding and block rounding.
+    if not (fine >= 0.0 and fine < Float64(Int.MAX)):
+        raise Error("Mesh cell count cannot fit in Int")
+    var cells = Int(fine) + 4
     return (cells + block - 1) // block
+
+
+def _checked_count(count: Int, factor: Int) raises -> Int:
+    """Multiply a nonnegative count by a positive factor without overflow."""
+    if count < 0 or factor <= 0:
+        raise Error("Mesh counts need a nonnegative count and positive factor")
+    if count > Int.MAX // factor:
+        raise Error("Mesh grid exceeds addressable storage")
+    return count * factor
+
+
+def _check_grid_sizes(lattice: Lattice) raises:
+    # Check the dense block-corner allocation before allocating slot_of.
+    # This also bounds the smaller block and super-block grids.
+    var corners = _checked_count(lattice.bx + 1, lattice.by + 1)
+    corners = _checked_count(corners, lattice.bz + 1)
+    _ = _checked_count(corners, size_of[Float64]())
+    # Fine cells have linear Int indexes even though storage is sparse.
+    var cells = _checked_count(lattice.bx, lattice.by)
+    cells = _checked_count(cells, lattice.bz)
+    _ = _checked_count(cells, lattice.block * lattice.block * lattice.block)
 
 
 def check_cell(cell: Length, block: Int) raises:
@@ -398,13 +423,29 @@ def mesh_part(
 
     Raises:
         Error: If `check_cell` refuses the cell or the block, the box is
-            empty, or `part` is empty.
+            nonfinite or empty, `part` is empty or names no primitive,
+            a grid size cannot fit in addressable storage, or the spill
+            budget is exhausted.
     """
     check_cell(cell, block)
+    if not (
+        isfinite(low.x)
+        and isfinite(low.y)
+        and isfinite(low.z)
+        and isfinite(high.x)
+        and isfinite(high.y)
+        and isfinite(high.z)
+    ):
+        raise Error("A mesh box must have finite coordinates")
     if not (high.x > low.x and high.y > low.y and high.z > low.z):
         raise Error("A mesh box must not be empty")
     if len(part) == 0:
         raise Error("A mesh part needs at least one primitive")
+    var kmax = 0.0
+    for i in part:  # pragma: no branch
+        if i < 0 or i >= len(model.prims):
+            raise Error("Mesh part index names no primitive")
+        kmax = max(kmax, model.prims[i].k)
     var h = Float64(cell.to(METER))
     var threads = workers if workers > 0 else num_logical_cores()
     var lattice = Lattice(
@@ -415,24 +456,15 @@ def mesh_part(
         _blocks(high.y - low.y, h, block),
         _blocks(high.z - low.z, h, block),
     )
-    var kmax = 0.0
-    for i in part:  # pragma: no branch
-        kmax = max(kmax, model.prims[i].k)
+    _check_grid_sizes(lattice)
     var grid = _Grid(lattice)
     _find_active(model, part, grid, kmax)
-    # Sample, make the samples blocks share agree, and wake each sleeping
-    # block the surface crosses into, until no block wakes.
-    var sampled = 0
-    for _round in range(SPILL_ROUNDS):  # pragma: no branch
-        _sample_blocks(model, grid, threads, sampled)
-        sampled = len(grid.active)
-        _share_faces(grid)
-        if _spill(model, part, grid, kmax) == 0:
-            break
+    _sample_band(model, part, grid, kmax, threads)
     var out = SurfaceMesh()
     var cells = List[Int]()
     _number_vertices(grid, cells, out.vertex_block)
     var count = len(cells)
+    _ = _checked_count(count, 3 * size_of[Float32]())
     out.positions = List[Float32](length=count * 3, fill=0.0)
     out.normals = List[Float32](length=count * 3, fill=0.0)
     var tasks = max(1, min(threads, count))
@@ -463,6 +495,28 @@ def mesh_part(
     out.list_count = grid.list_count.copy()
     out.lists = grid.lists.copy()
     return out^
+
+
+def _sample_band(
+    model: SdfModel,
+    part: List[Int],
+    mut grid: _Grid,
+    kmax: Float64,
+    threads: Int,
+) raises:
+    """Sample and share active blocks until no sleeping block wakes.
+
+    Refuse an unfinished frontier at the budget. Newly woken blocks have
+    no samples yet, so vertex numbering must not read them.
+    """
+    var sampled = 0
+    for _round in range(SPILL_ROUNDS):  # pragma: no branch
+        _sample_blocks(model, grid, threads, sampled)
+        sampled = len(grid.active)
+        _share_faces(grid)
+        if _spill(model, part, grid, kmax) == 0:
+            return
+    raise Error("Mesh spill budget exhausted before all blocks were sampled")
 
 
 def _find_active(
@@ -531,10 +585,13 @@ def _find_active(
                     grid.lists.append(id)
 
 
-def _sample_blocks(model: SdfModel, mut grid: _Grid, threads: Int, first: Int):
+def _sample_blocks(
+    model: SdfModel, mut grid: _Grid, threads: Int, first: Int
+) raises:
     """Sample every lattice point of the active blocks from slot `first`."""
     var side = grid.lattice.block + 1
     var per = side * side * side
+    _ = _checked_count(len(grid.active), per * size_of[Float32]())
     var count = len(grid.active) - first
     for _ in range(count * per):
         grid.samples.append(UNSAMPLED)
@@ -668,7 +725,7 @@ def _wake(
 
 def _number_vertices(
     mut grid: _Grid, mut cells: List[Int], mut blocks: List[Int]
-):
+) raises:
     """Give each crossed cell of each active block a vertex number."""
     var lt = grid.lattice
     var f = lt.block
@@ -676,6 +733,7 @@ def _number_vertices(
     var per = side * side * side
     var nx = lt.bx * f
     var ny = lt.by * f
+    _ = _checked_count(len(grid.active), f * f * f * size_of[Int]())
     grid.vertex_of = List[Int](length=len(grid.active) * f * f * f, fill=-1)
     for slot in range(len(grid.active)):  # pragma: no branch
         var b = grid.active[slot]

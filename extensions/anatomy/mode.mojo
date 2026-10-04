@@ -3,19 +3,19 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Whether a body is drawn to look right or to measure right.
+"""Whether a body is drawn as a game surface or inspectable tissue layers.
 
 Game mode draws the coat, the fur and the baked shadows, and it can
-change any shape that reads better. Engineering mode draws the tissues
-as they are measured: bone, muscle and skin, each in one flat color,
-with no noise on the normals and no baked occlusion. Its mass, inertia
-and muscle forces are in SI units and carry their sources.
+change any shape that reads better. Engineering display mode draws
+template bone, muscle and skin in flat colors, with no normal noise or
+baked occlusion. SI units and source metadata do not validate anatomy,
+physical accuracy or engineering capability.
 """
 
 
 @fieldwise_init
 struct AnatomyMode(Equatable, ImplicitlyCopyable, Writable):
-    """How a body is drawn and what its numbers are fit for."""
+    """How a body is drawn; this mode grants no engineering capability."""
 
     var value: Int
 
@@ -30,7 +30,7 @@ struct AnatomyMode(Equatable, ImplicitlyCopyable, Writable):
 
 # Visuals first: the coat, fur and baked shadows.
 comptime GAME_MODE = AnatomyMode(0)
-# Measured values first: tissues in flat colors, typed SI outputs.
+# Inspectable template layers and SI estimates, without certification.
 comptime ENGINEERING_MODE = AnatomyMode(1)
 
 

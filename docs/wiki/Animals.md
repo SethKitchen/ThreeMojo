@@ -96,6 +96,10 @@ Each cell that the surface crosses gets one vertex. Two Newton steps move the ve
 
 Only active blocks hold samples. Memory grows with the surface, not with the box. Work is shared among threads. The mesh is the same for any number of threads.
 
+The mesher uses at most eight sample-and-spill rounds to find all blocks that the surface crosses. If the last round wakes another block, it raises an error. It does not return an incomplete mesh or read samples that do not exist. A surface that finishes on the eighth round is accepted.
+
+The box coordinates must be finite and each upper bound must exceed its lower bound. Each part index must name a primitive in the model. Cell counts, grid products and storage byte counts must fit in `Int`. The mesher checks these limits before the related allocation. These checks do not add a smaller fixed grid limit.
+
 ### The coat
 
 A painter reads one vertex at a time. It gets the tag and the bone of the nearest solid. It gets the position and normal in the reference bind pose. A mark therefore stays on the skin when the animal moves. The painter returns a linear color and a `SurfaceClass`.
@@ -114,9 +118,13 @@ Near a joint, the colors of the two bones blend over the blend radius of their s
 
 `Pose` turns bones about their head joints. A child bone rides its parent. `Pose.root` moves the whole animal.
 
-`walk_pose` gives the lateral-sequence walk of procedural-animals' wolf. The stride is the one dynamic similarity gives the hip height at a Froude number, 0.25 by default. See [Animal anatomy](Animal-anatomy#gait-timing).
+`walk_pose` gives an in-place lateral-sequence walk. Dynamic similarity supplies a reference stride at a Froude number, 0.25 by default. `walk_stride` caps that stride to the common reach of all four two-link legs. The visual stride can therefore be shorter than the reference. See [Animal anatomy](Animal-anatomy#gait-timing).
 
-Each foot is on the ground for 70 % of the stride. Two-bone inverse kinematics put each foot on its path, so a planted foot stays still. The back bobs twice in a stride. The tail swings once. A rig without four legs gets its bind pose.
+Each foot is in stance for 70 % of the cycle. Two-bone inverse kinematics keep a stance foot at its bind height while it moves backward under the body. All four feet use the same bounded sweep. The leg targets compensate for the body bob. The tail swings once. A rig without four legs gets its bind pose.
+
+`walk_pose_at` takes a `Duration`. It samples the phase from that animal's reference frequency. Use the same time for animals in one scene. The anatomy gallery plays one shared-time clip once, because the species have different cycle periods.
+
+This is a kinematic illustration. The reference frequency and stride relation are estimates. The walk does not translate the body or solve contact dynamics. If a caller translates the body, the speed consistent with the visual stance is `walk_stride * stride_frequency`, not the uncapped reference speed. Validated engineering locomotion is not supported.
 
 ## Differences from procedural-animals
 

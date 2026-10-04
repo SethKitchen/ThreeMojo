@@ -16,7 +16,7 @@ femoris, 485 g of a 31.8 kg dog, 1.53% of body mass (Williams et al.
 2008, `FROM_TEXT`). The other five muscles keep the rat's ratios to the
 biceps femoris: rectus femoris 0.354, vastus lateralis 0.483,
 gastrocnemius (both heads) 0.704, soleus 0.051 and tibialis anterior
-0.248 (Eng et al. 2008, Table 1, `CROSS_CHECKED`). Mass scales with body
+0.248 (Eng et al. 2008, Table 1, `FROM_TEXT`). Mass scales with body
 mass, nearly isometrically (Pollock and Shadwick 1994, `FROM_ABSTRACT`).
 The optimal fiber length is the rat's share of the segment it lies
 along: 0.83, 0.28 and 0.48 of the femur for the thigh muscles; 0.34,
@@ -48,7 +48,6 @@ The fish, shark, snake and spider muscles are in
 """
 
 from extensions.anatomy.evidence import (
-    CROSS_CHECKED,
     DESIGN,
     FROM_TEXT,
     UNVERIFIED,
@@ -69,7 +68,7 @@ from extensions.animals.anatomy.body import (
 )
 from extensions.animals.rig import Pose, Rig
 from extensions.sdf.vector import V3, Rigid, cross, dot, length, lerp
-from std.math import cos
+from std.math import cos, isfinite
 from units.si import DEGREE, KILOGRAM, METER, Angle, Length, Mass
 
 # The greyhound's biceps femoris share of body mass, a side.
@@ -119,6 +118,15 @@ struct MuscleSpec(Copyable, Movable):
     # order from the origin. Each rides its own bone.
     var vias: List[Attachment]
 
+    def model_evidence(self) -> Evidence:
+        """Return DESIGN for the architecture template derived from references.
+
+        Returns:
+            DESIGN. share_source and fiber_source describe excerpt inputs;
+            applying them to another species is not a measured architecture.
+        """
+        return DESIGN
+
 
 def _at(bone: String, a: String, b: String, t: Float64, o: V3) -> Attachment:
     return Attachment(bone, a, b, t, o)
@@ -165,32 +173,32 @@ def _mammal() -> List[MuscleSpec]:
     out.append(_spec("biceps femoris",
         _at("pelvis", "hip{S}", "hip{S}", 0.0, V3(0.0, 0.05, -0.45)),
         _at("tibia{S}", "knee{S}", "hock{S}", 0.25, V3(0.0, 0.0, -0.12)),
-        bf, FROM_TEXT, "Williams2008", 34.0 / 41.0, "femur{S}", CROSS_CHECKED, "Eng2008",
+        bf, FROM_TEXT, "Williams2008", 34.0 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
         0.0, ["hip{S}", "knee{S}"], ["hamstring", "breeches"]))
     out.append(_spec("rectus femoris",
         _at("pelvis", "hip{S}", "hip{S}", 0.0, V3(0.0, 0.05, 0.15)),
         _at("tibia{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, -0.05, 0.15)),
-        bf * 0.945 / 2.671, CROSS_CHECKED, "Eng2008", 11.6 / 41.0, "femur{S}", CROSS_CHECKED, "Eng2008",
+        bf * 0.945 / 2.671, FROM_TEXT, "Eng2008", 11.6 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
         0.0, ["hip{S}", "knee{S}"], ["thighfront"]))
     out.append(_spec("vastus lateralis",
         _at("femur{S}", "hip{S}", "knee{S}", 0.15, V3(0.0, 0.0, 0.10)),
         _at("tibia{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, -0.05, 0.15)),
-        bf * 1.289 / 2.671, CROSS_CHECKED, "Eng2008", 19.6 / 41.0, "femur{S}", CROSS_CHECKED, "Eng2008",
+        bf * 1.289 / 2.671, FROM_TEXT, "Eng2008", 19.6 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
         0.0, ["knee{S}"], ["thigh", "thighmuscle"]))
     out.append(_spec("gastrocnemius",
         _at("femur{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, 0.05, -0.10)),
         _at("metatarsus{S}", "hock{S}", "hock{S}", 0.0, V3(0.0, 0.0, -0.25)),
-        bf * 1.880 / 2.671, CROSS_CHECKED, "Eng2008", 15.85 / 46.2, "tibia{S}", CROSS_CHECKED, "Eng2008",
+        bf * 1.880 / 2.671, FROM_TEXT, "Eng2008", 15.85 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
         0.0, ["knee{S}", "hock{S}"], ["calf", "gaskin"]))
     out.append(_spec("soleus",
         _at("tibia{S}", "knee{S}", "hock{S}", 0.15, V3(0.0, 0.0, -0.08)),
         _at("metatarsus{S}", "hock{S}", "hock{S}", 0.0, V3(0.0, 0.0, -0.25)),
-        bf * 0.135 / 2.671, CROSS_CHECKED, "Eng2008", 19.7 / 46.2, "tibia{S}", CROSS_CHECKED, "Eng2008",
+        bf * 0.135 / 2.671, FROM_TEXT, "Eng2008", 19.7 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
         0.0, ["hock{S}"], []))
     out.append(_spec("tibialis anterior",
         _at("tibia{S}", "knee{S}", "hock{S}", 0.15, V3(0.0, 0.0, 0.08)),
         _at("metatarsus{S}", "hock{S}", "mtp{S}", 0.2, V3(0.0, 0.0, 0.06)),
-        bf * 0.662 / 2.671, CROSS_CHECKED, "Eng2008", 16.4 / 46.2, "tibia{S}", CROSS_CHECKED, "Eng2008",
+        bf * 0.662 / 2.671, FROM_TEXT, "Eng2008", 16.4 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
         0.0, ["hock{S}"], ["shin"]))
     out.append(_spec("triceps brachii",
         _at("scapula{S}", "scapTop{S}", "shoulder{S}", 0.7, V3(0.0, 0.0, -0.15)),
@@ -316,7 +324,15 @@ struct AnimalMuscle(Copyable, Movable):
     var fiber_source: Cited
     var bellies: List[String]
 
-    def path(self, world: List[Rigid]) -> List[V3]:
+    def model_evidence(self) -> Evidence:
+        """Return DESIGN for this individual's generated muscle architecture.
+
+        Returns:
+            DESIGN, distinct from the retained excerpt reference grades.
+        """
+        return DESIGN
+
+    def path(self, world: List[Rigid]) raises -> List[V3]:
         """Return the path in a pose.
 
         Args:
@@ -324,13 +340,31 @@ struct AnimalMuscle(Copyable, Movable):
 
         Returns:
             The points, origin first, in meters.
+
+        Raises:
+            Error: If the architecture, indexes, points or segments are invalid.
         """
+        self.arch.check()
+        if len(self.points) < 2 or len(self.points) != len(self.bones):
+            raise Error("A muscle path needs paired points and bones")
         var out = List[V3](capacity=len(self.points))
         for k in range(len(self.points)):  # pragma: no branch
-            out.append(world[self.bones[k]].apply(self.points[k]))
+            var bone = self.bones[k]
+            if bone < 0 or bone >= len(world):
+                raise Error("A muscle path names a missing bone transform")
+            var p = world[bone].apply(self.points[k])
+            if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+                raise Error("A muscle path must have finite points")
+            if k > 0:
+                var span = length(p - out[k - 1])
+                if not (isfinite(span) and span > 0.0):
+                    raise Error(
+                        "A muscle path segment must have positive length"
+                    )
+            out.append(p)
         return out^
 
-    def moment_arms(self, rig: Rig, world: List[Rigid]) -> List[Length]:
+    def moment_arms(self, rig: Rig, world: List[Rigid]) raises -> List[Length]:
         """Return the moment arm about each joint the muscle crosses.
 
         A positive arm turns the distal bone about the joint's axis by
@@ -343,22 +377,60 @@ struct AnimalMuscle(Copyable, Movable):
 
         Returns:
             One moment arm per crossed joint, in meters.
+
+        Raises:
+            Error: If the path, joint mapping, axis or SI result is invalid.
         """
+        if len(world) != len(rig.bones):
+            raise Error("Muscle transforms must match the rig")
+        if len(self.joints) != len(self.joint_bones) or len(self.joints) != len(
+            self.spans
+        ):
+            raise Error("Muscle joints need paired bones and spans")
+        var axis_length = length(self.axis)
+        if not (isfinite(axis_length) and axis_length > 0.0):
+            raise Error("A muscle axis must be finite and nonzero")
+        var expected_spans = spans_of(rig, self.bones, self.joint_bones)
+        for n in range(len(self.spans)):
+            if self.spans[n] != expected_spans[n]:
+                raise Error(
+                    "A muscle joint span does not match the bone hierarchy"
+                )
         var p = self.path(world)
         var out = List[Length](capacity=len(self.joints))
         for n in range(len(self.joints)):  # pragma: no branch
-            ref turn = world[self.joint_bones[n]]
+            var joint = self.joints[n]
+            var bone = self.joint_bones[n]
+            var span = self.spans[n]
+            if joint < 0 or joint >= len(rig.joints):
+                raise Error("A muscle names a missing joint")
+            if bone < 0 or bone >= len(world):
+                raise Error("A muscle joint names a missing bone transform")
+            var head = rig.bones[bone].head
+            if (
+                joint >= len(rig.joint_names)
+                or rig.joint_names[joint] != head
+                or rig.find_joint(head) != joint
+            ):
+                raise Error(
+                    "A muscle joint must be the head of its turning bone"
+                )
+            if span <= 0 or span >= len(p):
+                raise Error("A muscle joint span is outside its path")
+            ref turn = world[bone]
             var center = turn.apply(rig.joints[self.joints[n]])
-            var axis = turn.turn(self.axis)
+            var axis = turn.turn(self.axis * (1.0 / axis_length))
             var k = self.spans[n]
             var lever = p[k] - center
             var line = p[k - 1] - p[k]
             var pull = line * (1.0 / length(line))
             var arm = dot(cross(lever, pull), axis)
+            if not isfinite(Float32(arm)):
+                raise Error("A muscle moment arm must fit a finite SI length")
             out.append(Length(Float32(arm), METER))
         return out^
 
-    def unit_length(self, world: List[Rigid]) -> Length:
+    def unit_length(self, world: List[Rigid]) raises -> Length:
         """Return the muscle-tendon length in a pose.
 
         Args:
@@ -366,15 +438,22 @@ struct AnimalMuscle(Copyable, Movable):
 
         Returns:
             The path's length, in meters.
+
+        Raises:
+            Error: If the path or its SI length is invalid.
         """
         var p = self.path(world)
         var unit = 0.0
         for k in range(1, len(p)):  # pragma: no branch
             unit += length(p[k] - p[k - 1])
+        if not (isfinite(Float32(unit)) and Float32(unit) > 0.0):
+            raise Error(
+                "A muscle path length must fit a positive finite SI length"
+            )
         return Length(Float32(unit), METER)
 
 
-def descends(rig: Rig, bone: Int, ancestor: Int) -> Bool:
+def descends(rig: Rig, bone: Int, ancestor: Int) raises -> Bool:
     """Return whether a bone is another or rides it.
 
     Args:
@@ -384,12 +463,22 @@ def descends(rig: Rig, bone: Int, ancestor: Int) -> Bool:
 
     Returns:
         True if `bone` is `ancestor` or a child of a child of it.
+
+    Raises:
+        Error: If an index or the parent chain is invalid.
     """
+    if bone < 0 or bone >= len(rig.bones):
+        raise Error("A descendant must name a bone")
+    if ancestor < 0 or ancestor >= len(rig.bones):
+        raise Error("An ancestor must name a bone")
     var b = bone
     while b >= 0:
         if b == ancestor:
             return True
-        b = rig.bones[b].parent.value
+        var parent = rig.bones[b].parent.value
+        if parent < -1 or parent >= b:
+            raise Error("A bone parent must be a root or an earlier bone")
+        b = parent
     return False
 
 
@@ -411,6 +500,8 @@ def spans_of(
         Error: If the origin already rides the joint's bone, or no point
             does.
     """
+    if len(bones) < 2:
+        raise Error("A muscle path needs at least two bones")
     var out = List[Int]()
     for jb in joint_bones:  # pragma: no branch
         if descends(rig, bones[0], jb):
@@ -420,6 +511,9 @@ def spans_of(
             k += 1
         if k == len(bones):
             raise Error("A muscle must insert beyond the joints it crosses")
+        for after in range(k, len(bones)):
+            if not descends(rig, bones[after], jb):
+                raise Error("A muscle path cannot cross back over a joint")
         out.append(k)
     return out^
 
@@ -461,7 +555,7 @@ def animal_muscles(
             the rig lacks a bone or a joint a muscle needs.
     """
     var m = Float64(body_mass.to(KILOGRAM))
-    if not (m > 0.0):
+    if not (isfinite(m) and m > 0.0):
         raise Error("A body mass must be positive")
     var specs = plan_muscles(plan)
     var out = List[AnimalMuscle]()
@@ -498,6 +592,7 @@ def animal_muscles(
                 default_tension(),
                 muscle_density(),
             )
+            arch.check()
             var joints = List[Int]()
             var joint_bones = List[Int]()
             for j in spec.crosses:  # pragma: no branch

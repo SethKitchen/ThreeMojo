@@ -36,6 +36,7 @@ from generators.utils import Vec3d
 from std.math import asin, cos, exp, isfinite, sin, sqrt
 from units.si import (
     KILOGRAM_PER_CUBIC_METER,
+    DEGREE,
     METER,
     MEGAPASCAL,
     PER_SECOND,
@@ -78,7 +79,23 @@ comptime SPECIFIC_TENSION = 0.3
 comptime SOLVE_STEPS = 60
 
 
-def active_force_length(l: Float64) -> Float64:
+def _check_normalized_length(value: Float64) raises:
+    if not (isfinite(value) and value >= 0.0):
+        raise Error("A normalized fiber length must be finite and nonnegative")
+
+
+def _check_activation(value: Float64) raises:
+    if not (value >= 0.0 and value <= 1.0):
+        raise Error("A muscle's activation or excitation must be 0 to 1")
+
+
+def _finite_force(value: Float64) raises -> Float64:
+    if not isfinite(value):
+        raise Error("The muscle force is outside the finite numeric range")
+    return value
+
+
+def active_force_length(l: Float64) raises -> Float64:
     """Return the active force at a normalized fiber length.
 
     Args:
@@ -86,12 +103,16 @@ def active_force_length(l: Float64) -> Float64:
 
     Returns:
         A fraction of `F0`, one at `l = 1`.
+
+    Raises:
+        Error: If the normalized length is negative or not finite.
     """
+    _check_normalized_length(l)
     var d = l - 1.0
     return exp(-d * d / SHAPE_FACTOR)
 
 
-def passive_force_length(l: Float64) -> Float64:
+def passive_force_length(l: Float64) raises -> Float64:
     """Return the passive fiber force at a normalized fiber length.
 
     Args:
@@ -99,14 +120,18 @@ def passive_force_length(l: Float64) -> Float64:
 
     Returns:
         A fraction of `F0`: zero up to `l = 1`, one at `l = 1.6`.
+
+    Raises:
+        Error: If the length is invalid or the force overflows.
     """
+    _check_normalized_length(l)
     if l <= 1.0:
         return 0.0
     var top = exp(PASSIVE_SHAPE * (l - 1.0) / PASSIVE_STRAIN) - 1.0
-    return top / (exp(PASSIVE_SHAPE) - 1.0)
+    return _finite_force(top / (exp(PASSIVE_SHAPE) - 1.0))
 
 
-def force_velocity(v: Float64) -> Float64:
+def force_velocity(v: Float64) raises -> Float64:
     """Return the force-velocity factor at a normalized fiber velocity.
 
     Args:
@@ -117,16 +142,21 @@ def force_velocity(v: Float64) -> Float64:
     Returns:
         Zero at `v <= -1`, one at `v = 0`, and up to 1.4 while the fiber
         lengthens.
+
+    Raises:
+        Error: If the normalized velocity is not finite.
     """
+    if not isfinite(v):
+        raise Error("A normalized fiber velocity must be finite")
     if v <= -1.0:
         return 0.0
     if v <= 0.0:
         return (1.0 + v) / (1.0 - v / SHORTENING_SHAPE)
     var k = (2.0 + 2.0 / SHORTENING_SHAPE) / (LENGTHENING_LIMIT - 1.0)
-    return (1.0 + v * k * LENGTHENING_LIMIT) / (1.0 + v * k)
+    return LENGTHENING_LIMIT - (LENGTHENING_LIMIT - 1.0) / (1.0 + v * k)
 
 
-def tendon_force(strain: Float64) -> Float64:
+def tendon_force(strain: Float64) raises -> Float64:
     """Return the tendon force at a tendon strain.
 
     Args:
@@ -134,17 +164,24 @@ def tendon_force(strain: Float64) -> Float64:
 
     Returns:
         A fraction of `F0`: zero for a slack tendon, one at 4% strain.
+
+    Raises:
+        Error: If the strain is not finite or the force overflows.
     """
+    if not isfinite(strain):
+        raise Error("A tendon strain must be finite")
     if strain <= 0.0:
         return 0.0
     var toe = 0.609 * TENDON_STRAIN
     if strain <= toe:
         var rise = exp(TOE_SHAPE * strain / toe) - 1.0
         return TOE_FORCE * rise / (exp(TOE_SHAPE) - 1.0)
-    return 1.712 / TENDON_STRAIN * (strain - toe) + TOE_FORCE
+    return _finite_force(1.712 / TENDON_STRAIN * (strain - toe) + TOE_FORCE)
 
 
-def activation_rate(excitation: Float64, activation: Float64) -> Frequency:
+def activation_rate(
+    excitation: Float64, activation: Float64
+) raises -> Frequency:
     """Return the rate of change of activation.
 
     Thelen's first-order dynamics: activation rises with a time constant
@@ -156,7 +193,12 @@ def activation_rate(excitation: Float64, activation: Float64) -> Frequency:
 
     Returns:
         `da/dt`, per second.
+
+    Raises:
+        Error: If either input is outside `[0, 1]` or not finite.
     """
+    _check_activation(excitation)
+    _check_activation(activation)
     var scale = 0.5 + 1.5 * activation
     var tau = DEACTIVATION_TIME / scale
     if excitation > activation:
@@ -211,45 +253,67 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             raise Error("A muscle's density must be positive")
         if self.tendon_slack.value < 0.0:
             raise Error("A muscle's tendon slack length cannot be negative")
-        if self.pennation.value < 0.0 or self.pennation.value > 1.0472:
+        if (
+            self.pennation.value < 0.0
+            or self.pennation.value > Angle(60, DEGREE).value
+        ):
             raise Error("A muscle's pennation must be 0 to 60 degrees")
 
-    def volume_m3(self) -> Float64:
+    def volume_m3(self) raises -> Float64:
         """Return the belly's volume, in cubic meters.
 
         Returns:
             Mass over density.
+
+        Raises:
+            Error: If the architecture is invalid.
         """
+        self.check()
         return Float64(self.mass.value) / Float64(self.density.value)
 
-    def pcsa(self) -> Area:
+    def pcsa(self) raises -> Area:
         """Return the physiological cross-sectional area.
 
         Returns:
             Volume over optimal fiber length.
+
+        Raises:
+            Error: If the architecture or the SI result is invalid.
         """
         var area = self.volume_m3() / Float64(self.fiber_length.value)
+        if not (isfinite(Float32(area)) and Float32(area) > 0.0):
+            raise Error("Muscle PCSA must fit a finite positive SI quantity")
         return Area(Float32(area), SQUARE_METER)
 
-    def max_force(self) -> Force:
+    def max_force(self) raises -> Force:
         """Return the maximum isometric fiber force, `F0`.
 
         Returns:
             Specific tension times PCSA.
-        """
-        return self.specific_tension * self.pcsa()
 
-    def thickness(self) -> Float64:
+        Raises:
+            Error: If the architecture or the SI result is invalid.
+        """
+        var force = self.specific_tension * self.pcsa()
+        if not (isfinite(force.value) and force.value > 0.0):
+            raise Error("Maximum muscle force must be finite and positive")
+        return force
+
+    def thickness(self) raises -> Float64:
         """Return the fibers' constant perpendicular spacing, in meters.
 
         Returns:
             `L0 sin a0`.
+
+        Raises:
+            Error: If the architecture is invalid.
         """
+        self.check()
         return Float64(self.fiber_length.value) * sin(
             Float64(self.pennation.value)
         )
 
-    def pennation_at(self, fiber_m: Float64) -> Float64:
+    def pennation_at(self, fiber_m: Float64) raises -> Float64:
         """Return the pennation angle at a fiber length.
 
         Args:
@@ -257,7 +321,12 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
 
         Returns:
             The angle, in radians, at most a right angle.
+
+        Raises:
+            Error: If the architecture or fiber length is invalid.
         """
+        if not (isfinite(fiber_m) and fiber_m > 0.0):
+            raise Error("A fiber length must be finite and positive")
         var s = self.thickness() / fiber_m
         if s >= 1.0:
             return asin(1.0)
@@ -268,7 +337,7 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
         activation: Float64,
         fiber: Length,
         velocity: Velocity,
-    ) -> Force:
+    ) raises -> Force:
         """Return the force the fibers put on the tendon.
 
         Args:
@@ -278,7 +347,16 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
 
         Returns:
             Active and passive fiber force, along the tendon.
+
+        Raises:
+            Error: If the architecture or state is invalid, or the force overflows.
         """
+        self.check()
+        _check_activation(activation)
+        if not (isfinite(fiber.value) and fiber.value > 0.0):
+            raise Error("A fiber length must be finite and positive")
+        if not isfinite(velocity.value):
+            raise Error("A fiber velocity must be finite")
         var l0 = Float64(self.fiber_length.value)
         var l = Float64(fiber.value) / l0
         var top = (0.25 + 0.75 * activation) * MAX_VELOCITY * l0
@@ -287,7 +365,12 @@ struct MuscleArchitecture(ImplicitlyCopyable, Writable):
             v
         ) + passive_force_length(l)
         var along = f * cos(self.pennation_at(Float64(fiber.value)))
-        return self.max_force().scaled(Float32(along))
+        var value = Float64(self.max_force().value) * along
+        _ = _finite_force(value)
+        var narrowed = Float32(value)
+        if not isfinite(narrowed) or (value != 0.0 and narrowed == 0.0):
+            raise Error("Muscle force must fit a finite SI quantity")
+        return Force(narrowed)
 
 
 @fieldwise_init
@@ -300,14 +383,16 @@ struct MuscleEquilibrium(ImplicitlyCopyable):
     var pennation: Angle
 
 
-def _fiber_from_reach(arch: MuscleArchitecture, reach: Float64) -> Float64:
+def _fiber_from_reach(
+    arch: MuscleArchitecture, reach: Float64
+) raises -> Float64:
     var h = arch.thickness()
     return sqrt(reach * reach + h * h)
 
 
 def _mismatch(
     arch: MuscleArchitecture, activation: Float64, unit: Float64, reach: Float64
-) -> Float64:
+) raises -> Float64:
     # Fiber force along the tendon minus tendon force, both over F0.
     var l0 = Float64(arch.fiber_length.value)
     var slack = Float64(arch.tendon_slack.value)
@@ -339,17 +424,17 @@ def isometric_equilibrium(
 
     Raises:
         Error: If the architecture is not valid, if the activation is
-            not in `[0, 1]`, or if the unit is not longer than its
+            not in `[0, 1]`, the unit is not finite, the force overflows,
+            or if the unit is not longer than its
             tendon's slack length.
     """
     arch.check()
-    if not (activation >= 0.0 and activation <= 1.0):
-        raise Error("A muscle's activation must be 0 to 1")
+    _check_activation(activation)
     if arch.tendon_slack.value <= 0.0:
         raise Error("The static solve needs a tendon with a slack length")
     var unit = Float64(unit_length.value)
     var slack = Float64(arch.tendon_slack.value)
-    if not (unit > slack):
+    if not (isfinite(unit) and unit > slack):
         raise Error("A muscle-tendon unit must be longer than its tendon")
     # At zero reach the fibers stand across the unit and pull nothing
     # along it; at full reach the tendon is slack.
@@ -364,7 +449,23 @@ def isometric_equilibrium(
     var reach = 0.5 * (low + high)
     var fiber = _fiber_from_reach(arch, reach)
     var strain = (unit - reach - slack) / slack
-    var force = arch.max_force().scaled(Float32(tendon_force(strain)))
+    var factor = tendon_force(strain)
+    var residual = _mismatch(arch, activation, unit, reach)
+    if not (isfinite(residual) and abs(residual) <= 1e-8 * (1.0 + abs(factor))):
+        raise Error("The available precision cannot resolve equilibrium")
+    var value = Float64(arch.max_force().value) * factor
+    var force = Force(Float32(value))
+    if value != 0.0 and force.value == 0.0:
+        raise Error("Equilibrium force must fit a finite SI quantity")
+    _ = _finite_force(Float64(force.value))
+    if not (isfinite(Float32(fiber)) and Float32(fiber) > 0.0):
+        raise Error(
+            "Equilibrium fiber length must fit a positive finite SI length"
+        )
+    if not (isfinite(Float32(unit - reach)) and Float32(unit - reach) > 0.0):
+        raise Error(
+            "Equilibrium tendon length must fit a positive finite SI length"
+        )
     return MuscleEquilibrium(
         force,
         Length(Float32(fiber), METER),
@@ -395,16 +496,21 @@ def moment_arm(
         Error: If the origin and insertion meet, or if the axis has no
             length.
     """
+    for p in [origin, insertion, center, axis]:  # pragma: no branch
+        if not (isfinite(p.x) and isfinite(p.y) and isfinite(p.z)):
+            raise Error("Muscle moment-arm points and axis must be finite")
     var line = origin - insertion
     var reach = line.length()
     var size = axis.length()
-    if not (reach > 0.0):
+    if not (isfinite(reach) and reach > 0.0):
         raise Error("A muscle's origin and insertion must differ")
-    if not (size > 0.0):
+    if not (isfinite(size) and size > 0.0):
         raise Error("A joint axis must have a direction")
     var lever = insertion - center
     var pull = line * (1.0 / reach)
     var arm = lever.cross(pull).dot(axis * (1.0 / size))
+    if not isfinite(Float32(arm)):
+        raise Error("A muscle moment arm must fit a finite SI length")
     return Length(Float32(arm), METER)
 
 

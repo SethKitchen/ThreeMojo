@@ -2812,7 +2812,7 @@
   "tests/compile_fail/a_soft_occupancy_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 15,
+        "line": 13,
         "column": 34,
         "message": "invalid call to 'filled_density': value passed to 'fill' cannot be converted from 'IntLiteral[0]' to 'SoftOccupancy'"
       }

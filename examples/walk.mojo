@@ -23,6 +23,7 @@ from extensions.animals.build import (
     mesh_animal,
 )
 from extensions.animals.gait import walk_pose
+from extensions.anatomy.locomotion import WALK_FROUDE, stride_frequency
 from extensions.animals.options import MEDIUM, animal_options
 from extensions.animals.registry import WOLF
 from geometries.plane import plane
@@ -42,7 +43,6 @@ comptime DEFAULT_OUTPUT = "out/walk.png"
 comptime WIDTH = 320
 comptime HEIGHT = 200
 comptime FRAMES = 16
-comptime DELAY_MS = 70
 
 
 def frame_at(
@@ -120,5 +120,10 @@ def main() raises:
     var frames = List[Framebuffer]()
     for i in range(FRAMES):
         frames.append(frame_at(renderer, wolf, Float64(i) / Float64(FRAMES)))
-    Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
+    # One full visual cycle uses this individual's reference frequency,
+    # with the APNG frame delay rounded to the nearest millisecond.
+    var hip = Length(Float32(wolf.rig.j("hipL").y), METER)
+    var frequency = Float64(stride_frequency(WALK_FROUDE, hip).value)
+    var delay = max(1, Int(1000.0 / (frequency * Float64(FRAMES)) + 0.5))
+    Path(destination).write_bytes(encode(frames, delay_ms=delay))
     print("Wrote", destination, "-", FRAMES, "frames")

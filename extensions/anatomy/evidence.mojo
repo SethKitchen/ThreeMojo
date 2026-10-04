@@ -13,8 +13,8 @@ so a caller can refuse inputs it does not trust:
 - `FROM_TEXT`: the number is in the source's body or in a secondary
   source that quotes it. Check it against the original before you rely
   on it.
-- `CROSS_CHECKED`: as `FROM_TEXT`, and it agrees with the other values
-  of its row, for example `PCSA = m / (rho L)`.
+- `CROSS_CHECKED`: the cited value has a documented independent check.
+  Arithmetic agreement in one excerpt is not an independent source check.
 - `UNVERIFIED`: a remembered or a requested value that no source we
   read shows.
 - `DESIGN`: a modeling choice or a unit conversion, not a measurement.

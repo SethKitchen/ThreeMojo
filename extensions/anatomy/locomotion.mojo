@@ -53,10 +53,13 @@ def froude(speed: Velocity, hip: Length) raises -> Float64:
         `u^2 / (g h)`.
 
     Raises:
-        Error: If the hip height is not positive and finite.
+        Error: If the hip height is not positive and finite, or the speed
+            is not finite.
     """
     var h = _height(hip)
     var u = Float64(speed.to(METER_PER_SECOND))
+    if not isfinite(u):
+        raise Error("A speed must be finite")
     return u * u / (Float64(STANDARD_GRAVITY.value) * h)
 
 
@@ -78,6 +81,8 @@ def speed_at(fr: Float64, hip: Length) raises -> Velocity:
     if not (fr >= 0.0 and isfinite(fr)):
         raise Error("A Froude number must be zero or more")
     var u = sqrt(fr * Float64(STANDARD_GRAVITY.value) * h)
+    if not isfinite(Float32(u)) or (fr > 0.0 and Float32(u) == 0.0):
+        raise Error("A speed must fit a finite SI quantity")
     return Velocity(Float32(u), METER_PER_SECOND)
 
 
@@ -98,7 +103,10 @@ def stride_length(fr: Float64, hip: Length) raises -> Length:
     var h = _height(hip)
     if not (fr > 0.0 and isfinite(fr)):
         raise Error("A stride needs a positive Froude number")
-    return Length(Float32(2.3 * pow(fr, 0.3) * h), METER)
+    var stride = Float32(2.3 * pow(fr, 0.3) * h)
+    if not (isfinite(stride) and stride > 0.0):
+        raise Error("A stride must fit a positive finite SI quantity")
+    return Length(stride, METER)
 
 
 def stride_frequency(fr: Float64, hip: Length) raises -> Frequency:
@@ -117,4 +125,7 @@ def stride_frequency(fr: Float64, hip: Length) raises -> Frequency:
     """
     var u = Float64(speed_at(fr, hip).value)
     var stride = Float64(stride_length(fr, hip).value)
-    return Frequency(Float32(u / stride), PER_SECOND)
+    var frequency = Float32(u / stride)
+    if not (isfinite(frequency) and frequency > 0.0):
+        raise Error("A stride frequency must fit a positive finite SI quantity")
+    return Frequency(frequency, PER_SECOND)
