@@ -752,5 +752,17 @@ def test_sturm_check_catches_a_missed_mode() raises:
         _ = lowest_modes(kb.build(), _identity_sparse(n), 1, 1e-10, 40)
 
 
+def test_lowest_modes_with_one_huge_mass() raises:
+    # A chain with a mass a million times the others at its last unknown.
+    # The lowest mode is that mass on the springs around it: 1/8 + 1. The
+    # trial vectors collapse onto it, and Gram-Schmidt replaces them.
+    var n = 8
+    var mb = SparseBuilder(n)
+    for i in range(n):
+        mb.add(i, i, 1.0 if i < n - 1 else 1e6)
+    var modes = lowest_modes(_second_difference(n), mb.build(), 2, 1e-10, 100)
+    assert_almost_equal(modes.values[0] * 1e6, 1.125, atol=1e-4)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

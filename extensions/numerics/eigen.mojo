@@ -11,9 +11,11 @@ symmetric. K is positive definite once the supports are applied; M is
 positive definite for a consistent mass.
 
 Subspace iteration carries q > p trial vectors at once. Each iteration
-solves K X̄ = M X with the skyline factor of K, projects K and M onto the
-span of X̄, and solves that small problem completely with the dense
-Jacobi method. The p lowest Ritz values converge first. After they
+solves K X̄ = M X with the skyline factor of K, makes X̄ M-orthonormal by
+modified Gram-Schmidt, projects K and M onto its span, and solves that
+small problem completely with the dense Jacobi method. A vector that
+collapses into the span of the others, as the vectors do when one mass
+dwarfs the rest, is replaced by a unit vector. The p lowest Ritz values converge first. After they
 converge, a Sturm sequence check factors K - σ M just above the largest
 one and counts the negative pivots. The count must equal p, which proves
 that no eigenvalue below was missed.
@@ -169,31 +171,58 @@ def lowest_modes(
         x.append(unit^)
     var previous = zeros(count)
     var values = zeros(q)
+    var cursor = 0
     var iterations = 0
     var converged = False
     while iterations < max_iterations:
         iterations += 1
-        # K X̄ = M X, and M X̄ for the projection.
-        var y = List[List[Float64]](capacity=q)
+        # X̄ = K⁻¹ M X, made M-orthonormal by modified Gram-Schmidt. A
+        # vector that collapses into the span of the others is replaced by
+        # a unit vector, so the projected mass stays positive definite.
         var xbar = List[List[Float64]](capacity=q)
         var mxbar = List[List[Float64]](capacity=q)
         var c = 0
         while c < q:
-            var mx = m.multiply(x[c])
-            var solved = factor.solve(mx)
-            mxbar.append(m.multiply(solved))
-            xbar.append(solved^)
-            y.append(mx^)
+            var v = factor.solve(m.multiply(x[c]))
+            var size = sqrt(dot(v, m.multiply(v)))
+            var length: Float64
+            var mv: List[Float64]
+            while True:
+                var j = 0
+                while j < len(xbar):
+                    var projection = dot(v, mxbar[j])
+                    var r = 0
+                    while r < n:
+                        v[r] -= projection * xbar[j][r]
+                        r += 1
+                    j += 1
+                mv = m.multiply(v)
+                length = sqrt(dot(v, mv))
+                if length > 1e-8 * size:
+                    break
+                # Replace it with the next unit vector in turn.
+                v = zeros(n)
+                v[cursor % n] = 1
+                cursor += 1
+                size = sqrt(dot(v, m.multiply(v)))
+            var r = 0
+            while r < n:
+                v[r] /= length
+                mv[r] /= length
+                r += 1
+            xbar.append(v^)
+            mxbar.append(mv^)
             c += 1
-        # Project: Kr = X̄ᵀ K X̄ = X̄ᵀ M X, Mr = X̄ᵀ M X̄.
+        # Project: Kr = X̄ᵀ K X̄ and Mr = X̄ᵀ M X̄, close to the identity.
         var kr = DenseMatrix(q, q)
         var mr = DenseMatrix(q, q)
         i = 0
         while i < q:
+            var kx = k.multiply(xbar[i])
             var j = i
             while j < q:
-                var kij = dot(xbar[i], y[j])
-                var mij = dot(xbar[i], mxbar[j])
+                var kij = dot(xbar[j], kx)
+                var mij = dot(xbar[j], mxbar[i])
                 kr.set(i, j, kij)
                 kr.set(j, i, kij)
                 mr.set(i, j, mij)

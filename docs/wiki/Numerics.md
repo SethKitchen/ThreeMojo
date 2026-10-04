@@ -58,7 +58,9 @@ var modes = lowest_modes(stiffness, mass, 3, 1e-10, 60)
 var hertz = sqrt(modes.values[0]) / (2 * pi)
 ```
 
-The method is subspace iteration. It carries `min(n, max(2 count, count + 8))` trial vectors. After convergence, it factors K - σ M just above the last wanted eigenvalue. The number of negative pivots must equal `count`. If it does not, an eigenvalue was missed, and `lowest_modes` raises.
+The method is subspace iteration. It carries `min(n, max(2 count, count + 8))` trial vectors. Each iteration makes them M-orthonormal by modified Gram-Schmidt. A vector that collapses into the span of the others is replaced by a unit vector. A mass a million times the rest still converges.
+
+After convergence, it factors K - σ M just above the last wanted eigenvalue. The number of negative pivots must equal `count`. If it does not, an eigenvalue was missed, and `lowest_modes` raises.
 
 `count_eigenvalues_below(k, m, shift)` gives that count for any shift.
 

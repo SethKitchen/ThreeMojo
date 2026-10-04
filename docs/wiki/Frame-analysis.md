@@ -194,7 +194,6 @@ Every function raises `Error` for input it cannot use.
 - A support fixes a degree of freedom at zero. The model has no springs and no settlements.
 - A member load is uniform along the member and acts along a global axis.
 - The view uses uniform tributary loads on beams. It does not model walls as shear walls or as loads.
-- `lowest_modes` can fail to factor its projected mass when an added mass is thousands of times the member mass on few elements. Use more elements or a smaller mass ratio.
 
 ## References
 
