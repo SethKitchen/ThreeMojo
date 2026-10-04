@@ -47,6 +47,18 @@ struct Traits(Movable):
         self.variant = variant
         self.warps = Warps()
 
+    def copy(self) -> Traits:
+        """Return a copy of the traits and their warps.
+
+        Returns:
+            The same values, sex, age, morph and warps.
+        """
+        var out = Traits(self.sex, self.age, self.variant)
+        out.names = self.names.copy()
+        out.values = self.values.copy()
+        out.warps = self.warps.copy()
+        return out^
+
     def set(mut self, name: String, value: Float64):
         """Store a named number, replacing any earlier one.
 

@@ -258,6 +258,16 @@ struct Warps(Movable):
         """Make an empty list. It moves nothing."""
         self.list = List[Warp]()
 
+    def copy(self) -> Warps:
+        """Return a copy of the list.
+
+        Returns:
+            The same warps, in the same order.
+        """
+        var out = Warps()
+        out.list = self.list.copy()
+        return out^
+
     def add(mut self, w: Warp) raises:
         """Append a warp.
 

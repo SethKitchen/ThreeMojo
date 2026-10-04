@@ -4793,5 +4793,63 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/a_body_plan_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'segment_of': value passed to 'plan' cannot be converted from 'IntLiteral[0]' to 'BodyPlan'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_segment_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 35,
+        "message": "invalid call to 'segment_density': value passed to 'segment' cannot be converted from 'IntLiteral[0]' to 'Segment'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_tissue_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'tissue_density': value passed to 'tissue' cannot be converted from 'IntLiteral[2]' to 'BodyTissue'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_reference_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'ReferenceKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_evidence_grade_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'evidence_label': value passed to 'grade' cannot be converted from 'IntLiteral[1]' to 'Evidence'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }

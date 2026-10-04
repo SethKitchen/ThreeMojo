@@ -442,9 +442,9 @@ def fur_normal(n: V3, bind: V3, world: Rigid, unit: Float64) -> V3:
     ) * (1.0 / e)
     var tilt = world.turn(g)
     var across = tilt - n * dot(tilt, n)
-    var out = n + across * 0.3
-    var l = length(out)
-    return out * (1.0 / l) if l > 0.0 else n
+    var tilted = n + across * 0.3
+    var l = length(tilted)
+    return tilted * (1.0 / l) if l > 0.0 else n
 
 
 def _paint(
