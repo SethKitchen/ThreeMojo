@@ -759,7 +759,6 @@ struct ALSM(Movable):
             if a in self.idle_time:
                 _ = self.idle_time.pop(a)
             localization.remove_actor(actor)
-            collision.remove_actor(actor)
             traffic_light.remove_actor(actor)
             motion_plan.remove_actor(actor)
             if a in shared.large_vehicles:
@@ -767,6 +766,8 @@ struct ALSM(Movable):
         else:
             _drop(self.unregistered_actors, a)
             _drop(self.hero_actors, a)
+        # Observed unregistered actors can also be collision-lock leads.
+        collision.remove_actor(actor)
         shared.track_traffic.delete_actor(actor)
         shared.simulation_state.remove_actor(actor)
 
