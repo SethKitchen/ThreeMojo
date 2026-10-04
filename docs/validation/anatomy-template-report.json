@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "78c9e05afe5d1add9279797d6aec0fcce22c9b1029ac106bdc1c23dcdc2b9d7e",
+    "source_sha256": "ceda6f530e11e9a97e8c8d0cd62f47f1bf38f8a01c61699d78599b92f00b64b8",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "8db1d19f25c1f7ff3264a6d7ae4e455ea3bb0ebfff96c9534de4a80b5379a58f"
+    "binary_sha256": "3bb9c95f6a30cbc1f523f2846958981681d45b420c965173715d30a3e867493d"
   },
   "source_file_sha256": {
     "extensions/humanoid/athleticism.mojo": "e9452e65b527c6f0ccd9c30663f1d0466dbd506753fb8346d8f663bd805a3735",
@@ -145,7 +145,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             0.48629367,
             0.24098805
           ],
@@ -229,7 +229,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             0.48629367,
             0.24098805
           ],
@@ -313,7 +313,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             0.48629367,
             0.24098805
           ],
@@ -453,7 +453,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             0.03223575,
             0.24098805
           ],
@@ -537,7 +537,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             0.03223575,
             0.24098805
           ],
@@ -621,7 +621,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             0.03223575,
             0.24098805
           ],
@@ -761,7 +761,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             -0.41197538,
             0.24098805
           ],
@@ -845,7 +845,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             -0.41197538,
             0.24098805
           ],
@@ -929,7 +929,7 @@
             -0.15179876
           ],
           "high_m": [
-            0.1276181,
+            0.12761812,
             -0.41197538,
             0.24098805
           ],
@@ -1558,7 +1558,7 @@
         "samples": 1440,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.005192782,
+        "signed_field_witness_m": 0.005192781,
         "pair_id": "canonical/bones/foot/calcaneus|tibia",
         "allowlist_applied": false,
         "geometry_kind": "implicit component envelope intersection",
@@ -7538,7 +7538,7 @@
         "samples": 336,
         "overlap_samples": 5,
         "overlap_volume_m3": 6.2500015e-07,
-        "signed_field_witness_m": -0.0021044065,
+        "signed_field_witness_m": -0.0021044063,
         "pair_id": "canonical/knee/knee/mcl|knee/medial",
         "allowlist_applied": false,
         "geometry_kind": "implicit component envelope intersection",
