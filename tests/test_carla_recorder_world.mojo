@@ -110,6 +110,7 @@ from extensions.carla.replayer_helper import (
     process_position,
     process_state_traffic_light,
     set_camera_position,
+    set_walker_speed,
 )
 from extensions.carla.recorder_packets import (
     PACKET_SCENE_LIGHT,
@@ -1218,6 +1219,37 @@ def test_helper_edges() raises:
         False,
     )
     assert_equal(spectator[0], NOT_CREATED)
+
+
+def test_walker_speed_ignores_nonwalkers_and_missing_actors() raises:
+    var world = _world()
+    var car = _spawn(world, "vehicle.lincoln.mkz", _pose(20, 1.75, 0.5, 0))
+    var walker = _spawn(world, "walker.pedestrian.0015", _pose(40, -4, 1.2, 0))
+    var gone = _spawn(world, "walker.pedestrian.0015", _pose(50, -4, 1.2, 0))
+    assert_true(world.destroy_actor(gone))
+    var driving = VehicleControl()
+    driving.throttle = 0.5
+    driving.steer = -0.25
+    world.apply_control(car, driving)
+    world.apply_walker_control(
+        walker, WalkerControl(Vector3(0, 1, 0), Velocity(1.5), True)
+    )
+    # Missing, dead and living non-walker ids must be harmless no-ops.
+    for id in [NO_ACTOR, ActorId(99), gone, car]:
+        set_walker_speed(world, id, 250)
+        var unchanged = world.get_walker_control(walker)
+        assert_equal(unchanged.speed.value, Float32(1.5))
+        assert_true(unchanged.direction == Vector3(0, 1, 0))
+        assert_true(unchanged.jump)
+        assert_equal(world.get_control(car).throttle, Float32(0.5))
+        assert_equal(world.get_control(car).steer, Float32(-0.25))
+    # The valid path converts centimeters per second to meters per second
+    # and restores CARLA's default forward direction and no-jump control.
+    set_walker_speed(world, walker, 250)
+    var changed = world.get_walker_control(walker)
+    assert_equal(changed.speed.value, Float32(2.5))
+    assert_true(changed.direction == Vector3(1, 0, 0))
+    assert_false(changed.jump)
 
 
 def test_angles_move_the_shorter_way() raises:

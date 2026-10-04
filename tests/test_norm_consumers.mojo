@@ -323,5 +323,41 @@ def test_vector2_zero_angle_obeys_signed_atan2() raises:
     assert_equal(Vector2(0.0, -0.0).angle().to(RADIAN), 2 * Float32(pi))
 
 
+def test_vector2_nonzero_axes_keep_their_angles() raises:
+    # The vertical axes are one quarter and three quarters of a turn.
+    # Either sign of zero x must bypass the two-zero special case when y
+    # is nonzero, including the smallest positive Float32 subnormal.
+    for zero in [Float32(0.0), Float32(-0.0)]:
+        for scale in [
+            bitcast[DType.float32](UInt32(1)),
+            Float32(1),
+            Float32(3e38),
+        ]:
+            assert_almost_equal(
+                Vector2(zero, scale).angle().to(RADIAN),
+                Float32(pi / 2),
+                atol=1e-6,
+            )
+            assert_almost_equal(
+                Vector2(zero, -scale).angle().to(RADIAN),
+                Float32(3 * pi / 2),
+                atol=1e-6,
+            )
+    # Together with (0, 0) and (0, 1), (1, 0) independently controls the
+    # first operand of the zero-vector guard. Keep the signed-y boundary.
+    assert_almost_equal(
+        Vector2(1, 0.0).angle().to(RADIAN), Float32(0), atol=1e-6
+    )
+    assert_almost_equal(
+        Vector2(1, -0.0).angle().to(RADIAN), 2 * Float32(pi), atol=1e-6
+    )
+    assert_almost_equal(
+        Vector2(-1, 0.0).angle().to(RADIAN), Float32(pi), atol=1e-6
+    )
+    assert_almost_equal(
+        Vector2(-1, -0.0).angle().to(RADIAN), Float32(pi), atol=1e-6
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
