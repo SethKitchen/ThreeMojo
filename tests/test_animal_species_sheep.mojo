@@ -33,8 +33,21 @@ comptime MERINO = 2
 comptime SHORN = 4
 
 
-def test_sheep() raises:
-    _species("sheep", 1)
+def test_sheep_traits() raises:
+    # Every trait over many seeds, and the first individual they find.
+    _species("sheep", 1, 5, 4, False)
+
+
+def test_whiteface_and_suffolk_sheep() raises:
+    _species("sheep", 0, 0, 1, False)
+
+
+def test_merino_and_black_sheep() raises:
+    _species("sheep", 0, 2, 3, False)
+
+
+def test_shorn_sheep_a_lamb_and_three_seeds() raises:
+    _species("sheep", 0, 4, 4, True)
 
 
 def test_rams_grow_horns_and_shorn_sheep_no_locks() raises:

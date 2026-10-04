@@ -3,15 +3,16 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Selected reference sizes of each species, with excerpt provenance.
+"""Selected reference sizes of each species, with their sources.
 
 Each species has a body plan, an adult mass for each sex, and one
 reference length that a field biologist measures: shoulder height for a
 quadruped mammal, total length for a bird or a fish, snout-vent or
 head-body length for a frog, a rat or a rabbit, and body length for a
 spider. Engineering mode scales the sculpt so that its reference length
-is the published one. The mass is then a prediction from the sculpt's
-volume, and the published mass checks it.
+is the published one. The sculpt's volume and the densities then give
+a mass, which calibration scales to the published one: a normalization,
+not a check.
 
 The sources are in the wiki page `Animal-anatomy`, by key. Each value
 carries its `Evidence` grade. Three were read in the source itself: the

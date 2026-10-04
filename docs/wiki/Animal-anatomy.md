@@ -2,7 +2,7 @@
 
 Each procedural animal has a template skeleton, Hill-type muscles, sampled segment mass and inertia, and a kinematic gait. You can inspect it in game mode or in engineering display mode. The quantities carry SI unit types. These models are not validated for engineering, clinical or animal-care decisions.
 
-The source grades describe readable reference excerpts. `model_evidence()` returns `DESIGN` for the selected body template, calibration and generated muscles. A source excerpt does not validate the sculpt, its tissue assignment or a different species.
+The source grades say how far each reference value was checked against its source. `model_evidence()` returns `DESIGN` for the selected body template, calibration and generated muscles. A checked source value does not validate the sculpt, its tissue assignment or a different species.
 
 ![A horse, a dog and a cheetah walk in game mode on the left and in engineering mode on the right](out/animal_anatomy.png)
 
@@ -55,7 +55,7 @@ var materials = materials_in_mode(ENGINEERING_MODE)
 
 Each literature value carries one of five grades. Most of the muscle, density and Thelen values were read in the table of the paper itself. The code and this page give that table and its page. A value read only in a search-result extract or a secondary source stays at `FROM_TEXT` at best. [Sources that could not be read](#sources-that-could-not-be-read) lists what is still to check.
 
-`SpeciesBody.mass_source` and `length_source` keep the provenance of each reference size. Muscle `share_source` and `fiber_source` keep the reference inputs. The separate `model_evidence()` reports `DESIGN`: selected representative sizes, cross-species ratios, attachment paths and individualized architecture are modeling choices, whatever the grade of the numbers they start from.
+`SpeciesBody.mass_source` and `length_source` keep the provenance of each reference size. Muscle `share_source` and `fiber_source` keep the reference inputs. The separate `model_evidence()` reports `DESIGN`. Selected representative sizes, cross-species ratios, attachment paths and individualized architecture are modeling choices. That holds whatever the grade of the numbers they start from.
 
 | Grade | Meaning |
 |---|---|
@@ -81,7 +81,7 @@ The calibration records its species and reference morph. It refuses use on anoth
 
 `calibrated_animal` scales the sculpt, the rig and the cells. The coat still paints. `calibrated_mass` scales the densities by the density factor. Each segment keeps the share of mass that the geometry gives it. An individual keeps its own size relative to the canonical one, so a juvenile stays small and light.
 
-Every current selected body template has `DESIGN` parameter evidence and requires `calibrate(..., allow_estimates=True)`. A matched morph and `FROM_TEXT` source excerpts do not bypass this gate. Unmatched morphs and unverified reference inputs also require opt-in. Opt-in permits inspection of a template estimate; it does not mark the result validated. Raw visual and game construction remains available without this calibration opt-in.
+Every current selected body template has `DESIGN` parameter evidence and requires `calibrate(..., allow_estimates=True)`. A matched morph and measured source values do not bypass this gate. Unmatched morphs and unverified reference inputs also require opt-in. Opt-in permits inspection of a template estimate; it does not mark the result validated. Raw visual and game construction remains available without this calibration opt-in.
 
 An unmatched morph gets its own length factor but no mass correction from a different reference kind. For example, the bear reference describes a black bear. A grizzly has `Calibration.matched` False. `matched` means only that the named reference kind agrees, not that anatomy or accuracy was validated.
 
@@ -298,9 +298,9 @@ One share serves every size, because a long bone's length and diameter scale ali
 
 ## Species
 
-All selected masses and reference lengths below are `DESIGN` parameters. The final column records only the cited excerpt’s grade.
+All selected masses and reference lengths below are `DESIGN` parameters. The final column records only the grade of the cited source.
 
-| Species | Kind | Selected male, female mass | Selected reference length | Excerpt grade |
+| Species | Kind | Selected male, female mass | Selected reference length | Source grade |
 |---|---|---|---|---|
 | Bear | American black bear | 100, 60 kg | 0.90 m shoulder | `FROM_TEXT` |
 | Boar | Central European wild boar | 85, 70 kg | 0.75 m shoulder | `FROM_TEXT` |
@@ -331,7 +331,7 @@ All selected masses and reference lengths below are `DESIGN` parameters. The fin
 
 - The muscle paths are straight lines between attachments and via points. They do not wrap around bone surfaces.
 - The tendons are rigid when bellies bulge. The static solve, `isometric_equilibrium`, has an elastic tendon.
-- The individual muscle architecture, selected representative body parameters, attachments and coat depths are `DESIGN` values. Excerpt evidence is recorded separately.
+- The individual muscle architecture, selected representative body parameters, attachments and coat depths are `DESIGN` values. Source evidence is recorded separately.
 - The cheetah takes the greyhound's pennation. The horse and the rat take the plan's fore limb, because their sources have no fore-limb table.
 - Birds have flight muscles but no leg muscles.
 - The physics world has no joints, so the segment bodies do not yet form a chain
