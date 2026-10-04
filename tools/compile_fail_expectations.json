@@ -716,6 +716,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_dof_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Dof'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_dot_screen_angle_is_not_a_bare_float.mojo": {
     "errors": [
       {
@@ -1756,6 +1766,16 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_load_case_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LoadCaseId'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_lod_distance_is_not_a_bare_float.mojo": {
     "errors": [
       {
@@ -1870,6 +1890,16 @@
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: value passed to 'side' cannot be converted from 'IntLiteral[2]' to 'Side'"
     ]
+  },
+  "tests/compile_fail/a_member_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MemberId'"
+      }
+    ],
+    "notes": []
   },
   "tests/compile_fail/a_mesh_index_is_not_a_bare_int.mojo": {
     "errors": [
@@ -2828,6 +2858,16 @@
       "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[1]' to 'ShapeKind'"
     ]
   },
+  "tests/compile_fail/a_shell_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ShellId'"
+      }
+    ],
+    "notes": []
+  },
   "tests/compile_fail/a_sign_kind_is_not_a_bare_int.mojo": {
     "errors": [
       {
@@ -3059,6 +3099,16 @@
         "line": 12,
         "column": 24,
         "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StoreyId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_structural_node_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeId'"
       }
     ],
     "notes": []
