@@ -48,6 +48,13 @@ scale whose start point has no length along an axis keeps that axis's
 scale, where three.js divides by zero. The `E` picker is a flat ring, the
 shape of three.js's torus with two segments around its tube, and the
 pickers are tested from both sides.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
 from cameras.camera import Camera
@@ -1499,9 +1506,7 @@ def _angle_between(a: Vector3, b: Vector3) -> Float32:
     Returns:
         The angle in radians, or a quarter turn when either has no length.
     """
-    var denominator = sqrt(a.dot(a) * b.dot(b))
-    var cosine = a.dot(b) / denominator if denominator != 0 else Float32(0)
-    return acos(max(Float32(-1), min(Float32(1), cosine)))
+    return a.angle_to(b).to(RADIAN)
 
 
 def _baked(
