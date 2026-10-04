@@ -24,6 +24,13 @@ reads the camera's world position: three.js reads its local `position`,
 which is the same for a camera at the scene's root. The clipping plane is
 `y = -clip_bias`, three.js's `globalPlanes`. `distance_attenuation` and
 `fresnel` are chosen when the mirror is made, as three.js's `defines`.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
 from cameras.camera import Camera
@@ -143,10 +150,12 @@ def fresnel_coefficient(eye: Vector3) -> Float32:
     Returns:
         The factor.
     """
-    var size = sqrt(eye.dot(eye))
-    if size == 0:
-        return 1
-    var up = eye.y / size
+    if not (isfinite(eye.x) and isfinite(eye.y) and isfinite(eye.z)):
+        var up = eye.y / sqrt(eye.dot(eye))
+        return 1 - up * up
+    var unit = eye
+    unit.normalize()
+    var up = unit.y
     return 1 - up * up
 
 
