@@ -677,7 +677,7 @@ def _sculpt_mane(mut m: SdfModel, rig: Rig, t: Traits, g: Float64) raises:
     var fc = _hl(0, -0.03, 0.02)
     var locks = Int(14.0 + 20.0 * g + 0.5)
     # A lion with a mane grows fourteen locks or more.
-    for _ in range(locks):  # pragma: no branch
+    for _ in range(locks):
         var u = 0.62 * pow(rl.next(), 0.8)
         var th = (rl.next() * 2.0 - 1.0) * pi * 0.9
         var ax = lerp(a0, a1, u)
