@@ -43,8 +43,16 @@ turn about the view axis. `enable_gizmos` hides the gizmo; three.js has
 the member but does not read it. The grid has 60 cells each way, the
 number three.js works out in floating point. A pointer is read at the
 center of its pixel.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from cameras.camera import Camera
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -324,9 +332,7 @@ def _angle_to(a: Vector3, b: Vector3) -> Float32:
     Returns:
         The angle in radians, or a quarter turn if either has no length.
     """
-    var denominator = sqrt(a.dot(a) * b.dot(b))
-    var cosine = _clamp(a.dot(b) / denominator, -1, 1)
-    return Float32(pi / 2) if denominator == 0 else acos(cosine)
+    return a.angle_to(b).to(RADIAN)
 
 
 def _distance(a: Vector3, b: Vector3) -> Float32:
@@ -1694,7 +1700,7 @@ struct ArcballControls(Copyable, Movable):
         var ray = near
         ray.normalize()
         var reach = _distance(lens.position(), self.center())
-        var l = sqrt(near.x * near.x + near.y * near.y)
+        var l = length2(near.x, near.y)
         if l == 0:
             return Vector3(near.x, near.y, self._tb_radius)
         var m = near.z / l
@@ -1737,12 +1743,12 @@ struct ArcballControls(Copyable, Movable):
         var near = lens.near_point(self._ndc(x, y))
         var ray = near
         ray.normalize()
-        var l = sqrt(near.x * near.x + near.y * near.y)
+        var l = length2(near.x, near.y)
         if l == 0:
             return Vector3(0, 0, 0)
         var q = _distance(lens.position(), self.center())
         var across = -q / (near.z / l)
-        var length = sqrt(q * q + across * across)
+        var length = length2(q, across)
         return Vector3(ray.x * length, ray.y * length, 0)
 
     def _calculate_tb_radius(self, lens: _Lens) -> Float32:
@@ -2741,7 +2747,7 @@ def _apart(ax: Float32, ay: Float32, bx: Float32, by: Float32) -> Float32:
     Returns:
         The distance, in pixels.
     """
-    return sqrt((bx - ax) * (bx - ax) + (by - ay) * (by - ay))
+    return length2(bx - ax, by - ay)
 
 
 def _angular_speed(
@@ -2788,7 +2794,7 @@ def _along(ray: Vector3, px: Float32, py: Float32, reach: Float32) -> Vector3:
     Returns:
         The point, in the camera's axes from the center.
     """
-    var length = sqrt(px * px + (reach - py) * (reach - py))
+    var length = length2(px, reach - py)
     var point = ray * length
     point.z += reach
     return point
