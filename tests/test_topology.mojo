@@ -40,6 +40,7 @@ from extensions.topology.ids import (
     RegionId,
     VertexId,
 )
+from extensions.topology.loops import split_bridged, vector_area
 from extensions.topology.storeys import build_storeys
 from extensions.topology.weld import Welder
 from generators.utils import Vec3d
@@ -702,6 +703,53 @@ def test_partitions_above_split_the_wall_tops_below() raises:
             if s.face_level[faces[i].value] == 4:
                 floors += 1
     assert_equal(floors, 3)
+
+
+def test_split_bridged_loops() raises:
+    # A square with a square hole, joined by a bridge from (0, 0) to (1, 1).
+    var loop: List[Vec3d] = [
+        Vec3d(0, 0, 0),
+        Vec3d(1, 1, 0),
+        Vec3d(1, 2, 0),
+        Vec3d(2, 2, 0),
+        Vec3d(2, 1, 0),
+        Vec3d(1, 1, 0),
+        Vec3d(0, 0, 0),
+        Vec3d(3, 0, 0),
+        Vec3d(3, 3, 0),
+        Vec3d(0, 3, 0),
+    ]
+    var parts = split_bridged(loop)
+    assert_equal(len(parts.outer), 4)
+    assert_equal(len(parts.holes), 1)
+    assert_almost_equal(vector_area(parts.outer).z, 9, atol=1e-12)
+    assert_almost_equal(vector_area(parts.holes[0]).z, -1, atol=1e-12)
+    # Without a bridge, the loop is its own outer ring.
+    var square: List[Vec3d] = [
+        Vec3d(0, 0, 0),
+        Vec3d(1, 0, 0),
+        Vec3d(1, 1, 0),
+        Vec3d(0, 1, 0),
+    ]
+    assert_equal(len(split_bridged(square).outer), 4)
+    # Two islands winding the same way: the second becomes a hole entry.
+    var islands: List[Vec3d] = [
+        Vec3d(0, 0, 0),
+        Vec3d(1, 0, 0),
+        Vec3d(1, 1, 0),
+        Vec3d(0, 1, 0),
+        Vec3d(0, 0, 0),
+        Vec3d(5, 0, 0),
+        Vec3d(6, 0, 0),
+        Vec3d(6, 1, 0),
+        Vec3d(5, 1, 0),
+        Vec3d(5, 0, 0),
+    ]
+    var both = split_bridged(islands)
+    assert_equal(len(both.holes), 1)
+    with assert_raises(contains="three corners"):
+        _ = split_bridged([Vec3d(0, 0, 0), Vec3d(1, 0, 0)])
+    assert_equal(vector_area(List[Vec3d]()).z, 0)
 
 
 def main() raises:
