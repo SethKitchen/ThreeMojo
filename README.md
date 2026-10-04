@@ -504,6 +504,21 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 
 </details>
 
+### Buildings
+
+Procedural buildings for engineering analysis and for games share one canonical model. A checked box records implemented scope. It does not establish engineering validity. See [Why buildings have one canonical model](https://github.com/SethKitchen/ThreeMojo/wiki/Why-buildings-have-one-canonical-model).
+
+- [x] [Engineering units](https://github.com/SethKitchen/ThreeMojo/wiki/Units#heat-structure-and-flow): a temperature exponent, thermal and structural quantities, and `Float64` quantities [#641](https://github.com/SethKitchen/ThreeMojo/issues/641)
+- [x] [Numerics](https://github.com/SethKitchen/ThreeMojo/wiki/Numerics): sparse assembly, skyline and conjugate-gradient solvers, and lowest modes by subspace iteration with a Sturm check [#642](https://github.com/SethKitchen/ThreeMojo/issues/642)
+- [x] [Building topology](https://github.com/SethKitchen/ThreeMojo/wiki/Building-topology): a cell complex in which rooms share faces [#643](https://github.com/SethKitchen/ThreeMojo/issues/643)
+- [ ] [Building model](https://github.com/SethKitchen/ThreeMojo/wiki/Building-model): storeys, spaces, elements, layered constructions and render views [#644](https://github.com/SethKitchen/ThreeMojo/issues/644)
+- [ ] [IFC exchange](https://github.com/SethKitchen/ThreeMojo/wiki/IFC-exchange): STEP physical files and an IFC4 subset, read and written [#645](https://github.com/SethKitchen/ThreeMojo/issues/645)
+- [ ] [Procedural towers](https://github.com/SethKitchen/ThreeMojo/wiki/Procedural-towers): a seeded tower as a building model [#646](https://github.com/SethKitchen/ThreeMojo/issues/646)
+- [ ] [Floor plans and interiors](https://github.com/SethKitchen/ThreeMojo/wiki/Floor-plans-and-interiors): seeded rooms, doors, windows and furniture [#647](https://github.com/SethKitchen/ThreeMojo/issues/647)
+- [ ] [Frame analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Frame-analysis): 3D frames, static and modal [#648](https://github.com/SethKitchen/ThreeMojo/issues/648)
+- [ ] [Shell analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Shell-analysis): flat-shell slabs and walls [#649](https://github.com/SethKitchen/ThreeMojo/issues/649)
+- [ ] [Building energy](https://github.com/SethKitchen/ThreeMojo/wiki/Building-energy): zones, transient conduction and a heat balance [#650](https://github.com/SethKitchen/ThreeMojo/issues/650)
+
 ### Out of scope
 
 This port provides native CPU and MAX GPU rendering. It excludes the WebGL and WebGPU renderers, CSS renderers, WebXR, audio, and video and canvas textures.
