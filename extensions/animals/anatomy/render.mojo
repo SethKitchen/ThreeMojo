@@ -16,14 +16,15 @@ tissue colors with no noise and no baked light:
   shortens; each tendon a cone along the rest of its path, thick enough
   to carry `F0` at 50 MPa.
 
-Each bone's radius is a share of its length. A mammal's long bones take
-the measured mid-shaft share: half the diameter over the length of the
-femur 0.0385, the tibia 0.036, the humerus 0.0456 and the radius 0.0337,
-the mean of five cheetahs and three greyhounds (Hudson et al. 2011a,
-Table 1, p. 364; 2011b, Table 1, p. 377; `FROM_TEXT`). One share serves
-every size because a long bone's length and diameter scale alike,
-`M^0.35` and `M^0.36` (Alexander et al. 1979, `FROM_ABSTRACT`). The
-other bones' shares and the tendon stress are `DESIGN` values.
+Each bone's radius is a share of its length. The mammal long-bone
+ratios use mid-shaft diameters and lengths from five cheetahs and three
+greyhounds (Hudson2011a, Table 1; Hudson2011b, Table 1; source inputs
+`FROM_TEXT`). Averaging the ratios and applying them to all mammals is
+`DESIGN`: femur 0.0385, tibia 0.036, humerus 0.0456 and radius 0.0337.
+Using each ratio at all sizes is also a DESIGN simplification. The
+length and diameter exponents, `M^0.35` and `M^0.36` (Alexander1979,
+`FROM_ABSTRACT`), differ; they do not establish an exact constant ratio.
+The other bones' shares and the tendon stress are DESIGN values.
 """
 
 from core.buffer_attribute import BufferAttribute
