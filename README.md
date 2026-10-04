@@ -114,7 +114,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion and synthetic reproduction; historical production source provenance remains open [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
 
 <details>
-<summary>Implemented: 8</summary>
+<summary>Implemented: 9</summary>
+
+- [x] [Bounded image decode scheduling](https://github.com/SethKitchen/ThreeMojo/wiki/Image-decode-queue): shared dynamic workers, ordered results, bounded active staging, and atomic cache publication [#505](https://github.com/SethKitchen/ThreeMojo/issues/505)
 
 - [x] [Portable asset and test roots](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): explicit asset roots, isolated direct-run fixtures, and subprocess ownership checks [#310](https://github.com/SethKitchen/ThreeMojo/issues/310)
 

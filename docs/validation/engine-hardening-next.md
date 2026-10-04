@@ -42,7 +42,7 @@ Hosting work requires a specified destination and verified source material.
 - [#309](https://github.com/SethKitchen/ThreeMojo/issues/309): complete durable asset hosting and integrity controls
 - [#333](https://github.com/SethKitchen/ThreeMojo/issues/333): retain double precision at typed quantity boundaries
 - [#336](https://github.com/SethKitchen/ThreeMojo/issues/336): remove texture-set copies without sharing mutable state
-- [#505](https://github.com/SethKitchen/ThreeMojo/issues/505): remove decode barriers while retaining bounded memory
+- [#505](https://github.com/SethKitchen/ThreeMojo/issues/505): dynamic decode queue implemented; focused checks and benchmarks pass, with full batch validation pending
 
 ## Numerical and coverage contracts
 
@@ -88,7 +88,12 @@ Land reviewed changes through child PRs into this draft branch.
 Keep all existing test workloads, the five-second limit, and the full coverage requirement.
 Preserve the CI draft and target-branch policy.
 
-Regenerate the anatomy report when its bound source changes.
+Compile changed code and run focused regressions for each complete issue implementation.
+Run full coverage and aggregate checks after all in-scope issues are implemented.
+Keep this base draft until that point.
+Regenerate the anatomy report on the final batch source.
+Its current source binding is stale after the decode-queue changes.
+Building-extension work and related issues are outside this batch.
 Keep CPU tests, GPU compilation and actual GPU execution as separate evidence.
 Each issue remains open until its complete acceptance criteria are verified.
 

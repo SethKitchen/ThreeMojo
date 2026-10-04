@@ -27,7 +27,7 @@ from objects.line import LOOP, SEGMENTS, STRIP
 from render.framebuffer import Color
 from render import ktx2
 from render.srgb import LINEAR, SRGB
-from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE
+from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE, Texture
 from render.texture_store import TextureId
 from render.webp import decode as decode_webp
 from std.pathlib import Path
@@ -590,10 +590,10 @@ def test_workers_decode_the_core_maps_as_one_worker_does() raises:
     assert_true(many_assets.textures.get(b.emissive_map).color_space == SRGB)
 
 
-def test_workers_finish_a_batch_before_reading_the_next_images() raises:
-    # The first batch contains malformed images. The third image has an
-    # invalid URI which must not be read until the first batch succeeds.
-    # Eagerly reading every input instead reports the unrelated URI error.
+def test_workers_preserve_the_first_source_error() raises:
+    # The first images are malformed. A later image has an invalid URI.
+    # Concurrent reads must not replace the earliest job's decode error
+    # with the later URI error, even if that read finishes first.
     var text = doc(
         ',"images":[{"uri":"data:image/png;base64,AAAA"},'
         '{"uri":"data:image/png;base64,AAAA"},'
@@ -606,6 +606,101 @@ def test_workers_finish_a_batch_before_reading_the_next_images() raises:
     var assets = Assets()
     with assert_raises(contains="neither PNG nor JPEG"):
         _ = load_gltf(text, List[UInt8](), "", scene, assets, 2)
+
+
+def test_workers_match_file_data_uri_and_buffer_view_images() raises:
+    var bytes = Path("assets/gltf/checker.png").read_bytes()
+    var text = doc(
+        ',"buffers":[{"byteLength":'
+        + String(len(bytes))
+        + "}]"
+        + ',"bufferViews":[{"buffer":0,"byteLength":'
+        + String(len(bytes))
+        + "}]"
+        + ',"images":[{"uri":"data:image/png;base64,'
+        + encode_base64(bytes)
+        + '"},'
+        '{"uri":"assets/gltf/checker.png"},{"bufferView":0,"mimeType":"image/png"}]'
+        + ',"samplers":[{"wrapS":33071,"wrapT":33648,"magFilter":9728,"minFilter":9984},'
+        '{"wrapS":10497,"wrapT":33071,"magFilter":9729,"minFilter":9729}]'
+        + ',"textures":[{"source":0,"sampler":0},{"source":1,"sampler":1},{"source":2,"sampler":0}]'
+        + ',"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}},"normalTexture":{"index":0}},'
+        '{"pbrMetallicRoughness":{"baseColorTexture":{"index":1}},"normalTexture":{"index":1}},'
+        '{"pbrMetallicRoughness":{"baseColorTexture":{"index":2}},"normalTexture":{"index":2}},'
+        '{"normalTexture":{"index":0}}]'
+    )
+    var serial_scene = Scene()
+    var serial_assets = Assets()
+    var serial = load_gltf(text, bytes, "", serial_scene, serial_assets, 1)
+    for workers in [2, 8]:
+        var scene = Scene()
+        var assets = Assets()
+        var model = load_gltf(text, bytes, "", scene, assets, workers)
+        assert_equal(assets.textures.count(), 6)
+        assert_equal(model.color_textures, serial.color_textures)
+        assert_equal(model.data_textures, serial.data_textures)
+        for index in range(6):
+            ref a = serial_assets.textures.get(TextureId(index))
+            ref b = assets.textures.get(TextureId(index))
+            assert_equal(a.pixels, b.pixels)
+            assert_equal(a.offsets, b.offsets)
+            assert_equal(a.levels, b.levels)
+            assert_true(a.color_space == b.color_space)
+            assert_true(a.alpha == b.alpha)
+            assert_true(a.min_filter == b.min_filter)
+            assert_true(a.mag_filter == b.mag_filter)
+            assert_true(a.wrap_s == b.wrap_s)
+            assert_true(a.wrap_t == b.wrap_t)
+            assert_equal(a.flip_y, b.flip_y)
+
+
+def test_workers_select_source_errors_across_acquisition_and_decode() raises:
+    for workers in [2, 8]:
+        for first in [True, False]:
+            var images = (
+                '[{"uri":"data:invalid-uri"},{"uri":"data:image/png;base64,AAAA"}]' if first else '[{"uri":"data:image/png;base64,AAAA"},{"uri":"data:invalid-uri"}]'
+            )
+            var text = doc(
+                ',"images":'
+                + images
+                + ',"textures":[{"source":0},{"source":1}]'
+                + ',"materials":[{"normalTexture":{"index":0}},'
+                '{"normalTexture":{"index":1}}]'
+            )
+            var scene = Scene()
+            var assets = Assets()
+            with assert_raises(
+                contains="without a comma" if first else "neither PNG nor JPEG"
+            ):
+                _ = load_gltf(text, List[UInt8](), "", scene, assets, workers)
+            assert_equal(assets.textures.count(), 0)
+
+
+def test_failed_predecode_keeps_existing_textures_and_exact_read_error() raises:
+    var text = doc(
+        ',"images":['
+        + png_image()
+        + ","
+        + png_image()
+        + ',{"uri":"data:invalid-uri"}]'
+        + ',"textures":[{"source":0},{"source":1},{"source":2}]'
+        + ',"materials":[{"normalTexture":{"index":0}},'
+        '{"normalTexture":{"index":1}},{"normalTexture":{"index":2}}]'
+    )
+    for workers in [2, 8]:
+        var scene = Scene()
+        var assets = Assets()
+        _ = assets.textures.add(Texture())
+        var raised = False
+        var message = String("")
+        try:
+            _ = load_gltf(text, List[UInt8](), "", scene, assets, workers)
+        except e:
+            raised = True
+            message = String(e)
+        assert_true(raised)
+        assert_equal(message, "glTF: a data URI without a comma")
+        assert_equal(assets.textures.count(), 1)
 
 
 def test_workers_refuse_what_one_worker_refuses() raises:
