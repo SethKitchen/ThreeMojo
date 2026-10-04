@@ -14976,6 +14976,24 @@ struct _ScalarMathKernels:
         for component in range(3):
             output[unsafe_offset=3 * at + component] = values[component]
 
+    @staticmethod
+    def norm_consumers_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate range-safe shared render consumers on device inputs."""
+        from max.gpu import global_idx
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var sample = norm_consumer_sample(
+            inputs[unsafe_offset=at * 2], inputs[unsafe_offset=at * 2 + 1]
+        )
+        for component in range(5):
+            output[unsafe_offset=at * 5 + component] = sample[component]
+
 
 def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
     from math.arc_tangent import atan2_float32, atan_float32
@@ -15210,3 +15228,80 @@ def test_shared_matrix_inverses_preserve_finite_extreme_scales() raises:
                     )
                     assert_almost_equal(actual, unit, atol=1e-6)
                     assert_almost_equal(actual, expected[component], atol=1e-6)
+
+
+def norm_consumer_sample(high: Float32, low: Float32) -> Array[Float32, 5]:
+    """Evaluate mixed-exponent frames, light directions, and mip levels."""
+    from lights.lighting import light_vector
+    from render.rasterizer import tangent_frame, mip_level
+
+    var frame = tangent_frame(
+        Vector3(0, 0, 1),
+        Vector3(high, 0, 0),
+        Vector3(0, low, 0),
+        Vector2(high, 0),
+        Vector2(0, low),
+    )
+    var tiny = tangent_frame(
+        Vector3(1, 0, 0),
+        Vector3(high, 0, 0),
+        Vector3(high, low, 0),
+        Vector2(low, 0),
+        Vector2(0, 0),
+    )
+    var light = light_vector(Vector3(high, high, 0), Vector3(-high, -high, 0))
+    return [
+        frame.tangent.x,
+        frame.bitangent.y,
+        tiny.tangent.z,
+        light[0].x / light[2],
+        mip_level(Vector2(high, high), Vector2(0, 0), 8, 8),
+    ]
+
+
+def test_shared_norm_consumers_preserve_extreme_product_directions() raises:
+    from std.math import isfinite, ldexp
+
+    if skipped_for_lack_of_a_gpu("shared norm consumers across product ranges"):
+        return
+    var inputs: List[Float32] = [
+        1,
+        1,
+        1e-30,
+        1e-30,
+        1e30,
+        1e30,
+        ldexp(Float32(1), 120),
+        ldexp(Float32(1), -40),
+        ldexp(Float32(1), 120),
+        ldexp(Float32(1), -120),
+        3e38,
+        bitcast[DType.float32](UInt32(1)),
+    ]
+    var count = len(inputs) // 2
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](5 * count)
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[_ScalarMathKernels.norm_consumers_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(count),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(count):
+            var cpu = norm_consumer_sample(inputs[at * 2], inputs[at * 2 + 1])
+            var expected: Array[Float32, 4] = [1, 1, -1, 0.7071067811865475]
+            for component in range(5):
+                var actual = host[at * 5 + component]
+                assert_true(isfinite(actual))
+                assert_almost_equal(actual, cpu[component], atol=2e-5)
+                if component < 4:
+                    assert_almost_equal(actual, expected[component], atol=2e-6)
