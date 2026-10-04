@@ -61,8 +61,15 @@ needs whole points, and a color for each point when it has colors.
 An `IndexedLineSet` colored per vertex by a `colorIndex` needs a
 multiple of three segments: three.js reads past the end otherwise.
 
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized3, _ordinary_squared
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
@@ -862,11 +869,18 @@ struct _Builder(Movable):
                 )
                 # three.js's `normalize` multiplies by one over the length.
                 var inverse = 1 / (length if length != 0 else Float64(1))
+                var unit = normalized3(v[0], v[1], v[2])
+                if _ordinary_squared(length * length):
+                    unit = (
+                        product(v[0], inverse),
+                        product(v[1], inverse),
+                        product(v[2], inverse),
+                    )
                 var s = sin(v[3] / 2)
                 object.quaternion = Quaternion(
-                    Float32(product(product(v[0], inverse), s)),
-                    Float32(product(product(v[1], inverse), s)),
-                    Float32(product(product(v[2], inverse), s)),
+                    Float32(product(unit[0], s)),
+                    Float32(product(unit[1], s)),
+                    Float32(product(unit[2], s)),
                     Float32(cos(v[3] / 2)),
                 )
             elif field.name == "scale":
