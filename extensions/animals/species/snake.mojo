@@ -241,14 +241,14 @@ def _pchip_slopes(x: List[Float64], y: List[Float64]) -> List[Float64]:
     var n = len(x)
     var d = List[Float64]()
     # Two points at least: `d[0]` and `d[n - 2]` are read below.
-    for i in range(n - 1):  # pragma: no branch
+    for i in range(n - 1):
         d.append((y[i + 1] - y[i]) / (x[i + 1] - x[i]))
     var m = List[Float64](length=n, fill=0.0)
     m[0] = d[0]
     m[n - 1] = d[n - 2]
     for i in range(1, n - 1):
         m[i] = 0.0 if d[i - 1] * d[i] <= 0.0 else (d[i - 1] + d[i]) / 2.0
-    for i in range(n - 1):  # pragma: no branch
+    for i in range(n - 1):
         if d[i] == 0.0:
             m[i] = 0.0
             m[i + 1] = 0.0
@@ -293,7 +293,7 @@ def _segments(n: Int, total: Float64, tip_shrink: Float64) -> List[Float64]:
     var w = List[Float64]()
     var sw = 0.0
     # Its one caller asks for `SPINE` bones.
-    for i in range(n):  # pragma: no branch
+    for i in range(n):
         var k = 1.0
         if i >= n - tip_bones:
             k = 1.0 - (1.0 - tip_shrink) * (
@@ -304,7 +304,7 @@ def _segments(n: Int, total: Float64, tip_shrink: Float64) -> List[Float64]:
         w.append(k)
         sw += k
     var out = List[Float64]()
-    for k in w:  # pragma: no branch
+    for k in w:
         out.append(k * total / sw)
     return out^
 
@@ -735,7 +735,7 @@ def snake_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         var tip = hw_at[SPINE]
         var seg_l = (RATTLE_LEN / Float64(RATTLE_SEGS)) * t.get("girth")
         # A rattle has one segment in the young, five to eight later.
-        for k in range(n_seg):  # pragma: no branch
+        for k in range(n_seg):
             var f = Float64(k) / Float64(max(1, RATTLE_SEGS - 1))
             var wk = tip * (1.35 - 0.3 * f)
             var c0 = b + d * (seg_l * (Float64(k) + 0.55))
@@ -1026,7 +1026,7 @@ def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
     # point's x and y are the plane's two coordinates.
     var best = 1e9
     # Its callers pass literal polylines of two points or more.
-    for i in range(len(pts) - 1):  # pragma: no branch
+    for i in range(len(pts) - 1):
         var ax = pts[i].x
         var ay = pts[i].y
         var bx = pts[i + 1].x - ax
