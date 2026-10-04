@@ -1065,7 +1065,7 @@ def feather_fins(
             # An arched rachis is a chain of pieces. A gently curved one is
             # one piece along its chord.
             var pieces = 1 + Int(sh.arc / 0.3)
-            for q in range(pieces):  # pragma: no branch
+            for q in range(pieces):
                 var t0 = Float64(q) / Float64(pieces)
                 var t1 = Float64(q + 1) / Float64(pieces)
                 var tm = 0.5 * (t0 + t1)
