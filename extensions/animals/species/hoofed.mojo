@@ -3,60 +3,42 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Helpers the cloven-hoofed species share: the goat, the sheep and the pig.
+"""Helpers the hoofed species share: the horse, the cow, the deer, the
+goat, the sheep and the pig.
 
-A pitched head frame, the 32-bit integer mixing their re-seeded streams
-use, the weighted pick of their breed tables, the aperture roll of
-procedural-animals' `eyeSocket.js`, and the hoofed skeleton: the standard
-quadruped with a hoof bone below each pastern.
+Their heads are modeled along their own axis, pitched nose down in the
+bind pose. `HeadFrame` is their `hl` and `hdir`. Their skeleton is the
+standard quadruped with a hoof bone below each pastern.
 """
 
-from extensions.sdf.ids import BoneId
-from extensions.animals.kit import (
-    EyeSpec,
-    eye_frame_of,
+from extensions.sdf.ids import (
+    BoneId,
+    SurfacePart,
 )
-from extensions.animals.options import AnimalRandom
+from extensions.animals.parts import BODY
+from extensions.animals.kit import EyeSpec
 from extensions.animals.rig import Rig, add_sided
 from extensions.sdf.field import SdfModel
 from extensions.sdf.vector import (
     V3,
     dot,
-    length,
     normalize,
 )
-from std.math import atan2, cos, pi, sin
-
-comptime MASK32 = 0xFFFFFFFF
+from std.math import asin, atan2, cos, pi, sin
 
 
 @fieldwise_init
 struct HeadFrame(ImplicitlyCopyable):
-    """A head modeled along its own axis, pitched nose-down.
+    """A head modeled along its own axis.
 
-    Head-local `x` is lateral, `y` dorsal and `z` along the head toward
-    the muzzle. `hy` and `hz` are the local `y` and `z` axes in the bind
-    pose, and `o` is the origin.
+    Head-local `x` is lateral, `y` dorsal and `z` along the nasal line.
+    `o` is the head's origin in reference space, and `hy` and `hz` are
+    the local `y` and `z` axes there.
     """
 
     var o: V3
     var hy: V3
     var hz: V3
-
-    def at(self, v: V3) -> V3:
-        """Return a head-local point in reference space.
-
-        Args:
-            v: The head-local point.
-
-        Returns:
-            The point.
-        """
-        return V3(
-            self.o.x + v.x,
-            self.o.y + v.y * self.hy.y + v.z * self.hz.y,
-            self.o.z + v.y * self.hy.z + v.z * self.hz.z,
-        )
 
     def dir(self, v: V3) -> V3:
         """Return a head-local direction in reference space.
@@ -73,6 +55,39 @@ struct HeadFrame(ImplicitlyCopyable):
             v.y * self.hy.z + v.z * self.hz.z,
         )
 
+    def at(self, v: V3) -> V3:
+        """Return a head-local point in reference space.
+
+        The origin is added to the whole direction, `o + dir(v)`. The
+        horse, the cow and the deer place their heads so.
+
+        Args:
+            v: The head-local point.
+
+        Returns:
+            The point.
+        """
+        return self.o + self.dir(v)
+
+    def at_chained(self, v: V3) -> V3:
+        """Return a head-local point in reference space, term by term.
+
+        Each term is added to the origin in turn. The goat, the sheep
+        and the pig place their heads so. The result can differ from
+        `at` in the last bit.
+
+        Args:
+            v: The head-local point.
+
+        Returns:
+            The point.
+        """
+        return V3(
+            self.o.x + v.x,
+            self.o.y + v.y * self.hy.y + v.z * self.hz.y,
+            self.o.z + v.y * self.hy.z + v.z * self.hz.z,
+        )
+
     def local(self, p: V3) -> V3:
         """Return a reference-space point in head-local coordinates.
 
@@ -87,7 +102,7 @@ struct HeadFrame(ImplicitlyCopyable):
 
 
 def head_frame(origin: V3, pitch_deg: Float64) -> HeadFrame:
-    """Return a head frame pitched nose-down.
+    """Return a head frame pitched nose down.
 
     Args:
         origin: The head's origin in reference space.
@@ -100,114 +115,124 @@ def head_frame(origin: V3, pitch_deg: Float64) -> HeadFrame:
     return HeadFrame(origin, V3(0.0, cos(a), sin(a)), V3(0.0, -sin(a), cos(a)))
 
 
-def imul32(a: Int, b: Int) -> Int:
-    """Return the low 32 bits of a product, as JavaScript's `Math.imul`.
+def pitched_head(poll: V3, pitch_deg: Float64, ahead: Float64) -> HeadFrame:
+    """Return a head frame pitched nose down, its origin ahead of the poll.
 
     Args:
-        a: One factor. Only its low 32 bits count.
-        b: The other factor. Only its low 32 bits count.
+        poll: The top of the poll, in reference space.
+        pitch_deg: How far the nasal line points below horizontal.
+        ahead: How far the origin lies from the poll along the nasal line.
 
     Returns:
-        The product's low 32 bits, as an unsigned number.
+        The frame.
     """
-    var p = UInt64(a & MASK32) * UInt64(b & MASK32)
-    return Int(p & UInt64(MASK32))
+    var f = head_frame(poll, pitch_deg)
+    f.o = poll + f.hz * ahead
+    return f
 
 
-def draw_u32(mut r: AnimalRandom) -> Int:
-    """Draw one 32-bit integer: `Math.floor(R() * 4294967296)`.
+def head_ell(
+    mut m: SdfModel,
+    tag: String,
+    bone: BoneId,
+    hf: HeadFrame,
+    c: V3,
+    r: V3,
+    k: Float64 = 0.02,
+    axis_l: V3 = V3(0.0, 0.0, 1.0),
+    up_l: V3 = V3(0.0, 1.0, 0.0),
+    carve: Bool = False,
+    part: SurfacePart = BODY,
+) raises -> Int:
+    """Add an ellipsoid in head-local coordinates: the sculpts' `hell`.
 
     Args:
-        r: The stream.
+        m: The sculpt.
+        tag: What the primitive is.
+        bone: The bone it rides.
+        hf: The head frame.
+        c: The head-local center.
+        r: The radii: lateral, dorsal and along the head.
+        k: The blend radius.
+        axis_l: The head-local direction of the third radius.
+        up_l: A head-local direction near the second radius.
+        carve: Whether it cuts instead of adds.
+        part: The surface it belongs to.
 
     Returns:
-        The integer, from zero to `2^32 - 1`.
+        Its index.
+
+    Raises:
+        Error: If `SdfModel.ell` refuses it.
     """
-    return Int(r.next() * 4294967296.0) & MASK32
-
-
-def stream_of(seed: Int) -> AnimalRandom:
-    """Return procedural-animals' `rng(seed)` for a 32-bit seed.
-
-    Args:
-        seed: The seed. Only its low 32 bits count.
-
-    Returns:
-        The stream.
-    """
-    return AnimalRandom(seed & MASK32, 1, 0)
-
-
-def pick_weighted(mut r: AnimalRandom, weights: List[Float64]) -> Int:
-    """Draw from a weighted table as the hoofed species' `pick` does.
-
-    One draw is scaled by the weights' sum; the first entry that takes
-    the remainder to zero or below wins.
-
-    Args:
-        r: The stream.
-        weights: Each entry's weight. They need not sum to one.
-
-    Returns:
-        The index picked. The last entry when rounding leaves a rest.
-    """
-    var total = 0.0
-    for w in weights:
-        total += w
-    var x = r.next() * total
-    for i in range(len(weights)):
-        x -= weights[i]
-        if x <= 0.0:
-            return i
-    return len(weights) - 1
-
-
-def aperture_tilt_along(e: EyeSpec, head_origin: V3, axis: V3) -> Float64:
-    """Return the roll that lays the eye's almond along a direction.
-
-    This is procedural-animals' `apertureTiltAlong`: the long axis has no
-    direction, so the roll is the one within 90 degrees of upright.
-
-    Args:
-        e: The eye. Its own `tilt` is ignored.
-        head_origin: The head's origin.
-        axis: The direction to follow, such as the head's axis.
-
-    Returns:
-        The roll, in radians.
-    """
-    var flat = EyeSpec(
-        e.c,
-        e.r,
-        e.back,
-        e.yaw,
-        e.pitch,
-        e.lid,
-        e.big_r,
-        e.d,
-        e.off,
-        0.0,
-        e.iris_z,
-        e.iris_r,
+    return m.ell(
+        tag,
+        bone,
+        hf.at(c),
+        r,
+        axis=normalize(hf.dir(axis_l)),
+        up=normalize(hf.dir(up_l)),
+        k=k,
+        carve=carve,
+        part=part,
     )
-    var f = eye_frame_of(flat, head_origin, 1.0)
-    var k = dot(axis, f.z)
-    var a = axis - f.z * k
-    var ph = atan2(dot(a, f.y), dot(a, f.x))
-    if ph > pi / 2.0:
-        ph -= pi
-    elif ph < -pi / 2.0:
-        ph += pi
-    return ph
+
+
+def eye_looking(
+    hf: HeadFrame,
+    c_local: V3,
+    look: V3,
+    r: Float64,
+    back: Float64,
+    lid: Float64,
+    big_r: Float64,
+    d: Float64,
+    off: Float64,
+    iris_z: Float64,
+    iris_r: Float64,
+) -> EyeSpec:
+    """Return an eye at a head-local point, looking along a direction.
+
+    Its roll is zero: set it with `aperture_tilt_along`.
+
+    Args:
+        hf: The head frame.
+        c_local: The eye's head-local center.
+        look: The view direction in reference space, a unit vector.
+        r: The eyeball's radius.
+        back: How far the ball sits behind its center.
+        lid: The lid's thickness.
+        big_r: The aperture arcs' radius.
+        d: The arcs' offset.
+        off: The aperture's offset along the eye's up axis.
+        iris_z: The iris plane's depth.
+        iris_r: The iris's radius.
+
+    Returns:
+        The eye.
+    """
+    return EyeSpec(
+        hf.dir(c_local),
+        r,
+        back,
+        atan2(look.x, look.z),
+        asin(look.y),
+        lid,
+        big_r,
+        d,
+        off,
+        0.0,
+        iris_z,
+        iris_r,
+    )
 
 
 def hoofed_bones(mut rig: Rig, tail_segs: Int, snout: Bool = False) raises:
-    """Add the hoofed quadruped's skeleton.
+    """Add the quadruped skeleton with a hoof bone below each pastern.
 
-    It is the standard quadruped with the pastern ending at the coffin
-    joint, `fpaw` from `mcp` to `fcoffin`, and a hoof bone below it,
-    `fhoof` from `fcoffin` to `ftoe`. The hind leg is the same with
-    `hpaw`, `hcoffin`, `hhoof` and `htoe`.
+    `fpaw` and `hpaw` are the pasterns, fetlock to coffin joint, and
+    `fhoof` and `hhoof` the hooves, coffin joint to toe. The rig's
+    joints must include `fcoffin` and `hcoffin` on each side.
 
     Args:
         rig: The rig, with its joints placed and mirrored.
@@ -250,99 +275,56 @@ def hoofed_bones(mut rig: Rig, tail_segs: Int, snout: Bool = False) raises:
     add_sided(rig, "hhoof{S}", "hcoffin{S}", "htoe{S}", "hpaw{S}")
 
 
-def limb_bone(bone: String) -> Bool:
-    """Return True for a bone of a hoofed leg.
-
-    Args:
-        bone: The bone's name.
-
-    Returns:
-        Whether it is a scapula, a leg bone, a pastern or a hoof.
-    """
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("fhoof")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-        or bone.startswith("hhoof")
-    )
-
-
-def front_bone(bone: String) -> Bool:
-    """Return True for a bone of a foreleg.
-
-    Args:
-        bone: The bone's name.
-
-    Returns:
-        Whether it is a scapula, humerus, radius, metacarpus, front
-        pastern or front hoof.
-    """
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("fhoof")
-    )
-
-
-def unit_or(v: V3, fallback: V3) -> V3:
-    """Return a direction normalized, or a fallback when it is zero.
-
-    Args:
-        v: The direction.
-        fallback: What to return for a zero vector.
-
-    Returns:
-        The unit direction.
-    """
-    var l2 = dot(v, v)
-    return normalize(v) if l2 > 1e-18 else fallback
-
-
-def cone_or_ball(
-    mut m: SdfModel,
-    tag: String,
-    bone: BoneId,
-    a: V3,
-    b: V3,
-    ra: Float64,
-    rb: Float64,
-    k: Float64,
-    thin: Bool = False,
-) raises -> Int:
-    """Add a round cone, or its bigger ball when that ball holds the other.
-
-    procedural-animals' round cone accepts ends whose balls nest; its
-    shape is then the bigger ball. `SdfModel.cone` refuses them.
+def dewclaw_balls(
+    mut m: SdfModel, bone: BoneId, mc: V3, s: Float64, z: Float64, r: Float64
+) raises:
+    """Add two round dewclaws behind a fetlock.
 
     Args:
         m: The sculpt.
-        tag: What the primitive is.
-        bone: The bone it rides.
-        a: One end.
-        b: The other end.
-        ra: The radius at `a`.
-        rb: The radius at `b`.
-        k: The blend radius.
-        thin: Whether coarse meshes must inflate it to stay visible.
-
-    Returns:
-        Its index.
+        bone: The bone they ride.
+        mc: The fetlock joint.
+        s: One for the left leg, minus one for the right.
+        z: How far forward of the joint they sit. Negative is behind.
+        r: Their radius.
 
     Raises:
-        Error: If the sculpt refuses the primitive.
+        Error: If the sculpt refuses a primitive.
     """
-    var nested = abs(ra - rb) >= length(b - a)
-    if nested:
-        var c = a if ra >= rb else b
-        return m.sphere(tag, bone, c, max(ra, rb), k=k, thin=thin)
-    return m.cone(tag, bone, a, b, ra, rb, k=k, thin=thin)
+    for k in [1.0, -1.0]:
+        _ = m.sphere(
+            "dewclaw",
+            bone,
+            mc + V3(0.009 * k * s, -0.006, z),
+            r,
+            k=0.004,
+        )
+
+
+def lens_distance(
+    p: V3, c: V3, x: V3, y: V3, big_r: Float64, d: Float64
+) -> Float64:
+    """Return the distance to an eye's almond aperture, across its plane.
+
+    The almond is two circles of radius `big_r` offset by `d` along `y`.
+    The square roots are taken as powers of one half, as the horse, the
+    cow and the deer painters were tuned with. They can differ from
+    `almond_distance` in the last bit.
+
+    Args:
+        p: The point.
+        c: The almond's center.
+        x: Across the almond.
+        y: Toward the upper lid.
+        big_r: The circles' radius.
+        d: Their offset.
+
+    Returns:
+        The signed distance, negative inside the almond.
+    """
+    var q = p - c
+    var u = dot(q, x)
+    var v = dot(q, y)
+    var a = (u * u + (v + d) * (v + d)) ** 0.5 - big_r
+    var b = (u * u + (v - d) * (v - d)) ** 0.5 - big_r
+    return max(a, b)

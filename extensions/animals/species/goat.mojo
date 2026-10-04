@@ -36,6 +36,14 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
+    aperture_tilt_along,
+    draw_u32,
+    is_front_limb,
+    imul32,
+    is_limb,
+    pick_weighted,
+    stream_of,
+    lid_distance,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import (
@@ -51,15 +59,9 @@ from extensions.sdf.field import SdfModel
 from extensions.animals.parts import BODY
 from extensions.animals.species.hoofed import (
     HeadFrame,
-    aperture_tilt_along,
-    draw_u32,
-    front_bone,
     head_frame,
     hoofed_bones,
-    imul32,
-    limb_bone,
-    pick_weighted,
-    stream_of,
+    dewclaw_balls,
 )
 from extensions.animals.traits import Traits
 from extensions.sdf.vector import (
@@ -145,7 +147,7 @@ def _frame() -> HeadFrame:
 
 
 def _hl(v: V3) -> V3:
-    return _frame().at(v)
+    return _frame().at_chained(v)
 
 
 def _face_z(z: Float64, kid: Bool) -> Float64:
@@ -1443,7 +1445,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.01,
         )
         var fpaw = rig.bone("fpaw" + side)
-        _dewclaws(m, fpaw, mc, s)
+        dewclaw_balls(m, fpaw, mc, s, -0.021, 0.0055)
         _ = m.cone("pastern", fpaw, mc, cf, 0.0155, 0.0165, k=0.01)
         _hoof(m, rig.bone("fhoof" + side), cf, toe, 1.0)
 
@@ -1559,7 +1561,7 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.01,
         )
         var hpaw = rig.bone("hpaw" + side)
-        _dewclaws(m, hpaw, mt, s)
+        dewclaw_balls(m, hpaw, mt, s, -0.021, 0.0055)
         _ = m.cone("pastern", hpaw, mt, chf, 0.015, 0.016, k=0.01)
         _hoof(m, rig.bone("hhoof" + side), chf, tt, 0.95)
 
@@ -1614,17 +1616,6 @@ def _skin(m: SdfModel, body: List[Int], p: V3, d: V3) -> V3:
     while u < 0.25 and m.eval_list(body, p + d * u) < 0.0:
         u += 0.002
     return p + d * (u - 0.012)
-
-
-def _dewclaws(mut m: SdfModel, bone: BoneId, mc: V3, s: Float64) raises:
-    for k in [1.0, -1.0]:
-        _ = m.sphere(
-            "dewclaw",
-            bone,
-            mc + V3(0.009 * k * s, -0.006, -0.021),
-            0.0055,
-            k=0.004,
-        )
 
 
 def _hoof(mut m: SdfModel, bone: BoneId, c: V3, toe_j: V3, w: Float64) raises:
@@ -1851,7 +1842,9 @@ def goat_palette(t: Traits) raises -> Palette:
             count += 1
         if not spots:
             if R.next() < 0.7:
-                out.set("patch" + String(count), f.at(V3(0.0, 0.02, 0.05)))
+                out.set(
+                    "patch" + String(count), f.at_chained(V3(0.0, 0.02, 0.05))
+                )
                 out.set(
                     "patchr" + String(count),
                     V3(0.1, 0.0, 0.3 + 0.35 * R.next()),
@@ -1963,7 +1956,7 @@ def _mark_sd(
             var torso = p.y - 0.43
             var leg = 1.0
             if legness > 0.0:
-                var fr = 1.0 if front_bone(bone) else -1.0
+                var fr = 1.0 if is_front_limb(bone) else -1.0
                 leg = p.y - 0.5 + 0.12 * smoothstep(-0.2, 0.7, n.z * fr)
             d = min(d, mix(torso, leg, smoothstep(0.1, 0.6, legness)))
         if (masks & M_REAR) != 0:
@@ -1994,7 +1987,7 @@ def _mark_sd(
             d = min(d, -0.01 if n.y < 0.0 else 0.01)
     var leggy = legness > 0.2
     if leggy:
-        var fr = front_bone(bone)
+        var fr = is_front_limb(bone)
         var knee_y = 0.3 if fr else 0.34
         if (masks & M_LEGS) != 0:
             d = min(d, p.y - knee_y)
@@ -2054,7 +2047,7 @@ def _region(part_horn: Bool, part_jaw: Bool, tag: String, bone: String) -> Int:
 
 
 def _legness(bone: String, p: V3) -> Float64:
-    if not limb_bone(bone):
+    if not is_limb(bone):
         return 0.0
     var upper = (
         bone.startswith("scapula")
@@ -2085,13 +2078,7 @@ def _lid_distance(t: Traits, p: V3) -> Float64:
     var e = goat_eye(t)
     var s = 1.0 if p.x >= 0.0 else -1.0
     var ef = eye_frame_of(e, HEAD_O, s)
-    var c = ef.c + ef.y * e.off
-    var d = p - c
-    var lx = dot(d, ef.x)
-    var ly = dot(d, ef.y)
-    var upper = sqrt(lx * lx + (ly + e.d) ** 2) - e.big_r
-    var lower = sqrt(lx * lx + (ly - e.d) ** 2) - e.big_r
-    return abs(max(upper, lower))
+    return lid_distance(e, ef, p)
 
 
 def goat_paint(
@@ -2159,7 +2146,7 @@ def goat_paint(
         c = mix3(c, pal.get("belly"), ventral * belly_k)
         var callus = (
             not kid
-            and front_bone(bone)
+            and is_front_limb(bone)
             and abs(p.y - 0.21) < 0.022
             and n.z > 0.5
         )

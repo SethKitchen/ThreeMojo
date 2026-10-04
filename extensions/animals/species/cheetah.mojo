@@ -29,6 +29,9 @@ from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
+    is_limb,
+    mirrored_blob,
+    aperture_local,
 )
 from extensions.animals.noise import cells3, fbm3, vnoise3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -45,13 +48,15 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     length_warp,
     legs_warp,
     scale_about_warp,
 )
-from std.math import cos, exp, floor, log, pi, pow, sin, sqrt
+from std.math import cos, floor, log, pi, pow, sin
+from extensions.sdf.distance import almond_distance
 
 comptime TAIL_SEGS = 10
 # The head's origin, between the eyes and the ears.
@@ -245,10 +250,6 @@ def cheetah_rig(t: Traits) raises -> Rig:
 
 def _hl(x: Float64, y: Float64, z: Float64) -> V3:
     return V3(HEAD_O.x + x, HEAD_O.y + y, HEAD_O.z + z)
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _tail_radius(t: Float64) -> Float64:
@@ -598,7 +599,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "scapmuscle",
             scap,
-            lerp(sc, sh, 0.5) + _sx(V3(0.006, 0, 0), s),
+            lerp(sc, sh, 0.5) + on_side(V3(0.006, 0, 0), s),
             sh - sc,
             V3(0.022, 0.1, 0.055),
             lateral=lat,
@@ -621,7 +622,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "forearmmuscle",
             rad,
-            lerp(e, w, 0.25) + _sx(V3(0.004, 0, 0.004), s),
+            lerp(e, w, 0.25) + on_side(V3(0.004, 0, 0.004), s),
             w - e,
             V3(0.03, 0.07, 0.034),
             lateral=lat,
@@ -633,7 +634,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
         _ = m.sphere(
             "dewclaw",
             meta,
-            lerp(w, mc, 0.35) + _sx(V3(-0.016, 0, 0.004), s),
+            lerp(w, mc, 0.35) + on_side(V3(-0.016, 0, 0.004), s),
             0.007,
             k=0.006,
         )
@@ -671,7 +672,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.4) + _sx(V3(0.004, 0, -0.035), s),
+            lerp(hp, kn, 0.4) + on_side(V3(0.004, 0, -0.035), s),
             kn - hp,
             V3(0.041, 0.15, 0.1),
             lateral=lat,
@@ -680,8 +681,8 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
         _ = m.cone(
             "thighfront",
             fem,
-            _sx(V3(0.04, 0.625, -0.33), s),
-            kn + _sx(V3(-0.004, 0.055, 0), s),
+            on_side(V3(0.04, 0.625, -0.33), s),
+            kn + on_side(V3(-0.004, 0.055, 0), s),
             0.04,
             0.025,
             k=0.06,
@@ -689,7 +690,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
         _ = m.cone(
             "hamstring",
             fem,
-            _sx(V3(0.046, 0.625, -0.595), s),
+            on_side(V3(0.046, 0.625, -0.595), s),
             lerp(kn, hk, 0.28) + V3(0, 0, -0.028),
             0.045,
             0.028,
@@ -699,19 +700,23 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "flankfold",
             fem,
-            _sx(V3(0.05, 0.475, -0.29), s),
+            on_side(V3(0.05, 0.475, -0.29), s),
             V3(-0.03, 0.16, 0.1),
             V3(0.02, 0.085, 0.04),
             lateral=lat,
             k=0.06,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.002, 0.008, 0.006), s), 0.0175, k=0.04
+            "stifle",
+            tib,
+            kn + on_side(V3(0.002, 0.008, 0.006), s),
+            0.0175,
+            k=0.04,
         )
         _ = m.cone(
             "shin",
             tib,
-            lerp(kn, hk, 0.06) + _sx(V3(0, 0, 0.004), s),
+            lerp(kn, hk, 0.06) + on_side(V3(0, 0, 0.004), s),
             hk,
             0.024,
             0.018,
@@ -721,7 +726,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "calf",
             tib,
-            lerp(kn, hk, 0.3) + _sx(V3(0.002, 0.01, -0.027), s),
+            lerp(kn, hk, 0.3) + on_side(V3(0.002, 0.01, -0.027), s),
             hk - kn,
             V3(0.025, 0.065, 0.029),
             lateral=lat,
@@ -933,20 +938,6 @@ def _spot(p: V3, radius: Float64, seed: Int, wob: Float64) -> Float64:
     return max(a, b)
 
 
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
-
-
 def cheetah_paint(
     pal: Palette, t: Traits, tag: String, bone: String, s: CoatSample
 ) -> Paint:
@@ -1041,7 +1032,7 @@ def cheetah_paint(
         var pale = (
             smoothstep(0.45, 0.95, ventral)
             * smoothstep(0.2, 0.06, p.z)
-            * (0.0 if _limb(bone) else 1.0)
+            * (0.0 if is_limb(bone) else 1.0)
         )
         col = mix3(col, SPOT, spot * (1.0 - 0.55 * pale))
     return Paint(mix3(col, SPOT, smoothstep(0.0008, -0.0006, mark)), FUR)
@@ -1053,7 +1044,7 @@ def _paint_body(
     # The torso, the neck and the legs: their color, how ventral they
     # are, and their spots' radius.
     var neck = bone == "neck1" or bone == "neck2"
-    var limb = _limb(bone)
+    var limb = is_limb(bone)
     var legness = smoothstep(0.55, 0.38, p.y) if limb else 0.0
     var up = clamp(n.y, -1.0, 1.0)
     var w: Float64
@@ -1109,11 +1100,20 @@ def _paint_face(c: List[V3], tag: String, bone: String, p: V3, n: V3) -> Paint:
         var leather = h.z > 0.085
         if leather:
             return Paint(c[NOSE_LEATHER], NOSE)
-    var whisker = _g3(h, 0.015, -0.035, 0.08, 0.02, 0.016, 0.024) * 0.5
-    var moustache = _g3(h, 0.017, -0.047, 0.07, 0.024, 0.0085, 0.034)
-    var lip = _g3(h, 0.0, -0.042, 0.088, 0.014, 0.01, 0.016)
-    var under_eye = _g3(h, 0.031, 0.009, 0.033, 0.011, 0.0075, 0.016) * 0.8
-    var above_eye = _g3(h, 0.03, 0.044, 0.025, 0.012, 0.006, 0.015) * 0.45
+    var whisker = (
+        mirrored_blob(h, V3(0.015, -0.035, 0.08), V3(0.02, 0.016, 0.024)) * 0.5
+    )
+    var moustache = mirrored_blob(
+        h, V3(0.017, -0.047, 0.07), V3(0.024, 0.0085, 0.034)
+    )
+    var lip = mirrored_blob(h, V3(0.0, -0.042, 0.088), V3(0.014, 0.01, 0.016))
+    var under_eye = (
+        mirrored_blob(h, V3(0.031, 0.009, 0.033), V3(0.011, 0.0075, 0.016))
+        * 0.8
+    )
+    var above_eye = (
+        mirrored_blob(h, V3(0.03, 0.044, 0.025), V3(0.012, 0.006, 0.015)) * 0.45
+    )
     var chin_w = (
         smoothstep(-0.02, 0.03, h.z) * 0.9 + smoothstep(-0.2, -0.7, n.y) * 0.6
     ) if jaw else 0.0
@@ -1143,22 +1143,6 @@ def _paint_face(c: List[V3], tag: String, bone: String, p: V3, n: V3) -> Paint:
     return Paint(col, FUR)
 
 
-def _g3(
-    h: V3,
-    cx: Float64,
-    cy: Float64,
-    cz: Float64,
-    rx: Float64,
-    ry: Float64,
-    rz: Float64,
-) -> Float64:
-    # A soft blob, mirrored across the midline.
-    var a = (abs(h.x) - cx) / rx
-    var b = (h.y - cy) / ry
-    var d = (h.z - cz) / rz
-    return exp(-(a * a + b * b + d * d))
-
-
 def _face_mark(p: V3, n: V3, jaw: Bool) -> Float64:
     # The face's black marks: the tear lines, the lid margins and the lip
     # line. Below zero is black.
@@ -1183,14 +1167,9 @@ def _face_mark(p: V3, n: V3, jaw: Bool) -> Float64:
     )
     var sd = 1.0 if p.x > HEAD_O.x else -1.0
     var ef = eye_frame_of(e, HEAD_O, sd)
-    var d = p - (ef.c + ef.y * e.off)
-    var lx = dot(d, ef.x)
-    var ly = dot(d, ef.y)
-    var lz = dot(d, ef.z)
-    var a = sqrt(lx * lx + (ly + e.d) * (ly + e.d)) - e.big_r
-    var b = sqrt(lx * lx + (ly - e.d) * (ly - e.d)) - e.big_r
-    var de = abs(max(a, b))
-    var near = de < 0.004 and lz > -0.4 * e.r
+    var q = aperture_local(e, ef, p)
+    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
+    var near = de < 0.004 and q.z > -0.4 * e.r
     if near:
         mark = min(mark, de - 0.0021)
     # The lip line where the upper lip meets the jaw.

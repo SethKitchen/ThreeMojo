@@ -13,6 +13,7 @@ smooth maximum. Primitives are evaluated in the order they were added.
 The field is negative inside the animal. Distances are meters.
 """
 
+from extensions.sdf.distance import almond_distance, rect_distance
 from extensions.sdf.ids import (
     BoneId,
     CONE,
@@ -156,9 +157,8 @@ def _lens(p: Primitive, q: V3) -> Float64:
     var lx = dot(d, p.ax)
     var ly = dot(d, p.ay)
     var lz = dot(d, p.az)
-    var upper = sqrt(lx * lx + (ly + p.r.y) * (ly + p.r.y)) - p.r.x
-    var lower = sqrt(lx * lx + (ly - p.r.y) * (ly - p.r.y)) - p.r.x
-    return max(max(upper, lower), max(p.lo - lz, lz - p.hi))
+    var across = almond_distance(lx, ly, p.r.x, p.r.y)
+    return max(across, max(p.lo - lz, lz - p.hi))
 
 
 def outline_distance(
@@ -212,10 +212,8 @@ def _fin(p: Primitive, outline: List[Float64], q: V3) -> Float64:
     var rho = min(half, p.r.y * half / p.r.x)
     var ex = outline_distance(outline, p.first, p.count, pu, pv) + rho
     var ey = abs(pn) - (half - rho)
-    var ox = max(ex, 0.0)
-    var oy = max(ey, 0.0)
     var slope = sqrt(p.lo * p.lo + p.hi * p.hi)
-    var inner = min(max(ex, ey), 0.0) + sqrt(ox * ox + oy * oy) - rho
+    var inner = rect_distance(ex, ey) - rho
     return inner / sqrt(1.0 + slope * slope)
 
 

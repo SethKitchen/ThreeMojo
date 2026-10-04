@@ -39,8 +39,13 @@ from extensions.animals.parts import (
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
-    eye_frame_of,
     sculpt_eye_socket,
+    is_limb,
+    pick_weighted,
+    aperture_tilt_along,
+    draw_u32,
+    imul32,
+    stream_of,
 )
 from extensions.animals.noise import fbm3, ihash, vnoise3
 from extensions.animals.options import (
@@ -63,6 +68,7 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -71,6 +77,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import asin, atan2, cos, pi, pow, sin, sqrt
+from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
 comptime TAIL_SEGS = 6
 # The head's origin: on the head's axis, level with the eyes.
@@ -106,19 +113,6 @@ def boar_variant_names() -> List[String]:
     return [String("adult"), "yearling", "piglet"]
 
 
-def _pick(mut r: AnimalRandom, weights: List[Float64]) -> Int:
-    # The original's weighted `pick`: one draw scaled by the total.
-    var total = 0.0
-    for w in weights:
-        total += w
-    var x = r.next() * total
-    for i in range(len(weights)):
-        x -= weights[i]
-        if x <= 0.0:
-            return i
-    return len(weights) - 1
-
-
 def boar_traits(mut r0: AnimalRandom, options: AnimalOptions) raises -> Traits:
     """Draw one boar: procedural-animals' `variation`.
 
@@ -137,12 +131,8 @@ def boar_traits(mut r0: AnimalRandom, options: AnimalOptions) raises -> Traits:
     Raises:
         Error: If the requested age class is not one of the three.
     """
-    var mixed = (
-        Int(r0.next() * 4294967296.0)
-        ^ ((options.seed * 0x9E3779B1) & 0xFFFFFFFF)
-        ^ 173
-    )
-    var r = AnimalRandom(mixed, 1, 0)
+    var mixed = draw_u32(r0) ^ imul32(options.seed, 0x9E3779B1) ^ 173
+    var r = stream_of(mixed)
     if options.variant.value >= 3:
         raise Error("The boar has no such age class")
     var variant: Int
@@ -154,7 +144,7 @@ def boar_traits(mut r0: AnimalRandom, options: AnimalOptions) raises -> Traits:
         variant = ADULT_CLASS
     else:
         var classes: List[Float64] = [72.0, 14.0, 14.0]
-        variant = _pick(r, classes)
+        variant = pick_weighted(r, classes)
     var piglet = variant == PIGLET
     var yearling = variant == YEARLING
     var sex = pick_sex(options.sex, r)
@@ -166,11 +156,11 @@ def boar_traits(mut r0: AnimalRandom, options: AnimalOptions) raises -> Traits:
         coat = YEARLING_COAT
     else:
         var coats: List[Float64] = [55.0, 15.0, 15.0, 15.0]
-        coat = _pick(r, coats)
+        coat = pick_weighted(r, coats)
     var reg_k = 1.0
     if variant == ADULT_CLASS:
         var regions: List[Float64] = [80.0, 10.0, 10.0]
-        var region = _pick(r, regions)
+        var region = pick_weighted(r, regions)
         reg_k = 1.18 if region == 1 else (0.86 if region == 2 else 1.0)
     var t = Traits(sex, ADULT if variant == ADULT_CLASS else JUVENILE, variant)
     var base = 0.34 if piglet else (
@@ -268,21 +258,6 @@ def _head_local(p: V3) -> V3:
     return V3(d.x, dot(d, HY), dot(d, HZ))
 
 
-def _tilt_along(e: EyeSpec, axis: V3) -> Float64:
-    # The aperture roll that lays the almond's long axis along `axis`,
-    # with the upper lid kept up: the original's `apertureTiltAlong`.
-    var flat = e
-    flat.tilt = 0.0
-    var f = eye_frame_of(flat, HEAD_O, 1.0)
-    var a = axis - f.z * dot(axis, f.z)
-    var ph = atan2(dot(a, f.y), dot(a, f.x))
-    if ph > pi / 2.0:
-        ph -= pi
-    elif ph < -pi / 2.0:
-        ph += pi
-    return ph
-
-
 def boar_eye(t: Traits) -> EyeSpec:
     """Return the boar's left eye: small, set high and far back, deep in
     bristly lids, looking out and a little forward.
@@ -309,7 +284,7 @@ def boar_eye(t: Traits) -> EyeSpec:
         0.007,
         0.0094,
     )
-    e.tilt = _tilt_along(e, HZ) - 0.05
+    e.tilt = aperture_tilt_along(e, HEAD_O, HZ) - 0.05
     return e
 
 
@@ -378,10 +353,6 @@ def boar_rig(t: Traits) raises -> Rig:
             "hhoof" + side, "hcoffin" + side, "htoe" + side, "hpaw" + side
         )
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 @fieldwise_init
@@ -845,7 +816,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "scapmuscle",
             rig.bone("scapula" + side),
-            lerp(sc, sh, 0.45) + _sx(V3(0.035, 0, -0.01), s),
+            lerp(sc, sh, 0.45) + on_side(V3(0.035, 0, -0.01), s),
             sh - sc,
             V3(0.03 * lk, 0.11, 0.075),
             lateral=lat,
@@ -854,7 +825,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.sphere(
             "shoulderpoint",
             hum,
-            sh + _sx(V3(0.012, 0, 0.01), s),
+            sh + on_side(V3(0.012, 0, 0.01), s),
             0.035,
             k=0.045,
         )
@@ -863,7 +834,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "triceps",
             hum,
-            lerp(sh, e, 0.55) + _sx(V3(0.008, 0.01, -0.05), s),
+            lerp(sh, e, 0.55) + on_side(V3(0.008, 0.01, -0.05), s),
             e - sh,
             V3(0.04 * lk, 0.08, 0.055),
             lateral=lat,
@@ -877,7 +848,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "forearmmuscle",
             rad,
-            lerp(e, w, 0.28) + _sx(V3(0.004, 0, 0.006), s),
+            lerp(e, w, 0.28) + on_side(V3(0.004, 0, 0.006), s),
             w - e,
             V3(0.04 * lk, 0.07, 0.043 * lk),
             lateral=lat,
@@ -886,8 +857,8 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone(
             "forearmweb",
             rad,
-            e + _sx(V3(-0.025, 0.035, -0.01), s),
-            lerp(e, w, 0.3) + _sx(V3(-0.01, 0, 0), s),
+            e + on_side(V3(-0.025, 0.035, -0.01), s),
+            lerp(e, w, 0.3) + on_side(V3(-0.01, 0, 0), s),
             0.03,
             0.022,
             k=0.03,
@@ -948,7 +919,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.42) + _sx(V3(0.02, 0, -0.03), s),
+            lerp(hp, kn, 0.42) + on_side(V3(0.02, 0, -0.03), s),
             kn - hp,
             V3(0.04 * lk, 0.13, 0.1),
             lateral=lat,
@@ -957,8 +928,8 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone(
             "thighfront",
             fem,
-            _sx(V3(0.08, 0.53, -0.31), s),
-            kn + _sx(V3(0.0, 0.03, 0.02), s),
+            on_side(V3(0.08, 0.53, -0.31), s),
+            kn + on_side(V3(0.0, 0.03, 0.02), s),
             0.05,
             0.034,
             k=0.05,
@@ -966,7 +937,7 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone(
             "hamstring",
             fem,
-            _sx(V3(0.05, 0.48, -0.52), s),
+            on_side(V3(0.05, 0.48, -0.52), s),
             lerp(kn, hk, 0.3) + V3(0, 0, -0.045),
             0.055,
             0.03,
@@ -976,20 +947,24 @@ def boar_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "flankfold",
             fem,
-            _sx(V3(0.095, 0.34, -0.21), s),
+            on_side(V3(0.095, 0.34, -0.21), s),
             V3(-0.1, 0.3, 0.12),
             V3(0.026, 0.07, 0.04),
             lateral=lat,
             k=0.05,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.004, 0.005, 0.014), s), 0.03, k=0.035
+            "stifle",
+            tib,
+            kn + on_side(V3(0.004, 0.005, 0.014), s),
+            0.03,
+            k=0.035,
         )
         _ = ell_y(
             m,
             "gaskin",
             tib,
-            lerp(kn, hk, 0.3) + _sx(V3(0.004, 0, -0.024), s),
+            lerp(kn, hk, 0.3) + on_side(V3(0.004, 0, -0.024), s),
             hk - kn,
             V3(0.042 * lk, 0.08, 0.052),
             lateral=lat,
@@ -1407,22 +1382,6 @@ def _stripes(t: Traits, p: V3, face: Bool) -> Float64:
     return d * zf + (1.0 - zf) * max(d, 0.01 + 0.02 * (1.0 - zf))
 
 
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("fhoof")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-        or bone.startswith("hhoof")
-    )
-
-
 def _tusk_paint(pal: Palette, t: Traits, p: V3) -> Paint:
     # Ivory, stained brownish at the base.
     var best = 1e9
@@ -1572,7 +1531,7 @@ def boar_paint(
         if neck:
             ventral = smoothstep(0.0, -0.7, n.y) * 0.5
         var leg = 0.0
-        if _limb(bone):
+        if is_limb(bone):
             leg = 1.0
             var upper = (
                 bone.startswith("scapula")
@@ -1634,30 +1593,16 @@ def _mane_of(p: V3, n: V3) -> Float64:
     return along * across * smoothstep(0.3, 0.7, n.y + 0.2)
 
 
-def _ell_dist(h: V3, c: V3, r: V3) -> Float64:
-    # About the distance from a head-local point to a head-aligned
-    # ellipsoid.
-    var q = V3((h.x - c.x) / r.x, (h.y - c.y) / r.y, (h.z - c.z) / r.z)
-    return (length(q) - 1.0) * min(r.x, min(r.y, r.z))
-
-
-def _seg_dist(h: V3, a: V3, b: V3, ra: Float64, rb: Float64) -> Float64:
-    # About the distance from a point to a round cone.
-    var ab = b - a
-    var u = clamp(dot(h - a, ab) / dot(ab, ab), 0.0, 1.0)
-    return length(h - (a + ab * u)) - (ra + (rb - ra) * u)
-
-
 def _jaw_dist(h: V3, snout_l: Float64) -> Float64:
     # The distance from a head-local point to the jaw's surface.
-    var d = _ell_dist(
+    var d = ellipsoid_estimate(
         h,
         V3(0.0, -0.094, _hz(0.12, snout_l)),
         V3(0.038, 0.025, 0.075 * snout_l + 0.02),
     )
     d = min(
         d,
-        _ell_dist(
+        ellipsoid_estimate(
             h,
             V3(0.0, -0.08, _hz(0.205, snout_l)),
             V3(0.027, 0.015, 0.042 * snout_l + 0.008),
@@ -1666,7 +1611,7 @@ def _jaw_dist(h: V3, snout_l: Float64) -> Float64:
     var sx = 1.0 if h.x >= 0.0 else -1.0
     return min(
         d,
-        _seg_dist(
+        round_cone_estimate(
             h,
             V3(0.035 * sx, -0.1, _hz(0.04, snout_l)),
             V3(0.025 * sx, -0.085, _hz(0.19, snout_l)),
@@ -1680,14 +1625,14 @@ def _lip_dist(h: V3, snout_l: Float64) -> Float64:
     # The distance from a head-local point to the upper lip and the
     # underside of the snout.
     var sx = 1.0 if h.x >= 0.0 else -1.0
-    var d = _ell_dist(
+    var d = ellipsoid_estimate(
         h,
         V3(0.034 * sx, -0.056, _hz(0.13, snout_l)),
         V3(0.026, 0.029, 0.085 * snout_l + 0.01),
     )
     d = min(
         d,
-        _ell_dist(
+        ellipsoid_estimate(
             h,
             V3(0.0, -0.055, _hz(0.2, snout_l)),
             V3(0.032, 0.022, 0.07 * snout_l + 0.01),
@@ -1695,7 +1640,7 @@ def _lip_dist(h: V3, snout_l: Float64) -> Float64:
     )
     return min(
         d,
-        _ell_dist(
+        ellipsoid_estimate(
             h,
             V3(0.044 * sx, -0.045, 0.055),
             V3(0.038, 0.05, 0.075),

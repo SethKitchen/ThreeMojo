@@ -3,15 +3,16 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Compound sculpting helpers: an ellipsoid aimed by its long axis, and
-a smooth tube along a Catmull-Rom curve.
+"""Compound sculpting helpers: an ellipsoid aimed by its long axis, a
+smooth tube along a Catmull-Rom curve, and a round cone that accepts
+nested ends.
 
 These are procedural-animals' `ellY` and `tube`.
 """
 
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import BoneId, SurfacePart
-from extensions.sdf.vector import V3, cross, normalize
+from extensions.sdf.vector import V3, cross, length, normalize
 
 
 def ell_y(
@@ -120,3 +121,43 @@ def tube(
                 k=k if i == 0 else 0.0,
                 part=part,
             )
+
+
+def cone_or_ball(
+    mut m: SdfModel,
+    tag: String,
+    bone: BoneId,
+    a: V3,
+    b: V3,
+    ra: Float64,
+    rb: Float64,
+    k: Float64,
+    thin: Bool = False,
+) raises -> Int:
+    """Add a round cone, or its bigger ball when that ball holds the other.
+
+    procedural-animals' round cone accepts ends whose balls nest; its
+    shape is then the bigger ball. `SdfModel.cone` refuses them.
+
+    Args:
+        m: The sculpt.
+        tag: What the primitive is.
+        bone: The bone it rides.
+        a: One end.
+        b: The other end.
+        ra: The radius at `a`.
+        rb: The radius at `b`.
+        k: The blend radius.
+        thin: Whether coarse meshes must inflate it to stay visible.
+
+    Returns:
+        Its index.
+
+    Raises:
+        Error: If the sculpt refuses the primitive.
+    """
+    var nested = abs(ra - rb) >= length(b - a)
+    if nested:
+        var c = a if ra >= rb else b
+        return m.sphere(tag, bone, c, max(ra, rb), k=k, thin=thin)
+    return m.cone(tag, bone, a, b, ra, rb, k=k, thin=thin)

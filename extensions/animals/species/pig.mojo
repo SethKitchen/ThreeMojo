@@ -35,6 +35,12 @@ from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
+    draw_u32,
+    is_front_limb,
+    imul32,
+    is_limb,
+    stream_of,
+    lid_distance,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import (
@@ -49,13 +55,8 @@ from extensions.animals.rig import Rig
 from extensions.sdf.field import SdfModel
 from extensions.animals.species.hoofed import (
     HeadFrame,
-    draw_u32,
-    front_bone,
     head_frame,
     hoofed_bones,
-    imul32,
-    limb_bone,
-    stream_of,
 )
 from extensions.animals.traits import Traits
 from extensions.sdf.vector import (
@@ -65,9 +66,9 @@ from extensions.sdf.vector import (
     dot,
     length,
     lerp,
-    mix,
     normalize,
     smoothstep,
+    rotate_about,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -76,6 +77,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import asin, atan2, cos, exp, floor, pi, pow, sin, sqrt
+from extensions.sdf.distance import segment_distance
 
 comptime TAIL_SEGS = 10
 # The head's origin: on the head's axis level with the eyes. The head is
@@ -124,7 +126,7 @@ def _frame() -> HeadFrame:
 
 
 def _hl(v: V3) -> V3:
-    return _frame().at(v)
+    return _frame().at_chained(v)
 
 
 def _ear_type(variant: Int) -> Int:
@@ -516,11 +518,6 @@ def _ear_spine(base: V3, s: Float64, t: Traits) -> EarSpine:
     return out^
 
 
-def _sstep(a: Float64, b: Float64, x: Float64) -> Float64:
-    var u = clamp((x - a) / (b - a), 0.0, 1.0)
-    return u * u * (3.0 - 2.0 * u)
-
-
 def _leaf_point(
     sp: EarSpine, f: EarForm, ear: Int, wph: Float64, kf: Float64, a: Float64
 ) -> Tuple[V3, V3]:
@@ -536,7 +533,10 @@ def _leaf_point(
         1e-4,
         _ear_w(ear, u)
         * sp.width
-        * (1.0 + f.wave * sin(2.0 * pi * 3.4 * u + wph) * _sstep(0.1, 0.35, u)),
+        * (
+            1.0
+            + f.wave * sin(2.0 * pi * 3.4 * u + wph) * smoothstep(0.1, 0.35, u)
+        ),
     )
     var cup = f.cup_root + (f.cup_tip - f.cup_root) * u
     var kap = cup / w
@@ -549,8 +549,8 @@ def _leaf_point(
 def _leaf_thick(f: EarForm, u: Float64, a: Float64, t_min: Float64) -> Float64:
     var tr = f.thick_root
     var te = f.thick_rim
-    var th = te + (tr - te) * (1.0 - _sstep(0.0, 0.55, u)) * (
-        1.0 - _sstep(0.25, 1.0, abs(a))
+    var th = te + (tr - te) * (1.0 - smoothstep(0.0, 0.55, u)) * (
+        1.0 - smoothstep(0.25, 1.0, abs(a))
     )
     return max(th, t_min)
 
@@ -591,12 +591,6 @@ def _ear_leaf(
 # ---------------------------------------------------------------- TAIL
 
 
-def _rot(v: V3, a: V3, ang: Float64) -> V3:
-    var c = cos(ang)
-    var s = sin(ang)
-    return v * c + cross(a, v) * s + a * (dot(a, v) * (1.0 - c))
-
-
 def _pig_tail(mut rig: Rig, side: Float64) raises:
     # The corkscrew: every joint turns by the same rotation, a helix that
     # rolls down behind the buttocks and drifts to one side.
@@ -624,8 +618,8 @@ def _pig_tail(mut rig: Rig, side: Float64) raises:
         rig.set("tail" + String(i + 1), p)
         var ax = normalize(x * cos(tau) + y * sin(tau))
         var b = beta * (0.6 if i == 0 else 1.0)
-        y = _rot(y, ax, b)
-        x = _rot(x, ax, b)
+        y = rotate_about(y, ax, b)
+        x = rotate_about(x, ax, b)
 
 
 def pig_rig(t: Traits) raises -> Rig:
@@ -697,7 +691,7 @@ def _hell(
     carve: Bool = False,
 ) raises:
     var f = _frame()
-    _ = m.ell(tag, h, f.at(c), r, axis=f.hz, up=f.hy, k=k, carve=carve)
+    _ = m.ell(tag, h, f.at_chained(c), r, axis=f.hz, up=f.hy, k=k, carve=carve)
 
 
 def _tusk_cones(t: Traits, s: Float64) -> List[V3]:
@@ -1607,21 +1601,15 @@ def _clear_of_joints(p: V3, r: Float64) -> Bool:
         var el = V3(0.1 * s, 0.31, 0.29)
         var hp = V3(0.09 * s, 0.55, -0.4)
         var kn = V3(0.11 * s, 0.36, -0.27)
-        if _seg_d(p, st, el) < r + 0.1:
+        if segment_distance(p, st, el) < r + 0.1:
             return False
-        if _seg_d(p, el, el + V3(0, 0.05, -0.16)) < r + 0.07:
+        if segment_distance(p, el, el + V3(0, 0.05, -0.16)) < r + 0.07:
             return False
-        if _seg_d(p, hp, kn) < r + 0.07:
+        if segment_distance(p, hp, kn) < r + 0.07:
             return False
         if length(p - kn) < r + 0.12:
             return False
     return True
-
-
-def _seg_d(p: V3, a: V3, b: V3) -> Float64:
-    var ab = b - a
-    var u = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
-    return length(p - (a + ab * u))
 
 
 def pig_palette(t: Traits) raises -> Palette:
@@ -1836,7 +1824,7 @@ def pig_paint(
         elif bone == "neck1" or bone == "neck2":
             region = 1
     var legness = 0.0
-    if limb_bone(bone):
+    if is_limb(bone):
         var upper = (
             bone.startswith("scapula")
             or bone.startswith("humerus")
@@ -1970,16 +1958,7 @@ def pig_paint(
         var ef = eye_frame_of(e, HEAD_O, 1.0 if p.x >= 0.0 else -1.0)
         var near_eye = length(p - ef.c) < 0.03
         if near_eye:
-            var cc = ef.c + ef.y * e.off
-            var dv = p - cc
-            var lx = dot(dv, ef.x)
-            var ly = dot(dv, ef.y)
-            var de = abs(
-                max(
-                    sqrt(lx * lx + (ly + e.d) ** 2) - e.big_r,
-                    sqrt(lx * lx + (ly - e.d) ** 2) - e.big_r,
-                )
-            )
+            var de = lid_distance(e, ef, p)
             if pink and de < 0.014:
                 c = mix3(
                     c,
@@ -2057,7 +2036,7 @@ def pig_paint(
                 * wr
             )
         if legness > 0.5:
-            var jy = 0.15 if front_bone(bone) else 0.17
+            var jy = 0.15 if is_front_limb(bone) else 0.17
             var dy = p.y - jy
             var ph = abs(dy / 0.012 - floor(dy / 0.012))
             crease = max(
@@ -2136,7 +2115,7 @@ def _markings(
         if none:
             return c
         var d: Float64
-        var front_leg = front_bone(bone) and legness > 0.4
+        var front_leg = is_front_limb(bone) and legness > 0.4
         if front_leg:
             d = -0.03
         else:
@@ -2163,7 +2142,7 @@ def _markings(
             var tail_t = clamp(length(p - ab) / 0.16, 0.0, 1.0)
             d = (0.55 - tail_t) * 0.05 + _rag(p, off, 40.0, 0.004)
         elif legness > 0.2:
-            var top = 0.13 if front_bone(bone) else 0.14
+            var top = 0.13 if is_front_limb(bone) else 0.14
             d = p.y - top * t.get("socks", 1.0) + _rag(p, off, 25.0, 0.03)
         return mix3(c, pal.get("white"), smoothstep(0.004, -0.004, d))
     return c

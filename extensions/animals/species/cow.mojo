@@ -40,6 +40,10 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
+    aperture_tilt_along,
+    is_front_limb,
+    is_limb,
+    pick_weighted,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import (
@@ -50,16 +54,12 @@ from extensions.animals.options import (
 )
 from extensions.animals.rig import Rig, tail_chain
 from extensions.sdf.field import SdfModel
-from extensions.animals.species.ungulate import (
+from extensions.animals.species.hoofed import (
     HeadFrame,
-    aperture_tilt_along,
     eye_looking,
     head_ell,
     hoofed_bones,
-    is_front_limb,
-    is_limb,
     lens_distance,
-    pick_weighted,
     pitched_head,
 )
 from extensions.animals.traits import Traits, pick_age
@@ -68,12 +68,12 @@ from extensions.sdf.vector import (
     clamp,
     cross,
     dot,
-    frame_zy,
     length,
     lerp,
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -82,6 +82,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, pi, sin
+from extensions.sdf.distance import oriented_ellipsoid_estimate
 
 # Ten caudal segments to the hocks, and two of switch hair.
 comptime TAIL_SEGS = 12
@@ -444,10 +445,6 @@ def cow_rig(t: Traits) raises -> Rig:
     hoofed_bones(rig, TAIL_SEGS)
     _ = rig.add_bone("tongue", "tongueBase", "tongueTip", "jaw")
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _horn_radii(t: Traits) -> List[Float64]:
@@ -1202,7 +1199,7 @@ def _foreleg(
         m,
         "scapmuscle",
         scap,
-        lerp(sc, sh, 0.45) + _sx(V3(0.06, 0, -0.02), s),
+        lerp(sc, sh, 0.45) + on_side(V3(0.06, 0, -0.02), s),
         sh - sc,
         V3(0.08 + 0.03 * bull, 0.25, 0.15),
         lateral=lat,
@@ -1211,7 +1208,7 @@ def _foreleg(
     _ = m.sphere(
         "shoulderpoint",
         hum,
-        sh + _sx(V3(0.015, 0.0, 0.03), s),
+        sh + on_side(V3(0.015, 0.0, 0.03), s),
         0.075 * leg_k,
         k=0.09,
     )
@@ -1220,7 +1217,7 @@ def _foreleg(
         m,
         "triceps",
         hum,
-        lerp(sh, e, 0.55) + _sx(V3(0.01, 0.02, -0.09), s),
+        lerp(sh, e, 0.55) + on_side(V3(0.01, 0.02, -0.09), s),
         e - sh,
         V3(0.1 * leg_k, 0.17, 0.12),
         lateral=lat,
@@ -1240,7 +1237,7 @@ def _foreleg(
         m,
         "forearmmuscle",
         rad,
-        lerp(e, w, 0.25) + _sx(V3(0.008, 0, 0.012), s),
+        lerp(e, w, 0.25) + on_side(V3(0.008, 0, 0.012), s),
         w - e,
         V3(0.074 * leg_k, 0.14, 0.08 * leg_k),
         lateral=lat,
@@ -1249,8 +1246,8 @@ def _foreleg(
     _ = m.cone(
         "forearmweb",
         rad,
-        e + _sx(V3(-0.04, 0.06, -0.02), s),
-        lerp(e, w, 0.3) + _sx(V3(-0.02, 0, 0), s),
+        e + on_side(V3(-0.04, 0.06, -0.02), s),
+        lerp(e, w, 0.3) + on_side(V3(-0.02, 0, 0), s),
         0.06,
         0.045,
         k=0.06,
@@ -1324,7 +1321,7 @@ def _hind_leg(
         m,
         "thigh",
         fem,
-        lerp(hp, kn, 0.42) + _sx(V3(0.02 + 0.02 * beef, 0, -0.05), s),
+        lerp(hp, kn, 0.42) + on_side(V3(0.02 + 0.02 * beef, 0, -0.05), s),
         kn - hp,
         V3(0.08 + 0.04 * beef, 0.3, 0.2 + 0.03 * beef),
         lateral=lat,
@@ -1333,8 +1330,8 @@ def _hind_leg(
     _ = m.cone(
         "thighfront",
         fem,
-        _sx(V3(0.22, 1.25, -0.46), s),
-        kn + _sx(V3(0.0, 0.06, 0.04), s),
+        on_side(V3(0.22, 1.25, -0.46), s),
+        kn + on_side(V3(0.0, 0.06, 0.04), s),
         0.11,
         0.07,
         k=0.1,
@@ -1342,7 +1339,7 @@ def _hind_leg(
     _ = m.cone(
         "hamstring",
         fem,
-        _sx(V3(0.11, 1.26, -0.84), s),
+        on_side(V3(0.11, 1.26, -0.84), s),
         lerp(kn, hk, 0.3) + V3(0, 0, -0.08),
         0.1 + 0.02 * beef,
         0.06,
@@ -1352,18 +1349,20 @@ def _hind_leg(
         m,
         "flankfold",
         fem,
-        _sx(V3(0.22, 0.92, -0.3), s),
+        on_side(V3(0.22, 0.92, -0.3), s),
         V3(-0.1, 0.3, 0.12),
         V3(0.05, 0.15, 0.08),
         lateral=lat,
         k=0.1,
     )
-    _ = m.sphere("stifle", tib, kn + _sx(V3(0.01, 0.01, 0.03), s), 0.06, k=0.07)
+    _ = m.sphere(
+        "stifle", tib, kn + on_side(V3(0.01, 0.01, 0.03), s), 0.06, k=0.07
+    )
     _ = ell_y(
         m,
         "gaskin",
         tib,
-        lerp(kn, hk, 0.32) + _sx(V3(0.006, 0, -0.045), s),
+        lerp(kn, hk, 0.32) + on_side(V3(0.006, 0, -0.045), s),
         hk - kn,
         V3(0.072 * leg_k, 0.16, 0.09 * leg_k),
         lateral=lat,
@@ -2003,11 +2002,13 @@ def _paint_head(
 
 def _nostril_dist(hm: V3) -> Float64:
     # About the distance to the left nostril's carver, head-local.
-    var f = frame_zy(V3(-0.35, 0.1, 1), V3(0.35, 1, 0))
-    var r = V3(0.011, 0.022, 0.02)
-    var d = hm - V3(0.043, -0.035, 0.392)
-    var u = V3(dot(d, f.x) / r.x, dot(d, f.y) / r.y, dot(d, f.z) / r.z)
-    return (length(u) - 1.0) * 0.011
+    return oriented_ellipsoid_estimate(
+        hm,
+        V3(0.043, -0.035, 0.392),
+        V3(-0.35, 0.1, 1),
+        V3(0.35, 1, 0),
+        V3(0.011, 0.022, 0.02),
+    )
 
 
 def _fur(c: V3, p: V3) -> V3:

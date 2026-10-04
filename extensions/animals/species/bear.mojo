@@ -33,6 +33,9 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    is_limb,
+    mirrored_blob,
+    aperture_local,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -49,6 +52,7 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     length_warp,
@@ -56,6 +60,7 @@ from extensions.animals.warp import (
     scale_about_warp,
 )
 from std.math import cos, exp, pi, pow, sin, sqrt
+from extensions.sdf.distance import almond_distance
 
 comptime TAIL_SEGS = 2
 # The head's origin, mid cranium between the eyes and the ears.
@@ -384,10 +389,6 @@ def bear_rig(t: Traits) raises -> Rig:
     rig.mirror_joints()
     quadruped_bones(rig, TAIL_SEGS)
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def bear_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
@@ -894,7 +895,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "scapmuscle",
             scap,
-            lerp(sc, sh, 0.5) + _sx(V3(0.02, 0, 0), s),
+            lerp(sc, sh, 0.5) + on_side(V3(0.02, 0, 0), s),
             sh - sc,
             V3(0.07, 0.17, 0.13),
             lateral=lat,
@@ -915,7 +916,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "armpit",
             hum,
-            lerp(sh, e, 0.75) + _sx(V3(-0.035, 0.02, 0.02), s),
+            lerp(sh, e, 0.75) + on_side(V3(-0.035, 0.02, 0.02), s),
             e - sh,
             V3(0.06, 0.1, 0.08),
             lateral=lat,
@@ -927,7 +928,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "forearmmuscle",
             rad,
-            lerp(e, w, 0.3) + _sx(V3(0.008, 0, 0.012), s),
+            lerp(e, w, 0.3) + on_side(V3(0.008, 0, 0.012), s),
             w - e,
             V3(0.075, 0.13, 0.075),
             lateral=lat,
@@ -991,7 +992,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.42) + _sx(V3(0.02, 0, -0.03), s),
+            lerp(hp, kn, 0.42) + on_side(V3(0.02, 0, -0.03), s),
             kn - hp,
             V3(0.1, 0.24, 0.16),
             lateral=lat,
@@ -1000,8 +1001,8 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
         _ = m.cone(
             "thighfront",
             fem,
-            _sx(V3(0.12, 0.7, -0.22), s),
-            kn + _sx(V3(-0.01, 0.07, 0.02), s),
+            on_side(V3(0.12, 0.7, -0.22), s),
+            kn + on_side(V3(-0.01, 0.07, 0.02), s),
             0.1,
             0.07,
             k=0.08,
@@ -1009,7 +1010,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
         _ = m.cone(
             "hamstring",
             fem,
-            _sx(V3(0.13, 0.74, -0.46), s),
+            on_side(V3(0.13, 0.74, -0.46), s),
             lerp(kn, hk, 0.3) + V3(0, 0, -0.05),
             0.1,
             0.07,
@@ -1019,7 +1020,7 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "breeches",
             fem,
-            lerp(hp, kn, 0.65) + _sx(V3(0.015, -0.02, -0.12), s),
+            lerp(hp, kn, 0.65) + on_side(V3(0.015, -0.02, -0.12), s),
             kn - hp,
             V3(0.075, 0.13, 0.06),
             lateral=lat,
@@ -1029,21 +1030,25 @@ def _sculpt_legs(mut m: SdfModel, rig: Rig) raises:
             m,
             "flankfold",
             fem,
-            _sx(V3(0.13, 0.56, -0.16), s),
+            on_side(V3(0.13, 0.56, -0.16), s),
             V3(-0.05, 0.2, 0.12),
             V3(0.05, 0.13, 0.08),
             lateral=lat,
             k=0.08,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.005, 0.01, 0.015), s), 0.055, k=0.05
+            "stifle",
+            tib,
+            kn + on_side(V3(0.005, 0.01, 0.015), s),
+            0.055,
+            k=0.05,
         )
         _ = m.cone("shin", tib, lerp(kn, hk, 0.05), hk, 0.065, 0.052, k=0.04)
         _ = ell_y(
             m,
             "calf",
             tib,
-            lerp(kn, hk, 0.3) + _sx(V3(0.004, 0.01, -0.045), s),
+            lerp(kn, hk, 0.3) + on_side(V3(0.004, 0.01, -0.045), s),
             hk - kn,
             V3(0.065, 0.12, 0.06),
             lateral=lat,
@@ -1388,27 +1393,6 @@ def _head_local(t: Traits, p: V3) -> V3:
     return V3(x, y, MUZZLE_Z0 + (z - MUZZLE_Z0) / mz if z > MUZZLE_Z0 else z)
 
 
-def _g3(h: V3, c: V3, r: V3) -> Float64:
-    var a = (abs(h.x) - c.x) / r.x
-    var b = (h.y - c.y) / r.y
-    var d = (h.z - c.z) / r.z
-    return exp(-(a * a + b * b + d * d))
-
-
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
-
-
 def _lock(p: V3, scale: Float64, off: Float64) -> Float64:
     # Locks of guard hair: noise stretched along the hair, which runs back
     # and down over the body.
@@ -1468,7 +1452,7 @@ def _body(
         )
     if rb == 4:
         col = mix3(c[FLANK], c[BACK], 0.5)
-    var legness = smoothstep(0.62, 0.4, p.y) if _limb(bone) else 0.0
+    var legness = smoothstep(0.62, 0.4, p.y) if is_limb(bone) else 0.0
     var pad = False
     if legness > 0.0:
         var dark = smoothstep(0.62, 0.3, p.y + 0.06 * nz)
@@ -1583,8 +1567,8 @@ def _paint_ear(c: List[V3], t: Traits, p: V3, n: V3, off: Float64) -> V3:
     # Furred ears: a pale rim, a pale cup with a dark hollow, a dark back.
     var sd = 1.0 if p.x > 0.0 else -1.0
     var ears = _ear_joints(t)
-    var base = _sx(ears[0], sd)
-    var tip = _sx(ears[1], sd)
+    var base = on_side(ears[0], sd)
+    var tip = on_side(ears[1], sd)
     var up = normalize(tip - base)
     var facing = normalize(V3(0.6 * sd, 0.05, 1))
     var center = lerp(base, tip, 0.4)
@@ -1671,8 +1655,10 @@ def _paint_head(
     var eye_dark = max(
         exp(-(de / 0.03) * (de / 0.03)),
         max(
-            0.8 * _g3(h, V3(0.036, 0.012, 0.085), V3(0.014, 0.02, 0.026)),
-            0.7 * _g3(h, V3(0.048, 0.006, 0.066), V3(0.02, 0.016, 0.02)),
+            0.8
+            * mirrored_blob(h, V3(0.036, 0.012, 0.085), V3(0.014, 0.02, 0.026)),
+            0.7
+            * mirrored_blob(h, V3(0.048, 0.006, 0.066), V3(0.02, 0.016, 0.02)),
         ),
     )
     col = mix3(col, mix3(c[HEAD], c[LEG], 0.8), eye_dark * 0.9)
@@ -1753,10 +1739,6 @@ def _lid_distance(t: Traits, p: V3) -> Float64:
     var e = bear_eye(t)
     var s = 1.0 if p.x > HEAD_O.x else -1.0
     var ef = eye_frame_of(e, HEAD_O, s)
-    var d = p - (ef.c + ef.y * e.off)
-    var lx = dot(d, ef.x)
-    var ly = dot(d, ef.y)
-    var lz = dot(d, ef.z)
-    var a = sqrt(lx * lx + (ly + e.d) * (ly + e.d)) - e.big_r
-    var b = sqrt(lx * lx + (ly - e.d) * (ly - e.d)) - e.big_r
-    return abs(max(a, b)) if lz > -0.3 * e.r else 1.0
+    var q = aperture_local(e, ef, p)
+    var de = abs(almond_distance(q.x, q.y, e.big_r, e.d))
+    return de if q.z > -0.3 * e.r else 1.0

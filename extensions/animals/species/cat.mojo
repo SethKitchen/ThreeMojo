@@ -30,6 +30,10 @@ from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
+    is_limb,
+    is_front_limb,
+    mirrored_blob,
+    hashed_stream,
 )
 from extensions.animals.noise import fbm3, vnoise3
 from extensions.animals.options import (
@@ -52,6 +56,7 @@ from extensions.sdf.vector import (
     mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -104,14 +109,6 @@ def cat_variant_names() -> List[String]:
         "calico",
         "gray",
     ]
-
-
-def _hashed(seed: Int, add: Int, mul: Int, xor: Int) -> AnimalRandom:
-    # The original's `rng(Math.imul(seed + add, mul) ^ xor)`, in 32 bits.
-    var a = (seed + add) & 0xFFFFFFFF
-    var lo = (a * (mul & 0xFFFF)) & 0xFFFFFFFF
-    var hi = ((a * (mul >> 16)) & 0xFFFF) << 16
-    return AnimalRandom(((lo + hi) & 0xFFFFFFFF) ^ xor, 1, 0)
 
 
 def _hl(v: V3) -> V3:
@@ -173,7 +170,7 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     Raises:
         Error: If the requested coat is not one of the seven.
     """
-    var m = _hashed(options.seed, 0x2C1B3C6D, 0x297A2D39, 0x1B873593)
+    var m = hashed_stream(options.seed, 0x2C1B3C6D, 0x297A2D39, 0x1B873593)
     for _ in range(3):
         _ = m.next()
     var weights: List[Float64] = [0.22, 0.12, 0.14, 0.14, 0.14, 0.11, 0.13]
@@ -193,7 +190,7 @@ def cat_traits(mut r: AnimalRandom, options: AnimalOptions) raises -> Traits:
     var male = 1.0 if t.male() else 0.0
     var stocky = variant == GRAY
     var longhair = m.next() < 0.18
-    var v = _hashed(options.seed, 0x5BD1E995, 0x27D4EB2D, 0x165667B1)
+    var v = hashed_stream(options.seed, 0x5BD1E995, 0x27D4EB2D, 0x165667B1)
     for _ in range(3):
         _ = v.next()
     var vv = List[Float64]()
@@ -404,10 +401,6 @@ def _tail_angles() -> List[Float64]:
 
 def _tail_lens() -> List[Float64]:
     return [0.033, 0.032, 0.031, 0.03, 0.029, 0.029, 0.028, 0.027, 0.026, 0.025]
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _e3(
@@ -888,7 +881,7 @@ def _fore_leg(
         m,
         "scapmuscle",
         scap,
-        lerp(sc, sh, 0.5) + _sx(V3(0.003, 0, 0), s),
+        lerp(sc, sh, 0.5) + on_side(V3(0.003, 0, 0), s),
         sh - sc,
         V3(0.0095, 0.036, 0.022),
         lateral=lat,
@@ -911,7 +904,7 @@ def _fore_leg(
         m,
         "forearmmuscle",
         rad,
-        lerp(e, w, 0.27) + _sx(V3(0.0015, 0, 0.0015), s),
+        lerp(e, w, 0.27) + on_side(V3(0.0015, 0, 0.0015), s),
         w - e,
         V3(0.0124 * lt, 0.026, 0.0134 * lt),
         lateral=lat,
@@ -925,7 +918,7 @@ def _fore_leg(
     _ = m.sphere(
         "dewclaw",
         meta,
-        lerp(w, mc, 0.3) + _sx(V3(-0.0068, 0, 0.0015), s),
+        lerp(w, mc, 0.3) + on_side(V3(-0.0068, 0, 0.0015), s),
         0.0026,
         k=0.002,
     )
@@ -971,7 +964,7 @@ def _hind_leg(
         m,
         "thigh",
         fem,
-        lerp(hp, kn, 0.34) + _sx(V3(0.002, 0, -0.012), s),
+        lerp(hp, kn, 0.34) + on_side(V3(0.002, 0, -0.012), s),
         kn - hp,
         V3(0.0185, 0.047, 0.037),
         lateral=lat,
@@ -980,8 +973,8 @@ def _hind_leg(
     _ = m.cone(
         "thighfront",
         fem,
-        _sx(V3(0.016, 0.186, -0.098), s),
-        kn + _sx(V3(-0.0012, 0.018, 0.0), s),
+        on_side(V3(0.016, 0.186, -0.098), s),
+        kn + on_side(V3(-0.0012, 0.018, 0.0), s),
         0.0138,
         0.009,
         k=0.02,
@@ -989,7 +982,7 @@ def _hind_leg(
     _ = m.cone(
         "hamstring",
         fem,
-        _sx(V3(0.017, 0.188, -0.186), s),
+        on_side(V3(0.017, 0.188, -0.186), s),
         lerp(kn, hk, 0.1) + V3(0, 0.006, -0.011),
         0.0158,
         0.0095,
@@ -999,19 +992,23 @@ def _hind_leg(
         m,
         "flankfold",
         fem,
-        _sx(V3(0.019, 0.14, -0.085), s),
+        on_side(V3(0.019, 0.14, -0.085), s),
         V3(-0.03, 0.16, 0.1),
         V3(0.0075, 0.028, 0.0135),
         lateral=lat,
         k=0.02,
     )
     _ = m.sphere(
-        "stifle", tib, kn + _sx(V3(0.0007, 0.0027, 0.002), s), 0.0068, k=0.013
+        "stifle",
+        tib,
+        kn + on_side(V3(0.0007, 0.0027, 0.002), s),
+        0.0068,
+        k=0.013,
     )
     _ = m.cone(
         "shin",
         tib,
-        lerp(kn, hk, 0.06) + _sx(V3(0, 0, 0.0013), s),
+        lerp(kn, hk, 0.06) + on_side(V3(0, 0, 0.0013), s),
         hk,
         0.0095 * lt,
         0.0068 * lt,
@@ -1021,7 +1018,7 @@ def _hind_leg(
         m,
         "calf",
         tib,
-        lerp(kn, hk, 0.3) + _sx(V3(0.0007, 0.0035, -0.009), s),
+        lerp(kn, hk, 0.3) + on_side(V3(0.0007, 0.0035, -0.009), s),
         hk - kn,
         V3(0.0102 * lt, 0.024, 0.0115 * lt),
         lateral=lat,
@@ -1067,7 +1064,7 @@ def _hind_leg(
             m,
             "britches",
             fem,
-            lerp(hp, kn, 0.55) + _sx(V3(0.004, -0.004, -0.027), s),
+            lerp(hp, kn, 0.55) + on_side(V3(0.004, -0.004, -0.027), s),
             kn - hp,
             V3(0.012, 0.03, 0.014),
             lateral=lat,
@@ -1394,30 +1391,6 @@ def _axial(p: V3) -> _Axial:
     return _Axial(s, theta, arc[3], arc[4], arc[6], arc[7], arc[8])
 
 
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
-
-
-def _front(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-    )
-
-
 struct _Noise(ImplicitlyCopyable):
     # The coat's seeded noise fields.
     var off: Float64
@@ -1672,7 +1645,7 @@ def cat_paint(
         region = 4
     elif bone == "neck1" or bone == "neck2":
         region = 1
-    elif _limb(bone):
+    elif is_limb(bone):
         leg = smoothstep(0.15, 0.09, p.y)
     var axl = _axial(p)
     var vt = axl.theta
@@ -1824,8 +1797,8 @@ def _face(pal: Palette, t: Traits, p: V3, n: V3, region: Int) -> V3:
         pal.get("dorsal"),
         smoothstep(0.3, 0.9, n.y) * smoothstep(0.0, -0.03, h.z) * 0.5,
     )
-    var g1 = _g3(h, V3(0.009, -0.024, 0.027), V3(0.011, 0.008, 0.012))
-    var g2 = _g3(h, V3(0.0, -0.032, 0.021), V3(0.012, 0.006, 0.012))
+    var g1 = mirrored_blob(h, V3(0.009, -0.024, 0.027), V3(0.011, 0.008, 0.012))
+    var g2 = mirrored_blob(h, V3(0.0, -0.032, 0.021), V3(0.012, 0.006, 0.012))
     var muzzle = max(g1, g2)
     var e = 0.017 if h.z > -0.004 else 0.022
     var chin_mid = smoothstep(e, e - 0.009, abs(h.x))
@@ -1867,13 +1840,6 @@ def _face(pal: Palette, t: Traits, p: V3, n: V3, region: Int) -> V3:
         ),
     )
     return c
-
-
-def _g3(h: V3, c: V3, r: V3) -> Float64:
-    var dx = (abs(h.x) - c.x) / r.x
-    var dy = (h.y - c.y) / r.y
-    var dz = (h.z - c.z) / r.z
-    return exp(-(dx * dx + dy * dy + dz * dz))
 
 
 def _tabby(
@@ -2098,7 +2064,7 @@ def _spots(
         var tip = tux and t.get("tailTip", 0.0) > 0.5
         w = smoothstep(0.9, 0.94, tail_s / tail_len) if tip else 0.0
     if leg > 0.0:
-        var top = t.get("sockF") if _front(bone) else t.get("sockH")
+        var top = t.get("sockF") if is_front_limb(bone) else t.get("sockH")
         var sock = smoothstep(top + 0.006, top - 0.006, p.y + 0.006 * nz)
         var wl = sock if tux else max(
             sock, vent * smoothstep(0.5, 0.9, w_amt + 0.3)

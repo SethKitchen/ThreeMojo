@@ -23,8 +23,18 @@ from extensions.animals.parts import (
     JAW,
 )
 from extensions.sdf.sculpt import (
+    cone_or_ball,
     ell_y,
     tube,
+)
+from extensions.sdf.distance import (
+    almond_distance,
+    ellipsoid_estimate,
+    oriented_ellipsoid_estimate,
+    rect_distance,
+    round_cone_estimate,
+    segment_distance,
+    segment_param,
 )
 from extensions.animals.kit import (
     EyeSpec,
@@ -91,6 +101,7 @@ from extensions.sdf.vector import (
     Rigid,
     V3,
     clamp,
+    on_side,
     cross,
     distance,
     dot,
@@ -643,6 +654,41 @@ def test_faces_need_four_vertices() raises:
     fewer.normals = mesh.normals.copy()
     _faces(grid, cells, fewer)
     assert_equal(len(fewer.indices), 0)
+
+
+def test_closed_form_distances() raises:
+    # The almond of two unit circles offset by a half: its tips are at
+    # the origin's sides, its rims a half above and below.
+    assert_almost_equal(almond_distance(0.0, 0.0, 1.0, 0.5), -0.5)
+    assert_almost_equal(almond_distance(0.0, 1.0, 1.0, 0.5), 0.5)
+    assert_almost_equal(rect_distance(-0.2, -0.1), -0.1)
+    assert_almost_equal(rect_distance(3.0, 4.0), 5.0)
+    var a = V3(0, 0, 0)
+    var b = V3(0, 0, 2)
+    assert_almost_equal(segment_param(V3(1, 0, 1), a, b), 0.5)
+    assert_almost_equal(segment_param(V3(1, 0, -3), a, b), 0.0)
+    assert_almost_equal(segment_distance(V3(0, 3, 6), a, b), 5.0)
+    assert_almost_equal(round_cone_estimate(V3(1, 0, 1), a, b, 0.2, 0.4), 0.7)
+    var r = V3(1, 2, 3)
+    assert_almost_equal(ellipsoid_estimate(V3(0, 4, 0), a, r), 1.0)
+    assert_almost_equal(
+        oriented_ellipsoid_estimate(
+            V3(4, 0, 0), a, V3(0, 0, 1), V3(0, 1, 0), r
+        ),
+        3.0,
+    )
+    _near(on_side(V3(1, 2, 3), -1.0), V3(-1, 2, 3))
+
+
+def test_cone_or_ball_takes_nested_ends() raises:
+    var m = SdfModel()
+    var bone = BoneId(0)
+    _ = cone_or_ball(m, "a", bone, V3(0, 0, 0), V3(0, 0, 1), 0.2, 0.1, 0.0)
+    assert_equal(m.prims[0].kind, CONE)
+    # The small ball sits inside the big one: only the big ball is added.
+    _ = cone_or_ball(m, "b", bone, V3(0, 0, 0), V3(0, 0, 0.1), 0.1, 0.5, 0.0)
+    assert_equal(m.prims[1].kind, ELLIPSOID)
+    _near(m.prims[1].c, V3(0, 0, 0.1))
 
 
 def main() raises:

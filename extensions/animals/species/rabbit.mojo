@@ -17,7 +17,6 @@ ears and big eyes and feet.
 
 from extensions.animals.coat import (
     FUR,
-    KERATIN,
     NOSE,
     SKIN,
     CoatSample,
@@ -36,6 +35,8 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     sculpt_eye_socket,
+    is_limb,
+    mirrored_blob,
 )
 from extensions.animals.noise import fbm3
 from extensions.animals.options import AnimalOptions, AnimalRandom
@@ -49,9 +50,9 @@ from extensions.sdf.vector import (
     dot,
     length,
     lerp,
-    mix,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     girth_warp,
@@ -59,7 +60,8 @@ from extensions.animals.warp import (
     legs_warp,
     scale_about_warp,
 )
-from std.math import cos, exp, pi, sin
+from std.math import cos, pi, sin
+from extensions.sdf.distance import ellipsoid_estimate, round_cone_estimate
 
 comptime TAIL_SEGS = 3
 # The head's origin: on the midline, level with the eye centers.
@@ -302,10 +304,6 @@ def rabbit_rig(t: Traits) raises -> Rig:
     quadruped_bones(rig, TAIL_SEGS)
     _ = rig.add_bone("snout", "snoutBase", "nose", "head")
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _ear_frame(t: Traits, s: Float64) -> Tuple[V3, V3, V3, V3, Float64]:
@@ -616,7 +614,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "scapmuscle",
             rig.bone("scapula" + side),
-            lerp(sc, sh, 0.5) + _sx(V3(0.004, 0, 0), s),
+            lerp(sc, sh, 0.5) + on_side(V3(0.004, 0, 0), s),
             sh - sc,
             V3(0.012, 0.038, 0.026),
             lateral=lat,
@@ -685,7 +683,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "haunch",
             fem,
-            lerp(hp, kn, 0.35) + _sx(V3(0.006, 0.002, -0.006), s),
+            lerp(hp, kn, 0.35) + on_side(V3(0.006, 0.002, -0.006), s),
             kn - hp,
             V3(0.026, 0.05, 0.038),
             lateral=lat,
@@ -695,7 +693,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.6) + _sx(V3(0.008, 0, 0), s),
+            lerp(hp, kn, 0.6) + on_side(V3(0.008, 0, 0), s),
             kn - hp,
             V3(0.019, 0.034, 0.026),
             lateral=lat,
@@ -705,7 +703,7 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "flankfold",
             fem,
-            _rl(_sx(V3(0.036, 0.07, -0.008), s)),
+            _rl(on_side(V3(0.036, 0.07, -0.008), s)),
             V3(0, 0.2, 0.1),
             V3(0.012, 0.028, 0.02),
             lateral=lat,
@@ -715,21 +713,21 @@ def rabbit_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "haunchlow",
             tib,
-            lerp(kn, hk, 0.5) + _sx(V3(0.002, 0.012, 0.008), s),
+            lerp(kn, hk, 0.5) + on_side(V3(0.002, 0.012, 0.008), s),
             hk - kn,
             V3(0.02, 0.036, 0.022),
             lateral=lat,
             k=0.008,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.002, 0, 0.002), s), 0.011, k=0.012
+            "stifle", tib, kn + on_side(V3(0.002, 0, 0.002), s), 0.011, k=0.012
         )
         _ = m.cone("shin", tib, kn, hk, 0.0115, 0.0075, k=0.005)
         _ = ell_y(
             m,
             "calf",
             tib,
-            lerp(kn, hk, 0.35) + _sx(V3(0.002, 0.006, -0.002), s),
+            lerp(kn, hk, 0.35) + on_side(V3(0.002, 0.006, -0.002), s),
             hk - kn,
             V3(0.012, 0.03, 0.014),
             lateral=lat,
@@ -979,14 +977,6 @@ def _agouti(color: Int) -> Float64:
     return table[color]
 
 
-def _g3(h: V3, c: V3, r: V3) -> Float64:
-    # A soft blob, mirrored across the midline.
-    var x = (abs(h.x) - c.x) / r.x
-    var y = (h.y - c.y) / r.y
-    var z = (h.z - c.z) / r.z
-    return exp(-(x * x + y * y + z * z))
-
-
 def _hind_foot(bone: String) -> Bool:
     return bone.startswith("hpaw") or bone.startswith("metatarsus")
 
@@ -1023,28 +1013,14 @@ def _region(part: SurfacePart, bone: String) -> Int:
     return 1 if neck else 0
 
 
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
-
-
 def _jaw_dist(h: V3) -> Float64:
     # About the distance from a head-local point to the jaw.
-    var q = V3((h.x) / 0.0066, (h.y + 0.0325) / 0.0048, (h.z - 0.019) / 0.0065)
-    var chin = (length(q) - 1.0) * 0.0048
-    var a = V3(0, -0.029, -0.012)
-    var ab = V3(0, -0.032, 0.021) - a
-    var u = clamp(dot(h - a, ab) / dot(ab, ab), 0.0, 1.0)
-    var mand = length(h - (a + ab * u)) - (0.0105 + (0.006 - 0.0105) * u)
+    var chin = ellipsoid_estimate(
+        h, V3(0.0, -0.0325, 0.019), V3(0.0066, 0.0048, 0.0065)
+    )
+    var mand = round_cone_estimate(
+        h, V3(0, -0.029, -0.012), V3(0, -0.032, 0.021), 0.0105, 0.006
+    )
     return min(chin, mand)
 
 
@@ -1093,7 +1069,7 @@ def rabbit_paint(
         c = mix3(
             c,
             pal.get("cheek"),
-            _g3(h, V3(0.017, -0.02, -0.005), V3(0.01, 0.012, 0.02)),
+            mirrored_blob(h, V3(0.017, -0.02, -0.005), V3(0.01, 0.012, 0.02)),
         )
         # The pale eye ring, the "spectacles".
         var ring = 0.0
@@ -1103,7 +1079,9 @@ def rabbit_paint(
             var de = length(p - ef.c) - (e.r + e.lid)
             ring = max(ring, smoothstep(0.0075, 0.002, de))
         c = mix3(c, pal.get("eyeRing"), ring * 0.6)
-        var lips = _g3(h, V3(0.006, -0.03, 0.036), V3(0.009, 0.006, 0.014))
+        var lips = mirrored_blob(
+            h, V3(0.006, -0.03, 0.036), V3(0.009, 0.006, 0.014)
+        )
         var chin = 0.9 if s.part == JAW else smoothstep(
             -0.028, -0.036, h.y
         ) * smoothstep(-0.2, -0.7, n.y)
@@ -1171,7 +1149,7 @@ def rabbit_paint(
         c = mix3(c, pal.get("chest"), chest * 0.8)
         c = mix3(c, pal.get("belly"), max(ventral, smoothstep(0.35, 0.8, -n.y)))
         ag *= 1.0 - smoothstep(0.2, 0.7, -n.y)
-        if _limb(bone):
+        if is_limb(bone):
             var upper = bone.startswith("scapula") or bone.startswith("humerus")
             var leg = smoothstep(0.15, 0.1, p.y) if upper else 1.0
             var sd = 1.0 if p.x >= 0.0 else -1.0

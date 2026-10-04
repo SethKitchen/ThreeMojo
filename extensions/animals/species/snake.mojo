@@ -49,11 +49,11 @@ from extensions.sdf.vector import (
     clamp,
     length,
     lerp,
-    mix,
     normalize,
     smoothstep,
 )
 from std.math import atan2, floor, sin, sqrt
+from extensions.sdf.distance import rect_distance
 
 # Spine bones, each about four or five vertebrae.
 comptime SPINE = 50
@@ -1006,13 +1006,6 @@ def _rand(seed: Int, k: Int, j: Int) -> Float64:
     return ihash(k, j * 7919 + 13, seed + 9173)
 
 
-def _box(qx: Float64, qy: Float64) -> Float64:
-    # The signed distance of a box from its corner offsets.
-    var ox = max(qx, 0.0)
-    var oy = max(qy, 0.0)
-    return sqrt(ox * ox + oy * oy) + min(max(qx, qy), 0.0)
-
-
 def _feature(
     ds: Float64, du: Float64, a: Float64, bb: Float64, diamond: Bool
 ) -> Float64:
@@ -1021,7 +1014,7 @@ def _feature(
         var l1 = abs(ds) / a + abs(du) / bb
         return (l1 - 1.0) * (a * bb) / sqrt(a * a + bb * bb)
     var rr = min(a, bb) * 0.55
-    return _box(abs(ds) - (a - rr), abs(du) - (bb - rr)) - rr
+    return rect_distance(abs(ds) - (a - rr), abs(du) - (bb - rr)) - rr
 
 
 def _seg2(px: Float64, py: Float64, pts: List[V3], w: List[Float64]) -> Float64:
@@ -1271,7 +1264,9 @@ def snake_paint(
                 var side = 1.0 if _rand(seed, 1000 + j, 3) < 0.5 else -1.0
                 var cw = 0.3 + 0.25 * _rand(seed, 1000 + j, 4)
                 var xc = side * hw * (0.2 + cw * 0.5)
-                var d = _box(abs(sg - at) - ca, abs(p.x - xc) - hw * cw * 0.5)
+                var d = rect_distance(
+                    abs(sg - at) - ca, abs(p.x - xc) - hw * cw * 0.5
+                )
                 best = min(best, d)
             if sg > s_vent:
                 best = min(best, abs(abs(p.x) - hw * 0.35) - hw * 0.14)

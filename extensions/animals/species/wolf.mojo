@@ -36,6 +36,7 @@ from extensions.animals.kit import (
     EyeSpec,
     eye_frame_of,
     head_local,
+    is_limb,
 )
 from extensions.animals.options import AnimalOptions, AnimalRandom
 from extensions.animals.rig import Rig, quadruped_bones, tail_chain
@@ -49,6 +50,7 @@ from extensions.sdf.vector import (
     lerp,
     normalize,
     smoothstep,
+    on_side,
 )
 from extensions.animals.warp import (
     length_warp,
@@ -274,10 +276,6 @@ def wolf_rig(t: Traits) raises -> Rig:
     rig.mirror_joints()
     quadruped_bones(rig, TAIL_SEGS)
     return rig^
-
-
-def _sx(v: V3, s: Float64) -> V3:
-    return V3(v.x * s, v.y, v.z)
 
 
 def _tail_radius(t: Float64, tb: Float64) -> Float64:
@@ -833,7 +831,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "scapmuscle",
             scap,
-            lerp(sc, sh, 0.5) + _sx(V3(0.008, 0, 0), s),
+            lerp(sc, sh, 0.5) + on_side(V3(0.008, 0, 0), s),
             sh - sc,
             V3(0.026, 0.1, 0.058),
             lateral=lat,
@@ -856,7 +854,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "forearmmuscle",
             rad,
-            lerp(e, w, 0.25) + _sx(V3(0.003, 0, 0.004), s),
+            lerp(e, w, 0.25) + on_side(V3(0.003, 0, 0.004), s),
             w - e,
             V3(0.028, 0.068, 0.032),
             lateral=lat,
@@ -880,7 +878,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.sphere(
             "dewclaw",
             meta,
-            lerp(w, mc, 0.3) + _sx(V3(-0.016, 0, 0.002), s),
+            lerp(w, mc, 0.3) + on_side(V3(-0.016, 0, 0.002), s),
             0.006,
             k=0.005,
         )
@@ -924,7 +922,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "thigh",
             fem,
-            lerp(hp, kn, 0.4) + _sx(V3(0.004, 0, -0.03), s),
+            lerp(hp, kn, 0.4) + on_side(V3(0.004, 0, -0.03), s),
             kn - hp,
             V3(0.042, 0.145, 0.095),
             lateral=lat,
@@ -933,8 +931,8 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone(
             "thighfront",
             fem,
-            _sx(V3(0.04, 0.6, -0.15), s),
-            kn + _sx(V3(-0.004, 0.055, 0.0), s),
+            on_side(V3(0.04, 0.6, -0.15), s),
+            kn + on_side(V3(-0.004, 0.055, 0.0), s),
             0.038,
             0.024,
             k=0.06,
@@ -942,7 +940,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         _ = m.cone(
             "hamstring",
             fem,
-            _sx(V3(0.045, 0.6, -0.36), s),
+            on_side(V3(0.045, 0.6, -0.36), s),
             lerp(kn, hk, 0.28) + V3(0, 0, -0.03),
             0.046,
             0.028,
@@ -952,7 +950,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "breeches",
             fem,
-            lerp(hp, kn, 0.62) + _sx(V3(0.006, -0.01, -0.085), s),
+            lerp(hp, kn, 0.62) + on_side(V3(0.006, -0.01, -0.085), s),
             kn - hp,
             V3(0.03, 0.08, 0.03),
             lateral=lat,
@@ -962,19 +960,23 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "flankfold",
             fem,
-            _sx(V3(0.05, 0.48, -0.13), s),
+            on_side(V3(0.05, 0.48, -0.13), s),
             V3(-0.03, 0.16, 0.1),
             V3(0.02, 0.08, 0.04),
             lateral=lat,
             k=0.06,
         )
         _ = m.sphere(
-            "stifle", tib, kn + _sx(V3(0.002, 0.008, 0.006), s), 0.017, k=0.04
+            "stifle",
+            tib,
+            kn + on_side(V3(0.002, 0.008, 0.006), s),
+            0.017,
+            k=0.04,
         )
         _ = m.cone(
             "shin",
             tib,
-            lerp(kn, hk, 0.06) + _sx(V3(0, 0, 0.004), s),
+            lerp(kn, hk, 0.06) + on_side(V3(0, 0, 0.004), s),
             hk,
             0.023,
             0.017,
@@ -984,7 +986,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             m,
             "calf",
             tib,
-            lerp(kn, hk, 0.3) + _sx(V3(0.002, 0.01, -0.027), s),
+            lerp(kn, hk, 0.3) + on_side(V3(0.002, 0.01, -0.027), s),
             hk - kn,
             V3(0.025, 0.07, 0.03),
             lateral=lat,
@@ -1513,7 +1515,7 @@ def wolf_paint(
         c = mix3(pal.get("throat"), pal.get("mane"), smoothstep(-0.2, 0.5, n.y))
         c = mix3(c, pal.get("maneDark"), smoothstep(0.4, 0.9, n.y) * 0.7)
         agouti = 0.6
-    elif _limb(bone):
+    elif is_limb(bone):
         var side = 1.0 if p.x >= 0.0 else -1.0
         var inner = smoothstep(0.1, -0.6, n.x * side)
         c = mix3(pal.get("legOuter"), pal.get("legInner"), inner)
@@ -1579,17 +1581,3 @@ def wolf_paint(
         c = mix3(c, srgb(0x8A8580), frost * 0.4)
     c = grizzle(c, p, 120.0, 0.12 + 0.25 * agouti * (1.0 - juv))
     return Paint(c, FUR)
-
-
-def _limb(bone: String) -> Bool:
-    return (
-        bone.startswith("scapula")
-        or bone.startswith("humerus")
-        or bone.startswith("radius")
-        or bone.startswith("metacarpus")
-        or bone.startswith("fpaw")
-        or bone.startswith("femur")
-        or bone.startswith("tibia")
-        or bone.startswith("metatarsus")
-        or bone.startswith("hpaw")
-    )
