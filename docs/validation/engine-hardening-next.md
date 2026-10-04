@@ -73,7 +73,7 @@ No full anatomical calibration is claimed by this plan.
 - [#299](https://github.com/SethKitchen/ThreeMojo/issues/299): integrate audio-aligned face animation with LOD and baked characters
 - [#300](https://github.com/SethKitchen/ThreeMojo/issues/300): integrate persistent scene water and measure CPU/GPU paths
 - [#595](https://github.com/SethKitchen/ThreeMojo/issues/595): classify and resolve sampled canonical anatomy overlaps
-- [#596](https://github.com/SethKitchen/ThreeMojo/issues/596): extend canonical anatomy pair diagnostics
+- [#596](https://github.com/SethKitchen/ThreeMojo/issues/596): complete executable canonical pair catalog and diagnostics implemented; focused checks and representative evidence pass, with full pair execution deferred to final batch validation
 
 ## Separate animal draft
 
