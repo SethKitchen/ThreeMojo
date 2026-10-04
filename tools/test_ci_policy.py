@@ -59,7 +59,20 @@ class CiPolicyTests(unittest.TestCase):
         self.assertIsNotNone(lint)
         self.assertIn('test-portability', lint.group(1).split())
         self.assertIn('test-coverage-tool', lint.group(1).split())
-        self.assertIn('run: make -B ${{ matrix.target }} AFFECTED="$AFFECTED"', job)
+        self.assertIn('run: make -B ${{ matrix.target }} JOBS=1 AFFECTED="$AFFECTED"', job)
+
+    def test_only_macos_cpu_checks_serialize_outer_compilers(self):
+        job = self.jobs['cpu-macos']
+        self.assertRegex(job, r'(?m)^    runs-on: macos-latest$')
+        self.assertRegex(job, r'(?m)^    timeout-minutes: 150$')
+        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        self.assertEqual(commands, [
+            'make -B ${{ matrix.target }} JOBS=1 AFFECTED="$AFFECTED"',
+        ])
+        # The GPU compile job has its own existing JOBS=1 contract.
+        for name in ('lint', 'cpu', 'coverage-capture', 'coverage'):
+            with self.subTest(job=name):
+                self.assertNotRegex(self.jobs[name], r'\bJOBS\s*=')
 
     def test_draft_pull_requests_skip_every_check_job(self):
         self.assertTrue(CHECK_JOBS <= self.jobs.keys())
