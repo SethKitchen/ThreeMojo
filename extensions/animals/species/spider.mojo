@@ -363,11 +363,11 @@ def _chain(
     # `solveBindElevations` and `planarChain`.
     var el = List[Float64]()
     # The dims tables give every leg its elevations.
-    for e in el_deg:  # pragma: no branch
+    for e in el_deg:
         el.append(e * pi / 180.0)
     var drop = 0.0
     # Every leg has segments: `lens[free]` is read below.
-    for k in range(len(lens)):  # pragma: no branch
+    for k in range(len(lens)):
         if k != free:
             drop += lens[k] * sin(el[k])
     var s = (y_tip - base.y - drop) / lens[free]
@@ -376,7 +376,7 @@ def _chain(
     var p = base
     out.append(p)
     # Every leg has segments: `lens[free]` is read above.
-    for k in range(len(lens)):  # pragma: no branch
+    for k in range(len(lens)):
         p = p + _plane_dir(az, el[k], 1.0) * lens[k]
         out.append(p)
     return out^
@@ -386,7 +386,7 @@ def _leg_chain(d: _Dims, i: Int) -> List[V3]:
     # Leg `i` (0 to 3) of the left side, coxa base to claw tip.
     var lens = List[Float64]()
     # The dims tables list every leg segment.
-    for f in d.seg:  # pragma: no branch
+    for f in d.seg:
         lens.append(f * d.leg[i] * d.q)
     var base = d.mm(V3(d.coxa_x[i], d.coxa_y, d.coxa_z[i]))
     return _chain(base, d.coxa_az[i] * pi / 180.0, d.el, lens, 5, d.tip_y * d.q)
@@ -397,7 +397,7 @@ def _palp_chain(d: _Dims) -> List[V3]:
     # so the tarsus meets the ground slanting forward.
     var lens = List[Float64]()
     # The dims tables list every palp segment.
-    for f in d.palp_seg:  # pragma: no branch
+    for f in d.palp_seg:
         lens.append(f * d.palp_len * d.q)
     return _chain(
         d.mm(d.palp_base),
