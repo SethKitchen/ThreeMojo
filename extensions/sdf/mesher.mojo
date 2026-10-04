@@ -33,10 +33,10 @@ from units.si import METER, Length
 comptime SUPER = 4
 # Maximum sample-and-spill rounds. Exhaustion must not emit a partial mesh.
 comptime SPILL_ROUNDS = 8
-# A block wakes at first when a corner is this many half-diagonals from
-# the surface or nearer. Each field is exact or a lower bound, so the
-# surface cannot reach a block whose corners are all farther than one; the
-# rest is slack. The spill wakes any block the first pass still missed.
+# Initial wake threshold in block half-diagonals. Field magnitudes are
+# distance estimates, so this margin does not prove complete activation.
+# The spill can wake adjacent blocks when a sampled shared face crosses
+# the surface. It cannot discover an isolated unsampled component.
 comptime ACTIVE_MARGIN = 1.15
 # A sample value no field takes: "not sampled".
 comptime UNSAMPLED = Float32(3.0e38)

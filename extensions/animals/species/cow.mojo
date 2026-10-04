@@ -611,15 +611,16 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             k=0.06,
         )
         _ = m.ell("sheath", s2, V3(0, 0.6, 0.08), V3(0.03, 0.04, 0.05), k=0.04)
-        # A bull calf's `bull` is 0.25, so a calf never gets here.
-        _ = m.ell(
-            "scrotum",
-            pb,
-            V3(0, 0.66, -0.66),
-            V3(0.075, 0.13, 0.08),
-            axis=normalize(V3(0, 0.1, 1)),
-            k=0.05,
-        )
+        # Traits may be adjusted after drawing the calf's proportions.
+        if not calf:
+            _ = m.ell(
+                "scrotum",
+                pb,
+                V3(0, 0.66, -0.66),
+                V3(0.075, 0.13, 0.08),
+                axis=normalize(V3(0, 0.1, 1)),
+                k=0.05,
+            )
 
     # NECK: thin and long in dairy cows, short and thick in beef breeds,
     # massive with a crest in bulls.
@@ -693,19 +694,19 @@ def cow_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         0.06,
         k=0.08,
     )
-    # Every breed's dewlap is 0.24 or more: `_breed` gives 0.3 at least.
     var dw = t.get("dewlap", 0.5)
-    var a = V3(0, 0.99, 0.95)
-    var b = V3(0, 0.76, 0.66)
-    _ = m.ell(
-        "dewlap",
-        n1,
-        lerp(a, b, 0.55) + V3(0, -0.04 * dw, 0.02 * dw),
-        V3(0.035 + 0.015 * dw, 0.07 + 0.08 * dw, 0.2),
-        axis=normalize(b - a),
-        up=normalize(V3(0, 1, 0.9)),
-        k=0.07,
-    )
+    if dw > 0.02:
+        var a = V3(0, 0.99, 0.95)
+        var b = V3(0, 0.76, 0.66)
+        _ = m.ell(
+            "dewlap",
+            n1,
+            lerp(a, b, 0.55) + V3(0, -0.04 * dw, 0.02 * dw),
+            V3(0.035 + 0.015 * dw, 0.07 + 0.08 * dw, 0.2),
+            axis=normalize(b - a),
+            up=normalize(V3(0, 1, 0.9)),
+            k=0.07,
+        )
 
     # HEAD, in head-local coordinates.
     var h = rig.bone("head")

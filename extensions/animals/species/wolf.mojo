@@ -1158,6 +1158,19 @@ def _cheek_teeth() -> List[List[Float64]]:
     ]
 
 
+def wolf_box() -> Tuple[V3, V3]:
+    """Return nominal bounds for the raw wolf reference sculpt.
+
+    These fixed corners are not a guaranteed enclosure for arbitrary
+    caller-edited traits, later warps, or poses. Those configurations need
+    bounds derived from their actual geometry.
+
+    Returns:
+        The least and the greatest nominal corner.
+    """
+    return (V3(-0.2, -0.03, -0.9), V3(0.2, 0.96, 0.82))
+
+
 def wolf_look(t: Traits) -> EyeLook:
     """Return the wolf's eye colors: amber, or blue-gray in a pup.
 

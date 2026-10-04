@@ -791,7 +791,7 @@ def _taper_fin(
         var th = t_edge + (t_root - t_edge) * pow(f, 1.2)
         var pts = List[Float64](capacity=len(poly))
         # The fin tables are literal outlines.
-        for j in range(len(poly) // 2):  # pragma: no branch
+        for j in range(len(poly) // 2):
             var da = poly[j * 2] - root_a
             var db = poly[j * 2 + 1] - root_b
             if stretch:
@@ -834,7 +834,7 @@ def _median_fin(
     var y0 = g.top(u0) - 0.004 * tl if dorsal else g.bot(u0) + 0.004 * tl
     var poly = List[Float64](capacity=len(src))
     # The fin tables are literal outlines.
-    for i in range(len(src) // 2):  # pragma: no branch
+    for i in range(len(src) // 2):
         var a = src[i * 2] * tl
         var b = src[i * 2 + 1] * tl * kv
         var uu = min(u0 + a / tl, g.pc)
@@ -891,7 +891,7 @@ def _caudal_edge(
     from_tip: Bool,
 ):
     # Its two callers ask for nine and six points.
-    for i in range(1, n + 1):  # pragma: no branch
+    for i in range(1, n + 1):
         var f = Float64(i) / Float64(n)
         var x = a.x + (b.x - a.x) * f
         var y = a.y + (b.y - a.y) * f
@@ -906,7 +906,7 @@ def _caudal_edge(
 def _scaled(poly: List[Float64], ka: Float64, ky: Float64) -> List[Float64]:
     var out = List[Float64](capacity=len(poly))
     # Its callers pass the literal fin outlines.
-    for i in range(len(poly) // 2):  # pragma: no branch
+    for i in range(len(poly) // 2):
         out.append(poly[i * 2] * ka)
         out.append(poly[i * 2 + 1] * ky)
     return out^
@@ -1467,7 +1467,7 @@ def _line_dist(
     # below zero inside it.
     var best = 1e9
     # Its callers pass literal polylines.
-    for i in range(len(pts) // 2 - 1):  # pragma: no branch
+    for i in range(len(pts) // 2 - 1):
         var r = _seg_dist(
             px, py, pts[i * 2], pts[i * 2 + 1], pts[i * 2 + 2], pts[i * 2 + 3]
         )
@@ -1482,14 +1482,14 @@ def _trail_dist(poly: List[Float64], a: Float64, b: Float64) -> Float64:
     var iu = 0
     var il = 0
     # The caudal outline is a literal table.
-    for i in range(n):  # pragma: no branch
+    for i in range(n):
         if poly[i * 2 + 1] > poly[iu * 2 + 1]:
             iu = i
         if poly[i * 2 + 1] < poly[il * 2 + 1]:
             il = i
     var best = 1e9
     # The caudal outline lists its upper tip before its lower.
-    for i in range(iu, il):  # pragma: no branch
+    for i in range(iu, il):
         var r = _seg_dist(
             a, b, poly[i * 2], poly[i * 2 + 1], poly[i * 2 + 2], poly[i * 2 + 3]
         )
@@ -1965,7 +1965,7 @@ def _fin_color(
     var max_b = -1e9
     var min_b = 1e9
     # Its callers pass the literal fin outlines.
-    for i in range(len(poly) // 2):  # pragma: no branch
+    for i in range(len(poly) // 2):
         max_a = max(max_a, poly[i * 2])
         max_b = max(max_b, poly[i * 2 + 1])
         min_b = min(min_b, poly[i * 2 + 1])

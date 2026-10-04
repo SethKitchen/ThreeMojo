@@ -1394,7 +1394,7 @@ def pig_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     # Six, seven or eight pairs.
     var pairs = Int(t.get("teats", 7.0))
     var teat_k = 0.45 if boar >= 0.5 else (0.5 if piglet else 0.8 + 0.6 * belly)
-    for i in range(pairs):  # pragma: no branch
+    for i in range(pairs):
         var z = 0.2 + (-0.34 - 0.2) * Float64(i) / Float64(max(1, pairs - 1))
         var yb = 0.3 - 0.03 * belly + 0.008 * abs(z + 0.08) * 4.0 * 0.3 + tuck
         var x = 0.052 + 0.01 * cos(

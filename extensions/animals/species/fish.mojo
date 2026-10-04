@@ -504,7 +504,7 @@ def _skin_x(g: _Geo, u0: Float64, y: Float64) raises -> Float64:
     var ids = List[Int]()
     # Sections lie every 0.018 along the body, so the window of 0.16 round
     # `u0` holds several.
-    for i in range(len(m.prims)):  # pragma: no branch
+    for i in range(len(m.prims)):
         ids.append(i)
     var lo = 0.0
     var hi = g.hw(u0) * 2.0
@@ -760,7 +760,7 @@ def _median_rays(g: _Geo, d: _Median, dorsal: Bool) -> List[Float64]:
     var sl = g.sl
     var rays = List[Float64]()
     # The morph tables give every fish its fin rays.
-    for i in range(d.n):  # pragma: no branch
+    for i in range(d.n):
         var f = 0.0 if d.n == 1 else Float64(i) / Float64(d.n - 1)
         var u = d.u0 + (d.u1 - d.u0) * f
         var a = (d.a0 + (d.a1 - d.a0) * f) * pi / 180.0
@@ -816,7 +816,7 @@ def _caudal_rays(g: _Geo) -> List[Float64]:
     var n = g.v.c_n
     var rays = List[Float64]()
     # The morph tables give every fish its caudal rays.
-    for i in range(n):  # pragma: no branch
+    for i in range(n):
         var f = Float64(i) / Float64(n - 1)
         var e = 1.0 - 2.0 * f
         var a = pi + e * g.v.c_spread * pi / 180.0
@@ -840,7 +840,7 @@ def _pectoral_rays(g: _Geo) -> List[Float64]:
     var n = g.v.p_n
     var lens = List[Float64]()
     # The morph tables give every fish its pectoral rays.
-    for i in range(n):  # pragma: no branch
+    for i in range(n):
         var f = 0.0 if n == 1 else Float64(i) / Float64(n - 1)
         var l: Float64
         if g.v.p_shape == POINTED:
@@ -876,7 +876,7 @@ def _pelvic_rays(g: _Geo) -> List[Float64]:
     var n = g.v.v_n
     var lens = List[Float64]()
     # The morph tables give every fish its pelvic rays.
-    for i in range(n):  # pragma: no branch
+    for i in range(n):
         var f = 0.0 if n == 1 else Float64(i) / Float64(n - 1)
         lens.append(
             big_l
@@ -1502,13 +1502,13 @@ def fish_paint(
                 c, pal.get("spot"), smoothstep(0.0006 * sl, -0.0006 * sl, d)
             )
     if key == GOLDFISH and morph == 2:
-        # A goldfish has no adipose fin and no ear flap, so every region it
-        # paints here, the body, the head or the jaw, takes the patches.
-        var q = p + V3(1.0, 1.0, 1.0) * (
-            0.04 * sl * (fbm3(p * (14.0 / sl), 2) - 0.5)
-        )
-        var d = _spot(q, 0.12 * sl, 0.07 * sl, seed)
-        c = mix3(c, pal.get("spot"), smoothstep(0.004 * sl, -0.004 * sl, d))
+        var patched = k == 0 or k == 1 or k == 6
+        if patched:
+            var q = p + V3(1.0, 1.0, 1.0) * (
+                0.04 * sl * (fbm3(p * (14.0 / sl), 2) - 0.5)
+            )
+            var d = _spot(q, 0.12 * sl, 0.07 * sl, seed)
+            c = mix3(c, pal.get("spot"), smoothstep(0.004 * sl, -0.004 * sl, d))
     if key == CLOWNFISH:
         var bands = _clown_bands(g, u, e)
         c = mix3(

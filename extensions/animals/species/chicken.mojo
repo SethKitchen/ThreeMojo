@@ -660,8 +660,8 @@ struct _Stack(Movable):
         var iy0 = Int(floor(y - _Y0 + 0.5))
         var rr = Int(ceil(r))
         var m = -1e30
-        for iy in range(iy0 - rr, iy0 + rr + 1):  # pragma: no branch
-            for ix in range(ix0 - rr, ix0 + rr + 1):  # pragma: no branch
+        for iy in range(iy0 - rr, iy0 + rr + 1):
+            for ix in range(ix0 - rr, ix0 + rr + 1):
                 var out = ix < 0 or iy < 0 or ix >= _NX or iy >= _NY
                 if out:
                     continue
@@ -835,7 +835,7 @@ def _inside(poly: List[Float64], x: Float64, y: Float64) -> Bool:
     var n = len(poly) // 2
     var j = n - 1
     # Its callers pass the literal comb and lid outlines.
-    for i in range(n):  # pragma: no branch
+    for i in range(n):
         var ax = poly[i * 2]
         var ay = poly[i * 2 + 1]
         var bx = poly[j * 2]
@@ -852,7 +852,7 @@ def _box(poly: List[Float64]) -> Tuple[V3, V3]:
     var lo = V3(1e9, 1e9, 0.0)
     var hi = V3(-1e9, -1e9, 0.0)
     # Its callers pass the literal comb and lid outlines.
-    for i in range(0, len(poly), 2):  # pragma: no branch
+    for i in range(0, len(poly), 2):
         lo = V3(min(lo.x, poly[i]), min(lo.y, poly[i + 1]), 0.0)
         hi = V3(max(hi.x, poly[i]), max(hi.y, poly[i + 1]), 0.0)
     return (lo, hi)
@@ -940,11 +940,11 @@ def _shield(t: Traits) -> _Shield:
         while by <= 0.2001:
             var a = -1e300
             # The outline encloses hundreds of lattice points at any wing size.
-            for q in need:  # pragma: no branch
+            for q in need:
                 a = max(a, q.z - bx * q.x - by * q.y)
             var m = 0.0
             # The outline encloses hundreds of lattice points at any wing size.
-            for q in need:  # pragma: no branch
+            for q in need:
                 m += a + bx * q.x + by * q.y - q.z
             if m < best_m:
                 best_m = m
@@ -999,11 +999,11 @@ def _shield(t: Traits) -> _Shield:
         while by <= 0.4001:
             var a = -1e300
             # The lid encloses hundreds of lattice points at any wing size.
-            for q in lneed:  # pragma: no branch
+            for q in lneed:
                 a = max(a, q.z - bx * q.x - by * q.y)
             var m = 0.0
             # The lid encloses hundreds of lattice points at any wing size.
-            for q in lpts:  # pragma: no branch
+            for q in lpts:
                 var d = (
                     a
                     + bx * q.x
@@ -1072,7 +1072,7 @@ def _plate(
         np = -np
     var flat = List[Float64]()
     # Its callers pass card outlines of ten points or more.
-    for i in range(0, len(poly), 2):  # pragma: no branch
+    for i in range(0, len(poly), 2):
         var x = poly[i]
         var y = poly[i + 1]
         var q = f.q(x, y, plane.x + plane.y * x + plane.z * y) - q0
@@ -1216,7 +1216,7 @@ def _bed(
     var sa = V3(0.0, 0.0, 0.0)
     var sn = V3(0.0, 0.0, 0.0)
     # Its callers pass one frame per tail feather.
-    for f in frames:  # pragma: no branch
+    for f in frames:
         o = o + f.root
         sa = sa + f.axis
         sn = sn + f.normal
@@ -1230,7 +1230,7 @@ def _bed(
     var cy = 0.0
     var count = 0
     # Its callers pass one frame per tail feather.
-    for i in range(len(frames)):  # pragma: no branch
+    for i in range(len(frames)):
         ref ff = frames[i]
         ref f = shapes[i]
         var ln = lens[i]

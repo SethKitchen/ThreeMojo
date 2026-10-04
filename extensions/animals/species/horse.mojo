@@ -449,7 +449,7 @@ def _bone_list(m: SdfModel, h: BoneId) -> List[Int]:
     # The primitives on one bone that are not on the jaw, carvers too.
     var ids = List[Int]()
     # Both callers pass the head, sculpted just before.
-    for i in range(len(m.prims)):  # pragma: no branch
+    for i in range(len(m.prims)):
         var keep = m.prims[i].bone == h and m.prims[i].part != JAW
         if keep:
             ids.append(i)

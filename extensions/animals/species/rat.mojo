@@ -407,7 +407,7 @@ def _toes(
     # yaw in degrees, the length, the radius and, if given, the drop.
     var fwd = normalize(V3(tp.x - mp.x, 0.0, tp.z - mp.z))
     # Each caller passes its digit table.
-    for row in spec:  # pragma: no branch
+    for row in spec:
         var ang = row[0] * pi / 180.0 * s
         var r = row[2]
         var d = normalize(

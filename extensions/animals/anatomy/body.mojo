@@ -185,7 +185,7 @@ def _table() -> List[SpeciesBody]:
 
 
 def species_body(id: SpeciesId) raises -> SpeciesBody:
-    """Return a species' published size.
+    """Return selected reference sizes for a DESIGN species template.
 
     Args:
         id: The species.
