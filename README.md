@@ -468,7 +468,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 37</summary>
+<summary>Implemented: 38</summary>
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
 - [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue [#313](https://github.com/SethKitchen/ThreeMojo/issues/313)
@@ -492,6 +492,8 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Triangle budget results](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality#read-the-result): actual unique-geometry counts, typed failure reasons and strict transactional fitting [#324](https://github.com/SethKitchen/ThreeMojo/issues/324)
 - [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality): quality levels that fit a humanoid to a triangle budget, from 90,000 to one million, by edge collapse [#269](https://github.com/SethKitchen/ThreeMojo/issues/269)
 - [x] [Anatomy validity limits](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity): canonical lower-limb reports, provenance, sampling controls and unsupported-use gates [#289](https://github.com/SethKitchen/ThreeMojo/issues/289)
+
+- [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [Direction-independent junction bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-maps#junction-bounds): complete connecting-lane sections, record boundaries and bounded curved-interior approximation [#487](https://github.com/SethKitchen/ThreeMojo/issues/487)
