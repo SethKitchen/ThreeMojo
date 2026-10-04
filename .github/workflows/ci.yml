@@ -157,8 +157,10 @@ jobs:
       - name: Install Xvfb
         run: brew install xorg-server
 
+      # Serialize outer compiler processes to limit oversubscription while
+      # preserving every check and the per-test time limit.
       - name: check-cpu
-        run: make -B ${{ matrix.target }} AFFECTED="$AFFECTED"
+        run: make -B ${{ matrix.target }} JOBS=1 AFFECTED="$AFFECTED"
 
       # Only the offline CARLA exporter fixture needs these two packages.
       # Keep its exact wheels in a separate environment from Mojo/MAX.
