@@ -258,7 +258,7 @@ def test_species_tables_replace_the_plan() raises:
 
 
 def _real(id: SpeciesId) raises -> Animal:
-    var cal = calibrate(id, Variant(-1))
+    var cal = calibrate(id, Variant(-1), allow_estimates=True)
     var body = species_body(id)
     var a = create_animal(
         id,
