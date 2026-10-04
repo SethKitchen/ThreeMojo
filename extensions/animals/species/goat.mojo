@@ -676,9 +676,8 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     )
     # The udder of an adult doe, or a buck's scrotum: their own surface.
     var ub = rig.bone("udder")
-    # Every doe's udder is 0.2 or more.
     var u = t.get("udder", 0.0)
-    if doe_adult:
+    if doe_adult and u > 0.05:
         for s in [1.0, -1.0]:  # pragma: no branch
             _ = m.ell(
                 "udder",
@@ -1303,9 +1302,8 @@ def goat_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
             )
 
     # MANE: a buck's long hair along the crest and the back.
-    # Every buck's mane is 0.4 or more.
     var mn = t.get("mane", 0.0)
-    if buck:
+    if buck and mn > 0.05:
         var body = List[Int]()
         # The body is already sculpted.
         for i in range(len(m.prims)):  # pragma: no branch
@@ -1921,9 +1919,8 @@ def _mark_sd(
         var muzzle = (masks & M_MUZZLE) != 0 and face
         if muzzle:
             d = min(d, 0.155 - h.z + (0.01 if h.y > -0.02 else 0.0))
-        # Only the Alpine coats mark the ears, and Alpine ears stand.
         var ears = (masks & M_EARS) != 0 and region == 5
-        if ears:
+        if ears and t.get("lop", 0.0) < 0.5:
             # The outer part of an erect ear.
             var lift = t.get("earLift", 0.5)
             var eb = _hl(V3(0.048, 0.026, -0.06))
