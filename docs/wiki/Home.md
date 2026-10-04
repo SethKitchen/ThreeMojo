@@ -79,6 +79,7 @@ Look something up.
 - [Benchmarks](Benchmarks)
 - [Extensions](Extensions)
 - [Water](Water)
+- [Animals](Animals)
 - [CARLA](CARLA)
 - [Femur](Femur)
 - [Tibia](Tibia)

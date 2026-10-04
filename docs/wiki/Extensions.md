@@ -6,6 +6,8 @@ The first subject is the humanoid. The leg bones are the femur, tibia, fibula an
 
 The water subject ports Clearwater. See [Water](Water).
 
+The animals subject ports procedural-animals: 24 species sculpted as distance fields, posed and painted. See [Animals](Animals). Its distance field sculpting and meshing live in `extensions/sdf/`, so other subjects can use them.
+
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).
@@ -63,6 +65,22 @@ extensions/
         nerves/    peripheral nerves
         skin/      envelope
         hair/      dorsal and digital shafts
+  sdf/
+    vector.mojo    Vec3d helpers, frames and rigid transforms
+    ids.mojo       primitive kinds, bones, tags and surface parts
+    field.mojo     primitives, smooth unions and carvers
+    sculpt.mojo    aimed ellipsoids and Catmull-Rom tubes
+    mesher.mojo    narrow-band surface nets
+  animals/
+    parts.mojo     the named surface parts of an animal
+    kit.mojo       eyes and head-local frames
+    rig.mojo       joints, bones and poses
+    warp.mojo      seeded proportion warps
+    coat.mojo      surface classes, palettes and eyes
+    build.mojo     create, pose, mesh, paint and occlude
+    gait.mojo      the walk cycle
+    registry.mojo  the 24 species
+    species/       one sculpt, rig and coat per species
   water/
     spectrum.mojo  ocean spectrum and dispersion
     ripple.mojo    local wave equation

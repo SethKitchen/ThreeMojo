@@ -66,6 +66,7 @@
 - [Benchmarks](Benchmarks)
 - [Extensions](Extensions)
 - [Water](Water)
+- [Animals](Animals)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
   - [CARLA maps](CARLA-maps)
