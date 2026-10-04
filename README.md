@@ -80,7 +80,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 4</summary>
+<summary>Implemented: 5</summary>
+
+- [x] [Sphere/static-mesh continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision): opt-in analytic sweeps, bounded support, multiple impacts and transactional failure [#292](https://github.com/SethKitchen/ThreeMojo/issues/292)
 
 - [x] [Static primitive index benchmark and design](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#static-primitive-index-design): bounded snapshot experiments, allocation costs, exact contact/ray oracles and a deferred production ownership contract [#288](https://github.com/SethKitchen/ThreeMojo/issues/288)
 
