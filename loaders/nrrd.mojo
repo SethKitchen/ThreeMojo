@@ -38,8 +38,16 @@ type it does not know, or none; no encoding; a `space origin` with no
 `(`; `space directions` with no `( )`, or fewer than three of them;
 gzip data that is not gzip; and data that is not whole values of its
 type.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length3
 from loaders.js_number import js_parse_float, js_parse_int
 from loaders.js_text import is_js_space, js_part, js_string, js_trim
 from math.matrix4 import Matrix4
@@ -628,7 +636,7 @@ def parse_nrrd(bytes: List[UInt8]) raises -> Volume:
         var x = _component(vectors[v], 0)
         var y = _component(vectors[v], 1)
         var z = _component(vectors[v], 2)
-        spacing.append(sqrt(x * x + y * y + z * z))
+        spacing.append(length3(x, y, z))
     volume.spacing = spacing.copy()
     var transition = Matrix4()
     var space = header.space.or_else("")
