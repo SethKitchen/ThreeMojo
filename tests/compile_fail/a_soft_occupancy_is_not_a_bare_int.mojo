@@ -5,10 +5,8 @@
 
 """A soft fill must be a `SoftOccupancy`, not a bare integer."""
 
-from extensions.humanoid.skeleton.soft_tissue import (
-    cartilage_tissue,
-    filled_density,
-)
+from extensions.anatomy.soft_tissue import cartilage_tissue
+from extensions.humanoid.skeleton.soft_tissue import filled_density
 
 
 def main() raises:

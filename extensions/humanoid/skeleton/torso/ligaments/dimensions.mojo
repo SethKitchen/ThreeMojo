@@ -20,7 +20,7 @@ cited width table.
 
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.field import mix_point
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftTissue,
     cartilage_tissue,
     ligament_tissue,

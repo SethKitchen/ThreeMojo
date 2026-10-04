@@ -28,7 +28,6 @@ extensions/
     side.mojo          RIGHT, LEFT
     athleticism.mojo   UNTONED, TONED
     skeleton/
-      tissue.mojo      density, porosity and moduli
       bone.mojo        PBR maps and a Phong stand-in
       field.mojo       signed-distance primitives
       isosurface.mojo  marching tetrahedra
@@ -38,7 +37,7 @@ extensions/
       complexion.mojo  skin, hair and iris pigment and maps
       occupancy.mojo   tissue fill and mass tally
       look.mojo        cartilage, meniscus, ligament, muscle, vessel, lymph, nerve, skin, hair and eye looks
-      soft_tissue.mojo named hydrated-tissue density
+      soft_tissue.mojo grid-sampled soft-tissue mass
       leg/
         assembly.mojo  one connected limb
         contents.mojo  named layer bits
@@ -65,6 +64,9 @@ extensions/
         nerves/    peripheral nerves
         skin/      envelope
         hair/      dorsal and digital shafts
+  anatomy/
+    tissue.mojo      bone density, porosity and moduli
+    soft_tissue.mojo named hydrated-tissue density
   sdf/
     vector.mojo    Vec3d helpers, frames and rigid transforms
     ids.mojo       primitive kinds, bones, tags and surface parts

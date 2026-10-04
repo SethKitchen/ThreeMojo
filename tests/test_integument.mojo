@@ -62,13 +62,13 @@ from extensions.humanoid.skeleton.look import (
     tendon_phong,
 )
 from extensions.humanoid.skeleton.occupancy import MAX_STEP
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     HAIR as HAIR_KIND,
     SKIN as SKIN_KIND,
-    SOFT_FILL,
     hair_tissue,
     skin_tissue,
 )
+from extensions.humanoid.skeleton.soft_tissue import SOFT_FILL
 from materials.material import DOUBLE_SIDE, PHONG
 from math.vector3 import Vector3
 from render.srgb import SRGB

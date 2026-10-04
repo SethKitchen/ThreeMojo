@@ -25,7 +25,7 @@ authored in template centimeters. They are not a cited width table.
 from extensions.humanoid.side import BodySide
 from extensions.humanoid.skeleton.arm.frame import ArmDimensions
 from extensions.humanoid.skeleton.field import reject
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftTissue,
     cartilage_tissue,
     ligament_tissue,

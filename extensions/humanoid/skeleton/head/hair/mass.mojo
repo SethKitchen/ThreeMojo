@@ -23,7 +23,7 @@ from extensions.humanoid.skeleton.head.hair.dimensions import (
     HeadHair,
     head_hair_field,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
     SoftTissue,
     hair_tissue,

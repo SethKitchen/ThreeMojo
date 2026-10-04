@@ -35,7 +35,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
     pelvis_bone_label,
     pelvis_dimensions,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     BoneTissue,
     cortical_tissue,
     trabecular_tissue,
