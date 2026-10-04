@@ -32,7 +32,16 @@ a running total in `Float64` stored in `Float32`. A point is interpolated in
 and here they are refused: a weight attribute that is not there, a weight
 that is negative or not a number, positions that do not make whole
 triangles, and a sample from a surface with no weight at all.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
@@ -344,8 +353,7 @@ struct MeshSurfaceSampler(Movable):
                 v,
             )
         else:
-            normal = c - b
-            normal.cross(a - b)
+            normal = normal_or_zero(a, b, c)
         normal.normalize()
         var color: Optional[FloatColor] = None
         if self.geometry.has_attribute(COLOR):
