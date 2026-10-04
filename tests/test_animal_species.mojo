@@ -213,25 +213,17 @@ def _novel(id: SpeciesId, seeds: Int, cap: Int) raises -> List[AnimalOptions]:
     return out^
 
 
-def _species(
-    name: String,
-    cap: Int = 160,
-    first: Int = 0,
-    last: Int = -1,
-    extras: Bool = True,
-) raises:
+def _species(name: String, cap: Int = 160) raises:
     # Both sexes of the first morph, one sex of each other morph, a young
     # one, three seeds, and each individual unlike the others among many:
-    # enough to reach every branch of the species. A slow species can
-    # spread the morphs `first` to `last` and the `extras` over tests.
+    # enough to reach every branch of the species.
     var id = species_of(name)
     for options in _novel(id, 300, cap):
         var a = create_animal(id, options)
         _check(a)
         _paint_all(a)
     var morphs = len(species_variants(id))
-    var stop = morphs if last < 0 else last + 1
-    for v in range(first, stop):
+    for v in range(morphs):
         for sex in [MALE, FEMALE]:
             var first = v == 0
             if not first and (sex == MALE) == (v % 2 == 0):
@@ -248,8 +240,6 @@ def _species(
             )
             _check(adult)
             _paint_all(adult)
-    if not extras:
-        return
     var young = create_animal(
         id, animal_options(9, quality=CROWD, age=JUVENILE, variant=Variant(0))
     )
