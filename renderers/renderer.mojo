@@ -75,7 +75,16 @@ is kept when it comes within a millionth of the far distance of any plane,
 so that a mesh the culler and the clipper measure by different roundings
 of the same view is left for the clipper to decide. Keeping a mesh costs
 work; dropping one changes the image.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import normal_or_zero
 
 from renderers.render_list import (
     RenderItem,
@@ -399,12 +408,7 @@ def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     Wound counter-clockwise seen from the front, so the normal points at the
     viewer for a front-facing triangle.
     """
-    var first = b - a
-    first.cross(c - a)
-    # normalize leaves a zero vector alone, so a degenerate triangle gives a
-    # zero normal rather than a division by zero.
-    first.normalize()
-    return first^
+    return normal_or_zero(a, b, c)
 
 
 def _faces_away(
