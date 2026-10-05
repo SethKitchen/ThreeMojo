@@ -21,6 +21,11 @@ index: `lane_transform` is `Lane::ComputeTransform`, `lane_corners` is
 `lane_is_straight` is `Lane::IsStraight`. A `LaneKey` names a lane from
 anywhere in the map: its road id, its section id and its lane id.
 
+The fixed-s `nearest_lane` query keeps its computed centers in Float64 and
+uses exact stored-point distance ordering. Its reported Float64 norm is a
+scale-safe approximation. It visits every lane center, including centers
+after a farther one. Other methods retain the precision rules below.
+
 CARLA writes a point in single precision. This port computes in double
 and rounds at the end, where CARLA hands back a `Location`; the two agree
 to within a float's rounding.
@@ -29,6 +34,11 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/Road.cpp`,
 `LaneSection.cpp`, `LaneSectionMap.h` and `Lane.cpp`.
 """
 
+from extensions.carla.curve_distance import (
+    _finite_point,
+    _wide_distance,
+    _wide_point_order,
+)
 from extensions.carla.geometry import DirectedPoint, LINE
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import (
@@ -48,7 +58,7 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from std.math import atan, sqrt
+from std.math import atan, cos, isfinite, sin, sqrt
 from units.si import DEGREE, Angle, Length, METER, RADIAN
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
@@ -613,9 +623,11 @@ struct Road(Copyable, Movable):
     ) raises -> Tuple[Optional[LaneKey], Float64]:
         """Return the lane nearest a point at s, `Road::GetNearestLane`.
 
-        CARLA walks out from the reference line to the right, then to the
-        left, and stops on each side once a lane center is farther than
-        the best so far. It measures in OpenDRIVE's frame.
+        Visit all lane centers from inner to outer on the right, then
+        on the left, in OpenDRIVE's frame. Unlike CARLA, a farther center
+        does not end that side's search: rounded centers need not have
+        monotonic distances. Centers and widths stay in Float64. Exact
+        stored-point order decides ties; the later eligible lane wins.
 
         Args:
             s: A distance along the road, in meters.
@@ -623,18 +635,42 @@ struct Road(Copyable, Movable):
             lane_type: The lane types that may be the answer.
 
         Returns:
-            The nearest lane of those types, or None, and its distance.
+            The selected lane and its Float64 distance in meters. The
+            distance is a scale-safe approximation, not an exact norm.
+            If no lane matches, None and the largest finite Float64.
 
         Raises:
-            Error: If the mask is not valid, or a lane at s has no width
-                record there.
+            Error: If the mask or s is not valid, a query or visited center
+                is not finite, a needed record is missing, a visited width
+                is not finite, or the distance exceeds the Float64 range.
         """
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
+        if not isfinite(s):
+            raise Error("Fixed-s nearest lane needs a finite s")
+        var query: Array[Float64, 3] = [
+            Float64(location.x),
+            Float64(location.y),
+            Float64(location.z),
+        ]
+        _finite_point(query)
         var lanes = self.lanes_at(s)
-        var zero = self.directed_point(s)
+        # Keep the existing clamp and record rules without directed_point's
+        # Float32 lane-offset and elevation conversions.
+        var clamped = min(max(s, 0.0), self.length)
+        var zero = self._plan_point(clamped)
+        var offset = 0.0
+        var lane_offset = info_at(self.info.lane_offsets, clamped)
+        if Bool(lane_offset):
+            offset = lane_offset.value().polynomial.evaluate(clamped)
+        var sn = sin(zero.tangent)
+        var cs = cos(zero.tangent)
+        zero.x -= offset * sn
+        zero.y += offset * cs
+        zero.z = self.elevation_on(s).evaluate(s)
+        _finite_point([zero.x, zero.y, zero.z])
         var best: Optional[LaneKey] = None
-        var best_d = _DOUBLE_MAX
+        var best_center = Array[Float64, 3](fill=0.0)
         # Two sides, always.
         for side in range(2):  # pragma: no branch
             var current = zero
@@ -650,24 +686,36 @@ struct Road(Copyable, Movable):
                 var width = info_at(lane.info.widths, s)
                 if not Bool(width):
                     raise Error("A lane has no width record at s")
-                var half = Float32(width.value().polynomial.evaluate(s)) * 0.5
+                var w = width.value().polynomial.evaluate(s)
+                if not isfinite(w):
+                    raise Error("Fixed-s nearest lane needs a finite width")
+                var half = w * 0.5
                 if side == 1:
                     half = -half
-                current.apply_lateral_offset(Length(half, METER))
-                var d = Float64(
-                    Vector3(
-                        Float32(current.x),
-                        Float32(current.y),
-                        Float32(current.z),
-                    ).distance_to(location)
-                )
-                if d > best_d:
-                    break
+                # Length stores Float32, so update this internal center
+                # directly. Preserve the original two half-step walk.
+                current.x += half * sn
+                current.y -= half * cs
+                var center: Array[Float64, 3] = [
+                    current.x,
+                    current.y,
+                    current.z,
+                ]
+                _finite_point(center)
                 if lane.type.matches(lane_type):
-                    best = LaneKey(self.id, self.sections[pair[0]].id, lane.id)
-                    best_d = d
-                current.apply_lateral_offset(Length(half, METER))
-        return (best, best_d)
+                    if (
+                        not Bool(best)
+                        or _wide_point_order(center, best_center, query) <= 0
+                    ):
+                        best = LaneKey(
+                            self.id, self.sections[pair[0]].id, lane.id
+                        )
+                        best_center = center^
+                current.x += half * sn
+                current.y -= half * cs
+        if Bool(best):
+            return (best, _wide_distance(best_center, query))
+        return (best, _DOUBLE_MAX)
 
     # --- lanes ----------------------------------------------------------------
 
