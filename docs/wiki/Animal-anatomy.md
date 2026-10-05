@@ -144,7 +144,11 @@ Nine species fall within 5 % of the selected targets. Fish, frog, rabbit and sna
 
 The sampler checks primitive indexes, finite geometry and bounded grid dimensions before integer conversion or worker writes. A cone has two radii; its unused third radius does not remove coat erosion. Public tally addition rejects negative mass and invalid cell geometry. The result checks finite SI output and a physically admissible central tensor.
 
+Finite primitive inputs can still produce unrepresentable derived values. The sampler rejects nonfinite or zero grid counts before integer conversion. It also checks sampled field values and nearest-solid indexes at run time. If a worker cannot represent a sampled field value, `sample_mass` raises an error after all workers finish; it does not return a partial mass. These checks apply with debug assertions disabled.
+
 `BodyMass.bone` gives one bone's mass, center of mass and inertia. `BodyMass.total` gives the whole body. `BodyMass.reference` returns voxel-sampled extents. Thin features can be unresolved; a missing or nonpositive extent raises an error. These extents are not used for calibration or dimensional validation. Use `reference_length` for the separately defined template landmark.
+
+Centralization removes residuals within a component's Float64 raw-moment roundoff bound before checking the tensor. This can discard small positive or negative residuals. It does not prove that the true moment is zero. A body whose size is unresolved relative to its offset from the origin needs a better-centered frame.
 
 ### Densities
 
@@ -198,7 +202,7 @@ The other muscles keep the rat's ratios to the biceps femoris and the rat's penn
 
 Eng2008 reports fiber lengths normalized to a 2.4 micrometer sarcomere length. These are not bone lengths. The template divides them by fixed 41.0 mm femur and 46.2 mm tibia references that Eng2008 does not report. Their source remains untraced.
 
-The current rat rig instead authors 36 mm and 41 mm segments. The ratios below remain DESIGN choices; `fiber_source` cites only the fiber input. The rig supplies each individual's segment lengths.
+The current rat rig instead authors 36 mm and 41 mm segments. The ratios below remain DESIGN choices. `fiber_source` grades each ratio as `DESIGN` and names Eng2008 to trace only the fiber input. The rig supplies each individual's segment lengths.
 
 | Muscle | Mass over the biceps femoris | Fiber length over its segment | Pennation |
 |---|---|---|---|
@@ -232,7 +236,7 @@ A row can give an absolute fiber length, scaled by the cube root of body mass re
 |---|---|---|---|
 | Dog | Williams 2008a, Table 1, p. 364 (31.8 kg greyhounds). The soleus is from Hudson 2011a, Table 3, p. 367 (greyhounds of 27.3 kg). | Hind limb | `FROM_TEXT` |
 | Cheetah | Hudson 2011a, Table 3, p. 367, and 2011b, Table 2, p. 378. The body mass, 33.1 kg, is the mean of the five weighed cheetahs (Table 1). | Hind and fore limb | `FROM_TEXT`: the means of ratios do not give the mean PCSA. Pennation uses greyhound proxies, `DESIGN`, except for the soleus, which retains the rat plan's 3.9° as a DESIGN proxy. The 33.1 kg normalization uses five known body masses, while most muscle rows include eight subjects. |
-| Horse | Payne 2005, Table 4, p. 561. The body mass, 510 kg, is the mean of Table 3. | Hind limb | `FROM_TEXT` |
+| Horse | Payne 2005, Table 4, p. 561. The body mass, 510 kg, is the mean of all seven subjects in Table 3: five Thoroughbreds, one Thoroughbred cross and one Arab. | Hind limb | `FROM_TEXT` |
 | Rat | Eng 2008, Table 1, p. 2339. The body mass, 323 g, is on p. 2337. | Hind limb | `FROM_TEXT` |
 | Chicken | Hartman 1961, Table 1, p. 45 | Flight muscles | `FROM_TEXT` |
 | Crow | Hartman 1961, Table 1, p. 71 | Flight muscles | `FROM_TEXT` |
@@ -322,7 +326,7 @@ All selected masses and reference lengths below are `DESIGN` parameters. The fin
 | Fox | Red fox | 6.5, 5.0 kg | 0.40 m shoulder | `FROM_TEXT` |
 | Frog | American bullfrog | 0.30 kg | 0.155 m snout-vent | mass `UNVERIFIED`: the sources found give only an upper bound, 0.5 kg |
 | Goat | Saanen dairy goat | 85, 65 kg | 0.94 m shoulder, the buck's | mass `UNVERIFIED`: NSW DPI gives only the doe's minimum, 64 kg |
-| Horse | Thoroughbred | 500, 450 kg | 1.62 m shoulder | `FROM_TEXT`. Payne 2005, Table 3, p. 561, weighed five Thoroughbreds of 480 to 600 kg, 1.47 to 1.57 m tall, sex not given. |
+| Horse | Thoroughbred | 500, 450 kg | 1.62 m shoulder | `FROM_TEXT`. Payne 2005, Table 3, p. 561, lists seven horses, including five Thoroughbreds of 480 to 600 kg and 1.47 to 1.57 m tall. The full cohort has a mean mass of 510 kg. Sex is not given. |
 | Lion | African lion | 190, 126 kg | 1.15 m shoulder | `FROM_TEXT` |
 | Pig | Large White | 300, 250 kg | 0.90 m shoulder | length `UNVERIFIED`. 2068 Large White sows of 100 kg stand 0.614 m (Hong 2021, Table 1). Isometric scaling to 300 kg gives 0.886 m. |
 | Rabbit | European rabbit | 1.8 kg | 0.38 m head-body | `FROM_TEXT` |
