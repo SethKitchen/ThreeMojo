@@ -20,7 +20,7 @@ The held implementation in [PR #594](https://github.com/SethKitchen/ThreeMojo/pu
 - [#487](https://github.com/SethKitchen/ThreeMojo/issues/487): direction-independent complete-section junction bounds implemented; 147 focused tests pass, with full batch validation pending
 - [#577](https://github.com/SethKitchen/ThreeMojo/issues/577): support border-only lane widths and centerlines
 - [#580](https://github.com/SethKitchen/ThreeMojo/issues/580): bound subdivision and nearest-query work
-- [#604](https://github.com/SethKitchen/ThreeMojo/issues/604): preserve wide centers in fixed-parameter road queries
+- [#604](https://github.com/SethKitchen/ThreeMojo/issues/604): wide stored-center lane ordering implemented; 94 focused tests and independent exact controls pass, with full batch validation pending
 
 ## Physics
 
