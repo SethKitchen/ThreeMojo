@@ -50,7 +50,7 @@ Keep existing accuracy and resource limits.
 Measure ordinary-case costs as well as boundary correctness.
 
 - [#348](https://github.com/SethKitchen/ThreeMojo/issues/348): scale-safe normalization and remaining norm consumers implemented; 134 focused CPU tests and three Metal kernel compile checks pass, with full batch validation pending
-- [#538](https://github.com/SethKitchen/ThreeMojo/issues/538): add exact predicates for extreme convex-hull inputs
+- [#538](https://github.com/SethKitchen/ThreeMojo/issues/538): adaptive exact hull predicates implemented; 120 focused tests and independent exact controls pass, with full batch validation pending
 - [#550](https://github.com/SethKitchen/ThreeMojo/issues/550): exact query validation implemented with accepted current performance; full matrix and focused checks pass, with aggregate validation deferred
 - [#560](https://github.com/SethKitchen/ThreeMojo/issues/560): preserve arbitrary Boolable behavior in coverage probes
 
