@@ -159,7 +159,8 @@ def _span_box(
         road.info.lane_offsets[offset_index].polynomial, a, b
     )
     var lane_id = road.sections[section].lanes[lane].id.value
-    for other in road.sections[section].lanes:
+    # The valid selected lane belongs to this nonempty lane list.
+    for other in road.sections[section].lanes:  # pragma: no branch
         if other.id.value * lane_id <= 0 or abs(other.id.value) > abs(lane_id):
             continue
         var at = info_index(other.info.widths, a)
@@ -217,7 +218,8 @@ def _span_box(
             geometry.heading + (b - geometry.s) * geometry.curvature_start
         )
         var first = ceil(min(theta_a, theta_b) / half_pi)
-        for i in range(4):
+        # An arc checks exactly four consecutive cardinal headings.
+        for i in range(4):  # pragma: no branch
             var theta = (first + Float64(i)) * half_pi
             if theta <= max(theta_a, theta_b):
                 var s = (
@@ -302,7 +304,8 @@ def _span_box(
         + arc_error
     )
     var z_pad = z[2] * step * step / 8.0 + 2.0 * z[3]
-    for i in range(pieces + 1):
+    # At least one piece gives at least two endpoint samples.
+    for i in range(pieces + 1):  # pragma: no branch
         # Compute from the fixed start. Never accumulate signed steps or
         # follow a successor into another lane, section, or road.
         var s = b if i == pieces else a + (b - a) * (
@@ -330,14 +333,16 @@ def _lane_section_box(road: Road, section: Int, lane: Int) raises -> Box3:
     _record_breaks(breaks, road.info.geometries)
     _record_breaks(breaks, road.info.elevations)
     _record_breaks(breaks, road.info.lane_offsets)
-    for other in road.sections[section].lanes:
+    # The valid selected lane belongs to this nonempty lane list.
+    for other in road.sections[section].lanes:  # pragma: no branch
         _record_breaks(breaks, other.info.widths)
     for record in road.info.geometries:
         _insert_break(breaks, record.s + record.geometry.length)
         for sample in record.geometry.samples:
             _insert_break(breaks, record.s + sample.s)
     var out = Box3.empty()
-    for i in range(len(breaks) - 1):
+    # Breaks starts with both endpoints and only gains entries.
+    for i in range(len(breaks) - 1):  # pragma: no branch
         # Keep both sides of a discontinuous record boundary. The previous
         # representable s is the final API input that uses the old records.
         var end = min(breaks[i + 1], b)
