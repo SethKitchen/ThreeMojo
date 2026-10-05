@@ -1,0 +1,45 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""The positive body-part minimum also reserves unchanged facial geometry."""
+
+from core.assets import Assets
+from core.object3d import Object3D
+from core.scene import Scene
+from extensions.humanoid.rig.game import add_game_humanoid
+from extensions.humanoid.sex import MALE
+from extensions.humanoid.spec import HumanoidSpec
+from std.testing import TestSuite, assert_equal, assert_raises
+from units.si import FOOT, Length
+
+
+def test_facial_reservation_refuses_before_scene_or_asset_changes() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    # The 128 part minimum passes the cheap preflight. It still cannot
+    # accommodate the original face, mouth and eyes reserved afterward.
+    with assert_raises(contains="Facial LOD budget must keep at least"):
+        _ = add_game_humanoid(
+            scene,
+            assets,
+            root,
+            HumanoidSpec(Length(6, FOOT), MALE),
+            128,
+            detail=8,
+            hand_detail=8,
+            hair_detail=8,
+            facial_animation=True,
+        )
+    assert_equal(scene.count(), 1)
+    assert_equal(len(scene.meshes), 0)
+    assert_equal(len(scene.skinned_meshes), 0)
+    assert_equal(assets.geometries.count(), 0)
+    assert_equal(assets.materials.count(), 0)
+    assert_equal(assets.textures.count(), 0)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()
