@@ -57,6 +57,13 @@ def _crest(first=-28, last=150):
 
 
 class ConverterTests(unittest.TestCase):
+    def test_recipe_summation_has_explicit_rounding_order(self):
+        # Built-in sum uses compensated addition starting with Python 3.12.
+        # The production recipe must keep its original one-step rounding.
+        self.assertEqual(hair_style._ordered_sum([1e16, 1.0, -1e16]), 0.0)
+        self.assertEqual(hair_style._ordered_sum([1e16, -1e16, 1.0]), 1.0)
+        self.assertEqual(hair_style._ordered_sum([]), 0)
+
     def test_reads_and_resamples_a_tfx_file(self):
         with tempfile.TemporaryDirectory() as folder:
             path = os.path.join(folder, "hair.tfx")
