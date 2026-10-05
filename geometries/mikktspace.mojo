@@ -504,15 +504,15 @@ def _init_tri_info(
                 )
             if area > 0:
                 infos[f].flag |= ORIENT_PRESERVING
+            # A finite nonzero area proves finite UV inputs. Finite ws
+            # components then prove finite positions. Every wt product is
+            # a product of two widened Float32 inputs, so it fits Float64.
             if (
                 area != 0
                 and isfinite(area)
                 and isfinite(ws[0])
                 and isfinite(ws[1])
                 and isfinite(ws[2])
-                and isfinite(wt[0])
-                and isfinite(wt[1])
-                and isfinite(wt[2])
             ):
                 var sign = Float32(1) if area > 0 else Float32(-1)
                 var ns = normalized3(ws[0], ws[1], ws[2])
@@ -538,21 +538,20 @@ def _init_tri_info(
             continue
         if signed_area > 0:
             infos[f].flag |= ORIENT_PRESERVING
-        if _not_zero(signed_area):
-            var area = abs(signed_area)
-            var len_os = _length(os)
-            var len_ot = _length(ot)
-            var sign = Float32(1)
-            if (infos[f].flag & ORIENT_PRESERVING) == 0:
-                sign = -1
-            if _not_zero(len_os):
-                infos[f].os = os * (sign / len_os)
-            if _not_zero(len_ot):
-                infos[f].ot = ot * (sign / len_ot)
-            infos[f].mag_s = len_os / area
-            infos[f].mag_t = len_ot / area
-            if _healthy(infos[f].mag_s, infos[f].mag_t):
-                infos[f].flag &= ~GROUP_WITH_ANY
+        # The fast-path gate proves a nonzero finite area and ordinary
+        # squared derivative lengths. Their square roots are positive.
+        var area = abs(signed_area)
+        var len_os = _length(os)
+        var len_ot = _length(ot)
+        var sign = Float32(1)
+        if (infos[f].flag & ORIENT_PRESERVING) == 0:
+            sign = -1
+        infos[f].os = os * (sign / len_os)
+        infos[f].ot = ot * (sign / len_ot)
+        infos[f].mag_s = len_os / area
+        infos[f].mag_t = len_ot / area
+        if _healthy(infos[f].mag_s, infos[f].mag_t):
+            infos[f].flag &= ~GROUP_WITH_ANY
     _build_neighbors(infos, tri_list, count)
 
 
