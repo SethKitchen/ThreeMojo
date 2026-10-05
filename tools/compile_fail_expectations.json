@@ -4655,5 +4655,29 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_snapshot_owner_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 26,
+        "message": "invalid call to 'check_owner': value passed to 'owner' cannot be converted from 'IntLiteral[0]' to 'SnapshotOwner'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/physics_snapshot_owner.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 17,
+        "message": "invalid call to 'check': value passed to 'id' cannot be converted from 'SnapshotOwner' to 'BodyId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }

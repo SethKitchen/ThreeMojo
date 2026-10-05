@@ -65,6 +65,7 @@
 - [Examples](Examples)
 - [Benchmarks](Benchmarks)
 - [Extensions](Extensions)
+- [Physics query snapshots](Physics-query-snapshots)
 - [Water](Water)
 - [CARLA](CARLA)
   - [CARLA geometry](CARLA-geometry)
