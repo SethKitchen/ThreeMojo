@@ -54,11 +54,11 @@ Measure ordinary-case costs as well as boundary correctness.
 - [#550](https://github.com/SethKitchen/ThreeMojo/issues/550): exact query validation implemented with accepted current performance; full matrix and focused checks pass, with aggregate validation deferred
 - [#560](https://github.com/SethKitchen/ThreeMojo/issues/560): preserve arbitrary Boolable behavior in coverage probes
 
-## Remaining three.js features
+## Three.js features
 
 Check each issue against its stated upstream version and refusal contract.
 
-- [#614](https://github.com/SethKitchen/ThreeMojo/issues/614): expand the remaining GLSL source subset
+- [#614](https://github.com/SethKitchen/ThreeMojo/issues/614): bounded unsigned GLSL, texture gradients and finite loops implemented; 580 tests and independent controls pass, with full batch validation pending
 - [#615](https://github.com/SethKitchen/ThreeMojo/issues/615): all five missing OpenEXR codecs implemented; 49 tests, four typed negatives and independent fixtures pass, with full batch validation pending
 - [#616](https://github.com/SethKitchen/ThreeMojo/issues/616): opaque-scene depth and shared rectangle-volume lighting implemented; 115 focused CPU tests and three SM80 compile controls pass, with full batch validation pending
 - [#617](https://github.com/SethKitchen/ThreeMojo/issues/617): all six r180 raw ASTC formats implemented; focused tests and exact Arm reference regeneration pass, with full batch validation pending
@@ -99,5 +99,6 @@ Keep CPU tests, GPU compilation and actual GPU execution as separate evidence.
 Each issue remains open until its complete acceptance criteria are verified.
 
 The earlier bounded slices for #297, #303, #309, #348, #550 and #614 are already on main.
-The #348 remainder is implemented in this batch; the others remain listed above.
+The #348, #550, #303 and #614 remainders are implemented in this batch.
+The other partial slices remain listed above.
 Optional bulk gallery recompression remains excluded.
