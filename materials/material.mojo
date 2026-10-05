@@ -2735,9 +2735,6 @@ struct Material(ImplicitlyCopyable):
         Args:
             enabled: True to gate each ray sample against scene depth.
 
-        Returns:
-            Nothing.
-
         Raises:
             Error: If this material is not VOLUME.
         """
