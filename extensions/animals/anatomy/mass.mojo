@@ -252,7 +252,24 @@ def _sample_distance(model: SdfModel, ids: List[Int], q: V3) -> Float64:
     return d
 
 
-async def _sample_task(
+def _require_finite_distance(value: Float64) raises:
+    """Refuse a nonfinite already-evaluated sampling distance."""
+    if not isfinite(value):
+        raise Error("A sampled field must have finite valid distances")
+
+
+def _require_nonnegative_candidate(candidate: Int) raises:
+    """Refuse an absent nearest result before storage is indexed.
+
+    The caller separately establishes the primitive-index upper bound.
+    This validator does not read a model, pointer, or collection.
+    """
+    if candidate < 0:
+        raise Error("A sampled field must have finite valid distances")
+
+
+@always_inline
+def _sample_task_checked(
     model: Pointer[SdfModel, ImmutAnyOrigin],
     input: Pointer[_Input, ImmutAnyOrigin],
     grid: _Grid,
@@ -262,8 +279,8 @@ async def _sample_task(
     task: Int,
     first: Int,
     past: Int,
-):
-    """Sample a run of blocks into this task's own tallies and stats."""
+) raises:
+    """Sample blocks, raising only checked scalar validation failures."""
     var h = grid.h
     var rho = 0.5 * sqrt(3.0) * Float64(BLOCK) * h
     var kmax = model[].max_blend()
@@ -284,26 +301,20 @@ async def _sample_task(
         var near = 1e30
         for p in range(len(input[].parts)):  # pragma: no branch
             # Validate before culling can discard a nonfinite operand.
-            if not isfinite(_sample_distance(model[], input[].parts[p], c)):
-                stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-                return
+            _require_finite_distance(
+                _sample_distance(model[], input[].parts[p], c)
+            )
             # A part's nearest solid always survives its own cull.
             var cand = model[].cull(input[].parts[p], c, rho, kmax)
             var d = _sample_distance(model[], cand, c)
-            if not isfinite(d):
-                stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-                return
+            _require_finite_distance(d)
             near = min(near, d)
             lists.append(cand^)
-        if not isfinite(_sample_distance(model[], input[].coat, c)):
-            stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-            return
+        _require_finite_distance(_sample_distance(model[], input[].coat, c))
         var coat = model[].cull(input[].coat, c, rho, kmax)
         if len(coat) > 0:
             var d = _sample_distance(model[], coat, c)
-            if not isfinite(d):
-                stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-                return
+            _require_finite_distance(d)
             near = min(near, d)
         if near > 1.5 * rho + h:
             continue
@@ -316,9 +327,7 @@ async def _sample_task(
             var q = grid.center(i, j, k)
             if len(coat) > 0:
                 var d = _sample_distance(model[], coat, q)
-                if not isfinite(d):
-                    stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-                    return
+                _require_finite_distance(d)
                 if d < 0.0 and d > -h:
                     s[TOTAL_LOW] = min(s[TOTAL_LOW], q.z + d)
                     s[TOTAL_HIGH] = max(s[TOTAL_HIGH], q.z - d)
@@ -326,17 +335,16 @@ async def _sample_task(
             var solid = -1
             for p in range(len(lists)):  # pragma: no branch
                 var d = _sample_distance(model[], lists[p], q)
-                if not isfinite(d):
-                    stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-                    return
+                _require_finite_distance(d)
                 if d > 0.5 * h:
                     continue
                 # Finite primitive inputs do not guarantee representable
                 # distance arithmetic. Check before indexing by the result.
                 var candidate = model[].nearest(lists[p], q)
-                if candidate < 0 or candidate >= len(input[].reach):
-                    stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
-                    return
+                # part_list emits only primitive indexes; cull keeps them.
+                # nearest returns one of those indexes or -1. reach has
+                # one entry per unchanged primitive, so no upper bound is needed.
+                _require_nonnegative_candidate(candidate)
                 # Choose the nearest flesh surface after coat erosion.
                 # An uneroded eye can remain outside an eroded skin part.
                 d += min(input[].erode[p], input[].reach[candidate])
@@ -370,6 +378,31 @@ async def _sample_task(
                 s[BODY_HIGH] = max(s[BODY_HIGH], q.z - best)
     for n in range(STATS):  # pragma: no branch
         stats[unsafe_offset=task * STATS + n] = s[n]
+
+
+async def _sample_task(
+    model: Pointer[SdfModel, ImmutAnyOrigin],
+    input: Pointer[_Input, ImmutAnyOrigin],
+    grid: _Grid,
+    tallies: MutPointer[InertiaTally, MutAnyOrigin],
+    stats: MutPointer[Float64, MutAnyOrigin],
+    bones: Int,
+    task: Int,
+    first: Int,
+    past: Int,
+):
+    """Keep validation errors inside the worker until its flag is joined."""
+    try:
+        _sample_task_checked(
+            model, input, grid, tallies, stats, bones, task, first, past
+        )
+    except:
+        # Only the scalar validators currently raise. Review this catch
+        # before adding unrelated raising operations to the checked body.
+        # No error crosses TaskGroup. The caller reads this flag only
+        # after every worker has joined and before reducing partial sums.
+        stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+        return
 
 
 def _launch(
