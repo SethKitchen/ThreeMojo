@@ -298,19 +298,21 @@ def calibrated_animal(animal: Animal, cal: Calibration) raises -> Animal:
 
 
 def calibrated_mass(
-    animal: Animal, cal: Calibration, cells: Float64 = 60.0
+    animal: Animal, cal: Calibration, cells: Float64 = CANON_CELLS
 ) raises -> BodyMass:
     """Return an individual's mass properties at its published size.
 
     Args:
         animal: The individual, as `create_animal` made it.
         cal: Its species' calibration.
-        cells: Samples per published reference length.
+        cells: Samples per published reference length. The default is
+            the resolution `calibrate` measured at. Only there does the
+            canonical adult male weigh the published mass exactly.
 
     Returns:
         Per-bone mass, center and inertia, in SI units, with the
         densities scaled so the canonical adult male weighs the
-        published mass.
+        published mass at the default resolution.
 
     Raises:
         Error: If the scale or the sample count is not positive, or the

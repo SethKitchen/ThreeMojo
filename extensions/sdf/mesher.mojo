@@ -368,11 +368,22 @@ struct _Grid:
         self.samples = List[Float32]()
         self.vertex_of = List[Int]()
 
-    def sample(self, gx: Int, gy: Int, gz: Int) -> Float32:
-        """Return one lattice sample, or `UNSAMPLED` outside every block.
+    def locate(self, gx: Int, gy: Int, gz: Int) -> Tuple[Int, Int]:
+        """Return the active block that owns a lattice point.
 
-        A point on a face between blocks belongs to both. The block below
-        it is read when the block above it is not active.
+        A point on a face, an edge or a corner belongs to up to eight
+        blocks. The block it lies in by floor division owns it when it is
+        active; otherwise the first active one below it does. Every block
+        that holds the point finds the same owner.
+
+        Args:
+            gx: The x index.
+            gy: The y index.
+            gz: The z index.
+
+        Returns:
+            The owner's slot and the point's index among its samples, or
+            -1 and -1 when no active block holds the point.
         """
         var f = self.lattice.block
         var side = f + 1
@@ -387,8 +398,20 @@ struct _Grid:
                 var local = (gx - i * f) + side * (
                     (gy - j * f) + side * (gz - k * f)
                 )
-                return self.samples[slot * side * side * side + local]
-        return UNSAMPLED
+                return (slot, local)
+        return (-1, -1)
+
+    def sample(self, gx: Int, gy: Int, gz: Int) -> Float32:
+        """Return one lattice sample, or `UNSAMPLED` outside every block.
+
+        A point on a face between blocks belongs to both. It reads the
+        owner `locate` finds.
+        """
+        var at = self.locate(gx, gy, gz)
+        if at[0] < 0:
+            return UNSAMPLED
+        var side = self.lattice.block + 1
+        return self.samples[at[0] * side * side * side + at[1]]
 
     def vertex(self, gx: Int, gy: Int, gz: Int) -> Int:
         """Return the vertex of one cell, or -1."""
@@ -644,10 +667,10 @@ def _share_faces(mut grid: _Grid):
     """Give each lattice point one value in every block that holds it.
 
     Neighboring blocks sample their shared faces apart, each with its own
-    culled solids, and rounding can tell the two apart in sign. The
-    block a point lies in by floor division owns it, and every other
-    active block takes the owner's value. A cell then sees the same
-    crossings as its neighbors, and the surface has no pinholes.
+    culled solids, and rounding can tell the two apart in sign. The owner
+    `_Grid.locate` finds keeps its value, and every other active block
+    takes it. `_Grid.sample` reads the same owner. A cell then sees the
+    same crossings as its neighbors, and the surface has no pinholes.
     """
     var lt = grid.lattice
     var f = lt.block
@@ -664,16 +687,12 @@ def _share_faces(mut grid: _Grid):
             var lz = n // (side * side)
             if max(lx, max(ly, lz)) < f:
                 continue
-            var oi = min(bi + lx // f, lt.bx - 1)
-            var oj = min(bj + ly // f, lt.by - 1)
-            var ok = min(bk + lz // f, lt.bz - 1)
-            var owner = grid.slot_of[lt.block_index(oi, oj, ok)]
-            if owner < 0 or owner == slot:
+            var at = grid.locate(bi * f + lx, bj * f + ly, bk * f + lz)
+            # This block holds the point and is active: an owner exists.
+            debug_assert(at[0] >= 0, "An active block holds the point")
+            if at[0] == slot:
                 continue
-            var local = (bi * f + lx - oi * f) + side * (
-                (bj * f + ly - oj * f) + side * (bk * f + lz - ok * f)
-            )
-            grid.samples[slot * per + n] = grid.samples[owner * per + local]
+            grid.samples[slot * per + n] = grid.samples[at[0] * per + at[1]]
 
 
 def _spill(

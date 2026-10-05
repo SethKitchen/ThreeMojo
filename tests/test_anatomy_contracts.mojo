@@ -25,7 +25,13 @@ from extensions.anatomy.muscle import (
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from std.math import inf, nan
-from std.testing import TestSuite, assert_raises, assert_almost_equal
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_raises,
+    assert_true,
+)
 from units.si import (
     Mass,
     Length,
@@ -234,9 +240,22 @@ def test_result_refuses_corrupt_sums_and_unrepresentable_si_output() raises:
 
 
 def test_tiny_negative_inertia_diagonal_is_never_exported() raises:
+    # Within the rounding tolerance, a negative central moment is noise,
+    # as in a point mass: it exports as zero, never below.
+    var tiny = InertiaTally()
+    tiny.mass = 1
+    tiny.second = SIMD[DType.float64, 8](-1e-11, 0, 1, 0, 0, 0, 0, 0)
+    var r = tiny.result(0)
+    assert_equal(r.zz.value, 0.0)
+    assert_true(r.xx.value >= 0.0 and r.yy.value >= 0.0)
+    # A tensor mutated below zero after export is refused.
+    r.zz = MomentOfInertia(-1e-12)
+    with assert_raises(contains="nonnegative"):
+        r.check()
+    # Beyond it, the tally is refused.
     var bad = InertiaTally()
     bad.mass = 1
-    bad.second = SIMD[DType.float64, 8](-1e-11, 0, 1, 0, 0, 0, 0, 0)
+    bad.second = SIMD[DType.float64, 8](-1e-9, 0, 1, 0, 0, 0, 0, 0)
     with assert_raises(contains="nonnegative"):
         _ = bad.result(0)
 
