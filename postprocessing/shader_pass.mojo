@@ -51,11 +51,17 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
 from render.texture_store import TextureStore
+from render.texture import (
+    CLAMP,
+    gradient_sample_coordinate,
+    texture_grad_finite,
+)
 
 comptime Lanes = SIMD[DType.float32, 4]
 
@@ -298,6 +304,29 @@ struct ScreenNodes(ImplicitlyCopyable, NodeSource):
         """
         return self.sample(slot, u, v)
 
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients from a single-level screen image.
+
+        Args:
+            slot: The input or saved image slot.
+            u: Across.
+            v: Up.
+            dx: Coordinate change per screen pixel across.
+            dy: Coordinate change per screen pixel up.
+
+        Returns:
+            The straight color; transparent black for nonfinite inputs.
+        """
+        if not texture_grad_finite(u, v, dx, dy):
+            return FloatColor(0, 0, 0, 0)
+        return self.sample(
+            slot,
+            gradient_sample_coordinate(u, CLAMP),
+            gradient_sample_coordinate(v, CLAMP),
+        )
+
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a pixel of the input or the saved image by its column and
         row from the bottom, held inside the image.
@@ -462,6 +491,25 @@ struct HostScreenNodes[origin: Origin[mut=False]](NodeSource):
         if slot < 0:
             return self.screen.sample_level(slot, u, v, level)
         return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read an image or an asset texture with explicit gradients.
+
+        Args:
+            slot: The input or saved slot, or an asset texture id.
+            u: Across.
+            v: Up.
+            dx: Coordinate change per screen pixel across.
+            dy: Coordinate change per screen pixel up.
+
+        Returns:
+            The straight color; transparent black for nonfinite inputs.
+        """
+        if slot < 0:
+            return self.screen.sample_grad(slot, u, v, dx, dy)
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return an image's pixel or a texture's texel by its column and
