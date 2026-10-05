@@ -182,6 +182,10 @@ A `Viseme` is the shape the mouth takes for a group of sounds that look alike. T
 
 Spelling is not sound in English. A word spelled far from how it sounds moves the mouth as it is spelled.
 
+For caller-aligned phonemes or visemes on a game character, use
+[Audio-aligned game faces](Audio-aligned-game-faces). That path uses the
+supplied audio clock. The spelling-based `Speech` behavior above is unchanged.
+
 ## Hair
 
 The scalp's hair is strands over a shell. `add_groom` grows the strands. The shell under them is the mass of hair in shade.
