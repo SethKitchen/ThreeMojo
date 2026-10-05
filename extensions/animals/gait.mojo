@@ -48,7 +48,9 @@ def is_quadruped(rig: Rig) -> Bool:
         rig: The rig.
 
     Returns:
-        Whether it has both shoulders, both hips and a neck.
+        Whether it has both shoulders, both hips, the left wrist and the
+        left hock. `walk_pose` also turns `neck2`, and raises on a rig
+        without it.
     """
     var count = 0
     for name in [

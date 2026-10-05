@@ -35,12 +35,20 @@ def _check_second_moments(
     xy: Float64,
     xz: Float64,
     yz: Float64,
+    reference: Float64,
     tolerance: Float64,
 ) raises:
     # A realizable body's central second-moment matrix is positive
     # semidefinite. This also enforces the inertia triangle inequalities.
+    # The central moments are raw moments less m c^2, so their rounding
+    # grows with the raw moments: `reference` is their size. A point mass
+    # has central moments of rounding noise alone, and must pass.
     var scale = max(
-        abs(xx), max(abs(yy), max(abs(zz), max(abs(xy), max(abs(xz), abs(yz)))))
+        reference,
+        max(
+            abs(xx),
+            max(abs(yy), max(abs(zz), max(abs(xy), max(abs(xz), abs(yz))))),
+        ),
     )
     if scale == 0.0:
         return
@@ -113,6 +121,12 @@ struct SegmentInertia(ImplicitlyCopyable):
         var x = Float64(self.xx.value)
         var y = Float64(self.yy.value)
         var z = Float64(self.zz.value)
+        var cx = Float64(self.center.x)
+        var cy = Float64(self.center.y)
+        var cz = Float64(self.center.z)
+        # The raw second moments about the frame's origin: m |c|^2 and half
+        # the trace of the central tensor.
+        var raw = Float64(self.mass.value) * (cx * cx + cy * cy + cz * cz)
         _check_second_moments(
             (y + z - x) * 0.5,
             (x + z - y) * 0.5,
@@ -120,6 +134,7 @@ struct SegmentInertia(ImplicitlyCopyable):
             -Float64(self.xy.value),
             -Float64(self.xz.value),
             -Float64(self.yz.value),
+            raw + (x + y + z) * 0.5,
             1e-6,
         )
 
@@ -266,7 +281,15 @@ struct InertiaTally(Copyable, Movable):
         var sxy = self.second[3] - mass * c[0] * c[1]
         var sxz = self.second[4] - mass * c[0] * c[2]
         var syz = self.second[5] - mass * c[1] * c[2]
-        _check_second_moments(sxx, syy, szz, sxy, sxz, syz, 1e-10)
+        var raw = max(
+            abs(self.second[0]), max(abs(self.second[1]), abs(self.second[2]))
+        )
+        _check_second_moments(sxx, syy, szz, sxy, sxz, syz, raw, 1e-10)
+        # The check allows rounding noise just below zero. A central second
+        # moment cannot be negative: a point mass's are exactly zero.
+        sxx = max(sxx, 0.0)
+        syy = max(syy, 0.0)
+        szz = max(szz, 0.0)
         var result = SegmentInertia(
             Mass(Float32(mass), KILOGRAM),
             Vector3(Float32(c[0]), Float32(c[1]), Float32(c[2])),

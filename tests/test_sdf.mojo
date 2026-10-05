@@ -55,6 +55,7 @@ from extensions.sdf.mesher import (
     _mesh_part,
     _number_vertices,
     _sample_band,
+    _share_faces,
     _wake,
     check_cell,
     merge,
@@ -521,6 +522,58 @@ def test_mesh_a_ball() raises:
         workers=0,
     )
     assert_equal(all.vertex_count(), mesh.vertex_count())
+
+
+def _same_mesh(a: SurfaceMesh, b: SurfaceMesh) raises:
+    assert_equal(len(a.positions), len(b.positions))
+    assert_equal(len(a.normals), len(b.normals))
+    assert_equal(len(a.indices), len(b.indices))
+    for i in range(len(a.positions)):
+        assert_equal(a.positions[i], b.positions[i])
+        assert_equal(a.normals[i], b.normals[i])
+    for i in range(len(a.indices)):
+        assert_equal(a.indices[i], b.indices[i])
+
+
+def test_any_worker_count_makes_the_same_mesh() raises:
+    # Blended balls and a carver over many blocks: one, two and all
+    # workers must agree to the bit.
+    var m = SdfModel()
+    _ = m.sphere("a", BoneId(0), V3(-0.3, 0, 0), 0.5, k=0.2)
+    _ = m.sphere("b", BoneId(0), V3(0.35, 0.1, 0), 0.4, k=0.2)
+    _ = m.sphere("c", BoneId(0), V3(0, 0.45, 0), 0.25, k=0.05, carve=True)
+    var parts: List[Int] = [0, 1, 2]
+    var lo = V3(-1, -1, -1)
+    var hi = V3(1, 1, 1)
+    var step = Length(0.05, METER)
+    var one = mesh_part(m, parts, lo, hi, step, block=4, workers=1)
+    assert_true(one.vertex_count() > 500)
+    for workers in [2, 0]:
+        _same_mesh(
+            mesh_part(m, parts, lo, hi, step, block=4, workers=workers), one
+        )
+
+
+def test_shared_edge_points_agree_when_their_owner_is_asleep() raises:
+    # Blocks of two cells, two by two. The edge at gx = gy = 2 belongs to
+    # all four; its floor-division owner, block (1, 1), is not active.
+    var grid = _Grid(Lattice(V3(0, 0, 0), 1.0, 2, 2, 2, 1))
+    var per = 27
+    for b in [1, 2]:  # blocks (1, 0) and (0, 1)
+        grid.slot_of[b] = len(grid.active)
+        grid.active.append(b)
+        for _ in range(per):
+            grid.samples.append(Float32(b))
+    _share_faces(grid)
+    for gz in range(3):
+        var shared = grid.sample(2, 2, gz)
+        var at10 = grid.samples[0 * per + 0 + 3 * (2 + 3 * gz)]
+        var at01 = grid.samples[1 * per + 2 + 3 * (0 + 3 * gz)]
+        assert_equal(at10, at01)
+        assert_equal(at10, shared)
+    # A point only one block holds keeps its own value.
+    assert_equal(grid.sample(3, 0, 0), Float32(1))
+    assert_equal(grid.sample(0, 3, 0), Float32(2))
 
 
 def test_spill_wakes_the_blocks_a_thin_first_pass_misses() raises:

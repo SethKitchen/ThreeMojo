@@ -90,6 +90,22 @@ def test_point_mass_and_empty_tally_contracts() raises:
     assert_equal(point.yy.value, 0.0)
     assert_equal(point.zz.value, 0.0)
     assert_equal(point.gyration(point.xx).value, 0.0)
+    # Off the origin, a point mass's central moments are rounding noise.
+    # They are judged against the raw moments, so every one passes.
+    for m in [Float64(0.3), Float64(2), Float64(75)]:
+        for i in range(-3, 4):
+            for j in range(-3, 4):
+                var p = Vector3(
+                    Float32(0.137 * Float64(i) + 0.011),
+                    Float32(-0.091 * Float64(j) + 0.023),
+                    Float32(0.053 * Float64(i * j) - 0.017),
+                )
+                var single = InertiaTally()
+                single.add_cell(m, p, Vector3(0, 0, 0))
+                var r = single.result(0)
+                var reach = m * Float64(p.dot(p))
+                for value in [r.xx.value, r.yy.value, r.zz.value]:
+                    assert_true(abs(Float64(value)) <= 1e-9 * reach)
 
 
 def test_segment_guard_validates_mutable_si_state_and_extreme_gyration() raises:

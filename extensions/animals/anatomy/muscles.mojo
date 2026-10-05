@@ -28,7 +28,8 @@ length. It does not give the 41.0 and 46.2 mm bone lengths that this
 template uses as denominators. Their source remains untraced. They are
 not the current rat rig's authored 36 and 41 mm limb lengths. The
 fiber-to-bone ratios remain DESIGN: 0.83, 0.28 and 0.48 for the thigh;
-0.34, 0.43 and 0.35 for the shank. `fiber_source` cites the numerator.
+0.34, 0.43 and 0.35 for the shank. `fiber_source` names Eng2008 for the
+numerator, graded DESIGN because the denominator is untraced.
 The rig supplies each individual's segment length. The plan uses the
 rat's nonzero pennation angles; applying them across species is DESIGN.
 Reading a table and reproducing its arithmetic is not an independent
@@ -297,32 +298,32 @@ def _mammal() -> List[MuscleSpec]:
     out.append(_spec("biceps femoris",
         _at("pelvis", "hip{S}", "hip{S}", 0.0, V3(0.0, 0.05, -0.45)),
         _at("tibia{S}", "knee{S}", "hock{S}", 0.25, V3(0.0, 0.0, -0.12)),
-        bf, FROM_TEXT, "Williams2008a", 34.0 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
+        bf, FROM_TEXT, "Williams2008a", 34.0 / 41.0, "femur{S}", DESIGN, "Eng2008",
         3.6, FROM_TEXT, "Eng2008", ["hip{S}", "knee{S}"], ["hamstring", "breeches"]))
     out.append(_spec("rectus femoris",
         _at("pelvis", "hip{S}", "hip{S}", 0.0, V3(0.0, 0.05, 0.15)),
         _at("tibia{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, -0.05, 0.15)),
-        bf * 945.33 / 2670.83, FROM_TEXT, "Eng2008", 11.6 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
+        bf * 945.33 / 2670.83, FROM_TEXT, "Eng2008", 11.6 / 41.0, "femur{S}", DESIGN, "Eng2008",
         25.4, FROM_TEXT, "Eng2008", ["hip{S}", "knee{S}"], ["thighfront"]))
     out.append(_spec("vastus lateralis",
         _at("femur{S}", "hip{S}", "knee{S}", 0.15, V3(0.0, 0.0, 0.10)),
         _at("tibia{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, -0.05, 0.15)),
-        bf * 1288.83 / 2670.83, FROM_TEXT, "Eng2008", 19.6 / 41.0, "femur{S}", FROM_TEXT, "Eng2008",
+        bf * 1288.83 / 2670.83, FROM_TEXT, "Eng2008", 19.6 / 41.0, "femur{S}", DESIGN, "Eng2008",
         10.0, FROM_TEXT, "Eng2008", ["knee{S}"], ["thigh", "thighmuscle"]))
     out.append(_spec("gastrocnemius",
         _at("femur{S}", "knee{S}", "knee{S}", 0.0, V3(0.0, 0.05, -0.10)),
         _at("metatarsus{S}", "hock{S}", "hock{S}", 0.0, V3(0.0, 0.0, -0.25)),
-        bf * 1880.34 / 2670.83, FROM_TEXT, "Eng2008", 15.82 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
+        bf * 1880.34 / 2670.83, FROM_TEXT, "Eng2008", 15.82 / 46.2, "tibia{S}", DESIGN, "Eng2008",
         14.1, FROM_TEXT, "Eng2008", ["knee{S}", "hock{S}"], ["calf", "gaskin"]))
     out.append(_spec("soleus",
         _at("tibia{S}", "knee{S}", "hock{S}", 0.15, V3(0.0, 0.0, -0.08)),
         _at("metatarsus{S}", "hock{S}", "hock{S}", 0.0, V3(0.0, 0.0, -0.25)),
-        bf * 134.67 / 2670.83, FROM_TEXT, "Eng2008", 19.7 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
+        bf * 134.67 / 2670.83, FROM_TEXT, "Eng2008", 19.7 / 46.2, "tibia{S}", DESIGN, "Eng2008",
         3.9, FROM_TEXT, "Eng2008", ["hock{S}"], []))
     out.append(_spec("tibialis anterior",
         _at("tibia{S}", "knee{S}", "hock{S}", 0.15, V3(0.0, 0.0, 0.08)),
         _at("metatarsus{S}", "hock{S}", "mtp{S}", 0.2, V3(0.0, 0.0, 0.06)),
-        bf * 662.17 / 2670.83, FROM_TEXT, "Eng2008", 16.4 / 46.2, "tibia{S}", FROM_TEXT, "Eng2008",
+        bf * 662.17 / 2670.83, FROM_TEXT, "Eng2008", 16.4 / 46.2, "tibia{S}", DESIGN, "Eng2008",
         12.8, FROM_TEXT, "Eng2008", ["hock{S}"], ["shin"]))
     # Fore limb: Williams et al. 2008b, Table 1, p. 375, in g, cm and
     # degrees; the bones are Table 3's.
@@ -510,8 +511,9 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
         t.append(_row("supraspinatus", 206.4, 33.1, 7.9, 18.0, f, g, d, wf))
         t.append(_row("superficial digital flexor", 23.4, 33.1, 1.0, 41.0, f, g, d, wf))
     elif species == HORSE:
-        # Payne et al. 2005, Table 4, p. 561: seven horses of 510 kg
-        # (Table 3). The biceps femoris sums its intermediate (870 g,
+        # Payne et al. 2005, Table 4, p. 561: one pelvic limb each of seven
+        # horses, five of them Thoroughbreds; 510 kg is their mean (Table
+        # 3). The biceps femoris sums its intermediate (870 g,
         # 235 mm, 27), vertebral (6112 g, 258 mm, 37) and caudal (946 g,
         # 245 mm, 39) heads; the gastrocnemius its medial (817 g, 48 mm,
         # 36) and lateral (808 g, 56 mm, 34) heads.

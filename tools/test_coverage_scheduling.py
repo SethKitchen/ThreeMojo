@@ -19,7 +19,7 @@ import coverage_shard
 class CoverageSchedulingTests(unittest.TestCase):
     def test_profile_is_positive_finite_and_complete_for_recorded_suites(self):
         costs = coverage_shard.load_costs(coverage_shard.PROFILE)
-        self.assertEqual(len(costs), 516)
+        self.assertEqual(len(costs), 525)
         self.assertGreater(costs['tests/test_hair_styles.mojo'], 4000)
 
     def test_rejects_invalid_costs_and_duplicate_keys(self):

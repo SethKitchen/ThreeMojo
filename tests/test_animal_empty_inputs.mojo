@@ -63,6 +63,7 @@ from extensions.animals.species.shark import (
 )
 from extensions.animals.species.sheep import _locks, _neck_s
 from extensions.animals.species.snake import _pchip_slopes, _seg2
+from extensions.animals.species.swimmer_rig import fin_outline, fin_ray_coords
 from extensions.animals.species.spider import (
     _Dims,
     _chain,
@@ -202,6 +203,18 @@ def test_a_mane_too_small_for_one_lock_keeps_its_volume() raises:
     assert_true(len(m.prims) > 0)
     for p in m.prims:
         assert_equal(m.tags[p.tag.value], "mane")
+
+
+def _no_fin(rays: List[Float64]) raises:
+    assert_equal(len(fin_outline(rays, 0.001, 0.0)), 0)
+    var c = fin_ray_coords(rays, 0.5, 0.5)
+    assert_equal(c.phase, 0.0)
+    assert_equal(c.along, 0.0)
+
+
+def test_fins_of_fewer_than_two_rays_have_no_outline() raises:
+    _no_fin(List[Float64]())
+    _no_fin([0.0, 0.0, 0.0, 1.0])
 
 
 def test_unsolvable_spider_chains_keep_only_their_base() raises:

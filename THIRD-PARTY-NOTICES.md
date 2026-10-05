@@ -451,7 +451,10 @@ SOFTWARE.
 
 `extensions/animals/` ports procedural-animals' signed distance field
 sculpts, rigs, seeded variation, proportion warps, coat palettes and eye
-specifications. procedural-animals is Copyright (c) 2026 Majid Manzarpour
+specifications. `extensions/sdf/` ports its distance-field primitives and
+smooth unions (`core/sdf/sdf.js`), its surface-nets mesher
+(`core/sdf/mesher.js`) and its sculpt helpers, such as `ellY` and `tube`.
+Both carry this notice. procedural-animals is Copyright (c) 2026 Majid Manzarpour
 and procedural-animals contributors and is distributed under the MIT
 License, reproduced in full below.
 
