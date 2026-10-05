@@ -196,21 +196,26 @@ class CoverageStagingTests(unittest.TestCase):
             extra = Path(directory) / 'classification.mk'
             extra.write_text('classification-test:\n' + ''.join(
                 f'\t@echo {name}=$({name})\n' for name in names))
-            output = subprocess.check_output([
-                'make', '--no-print-directory', '-s', '-f', 'Makefile',
-                '-f', str(extra), 'classification-test',
-            ], cwd=root, text=True)
-        values = dict(line.split('=', 1) for line in output.splitlines())
-        classified = {name: set(values[name].split()) for name in names}
-        for helper in self.TEST_HELPERS:
-            for name in ('HELPER_LIBS', 'DOC_SOURCES', 'COVERAGE_PASSTHROUGH'):
-                self.assertIn(helper, classified[name], name)
-            for name in ('ENTRY_POINTS', 'COVERED'):
-                self.assertNotIn(helper, classified[name], name)
-        # Measured production code stays instrumented, not copied through.
-        self.assertIn('math/vector3.mojo', classified['COVERED'])
-        self.assertTrue(classified['COVERED'].isdisjoint(
-            classified['COVERAGE_PASSTHROUGH']))
+            for inherited in (None, '-- AFFECTED=HEAD'):
+                # CI exports command-line selections through MAKEFLAGS.
+                # This checks canonical classification, not an affected slice.
+                environment = {} if inherited is None else {'MAKEFLAGS': inherited}
+                with self.subTest(makeflags=inherited), patch.dict('os.environ', environment):
+                    output = subprocess.check_output([
+                        'make', '--no-print-directory', '-s', '-f', 'Makefile',
+                        '-f', str(extra), 'classification-test', 'AFFECTED=',
+                    ], cwd=root, text=True)
+                    values = dict(line.split('=', 1) for line in output.splitlines())
+                    classified = {name: set(values[name].split()) for name in names}
+                    for helper in self.TEST_HELPERS:
+                        for name in ('HELPER_LIBS', 'DOC_SOURCES', 'COVERAGE_PASSTHROUGH'):
+                            self.assertIn(helper, classified[name], name)
+                        for name in ('ENTRY_POINTS', 'COVERED'):
+                            self.assertNotIn(helper, classified[name], name)
+                    # Measured production code stays instrumented, not copied through.
+                    self.assertIn('math/vector3.mojo', classified['COVERED'])
+                    self.assertTrue(classified['COVERED'].isdisjoint(
+                        classified['COVERAGE_PASSTHROUGH']))
 
     def test_import_only_helpers_are_copied_beside_their_suites(self):
         import subprocess
