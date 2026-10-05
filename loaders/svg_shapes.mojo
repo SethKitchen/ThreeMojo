@@ -52,7 +52,7 @@ from loaders.svg_path import (
     same_point,
 )
 from math.path import Shape
-from std.math import acos, cos, floor, isfinite, log10, pi, sin, sqrt
+from std.math import fma, acos, cos, floor, isfinite, log10, pi, sin, sqrt
 
 
 # three.js's `BIGNUMBER`.
@@ -768,7 +768,8 @@ def _normalize(v: SvgVector) -> SvgVector:
     """Return a vector of length one, three.js's `normalize`: it divides by
     the length, or by one for a zero vector, as a multiply by the
     reciprocal."""
-    var squared = v[0] * v[0] + v[1] * v[1]
+    # Retain JavaScript's separate product roundings at semicircle caps.
+    var squared = fma(v[0], v[0], Float64(0)) + fma(v[1], v[1], Float64(0))
     if _ordinary_squared(squared) or squared != squared:
         return v * (1 / sqrt(squared))
     var unit = normalized2(v[0], v[1])
@@ -777,7 +778,7 @@ def _normalize(v: SvgVector) -> SvgVector:
 
 def _dot(a: SvgVector, b: SvgVector) -> Float64:
     """Return the dot product."""
-    return a[0] * b[0] + a[1] * b[1]
+    return fma(a[0], b[0], Float64(0)) + fma(a[1], b[1], Float64(0))
 
 
 def _normal(p1: SvgVector, p2: SvgVector) -> SvgVector:
