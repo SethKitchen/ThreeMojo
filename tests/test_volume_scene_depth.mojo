@@ -861,5 +861,64 @@ def test_resize_viewport_and_supersampling_use_current_raster_dimensions() raise
     _expect_pixel(target.resolve().get_pixel(MID, MID), 0.4)
 
 
+def test_depth_capture_checks_height_and_unrepresentable_reconstruction() raises:
+    var target = RenderTarget(2, 1, BLACK)
+    var captured = TransmissionTarget(target, Matrix4())
+    captured.capture_volume_depth(target, Matrix4(), Length(10, METER))
+    var wrong_height = RenderTarget(2, 2, BLACK)
+    with assert_raises(contains="match the captured image"):
+        captured.capture_volume_depth(
+            wrong_height, Matrix4(), Length(10, METER)
+        )
+    with assert_raises(contains="raster target size"):
+        captured.check_volume_depth(True, 2, 2)
+    # The finite invertible z scale has an inverse outside Float32. The
+    # snapshot must refuse that reconstruction and retain its old data.
+    var extreme = Matrix4()
+    extreme.elements[10] = Float32(1e-39)
+    target.depth[0] = 1
+    with assert_raises(contains="reconstruct a finite distance"):
+        captured.capture_volume_depth(target, extreme, Length(10, METER))
+    assert_equal(captured.volume_depth_at(0, 0).value, Float32(10))
+    assert_equal(captured.volume_depth_at(1, 0).value, Float32(10))
+
+
+def test_nonvolume_triangle_cannot_request_volume_depth() raises:
+    var assets = Assets()
+    var scene = _scene(assets, volume_node_material(scene_depth=True))
+    var corners = Renderer(SIZE, SIZE).prepare(scene, assets, _camera())
+    var index = 0
+    while not corners[index].volume_scene_depth:
+        index += 3
+    var a = corners[index]
+    var b = corners[index + 1]
+    var c = corners[index + 2]
+    a.kind = BASIC
+    b.kind = BASIC
+    c.kind = BASIC
+    with assert_raises(contains="Only a VOLUME triangle"):
+        check_triangle_state(a, b, c)
+
+
+def test_filtered_uv_view_does_not_request_a_volume_depth_snapshot() raises:
+    var assets = Assets()
+    var scene = _scene(assets, volume_node_material(steps=5, scene_depth=True))
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.draw_filter = ONE_OIT_DRAW
+    renderer.oit_draw = 0
+    renderer.set_shading(SHADE_UV)
+    var requested = renderer.render(scene, assets, _camera())
+    assets.materials.materials[0].set_volume_scene_depth(False)
+    var ordinary = renderer.render(scene, assets, _camera())
+    for y in range(SIZE):
+        for x in range(SIZE):
+            var got = requested.get_pixel(x, y)
+            var expected = ordinary.get_pixel(x, y)
+            assert_equal(got.r, expected.r)
+            assert_equal(got.g, expected.g)
+            assert_equal(got.b, expected.b)
+            assert_equal(got.a, expected.a)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
