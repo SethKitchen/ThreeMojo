@@ -29,7 +29,16 @@ from extensions.numerics.dense import (
     solve_tridiagonal,
     symmetric_eigen,
 )
-from extensions.numerics.eigen import count_eigenvalues_below, lowest_modes
+from extensions.numerics.eigen import (
+    Modes,
+    _check_sturm_pivot,
+    _checked_schur_value,
+    _independent_mass_norm,
+    _pivoted_inertia,
+    _verify_sturm,
+    count_eigenvalues_below,
+    lowest_modes,
+)
 from extensions.numerics.iterative import (
     BUDGET_EXHAUSTED,
     CONVERGED,
@@ -83,6 +92,21 @@ def _scrambled_path(n: Int) raises -> CsrMatrix:
             b.add(label[i], label[i + 1], -1)
             b.add(label[i + 1], label[i], -1)
     return b.build()
+
+
+def _check_modes(k: CsrMatrix, m: CsrMatrix, modes: Modes) raises:
+    """Check every residual and every entry of the mass Gram matrix."""
+    for c in range(len(modes.values)):
+        var kphi = k.multiply(modes.vectors[c])
+        var mphi = m.multiply(modes.vectors[c])
+        for i in range(k.size):
+            assert_almost_equal(kphi[i], modes.values[c] * mphi[i], atol=1e-8)
+        for other in range(len(modes.values)):
+            assert_almost_equal(
+                dot(modes.vectors[other], mphi),
+                1.0 if other == c else 0.0,
+                atol=1e-10,
+            )
 
 
 # --- vectors -----------------------------------------------------------------
@@ -263,6 +287,56 @@ def test_symmetric_eigen_of_the_second_difference() raises:
     var sorted = symmetric_eigen(d)
     assert_equal(sorted.values[0], 1)
     assert_equal(sorted.vectors.get(1, 0), 1)
+
+
+def test_symmetric_eigen_preserves_extreme_finite_scales() raises:
+    var scales: List[Float64] = [1e200, 1e-200, 1e-310]
+    for scale in scales:
+        var a = DenseMatrix(2, 2)
+        a.set(0, 0, 2 * scale)
+        a.set(1, 1, 2 * scale)
+        a.set(0, 1, scale)
+        a.set(1, 0, scale)
+        var pairs = symmetric_eigen(a)
+        assert_almost_equal(pairs.values[0] / scale, 1, atol=1e-12)
+        assert_almost_equal(pairs.values[1] / scale, 3, atol=1e-12)
+        for c in range(2):
+            var norm_squared = Float64(0)
+            for i in range(2):
+                var left = Float64(0)
+                for j in range(2):
+                    left += (a.get(i, j) / scale) * pairs.vectors.get(j, c)
+                assert_almost_equal(
+                    left,
+                    (pairs.values[c] / scale) * pairs.vectors.get(i, c),
+                    atol=1e-12,
+                )
+                norm_squared += pairs.vectors.get(i, c) ** 2
+            assert_almost_equal(norm_squared, 1, atol=1e-14)
+        assert_almost_equal(
+            pairs.vectors.get(0, 0) * pairs.vectors.get(0, 1)
+            + pairs.vectors.get(1, 0) * pairs.vectors.get(1, 1),
+            0,
+            atol=1e-14,
+        )
+    # Both the diagonal difference and twice the off-diagonal used to
+    # overflow, although these eigenvalues are representable.
+    var extreme = DenseMatrix(2, 2)
+    extreme.set(0, 0, -9e307)
+    extreme.set(1, 1, 9e307)
+    extreme.set(0, 1, 9e307)
+    extreme.set(1, 0, 9e307)
+    var pairs = symmetric_eigen(extreme)
+    assert_almost_equal(pairs.values[0] / 9e307, -sqrt(2.0), atol=1e-14)
+    assert_almost_equal(pairs.values[1] / 9e307, sqrt(2.0), atol=1e-14)
+    var zero = symmetric_eigen(DenseMatrix(2, 2))
+    assert_equal(zero.values[0], 0)
+    assert_equal(zero.values[1], 0)
+    var overflow = DenseMatrix(2, 2)
+    for i in range(4):
+        overflow.data[i] = 1e308
+    with assert_raises(contains="finite"):
+        _ = symmetric_eigen(overflow)
 
 
 def test_symmetric_eigen_refuses() raises:
@@ -481,6 +555,49 @@ def test_skyline_matches_the_dense_solution() raises:
         _ = factor.solve(short)
 
 
+def test_skyline_profile_uses_the_reordered_upper_triangle() raises:
+    # Store exactly the upper entries after each permutation. The mirrored
+    # system has diagonals 4 and edges 0-1, 1-2, each of weight 1.
+    for reordered in range(2):
+        var order: List[Int] = [0, 1, 2]
+        if reordered == 1:
+            order[0] = 2
+            order[1] = 0
+            order[2] = 1
+        for full in range(2):
+            var b = SparseBuilder(3)
+            for i in range(3):
+                b.add(order[i], order[i], 4)
+            b.add(order[0], order[1], 1)
+            b.add(order[1], order[2], 1)
+            if full == 1:
+                b.add(order[1], order[0], 1)
+                b.add(order[2], order[1], 1)
+            var a = b.build()
+            assert_equal(profile(a, order), 5)
+            var factor = SkylineFactor(a, order.copy())
+            assert_equal(len(factor.data), 5)
+            var rhs = zeros(3)
+            rhs[order[0]] = 5
+            rhs[order[1]] = 6
+            rhs[order[2]] = 5
+            var solution = factor.solve(rhs)
+            for i in range(3):
+                assert_almost_equal(solution[i], 1, atol=1e-14)
+    # Lower-only entries do not widen the profile or enter the factor.
+    var lower = SparseBuilder(2)
+    lower.add(0, 0, 2)
+    lower.add(1, 1, 2)
+    lower.add(1, 0, 9)
+    var lower_matrix = lower.build()
+    assert_equal(profile(lower_matrix, identity_order(2)), 2)
+    var diagonal = SkylineFactor(lower_matrix, identity_order(2))
+    var rhs: List[Float64] = [2, 2]
+    var answer = diagonal.solve(rhs)
+    assert_equal(answer[0], 1)
+    assert_equal(answer[1], 1)
+
+
 def test_skyline_counts_negative_pivots() raises:
     # Eigenvalues 1 and -1, so one negative pivot.
     var b = SparseBuilder(2)
@@ -542,6 +659,145 @@ def test_lowest_modes_of_a_small_problem_uses_every_vector() raises:
     var modes = lowest_modes(k, m, 3, 1e-12, 20)
     assert_almost_equal(modes.values[0], 2 - sqrt(2.0), atol=1e-12)
     assert_almost_equal(modes.values[2], 2 + sqrt(2.0), atol=1e-12)
+
+
+def test_inertia_refusal_helpers_and_empty_rows() raises:
+    assert_equal(_pivoted_inertia(SparseBuilder(0).build()), 0)
+    with assert_raises(contains="singular"):
+        _ = _pivoted_inertia(SparseBuilder(2).build())
+    var row = SparseBuilder(2)
+    row.add(1, 1, 1)
+    with assert_raises(contains="singular"):
+        _ = _pivoted_inertia(row.build())
+    var invalid = _identity_sparse(1)
+    invalid.values[0] = nan[DType.float64]()
+    with assert_raises(contains="finite entries"):
+        _ = _pivoted_inertia(invalid)
+    assert_equal(_checked_schur_value(2), 2)
+    with assert_raises(contains="finite arithmetic"):
+        _ = _checked_schur_value(inf[DType.float64]())
+    with assert_raises(contains="finite arithmetic"):
+        _ = _checked_schur_value(nan[DType.float64]())
+    _check_sturm_pivot(1)
+    _check_sturm_pivot(-1)
+    with assert_raises(contains="singular"):
+        _check_sturm_pivot(1e-15)
+    # The pivot boundary is inclusive, for both signs.
+    with assert_raises(contains="singular"):
+        _check_sturm_pivot(1e-14)
+    with assert_raises(contains="singular"):
+        _check_sturm_pivot(-1e-14)
+    _check_sturm_pivot(1.0001e-14)
+    _check_sturm_pivot(-1.0001e-14)
+    assert_true(_independent_mass_norm(1, 1))
+    assert_false(_independent_mass_norm(nan[DType.float64](), 1))
+    assert_false(_independent_mass_norm(1, nan[DType.float64]()))
+    assert_false(_independent_mass_norm(1, 0))
+    assert_false(_independent_mass_norm(1, 1e-9))
+    # Independence requires a strict increase above the relative bound.
+    assert_false(_independent_mass_norm(1, 1e-8))
+    assert_true(_independent_mass_norm(1, 1.0001e-8))
+
+
+def test_sturm_verification_checks_incorrect_candidate_values() raises:
+    var identity = _identity_sparse(3)
+    _verify_sturm(identity, identity, [1.0, 1.0, 1.0], 2)
+    var modes = lowest_modes(identity, identity, 2, 1e-12, 20)
+    _check_modes(identity, identity, modes)
+    # A purported value below the actual spectrum must fail the upper
+    # count, independently of the lower-count refusal.
+    with assert_raises(contains="missed eigenvalue"):
+        _verify_sturm(identity, identity, [0.0, 1.0, 1.0], 1)
+    # An unwanted Ritz value can put the first attempted shift exactly on
+    # another true eigenvalue. The requested first value is still valid.
+    var diagonal = SparseBuilder(4)
+    diagonal.add(0, 0, 1)
+    diagonal.add(1, 1, 3)
+    diagonal.add(2, 2, 5)
+    diagonal.add(3, 3, 7)
+    _verify_sturm(diagonal.build(), _identity_sparse(4), [1.0, 5.0, 5.0], 1)
+
+
+def test_sturm_count_pivots_a_nonsingular_indefinite_shift() raises:
+    var b = SparseBuilder(2)
+    b.add(0, 0, 2)
+    b.add(1, 1, 2)
+    b.add(0, 1, 1)
+    b.add(1, 0, 1)
+    var k = b.build()
+    var m = _identity_sparse(2)
+    assert_equal(count_eigenvalues_below(k, m, 2), 1)
+    assert_equal(count_eigenvalues_below(k, m, 0), 0)
+    assert_equal(count_eigenvalues_below(k, m, 4), 2)
+    with assert_raises(contains="singular"):
+        _ = count_eigenvalues_below(k, m, 1)
+    with assert_raises(contains="finite"):
+        _ = count_eigenvalues_below(k, m, inf[DType.float64]())
+    var modes = lowest_modes(k, m, 1, 1e-12, 20)
+    assert_almost_equal(modes.values[0], 1, atol=1e-12)
+    _check_modes(k, m, modes)
+    # Multiple blocks, symmetric swaps and nontrivial Schur updates.
+    var chain = _second_difference(7)
+    var mass = _identity_sparse(7)
+    for count in range(1, 7):
+        var lower = 2 - 2 * cos(Float64(count) * pi / 8)
+        var upper = 2 - 2 * cos(Float64(count + 1) * pi / 8)
+        assert_equal(
+            count_eigenvalues_below(chain, mass, 0.5 * (lower + upper)), count
+        )
+
+
+def test_lowest_modes_can_end_inside_a_repeated_cluster() raises:
+    var identity = _identity_sparse(2)
+    var first = lowest_modes(identity, identity, 1, 1e-12, 20)
+    assert_almost_equal(first.values[0], 1, atol=1e-12)
+    _check_modes(identity, identity, first)
+    # q = 9: the represented cluster reaches the edge of the trial space,
+    # but its actual multiplicity is 12. No shift has a count of 1 or 9.
+    var larger = _identity_sparse(12)
+    var partial = lowest_modes(larger, larger, 1, 1e-12, 20)
+    assert_almost_equal(partial.values[0], 1, atol=1e-12)
+    _check_modes(larger, larger, partial)
+    # A separate high-stiffness block must not make the narrow cluster
+    # shifts look singular merely because the global matrix scale is high.
+    var split_builder = SparseBuilder(12)
+    for i in range(12):
+        split_builder.add(i, i, 100.0 if i < 2 else 1.0)
+    var split = split_builder.build()
+    var split_modes = lowest_modes(split, larger, 1, 1e-12, 20)
+    assert_almost_equal(split_modes.values[0], 1, atol=1e-12)
+    _check_modes(split, larger, split_modes)
+    # Two identical spring chains give each structural mode twice.
+    var b = SparseBuilder(16)
+    for block in range(2):
+        for i in range(8):
+            var row = block * 8 + i
+            b.add(row, row, 2)
+            if i + 1 < 8:
+                b.add(row, row + 1, -1)
+                b.add(row + 1, row, -1)
+    var k = b.build()
+    var m = _identity_sparse(16)
+    var modes = lowest_modes(k, m, 3, 1e-12, 80)
+    for c in range(3):
+        var expected = 2 - 2 * cos(Float64(c // 2 + 1) * pi / 9)
+        assert_almost_equal(modes.values[c], expected, atol=1e-10)
+    _check_modes(k, m, modes)
+
+
+def test_lowest_modes_refuses_mass_without_a_positive_basis() raises:
+    var k = _identity_sparse(2)
+    with assert_raises(contains="positive definite"):
+        _ = lowest_modes(k, SparseBuilder(2).build(), 1, 1e-8, 2)
+    var partial = SparseBuilder(2)
+    partial.add(0, 0, 1)
+    with assert_raises(contains="positive definite"):
+        _ = lowest_modes(k, partial.build(), 1, 1e-8, 2)
+    var negative = SparseBuilder(2)
+    negative.add(0, 0, -1)
+    negative.add(1, 1, -1)
+    with assert_raises(contains="positive definite"):
+        _ = lowest_modes(k, negative.build(), 1, 1e-8, 2)
 
 
 def test_lowest_modes_refuses() raises:
@@ -750,6 +1006,22 @@ def test_sturm_check_catches_a_missed_mode() raises:
         kb.add(i, i, 10 + Float64(i))
     with assert_raises(contains="Sturm"):
         _ = lowest_modes(kb.build(), _identity_sparse(n), 1, 1e-10, 40)
+
+
+def test_sturm_cluster_check_catches_a_missed_lower_mode() raises:
+    # As in the distinct-mode witness, (1, -1) on the first block is
+    # absent from the starting span. The visible lowest modes now repeat.
+    var missing: List[Float64] = [0.5, 1 - 1e-10]
+    for value in missing:
+        var b = SparseBuilder(12)
+        b.add(0, 0, 100)
+        b.add(1, 1, 100)
+        b.add(0, 1, 100 - value)
+        b.add(1, 0, 100 - value)
+        for i in range(2, 12):
+            b.add(i, i, 1)
+        with assert_raises(contains="Sturm"):
+            _ = lowest_modes(b.build(), _identity_sparse(12), 1, 1e-10, 40)
 
 
 def test_lowest_modes_with_one_huge_mass() raises:
