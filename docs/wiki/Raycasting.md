@@ -185,6 +185,10 @@ tracks retained predicate and hit-point differences from exact stored-input orac
 [Issue #550](https://github.com/SethKitchen/ThreeMojo/issues/550) records the
 throughput work and its measured limits.
 
+Unprepared box queries classify finite and nonzero components from their stored bits.
+This avoids wide regularity sums without changing slab or point arithmetic.
+The [throughput report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ray-query-550.md) records the complete baseline/candidate matrix and pending aggregate checks.
+
 ## Sphere hit-point filter
 
 Sphere hit-point queries first use a wide quadratic filter. It uses the
