@@ -356,8 +356,10 @@ def _stored_face_normal(vertices: List[Vec]) -> Vec:
     # The loader deliberately retains malformed and unrepresentable corners.
     # Their Float32 output positions are nonfinite; keep three.js's normal
     # arithmetic there instead of giving invalid geometry a finite direction.
-    for vertex in vertices:
-        for lane in range(3):
+    # LDrawFace requires three or four corners.
+    for vertex in vertices:  # pragma: no branch
+        # Every stored position has three spatial components.
+        for lane in range(3):  # pragma: no branch
             if not isfinite(Float32(vertex[lane])):
                 var cross = _cross(
                     vertices[1] - vertices[0], vertices[2] - vertices[1]
