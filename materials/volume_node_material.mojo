@@ -15,7 +15,10 @@ graph's `OFFSET_NODE` moves its start by that share of one step, which
 breaks up the bands.
 
 At each step the point and spot lights add their color, times their
-shadow twice, to the density: `Lighting.volume_light_at`. The graph's
+shadow twice, to the density: `Lighting.volume_light_at`. Rectangles add
+the camera-space volume LTC term, raised to the power 1.5 per channel.
+An explicit opaque-scene depth input gates each original ray sample.
+The graph's
 `SCATTERING_NODE` multiplies the density; its `position_world` node reads
 the step's position, as three.js's context hands `positionRay` to
 `scatteringNode`. Beer's law then thins what the ray lets through by
@@ -24,6 +27,17 @@ through, and the material's alpha.
 
 Both rasterizers call `volumetric_light` with their own `RayLights`: the
 host's `LitRay` over a `Lighting`, and the kernel's over its light buffer.
+
+**Differences from r186.** The outgoing result remains one minus
+transmittance; r186 accumulates outgoing light and ray emission separately.
+Depth compares signed camera-axis distances on both projections. This
+corrects r186's orthographic mixed-space gate: with near=1, far=9, a sample
+at distance 2 is before an opaque surface at 3, but r186 compares the
+sample's perspective depth 0.5625 with orthographic scene depth 0.25 and
+rejects it. Our gate admits that sample, as axial ordering requires.
+The reversed-perspective path has the inverse error: for the same planes,
+forward sample depth 0.75 at distance 3 decodes as distance 9/7, so r186
+admits it through a surface at distance 2. The axial gate rejects it.
 """
 
 from lights.lighting import Lighting
@@ -43,7 +57,8 @@ from materials.nodes import (
 )
 from math.vector3 import Vector3
 from render.framebuffer import Color
-from std.math import exp, max, min
+from std.math import exp, inf, max, min
+from units.si import Length, METER
 
 
 # three.js's Beer's law constant: `scatteringDensity.mul( .01 )`.
@@ -130,9 +145,14 @@ def volumetric_light[
     radius: Float32,
     steps: Int,
     offset: Float32,
+    scene_depth: Length = Length(inf[DType.float32](), METER),
+    view_back: Vector3 = Vector3(0, 0, 1),
 ) -> Vector3:
     """Return the light a volume's ray gathers for one fragment: three.js's
-    `VolumetricLightingModel.start`, then `finish`.
+    depth gate and light inputs from r186's `VolumetricLightingModel`.
+
+    The outgoing result remains one minus transmittance. It does not
+    implement r186's separate outgoing-light accumulation or ray emission.
 
     Args:
         lights: The lights the ray reads at each step.
@@ -148,6 +168,11 @@ def volumetric_light[
         steps: How many steps the ray takes, from one.
         offset: The share of a step the ray starts at: the graph's
             `OFFSET_NODE`, or zero.
+        scene_depth: The opaque scene's signed camera-axis distance at
+            this raster sample. Infinity means no depth input. Each step
+            at or before this distance contributes, including equality.
+            The gate does not move or resize the ray's steps.
+        view_back: The camera's unit world-space backward axis.
 
     Returns:
         One minus what the ray lets through, per channel, linear: the
@@ -169,6 +194,11 @@ def volumetric_light[
     var given = inputs
     for _ in range(steps):
         var at = start + direction * travelled
+        # r186 gates scattering at each original sample. It does not
+        # truncate the ray and redistribute its steps, or clip at near.
+        if (eye - at).dot(view_back) > scene_depth.value:
+            travelled += step
+            continue
         var density = lights.light_at(at)
         if scattered:
             given.position = at
@@ -188,6 +218,7 @@ def volume_node_material(
     steps: Int = DEFAULT_STEPS,
     nodes: NodeProgramId = NO_NODES,
     opacity: Float32 = 1.0,
+    scene_depth: Bool = False,
 ) raises -> Material:
     """Return three.js's `VolumeNodeMaterial` at its defaults: a `VOLUME`
     surface drawn from its back faces, blended, with no depth test and no
@@ -200,6 +231,8 @@ def volume_node_material(
         nodes: The graph with the `SCATTERING_NODE` and the `OFFSET_NODE`,
             or `NO_NODES`.
         opacity: The alpha, from zero to one.
+        scene_depth: Capture opaque scene depth before any volume and gate
+            scattering against it. False preserves the ungated ray.
 
     Returns:
         The material.
@@ -219,4 +252,5 @@ def volume_node_material(
     material.depth_test = False
     material.depth_write = False
     material.set_steps(steps)
+    material.set_volume_scene_depth(scene_depth)
     return material
