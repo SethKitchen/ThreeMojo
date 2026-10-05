@@ -39,7 +39,8 @@ from units.si import Length, FOOT, Duration, Angle, DEGREE
 
 
 def _count(scene: Scene, assets: Assets) raises -> Int:
-    """Count actual triangles across all body, hand, face, mouth, hair and eyes."""
+    """Count actual triangles across all body, hand, face, mouth, hair and eyes.
+    """
     var total = 0
     for i in range(len(scene.meshes)):
         total += assets.geometries.get(
