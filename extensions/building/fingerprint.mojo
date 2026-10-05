@@ -84,14 +84,22 @@ def fingerprint(building: Building) -> UInt64:
         The 64-bit FNV-1a hash of its content.
     """
     var h = Fingerprint()
+    h.add_text("ThreeMojo Building fingerprint v2")
     h.add_text(building.name)
+    h.add_float(building.site.latitude.value)
+    h.add_float(building.site.longitude.value)
+    h.add_float(building.site.elevation.value)
+    h.add_float(building.site.north.value)
     h.add_int(len(building.storeys))
     for i in range(len(building.storeys)):
+        h.add_text(building.storeys[i].name)
         h.add_float(building.storeys[i].elevation.value)
         h.add_float(building.storeys[i].height.value)
     h.add_int(len(building.spaces))
     for i in range(len(building.spaces)):
         ref space = building.spaces[i]
+        h.add_text(space.name)
+        h.add_int(space.cell.value)
         h.add_int(space.use.value)
         h.add_int(space.storey.value)
         h.add_int(len(space.outline))
@@ -101,14 +109,19 @@ def fingerprint(building: Building) -> UInt64:
     h.add_int(len(building.elements))
     for i in range(len(building.elements)):
         ref element = building.elements[i]
+        h.add_text(element.name)
+        h.add_int(element.storey.value)
         h.add_int(element.kind.value)
         h.add_int(len(element.faces))
         for k in range(len(element.faces)):
             h.add_int(element.faces[k].value)
+        h.add_int(1 if element.construction else 0)
         h.add_int(
             element.construction.value().value if element.construction else -1
         )
+        h.add_int(1 if element.material else 0)
         h.add_int(element.material.value().value if element.material else -1)
+        h.add_int(1 if element.section else 0)
         if element.section:
             var s = element.section.value()
             h.add_int(s.shape.value)
@@ -125,15 +138,23 @@ def fingerprint(building: Building) -> UInt64:
     h.add_int(len(building.openings))
     for i in range(len(building.openings)):
         ref opening = building.openings[i]
+        h.add_text(opening.name)
         h.add_int(opening.kind.value)
         h.add_int(opening.host.value)
         h.add_float(opening.offset.value)
         h.add_float(opening.sill.value)
         h.add_float(opening.width.value)
         h.add_float(opening.height.value)
+        h.add_int(1 if opening.glazing else 0)
+        if opening.glazing:
+            var glazing = opening.glazing.value()
+            h.add_float(glazing.u_value.value)
+            h.add_float(glazing.solar_heat_gain)
+            h.add_float(glazing.visible_transmittance)
     h.add_int(len(building.furnishings))
     for i in range(len(building.furnishings)):
         ref item = building.furnishings[i]
+        h.add_text(item.name)
         h.add_int(item.kind.value)
         h.add_int(item.space.value)
         h.add_float(item.center.x)
@@ -150,11 +171,69 @@ def fingerprint(building: Building) -> UInt64:
         h.add_float(m.elastic_modulus.value)
         h.add_float(m.conductivity.value)
         h.add_float(m.specific_heat.value)
+        h.add_float(m.poisson_ratio)
+        h.add_float(m.strength.value)
+        h.add_float(m.thermal_expansion.value)
+        h.add_float(Float64(m.look.red))
+        h.add_float(Float64(m.look.green))
+        h.add_float(Float64(m.look.blue))
+        h.add_float(Float64(m.look.roughness))
+        h.add_float(Float64(m.look.metalness))
+        h.add_float(Float64(m.look.transmission))
     h.add_int(len(building.constructions))
     for i in range(len(building.constructions)):
         ref c = building.constructions[i]
         h.add_text(c.name)
+        h.add_int(len(c.layers))
         for k in range(len(c.layers)):
             h.add_int(c.layers[k].material.value)
             h.add_float(c.layers[k].thickness.value)
+    # These public arrays are also read by views. Hash the geometry and
+    # the maps, not its private caches or assembly weld tolerance. The
+    # tolerance controls future input merging, not this model's content.
+    ref topology = building.topology
+    ref complex = topology.complex
+    h.add_int(len(complex.welder.points))
+    for i in range(len(complex.welder.points)):
+        var point = complex.welder.points[i]
+        h.add_float(point.x)
+        h.add_float(point.y)
+        h.add_float(point.z)
+    h.add_int(len(complex.faces))
+    for i in range(len(complex.faces)):
+        ref face = complex.faces[i]
+        h.add_int(face.kind.value)
+        h.add_int(1 if face.positive else 0)
+        h.add_int(face.positive.value().value if face.positive else -1)
+        h.add_int(1 if face.negative else 0)
+        h.add_int(face.negative.value().value if face.negative else -1)
+        h.add_int(len(face.loop))
+        for k in range(len(face.loop)):
+            h.add_int(face.loop[k].value)
+    h.add_int(len(complex.edges))
+    for i in range(len(complex.edges)):
+        h.add_int(complex.edges[i].a.value)
+        h.add_int(complex.edges[i].b.value)
+    h.add_int(len(complex.cell_faces))
+    for i in range(len(complex.cell_faces)):
+        h.add_int(len(complex.cell_faces[i]))
+        for k in range(len(complex.cell_faces[i])):
+            h.add_int(complex.cell_faces[i][k].value)
+    h.add_int(len(complex.edge_faces))
+    for i in range(len(complex.edge_faces)):
+        h.add_int(len(complex.edge_faces[i]))
+        for k in range(len(complex.edge_faces[i])):
+            h.add_int(complex.edge_faces[i][k].value)
+    h.add_int(len(topology.cell_storey))
+    for i in range(len(topology.cell_storey)):
+        h.add_int(topology.cell_storey[i])
+    h.add_int(len(topology.cell_region))
+    for i in range(len(topology.cell_region)):
+        h.add_int(topology.cell_region[i].value)
+    h.add_int(len(topology.face_level))
+    for i in range(len(topology.face_level)):
+        h.add_int(topology.face_level[i])
+    h.add_int(len(building.face_element))
+    for i in range(len(building.face_element)):
+        h.add_int(building.face_element[i])
     return h.value
