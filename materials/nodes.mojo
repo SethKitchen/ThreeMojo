@@ -241,56 +241,32 @@ struct ValueType(Equatable, ImplicitlyCopyable, Writable):
     def is_unsigned(self) -> Bool:
         """Return whether this type stores exact UInt32 lanes.
 
-        Args:
-            self: The type to inspect.
-
         Returns:
             True for `NODE_UINT` and the unsigned vectors.
-
-        Raises:
-            None.
         """
         return self.value >= 41 and self.value <= 44
 
     def is_signed(self) -> Bool:
         """Return whether this type stores exact Int32 lanes.
 
-        Args:
-            self: The type to inspect.
-
         Returns:
             True for `NODE_INT` and the exact signed vectors.
-
-        Raises:
-            None.
         """
         return self.value >= 45 and self.value <= 48
 
     def is_integer(self) -> Bool:
         """Return whether this type stores exact integer lanes.
 
-        Args:
-            self: The type to inspect.
-
         Returns:
             True for exact unsigned or signed scalars and vectors.
-
-        Raises:
-            None.
         """
         return self.is_unsigned() or self.is_signed()
 
     def width(self) -> Int:
         """Return the component count, without an integer type tag.
 
-        Args:
-            self: The type to inspect.
-
         Returns:
             One through four for register types, otherwise the type value.
-
-        Raises:
-            None.
         """
         if self.is_unsigned():
             return self.value - 40
@@ -1284,9 +1260,6 @@ struct NodeGraph(Copyable, Movable):
 
         Returns:
             The node, retaining every bit.
-
-        Raises:
-            None.
         """
         return self._add(
             NODE_CONSTANT,
@@ -1302,9 +1275,6 @@ struct NodeGraph(Copyable, Movable):
 
         Returns:
             The node, with all 32 bits of each component.
-
-        Raises:
-            None.
         """
         return self._add(
             NODE_CONSTANT,
@@ -1321,9 +1291,6 @@ struct NodeGraph(Copyable, Movable):
 
         Returns:
             The node, with all 32 bits of each component.
-
-        Raises:
-            None.
         """
         return self._add(
             NODE_CONSTANT,
@@ -1343,9 +1310,6 @@ struct NodeGraph(Copyable, Movable):
 
         Returns:
             The node, with all 32 bits of each component.
-
-        Raises:
-            None.
         """
         return self._add(
             NODE_CONSTANT,
@@ -1369,9 +1333,6 @@ struct NodeGraph(Copyable, Movable):
 
         Returns:
             The node, with all 32 bits of each component.
-
-        Raises:
-            None.
         """
         return self._add(
             NODE_CONSTANT,
@@ -1529,10 +1490,10 @@ struct NodeGraph(Copyable, Movable):
             Error: If the width is outside one through four, or the name
                 is empty or already used.
         """
-        if width < 1 or width > 4:
+        if width > 4:
             raise Error("An unsigned uniform has one to four components")
         var lanes = Lanes(0)
-        for lane in range(width):
+        for lane in range(width):  # pragma: no branch
             lanes[lane] = bitcast[DType.float32](value[lane])
         return self._uniform(name, ValueType(40 + width), lanes)
 
@@ -2314,7 +2275,7 @@ struct NodeGraph(Copyable, Movable):
         if self._types[gradient.value] != NODE_VEC2:
             raise Error("A texture gradient must be a vec2")
         var order = self._order(gradient.value)
-        for index in range(len(order)):
+        for index in range(len(order)):  # pragma: no branch
             var kind = self._kinds[order[index]]
             if (
                 kind == NODE_UNIFORM
@@ -6366,9 +6327,6 @@ struct NodeProgram(Copyable, Movable):
             name: The uniform's name.
             value: The unsigned value, retaining all bits.
 
-        Returns:
-            None.
-
         Raises:
             Error: If the name or the declared type is invalid.
         """
@@ -6382,9 +6340,6 @@ struct NodeProgram(Copyable, Movable):
         Args:
             name: The uniform's name.
             value: The unsigned value, retaining all bits.
-
-        Returns:
-            None.
 
         Raises:
             Error: If the name or the declared type is invalid.
@@ -6404,9 +6359,6 @@ struct NodeProgram(Copyable, Movable):
             x: The first unsigned component.
             y: The second unsigned component.
             z: The third unsigned component.
-
-        Returns:
-            None.
 
         Raises:
             Error: If the name or the declared type is invalid.
@@ -6431,9 +6383,6 @@ struct NodeProgram(Copyable, Movable):
             name: The uniform's name.
             value: The unsigned value, retaining all bits.
 
-        Returns:
-            None.
-
         Raises:
             Error: If the name or the declared type is invalid.
         """
@@ -6451,10 +6400,10 @@ struct NodeProgram(Copyable, Movable):
         Raises:
             Error: If the name, width, or unsigned type does not match.
         """
-        if width < 1 or width > 4:
+        if width > 4:
             raise Error("An unsigned uniform has one to four components")
         var lanes = Lanes(0)
-        for lane in range(width):
+        for lane in range(width):  # pragma: no branch
             lanes[lane] = bitcast[DType.float32](value[lane])
         self._set(name, ValueType(40 + width), lanes)
 
@@ -6883,7 +6832,8 @@ trait NodeSource:
         """Read with explicit gradients, using isotropic filtering by default.
 
         Texture stores override this method to honor their anisotropy.
-        The interpreter rejects nonfinite inputs before calling it.
+        The interpreter checks inputs before this call, rejecting nonfinite
+        values.
 
         Args:
             slot: The texture's id.
@@ -6894,9 +6844,6 @@ trait NodeSource:
 
         Returns:
             The linear color with straight alpha.
-
-        Raises:
-            Never. The interpreter checks inputs before this call.
         """
         var size = self.size(slot, 0)
         var footprint = anisotropic_footprint(
@@ -8009,7 +7956,7 @@ def _uint_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
     var c = bitcast[DType.uint32, 4](z)
     if op == NODE_TO_UINT.value:
         var converted = SIMD[DType.uint32, 4](0)
-        for lane in range(4):
+        for lane in range(4):  # pragma: no branch
             converted[lane] = _float_integer_bits(x[lane])
         return bitcast[DType.float32, 4](converted)
     if op == NODE_UINT_TO_INT.value:
@@ -8054,7 +8001,7 @@ def _uint_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
     elif op == NODE_UINT_BIT_NOT.value:
         result = ~a
     else:
-        for lane in range(4):
+        for lane in range(4):  # pragma: no branch
             if op == NODE_UINT_DIV.value:
                 if b[lane] != 0:
                     result[lane] = a[lane] // b[lane]
@@ -8077,7 +8024,7 @@ def _int_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
     """
     if op == NODE_TO_INT.value:
         var converted = SIMD[DType.uint32, 4](0)
-        for lane in range(4):
+        for lane in range(4):  # pragma: no branch
             converted[lane] = _float_integer_bits(x[lane], signed=True)
         return bitcast[DType.float32, 4](converted)
     if op == NODE_INT_TO_UINT.value:
@@ -8116,7 +8063,7 @@ def _int_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
         var result = SIMD[DType.uint32, 4](0)
         var ua = bitcast[DType.uint32, 4](x)
         var ub = bitcast[DType.uint32, 4](y)
-        for lane in range(4):
+        for lane in range(4):  # pragma: no branch
             if b[lane] == 0:
                 continue
             var left = UInt32(0) - ua[lane] if a[lane] < 0 else ua[lane]
@@ -8135,13 +8082,27 @@ def _int_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
         return bitcast[DType.float32, 4](result)
     if op == NODE_INT_SHIFT_RIGHT.value:
         var result = SIMD[DType.int32, 4](0)
-        for lane in range(4):
+        for lane in range(4):  # pragma: no branch
             if b[lane] >= 0 and b[lane] < 32:
                 result[lane] = a[lane] >> b[lane]
         return bitcast[DType.float32, 4](result)
     return _uint_operation(
         op - NODE_INT_ADD.value + NODE_UINT_ADD.value, x, y, z
     )
+
+
+def _is_signed_operation(op: Int) -> Bool:
+    """Classify any raw opcode by the exact signed-integer instruction range.
+
+    Args:
+        op: A raw integer, including values outside the supported opcode range.
+
+    Returns:
+        True only for NODE_INT_ADD through NODE_INT_LAST, inclusive.
+    """
+    if op >= NODE_INT_ADD.value and op <= NODE_INT_LAST.value:
+        return True
+    return False
 
 
 def _operation[
@@ -8154,7 +8115,7 @@ def _operation[
     negation, are worked out in `run_code` itself."""
     if op >= NODE_UINT_ADD.value and op <= NODE_UINT_TO_BOOL.value:
         return _uint_operation(op, x, y, z)
-    if op >= NODE_INT_ADD.value and op <= NODE_INT_LAST.value:
+    if _is_signed_operation(op):
         return _int_operation(op, x, y, z)
     var width = Int(immediate)
     if op == NODE_MIX.value:
