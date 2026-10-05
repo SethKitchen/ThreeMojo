@@ -42,7 +42,9 @@ lookup. It takes view-space corners, keeps the light's one-sided test,
 and clips the absolute edge-vector sum. A zero-length corner direction
 stays zero here, as in the existing surface path; shader normalization of
 zero has no portable result. Finite nondegenerate cases retain r186's
-formula, including its camera-dependent z term.
+formula, including its camera-dependent z term. An exactly zero-width or
+zero-height rectangle has zero area and returns zero before edge evaluation.
+This avoids backend-dependent cancellation residue without a near-zero cutoff.
 """
 
 from math.vector2 import Vector2
@@ -463,13 +465,20 @@ def ltc_evaluate_volume(
         corner3: The fourth corner, in view space.
 
     Returns:
-        The form factor, zero on the back side of the light.
+        The form factor, zero on the back side or for zero width or height.
 
     Raises:
         None.
     """
-    var light_normal = corner1 - corner0
-    light_normal.cross(corner3 - corner0)
+    var width = corner1 - corner0
+    var height = corner3 - corner0
+    # An exactly collapsed rectangle has zero area. Do not ask independently
+    # rounded opposite edge integrals to cancel on every CPU/GPU backend.
+    # Test components, not a squared area that can underflow for thin lights.
+    if width == Vector3(0, 0, 0) or height == Vector3(0, 0, 0):
+        return 0
+    var light_normal = width
+    light_normal.cross(height)
     if light_normal.dot(position - corner0) < 0:
         return 0
     var c0 = corner0 - position
