@@ -4,17 +4,17 @@ This checkpoint preserves the authored building work in [#655](https://github.co
 
 ## Current source and report
 
-The update incorporates main's [#669](https://github.com/SethKitchen/ThreeMojo/pull/669) changes through a history-preserving merge. Its parents are the prior #632 head `c9908aca01bc9299c9e7b3a0f5d61eba9dcad417` and main `77b38aeb00c8a877be0f44d5b75daf0ddd1600b3`.
+The preceding integration incorporates main's [#669](https://github.com/SethKitchen/ThreeMojo/pull/669) changes through a history-preserving merge. That integration's parents are the prior #632 head `c9908aca01bc9299c9e7b3a0f5d61eba9dcad417` and main `77b38aeb00c8a877be0f44d5b75daf0ddd1600b3`.
 
-The source contains 2,215 bound inputs. Its digest is:
+The current source contains 2,217 bound inputs. Its digest is:
 
-`7da9ab9c510810d311a4ef8a0f0aa513c8e6d3180269cfd1a5124b2c728757b2`
+`ffe15160eb7e4a32c27f0e8d7a2f129ecda8d97fd648cb77e72a70e61ea8f98b`
 
 The fresh [anatomy report](anatomy-template-report.json) has SHA-256:
 
-`c0c01eb11731ebf3dd9a35327cf22f631944e14fba057acc055453d8fdfb45b5`
+`ccf1da6442a139848cb3869b4d62ca36b5270f4e03b8cc618000209aae836a81`
 
-The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 66.67 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows.
+The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 59.54 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows.
 
 **The report still contains 367 unallowlisted sampled-overlap findings.** All diagnostic content is unchanged from the prior report; only build provenance changed. Completing the checks does not establish anatomical validity. The findings remain tracked in [#595](https://github.com/SethKitchen/ThreeMojo/issues/595). Visual and rig mapping remains in [#297](https://github.com/SethKitchen/ThreeMojo/issues/297). Sampled fields do not prove clearance or engineering or clinical validity.
 
@@ -31,17 +31,35 @@ The coverage additions contain asserted boundary and reference controls. Reviewe
 - Math/core/geometry: four changed modules and unchanged Sculptor have complete fresh source-matching coverage. Ten other scoped modules have source-identical diagnostic evidence.
 - Loaders and texture formats: five changed modules cover 4,713/4,713 fresh obligations. Eight unchanged modules retain verified diagnostic evidence.
 - Renderer: six changed modules cover 11,752/11,752 fresh obligations across 35 captures. The packet also passes 134 compatibility tests and adds 57 controls.
-- Extensions: 33 new controls are included. Six animal mass-worker refusal paths remain unhit. Full module coverage is not established.
+- Extensions: the earlier 33 controls remain. Additional scalar and bounded FIN controls support the complete fresh mass-module measurement below.
 
 The diagnostic evidence reconstructs scoped manifests from immutable source and tool bytes, then checks the original missing diagnostics exactly. It is not a substitute for final integrated-head CI. The composed doc-only edits retain renderer executable bytes, but their shifted source locations still require fresh hosted measurement.
 
-On this composed source, all seven repaired API-documentation checks pass. All 37 actual Metal AIR modules pass direct-call type checks. All 442 negative fixtures produce the expected source rejections with unchanged diagnostics and the original 120-second per-case limit. After report regeneration, all 319 Python tool tests, including source binding, and all 48 CARLA Python controls pass.
+On the preceding d15 integration, all seven repaired API checks, all 37 actual Metal AIR modules and all 442 negative fixtures passed. Those receipts remain bound to that source. After the current report regeneration, all 319 Python tool tests, including source binding, and all 48 CARLA Python controls pass. Fresh exact-head CI remains required.
 
 The prior [c990 CI run](https://github.com/SethKitchen/ThreeMojo/actions/runs/37340945189) passes the unchanged full LOD test in 1.583080 seconds on Linux and 1.027728 seconds on Apple Silicon. Its Linux CPU jobs later time out during other builds. Those inferred stalled import closures are unchanged from successful earlier runs.
 
 Linux CPU compilation now uses one compiler thread while preserving outer suite parallelism. Immediate build/run progress records preserve captured diagnostics and exit propagation. Five mock controls, CI-policy tests and a nine-test native recipe witness pass. This is a bounded scheduling correction; the timeout cause is not proven. Fresh hosted validation remains required.
 
-**Strict full-repository coverage, exact-head aggregate/platform CI and the remaining mass-worker gaps are still open.** GPU device execution and Apple linker/device parity were not run. This update does not merge #632 into main. #594 remains held.
+**Strict full-repository coverage and exact-head aggregate/platform CI are still open.** GPU device execution and Apple linker/device parity were not run. This update does not merge #632 into main. #594 remains held.
+
+## Final mass validation follow-up
+
+This follow-up is based on the published `d15bb7f225c497e625a930a49aba5757b396003e` source. The exact three-file patch has SHA-256:
+
+`0cb9522df36f129eb9c593250435224e3535782e48401ac9ae92de373c40a5c9`
+
+It removes a proven-impossible upper-index operand and centralizes six finite predicates through shared checked helpers. The negative-index check and local asynchronous refusal handling remain. Independent source and lowered-code review confirms all seven checks remain. Explicit inlining retains the ordinary worker's stack and allocation layout.
+
+Fresh captures from nine included suites, containing 50 tests, cover all 485 mass-module obligations: 265 lines, 182 branch/condition outcomes and 38 MC/DC checks. No historical or remapped hits are used. The qualification-only coarse control is excluded from that complete report. All 51 native cases, including the supplemental control, pass the original five-second limit; the slowest is 151.91 ms. The mass API documentation check also passes.
+
+The denominator moves from 507 to 501 after the reviewed impossible-operand simplification, then to 485 after shared finite validation and the local refusal protocol. No new coverage exclusions or threshold changes are introduced. This is explicit source refactoring, not a claim that the old missing outcomes were exercised.
+
+Complete source obligations do not establish every call-site-specific exceptional geometry path. Safe scalar controls exercise the shared validators. Bounded constructor tests assert ordinary/refusal behavior, and every retained worker call site is hit. Final full-repository CI remains necessary.
+
+The initial centralization prototype regressed local timing by 11.4%; that result is retained. After the reviewed inlining change, the ratio of medians is 1.002670, or +0.27%, relative to published d15 validation. Four measured pairs are faster and four are slower. The median paired ratio is 1.029831. This supports approximate local parity, not a universal speedup or zero-overhead claim. Rare refusal trace/error/unwind cost remains.
+
+The d15 workflow passed Apple CPU suites 2/2 and coverage capture 6/8. Thirteen other jobs failed to acquire hosted runners and never ran code. These prior results are historical, not qualification of this follow-up. Its new exact-head workflow must complete all required checks.
 
 ## Review corrections
 
