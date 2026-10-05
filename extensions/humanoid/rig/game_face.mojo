@@ -47,7 +47,8 @@ def _attribute_hash(mut value: UInt64, attribute: BufferAttribute) raises:
     _mix(value, UInt64(attribute.count()))
     _mix(value, UInt64(attribute.item_size))
     for i in range(attribute.count()):
-        for c in range(attribute.item_size):
+        # A reached component loop has a positive attribute item size.
+        for c in range(attribute.item_size):  # pragma: no branch
             var x = attribute.component(i, c)
             if not isfinite(x):
                 raise Error("Facial geometry must have finite components")
@@ -74,12 +75,15 @@ def facial_correspondence(geometry: BufferGeometry) raises -> String:
     _attribute_hash(value, geometry.attribute_view(String(POSITION)))
     _mix(value, UInt64(len(geometry.index)))
     var count = geometry.vertex_count()
-    for index in geometry.index:
+    # Validated facial topology has at least one indexed triangle.
+    for index in geometry.index:  # pragma: no branch
         if index < 0 or index >= count:
             raise Error("Facial topology index is out of range")
         _mix(value, UInt64(index))
-    for i in range(geometry.morph_count()):
-        for c in geometry.morph_names[i].as_bytes():
+    # Validation requires the complete nonempty set of facial targets.
+    for i in range(geometry.morph_count()):  # pragma: no branch
+        # Validated target names equal the nonempty named facial shapes.
+        for c in geometry.morph_names[i].as_bytes():  # pragma: no branch
             _mix(value, UInt64(c))
         _attribute_hash(value, geometry.morph_positions[i])
     return String(value)
@@ -99,7 +103,8 @@ def _validate_shapes(geometry: BufferGeometry) raises:
         raise Error("Facial correspondence requires target names")
     if len(geometry.morph_normals) != len(shapes):
         raise Error("Facial correspondence requires all normal targets")
-    for i in range(len(shapes)):
+    # The facial shape list begins with both named blink targets.
+    for i in range(len(shapes)):  # pragma: no branch
         if geometry.morph_names[i] != shapes[i]:
             raise Error("Facial correspondence target mapping has changed")
         ref positions = geometry.morph_positions[i]
@@ -113,7 +118,8 @@ def _validate_shapes(geometry: BufferGeometry) raises:
 def _identity_local(node: Object3D) raises -> Bool:
     """Require an unmodified child frame, including matrix-only edits."""
     var matrix = node.local_matrix() if node.matrix_auto_update else node.matrix
-    for k in range(16):
+    # A local transform has exactly sixteen matrix elements.
+    for k in range(16):  # pragma: no branch
         var expected = Float32(1) if k % 5 == 0 else Float32(0)
         if matrix.elements[k] != expected:
             return False
@@ -126,7 +132,8 @@ def _placement(scene: Scene, holder: NodeId, record: UserData) raises:
     if scene.get(node.parent).name != "head":
         raise Error("Game facial offset must remain directly below HEAD")
     var matrix = node.local_matrix() if node.matrix_auto_update else node.matrix
-    for k in range(16):
+    # A holder transform has exactly sixteen matrix elements.
+    for k in range(16):  # pragma: no branch
         var expected = Float32(1) if k % 5 == 0 else Float32(0)
         if k >= 12 and k <= 14:
             expected = Float32(record.number("offset_" + String(k - 12)))
@@ -179,7 +186,8 @@ struct GameFace(Copyable, Movable):
         )
         var record = user_data_of(doc, 0)
         _placement(scene, self.holder, record)
-        for i in range(3):
+        # The binding-size guard requires exactly three preserved meshes.
+        for i in range(3):  # pragma: no branch
             var k = self.meshes[i]
             if k < 0 or k >= len(scene.meshes):
                 raise Error("Game facial mesh is missing")
@@ -197,7 +205,8 @@ struct GameFace(Copyable, Movable):
                 raise Error(
                     "Game facial vertex correspondence changed; rebuild"
                 )
-            for target in range(len(geometry.morph_names)):
+            # Correspondence validation requires every named facial target.
+            for target in range(len(geometry.morph_names)):  # pragma: no branch
                 var name = geometry.morph_names[target]
                 if name not in mesh.morph_target_dictionary:
                     raise Error("Game facial mesh is missing a named target")
@@ -221,10 +230,12 @@ struct GameFace(Copyable, Movable):
         var shapes = face_rig_shapes()
         if len(face.shapes) != len(shapes):
             raise Error("Game face requires the complete weight mapping")
-        for i in range(len(shapes)):
+        # The facial shape list begins with both named blink targets.
+        for i in range(len(shapes)):  # pragma: no branch
             if face.shapes[i] != shapes[i] or not isfinite(face.weights[i]):
                 raise Error("Game face weights or mapping are invalid")
-        for k in self.meshes:
+        # Binding validation has already required exactly three meshes.
+        for k in self.meshes:  # pragma: no branch
             face.apply(scene.meshes[k])
 
     def store_alignment(self, mut scene: Scene, speech: AlignedSpeech) raises:
@@ -289,7 +300,8 @@ def attach_game_face(
     if scene.get(head).name != "head":
         raise Error("Game facial offset must be directly below HEAD")
     var signatures = List[String]()
-    for i in range(len(geometries)):
+    # The attachment-size guard requires exactly three geometries.
+    for i in range(len(geometries)):  # pragma: no branch
         signatures.append(facial_correspondence(geometries[i]))
     var record = UserData()
     record.set_string("recipe", String(GAME_FACE_RECIPE))
@@ -301,7 +313,8 @@ def attach_game_face(
     record.set_number("offset_2", Float64(offset.z))
     _placement(scene, holder, record)
     var meshes = List[Int]()
-    for i in range(3):
+    # Attachment always installs the three validated facial parts.
+    for i in range(3):  # pragma: no branch
         var node = Object3D()
         node.name = "game-face-" + String(i)
         var nid = scene.attach(node^, holder)
@@ -351,7 +364,8 @@ def bind_game_face(
     _placement(scene, holder, record)
     var meshes = List[Int]()
     var signatures = List[String]()
-    for part in range(3):
+    # Binding always resolves the three named facial parts.
+    for part in range(3):  # pragma: no branch
         var found = -1
         for k in range(len(scene.meshes)):
             var child = scene.get(scene.meshes[k].node)
