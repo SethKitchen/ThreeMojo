@@ -1507,6 +1507,66 @@ def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
     return values[root.value]
 
 
+def _fold_integer_constants(mut graph: NodeGraph) raises:
+    """Fold scalar integer instructions whose inputs are all constants.
+
+    Unrolled integer indices otherwise retain their conversion, multiply,
+    add, and conversion back to float at every step. Use the same exact
+    payload operations as execution. Reuse constants only when their exact
+    type and payload bits match. Runtime inputs and floating-point arithmetic
+    are unchanged. The compiler builds each dependency before its reader.
+    """
+    var constants = Dict[UInt64, Int]()
+    for node in range(graph.count()):
+        var kind = graph._kinds[node]
+        var type = graph._types[node]
+        if not type.is_vector() or type.width() != 1:
+            continue
+        if kind == NODE_CONSTANT:
+            var key = (UInt64(type.value) << 32) | UInt64(
+                bitcast[DType.uint32](graph._values[node * 4])
+            )
+            if key not in constants:
+                constants[key] = node
+            continue
+        if (
+            kind.value < NODE_UINT_FIRST.value
+            or kind.value > NODE_INT_LAST.value
+        ):
+            continue
+        var known = True
+        var inputs = Array[Lanes, 3](fill=Lanes(0))
+        for slot in range(3):
+            var input = graph._inputs[node * 3 + slot]
+            while input >= 0 and graph._kinds[input] == NODE_COPY:
+                input = graph._inputs[input * 3]
+            if input < 0:
+                continue
+            if graph._kinds[input] != NODE_CONSTANT:
+                known = False
+                break
+            inputs[slot] = Lanes(graph._values[input * 4], 0, 0, 0)
+        if not known:
+            continue
+        var value = _uint_operation(
+            kind.value, inputs[0], inputs[1], inputs[2]
+        ) if kind.value <= NODE_UINT_LAST.value else _int_operation(
+            kind.value, inputs[0], inputs[1], inputs[2]
+        )
+        var key = (UInt64(type.value) << 32) | UInt64(
+            bitcast[DType.uint32](value[0])
+        )
+        for slot in range(3):
+            graph._inputs[node * 3 + slot] = -1
+        if key in constants:
+            graph._kinds[node] = NODE_COPY
+            graph._inputs[node * 3] = constants[key]
+        else:
+            graph._kinds[node] = NODE_CONSTANT
+            graph._values[node * 4] = value[0]
+            constants[key] = node
+
+
 def _simplify_proved_control(
     mut graph: NodeGraph, values: List[Optional[Float32]]
 ):
@@ -1867,6 +1927,7 @@ struct _Compiler(Movable):
                 " or its exit proof is unsupported"
             )
         _simplify_proved_control(self.graph, proof)
+        _fold_integer_constants(self.graph)
 
     def declare_outputs(mut self) raises:
         """Declare GLSL's outputs this shader and version have: a vertex's
