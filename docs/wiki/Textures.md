@@ -179,6 +179,11 @@ weight interpolation and edge cropping.
 | ASTC 4x4 SFLOAT | 1000066000 | 4x4 | Linear RGBA floats |
 | ASTC 6x6 SFLOAT | 1000066004 | 6x6 | Linear RGBA floats |
 
+The descriptor must name the ASTC color model, `KHR_DF_MODEL_ASTC` (162).
+This is the matching block-compressed model required by the
+[KTX2 data format descriptor rules](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html).
+Files with another model now raise an error.
+
 The Vulkan format and descriptor transfer function must agree. sRGB
 stays encoded in the byte texture until sampling. UNORM endpoints expand
 by bit replication. sRGB endpoints expand by a shift and midpoint bias.
