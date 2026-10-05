@@ -422,7 +422,7 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
     else:
         var prev = s0 * sgn
         # The first and the last ray lie on opposite sides of the point,
-        # so there are two rays at least.
+        # and two rays at least were checked above.
         for i in range(1, n):  # pragma: no branch
             var si = _side(rays, i, qu, qv) * sgn
             if si <= 0.0:
