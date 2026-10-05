@@ -52,6 +52,14 @@ from extensions.humanoid.rig.joints import (
     joint_parent,
     named_joints,
 )
+from extensions.humanoid.rig.game_face import (
+    GameFace,
+    attach_game_face,
+    GAME_FACE_RECIPE,
+)
+from extensions.humanoid.skeleton.head.expression import face_rig_shapes
+from extensions.humanoid.skeleton.head.face_model import TEETH, GUMS_AND_TONGUE
+from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
 from extensions.humanoid.rig.weights import part_legs, skin_weights
 from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.skeleton.arm.assembly import UNSET_PAINT
@@ -75,11 +83,16 @@ from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
 from extensions.humanoid.skeleton.head.skin.tint import THINNESS, untinted
 from extensions.humanoid.skeleton.look import (
     eye_physical,
+    gum_physical,
+    teeth_physical,
     hair_phong,
     skin_phong,
 )
 from extensions.humanoid.skeleton.simplify import simplify
-from extensions.humanoid.skeleton.torso.body import body_skin_mesh
+from extensions.humanoid.skeleton.torso.body import (
+    body_skin_mesh,
+    body_skin_parts,
+)
 from extensions.humanoid.spec import HumanoidSpec
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
@@ -113,6 +126,8 @@ struct GameHumanoid(Movable):
     var skins: List[Int]
     # The scalp's hair as strands, if any were grown.
     var strands: List[HairStrands]
+    # Present only when original facial correspondence was requested.
+    var face: Optional[GameFace]
 
     def __init__(
         out self,
@@ -121,6 +136,7 @@ struct GameHumanoid(Movable):
         var bones: List[NodeId],
         var skins: List[Int],
         var strands: List[HairStrands],
+        var face: Optional[GameFace] = None,
     ):
         """Hold a humanoid's parts.
 
@@ -130,12 +146,14 @@ struct GameHumanoid(Movable):
             bones: One node per joint.
             skins: Its skinned meshes' indices in the scene.
             strands: Its hair's strands, or none.
+            face: Preserved face and mouth binding, or no facial animation.
         """
         self.rig = rig^
         self.root = root
         self.bones = bones^
         self.skins = skins^
         self.strands = strands^
+        self.face = face^
 
 
 def _key(p: Vector3) -> Int:
@@ -236,7 +254,12 @@ def _budgeted(
     if triangles <= 0 or mesh.triangle_count() <= triangles:
         return mesh^
     var fewer = simplify(mesh, triangles)
-    carry_attributes(mesh, fewer)
+    # Hair shells have neither attribute. Do not build a nearest-vertex
+    # map when there is no color or thinness to transfer.
+    if mesh.has_attribute(String(COLOR)) or mesh.has_attribute(
+        String(THINNESS)
+    ):
+        carry_attributes(mesh, fewer)
     return fewer^
 
 
@@ -257,6 +280,7 @@ def add_game_humanoid(
     followers: Int = 0,
     workers: Int = 1,
     use: HumanoidUse = VISUAL_USE,
+    facial_animation: Bool = False,
 ) raises -> GameHumanoid:
     """Build one person's skin on a skeleton under `parent`.
 
@@ -280,6 +304,9 @@ def add_game_humanoid(
         followers: Follow strands round each guide.
         workers: How many threads mesh the skin.
         use: Visual use only. Engineering use is refused before scene edits.
+        facial_animation: Keep original face, teeth and gums/tongue under HEAD.
+            The total mesh budget then includes those parts and both eyes.
+            Insufficient budgets raise instead of dropping targets or exceeding it.
 
     Returns:
         The humanoid: its rig, its bones and its meshes.
@@ -300,6 +327,7 @@ def add_game_humanoid(
         skin_paint,
         hair_paint,
         eye_paint,
+        facial_animation,
     )
     var node = Object3D()
     node.user_data.set_json(
@@ -312,10 +340,25 @@ def add_game_humanoid(
             "unverified-converted-ICTF-THRS",
         ).to_json(),
     )
-    var root = scene.attach(node^, parent)
-    var body = body_skin_mesh(
-        spec, detail, workers, LEG_GAP * Float32(spec.stature.value) / 1.8288
+    var gap = LEG_GAP * Float32(spec.stature.value) / 1.8288
+    var body: BufferGeometry
+    var facial_meshes = List[BufferGeometry]()
+    var dims = head_muscle_dimensions(spec)
+    if facial_animation:
+        var shapes = face_rig_shapes()
+        var split = body_skin_parts(spec, detail, workers, gap, shapes)
+        body = split.pop(0)
+        facial_meshes.append(split.pop(0))
+        facial_meshes.append(mouth_mesh(dims, TEETH, shapes))
+        facial_meshes.append(mouth_mesh(dims, GUMS_AND_TONGUE, shapes))
+    else:
+        body = body_skin_mesh(spec, detail, workers, gap)
+    var shell = head_hair_from_dimensions(
+        dims, SCALP_HAIR, RIGHT, hair_detail, workers, hair_style
     )
+    var eyes = List[BufferGeometry]()
+    for side in [RIGHT, LEFT]:
+        eyes.append(eyeball_mesh(dims, side, 12))
     var arms = arm_muscle_dimensions(spec)
     var right = hand_skin_from_dimensions(arms, RIGHT, hand_detail)
     var left = hand_skin_from_dimensions(arms, LEFT, hand_detail)
@@ -324,18 +367,93 @@ def add_game_humanoid(
     # The rig reads the crown, the fingertips and the toes off the skin.
     var outline = List[Float32]()
     _outline(outline, body)
+    if facial_animation:
+        _outline(outline, facial_meshes[0])
     _outline(outline, right)
     _outline(outline, left)
     var whole = BufferGeometry()
     whole.set_attribute(String(POSITION), BufferAttribute(outline^, 3))
     var rig = humanoid_rig(spec, whole)
+    var remaining = triangles
+    var reserve = 0
+    if facial_animation and triangles > 0:
+        for i in range(len(facial_meshes)):
+            reserve += facial_meshes[i].triangle_count()
+        for i in range(len(eyes)):
+            reserve += eyes[i].triangle_count()
+        # Preserve the complete facial submesh and reserve 32 per body,
+        # hand and hair part. Safe-collapse limits can require more.
+        if triangles < reserve + 128:
+            raise Error(
+                "Facial LOD budget must keep at least "
+                + String(reserve + 128)
+                + " triangles"
+            )
+        remaining = triangles - reserve - 128
+    var body_budget = Int(Float32(remaining) * BODY_SHARE)
     var hand_budget = Int(
-        Float32(triangles) * (1 - BODY_SHARE - HAIR_SHARE) / 2
+        Float32(remaining) * (1 - BODY_SHARE - HAIR_SHARE) / 2
     )
+    var hair_budget = Int(Float32(remaining) * HAIR_SHARE)
+    if facial_animation and triangles > 0:
+        body_budget += 32
+        hand_budget += 32
+        hair_budget += 32
+    elif triangles > 0:
+        hair_budget = max(1, hair_budget)
     var parts = List[BufferGeometry]()
-    parts.append(_budgeted(body^, Int(Float32(triangles) * BODY_SHARE)))
-    parts.append(_budgeted(right^, hand_budget))
-    parts.append(_budgeted(left^, hand_budget))
+    if facial_animation and triangles > 0:
+        # Establish the hands' and shell's actual counts before reducing
+        # the body. A protected hair shell can exceed its nominal share.
+        # Giving the body the actual remainder avoids a second body
+        # decimation and attribute-transfer pass in the usual case.
+        shell = _budgeted(shell^, hair_budget)
+        right = _budgeted(right^, hand_budget)
+        left = _budgeted(left^, hand_budget)
+        body_budget = max(
+            32,
+            triangles
+            - reserve
+            - shell.triangle_count()
+            - right.triangle_count()
+            - left.triangle_count(),
+        )
+        parts.append(_budgeted(body^, body_budget))
+        parts.append(right^)
+        parts.append(left^)
+    else:
+        parts.append(_budgeted(body^, body_budget))
+        parts.append(_budgeted(right^, hand_budget))
+        parts.append(_budgeted(left^, hand_budget))
+        shell = _budgeted(shell^, hair_budget)
+    if facial_animation and triangles > 0:
+        var retained = reserve + shell.triangle_count()
+        for i in range(len(parts)):
+            retained += parts[i].triangle_count()
+        # A part can exceed its initial share at a safe-collapse limit.
+        # Reclaim that excess from parts that can still shrink before
+        # refusing the total budget. The face and eyes are never touched.
+        for i in range(len(parts)):
+            if retained <= triangles:
+                break
+            var before = parts[i].triangle_count()
+            var target = max(32, before - (retained - triangles))
+            var reduced = _budgeted(parts[i].clone(), target)
+            retained += reduced.triangle_count() - before
+            parts[i] = reduced^
+        if retained > triangles:
+            var before = shell.triangle_count()
+            var target = max(32, before - (retained - triangles))
+            shell = _budgeted(shell^, target)
+            retained += shell.triangle_count() - before
+        if retained > triangles:
+            raise Error(
+                "Facial LOD safe-collapse limit exceeds budget: retained "
+                + String(retained)
+                + ", requested "
+                + String(triangles)
+            )
+    var root = scene.attach(node^, parent)
     # A bone at each joint, each hung from its parent's.
     var bones = List[NodeId]()
     for joint in named_joints():  # pragma: no branch
@@ -388,21 +506,23 @@ def add_game_humanoid(
     var head = rig.at(HEAD)
     holder.set_position(-head.x, -head.y, -head.z)
     var holder_id = scene.attach(holder^, bones[HEAD.value])
-    var dims = head_muscle_dimensions(spec)
     var hair = resolved_paint(assets, hair_paint, hair_phong(spec.genome))
-    var shell = head_hair_from_dimensions(
-        dims, SCALP_HAIR, RIGHT, hair_detail, workers, hair_style
-    )
-    var hair_budget = 0
-    if triangles > 0:
-        hair_budget = max(1, Int(Float32(triangles) * HAIR_SHARE))
-    place_mesh(scene, assets, holder_id, _budgeted(shell^, hair_budget), hair)
+    place_mesh(scene, assets, holder_id, shell^, hair)
+    var face = Optional[GameFace](None)
+    if facial_animation:
+        var paints = List[MaterialId]()
+        paints.append(skin)
+        paints.append(assets.materials.add(teeth_physical()))
+        paints.append(assets.materials.add(gum_physical()))
+        face = attach_game_face(
+            scene, assets, holder_id, facial_meshes^, paints
+        )
     var eye = eye_paint
     if eye.value < 0:
         var iris = assets.textures.add(iris_albedo(64, spec.genome))
         eye = assets.materials.add(eye_physical(iris))
-    for side in [RIGHT, LEFT]:  # pragma: no branch
-        place_mesh(scene, assets, holder_id, eyeball_mesh(dims, side, 12), eye)
+    for _ in range(2):  # pragma: no branch
+        place_mesh(scene, assets, holder_id, eyes.pop(0), eye)
     var strands = List[HairStrands]()
     if guides > 0:
         strands.append(
@@ -416,7 +536,7 @@ def add_game_humanoid(
                 style=hair_style,
             )
         )
-    return GameHumanoid(rig^, root, bones^, skins^, strands^)
+    return GameHumanoid(rig^, root, bones^, skins^, strands^, face^)
 
 
 def game_build_settings(
@@ -430,6 +550,7 @@ def game_build_settings(
     skin_paint: MaterialId = UNSET_PAINT,
     hair_paint: MaterialId = UNSET_PAINT,
     eye_paint: MaterialId = UNSET_PAINT,
+    facial_animation: Bool = False,
 ) raises -> UserData:
     """Record every game-builder option that changes a visual recipe.
 
@@ -447,6 +568,7 @@ def game_build_settings(
         skin_paint: Skin material ID, or the default sentinel.
         hair_paint: Hair material ID, or the default sentinel.
         eye_paint: Eye material ID, or the default sentinel.
+        facial_animation: Preserve original face correspondence for audio playback.
 
     Returns:
         A value snapshot independent of the canonical spec.
@@ -454,9 +576,17 @@ def game_build_settings(
     Raises:
         Error: If the hair style is unnamed.
     """
+    if triangles < 0:
+        raise Error("Game triangle budget must be nonnegative")
+    if facial_animation and guides > 0:
+        raise Error(
+            "Facial triangle budgets do not support strand hair; use the shell"
+        )
     if not hair_style.is_valid():
         raise Error("Game build settings require a named hair style")
     var settings = UserData()
+    if facial_animation:
+        settings.set_string("facial_recipe", String(GAME_FACE_RECIPE))
     settings.set_string("triangles", String(triangles))
     settings.set_string("body_detail", String(detail))
     settings.set_string("hand_detail", String(hand_detail))
