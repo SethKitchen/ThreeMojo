@@ -190,7 +190,7 @@ def _indexed_ray(
         SnapshotOwner(hit.body, snapshot._capture),
         hit.point,
         hit.normal,
-        hit.distance,
+        Length(hit.distance),
         hit.material,
     )
 
@@ -205,7 +205,7 @@ def _indexed_batch(
         if hit:
             checksum += Float64(
                 hit.value().owner.source_body.value + 1
-            ) + Float64(hit.value().distance)
+            ) + Float64(hit.value().distance.value)
     return checksum
 
 
@@ -263,7 +263,7 @@ def _frozen_linear_batch(
         if hit:
             checksum += Float64(
                 hit.value().owner.source_body.value + 1
-            ) + Float64(hit.value().distance)
+            ) + Float64(hit.value().distance.value)
     return checksum
 
 
@@ -278,7 +278,7 @@ def _snapshot_batch(
         if hit:
             checksum += Float64(
                 hit.value().owner.source_body.value + 1
-            ) + Float64(hit.value().distance)
+            ) + Float64(hit.value().distance.value)
     return checksum
 
 
@@ -288,7 +288,7 @@ def _equal(
     assert_equal(Bool(actual), Bool(expected))
     if expected:
         assert_equal(actual.value().owner.source_body, expected.value().body)
-        assert_equal(actual.value().distance, expected.value().distance)
+        assert_equal(actual.value().distance.value, expected.value().distance)
         assert_true(actual.value().point == expected.value().point)
         assert_true(actual.value().normal == expected.value().normal)
         assert_equal(
