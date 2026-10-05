@@ -75,15 +75,11 @@ def mouth_mesh(
         ref turned = worn.attribute_view(String(NORMAL))
         var positions = List[Float32](capacity=3 * total)
         var normals = List[Float32](capacity=3 * total)
-        for v in range(total):  # pragma: no branch
-            var d = moved.vector3(v) - still.vector3(v)
-            var n = turned.vector3(v) - facing.vector3(v)
-            positions.append(d.x)
-            positions.append(d.y)
-            positions.append(d.z)
-            normals.append(n.x)
-            normals.append(n.y)
-            normals.append(n.z)
+        # Both meshes come from FaceModel.part: their attributes are
+        # packed Float32 triples with identical vertex correspondence.
+        for c in range(3 * total):  # pragma: no branch
+            positions.append(moved.data[c] - still.data[c])
+            normals.append(turned.data[c] - facing.data[c])
         targets.append(BufferAttribute(positions^, 3))
         turns.append(BufferAttribute(normals^, 3))
     rest.morph_relative = True

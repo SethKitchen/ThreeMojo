@@ -545,7 +545,9 @@ struct MeshTree(Movable):
         var best = gap.dot(gap)
         var found = start
         # The walk holds at most two nodes a level of the tree.
-        var stack = SIMD[DType.int32, STACK_SIZE](0)
+        # This is a scalar-indexed stack, not a vector calculation. An array
+        # avoids copying a wide SIMD value for each dynamic push and pop.
+        var stack = Array[Int32, STACK_SIZE](fill=0)
         var top = 1
         while top > 0:
             top -= 1
