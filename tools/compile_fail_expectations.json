@@ -4735,5 +4735,21 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/an_unsigned_uniform_is_not_a_float.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 12,
+        "message": "no matching method in call to 'set_uniform_uint'"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'y'",
+      "candidate not viable: value passed to 'value' cannot be converted from 'Float32' to 'SIMD[.uint32, 2]'",
+      "candidate not viable: value passed to 'value' cannot be converted from 'Float32' to 'SIMD[.uint32, 4]'",
+      "candidate not viable: value passed to 'value' cannot be converted from 'Float32' to 'SIMD[.uint32, width]'",
+      "candidate not viable: value passed to 'value' cannot be converted from 'Float32' to 'UInt32'"
+    ]
   }
 }

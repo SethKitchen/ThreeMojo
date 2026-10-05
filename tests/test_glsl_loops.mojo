@@ -48,8 +48,8 @@ from materials.nodes import (
 
 
 def test_glsl3_while_reference_boundaries() raises:
-    var counts: List[Int] = [0, 1, 63, 64]
-    var sums: List[Int] = [0, 0, 1953, 2016]
+    var counts: List[Int] = [0, 1, 63, 64, 65, 128, 256]
+    var sums: List[Int] = [0, 0, 1953, 2016, 2080, 8128, 32640]
     var expressions: List[String] = ["float(i)", "sum", "float(calls)"]
     for at in range(len(counts)):
         var expected: List[Int] = [counts[at], sums[at], counts[at] + 1]
@@ -72,9 +72,9 @@ def test_glsl3_while_reference_boundaries() raises:
 
 
 def test_glsl3_do_reference_boundaries() raises:
-    var bounds: List[Int] = [0, 1, 63, 64]
-    var counts: List[Int] = [1, 1, 63, 64]
-    var sums: List[Int] = [0, 0, 1953, 2016]
+    var bounds: List[Int] = [0, 1, 63, 64, 65, 128, 256]
+    var counts: List[Int] = [1, 1, 63, 64, 65, 128, 256]
+    var sums: List[Int] = [0, 0, 1953, 2016, 2080, 8128, 32640]
     var expressions: List[String] = ["float(i)", "sum", "float(calls)"]
     for at in range(len(bounds)):
         var expected: List[Int] = [counts[at], sums[at], counts[at]]
@@ -146,8 +146,8 @@ def test_loop_jumps_at_the_budget() raises:
     )
     refused(
         (
-            "void first() { int i = 0; while (true) { i++; if (i == 65) return;"
-            " } } void main() { first(); gl_FragColor = vec4(1.0); }"
+            "void first() { int i = 0; while (true) { i++; if (i == 257)"
+            " return; } } void main() { first(); gl_FragColor = vec4(1.0); }"
         ),
         "must provably stop within",
     )
@@ -164,18 +164,18 @@ def test_loop_jumps_at_the_budget() raises:
 
 def test_exhaustion_is_refused_even_when_its_output_is_dead() raises:
     var loops: List[String] = [
-        "int i = 0; while (i < 65) i++;",
-        "int i = 0; do { i++; } while (i < 65);",
+        "int i = 0; while (i < 257) i++;",
+        "int i = 0; do { i++; } while (i < 257);",
         "while (true) {}",
         "do { continue; } while (true);",
         "while (true) { continue; }",
     ]
     for loop in loops:
-        refused_statement(loop, "must provably stop within 64 body executions")
+        refused_statement(loop, "must provably stop within 256 body executions")
     # A later terminating iteration must not hide earlier exhaustion.
     refused_statement(
         (
-            "for (int j = 0; j < 2; j++) { int i = 0; int n = j == 0 ? 65 : 1;"
+            "for (int j = 0; j < 2; j++) { int i = 0; int n = j == 0 ? 257 : 1;"
             " while (i < n) i++; }"
         ),
         "must provably stop within",
@@ -183,7 +183,7 @@ def test_exhaustion_is_refused_even_when_its_output_is_dead() raises:
     # The first outer iteration must not serve as proof for later ones.
     refused_statement(
         (
-            "for (int j = 0; j < 2; j++) { int i = 0; int n = j == 0 ? 1 : 65;"
+            "for (int j = 0; j < 2; j++) { int i = 0; int n = j == 0 ? 1 : 257;"
             " while (i < n) i++; }"
         ),
         "must provably stop within",
@@ -350,17 +350,17 @@ def test_signed_zero_cannot_supply_a_false_exit_proof() raises:
 
 def test_larger_finite_loops_fail_explicitly_or_use_constant_for() raises:
     # Independent GLSL3 recurrence fixtures above the while/do budget.
-    var bounds: List[Int] = [65, 96, 128]
-    var sums: List[Int] = [2080, 4560, 8128]
+    var bounds: List[Int] = [257, 320, 512]
+    var sums: List[Int] = [32896, 51040, 130816]
     for at in range(len(bounds)):
         var bound = String(bounds[at])
         refused_statement(
             "int i = 0; while (i < " + bound + ") i++;",
-            "must provably stop within 64",
+            "must provably stop within 256",
         )
         refused_statement(
             "int i = 0; do { i++; } while (i < " + bound + ");",
-            "must provably stop within 64",
+            "must provably stop within 256",
         )
         var fragment = (
             "#version 300 es\nprecision highp float; out vec4 color; void"
@@ -436,16 +436,18 @@ def test_vertex_and_fragment_loop_budgets_are_independent() raises:
     )
 
 
-def test_scalar_return_keeps_the_existing_register_limit() raises:
-    # This same shader exceeds 32 live values before the exhaustion fix.
-    # Do not relax that limit to turn a bounded loop into a larger program.
-    refused(
-        (
-            "float first() { int i = 0; while (true) { i++; if (i == 63) return"
-            " float(i); } return -1.0; } void main() { gl_FragColor ="
-            " vec4(first()); }"
+def test_scalar_return_uses_proved_control_without_more_registers() raises:
+    # The successful scalar proof removes inactive selections. The same
+    # workload now fits the unchanged 32-register budget.
+    assert_equal(
+        number(
+            "first()",
+            (
+                "float first() { int i = 0; while (true) { i++; if (i == 63)"
+                " return float(i); } return -1.0; }"
+            ),
         ),
-        "more than 32 values alive at once",
+        63,
     )
 
 

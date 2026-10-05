@@ -128,6 +128,31 @@ void main() {
             assert_equal(_texel(image, x, y, 0), _texel(before, x, y, 0))
 
 
+def test_a_variable_reads_explicit_gradients_at_its_one_level() raises:
+    var computation = GPUComputationRenderer(SIZE_X, SIZE_Y)
+    var same = computation.add_variable(
+        "field",
+        """
+void main() {
+    vec2 uv = gl_FragCoord.xy / resolution.xy;
+    gl_FragColor = textureGrad(field, uv, vec2(8.0, 2.0), vec2(-3.0, 9.0));
+}
+""",
+        _starting_positions(computation),
+    )
+    computation.set_variable_dependencies(same, [same])
+    computation.init()
+    var before = computation.current_image(same)
+    computation.compute()
+    var image = computation.current_image(same)
+    for x in range(SIZE_X):
+        for y in range(SIZE_Y):
+            for lane in range(4):
+                assert_equal(
+                    _texel(image, x, y, lane), _texel(before, x, y, lane)
+                )
+
+
 def test_a_neighbor_is_read_across_a_wrapped_edge() raises:
     var computation = GPUComputationRenderer(SIZE_X, SIZE_Y)
     var shift = computation.add_variable(

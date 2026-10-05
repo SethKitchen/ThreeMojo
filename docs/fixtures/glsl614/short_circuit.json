@@ -1,0 +1,418 @@
+{
+  "schema": "threemojo-glsl614-short-circuit-v1",
+  "reference": "Mesa GLES3, #version 300 es, exact RGBA32UI readback",
+  "cases": [
+    {
+      "id": "short_and_false",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;bool b=false&&bump(n); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "observed": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_or_true",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;bool b=true||bump(n); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "observed": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_and_true",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;bool b=true&&bump(n); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "observed": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_or_false",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;bool b=false||bump(n); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "observed": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_xor_eager",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;bool b=false^^bump(n); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "observed": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_runtime_and_0",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0xffffffffu;bool b=flag&&bump(n); result=uvec4(n);}\n",
+      "uniforms": {
+        "flag": {
+          "type": "bool",
+          "value": 0
+        }
+      },
+      "expected": [
+        4294967295,
+        4294967295,
+        4294967295,
+        4294967295
+      ],
+      "observed": [
+        4294967295,
+        4294967295,
+        4294967295,
+        4294967295
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_runtime_or_0",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0xffffffffu;bool b=flag||bump(n); result=uvec4(n);}\n",
+      "uniforms": {
+        "flag": {
+          "type": "bool",
+          "value": 0
+        }
+      },
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "observed": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_runtime_ternary_0",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;uint b=flag?add(n,1u):add(n,2u); result=uvec4(n);}\n",
+      "uniforms": {
+        "flag": {
+          "type": "bool",
+          "value": 0
+        }
+      },
+      "expected": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "observed": [
+        2,
+        2,
+        2,
+        2
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_runtime_and_1",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0xffffffffu;bool b=flag&&bump(n); result=uvec4(n);}\n",
+      "uniforms": {
+        "flag": {
+          "type": "bool",
+          "value": 1
+        }
+      },
+      "expected": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "observed": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_runtime_or_1",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0xffffffffu;bool b=flag||bump(n); result=uvec4(n);}\n",
+      "uniforms": {
+        "flag": {
+          "type": "bool",
+          "value": 1
+        }
+      },
+      "expected": [
+        4294967295,
+        4294967295,
+        4294967295,
+        4294967295
+      ],
+      "observed": [
+        4294967295,
+        4294967295,
+        4294967295,
+        4294967295
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_runtime_ternary_1",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;uint b=flag?add(n,1u):add(n,2u); result=uvec4(n);}\n",
+      "uniforms": {
+        "flag": {
+          "type": "bool",
+          "value": 1
+        }
+      },
+      "expected": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "observed": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_while_63",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;while(n<63u&&bump(n)){} result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        63,
+        63,
+        63,
+        63
+      ],
+      "observed": [
+        63,
+        63,
+        63,
+        63
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_do_63",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;do{}while(n<63u&&bump(n)); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        63,
+        63,
+        63,
+        63
+      ],
+      "observed": [
+        63,
+        63,
+        63,
+        63
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_while_64",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;while(n<64u&&bump(n)){} result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "observed": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_do_64",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;do{}while(n<64u&&bump(n)); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "observed": [
+        64,
+        64,
+        64,
+        64
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_while_65",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;while(n<65u&&bump(n)){} result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        65,
+        65,
+        65,
+        65
+      ],
+      "observed": [
+        65,
+        65,
+        65,
+        65
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_do_65",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;do{}while(n<65u&&bump(n)); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        65,
+        65,
+        65,
+        65
+      ],
+      "observed": [
+        65,
+        65,
+        65,
+        65
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_while_256",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;while(n<256u&&bump(n)){} result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "observed": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "passed": true
+    },
+    {
+      "id": "short_do_256",
+      "category": "uint",
+      "comparison": "exact_uint32",
+      "fragment_source": "#version 300 es\nprecision highp float;\nprecision highp int;\nprecision highp sampler2D;\nlayout(location = 0) out uvec4 result;\nuniform bool flag;\nbool bump(inout uint n){n++;return true;}\nuint add(inout uint n,uint v){n+=v;return n;}\nvoid main(){uint n=0u;do{}while(n<256u&&bump(n)); result=uvec4(n);}\n",
+      "uniforms": {},
+      "expected": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "observed": [
+        256,
+        256,
+        256,
+        256
+      ],
+      "passed": true,
+      "native_outcome": "explicit resource exhaustion: this do loop executes 257 bodies because its condition advances the counter",
+      "body_executions": 257
+    }
+  ]
+}

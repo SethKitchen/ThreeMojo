@@ -96,6 +96,7 @@ limits, and explicit zero and nonfinite rules.
 
 from std.math import exp2
 from math.norm import length2, _ordinary_squared
+from math.scaled_products import _split, _sum_products, _at_exponent
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -110,7 +111,7 @@ from render.srgb import (
 )
 from render.float_image import FloatImage
 from render.raster_state import STANDARD_DEPTH, DepthMode, window_depth
-from std.math import ceil, floor, isfinite, log2, sqrt
+from std.math import ceil, floor, fma, isfinite, log2, sqrt
 from std.memory import bitcast
 from units.si import Angle, RADIAN
 
@@ -1746,6 +1747,48 @@ struct Texture(Movable):
             plan.blend,
         )
 
+    def sample_grad(
+        self, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) raises -> FloatColor:
+        """Read a texture with explicit gradients in normalized coordinates.
+
+        Coordinates and gradients are already placed, as for `sample_level`.
+        Sampling preserves the texture's wrap, filters, mip chain, color
+        space, alpha, and at most `MAX_ANISOTROPY` taps.
+
+        Args:
+            u: Horizontal coordinate.
+            v: Vertical coordinate.
+            dx: Coordinate change per screen pixel across.
+            dy: Coordinate change per screen pixel up.
+
+        Returns:
+            The linear color with straight alpha.
+
+        Raises:
+            Error: If a coordinate or gradient is not finite.
+        """
+        if not texture_grad_finite(u, v, dx, dy):
+            raise Error(
+                "Texture gradient coordinates and gradients must be finite"
+            )
+        return self._sample_grad(u, v, dx, dy)
+
+    def _sample_grad(
+        self, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients in the non-raising shader interpreter.
+        Invalid runtime inputs return transparent black without a sample.
+        """
+        if not texture_grad_finite(u, v, dx, dy):
+            return FloatColor(0, 0, 0, 0)
+        if self.is_blank():
+            return FloatColor(1, 1, 1, 1)
+        var footprint = anisotropic_footprint(
+            dx, dy, self.width, self.height, self.anisotropy
+        )
+        return self._sample_footprint(u, v, footprint, explicit=True)
+
     def sample_footprint(
         self, u: Float32, v: Float32, footprint: Footprint
     ) raises -> FloatColor:
@@ -1774,7 +1817,11 @@ struct Texture(Movable):
         return self._sample_footprint(u, v, footprint)
 
     def _sample_footprint(
-        self, u: Float32, v: Float32, footprint: Footprint
+        self,
+        u: Float32,
+        v: Float32,
+        footprint: Footprint,
+        explicit: Bool = False,
     ) -> FloatColor:
         """Return the color over a footprint `validate` has already passed.
 
@@ -1789,19 +1836,39 @@ struct Texture(Movable):
             v: Vertical coordinate, 0 at the *bottom* edge.
             footprint: The level, the tap count and the step between taps,
                 from `anisotropic_footprint`. At least one tap.
+            explicit: Reject invalid runtime footprints and reduce extreme
+                finite tap coordinates before conversion to texel indices.
 
         Returns:
             The color found there, or opaque white if the texture is blank.
         """
+        if explicit:
+            if (
+                not isfinite(footprint.level)
+                or not isfinite(footprint.step.x)
+                or not isfinite(footprint.step.y)
+            ):
+                return FloatColor(0, 0, 0, 0)
         if footprint.taps == 1:
+            if explicit:
+                return self.sample_level(
+                    gradient_sample_coordinate(u, self.wrap_s),
+                    gradient_sample_coordinate(v, self.wrap_t),
+                    footprint.level,
+                )
             return self.sample_level(u, v, footprint.level)
         var total = FloatColor(0.0, 0.0, 0.0, 0.0)
         for tap in range(footprint.taps):  # pragma: no branch
             var along = Float32(tap) - Float32(footprint.taps - 1) / 2
+            var tap_u = u + footprint.step.x * along
+            var tap_v = v + footprint.step.y * along
+            if explicit:
+                if not isfinite(tap_u) or not isfinite(tap_v):
+                    return FloatColor(0, 0, 0, 0)
+                tap_u = gradient_sample_coordinate(tap_u, self.wrap_s)
+                tap_v = gradient_sample_coordinate(tap_v, self.wrap_t)
             var sampled = self.sample_level(
-                u + footprint.step.x * along,
-                v + footprint.step.y * along,
-                footprint.level,
+                tap_u, tap_v, footprint.level
             ).premultiplied()
             total = FloatColor(
                 total.r + sampled.r,
@@ -1863,6 +1930,60 @@ comptime MAX_ANISOTROPY = 16
 # term is rounding noise and the footprint is axis-aligned; see
 # `_major_direction`. Ten times a Float32's relative precision.
 comptime DIAGONAL_TOLERANCE = Float32(1e-6)
+
+
+def texture_grad_finite(
+    u: Float32, v: Float32, dx: Vector2, dy: Vector2
+) -> Bool:
+    """Check explicit sampling inputs before footprint or texel arithmetic.
+
+    Args:
+        u: Horizontal coordinate.
+        v: Vertical coordinate.
+        dx: Coordinate change per screen pixel across.
+        dy: Coordinate change per screen pixel up.
+
+    Returns:
+        Whether all six components are finite.
+
+    Raises:
+        Never.
+    """
+    return (
+        isfinite(u)
+        and isfinite(v)
+        and isfinite(dx.x)
+        and isfinite(dx.y)
+        and isfinite(dy.x)
+        and isfinite(dy.y)
+    )
+
+
+def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
+    """Reduce extreme finite tap coordinates before conversion to texel indices.
+
+    Ordinary coordinates keep their exact arithmetic. Reduction keeps the
+    representable wrap phase of larger finite coordinates and avoids
+    overflowing a texel-index conversion after a large finite gradient.
+
+    Args:
+        value: A finite coordinate of an explicit-gradient tap.
+        mode: The texture's checked wrap mode.
+
+    Returns:
+        The same coordinate or a bounded coordinate with the same wrap.
+
+    Raises:
+        Never. The caller supplies a checked wrap mode.
+    """
+    if abs(value) <= Float32(1048576):
+        return value
+    if mode == CLAMP:
+        return Float32(0) if value < 0 else Float32(1)
+    if mode == MIRROR:
+        var half = value * Float32(0.5)
+        return (half - floor(half)) * 2
+    return value - floor(value)
 
 
 @fieldwise_init
@@ -1954,14 +2075,41 @@ def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
         half_sum = (a + c) / 2
         half_difference = (a - c) / 2
     var spread = length2(half_difference, b)
-    # Clamped with `max` rather than with an `if`. Neither can go below
-    # zero in exact arithmetic -- `spread` is at most `half_sum`, because
-    # the Gram matrix of two real vectors is positive semidefinite -- so a
-    # rounding is the only thing either guard is for, and an `if` would be
-    # a branch no test could take.
     var larger = max(Float32(0), half_sum + spread)
-    var smaller = max(Float32(0), half_sum - spread)
-    return Vector2(sqrt(larger) * scale, sqrt(smaller) * scale)
+    var major = sqrt(larger)
+    if major == 0:
+        return Vector2(0, 0)
+    if spread == 0:
+        # A circle must keep identical axes. Dividing its rounded area by
+        # its rounded major can lose one ulp and request a spurious tap.
+        return Vector2(major * scale, major * scale)
+    # Subtracting the two Gram eigenvalues loses the short axis of a thin
+    # ellipse. The singular values' product is abs(det(J)), so divide its
+    # determinant by the major length instead. The FMA residual preserves
+    # small determinants of nearly parallel columns, with Float32 alone.
+    var minor: Float32
+    if scale == 1:
+        var product = u.y * v.x
+        var residual = fma(-u.y, v.x, product)
+        var determinant = fma(u.x, v.y, -product)
+        minor = abs(determinant + residual) / major
+    else:
+        # Dividing columns by an arbitrary scale can erase the difference
+        # between nearly parallel columns. Keep the original determinant
+        # as a fraction and exponent instead. Only the final length is
+        # narrowed back to Float32; no squared scale is materialized.
+        var area = _sum_products[DType.float32, 2](
+            [u.x, -u.y], [v.y, v.x], [1, 1]
+        )
+        var major_parts = _split(major)
+        var scale_parts = _split(scale)
+        var quotient = _split(
+            abs(area.fraction) / (major_parts.fraction * scale_parts.fraction),
+            area.exponent - major_parts.exponent - scale_parts.exponent,
+        )
+        minor = _at_exponent(quotient, 0)
+    var long_axis = major * scale
+    return Vector2(long_axis, min(long_axis, minor))
 
 
 def _major_direction(

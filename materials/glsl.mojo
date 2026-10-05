@@ -36,17 +36,17 @@ vec4` is the color and the opacity. `gl_FragDepth` is the depth node.
 is, and `gl_FrontFacing` is true on every face that three.js's WebGL
 renderer calls front: under `BACK_SIDE`, every face drawn.
 
-**The subset.** The types `void`, `bool`, `int`, `float`, `vec2` to
-`vec4`, `mat2` to `mat4`, and `sampler2D` uniforms. Uniforms, varyings,
+**The subset.** The types `void`, `bool`, `int`, `uint`, `float`, scalar
+and vector integers, float vectors, matrices, and texture uniforms. Uniforms, varyings,
 `const` globals, functions with `in`, `out` and `inout` parameters, `if`
-and `else`, `for` with a constant count, the operators but the bit ones,
+and `else`, `for` with a constant count, arithmetic and unsigned bit operators,
 `?:`, swizzles, indexes, arrays of one dimension, structs, constructors,
 object-like `#define`s, and the built-in functions GLSL has for floats and
-vectors. An `int` is a whole number held in a float. GLSL ES has no
-conversion between `int` and `float`, and neither has this. Whatever is
+vectors. Signed and unsigned integers retain all 32 bits in graph storage
+and registers. Conversions between integer and float types are explicit. Whatever is
 outside the subset is refused with the shader, the line and the reason.
 
-**Loop limits.** A `while` or `do` must provably stop within 64 body
+**Loop limits.** A `while` or `do` must provably stop within 256 body
 executions. The final condition still runs. A shader with an exhausted or
 unproved loop is refused before either renderer receives its program.
 This replaces the old silent truncation and can refuse previously accepted
@@ -65,6 +65,14 @@ from materials.nodes import (
     MAX_ATTRIBUTE_FLOATS,
     MAX_LOOP_COUNT,
     NODE_FLOAT,
+    NODE_UINT,
+    NODE_UINT_FIRST,
+    NODE_UINT_LAST,
+    NODE_INT_FIRST,
+    NODE_INT_LAST,
+    _int_operation,
+    Lanes,
+    _uint_operation,
     NODE_CONSTANT,
     NODE_COPY,
     NODE_SWIZZLE,
@@ -112,16 +120,16 @@ comptime _PAIRS = " ++ -- += -= *= /= %= == != <= >= && || ^^ << >> &= |= ^= "
 comptime _SINGLES = "+-*/%=<>!~&|^?:;,.(){}[]"
 comptime _KEYWORDS = (
     " attribute const uniform varying layout centroid flat smooth break"
-    " continue do for while switch case default if else in out inout true"
-    " false invariant discard return struct precision highp mediump lowp"
-    " void float int bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D ivec2"
-    " ivec3 ivec4 bvec2 bvec3 bvec4 samplerCube sampler3D sampler2DArray "
+    " continue do for while switch case default if else in out inout true false"
+    " invariant discard return struct precision highp mediump lowp void float"
+    " int uint uvec2 uvec3 uvec4 bool vec2 vec3 vec4 mat2 mat3 mat4 sampler2D"
+    " ivec2 ivec3 ivec4 bvec2 bvec3 bvec4 samplerCube sampler3D sampler2DArray "
 )
 # The most elements an array holds: each is a variable, and an index picked
 # where the shader runs reads every one.
 comptime MAX_ARRAY_SIZE = 256
 comptime _REFUSED_TYPES = (
-    " uint uvec2 uvec3 uvec4 mat2x2"
+    " mat2x2"
     " mat2x3 mat2x4 mat3x2 mat3x3 mat3x4 mat4x2 mat4x3 mat4x4"
     " sampler2DShadow samplerCubeShadow isampler2D"
     " usampler2D "
@@ -129,11 +137,11 @@ comptime _REFUSED_TYPES = (
 comptime _BUILTINS = (
     " radians degrees sin cos tan asin acos atan pow exp log exp2 log2 sqrt"
     " inversesqrt abs sign floor ceil trunc round roundEven fract mod min max"
-    " clamp mix step smoothstep length distance dot cross normalize"
-    " faceforward reflect refract dFdx dFdy fwidth texture texture2D"
-    " transpose determinant inverse textureLod lessThan lessThanEqual"
-    " greaterThan greaterThanEqual equal notEqual any all not texelFetch"
-    " textureSize textureProj texture2DProj textureCube "
+    " clamp mix step smoothstep length distance dot cross normalize faceforward"
+    " reflect refract dFdx dFdy fwidth texture texture2D transpose determinant"
+    " inverse textureLod textureGrad lessThan lessThanEqual greaterThan"
+    " greaterThanEqual equal notEqual any all not texelFetch textureSize"
+    " textureProj texture2DProj textureCube "
 )
 comptime _REFUSED_FUNCTIONS = (
     " sinh cosh tanh asinh acosh atanh modf isnan isinf floatBitsToInt"
@@ -141,21 +149,20 @@ comptime _REFUSED_FUNCTIONS = (
     " unpackSnorm2x16 packUnorm2x16 unpackUnorm2x16 packHalf2x16"
     " unpackHalf2x16 matrixCompMult outerProduct"
     " textureOffset"
-    " texelFetchOffset textureProjLod textureGrad texture2DLod "
+    " texelFetchOffset textureProjLod texture2DLod "
 )
 # The qualifiers the subset refuses, and the statements.
 comptime _REFUSED_QUALIFIERS = " flat centroid invariant inout buffer shared "
 # The most body executions of a `while` or a `do` loop. One additional
 # condition-only iteration proves it has stopped. The compiler refuses a
 # shader when it cannot prove that no loop reaches that extra body.
-comptime MAX_WHILE_COUNT = 64
+comptime MAX_WHILE_COUNT = 256
 # The built-ins that compare two vectors one component at a time.
 comptime _COMPARISONS = (
     " lessThan lessThanEqual greaterThan greaterThanEqual equal notEqual "
 )
 # What a `break` leaves when it is a loop's; see `_Compiler.breakables`.
 comptime _A_LOOP = -2
-comptime _BIT_MARKS = " | & ^ << >> ~ "
 
 
 def _listed(word: String, words: StringLiteral) -> Bool:
@@ -178,14 +185,13 @@ def _letter(text: String, at: Int) -> String:
 
 @fieldwise_init
 struct _TokenKind(Equatable, ImplicitlyCopyable):
-    """What a token is: a name, a whole number, a real number, a mark, or
-    the end."""
+    """A name, signed or unsigned whole number, real number, mark, or end."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the five kinds."""
-        return self.value >= 0 and self.value <= 4
+        """Return True if this is one of the six token kinds."""
+        return self.value >= 0 and self.value <= 5
 
 
 comptime _NAME = _TokenKind(0)
@@ -193,6 +199,7 @@ comptime _INT = _TokenKind(1)
 comptime _REAL = _TokenKind(2)
 comptime _MARK = _TokenKind(3)
 comptime _END = _TokenKind(4)
+comptime _UINT_TOKEN = _TokenKind(5)
 
 
 @fieldwise_init
@@ -392,6 +399,10 @@ struct _Lexer(Movable):
             return end
         if _starts_number(c, next):
             return self.number(text, at, line, out)
+        var triple = _clipped(text, at, at + 3)
+        if triple == "<<=" or triple == ">>=":
+            out.append(_Token(_MARK, triple, 0, line))
+            return at + 3
         var pair = _clipped(text, at, at + 2)
         if pair.byte_length() == 2 and _listed(pair, _PAIRS):
             out.append(_Token(_MARK, pair, 0, line))
@@ -407,68 +418,83 @@ struct _Lexer(Movable):
     def number(
         mut self, text: String, at: Int, line: Int, mut out: List[_Token]
     ) raises -> Int:
-        """Lex a number: a decimal or hexadecimal `int`, or a `float`.
+        """Lex decimal, octal or hexadecimal integers and real numbers.
 
         Raises:
-            Error: If it is unsigned, malformed, or a letter follows it.
+            Error: If the spelling or the 32-bit integer range is invalid.
         """
         var bytes = text.as_bytes()
         var end = at
+        var base = 10
+        var digits_at = at
         if _is_hex_start(_clipped(text, at, at + 2)):
-            end = at + 2
+            base = 16
+            digits_at += 2
+            end = digits_at
             while end < len(bytes) and _is_hex(bytes[end]):
                 end += 1
-            var digits = String(text[byte = at + 2 : end])
-            if digits == "":
+            if end == digits_at:
                 raise self.error(line, "a hexadecimal number needs digits")
-            out.append(
-                _Token(_INT, "0x" + digits, Float64(atol(digits, 16)), line)
-            )
-            return self.suffix(text, end, line, False)
+        else:
+            while end < len(bytes) and _is_digit(bytes[end]):
+                end += 1
         var real = False
-        while end < len(bytes) and _is_digit(bytes[end]):
-            end += 1
-        if end < len(bytes) and bytes[end] == UInt8(ord(".")):
+        if base == 10 and end < len(bytes) and bytes[end] == UInt8(ord(".")):
             real = True
             end += 1
             while end < len(bytes) and _is_digit(bytes[end]):
                 end += 1
-        if end < len(bytes) and _is_exponent(bytes[end]):
+        if base == 10 and end < len(bytes) and _is_exponent(bytes[end]):
             real = True
             end += 1
             if end < len(bytes) and _is_sign(bytes[end]):
                 end += 1
-            var digits = end
+            var first = end
             while end < len(bytes) and _is_digit(bytes[end]):
                 end += 1
-            if end == digits:
+            if end == first:
                 raise self.error(line, "an exponent needs digits")
         var written = String(text[byte=at:end])
+        var kind = _REAL if real else _INT
+        var number = Float64(0)
         if real:
-            out.append(_Token(_REAL, written, atof(written), line))
+            number = atof(written)
         else:
-            out.append(_Token(_INT, written, Float64(atol(written)), line))
-        return self.suffix(text, end, line, real)
-
-    def suffix(
-        self, text: String, at: Int, line: Int, real: Bool
-    ) raises -> Int:
-        """Take a float's `f` suffix, and refuse any other letter after a
-        number.
-
-        Raises:
-            Error: If a `u` or another letter follows the number.
-        """
-        var bytes = text.as_bytes()
-        if at >= len(bytes) or not _is_word_byte(bytes[at]):
-            return at
-        var c = _letter(text, at)
-        var alone = at + 1 >= len(bytes) or not _is_word_byte(bytes[at + 1])
-        if real and (c == "f" or c == "F") and alone:
-            return at + 1
-        if c == "u" or c == "U":
-            raise self.error(line, "unsigned integers are outside the subset")
-        raise self.error(line, "a letter cannot follow a number")
+            if base == 10 and end - at > 1 and bytes[at] == UInt8(ord("0")):
+                base = 8
+            for digit_at in range(digits_at, end):
+                var byte = Int(bytes[digit_at])
+                var digit = byte - ord("0")
+                if byte >= ord("a") and byte <= ord("f"):
+                    digit = byte - ord("a") + 10
+                elif byte >= ord("A") and byte <= ord("F"):
+                    digit = byte - ord("A") + 10
+                if digit >= base:
+                    raise self.error(
+                        line, "an octal integer uses digits 0 to 7"
+                    )
+                number = number * Float64(base) + Float64(digit)
+                if number > 4294967295.0:
+                    raise self.error(line, "an integer literal exceeds 32 bits")
+        var suffix_end = end
+        if end < len(bytes) and _is_word_byte(bytes[end]):
+            var c = _letter(text, end)
+            var alone = end + 1 >= len(bytes) or not _is_word_byte(
+                bytes[end + 1]
+            )
+            if not real and alone and (c == "u" or c == "U"):
+                kind = _UINT_TOKEN
+                suffix_end += 1
+            elif real and alone and (c == "f" or c == "F"):
+                suffix_end += 1
+            else:
+                raise self.error(line, "a letter cannot follow a number")
+        if kind == _INT and number > 2147483647.0:
+            raise self.error(
+                line, "an int literal exceeds 2147483647; use a u suffix"
+            )
+        out.append(_Token(kind, written, number, line))
+        return suffix_end
 
     def directive(mut self, text: String, line: Int, before: Int) raises:
         """Run one preprocessor line: `#version`, an object-like `#define`,
@@ -805,7 +831,7 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         return self.value >= _STRUCT_BASE
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the nineteen types."""
+        """Return True if this is a supported built-in type."""
         return (
             (self.value >= 0 and self.value <= 6)
             or (self.value >= 18 and self.value <= 20)
@@ -814,10 +840,15 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             or self.value == 9
             or self.value == 16
             or (self.value >= 32 and self.value <= 35)
+            or self.is_uint()
         )
 
     def name(self) -> String:
         """Return the type's GLSL name."""
+        if self.is_uint():
+            return "uint" if self.value == 41 else "uvec" + String(
+                self.value - 40
+            )
         if self.value == 0:
             return "void"
         if self.value == 1:
@@ -851,6 +882,8 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
     def width(self) -> Int:
         """Return how many components a value of this type has: one for a
         `bool` or an `int`, and four for a `mat2`."""
+        if self.is_uint():
+            return self.value - 40
         if self.value == 8:
             return 4
         if self.value >= 18 and self.value <= 20:
@@ -864,6 +897,18 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
         """Return True for `int` and `ivec2` to `ivec4`."""
         return self.value == 5 or (self.value >= 18 and self.value <= 20)
 
+    def is_uint(self) -> Bool:
+        """Return True for uint and its vectors."""
+        return self.value >= 41 and self.value <= 44
+
+    def graph_type(self) -> ValueType:
+        """Return the register type, retaining exact unsigned payloads."""
+        if self.is_uint():
+            return ValueType(self.value)
+        if self.is_int():
+            return ValueType(44 + self.width())
+        return ValueType(self.width())
+
     def is_bool(self) -> Bool:
         """Return True for `bool` and `bvec2` to `bvec4`."""
         return self.value == 6 or (self.value >= 22 and self.value <= 24)
@@ -871,12 +916,15 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
     def is_any_vector(self) -> Bool:
         """Return True for a vector of floats, ints or bools."""
         return self.is_vector() or (
-            (self.is_int() or self.is_bool()) and not self.is_scalar()
+            (self.is_int() or self.is_bool() or self.is_uint())
+            and not self.is_scalar()
         )
 
     def resized(self, width: Int) -> _Type:
         """Return the type of this one's kind of component, `width` wide: a
         scalar for one."""
+        if self.is_uint():
+            return _Type(40 + width)
         if self.is_int():
             return _TINT if width == 1 else _Type(16 + width)
         if self.is_bool():
@@ -885,7 +933,12 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
 
     def is_scalar(self) -> Bool:
         """Return True for `float`, `int` and `bool`."""
-        return self.value == 1 or self.value == 5 or self.value == 6
+        return (
+            self.value == 1
+            or self.value == 5
+            or self.value == 6
+            or self.value == 41
+        )
 
     def is_float(self) -> Bool:
         """Return True for `float` and the vectors."""
@@ -906,7 +959,7 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
 
     def is_number(self) -> Bool:
         """Return True for `int`, `float` and their vectors."""
-        return self.is_float() or self.is_int()
+        return self.is_float() or self.is_int() or self.is_uint()
 
     def holds(self) -> Bool:
         """Return True for what a local variable can hold: a `bool`, an
@@ -915,6 +968,7 @@ struct _Type(Equatable, ImplicitlyCopyable, Writable):
             (self.value >= 1 and self.value <= 6)
             or self.value == 8
             or self.is_any_vector()
+            or self.is_uint()
         )
 
 
@@ -924,6 +978,10 @@ comptime _VEC2 = _Type(2)
 comptime _VEC3 = _Type(3)
 comptime _VEC4 = _Type(4)
 comptime _TINT = _Type(5)
+comptime _TUINT = _Type(41)
+comptime _UVEC2 = _Type(42)
+comptime _UVEC3 = _Type(43)
+comptime _UVEC4 = _Type(44)
 comptime _BOOL = _Type(6)
 comptime _MAT2 = _Type(8)
 comptime _IVEC2 = _Type(18)
@@ -955,6 +1013,14 @@ struct _Struct(Copyable, Movable):
 
 def _type_named(name: String) -> _Type:
     """Return the type a keyword names, or `_NO_TYPE`."""
+    if name == "uint":
+        return _TUINT
+    if name == "uvec2":
+        return _UVEC2
+    if name == "uvec3":
+        return _UVEC3
+    if name == "uvec4":
+        return _UVEC4
     if name == "void":
         return _VOID
     if name == "float":
@@ -1143,18 +1209,60 @@ comptime _VERTEX = 0
 comptime _FRAGMENT = 1
 
 
-def _fold(mark: String, a: Float64, b: Float64, whole: Bool) -> Float64:
-    """Return an arithmetic operator of two known numbers, as GLSL computes
-    it: an `int` division drops the fraction, toward zero."""
+def _fold(mark: String, a: Float64, b: Float64) -> Float64:
+    """Evaluate known float arithmetic with per-node Float32 rounding."""
+    var x = Float32(a)
+    var y = Float32(b)
     if mark == "+":
-        return a + b
+        return Float64(x + y)
     if mark == "-":
-        return a - b
+        return Float64(x - y)
     if mark == "*":
-        return a * b
+        return Float64(x * y)
+    return Float64(x / y)
+
+
+def _fold_uint(mark: String, a: Float64, b: Float64) -> Float64:
+    """Evaluate a defined scalar unsigned operation modulo 2 ** 32."""
+    var x = UInt32(UInt64(a))
+    var y = UInt32(UInt64(b))
+    if mark == "+":
+        return Float64(x + y)
+    if mark == "-":
+        return Float64(x - y)
+    if mark == "*":
+        return Float64(x * y)
     if mark == "/":
-        return Float64(Int(a / b)) if whole else a / b
-    return a - b * Float64(Int(a / b))
+        return Float64(x // y) if y != 0 else 0
+    if mark == "%":
+        return Float64(x % y) if y != 0 else 0
+    if mark == "&":
+        return Float64(x & y)
+    if mark == "|":
+        return Float64(x | y)
+    if mark == "^":
+        return Float64(x ^ y)
+    if mark == "<<":
+        return Float64(x << y) if y < 32 else 0
+    return Float64(x >> y) if y < 32 else 0
+
+
+def _fold_int(mark: String, a: Float64, b: Float64) -> Float64:
+    """Evaluate scalar signed arithmetic with exact 32-bit intermediates."""
+    var x = Int64(a)
+    var y = Int64(b)
+    var bits: UInt32
+    if mark == "+":
+        bits = UInt32(x) + UInt32(y)
+    elif mark == "-":
+        bits = UInt32(x) - UInt32(y)
+    elif mark == "*":
+        bits = UInt32(x) * UInt32(y)
+    elif mark == "/":
+        bits = UInt32(Int64(a / b)) if y != 0 else UInt32(0)
+    else:
+        bits = UInt32(x - y * Int64(a / b)) if y != 0 else UInt32(0)
+    return Float64(bitcast[DType.int32](bits))
 
 
 def _runs(compare: String, index: Float64, bound: Float64) -> Bool:
@@ -1189,6 +1297,12 @@ def _assignment(mark: String) -> Bool:
         or mark == "-="
         or mark == "*="
         or mark == "/="
+        or mark == "%="
+        or mark == "&="
+        or mark == "|="
+        or mark == "^="
+        or mark == "<<="
+        or mark == ">>="
     )
 
 
@@ -1287,7 +1401,9 @@ def _loop_binary(kind: NodeKind, a: Float32, b: Float32) -> Optional[Float32]:
     return None
 
 
-def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
+def _loop_constants(
+    graph: NodeGraph, root: NodeRef
+) raises -> List[Optional[Float32]]:
     """Prove one scalar graph value without reading runtime inputs.
 
     A select can be known when its condition or both equal arms are known.
@@ -1302,12 +1418,17 @@ def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
     var order = graph._order(root.value)
     for place in range(len(order)):  # pragma: no branch
         var node = order[place]
-        if graph._types[node] != NODE_FLOAT:
+        if (
+            not graph._types[node].is_vector()
+            or graph._types[node].width() != 1
+        ):
             continue
         var kind = graph._kinds[node]
         if kind == NODE_CONSTANT:
             var literal = graph._values[node * 4]
-            if _loop_number_is_portable(literal):
+            if graph._types[node].is_integer() or _loop_number_is_portable(
+                literal
+            ):
                 values[node] = literal
             continue
         var inputs = List[Optional[Float32]]()
@@ -1343,6 +1464,24 @@ def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
                 values[node] = Float32(1)
             elif a and b:
                 values[node] = Float32(0)
+        elif (
+            kind.value >= NODE_UINT_FIRST.value
+            and kind.value <= NODE_INT_LAST.value
+        ):
+            var known = True
+            for slot in range(3):
+                if graph._inputs[node * 3 + slot] >= 0 and not inputs[slot]:
+                    known = False
+            if known:
+                var x = Lanes(a.value() if a else Float32(0))
+                var y = Lanes(b.value() if b else Float32(0))
+                var z = Lanes(c.value() if c else Float32(0))
+                var result = _uint_operation(
+                    kind.value, x, y, z
+                ) if kind.value <= NODE_UINT_LAST.value else _int_operation(
+                    kind.value, x, y, z
+                )
+                values[node] = result[0]
         elif a:
             if kind == NODE_NOT:
                 values[node] = Float32(Int(a.value() == 0))
@@ -1352,10 +1491,55 @@ def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
                 values[node] = trunc(a.value())
             elif b:
                 values[node] = _loop_binary(kind, a.value(), b.value())
-        if values[node]:
+        if values[node] and not graph._types[node].is_integer():
             if not _loop_number_is_portable(values[node].value()):
                 values[node] = None
+    return values^
+
+
+def _loop_constant(graph: NodeGraph, root: NodeRef) raises -> Optional[Float32]:
+    """Return a proved scalar value, preserving integer payload bits.
+
+    Raises:
+        Error: If the graph dependencies are invalid.
+    """
+    var values = _loop_constants(graph, root)
     return values[root.value]
+
+
+def _simplify_proved_control(
+    mut graph: NodeGraph, values: List[Optional[Float32]]
+):
+    """Reuse exact loop-exit proofs to remove inactive unrolled work.
+
+    Only values already required by the successful termination proof are
+    folded. Runtime uniforms and unrelated floating-point arithmetic stay
+    untouched. A select with a proved condition becomes a payload copy.
+    """
+    for node in range(len(values)):
+        if values[node]:
+            graph._kinds[node] = NODE_CONSTANT
+            for slot in range(3):
+                graph._inputs[node * 3 + slot] = -1
+            graph._values[node * 4] = values[node].value()
+        elif graph._kinds[node] == NODE_SELECT:
+            var condition = graph._inputs[node * 3]
+            # The graph broadcasts a scalar condition to a vector's width.
+            # Such a broadcast has the same truth in every lane.
+            if condition >= 0 and graph._kinds[condition] == NODE_SWIZZLE:
+                var source = graph._inputs[condition * 3]
+                if (
+                    source >= 0
+                    and graph._types[source] == NODE_FLOAT
+                    and graph._values[condition * 4] == 0
+                ):
+                    condition = source
+            if condition >= 0 and values[condition]:
+                var choice = 1 if values[condition].value() != 0 else 2
+                graph._kinds[node] = NODE_COPY
+                graph._inputs[node * 3] = graph._inputs[node * 3 + choice]
+                graph._inputs[node * 3 + 1] = -1
+                graph._inputs[node * 3 + 2] = -1
 
 
 struct _Compiler(Movable):
@@ -1562,6 +1746,16 @@ struct _Compiler(Movable):
     def zero(mut self, type: _Type) -> Int:
         """Return a node of zeros of a type, as wide as it."""
         var width = type.width()
+        if type.is_uint():
+            if width == 2:
+                return self.graph.uvec2(0, 0).value
+            if width == 3:
+                return self.graph.uvec3(0, 0, 0).value
+            if width == 4:
+                return self.graph.uvec4(0, 0, 0, 0).value
+            return self.graph.uint(0).value
+        if type.is_int():
+            return self.graph._add(NODE_CONSTANT, type.graph_type()).value
         if width == 2:
             return self.graph.vec2(0, 0).value
         if width == 3:
@@ -1572,7 +1766,13 @@ struct _Compiler(Movable):
 
     def literal(mut self, type: _Type, number: Float64) -> _Value:
         """Return a known scalar."""
-        var node = self.graph.float(Float32(number)).value
+        var node: Int
+        if type.is_uint():
+            node = self.graph.uint(UInt32(UInt64(number))).value
+        elif type.is_int():
+            node = self.graph.int32(Int32(Int64(number))).value
+        else:
+            node = self.graph.float(Float32(number)).value
         return _Value(type, node, True, True, number, _PLAIN, -1, False, -1, "")
 
     def node(self, value: _Value) raises -> NodeRef:
@@ -1656,9 +1856,9 @@ struct _Compiler(Movable):
             self.at = found.first
             raise self.error("main is void main()")
         _ = self.inline(main, List[_Value]())
-        var exhausted = _loop_constant(
-            self.graph, self.graph.get(self.loop_exhaustion)
-        )
+        var proof_root = self.graph.get(self.loop_exhaustion)
+        var proof = _loop_constants(self.graph, proof_root)
+        var exhausted = proof[proof_root.value]
         if not exhausted or exhausted.value() != 0:
             raise self.error(
                 "a while or do loop must provably stop within "
@@ -1666,6 +1866,7 @@ struct _Compiler(Movable):
                 + " body executions; the loop exceeds this resource limit"
                 " or its exit proof is unsupported"
             )
+        _simplify_proved_control(self.graph, proof)
 
     def declare_outputs(mut self) raises:
         """Declare GLSL's outputs this shader and version have: a vertex's
@@ -1825,6 +2026,8 @@ struct _Compiler(Movable):
             type = self.struct_named(word)
         if not type.is_valid() and not type.is_struct():
             raise self.error("expected a type before " + self.describe())
+        if type.is_uint() and self.raw and self.version != 300:
+            raise self.error("unsigned types require GLSL ES 3.0")
         self.at += 1
         return type
 
@@ -2033,7 +2236,7 @@ struct _Compiler(Movable):
         var picked = values[0].copy()
         for at in range(1, len(values)):
             picked = self.choose(
-                self.graph.equal(index, self.graph.float(Float32(at))),
+                self.graph.equal(index, self.index_literal(index, at)),
                 values[at],
                 picked,
             )
@@ -2187,7 +2390,9 @@ struct _Compiler(Movable):
                 self.declare(self.uniforms[index].copy())
                 return
         var node: NodeRef
-        if type == _SAMPLER:
+        if type.is_uint():
+            node = self.graph.uniform_uint(name, type.graph_type())
+        elif type == _SAMPLER:
             node = self.graph.texture_uniform(name, NO_TEXTURE)
         elif type == _SAMPLER_CUBE:
             node = self.graph.cube_uniform(name, NO_CUBE_TEXTURE)
@@ -2218,7 +2423,7 @@ struct _Compiler(Movable):
             else:
                 node = self.graph.uniform(name, Float32(0))
             if type.is_int():
-                node = self.graph.trunc(node)
+                node = self.graph.to_int(node)
             elif type.is_bool():
                 node = self.graph.not_equal(node, self.graph.float(0))
         var symbol = _Symbol(
@@ -2396,9 +2601,13 @@ struct _Compiler(Movable):
         if self.is_mark("]") and open:
             self.at += 1
             return 0
-        var size = self.additive()
+        var size = self.bit_or()
         self.expect("]")
-        if size.type != _TINT or not size.known or size.number < 1:
+        if (
+            (size.type != _TINT and size.type != _TUINT)
+            or not size.known
+            or size.number < 1
+        ):
             raise self.error("an array's size is a positive constant int")
         if size.number > Float64(MAX_ARRAY_SIZE):
             raise self.error(
@@ -2661,7 +2870,7 @@ struct _Compiler(Movable):
         )
         if framed:
             var frame = called.result if called.result != _VOID else _FLOAT
-            self.graph.open_call(ValueType(frame.width()))
+            self.graph.open_call(frame.graph_type())
         while self.at < called.last:
             self.statement()
         _ = self.calling.pop()
@@ -2786,7 +2995,7 @@ struct _Compiler(Movable):
         self.expect("(")
         var selector = self.expression()
         self.expect(")")
-        if selector.type != _TINT:
+        if selector.type != _TINT and selector.type != _TUINT:
             raise self.error(
                 "a switch chooses by an int, not a " + selector.type.name()
             )
@@ -2805,8 +3014,8 @@ struct _Compiler(Movable):
                 nesting -= 1
             elif nesting == 0 and self.is_word("case"):
                 self.at += 1
-                var label = self.additive()
-                if label.type != _TINT or not label.known:
+                var label = self.bit_or()
+                if label.type != selector.type or not label.known:
                     raise self.error("a case label is a constant int")
                 for index in range(len(labels)):
                     if labels[index] == label.number:
@@ -2828,7 +3037,8 @@ struct _Compiler(Movable):
             matched = self.graph.logical_or(
                 matched,
                 self.graph.equal(
-                    chosen, self.graph.float(Float32(labels[index]))
+                    chosen,
+                    self.node(self.literal(selector.type, labels[index])),
                 ),
             )
         # A continue in the switch breaks out of it and sets this.
@@ -2845,10 +3055,10 @@ struct _Compiler(Movable):
             var hit: NodeRef
             if self.is_word("case"):
                 self.at += 1
-                var label = self.additive()
+                var label = self.bit_or()
                 self.expect(":")
                 hit = self.graph.equal(
-                    chosen, self.graph.float(Float32(label.number))
+                    chosen, self.node(self.literal(selector.type, label.number))
                 )
             elif self.is_word("default"):
                 self.at += 1
@@ -3108,7 +3318,7 @@ struct _Compiler(Movable):
         Raises:
             Error: If it is not of the type, or not known before it runs.
         """
-        var value = self.additive()
+        var value = self.bit_or()
         if value.type != type or not value.known:
             raise self.error(
                 "a for loop's " + what + " is a constant " + type.name()
@@ -3125,9 +3335,13 @@ struct _Compiler(Movable):
         self.at += 1
         self.expect("(")
         _ = self.qualifiers()
-        if not self.is_word("int") and not self.is_word("float"):
+        if (
+            not self.is_word("int")
+            and not self.is_word("float")
+            and not self.is_word("uint")
+        ):
             raise self.error(
-                "a for loop begins by declaring its int or float index"
+                "a for loop begins by declaring its int, uint or float index"
             )
         var type = self.type()
         var name = self.name()
@@ -3156,8 +3370,31 @@ struct _Compiler(Movable):
                     + String(MAX_LOOP_COUNT)
                     + " times"
                 )
-            index = Float64(Float32(index + step))
-        var node = self.graph.Loop(count, Float32(first), Float32(step))
+            if type.is_uint():
+                var signed_step = (
+                    Float64(bitcast[DType.uint32](Int32(Int64(step)))) if step
+                    < 0 else step
+                )
+                index = _fold_uint("+", index, signed_step)
+            elif type.is_int():
+                index = Float64(
+                    bitcast[DType.int32](UInt32(Int64(index + step)))
+                )
+            else:
+                index = Float64(Float32(index + step))
+        var node: NodeRef
+        if type.is_uint():
+            var iteration = self.graph.to_uint(self.graph.Loop(count))
+            var start = self.graph.uint(UInt32(UInt64(first)))
+            var by = self.graph.uint(UInt32(Int64(step)))
+            node = self.graph.add(start, self.graph.mul(iteration, by))
+        elif type.is_int():
+            var iteration = self.graph.to_int(self.graph.Loop(count))
+            var start = self.graph.int32(Int32(Int64(first)))
+            var by = self.graph.int32(Int32(Int64(step)))
+            node = self.graph.add(start, self.graph.mul(iteration, by))
+        else:
+            node = self.graph.Loop(count, Float32(first), Float32(step))
         self.open()
         self.declare(_Symbol(name, _INDEX, _plain(type, node.value), -1, False))
         self.depth += 1
@@ -3382,12 +3619,14 @@ struct _Compiler(Movable):
                 self.at += 1
                 var value = self.expression()
                 if mark != "=":
-                    value = self.arithmetic(_letter(mark, 0), target, value)
+                    var operator = String(
+                        mark[byte = 0 : mark.byte_length() - 1]
+                    )
+                    if _listed(operator, " & | ^ << >> "):
+                        value = self.bits(operator, target, value)
+                    else:
+                        value = self.arithmetic(operator, target, value)
                 self.assign(target, value)
-            elif _listed(mark, " %= &= |= ^= <<= >>= "):
-                raise self.error(
-                    "the operator " + mark + " is outside the subset"
-                )
         if self.is_mark("=") or self.is_mark("++") or self.is_mark("--"):
             raise self.error(
                 "an assignment or ++ is a whole statement in this subset"
@@ -3400,10 +3639,12 @@ struct _Compiler(Movable):
         Raises:
             Error: If the target cannot be assigned or is not a number.
         """
-        if target.type != _TINT and target.type != _FLOAT:
+        if not target.type.is_number():
             raise self.error("++ and -- change an int or a float")
-        var one = self.literal(target.type, sign)
-        self.assign(target, self.arithmetic("+", target, one))
+        var one = self.literal(target.type.resized(1), 1)
+        self.assign(
+            target, self.arithmetic("+" if sign > 0 else "-", target, one)
+        )
 
     def assign(mut self, target: _Value, value: _Value) raises:
         """Make a variable, or some of its components, hold a value.
@@ -3550,12 +3791,23 @@ struct _Compiler(Movable):
                     value.type,
                 )
             var here = self.graph.equal(
-                NodeRef(target.point), self.graph.float(Float32(index))
+                NodeRef(target.point),
+                self.index_literal(NodeRef(target.point), index),
             )
             self.graph.assign(variable, self.graph.select(here, written, held))
             ref changed = self.symbols[first + index]
             changed.written = True
             changed.value.local = changed.value.local or value.local
+
+    def index_literal(mut self, index: NodeRef, number: Int) raises -> NodeRef:
+        """Return a small index constant in the index's exact register family.
+        """
+        var type = self.graph.type_of(index)
+        if type.is_unsigned():
+            return self.graph.uint(UInt32(number))
+        if type.is_signed():
+            return self.graph.int32(Int32(number))
+        return self.graph.float(Float32(number))
 
     def pick(mut self, values: List[NodeRef], index: NodeRef) raises -> NodeRef:
         """Return the value an index picks where the shader runs, the first
@@ -3565,7 +3817,7 @@ struct _Compiler(Movable):
         # two, so the loop runs.
         for at in range(1, len(values)):  # pragma: no branch
             picked = self.graph.select(
-                self.graph.equal(index, self.graph.float(Float32(at))),
+                self.graph.equal(index, self.index_literal(index, at)),
                 values[at],
                 picked,
             )
@@ -3609,9 +3861,14 @@ struct _Compiler(Movable):
                 "a ?: needs a bool, not a " + condition.type.name()
             )
         self.at += 1
+        self.graph.If(NodeRef(condition.node))
+        self.depth += 1
         var yes = self.expression()
         self.expect(":")
+        self.graph.Else()
         var no = self.expression()
+        self.depth -= 1
+        self.graph.End()
         if yes.type != no.type:
             raise self.error(
                 "a ?: chooses between one type, not a "
@@ -3627,8 +3884,8 @@ struct _Compiler(Movable):
     def logical(
         mut self, mark: String, left: _Value, right: _Value
     ) raises -> _Value:
-        """Return `&&`, `||` or `^^` of two `bool`s. Both sides are
-        computed: an expression here has no side effects to skip.
+        """Combine two bool values after their evaluation gates are built.
+        The parser gates side effects of `&&` and `||`; `^^` reads both.
 
         Raises:
             Error: If either is not a `bool`.
@@ -3651,7 +3908,13 @@ struct _Compiler(Movable):
         var left = self.logical_xor()
         while self.is_mark("||"):
             self.at += 1
+            if left.type != _BOOL:
+                raise self.error("|| joins two bools")
+            self.graph.If(self.graph.logical_not(NodeRef(left.node)))
+            self.depth += 1
             var right = self.logical_xor()
+            self.depth -= 1
+            self.graph.End()
             left = self.logical("||", left, right)
         return left^
 
@@ -3666,25 +3929,99 @@ struct _Compiler(Movable):
 
     def logical_and(mut self) raises -> _Value:
         """Parse `a && b`."""
-        var left = self.equality()
+        var left = self.bit_or()
         while self.is_mark("&&"):
             self.at += 1
-            var right = self.equality()
+            if left.type != _BOOL:
+                raise self.error("&& joins two bools")
+            self.graph.If(NodeRef(left.node))
+            self.depth += 1
+            var right = self.bit_or()
+            self.depth -= 1
+            self.graph.End()
             left = self.logical("&&", left, right)
         return left^
 
-    def refuse_bits(self) raises:
-        """Refuse a bit operator where one could follow a value.
+    def bit_or(mut self) raises -> _Value:
+        """Parse unsigned bitwise or, below equality precedence."""
+        var left = self.bit_xor()
+        while self.is_mark("|"):
+            self.at += 1
+            left = self.bits("|", left, self.bit_xor())
+        return left^
+
+    def bit_xor(mut self) raises -> _Value:
+        """Parse unsigned bitwise exclusive or."""
+        var left = self.bit_and()
+        while self.is_mark("^"):
+            self.at += 1
+            left = self.bits("^", left, self.bit_and())
+        return left^
+
+    def bit_and(mut self) raises -> _Value:
+        """Parse unsigned bitwise and."""
+        var left = self.equality()
+        while self.is_mark("&"):
+            self.at += 1
+            left = self.bits("&", left, self.equality())
+        return left^
+
+    def shifted(mut self) raises -> _Value:
+        """Parse unsigned shifts, below additive precedence."""
+        var left = self.additive()
+        while self.is_mark("<<") or self.is_mark(">>"):
+            var mark = self.peek()
+            self.at += 1
+            left = self.bits(mark, left, self.additive())
+        return left^
+
+    def bits(
+        mut self, mark: String, left: _Value, right: _Value
+    ) raises -> _Value:
+        """Build exact unsigned bit operations with GLSL shape checks.
 
         Raises:
-            Error: If the current token is one.
+            Error: If operands are not unsigned, sizes differ, or a known shift is invalid.
         """
-        if self.tokens[self.at].kind == _MARK and _listed(
-            self.peek(), _BIT_MARKS
-        ):
+        var shift = mark == "<<" or mark == ">>"
+        var a = left.type
+        var b = right.type
+        if not a.is_uint() or not (b.is_uint() or (shift and b.is_int())):
             raise self.error(
-                "the bit operator " + self.peek() + " is outside the subset"
+                "the bit operator "
+                + mark
+                + " requires unsigned operands in this subset"
             )
+        if shift:
+            if not b.is_scalar() and b.width() != a.width():
+                raise self.error(
+                    "a shift count is scalar or has the left operand's width"
+                )
+            if right.known and (right.number < 0 or right.number >= 32):
+                raise self.error("an unsigned shift count must be from 0 to 31")
+        elif a != b and not a.is_scalar() and not b.is_scalar():
+            raise self.error("unsigned bit operands have one vector width")
+        var x = self.node(left)
+        var y = self.node(right)
+        if b.is_int():
+            y = self.graph.to_uint(y)
+        var node: NodeRef
+        if mark == "&":
+            node = self.graph.bit_and(x, y)
+        elif mark == "|":
+            node = self.graph.bit_or(x, y)
+        elif mark == "^":
+            node = self.graph.bit_xor(x, y)
+        elif mark == "<<":
+            node = self.graph.shift_left(x, y)
+        else:
+            node = self.graph.shift_right(x, y)
+        var type = a if shift or a.width() >= b.width() else b
+        var value = self.derived(type, node, left, right)
+        if left.known and right.known:
+            value.known = True
+            value.number = _fold_uint(mark, left.number, right.number)
+        return value^
 
     def equality(mut self) raises -> _Value:
         """Parse `a == b` and `a != b`: true only where every component
@@ -3714,15 +4051,17 @@ struct _Compiler(Movable):
 
     def relational(mut self) raises -> _Value:
         """Parse `<`, `<=`, `>` and `>=` of two `int`s or two `float`s."""
-        var left = self.additive()
+        var left = self.shifted()
         while (
             _listed(self.peek(), " < <= > >= ")
             and self.tokens[self.at].kind == _MARK
         ):
             var mark = self.peek()
             self.at += 1
-            var right = self.additive()
-            var scalar = left.type == _FLOAT or left.type == _TINT
+            var right = self.shifted()
+            var scalar = (
+                left.type == _FLOAT or left.type == _TINT or left.type == _TUINT
+            )
             if left.type != right.type or not scalar:
                 raise self.error(
                     "cannot compare a "
@@ -3742,7 +4081,6 @@ struct _Compiler(Movable):
             else:
                 node = self.graph.greater_than_equal(a, b)
             left = self.derived(_BOOL, node, left, right)
-        self.refuse_bits()
         return left^
 
     def additive(mut self) raises -> _Value:
@@ -3753,7 +4091,6 @@ struct _Compiler(Movable):
             self.at += 1
             var right = self.multiplicative()
             left = self.arithmetic(mark, left, right)
-        self.refuse_bits()
         return left^
 
     def multiplicative(mut self) raises -> _Value:
@@ -3785,14 +4122,18 @@ struct _Compiler(Movable):
             return self.transformed(left, right)
         var a = left.type
         var b = right.type
-        if mark == "%" and (not a.is_int() or not b.is_int()):
+        if mark == "%" and not (
+            (a.is_int() and b.is_int()) or (a.is_uint() and b.is_uint())
+        ):
             raise self.error("% takes two ints: write mod() for floats")
         if a == _MAT2 or b == _MAT2:
             return self.mat2_arithmetic(mark, left, right)
         if a.is_matrix() or b.is_matrix():
             return self.matrix_product(mark, left, right)
-        var numeric = (a.is_float() and b.is_float()) or (
-            a.is_int() and b.is_int()
+        var numeric = (
+            (a.is_float() and b.is_float())
+            or (a.is_int() and b.is_int())
+            or (a.is_uint() and b.is_uint())
         )
         var sizes = a == b or a.is_scalar() or b.is_scalar()
         if not numeric or not sizes:
@@ -3804,6 +4145,13 @@ struct _Compiler(Movable):
                 + " and a "
                 + b.name()
             )
+        if (
+            (a.is_uint() or a.is_int())
+            and (mark == "/" or mark == "%")
+            and right.known
+            and right.number == 0
+        ):
+            raise self.error("integer division or remainder by zero")
         var type = a if a.width() >= b.width() else b
         var x = self.node(left)
         var y = self.node(right)
@@ -3816,15 +4164,20 @@ struct _Compiler(Movable):
             node = self.graph.mul(x, y)
         elif mark == "/":
             node = self.graph.div(x, y)
-            if type.is_int():
-                node = self.graph.trunc(node)
+        elif type.is_uint() or type.is_int():
+            node = self.graph.mod(x, y)
         else:
             var quotient = self.graph.trunc(self.graph.div(x, y))
             node = self.graph.sub(x, self.graph.mul(y, quotient))
         var value = self.derived(type, node, left, right)
         if left.known and right.known:
             value.known = True
-            value.number = _fold(mark, left.number, right.number, type == _TINT)
+            if type.is_uint():
+                value.number = _fold_uint(mark, left.number, right.number)
+            elif type.is_int():
+                value.number = _fold_int(mark, left.number, right.number)
+            else:
+                value.number = _fold(mark, left.number, right.number)
         return value^
 
     def mat2_arithmetic(
@@ -4002,13 +4355,24 @@ struct _Compiler(Movable):
         ):
             return self.postfix()
         self.at += 1
-        if mark == "~":
-            raise self.error("the bit operator ~ is outside the subset")
         if mark == "++" or mark == "--":
             raise self.error(
                 "an assignment or ++ is a whole statement in this subset"
             )
         var value = self.unary()
+        if mark == "~":
+            if not value.type.is_uint():
+                raise self.error(
+                    "the bit operator ~ requires an unsigned operand in this"
+                    " subset"
+                )
+            var result = self.derived(
+                value.type, self.graph.bit_not(self.node(value)), value, value
+            )
+            result.known = value.known
+            if value.known:
+                result.number = Float64(~UInt32(UInt64(value.number)))
+            return result^
         if mark == "!":
             if value.type != _BOOL:
                 raise self.error("! takes a bool, not a " + value.type.name())
@@ -4026,7 +4390,13 @@ struct _Compiler(Movable):
             value.type, self.graph.negate(self.node(value)), value, value
         )
         result.known = value.known
-        result.number = -value.number
+        result.number = _fold_uint(
+            "-", 0, value.number
+        ) if value.type.is_uint() else (
+            _fold_int(
+                "-", 0, value.number
+            ) if value.type.is_int() else -value.number
+        )
         return result^
 
     def postfix(mut self) raises -> _Value:
@@ -4077,7 +4447,7 @@ struct _Compiler(Movable):
                         "only a vector or a matrix can be indexed in this"
                         " subset"
                     )
-                if index.type != _TINT:
+                if index.type != _TINT and index.type != _TUINT:
                     raise self.error("a vector is indexed by an int")
                 if not index.known:
                     # Picked where the shader runs, and not assigned.
@@ -4112,7 +4482,11 @@ struct _Compiler(Movable):
             Error: If the matrix is one of three.js's transforms, or the
                 index is not a constant int in range.
         """
-        if value.tag == _MODEL and index.type == _TINT and index.known:
+        if (
+            value.tag == _MODEL
+            and (index.type == _TINT or index.type == _TUINT)
+            and index.known
+        ):
             # Known only as a step: `.xyz` of the first three makes the
             # model's turn and stretch.
             self.check_column(value.type, 4, index)
@@ -4142,7 +4516,7 @@ struct _Compiler(Movable):
         Raises:
             Error: If the index is not an int, or is outside the matrix.
         """
-        if index.type != _TINT:
+        if index.type != _TINT and index.type != _TUINT:
             raise self.error("a matrix is indexed by an int")
         if index.known and (index.number < 0 or index.number >= Float64(size)):
             raise self.error("the index is outside the " + type.name())
@@ -4211,6 +4585,11 @@ struct _Compiler(Movable):
             Error: If the token begins no value of the subset.
         """
         var token = self.tokens[self.at].copy()
+        if token.kind == _UINT_TOKEN:
+            if self.raw and self.version != 300:
+                raise self.error("unsigned literals require GLSL ES 3.0")
+            self.at += 1
+            return self.literal(_TUINT, token.number)
         if token.kind == _INT:
             self.at += 1
             return self.literal(_TINT, token.number)
@@ -4275,7 +4654,7 @@ struct _Compiler(Movable):
         self.at += 1
         var index = self.expression()
         self.expect("]")
-        if index.type != _TINT:
+        if index.type != _TINT and index.type != _TUINT:
             raise self.error("an array is indexed by an int")
         if index.known:
             if index.number < 0 or index.number >= Float64(size):
@@ -4387,6 +4766,11 @@ struct _Compiler(Movable):
             if not args[arg].type.is_struct():
                 _ = self.node(args[arg])
         var result = self.inline(index, args)
+        # A user function is not a GLSL constant expression. In particular,
+        # its last return's metadata cannot stand for an earlier return.
+        result.constant = False
+        result.known = False
+        result.number = 0
         for arg in range(len(args)):
             result.local = result.local or args[arg].local
         return result^
@@ -4399,6 +4783,8 @@ struct _Compiler(Movable):
             Error: If the type cannot be constructed, or the arguments are
                 too few or too many.
         """
+        if type.is_uint() and self.raw and self.version != 300:
+            raise self.error("unsigned types require GLSL ES 3.0")
         if len(args) == 0:
             raise self.error(
                 "a " + type.name() + " constructor needs arguments"
@@ -4446,10 +4832,9 @@ struct _Compiler(Movable):
                 )
             var part = NodeRef(args[index].node)
             var given = args[index].type
-            if type.is_int() and not given.is_int() and not given.is_bool():
-                part = self.graph.trunc(part)
-            elif type.is_bool() and not given.is_bool():
-                part = self.graph.not_equal(part, self.graph.float(0))
+            part = self.convert_node(type, given, part)
+            if args[index].known:
+                _ = self.convert_number(type, given, args[index].number)
             var size = given.width()
             if filled + size > width:
                 size = width - filled
@@ -4497,6 +4882,7 @@ struct _Compiler(Movable):
         value.constant = arg.constant
         value.local = arg.local
         if arg.type.is_scalar():
+            node = self.convert_node(_FLOAT, arg.type, node)
             var zero = self.graph.float(0)
             value.node = self.graph.join([node, zero, zero, node]).value
             return value^
@@ -4580,7 +4966,9 @@ struct _Compiler(Movable):
                 raise self.error(
                     "a " + type.name() + " is made of one matrix alone"
                 )
-            var node = NodeRef(self.node(args[index]).value)
+            var node = self.convert_node(
+                _FLOAT, args[index].type, self.node(args[index])
+            )
             var width = args[index].type.width()
             if width == 1:
                 parts.append(node)
@@ -4654,14 +5042,70 @@ struct _Compiler(Movable):
             return self.graph.mat3(columns[0], columns[1], columns[2])
         return self.graph.mat4(columns[0], columns[1], columns[2], columns[3])
 
+    def convert_node(
+        mut self, to: _Type, from_type: _Type, node: NodeRef
+    ) raises -> NodeRef:
+        """Convert every lane without exposing integer payload bits as floats.
+
+        Raises:
+            Error: If the node is not a scalar or vector of this graph.
+        """
+        if to.is_uint():
+            return self.graph.to_uint(node)
+        if to.is_int():
+            return self.graph.to_int(node)
+        if to.is_bool():
+            if from_type.is_uint():
+                return self.graph.uint_to_bool(node)
+            if from_type.is_int():
+                return self.graph.int_to_bool(node)
+            return self.graph.not_equal(node, self.graph.float(0))
+        if from_type.is_uint():
+            return self.graph.uint_to_float(node)
+        if from_type.is_int():
+            return self.graph.int_to_float(node)
+        return node
+
+    def convert_number(
+        self, to: _Type, from_type: _Type, number: Float64
+    ) raises -> Float64:
+        """Convert known scalar metadata with checked float-to-integer ranges.
+
+        Raises:
+            Error: If a known float conversion is nonfinite or outside the target range.
+        """
+        if to.is_uint():
+            if from_type.is_int():
+                return Float64(bitcast[DType.uint32](Int32(Int64(number))))
+            if not isfinite(number) or number < 0 or number >= 4294967296.0:
+                raise self.error(
+                    "uint conversion requires a finite value from 0 to"
+                    " 4294967295"
+                )
+            return Float64(UInt32(UInt64(number)))
+        if to.is_int():
+            if from_type.is_uint():
+                return Float64(bitcast[DType.int32](UInt32(UInt64(number))))
+            if (
+                not isfinite(number)
+                or number < -2147483648.0
+                or number >= 2147483648.0
+            ):
+                raise self.error(
+                    "int conversion requires a finite 32-bit signed value"
+                )
+            return Float64(Int32(Int64(number)))
+        if to.is_bool():
+            return 1 if number != 0 else 0
+        return Float64(Float32(number))
+
     def convert(
         mut self, type: _Type, args: List[_Value], var value: _Value
     ) raises -> _Value:
-        """Return `float(x)`, `int(x)` or `bool(x)` of one scalar or of a
-        vector's first component.
+        """Convert one scalar or a vector's first component.
 
         Raises:
-            Error: If there is more than one argument.
+            Error: If there is more than one argument or a known conversion is outside range.
         """
         if len(args) > 1:
             raise self.error(
@@ -4671,16 +5115,10 @@ struct _Compiler(Movable):
         var node = NodeRef(args[0].node)
         if from_type.width() > 1:
             node = self.graph.swizzle(node, "x")
-        var number = args[0].number
-        if type == _TINT and from_type != _TINT and from_type != _BOOL:
-            node = self.graph.trunc(node)
-            number = Float64(Int(number))
-        if type == _BOOL and from_type != _BOOL:
-            node = self.graph.not_equal(node, self.graph.float(0))
-            number = 1 if number != 0 else 0
-        value.node = node.value
+        value.node = self.convert_node(type, from_type, node).value
         value.known = args[0].known
-        value.number = number
+        if value.known:
+            value.number = self.convert_number(type, from_type, args[0].number)
         return value^
 
     def builtin_call(
@@ -4702,8 +5140,8 @@ struct _Compiler(Movable):
         if _listed(
             name,
             (
-                " texture texture2D textureLod textureProj texture2DProj"
-                " textureCube "
+                " texture texture2D textureLod textureGrad textureProj"
+                " texture2DProj textureCube "
             ),
         ):
             return self.texture(name, args, nodes, value^)
@@ -4855,11 +5293,17 @@ struct _Compiler(Movable):
         if fetch:
             value.type = _VEC4
             value.node = self.graph.texture_load(
-                nodes[0], nodes[1], nodes[2]
+                nodes[0],
+                self.graph.int_to_float(nodes[1]),
+                self.graph.int_to_float(nodes[2]),
             ).value
         else:
             value.type = _IVEC2
-            value.node = self.graph.texture_size(nodes[0], nodes[1]).value
+            value.node = self.graph.to_int(
+                self.graph.texture_size(
+                    nodes[0], self.graph.int_to_float(nodes[1])
+                )
+            ).value
         return value^
 
     def texture(
@@ -4869,14 +5313,15 @@ struct _Compiler(Movable):
         nodes: List[NodeRef],
         var value: _Value,
     ) raises -> _Value:
-        """Return `texture(s, uv)` or `texture2D(s, uv)`, or `textureLod(s,
-        uv, level)` at a mip level.
+        """Return a texture read at implicit coordinates, an explicit mip
+        level, or explicit `textureGrad` gradients.
 
         Raises:
             Error: If the spelling is not the shader's version's, the shader
                 is a vertex shader, or the arguments are others.
         """
         var level = name == "textureLod"
+        var gradient = name == "textureGrad"
         var projective = name == "textureProj" or name == "texture2DProj"
         var modern = (
             name != "texture2D"
@@ -4920,6 +5365,23 @@ struct _Compiler(Movable):
                 self.graph.swizzle(nodes[1], last),
             )
             value.node = self.graph.texture(nodes[0], uv).value
+        elif gradient:
+            if (
+                len(args) != 4
+                or args[0].type != _SAMPLER
+                or args[1].type != _VEC2
+                or args[2].type != _VEC2
+                or args[3].type != _VEC2
+            ):
+                raise self.error(
+                    "textureGrad() takes a sampler2D and three vec2 values"
+                )
+            try:
+                value.node = self.graph.texture_grad(
+                    nodes[0], nodes[1], nodes[2], nodes[3]
+                ).value
+            except error:
+                raise self.error(String(error))
         elif level:
             if (
                 len(args) != 3
@@ -5040,6 +5502,7 @@ struct _Compiler(Movable):
         """
         var shapes = _shapes(name)
         var ints = _takes_ints(name)
+        var uints = _listed(name, " min max clamp ")
         # Never empty: every built-in has a signature.
         for shape in range(len(shapes)):  # pragma: no branch
             var letters = shapes[shape]
@@ -5051,13 +5514,19 @@ struct _Compiler(Movable):
             for index in range(len(args)):  # pragma: no branch
                 var letter = _letter(letters, index)
                 var type = args[index].type
-                var number = type.is_float() or (ints and type.is_int())
+                var number = (
+                    type.is_float()
+                    or (ints and type.is_int())
+                    or (uints and type.is_uint())
+                )
                 if letter == "3":
                     generic = _VEC3
                     fits = fits and type == _VEC3
                 elif letter == "F":
                     # The scalar of the generic type: an int beside ints.
-                    var scalar = _TINT if generic.is_int() else _FLOAT
+                    var scalar = _TUINT if generic.is_uint() else (
+                        _TINT if generic.is_int() else _FLOAT
+                    )
                     fits = fits and type == scalar
                 else:
                     fits = (

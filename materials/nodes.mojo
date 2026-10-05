@@ -99,20 +99,33 @@ three corners and interpolates the three with the fragment's
 perspective-correct weights.
 
 **Registers.** Each instruction writes one of `MAX_REGISTERS` registers of
-four floats. The compiler gives a register back when the last reader of its
+four 32-bit words. Float nodes use Float32 values. Exact integer nodes
+bitcast UInt32 payloads into these words. No float arithmetic reads those
+payloads. The compiler gives a register back when the last reader of its
 value has run, so an output can hold up to `MAX_INSTRUCTIONS` instructions
 while no more than `MAX_REGISTERS` values are alive at once.
+
+**Exact integers.** `uint` and `uvec2` through `uvec4` retain all 32 bits.
+The signed types produced by `uint_to_int` also retain all 32 bits. Integer
+arithmetic wraps modulo 2 ** 32. Division or remainder by zero returns zero.
+A shift count of 32 or more returns zero. Signed division truncates toward
+zero; the minimum signed value divided by minus one wraps. These bounded
+results define cases that GLSL leaves undefined. `to_uint` and `to_int`
+truncate float values toward zero. Unsigned conversion accepts values from
+zero through values below 2 ** 32. Signed conversion accepts values from
+-2 ** 31 through values below 2 ** 31. Out-of-range and nonfinite inputs
+return zero. Integer-to-integer conversions reinterpret all 32 bits.
+`unsigned` remains the legacy float-backed conversion for existing callers.
+Use `uint_to_float` or `int_to_float` before float-only math or shader outputs.
 
 **Compute programs.** `materials.compute_nodes` builds three.js's compute
 nodes on a graph: its statements' roots are laid out by `compile_roots`
 and run by `run_code`, and the compute leaves read the invocation, the
 storage buffers and the statements' results through `NodeSource`.
 
-**What three.js offers that is not ported.** `Break`, `Continue` and `Return` in a loop, integer and bit operations, the
-matrix functions (`transpose`, `inverse`), the Worley and cell noises and
-`mx_noise_vec3`, and a texture node's own mip level: a texture node reads
-its image at the level the surface's own coordinates pick, where WebGPU
-measures the derivatives of the coordinate the node computes.
+**Texture footprints.** An ordinary texture node reads its image at the
+level the surface's own coordinates pick. WebGPU instead measures the
+derivatives of the coordinate the node computes.
 """
 
 from lights.shadow import ShadowShape
@@ -138,7 +151,21 @@ from render.volume_texture_store import (
     DataArrayTextureId,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import ceil, cos, exp, exp2, floor, log2, max, min, pow, sin, sqrt
+from render.texture import anisotropic_footprint
+from std.math import (
+    ceil,
+    cos,
+    exp,
+    exp2,
+    floor,
+    isfinite,
+    log2,
+    max,
+    min,
+    pow,
+    sin,
+    sqrt,
+)
 from std.memory import bitcast
 from units.si import Duration, SECOND
 
@@ -156,6 +183,8 @@ comptime MAX_GRAPH_NODES = 65536
 # inputs, one immediate -- where a constant's floats are, which components a
 # swizzle picks, or how wide a vector is -- and the register it writes. A
 # node that reads the fragment keeps its context in the third input's place.
+# An exact integer constant keeps ValueType.value - 40 in the unused B slot.
+# Constant and uniform loads must run before operand-register reads.
 comptime INSTRUCTION_OP = 0
 comptime INSTRUCTION_A = 1
 comptime INSTRUCTION_B = 2
@@ -181,38 +210,108 @@ struct ValueType(Equatable, ImplicitlyCopyable, Writable):
     a vector of two, three or four, a `mat3` or a `mat4`, a texture, a
     cube texture, a 3D texture or an array texture. `value` is the
     component count, 32 for a texture, 33 for a cube texture, 34 for a 3D
-    texture and 35 for an array texture."""
+    texture and 35 for an array texture. Values 41 through 44 name exact
+    unsigned integers. Values 45 through 48 name exact signed integers.
+    `width` gives their component counts."""
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the ten types there are.
+        """Return True if this names a supported value type.
 
         Returns:
-            Whether the value is one to four, 9, 16, or 32 to 35.
+            Whether the value is one to four, 9, 16, 32 to 35, or 41 to 48.
         """
         return (
             (self.value >= 1 and self.value <= 4)
             or self.value == 9
             or self.value == 16
             or (self.value >= 32 and self.value <= 35)
+            or self.is_integer()
         )
 
     def is_vector(self) -> Bool:
-        """Return True if a register holds this type: a `float` or a vector.
+        """Return True if a register holds this scalar or vector type.
 
         Returns:
-            Whether the value is one to four.
+            Whether this is a float-backed or exact integer register type.
         """
-        return self.value >= 1 and self.value <= 4
+        return (self.value >= 1 and self.value <= 4) or self.is_integer()
+
+    def is_unsigned(self) -> Bool:
+        """Return whether this type stores exact UInt32 lanes.
+
+        Args:
+            self: The type to inspect.
+
+        Returns:
+            True for `NODE_UINT` and the unsigned vectors.
+
+        Raises:
+            None.
+        """
+        return self.value >= 41 and self.value <= 44
+
+    def is_signed(self) -> Bool:
+        """Return whether this type stores exact Int32 lanes.
+
+        Args:
+            self: The type to inspect.
+
+        Returns:
+            True for `NODE_INT` and the exact signed vectors.
+
+        Raises:
+            None.
+        """
+        return self.value >= 45 and self.value <= 48
+
+    def is_integer(self) -> Bool:
+        """Return whether this type stores exact integer lanes.
+
+        Args:
+            self: The type to inspect.
+
+        Returns:
+            True for exact unsigned or signed scalars and vectors.
+
+        Raises:
+            None.
+        """
+        return self.is_unsigned() or self.is_signed()
+
+    def width(self) -> Int:
+        """Return the component count, without an integer type tag.
+
+        Args:
+            self: The type to inspect.
+
+        Returns:
+            One through four for register types, otherwise the type value.
+
+        Raises:
+            None.
+        """
+        if self.is_unsigned():
+            return self.value - 40
+        if self.is_signed():
+            return self.value - 44
+        return self.value
 
     def name(self) -> String:
         """Return the type's TSL name, for an error message.
 
         Returns:
             `float`, `vec2` to `vec4`, `mat3`, `mat4`, `texture`,
-            `cubeTexture`, `texture3D` or `textureArray`.
+            `cubeTexture`, `texture3D`, `textureArray`, `uint`, `uvec2` to
+            `uvec4`, `int`, or `ivec2` to `ivec4`.
         """
+        if self.is_unsigned():
+            return "uint" if self.width() == 1 else "uvec" + String(
+                self.width()
+            )
+        if self.is_signed():
+            return "int" if self.width() == 1 else "ivec" + String(self.width())
         if self.value == 1:
             return "float"
         if self.value == 9:
@@ -240,6 +339,14 @@ comptime NODE_SAMPLER = ValueType(32)
 comptime NODE_SAMPLER_CUBE = ValueType(33)
 comptime NODE_SAMPLER_3D = ValueType(34)
 comptime NODE_SAMPLER_ARRAY = ValueType(35)
+comptime NODE_UINT = ValueType(41)
+comptime NODE_UVEC2 = ValueType(42)
+comptime NODE_UVEC3 = ValueType(43)
+comptime NODE_UVEC4 = ValueType(44)
+comptime NODE_INT = ValueType(45)
+comptime NODE_IVEC2 = ValueType(46)
+comptime NODE_IVEC3 = ValueType(47)
+comptime NODE_IVEC4 = ValueType(48)
 
 
 @fieldwise_init
@@ -257,7 +364,7 @@ struct NodeKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return (
             self.value >= NODE_CONSTANT.value
-            and self.value <= NODE_COMPUTE_RESULT.value
+            and self.value <= NODE_INT_LAST.value
         )
 
 
@@ -440,6 +547,136 @@ comptime NODE_SHADOW = NodeKind(107)
 comptime NODE_COMPUTE_BUILTIN = NodeKind(108)
 comptime NODE_STORAGE_ELEMENT = NodeKind(109)
 comptime NODE_COMPUTE_RESULT = NodeKind(110)
+# An explicit two-dimensional gradient pair packed into input C. Input A
+# is the coordinate; input B is the sampler, as for NODE_TEXTURE_LEVEL.
+comptime NODE_TEXTURE_GRAD = NodeKind(111)
+
+# Integer operations use bitcast payloads, never float arithmetic.
+comptime NODE_UINT_ADD = NodeKind(112)
+comptime NODE_UINT_SUB = NodeKind(113)
+comptime NODE_UINT_MUL = NodeKind(114)
+comptime NODE_UINT_DIV = NodeKind(115)
+comptime NODE_UINT_MOD = NodeKind(116)
+comptime NODE_UINT_MIN = NodeKind(117)
+comptime NODE_UINT_MAX = NodeKind(118)
+comptime NODE_UINT_CLAMP = NodeKind(119)
+comptime NODE_UINT_NEGATE = NodeKind(120)
+comptime NODE_UINT_BIT_AND = NodeKind(121)
+comptime NODE_UINT_BIT_OR = NodeKind(122)
+comptime NODE_UINT_BIT_XOR = NodeKind(123)
+comptime NODE_UINT_BIT_NOT = NodeKind(124)
+comptime NODE_UINT_SHIFT_LEFT = NodeKind(125)
+comptime NODE_UINT_SHIFT_RIGHT = NodeKind(126)
+comptime NODE_UINT_LESS_THAN = NodeKind(127)
+comptime NODE_UINT_LESS_THAN_EQUAL = NodeKind(128)
+comptime NODE_UINT_GREATER_THAN = NodeKind(129)
+comptime NODE_UINT_GREATER_THAN_EQUAL = NodeKind(130)
+comptime NODE_UINT_EQUAL = NodeKind(131)
+comptime NODE_UINT_NOT_EQUAL = NodeKind(132)
+comptime NODE_TO_UINT = NodeKind(133)
+comptime NODE_UINT_TO_FLOAT = NodeKind(134)
+comptime NODE_UINT_TO_INT = NodeKind(135)
+comptime NODE_UINT_TO_BOOL = NodeKind(136)
+comptime NODE_INT_ADD = NodeKind(137)
+comptime NODE_INT_SUB = NodeKind(138)
+comptime NODE_INT_MUL = NodeKind(139)
+comptime NODE_INT_DIV = NodeKind(140)
+comptime NODE_INT_MOD = NodeKind(141)
+comptime NODE_INT_MIN = NodeKind(142)
+comptime NODE_INT_MAX = NodeKind(143)
+comptime NODE_INT_CLAMP = NodeKind(144)
+comptime NODE_INT_NEGATE = NodeKind(145)
+comptime NODE_INT_BIT_AND = NodeKind(146)
+comptime NODE_INT_BIT_OR = NodeKind(147)
+comptime NODE_INT_BIT_XOR = NodeKind(148)
+comptime NODE_INT_BIT_NOT = NodeKind(149)
+comptime NODE_INT_SHIFT_LEFT = NodeKind(150)
+comptime NODE_INT_SHIFT_RIGHT = NodeKind(151)
+comptime NODE_INT_LESS_THAN = NodeKind(152)
+comptime NODE_INT_LESS_THAN_EQUAL = NodeKind(153)
+comptime NODE_INT_GREATER_THAN = NodeKind(154)
+comptime NODE_INT_GREATER_THAN_EQUAL = NodeKind(155)
+comptime NODE_INT_EQUAL = NodeKind(156)
+comptime NODE_INT_NOT_EQUAL = NodeKind(157)
+comptime NODE_TO_INT = NodeKind(158)
+comptime NODE_INT_TO_FLOAT = NodeKind(159)
+comptime NODE_INT_TO_UINT = NodeKind(160)
+comptime NODE_INT_TO_BOOL = NodeKind(161)
+comptime NODE_INT_ABS = NodeKind(162)
+comptime NODE_INT_SIGN = NodeKind(163)
+comptime NODE_UINT_FIRST = NODE_UINT_ADD
+comptime NODE_UINT_LAST = NODE_UINT_TO_BOOL
+comptime NODE_INT_FIRST = NODE_INT_ADD
+comptime NODE_INT_LAST = NODE_INT_SIGN
+
+
+def _integer_type(type: ValueType, width: Int) -> ValueType:
+    """Return a register type of the same family and a new width."""
+    return ValueType(
+        width + (40 if type.is_unsigned() else (44 if type.is_signed() else 0))
+    )
+
+
+def _uint_kind(kind: NodeKind) -> NodeKind:
+    """Map a supported numeric operation to its exact unsigned kind.
+
+    Return an invalid kind for float-only math and logic.
+    """
+    if kind == NODE_ADD:
+        return NODE_UINT_ADD
+    if kind == NODE_SUB:
+        return NODE_UINT_SUB
+    if kind == NODE_MUL:
+        return NODE_UINT_MUL
+    if kind == NODE_DIV:
+        return NODE_UINT_DIV
+    if kind == NODE_MOD:
+        return NODE_UINT_MOD
+    if kind == NODE_MIN:
+        return NODE_UINT_MIN
+    if kind == NODE_MAX:
+        return NODE_UINT_MAX
+    if kind == NODE_CLAMP:
+        return NODE_UINT_CLAMP
+    if kind == NODE_NEGATE:
+        return NODE_UINT_NEGATE
+    if kind == NODE_BIT_AND:
+        return NODE_UINT_BIT_AND
+    if kind == NODE_BIT_OR:
+        return NODE_UINT_BIT_OR
+    if kind == NODE_BIT_XOR:
+        return NODE_UINT_BIT_XOR
+    if kind == NODE_BIT_NOT:
+        return NODE_UINT_BIT_NOT
+    if kind == NODE_SHIFT_LEFT:
+        return NODE_UINT_SHIFT_LEFT
+    if kind == NODE_SHIFT_RIGHT:
+        return NODE_UINT_SHIFT_RIGHT
+    if kind == NODE_LESS_THAN:
+        return NODE_UINT_LESS_THAN
+    if kind == NODE_LESS_THAN_EQUAL:
+        return NODE_UINT_LESS_THAN_EQUAL
+    if kind == NODE_GREATER_THAN:
+        return NODE_UINT_GREATER_THAN
+    if kind == NODE_GREATER_THAN_EQUAL:
+        return NODE_UINT_GREATER_THAN_EQUAL
+    if kind == NODE_EQUAL:
+        return NODE_UINT_EQUAL
+    if kind == NODE_NOT_EQUAL:
+        return NODE_UINT_NOT_EQUAL
+    return NodeKind(-1)
+
+
+def _int_kind(kind: NodeKind) -> NodeKind:
+    """Map a supported numeric operation to its exact signed kind."""
+    if kind == NODE_ABS:
+        return NODE_INT_ABS
+    if kind == NODE_SIGN:
+        return NODE_INT_SIGN
+    var mapped = _uint_kind(kind)
+    return NodeKind(
+        mapped.value + NODE_INT_ADD.value - NODE_UINT_ADD.value
+    ) if mapped.is_valid() else mapped
 
 
 @fieldwise_init
@@ -702,7 +939,7 @@ comptime _SURFACE_READS = SIMD[DType.int32, 16](
     Int32(NODE_VARYING.value),
     Int32(NODE_DFDX.value),
     Int32(NODE_DFDY.value),
-    Int32(NODE_TEXTURE.value),
+    Int32(NODE_TEXTURE_GRAD.value),
     Int32(NODE_TEXTURE.value),
     Int32(NODE_TEXTURE.value),
     Int32(NODE_TEXTURE.value),
@@ -1039,6 +1276,114 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._add(NODE_CONSTANT, NODE_VEC4, value=Lanes(x, y, z, w))
 
+    def int32(mut self, x: Int32) -> NodeRef:
+        """Return an exact signed 32-bit constant.
+
+        Args:
+            x: The signed value.
+
+        Returns:
+            The node, retaining every bit.
+
+        Raises:
+            None.
+        """
+        return self._add(
+            NODE_CONSTANT,
+            NODE_INT,
+            value=Lanes(bitcast[DType.float32](x), 0, 0, 0),
+        )
+
+    def uint(mut self, x: UInt32) -> NodeRef:
+        """Return an exact constant `uint`.
+
+        Args:
+            x: An unsigned component.
+
+        Returns:
+            The node, with all 32 bits of each component.
+
+        Raises:
+            None.
+        """
+        return self._add(
+            NODE_CONSTANT,
+            NODE_UINT,
+            value=Lanes(bitcast[DType.float32](x), 0, 0, 0),
+        )
+
+    def uvec2(mut self, x: UInt32, y: UInt32) -> NodeRef:
+        """Return an exact constant `uvec2`.
+
+        Args:
+            x: An unsigned component.
+            y: An unsigned component.
+
+        Returns:
+            The node, with all 32 bits of each component.
+
+        Raises:
+            None.
+        """
+        return self._add(
+            NODE_CONSTANT,
+            NODE_UVEC2,
+            value=Lanes(
+                bitcast[DType.float32](x), bitcast[DType.float32](y), 0, 0
+            ),
+        )
+
+    def uvec3(mut self, x: UInt32, y: UInt32, z: UInt32) -> NodeRef:
+        """Return an exact constant `uvec3`.
+
+        Args:
+            x: An unsigned component.
+            y: An unsigned component.
+            z: An unsigned component.
+
+        Returns:
+            The node, with all 32 bits of each component.
+
+        Raises:
+            None.
+        """
+        return self._add(
+            NODE_CONSTANT,
+            NODE_UVEC3,
+            value=Lanes(
+                bitcast[DType.float32](x),
+                bitcast[DType.float32](y),
+                bitcast[DType.float32](z),
+                0,
+            ),
+        )
+
+    def uvec4(mut self, x: UInt32, y: UInt32, z: UInt32, w: UInt32) -> NodeRef:
+        """Return an exact constant `uvec4`.
+
+        Args:
+            x: An unsigned component.
+            y: An unsigned component.
+            z: An unsigned component.
+            w: An unsigned component.
+
+        Returns:
+            The node, with all 32 bits of each component.
+
+        Raises:
+            None.
+        """
+        return self._add(
+            NODE_CONSTANT,
+            NODE_UVEC4,
+            value=Lanes(
+                bitcast[DType.float32](x),
+                bitcast[DType.float32](y),
+                bitcast[DType.float32](z),
+                bitcast[DType.float32](w),
+            ),
+        )
+
     def color(mut self, color: Color) -> NodeRef:
         """Return a constant color as a linear `vec3`, TSL's `color()`.
 
@@ -1068,6 +1413,128 @@ struct NodeGraph(Copyable, Movable):
             ):
                 raise Error("A node graph already has a uniform named " + name)
         return self._add(NODE_UNIFORM, type, value=value, name=name)
+
+    def uniform_uint(mut self, name: String, type: ValueType) raises -> NodeRef:
+        """Return a zero-initialized exact unsigned uniform.
+
+        Args:
+            name: A unique nonempty name.
+            type: `NODE_UINT` or an unsigned vector type.
+
+        Returns:
+            The named zero value with the requested unsigned width.
+
+        Raises:
+            Error: If the type is not unsigned or the name is invalid.
+        """
+        if not type.is_unsigned():
+            raise Error("An unsigned uniform requires an unsigned type")
+        return self._uniform(name, type, Lanes(0))
+
+    def uniform_uint(mut self, name: String, value: UInt32) raises -> NodeRef:
+        """Create an exact unsigned scalar uniform.
+
+        Args:
+            name: The uniform's name.
+            value: The unsigned value, retaining all bits.
+
+        Returns:
+            The new node.
+
+        Raises:
+            Error: If the name or the requested type is invalid.
+        """
+        return self.uniform_uint[1](name, value)
+
+    def uniform_uint(
+        mut self, name: String, value: SIMD[DType.uint32, 2]
+    ) raises -> NodeRef:
+        """Create an exact unsigned 2-component vector uniform.
+
+        Args:
+            name: The uniform's name.
+            value: The unsigned value, retaining all bits.
+
+        Returns:
+            The new node.
+
+        Raises:
+            Error: If the name or the requested type is invalid.
+        """
+        return self.uniform_uint[2](name, value)
+
+    def uniform_uint(
+        mut self, name: String, x: UInt32, y: UInt32, z: UInt32
+    ) raises -> NodeRef:
+        """Create an exact unsigned three-component uniform.
+
+        Mojo SIMD widths are powers of two. This overload supplies three
+        components without requiring an unsupported SIMD width.
+
+        Args:
+            name: The uniform's name.
+            x: The first unsigned component.
+            y: The second unsigned component.
+            z: The third unsigned component.
+
+        Returns:
+            The new node.
+
+        Raises:
+            Error: If the name or the requested type is invalid.
+        """
+        return self._uniform(
+            name,
+            NODE_UVEC3,
+            Lanes(
+                bitcast[DType.float32](x),
+                bitcast[DType.float32](y),
+                bitcast[DType.float32](z),
+                0,
+            ),
+        )
+
+    def uniform_uint(
+        mut self, name: String, value: SIMD[DType.uint32, 4]
+    ) raises -> NodeRef:
+        """Create an exact unsigned 4-component vector uniform.
+
+        Args:
+            name: The uniform's name.
+            value: The unsigned value, retaining all bits.
+
+        Returns:
+            The new node.
+
+        Raises:
+            Error: If the name or the requested type is invalid.
+        """
+        return self.uniform_uint[4](name, value)
+
+    def uniform_uint[
+        width: Int
+    ](
+        mut self, name: String, value: SIMD[DType.uint32, width]
+    ) raises -> NodeRef:
+        """Return a named exact unsigned scalar or vector.
+
+        Args:
+            name: A unique nonempty uniform name.
+            value: One, two, or four unsigned components.
+
+        Returns:
+            The unsigned node, retaining every bit.
+
+        Raises:
+            Error: If the width is outside one through four, or the name
+                is empty or already used.
+        """
+        if width < 1 or width > 4:
+            raise Error("An unsigned uniform has one to four components")
+        var lanes = Lanes(0)
+        for lane in range(width):
+            lanes[lane] = bitcast[DType.float32](value[lane])
+        return self._uniform(name, ValueType(40 + width), lanes)
 
     def uniform(mut self, name: String, value: Float32) raises -> NodeRef:
         """Return a named `float` the caller can change between frames,
@@ -1777,6 +2244,98 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._at_level(self.texture(sampler, uv), level)
 
+    def texture_grad(
+        mut self, map: TextureId, uv: NodeRef, dx: NodeRef, dy: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture read with explicit coordinate gradients.
+
+        Args:
+            map: The texture in the renderer's store.
+            uv: The already placed coordinate, a `vec2`.
+            dx: Coordinate change per screen pixel across, a `vec2`.
+            dy: Coordinate change per screen pixel up, a `vec2`.
+
+        Returns:
+            A linear `vec4` with straight alpha. Nonfinite runtime inputs
+            return transparent black before any texture read.
+
+        Raises:
+            Error: If the texture id is negative, a node has the wrong
+                type, or a constant gradient is not finite.
+        """
+        self._check_texture_gradient(dx)
+        self._check_texture_gradient(dy)
+        var gradients = self.join([dx, dy])
+        var texel = self.texture(map, uv)
+        return self._with_texture_gradients(texel, gradients)
+
+    def texture_grad(
+        mut self, sampler: NodeRef, uv: NodeRef, dx: NodeRef, dy: NodeRef
+    ) raises -> NodeRef:
+        """Return a texture uniform read with explicit coordinate gradients.
+
+        Args:
+            sampler: A `texture` uniform, GLSL's `sampler2D`.
+            uv: The already placed coordinate, a `vec2`.
+            dx: Coordinate change per screen pixel across, a `vec2`.
+            dy: Coordinate change per screen pixel up, a `vec2`.
+
+        Returns:
+            A linear `vec4` with straight alpha. Nonfinite runtime inputs
+            return transparent black before any texture read.
+
+        Raises:
+            Error: If a node has the wrong type or a constant gradient is
+                not finite.
+        """
+        self._check_texture_gradient(dx)
+        self._check_texture_gradient(dy)
+        var gradients = self.join([dx, dy])
+        var texel = self.texture(sampler, uv)
+        return self._with_texture_gradients(texel, gradients)
+
+    def _with_texture_gradients(
+        mut self, texel: NodeRef, gradients: NodeRef
+    ) -> NodeRef:
+        """Attach two checked, packed `vec2` gradients as the third input."""
+        self._kinds[texel.value] = NODE_TEXTURE_GRAD
+        self._inputs[texel.value * 3 + 2] = gradients.value
+        return texel
+
+    def _check_texture_gradient(self, gradient: NodeRef) raises:
+        """Refuse wrong types and nonfinite source-independent gradients.
+
+        Runtime values cannot raise in the shared renderer interpreter.
+        Its texture-gradient leaf rejects nonfinite inputs as transparent
+        black instead. Constant expressions are checked here with the same
+        bounded interpreter that runs the final program.
+        """
+        self._check(gradient)
+        if self._types[gradient.value] != NODE_VEC2:
+            raise Error("A texture gradient must be a vec2")
+        var order = self._order(gradient.value)
+        for index in range(len(order)):
+            var kind = self._kinds[order[index]]
+            if (
+                kind == NODE_UNIFORM
+                or kind == NODE_TIME
+                or kind == NODE_CAMERA_POSITION
+                or kind == NODE_VIEW_MATRIX
+                or _is_attribute(kind)
+                or _is_compute(kind)
+                or _SURFACE_READS.eq(Int32(kind.value)).reduce_or()
+            ):
+                return
+        var probe = self.copy()
+        probe._blocks = List[_Block]()
+        probe._discards = List[Int]()
+        var starts = List[Int]()
+        var program = probe.compile_roots([gradient], starts)
+        var source = ProgramSource(Pointer(to=program))
+        var value = run_code(source, starts[0], starts[1], source.vertex)
+        if not isfinite(value[0]) or not isfinite(value[1]):
+            raise Error("A texture gradient must be finite")
+
     def texture_load(
         mut self, sampler: NodeRef, at: NodeRef, level: NodeRef
     ) raises -> NodeRef:
@@ -1890,14 +2449,14 @@ struct NodeGraph(Copyable, Movable):
             Error: If `a` is not a node of this graph, or not a `float` or a
                 vector.
         """
-        self._vector(a, "interpolate")
+        self._float_vector(a, "interpolate")
         var type = self._types[a.value]
         return self._add(NODE_VARYING, type, a.value)
 
     # --- math ---------------------------------------------------------------
 
     def _vector(self, node: NodeRef, verb: String) raises:
-        """Refuse a node that is not a `float` or a vector.
+        """Refuse a node that is not a scalar or vector register value.
 
         Raises:
             Error: If the ref names no node of this graph, or the node is a
@@ -1908,22 +2467,47 @@ struct NodeGraph(Copyable, Movable):
         if not type.is_vector():
             raise Error("A node graph cannot " + verb + " a " + type.name())
 
+    def _float_vector(self, node: NodeRef, verb: String) raises:
+        """Refuse integer payloads for float-only operations.
+
+        Raises:
+            Error: If the node is not a float scalar or vector.
+        """
+        self._vector(node, verb)
+        if self._types[node.value].is_integer():
+            raise Error("A node graph cannot " + verb + " an exact integer")
+
     def _splat(mut self, node: NodeRef, to: ValueType) -> NodeRef:
-        """Return a `float` repeated into every component of `to`."""
+        """Return scalar bits repeated into every component of `to`."""
         return self._add(NODE_SWIZZLE, to, node.value)
 
     def _match(
         mut self, node: NodeRef, to: ValueType, verb: String
     ) raises -> NodeRef:
-        """Return `node` as a `to`: itself, or a `float` repeated.
+        """Match a numeric family and repeat a scalar when needed.
+
+        Legacy float-backed signed operands can promote to exact signed
+        values. Other numeric families must use an explicit conversion.
 
         Raises:
-            Error: If `node` is a vector of another size.
+            Error: If the families differ or the vector widths differ.
         """
         var type = self._types[node.value]
         if type == to:
             return node
-        if type == NODE_FLOAT:
+        if (
+            type.is_signed() != to.is_signed()
+            and to.is_signed()
+            and not type.is_integer()
+            and type.is_vector()
+        ):
+            return self._match(self.to_int(node), to, verb)
+        if (
+            type.width() == 1
+            and type.is_unsigned() == to.is_unsigned()
+            and type.is_signed() == to.is_signed()
+            and to.is_vector()
+        ):
             return self._splat(node, to)
         raise Error(
             "A node graph cannot "
@@ -1938,7 +2522,12 @@ struct NodeGraph(Copyable, Movable):
         """Return the type two operands meet at: the wider of the two."""
         var left = self._types[a.value]
         var right = self._types[b.value]
-        return left if left.value >= right.value else right
+        var width = max(left.width(), right.width())
+        if left.is_integer():
+            return _integer_type(left, width)
+        if right.is_integer():
+            return _integer_type(right, width)
+        return ValueType(width)
 
     def _binary(
         mut self, kind: NodeKind, a: NodeRef, b: NodeRef, verb: String
@@ -1955,7 +2544,20 @@ struct NodeGraph(Copyable, Movable):
         var type = self._widest(a, b)
         var left = self._match(a, type, verb)
         var right = self._match(b, type, verb)
-        return self._add(kind, type, left.value, right.value)
+        var operation = kind
+        var result = type
+        if type.is_integer():
+            operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
+                kind
+            )
+            if not operation.is_valid():
+                raise Error("A node graph cannot " + verb + " an exact integer")
+            if (
+                kind.value >= NODE_LESS_THAN.value
+                and kind.value <= NODE_NOT_EQUAL.value
+            ):
+                result = ValueType(type.width())
+        return self._add(operation, result, left.value, right.value)
 
     def add(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
         """Return `a + b`, TSL's `add`.
@@ -2580,12 +3182,26 @@ struct NodeGraph(Copyable, Movable):
         self._vector(b, verb)
         self._vector(c, verb)
         var type = self._widest(a, b)
-        if self._types[c.value].value > type.value:
-            type = self._types[c.value]
+        var third_type = self._types[c.value]
+        if third_type.is_integer() and not type.is_integer():
+            type = _integer_type(
+                third_type, max(type.width(), third_type.width())
+            )
+        elif third_type.width() > type.width():
+            type = _integer_type(type, third_type.width())
         var first = self._match(a, type, verb)
         var second = self._match(b, type, verb)
         var third = self._match(c, type, verb)
-        return self._add(kind, type, first.value, second.value, third.value)
+        var operation = kind
+        if type.is_integer():
+            operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
+                kind
+            )
+            if not operation.is_valid():
+                raise Error("A node graph cannot " + verb + " an exact integer")
+        return self._add(
+            operation, type, first.value, second.value, third.value
+        )
 
     def mix(mut self, a: NodeRef, b: NodeRef, t: NodeRef) raises -> NodeRef:
         """Return `a * (1 - t) + b * t`, TSL's and GLSL's `mix`.
@@ -2661,7 +3277,19 @@ struct NodeGraph(Copyable, Movable):
             Error: If any is not a node of this graph, or two are vectors of
                 two sizes.
         """
-        return self._ternary(NODE_SELECT, condition, a, b, "select")
+        self._float_vector(condition, "select by")
+        self._vector(a, "select")
+        self._vector(b, "select")
+        var type = self._widest(a, b)
+        var condition_type = self._types[condition.value]
+        if condition_type.width() > type.width():
+            type = _integer_type(type, condition_type.width())
+        var first = self._match(a, type, "select")
+        var second = self._match(b, type, "select")
+        var gate = self._match(condition, ValueType(type.width()), "select")
+        return self._add(
+            NODE_SELECT, type, gate.value, first.value, second.value
+        )
 
     def _same(
         mut self, kind: NodeKind, a: NodeRef, b: NodeRef, verb: String
@@ -2673,8 +3301,8 @@ struct NodeGraph(Copyable, Movable):
             Error: If either is not a node of this graph, or their types
                 differ.
         """
-        self._vector(a, verb)
-        self._vector(b, verb)
+        self._float_vector(a, verb)
+        self._float_vector(b, verb)
         var type = self._types[a.value]
         if self._types[b.value] != type:
             raise Error(
@@ -2839,12 +3467,19 @@ struct NodeGraph(Copyable, Movable):
             Error: If `a` is not a `float` or a vector of this graph.
         """
         self._vector(a, "compute with")
-        var width = self._types[a.value]
+        var type = self._types[a.value]
+        var operation = kind
+        if type.is_integer():
+            operation = _uint_kind(kind) if type.is_unsigned() else _int_kind(
+                kind
+            )
+            if not operation.is_valid() or scalar:
+                raise Error("A float-only node cannot read an exact integer")
         return self._add(
-            kind,
-            NODE_FLOAT if scalar else width,
+            operation,
+            NODE_FLOAT if scalar else type,
             a.value,
-            value=Lanes(Float32(width.value), 0, 0, 0),
+            value=Lanes(Float32(type.width()), 0, 0, 0),
         )
 
     def normalize(mut self, a: NodeRef) raises -> NodeRef:
@@ -3081,9 +3716,144 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._unary(NODE_TRUNC, a)
 
+    def to_uint(mut self, a: NodeRef) raises -> NodeRef:
+        """Convert numeric float lanes, or reinterpret exact signed bits.
+
+        Args:
+            a: A register value of this graph.
+
+        Returns:
+            An exact unsigned node of the same width. Float inputs truncate
+            toward zero. See the module's bounded conversion rules.
+
+        Raises:
+            Error: If the input is not a register value of this graph.
+        """
+        self._vector(a, "convert to uint")
+        var type = self._types[a.value]
+        if type.is_unsigned():
+            return a
+        return self._add(
+            NODE_INT_TO_UINT if type.is_signed() else NODE_TO_UINT,
+            ValueType(40 + type.width()),
+            a.value,
+        )
+
+    def to_int(mut self, a: NodeRef) raises -> NodeRef:
+        """Convert numeric float lanes, or reinterpret exact unsigned bits.
+
+        Args:
+            a: A register value of this graph.
+
+        Returns:
+            An exact signed node of the same width. Float inputs truncate
+            toward zero. See the module's bounded conversion rules.
+
+        Raises:
+            Error: If the input is not a register value of this graph.
+        """
+        self._vector(a, "convert to int")
+        var type = self._types[a.value]
+        if type.is_signed():
+            return a
+        return self._add(
+            NODE_UINT_TO_INT if type.is_unsigned() else NODE_TO_INT,
+            ValueType(44 + type.width()),
+            a.value,
+        )
+
+    def _integer_conversion(
+        mut self, a: NodeRef, kind: NodeKind, unsigned: Bool
+    ) raises -> NodeRef:
+        """Append a numeric conversion after checking its integer family.
+
+        Raises:
+            Error: If the input is not the expected integer family.
+        """
+        self._vector(a, "convert")
+        var type = self._types[a.value]
+        if not type.is_integer() or type.is_unsigned() != unsigned:
+            raise Error("An integer conversion received the wrong type")
+        return self._add(kind, ValueType(type.width()), a.value)
+
+    def uint_to_float(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each unsigned value as a numeric float.
+
+        Args:
+            a: An exact unsigned node.
+
+        Returns:
+            A float-backed node of the same width.
+
+        Raises:
+            Error: If the input has another type or is not in this graph.
+        """
+        return self._integer_conversion(a, NODE_UINT_TO_FLOAT, True)
+
+    def int_to_float(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each signed value as a numeric float.
+
+        Args:
+            a: An exact signed node.
+
+        Returns:
+            A float-backed node of the same width.
+
+        Raises:
+            Error: If the input has another type or is not in this graph.
+        """
+        return self._integer_conversion(a, NODE_INT_TO_FLOAT, False)
+
+    def uint_to_bool(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each unsigned value as zero or one.
+
+        Args:
+            a: An exact unsigned node.
+
+        Returns:
+            A float-backed node of the same width.
+
+        Raises:
+            Error: If the input has another type or is not in this graph.
+        """
+        return self._integer_conversion(a, NODE_UINT_TO_BOOL, True)
+
+    def int_to_bool(mut self, a: NodeRef) raises -> NodeRef:
+        """Return each signed value as zero or one.
+
+        Args:
+            a: An exact signed node.
+
+        Returns:
+            A float-backed node of the same width.
+
+        Raises:
+            Error: If the input has another type or is not in this graph.
+        """
+        return self._integer_conversion(a, NODE_INT_TO_BOOL, False)
+
+    def uint_to_int(mut self, a: NodeRef) raises -> NodeRef:
+        """Interpret exact unsigned bits as a signed 32-bit integer.
+
+        Args:
+            a: An exact unsigned scalar or vector.
+
+        Returns:
+            An exact signed value. `to_uint` can restore every original bit.
+
+        Raises:
+            Error: If the input is not unsigned or is not in this graph.
+        """
+        self._vector(a, "convert to int")
+        if not self._types[a.value].is_unsigned():
+            raise Error("uint_to_int requires an exact unsigned value")
+        return self.to_int(a)
+
     def unsigned(mut self, a: NodeRef) raises -> NodeRef:
-        """Return each component as TSL's `uint` holds it: truncated toward
-        zero, with a negative one wrapped up by 2 ** 32.
+        """Return the legacy float-backed unsigned conversion.
+
+        This truncates toward zero and wraps negative values by 2 ** 32.
+        It can round large values. Use `to_uint` for exact integer storage.
 
         Args:
             a: A `float` or a vector.
@@ -3160,6 +3930,28 @@ struct NodeGraph(Copyable, Movable):
         """
         return self._unary(NODE_BIT_NOT, a)
 
+    def _shift(
+        mut self, kind: NodeKind, a: NodeRef, b: NodeRef
+    ) raises -> NodeRef:
+        """Shift exact integers by signed or unsigned scalar/vector counts.
+
+        Raises:
+            Error: If the count cannot be matched to the left width.
+        """
+        self._vector(a, "shift")
+        self._vector(b, "shift by")
+        var type = self._types[a.value]
+        if not type.is_integer():
+            return self._binary(kind, a, b, "shift")
+        var count = self.to_uint(b) if type.is_unsigned() else self.to_int(b)
+        count = self._match(count, type, "shift")
+        return self._add(
+            _uint_kind(kind) if type.is_unsigned() else _int_kind(kind),
+            type,
+            a.value,
+            count.value,
+        )
+
     def shift_left(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
         """Return `a`'s bits moved up by `b`, per component, TSL's
         `shiftLeft`. A shift reads the low five bits of `b`, as a GPU does.
@@ -3175,7 +3967,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If either is not a node of this graph, or they are
                 vectors of two sizes.
         """
-        return self._binary(NODE_SHIFT_LEFT, a, b, "shift")
+        return self._shift(NODE_SHIFT_LEFT, a, b)
 
     def shift_right(mut self, a: NodeRef, b: NodeRef) raises -> NodeRef:
         """Return `a`'s bits moved down by `b`, per component, keeping the
@@ -3192,7 +3984,7 @@ struct NodeGraph(Copyable, Movable):
             Error: If either is not a node of this graph, or they are
                 vectors of two sizes.
         """
-        return self._binary(NODE_SHIFT_RIGHT, a, b, "shift")
+        return self._shift(NODE_SHIFT_RIGHT, a, b)
 
     def exp(mut self, a: NodeRef) raises -> NodeRef:
         """Return e raised to each component, TSL's `exp`.
@@ -3385,7 +4177,7 @@ struct NodeGraph(Copyable, Movable):
         Raises:
             Error: If `a` is not a `float` or a vector of this graph.
         """
-        self._vector(a, "differentiate")
+        self._float_vector(a, "differentiate")
         var type = self._types[a.value]
         return self._add(kind, type, a.value)
 
@@ -3459,6 +4251,11 @@ struct NodeGraph(Copyable, Movable):
             Error: If any is not a node of this graph, or two are vectors of
                 two sizes.
         """
+        self._float_vector(x, "remap")
+        self._float_vector(in_low, "remap")
+        self._float_vector(in_high, "remap")
+        self._float_vector(out_low, "remap")
+        self._float_vector(out_high, "remap")
         var t = self.div(self.sub(x, in_low), self.sub(in_high, in_low))
         return self.add(self.mul(t, self.sub(out_high, out_low)), out_low)
 
@@ -3482,7 +4279,7 @@ struct NodeGraph(Copyable, Movable):
         var letters = components.as_bytes()
         if len(letters) < 1 or len(letters) > 4:
             raise Error("A swizzle picks one to four components")
-        var width = self._types[a.value].value
+        var width = self._types[a.value].width()
         var packed = 0
         var scale = 1
         for index in range(len(letters)):  # pragma: no branch
@@ -3498,7 +4295,7 @@ struct NodeGraph(Copyable, Movable):
             scale *= 4
         return self._add(
             NODE_SWIZZLE,
-            ValueType(len(letters)),
+            _integer_type(self._types[a.value], len(letters)),
             a.value,
             value=Lanes(Float32(packed), 0, 0, 0),
         )
@@ -3523,7 +4320,14 @@ struct NodeGraph(Copyable, Movable):
         var total = 0
         for index in range(len(parts)):  # pragma: no branch
             self._vector(parts[index], "join")
-            total += self._types[parts[index].value].value
+            var type = self._types[parts[index].value]
+            var first_type = self._types[parts[0].value]
+            if (
+                type.is_unsigned() != first_type.is_unsigned()
+                or type.is_signed() != first_type.is_signed()
+            ):
+                raise Error("A join requires one numeric family")
+            total += type.width()
         if total > 4:
             raise Error(
                 "A join makes at most four components, not " + String(total)
@@ -3536,16 +4340,16 @@ struct NodeGraph(Copyable, Movable):
         if len(parts) == 4:
             first = self.join([parts[0], parts[1]])
             rest = 2
-        var widths = self._types[first.value].value
+        var widths = self._types[first.value].width()
         var b = parts[rest]
         var c = -1
-        widths += self._types[b.value].value * 5
+        widths += self._types[b.value].width() * 5
         if rest + 1 < len(parts):
             c = parts[rest + 1].value
-            widths += self._types[c].value * 25
+            widths += self._types[c].width() * 25
         return self._add(
             NODE_JOIN,
-            ValueType(total),
+            _integer_type(self._types[first.value], total),
             first.value,
             b.value,
             c,
@@ -3864,7 +4668,7 @@ struct NodeGraph(Copyable, Movable):
                 "A storage element is read at a float index, not a "
                 + self._types[index.value].name()
             )
-        if not type.is_vector():
+        if not type.is_vector() or type.is_integer():
             raise Error("A storage element is a float or a vector")
         return self._add(
             NODE_STORAGE_ELEMENT,
@@ -3939,7 +4743,7 @@ struct NodeGraph(Copyable, Movable):
         """
         if not statement.is_valid():
             raise Error("A compute result names no statement there can be")
-        if not type.is_vector():
+        if not type.is_vector() or type.is_integer():
             raise Error("A compute result is a float or a vector")
         return self._add(
             NODE_COMPUTE_RESULT,
@@ -4038,9 +4842,11 @@ struct NodeGraph(Copyable, Movable):
 
     def _is_zero(self, node: Int) -> Bool:
         """Return True if a node is the constant zero."""
-        return (
-            self._kinds[node] == NODE_CONSTANT and self._values[node * 4] == 0
-        )
+        if self._kinds[node] != NODE_CONSTANT:
+            return False
+        if self._types[node].is_integer():
+            return bitcast[DType.uint32](self._values[node * 4]) == 0
+        return self._values[node * 4] == 0
 
     def open_call(mut self, output: ValueType) raises:
         """Begin building a function's body, so that `Return` has a call to
@@ -4056,7 +4862,8 @@ struct NodeGraph(Copyable, Movable):
         if not output.is_vector():
             raise Error("A call returns a float or a vector")
         var returned = self.Var(self.float(0))
-        var result = self.Var(self._match(self.float(0), output, "hold"))
+        var zero = self._add(NODE_CONSTANT, output)
+        var result = self.Var(zero)
         self._returns.append(
             _Return(returned.value, result.value, len(self._blocks), False)
         )
@@ -4716,6 +5523,7 @@ struct NodeGraph(Copyable, Movable):
                 (_is_attribute(kind) and not local)
                 or kind == NODE_TEXTURE
                 or kind == NODE_TEXTURE_LEVEL
+                or kind == NODE_TEXTURE_GRAD
                 or kind == NODE_TEXEL_FETCH
                 or kind == NODE_TEXTURE_SIZE
                 or kind == NODE_TEXTURE_CUBE
@@ -4736,6 +5544,7 @@ struct NodeGraph(Copyable, Movable):
         if output == SIZE_NODE and (
             kind == NODE_TEXTURE
             or kind == NODE_TEXTURE_LEVEL
+            or kind == NODE_TEXTURE_GRAD
             or kind == NODE_TEXEL_FETCH
             or kind == NODE_TEXTURE_SIZE
             or kind == NODE_TEXTURE_CUBE
@@ -5264,6 +6073,7 @@ def _children(
     if corner and (
         kind == NODE_TEXTURE
         or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXTURE_GRAD
         or kind == NODE_TEXEL_FETCH
         or kind == NODE_TEXTURE_SIZE
         or kind == NODE_TEXTURE_CUBE
@@ -5324,6 +6134,7 @@ def _emit(
     elif (
         kind == NODE_TEXTURE
         or kind == NODE_TEXTURE_LEVEL
+        or kind == NODE_TEXTURE_GRAD
         or kind == NODE_TEXEL_FETCH
         or kind == NODE_TEXTURE_SIZE
     ):
@@ -5359,7 +6170,13 @@ def _emit(
         reads.append(operands[slot])
     layout.ops.append(op)
     layout.a.append(0)
-    layout.b.append(0)
+    # Exact constants authorize raw payload words during JSON validation.
+    # Their unused B field is metadata, not a register index. Uniforms
+    # keep their type in the program's named-uniform metadata instead.
+    layout.b.append(
+        graph._types[node].value - 40 if kind == NODE_CONSTANT
+        and graph._types[node].is_integer() else 0
+    )
     # A node that reads the surface keeps its context where its third
     # operand would be.
     layout.c.append(context if _is_attribute(kind) else 0)
@@ -5541,6 +6358,105 @@ struct NodeProgram(Copyable, Movable):
         var at = self._find(name, type)
         for lane in range(4):  # pragma: no branch
             self.code[at + lane] = value[lane]
+
+    def set_uniform_uint(mut self, name: String, value: UInt32) raises:
+        """Update an exact unsigned scalar uniform.
+
+        Args:
+            name: The uniform's name.
+            value: The unsigned value, retaining all bits.
+
+        Returns:
+            None.
+
+        Raises:
+            Error: If the name or the declared type is invalid.
+        """
+        self.set_uniform_uint[1](name, value)
+
+    def set_uniform_uint(
+        mut self, name: String, value: SIMD[DType.uint32, 2]
+    ) raises:
+        """Update an exact unsigned 2-component vector uniform.
+
+        Args:
+            name: The uniform's name.
+            value: The unsigned value, retaining all bits.
+
+        Returns:
+            None.
+
+        Raises:
+            Error: If the name or the declared type is invalid.
+        """
+        self.set_uniform_uint[2](name, value)
+
+    def set_uniform_uint(
+        mut self, name: String, x: UInt32, y: UInt32, z: UInt32
+    ) raises:
+        """Update an exact unsigned three-component uniform.
+
+        Mojo SIMD widths are powers of two. This overload supplies three
+        components without requiring an unsupported SIMD width.
+
+        Args:
+            name: The uniform's name.
+            x: The first unsigned component.
+            y: The second unsigned component.
+            z: The third unsigned component.
+
+        Returns:
+            None.
+
+        Raises:
+            Error: If the name or the declared type is invalid.
+        """
+        self._set(
+            name,
+            NODE_UVEC3,
+            Lanes(
+                bitcast[DType.float32](x),
+                bitcast[DType.float32](y),
+                bitcast[DType.float32](z),
+                0,
+            ),
+        )
+
+    def set_uniform_uint(
+        mut self, name: String, value: SIMD[DType.uint32, 4]
+    ) raises:
+        """Update an exact unsigned 4-component vector uniform.
+
+        Args:
+            name: The uniform's name.
+            value: The unsigned value, retaining all bits.
+
+        Returns:
+            None.
+
+        Raises:
+            Error: If the name or the declared type is invalid.
+        """
+        self.set_uniform_uint[4](name, value)
+
+    def set_uniform_uint[
+        width: Int
+    ](mut self, name: String, value: SIMD[DType.uint32, width]) raises:
+        """Change an exact unsigned scalar or vector uniform.
+
+        Args:
+            name: The uniform's name.
+            value: Its new unsigned components, without conversion.
+
+        Raises:
+            Error: If the name, width, or unsigned type does not match.
+        """
+        if width < 1 or width > 4:
+            raise Error("An unsigned uniform has one to four components")
+        var lanes = Lanes(0)
+        for lane in range(width):
+            lanes[lane] = bitcast[DType.float32](value[lane])
+        self._set(name, ValueType(40 + width), lanes)
 
     def set_uniform(mut self, name: String, value: Float32) raises:
         """Change a `float` uniform, as three.js's `uniform.value =` does.
@@ -5736,6 +6652,8 @@ struct NodeProgram(Copyable, Movable):
     def uniform(self, name: String) raises -> Lanes:
         """Return a uniform's value, in as many lanes as its type has and
         zero past them: a matrix's first four floats, a texture's id.
+        Exact unsigned values are raw bitcast words; `read_unsigned`
+        returns them as UInt32 lanes.
 
         Args:
             name: The uniform's name.
@@ -5755,6 +6673,25 @@ struct NodeProgram(Copyable, Movable):
                     self.code[at + 2],
                     self.code[at + 3],
                 )
+        raise Error("A node program has no uniform named " + name)
+
+    def read_unsigned(self, name: String) raises -> SIMD[DType.uint32, 4]:
+        """Read all bits of an exact unsigned uniform.
+
+        Args:
+            name: The unsigned uniform's name.
+
+        Returns:
+            The components as UInt32 lanes, with zero past the stored width.
+
+        Raises:
+            Error: If the uniform is missing or is not unsigned.
+        """
+        for index in range(len(self.uniform_names)):
+            if self.uniform_names[index] == name:
+                if not self.uniform_types[index].is_unsigned():
+                    raise Error("read_unsigned requires an unsigned uniform")
+                return bitcast[DType.uint32, 4](self.uniform(name))
         raise Error("A node program has no uniform named " + name)
 
     def set_frame(mut self, time: Duration, view: Matrix4):
@@ -5939,6 +6876,33 @@ trait NodeSource:
             The linear color, straight alpha.
         """
         ...
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read with explicit gradients, using isotropic filtering by default.
+
+        Texture stores override this method to honor their anisotropy.
+        The interpreter rejects nonfinite inputs before calling it.
+
+        Args:
+            slot: The texture's id.
+            u: Across, already placed.
+            v: Up, already placed.
+            dx: Coordinate change per screen pixel across.
+            dy: Coordinate change per screen pixel up.
+
+        Returns:
+            The linear color with straight alpha.
+
+        Raises:
+            Never. The interpreter checks inputs before this call.
+        """
+        var size = self.size(slot, 0)
+        var footprint = anisotropic_footprint(
+            dx, dy, max(1, Int(size[0])), max(1, Int(size[1])), 1
+        )
+        return self.sample_level(slot, u, v, footprint.level)
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a texel by its column and row, GLSL's `texelFetch`.
@@ -6505,6 +7469,23 @@ def _leaf[
             Int(source.word(Int(immediate))), x[0], x[1], z[0]
         )
         return Lanes(texel.r, texel.g, texel.b, texel.a)
+    if op == NODE_TEXTURE_GRAD.value:
+        if not inputs.textured:
+            return Lanes(1)
+        if (
+            not isfinite(x[0])
+            or not isfinite(x[1])
+            or not isfinite(z).reduce_and()
+        ):
+            return Lanes(0)
+        var texel = source.sample_grad(
+            Int(source.word(Int(immediate))),
+            x[0],
+            x[1],
+            Vector2(z[0], z[1]),
+            Vector2(z[2], z[3]),
+        )
+        return Lanes(texel.r, texel.g, texel.b, texel.a)
     if op == NODE_TEXEL_FETCH.value:
         if not inputs.textured:
             return Lanes(1)
@@ -6993,6 +7974,176 @@ def _bits(op: Int, x: Lanes, y: Lanes) -> Lanes:
     return whole.lt(0).select(whole + Lanes(4294967296.0), whole)
 
 
+def _float_integer_bits(x: Float32, signed: Bool = False) -> UInt32:
+    """Truncate a float in the target integer range without a numeric cast.
+
+    Out-of-range and nonfinite inputs return zero. Reading IEEE fields
+    avoids undefined float-to-integer casts on either backend.
+    """
+    var bits = bitcast[DType.uint32](x)
+    var exponent = Int((bits >> 23) & 255) - 127
+    if exponent < 0 or exponent > 31:
+        return 0
+    var magnitude = (bits & 0x007FFFFF) | 0x00800000
+    if exponent >= 23:
+        magnitude = magnitude << UInt32(exponent - 23)
+    else:
+        magnitude = magnitude >> UInt32(23 - exponent)
+    if (bits & 0x80000000) != 0:
+        if not signed or magnitude > 0x80000000:
+            return 0
+        return UInt32(0) - magnitude
+    if signed and magnitude >= 0x80000000:
+        return 0
+    return magnitude
+
+
+def _uint_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
+    """Compute exact unsigned operations from bitcast register payloads.
+
+    Comparisons and Boolean conversions return ordinary float truth lanes.
+    Division by zero and shifts of 32 or more return zero in each lane.
+    """
+    var a = bitcast[DType.uint32, 4](x)
+    var b = bitcast[DType.uint32, 4](y)
+    var c = bitcast[DType.uint32, 4](z)
+    if op == NODE_TO_UINT.value:
+        var converted = SIMD[DType.uint32, 4](0)
+        for lane in range(4):
+            converted[lane] = _float_integer_bits(x[lane])
+        return bitcast[DType.float32, 4](converted)
+    if op == NODE_UINT_TO_INT.value:
+        return x
+    if op == NODE_UINT_TO_FLOAT.value:
+        return a.cast[DType.float32]()
+    if op == NODE_UINT_TO_BOOL.value:
+        return _truth(a.ne(0))
+    if op == NODE_UINT_LESS_THAN.value:
+        return _truth(a.lt(b))
+    if op == NODE_UINT_LESS_THAN_EQUAL.value:
+        return _truth(a.le(b))
+    if op == NODE_UINT_GREATER_THAN.value:
+        return _truth(a.gt(b))
+    if op == NODE_UINT_GREATER_THAN_EQUAL.value:
+        return _truth(a.ge(b))
+    if op == NODE_UINT_EQUAL.value:
+        return _truth(a.eq(b))
+    if op == NODE_UINT_NOT_EQUAL.value:
+        return _truth(a.ne(b))
+    var result = SIMD[DType.uint32, 4](0)
+    if op == NODE_UINT_ADD.value:
+        result = a + b
+    elif op == NODE_UINT_SUB.value:
+        result = a - b
+    elif op == NODE_UINT_MUL.value:
+        result = a * b
+    elif op == NODE_UINT_MIN.value:
+        result = min(a, b)
+    elif op == NODE_UINT_MAX.value:
+        result = max(a, b)
+    elif op == NODE_UINT_CLAMP.value:
+        result = min(max(a, b), c)
+    elif op == NODE_UINT_NEGATE.value:
+        result = SIMD[DType.uint32, 4](0) - a
+    elif op == NODE_UINT_BIT_AND.value:
+        result = a & b
+    elif op == NODE_UINT_BIT_OR.value:
+        result = a | b
+    elif op == NODE_UINT_BIT_XOR.value:
+        result = a ^ b
+    elif op == NODE_UINT_BIT_NOT.value:
+        result = ~a
+    else:
+        for lane in range(4):
+            if op == NODE_UINT_DIV.value:
+                if b[lane] != 0:
+                    result[lane] = a[lane] // b[lane]
+            elif op == NODE_UINT_MOD.value:
+                if b[lane] != 0:
+                    result[lane] = a[lane] % b[lane]
+            elif b[lane] < 32:
+                if op == NODE_UINT_SHIFT_LEFT.value:
+                    result[lane] = a[lane] << b[lane]
+                else:
+                    result[lane] = a[lane] >> b[lane]
+    return bitcast[DType.float32, 4](result)
+
+
+def _int_operation(op: Int, x: Lanes, y: Lanes, z: Lanes) -> Lanes:
+    """Compute exact signed operations without rounded float intermediates.
+
+    Wrapping arithmetic and bit operations use the unsigned implementation.
+    Signed division truncates toward zero and signed shifts extend the sign.
+    """
+    if op == NODE_TO_INT.value:
+        var converted = SIMD[DType.uint32, 4](0)
+        for lane in range(4):
+            converted[lane] = _float_integer_bits(x[lane], signed=True)
+        return bitcast[DType.float32, 4](converted)
+    if op == NODE_INT_TO_UINT.value:
+        return x
+    var a = bitcast[DType.int32, 4](x)
+    var b = bitcast[DType.int32, 4](y)
+    var c = bitcast[DType.int32, 4](z)
+    if op == NODE_INT_TO_FLOAT.value:
+        return a.cast[DType.float32]()
+    if op == NODE_INT_TO_BOOL.value:
+        return _truth(a.ne(0))
+    if op == NODE_INT_ABS.value:
+        var bits = bitcast[DType.uint32, 4](x)
+        return bitcast[DType.float32, 4](
+            a.lt(0).select(SIMD[DType.uint32, 4](0) - bits, bits)
+        )
+    if op == NODE_INT_SIGN.value:
+        var positive = a.gt(0).select(Whole(1), Whole(0))
+        var negative = a.lt(0).select(Whole(-1), Whole(0))
+        return bitcast[DType.float32, 4](positive | negative)
+    if op == NODE_INT_LESS_THAN.value:
+        return _truth(a.lt(b))
+    if op == NODE_INT_LESS_THAN_EQUAL.value:
+        return _truth(a.le(b))
+    if op == NODE_INT_GREATER_THAN.value:
+        return _truth(a.gt(b))
+    if op == NODE_INT_GREATER_THAN_EQUAL.value:
+        return _truth(a.ge(b))
+    if op == NODE_INT_MIN.value:
+        return bitcast[DType.float32, 4](min(a, b))
+    if op == NODE_INT_MAX.value:
+        return bitcast[DType.float32, 4](max(a, b))
+    if op == NODE_INT_CLAMP.value:
+        return bitcast[DType.float32, 4](min(max(a, b), c))
+    if op == NODE_INT_DIV.value or op == NODE_INT_MOD.value:
+        var result = SIMD[DType.uint32, 4](0)
+        var ua = bitcast[DType.uint32, 4](x)
+        var ub = bitcast[DType.uint32, 4](y)
+        for lane in range(4):
+            if b[lane] == 0:
+                continue
+            var left = UInt32(0) - ua[lane] if a[lane] < 0 else ua[lane]
+            var right = UInt32(0) - ub[lane] if b[lane] < 0 else ub[lane]
+            if op == NODE_INT_DIV.value:
+                var quotient = left // right
+                result[lane] = (
+                    UInt32(0) - quotient if (a[lane] < 0)
+                    != (b[lane] < 0) else quotient
+                )
+            else:
+                var remainder = left % right
+                result[lane] = (
+                    UInt32(0) - remainder if a[lane] < 0 else remainder
+                )
+        return bitcast[DType.float32, 4](result)
+    if op == NODE_INT_SHIFT_RIGHT.value:
+        var result = SIMD[DType.int32, 4](0)
+        for lane in range(4):
+            if b[lane] >= 0 and b[lane] < 32:
+                result[lane] = a[lane] >> b[lane]
+        return bitcast[DType.float32, 4](result)
+    return _uint_operation(
+        op - NODE_INT_ADD.value + NODE_UINT_ADD.value, x, y, z
+    )
+
+
 def _operation[
     S: NodeSource
 ](
@@ -7001,6 +8152,10 @@ def _operation[
     """Return what a math node computes from its inputs' registers. The
     commonest nodes, `add`, `sub`, `mul`, `div`, a swizzle, a join and a
     negation, are worked out in `run_code` itself."""
+    if op >= NODE_UINT_ADD.value and op <= NODE_UINT_TO_BOOL.value:
+        return _uint_operation(op, x, y, z)
+    if op >= NODE_INT_ADD.value and op <= NODE_INT_LAST.value:
+        return _int_operation(op, x, y, z)
     var width = Int(immediate)
     if op == NODE_MIX.value:
         return x * (1 - z) + y * z
@@ -7118,7 +8273,11 @@ def _operation[
     if op == NODE_NOT.value:
         return _truth(x.eq(0))
     if op == NODE_SELECT.value:
-        return x.ne(0).select(y, z)
+        return bitcast[DType.float32, 4](
+            x.ne(0).select(
+                bitcast[DType.uint32, 4](y), bitcast[DType.uint32, 4](z)
+            )
+        )
     if op == NODE_MATRIX_VECTOR.value or op == NODE_VECTOR_MATRIX.value:
         return _matrix(source, x, width, op == NODE_VECTOR_MATRIX.value)
     if op == NODE_NOISE.value:
@@ -7204,12 +8363,23 @@ def run_code[
     for index in range(count):  # pragma: no branch
         var at = start + index * INSTRUCTION_FLOATS
         var op = Int(source.word(at + INSTRUCTION_OP))
+        var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
+        written = Int(source.word(at + INSTRUCTION_DEST))
+        # Integer constants use B for a type tag. Loads do not need
+        # operand registers, so keep metadata out of the operand path.
+        if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
+            var place = Int(immediate)
+            registers[written] = Lanes(
+                source.word(place),
+                source.word(place + 1),
+                source.word(place + 2),
+                source.word(place + 3),
+            )
+            continue
         var third = Int(source.word(at + INSTRUCTION_C))
         var x = registers[Int(source.word(at + INSTRUCTION_A))]
         var y = registers[Int(source.word(at + INSTRUCTION_B))]
         var z = registers[third]
-        var immediate = source.word(at + INSTRUCTION_IMMEDIATE)
-        written = Int(source.word(at + INSTRUCTION_DEST))
         # The commonest nodes, worked out here, each exactly as `_leaf` or
         # `_operation` works it out: calling either costs more than a
         # multiply does, and most of a program is these.
@@ -7224,15 +8394,6 @@ def run_code[
             continue
         if op == NODE_DIV.value:
             registers[written] = x / y
-            continue
-        if op == NODE_CONSTANT.value or op == NODE_UNIFORM.value:
-            var place = Int(immediate)
-            registers[written] = Lanes(
-                source.word(place),
-                source.word(place + 1),
-                source.word(place + 2),
-                source.word(place + 3),
-            )
             continue
         if op == NODE_SWIZZLE.value:
             var order = Int(immediate)
@@ -7260,6 +8421,7 @@ def run_code[
             or op == NODE_SHADOW.value
             or op == NODE_FRONT_FACING.value
             or op == NODE_TEXTURE_LEVEL.value
+            or op == NODE_TEXTURE_GRAD.value
             or op == NODE_TEXEL_FETCH.value
             or op == NODE_TEXTURE_SIZE.value
             or op == NODE_ATTRIBUTE.value

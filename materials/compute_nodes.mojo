@@ -153,7 +153,7 @@ def _width(type: ValueType) raises -> Int:
     Raises:
         Error: If the type is not a `float` or a vector.
     """
-    if not type.is_vector():
+    if not type.is_vector() or type.is_integer():
         raise Error(
             "A storage element is a float or a vector, not a " + type.name()
         )

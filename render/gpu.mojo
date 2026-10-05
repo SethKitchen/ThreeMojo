@@ -346,6 +346,8 @@ from render.texture import (
     UvPlacement,
     Wrap,
     anisotropic_footprint,
+    gradient_sample_coordinate,
+    texture_grad_finite,
     blend_texels,
     fetch_level,
     fetch_row,
@@ -516,7 +518,7 @@ from render.splatrule import (
 from units.si import Angle, Length, METER, RADIAN
 from max.gpu import global_idx
 from max.gpu.memory import AddressSpace
-from std.math import ceildiv, cos, floor, inf, log2, sin, sqrt
+from std.math import ceildiv, cos, floor, inf, isfinite, log2, sin, sqrt
 from std.memory import bitcast, unsafe_memcpy
 from std.sys import has_accelerator
 
@@ -4613,20 +4615,71 @@ def _sample_slot(
         image.height,
         image.anisotropy,
     )
+    return _sample_footprint(texels, ramp, image, u, v, footprint)
+
+
+def _sample_grad(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    image: _Descriptor,
+    u: Float32,
+    v: Float32,
+    dx: Vector2,
+    dy: Vector2,
+) -> FloatColor:
+    """Read explicit gradients with the host's footprint arithmetic."""
+    if not texture_grad_finite(u, v, dx, dy):
+        return FloatColor(0, 0, 0, 0)
+    var footprint = anisotropic_footprint(
+        dx, dy, image.width, image.height, image.anisotropy
+    )
+    return _sample_footprint(
+        texels, ramp, image, u, v, footprint, explicit=True
+    )
+
+
+def _sample_footprint(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    image: _Descriptor,
+    u: Float32,
+    v: Float32,
+    footprint: Footprint,
+    explicit: Bool = False,
+) -> FloatColor:
+    """Read bounded taps as `Texture._sample_footprint` reads them."""
+    if explicit:
+        if (
+            not isfinite(footprint.level)
+            or not isfinite(footprint.step.x)
+            or not isfinite(footprint.step.y)
+        ):
+            return FloatColor(0, 0, 0, 0)
     if footprint.taps == 1:
+        if explicit:
+            return _sample_level(
+                texels,
+                ramp,
+                image,
+                gradient_sample_coordinate(u, image.wrap_s),
+                gradient_sample_coordinate(v, image.wrap_t),
+                footprint.level,
+            )
         return _sample_level(texels, ramp, image, u, v, footprint.level)
     # The taps along the long axis, averaged premultiplied, exactly as
     # `Texture.sample_footprint` averages them.
     var total = FloatColor(0.0, 0.0, 0.0, 0.0)
     for tap in range(footprint.taps):
         var along = Float32(tap) - Float32(footprint.taps - 1) / 2
+        var tap_u = u + footprint.step.x * along
+        var tap_v = v + footprint.step.y * along
+        if explicit:
+            if not isfinite(tap_u) or not isfinite(tap_v):
+                return FloatColor(0, 0, 0, 0)
+            tap_u = gradient_sample_coordinate(tap_u, image.wrap_s)
+            tap_v = gradient_sample_coordinate(tap_v, image.wrap_t)
         var sampled = _sample_level(
-            texels,
-            ramp,
-            image,
-            u + footprint.step.x * along,
-            v + footprint.step.y * along,
-            footprint.level,
+            texels, ramp, image, tap_u, tap_v, footprint.level
         ).premultiplied()
         total = FloatColor(
             total.r + sampled.r,
@@ -4920,6 +4973,20 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
             u,
             v,
             level,
+        )
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients with the host's bounded footprint."""
+        return _sample_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            dx,
+            dy,
         )
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
@@ -5284,6 +5351,20 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
             level,
         )
 
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients with the host's bounded footprint."""
+        return _sample_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            dx,
+            dy,
+        )
+
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
         """Return a 3D texture read, as `Data3DTexture.sample` reads it."""
         return _fog_volume(self.fog, slot, at)
@@ -5486,6 +5567,20 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
             u,
             v,
             level,
+        )
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients with the host's bounded footprint."""
+        return _sample_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            dx,
+            dy,
         )
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:

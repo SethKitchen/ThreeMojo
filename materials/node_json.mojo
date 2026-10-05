@@ -8,18 +8,23 @@ port has it: what `exporters.object_json` writes in a material's `nodes`
 field, and what `loaders.object_loader` reads back.
 
 three.js writes each node of the graph with its own type and inputs. This
-port writes the compiled program instead: its floats, its uniforms, its
+port writes the compiled program instead: its words, its uniforms, its
 custom attributes, and where it keeps the id of each texture and cube it
 reads. A texture is written as the uuid of its entry in the file's
 `textures` list, so the loader can give the program the id the texture gets
 in its own store. three.js's loaders read the other fields of the material
-and leave this one alone.
+and leave this one alone. Exact integer programs use `codeBits`: unsigned
+32-bit JSON integers that preserve every stored bit. Float-only programs
+keep the legacy `code` array. The reader accepts either encoding, never
+both.
 """
 
 from exporters.json_writer import JsonWriter
-from loaders.json import JsonDocument
+from loaders.json import ARRAY, JsonDocument
+from materials import nodes
 from materials.nodes import PROGRAM_HEADER, NodeProgram, ValueType
 from materials.node_validation import validate_surface_program
+from std.memory import bitcast
 
 
 @fieldwise_init
@@ -53,7 +58,8 @@ def write_node_program(
 
     Raises:
         Error: If the program reads a 3D or an array texture, which object
-            JSON does not write, or a list is not as long as its offsets.
+            JSON does not write, a list is not as long as its offsets, or
+            serialized surface validation rejects the program.
     """
     if len(program.volume_offsets) > 0 or len(program.array_offsets) > 0:
         raise Error(
@@ -64,12 +70,17 @@ def write_node_program(
         program.cube_offsets
     ):
         raise Error("Object JSON: a node program's textures do not match it")
+    validate_surface_program(program)
+    var exact = _integer_program(program)
     writer.begin_object()
-    writer.key("code")
+    writer.key("codeBits" if exact else "code")
     writer.begin_array()
     # A compiled program holds its header, so the loop runs.
     for index in range(len(program.code)):  # pragma: no branch
-        writer.number(program.code[index])
+        if exact:
+            writer.integer(Int(bitcast[DType.uint32](program.code[index])))
+        else:
+            writer.number(program.code[index])
     writer.end_array()
     writer.key("uniforms")
     writer.begin_array()
@@ -100,6 +111,25 @@ def write_node_program(
     writer.key("readsScene")
     writer.boolean(program.reads_scene)
     writer.end_object()
+
+
+def _integer_program(program: NodeProgram) -> Bool:
+    """Choose the exact encoding after the program has passed validation."""
+    for type in program.uniform_types:
+        if type.is_integer():
+            return True
+    for output in range(nodes.NODE_OUTPUT_COUNT):
+        var start = Int(program.code[output * 2])
+        var count = Int(program.code[output * 2 + 1])
+        for instruction in range(count):
+            var at = start + instruction * nodes.INSTRUCTION_FLOATS
+            var op = Int(program.code[at])
+            if op >= nodes.NODE_UINT_FIRST.value or (
+                op == nodes.NODE_CONSTANT.value
+                and program.code[at + nodes.INSTRUCTION_B] != 0
+            ):
+                return True
+    return False
 
 
 def _places(
@@ -144,16 +174,29 @@ def read_node_program(
     Raises:
         Error: If a field is missing or of the wrong kind, the code is
             shorter than a program's header, a uniform's type is none there
-            is, or an offset is outside the program.
+            is, an offset is outside the program, or codeBits has a word
+            outside the UInt32 range or is present together with code.
     """
     var program = NodeProgram()
-    var code = document.get(item, "code")
+    var exact = document.has(item, "codeBits")
+    if exact and document.has(item, "code"):
+        raise Error("Object JSON: a node program cannot have code and codeBits")
+    var code = document.get(item, "codeBits" if exact else "code")
+    if document.kind(code) != ARRAY:
+        raise Error("Object JSON: a node program's code must be an array")
     if document.length(code) < PROGRAM_HEADER:
         raise Error("Object JSON: a node program's code is too short")
     program.code = List[Float32](capacity=document.length(code))
     # At least a header, as asked above, so the loop runs.
     for index in range(document.length(code)):  # pragma: no branch
-        program.code.append(Float32(document.number(document.at(code, index))))
+        var entry = document.at(code, index)
+        if exact:
+            var bits = document.integer(entry)
+            if bits < 0 or bits > 4294967295:
+                raise Error("Object JSON: a codeBits word must fit UInt32")
+            program.code.append(bitcast[DType.float32](UInt32(bits)))
+        else:
+            program.code.append(Float32(document.number(entry)))
     var uniforms = document.get(item, "uniforms")
     for index in range(document.length(uniforms)):
         var entry = document.at(uniforms, index)

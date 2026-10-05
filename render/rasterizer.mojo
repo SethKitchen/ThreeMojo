@@ -5787,6 +5787,12 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         texture's two filters, as `Texture.sample_level` reads it."""
         return self.textures[].textures[slot].sample_level(u, v, level)
 
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients through the texture's checked sampler."""
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
         return self.cubes[].textures[slot].sample(direction)
@@ -5953,6 +5959,12 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         `Texture.sample_level`."""
         return self.textures[].textures[slot].sample_level(u, v, level)
 
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients through the texture's checked sampler."""
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
         return self.cubes[].textures[slot].sample(direction)
@@ -6114,6 +6126,12 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         """Return a texture read at (u, v) and a mip level,
         `Texture.sample_level`."""
         return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients through the texture's checked sampler."""
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
