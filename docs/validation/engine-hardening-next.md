@@ -60,7 +60,7 @@ Check each issue against its stated upstream version and refusal contract.
 
 - [#614](https://github.com/SethKitchen/ThreeMojo/issues/614): expand the remaining GLSL source subset
 - [#615](https://github.com/SethKitchen/ThreeMojo/issues/615): add the missing OpenEXR compression decoders
-- [#616](https://github.com/SethKitchen/ThreeMojo/issues/616): complete volume depth and rectangle-light support
+- [#616](https://github.com/SethKitchen/ThreeMojo/issues/616): opaque-scene depth and shared rectangle-volume lighting implemented; 115 focused CPU tests and three SM80 compile controls pass, with full batch validation pending
 - [#617](https://github.com/SethKitchen/ThreeMojo/issues/617): decode raw ASTC textures in KTX2
 
 ## Scene and humanoid work
