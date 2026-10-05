@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "created_at_utc": "2026-10-05T03:03:54.978743+00:00",
+  "files": {
+    "bench/physics_snapshot_bench.mojo": "6fc8360aaa92b7147c08723f181010da6775e27ee0cb4079342c9c8afdc7983e",
+    "bench/physics_snapshot_small_bench.mojo": "676eae954c1906dbbe215a688b97d06f26bdf12cd02e1b8fb332eedddb2f5955",
+    "bench/physics_snapshot_allocations.c": "3e1efc378d7f02b60c364aef66e0c87e15fb9bb5bc41c0830c07a05b056de799",
+    "bench/physics_snapshot_report.py": "ec78b82e935e596151d2c77aade133391e9c26c956cc91323501a0b14903b068",
+    "docs/validation/owned-physics-snapshots-633-native.csv": "f6230f44b4d4b0a44cfae3bb02f8e4f3abb623806ffa7c2c5e73aae28d06eac5",
+    "docs/validation/owned-physics-snapshots-633-allocations.csv": "8c6bf3d0cb4dc5f9b853f3f18818cf56c191967c588122e669c9c3dc30610e45",
+    "docs/validation/owned-physics-snapshots-633-small-repeat.csv": "eb3198e2f335b44fdb78e0fb8ffb53266cc8ef6c5b1b8b01378f2dbef88da0de",
+    "docs/validation/owned-physics-snapshots-633-measured-source.json": "44554b82c343f159a46df94c78cf6441d5bf23654589091cd399c1936ff0be53",
+    "docs/validation/owned-physics-snapshots-633.json": "4e79037c07fb2af5c938de7f6be78d64f87412410444f15e8be606739718c816",
+    "docs/validation/owned-physics-snapshots-633.md": "48243689a7ef8186ad5ceca9f2efb2cadaf1429fb5538f237d47e6d56f2d1ac4",
+    "docs/validation/owned-physics-snapshots-633-verification.json": "d3f4233cc674c765e0eb6a26e85e32e352113da93c4eab221b4aad2d4f6c501b"
+  },
+  "measured_binaries": {
+    ".cache/snapshot-633/bench": "fc33dc0f1b2d025209152807d26ef3bd99daee8b1151c9dd5d9af6af04a2f57e",
+    ".cache/snapshot-633/small-recheck": "24e639d7ff88d46d700a2340898d29a47898268448994d7bd364d10f4c7ef4d5",
+    ".cache/snapshot-633/allocations.so": "8bd20b1c141d359f8fe7b09c464d6a65270c5d3024c2ec237c52b1a71c6ba816"
+  },
+  "checks": {
+    "native_rows": 1344,
+    "allocation_rows": 456,
+    "tiny_repeat_rows": 1512,
+    "exact_ray_fields": true,
+    "full_ordered_dynamic_pair_keys": true,
+    "post_mutation_and_source_release_parity": true,
+    "allocation_selftest": true,
+    "allocation_overflow_zero": true,
+    "drivers_build_flags": "--Werror -I .",
+    "hook_build_flags": "-std=c11 -Wall -Wextra -Werror -O2 -shared -fPIC",
+    "all_run_exit_codes": 0,
+    "report_rejection_probes": [
+      "missing row",
+      "duplicate sample",
+      "altered checksum",
+      "inconsistent memory counter"
+    ],
+    "aggregate_repository_checks_claimed": false
+  },
+  "production_doc_only_delta": {
+    "path": "extensions/physics/query_snapshot.mojo",
+    "measured_sha256": "f544f341a35d19013a719d42028d12dd92cb4c7368309573785e3a51ae86cf57",
+    "final_sha256": "ef68f1adefedf2acbb09dcdcb57fa72396d753c1eee4ae2bb34d668da35c7e3a",
+    "changes": [
+      "Clarify negative reach only rejects ordinary finite-distance hits; preserved legacy NaN answers retain their behavior.",
+      "Add six public field docstrings for historical owner and captured hit fields."
+    ],
+    "verified_by_reconstructing_entire_measured_file_and_matching_hash": true
+  },
+  "notes": [
+    "The postprocessing report script evolved after the native build. Its final hash is in files and the validated summary; no measured native harness code changed.",
+    "The small repeat imports the unchanged primary benchmark helpers and keeps all original anomalous native rows.",
+    "The baseline frozen-linear exploratory binary and incomplete allocation run are retained in .cache only; they are not the final acceptance measurements."
+  ]
+}
