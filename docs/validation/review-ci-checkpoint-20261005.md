@@ -8,15 +8,33 @@ The preceding integration incorporates main's [#669](https://github.com/SethKitc
 
 The current source contains 2,217 bound inputs. Its digest is:
 
-`ffe15160eb7e4a32c27f0e8d7a2f129ecda8d97fd648cb77e72a70e61ea8f98b`
+`b0aca4b04f79fed6528182e470ce72bcfc77be52033f31406a23862e0ac0551a`
 
 The fresh [anatomy report](anatomy-template-report.json) has SHA-256:
 
-`ccf1da6442a139848cb3869b4d62ca36b5270f4e03b8cc618000209aae836a81`
+`5bc0bf47a672c933a409f7929c01c6152fef9f4c9a6caa8b7fd1c7d20f240020`
 
-The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 59.54 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows.
+The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 61.61 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows.
 
 **The report still contains 367 unallowlisted sampled-overlap findings.** All diagnostic content is unchanged from the prior report; only build provenance changed. Completing the checks does not establish anatomical validity. The findings remain tracked in [#595](https://github.com/SethKitchen/ThreeMojo/issues/595). Visual and rig mapping remains in [#297](https://github.com/SethKitchen/ThreeMojo/issues/297). Sampled fields do not prove clearance or engineering or clinical validity.
+
+## Composed formatting and compiler diagnostics
+
+The Linux and Apple lint jobs on `5d9dbe20` both identified one formatting difference in `render/texture.mojo`. The repair moves only the closing delimiter of the `_scaled_footprint` docstring. Its words, imports and executable bytes are unchanged. The canonical repository formatter check passes all 2,106 selected files, and the texture API check passes. All 65 Mojo files changed during composition were also checked; the other 64 are unchanged.
+
+The prior [d15 Linux CPU job](https://github.com/SethKitchen/ThreeMojo/actions/runs/37365729726/job/111950286919) reached its original two-hour limit despite one compiler thread. It records 83 build starts and 79 build/run completions. Four builds remain unfinished: `test_audit_regressions`, `test_carla_physics_bodies`, `test_exact_predicates` and `test_geometry_tools`. The single-thread adjustment did not resolve those stalls. Their cause is not established.
+
+This update adds opt-in Linux CPU compiler diagnostics. Every 60 seconds, it samples bounded metadata for the owned compiler and its best-effort descendants: CPU time, approximate RSS, thread states and wait channels. Readable cgroup OOM counters are shared context, not compiler-specific attribution. Process discovery can race or be truncated; unavailable fields are reported explicitly.
+
+The helper does not capture command lines, process environments, memory contents, stacks or unrelated processes. It does not change privileges, compiler flags, outer suite parallelism, workloads or time limits. Catchable cancellation and compiler exit status are preserved. The diagnostics are disabled outside the explicit Linux CPU opt-in.
+
+The composed recipe passes a bounded real-compiler smoke and all nine exact-predicate tests under the original five-second gate. It emits a live startup sample and successful compiler/build/run exit records. That compile completes before the first 60-second interval, so this smoke does not measure periodic behavior during a long stall. Mock lifecycle/procfs controls cover those collection paths. No hosted-stall fix is claimed.
+
+The full tool suite exposed two mock-repository inventories missing the new helper. Both now include it, and the existing cache-invalidation assertion covers it. No assertion is removed. The complete 342-tool/48-CARLA suites pass with opt-in both disabled and enabled.
+
+The report snapshot binds Mojo sources, report logic and provenance inventory. The additional Makefile/Python/YAML tooling is separately bound by the committed tree and exact file hashes. The docstring change required the full report refresh above; all 367 diagnostic findings remain unchanged.
+
+The preceding 5d9 MAX/no-GPU job compiles the GPU entries, passes 47 host-side cases and checks all 37 actual Metal AIR modules. It performs no GPU device execution. These results remain bound to that prior head; fresh exact-head CI must qualify this update.
 
 ## Main conflict resolution
 
@@ -35,7 +53,7 @@ The coverage additions contain asserted boundary and reference controls. Reviewe
 
 The diagnostic evidence reconstructs scoped manifests from immutable source and tool bytes, then checks the original missing diagnostics exactly. It is not a substitute for final integrated-head CI. The composed doc-only edits retain renderer executable bytes, but their shifted source locations still require fresh hosted measurement.
 
-On the preceding d15 integration, all seven repaired API checks, all 37 actual Metal AIR modules and all 442 negative fixtures passed. Those receipts remain bound to that source. After the current report regeneration, all 319 Python tool tests, including source binding, and all 48 CARLA Python controls pass. Fresh exact-head CI remains required.
+On the preceding d15 integration, all seven repaired API checks, all 37 actual Metal AIR modules and all 442 negative fixtures passed. Those receipts remain bound to that source. After the current report regeneration, all 342 Python tool tests and all 48 CARLA controls pass twice: normal configuration and telemetry opt-in. Source-binding checks are included. Fresh exact-head CI remains required.
 
 The prior [c990 CI run](https://github.com/SethKitchen/ThreeMojo/actions/runs/37340945189) passes the unchanged full LOD test in 1.583080 seconds on Linux and 1.027728 seconds on Apple Silicon. Its Linux CPU jobs later time out during other builds. Those inferred stalled import closures are unchanged from successful earlier runs.
 

@@ -348,7 +348,8 @@ $(TEST_CPU_STAMP):
 	             progress() { printf "%s suite=%s %s\n" \
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
-	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
+	             out=$$(python3 tools/compiler_telemetry.py --suite "$$1" --log-fd 3 -- \
+	                    $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \
 	                    progress "$$1" "build-end: exit=$$build_rc"; \
 	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \

@@ -85,6 +85,15 @@ class CiPolicyTests(unittest.TestCase):
         ])
         self.assertNotRegex(job, r'\bJOBS\s*=')
 
+    def test_compiler_telemetry_is_opted_in_only_for_the_linux_cpu_step(self):
+        self.assertIn('THREEMOJO_COMPILER_TELEMETRY: "1"', self.jobs['cpu'])
+        self.assertRegex(self.jobs['cpu'],
+                         r'(?m)^      - name: test-cpu\n        env:\n'
+                         r'          THREEMOJO_COMPILER_TELEMETRY: "1"$')
+        for name, job in self.jobs.items():
+            if name != 'cpu':
+                self.assertNotIn('THREEMOJO_COMPILER_TELEMETRY', job)
+
     def test_draft_pull_requests_skip_every_check_job(self):
         self.assertTrue(CHECK_JOBS <= self.jobs.keys())
         # A future check job must opt out of draft PRs too. Only the wiki
