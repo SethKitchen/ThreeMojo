@@ -110,7 +110,7 @@ A line load and a member's weight become consistent nodal loads. The rotation ab
 
 ## The structural view of a building
 
-`structural_view(building, options)` returns a `StructuralView`. It holds a `StructuralModel`, its `dead` and `live` load cases, the building element of each member and shell, and `notes` on what it dropped.
+`structural_view(building, options)` returns a `StructuralView`. It holds a `StructuralModel`, its `dead` and `live` load cases, the building element of each member and shell, and `notes` on what it dropped. The view validates the canonical building before it reads model references or creates structural nodes. Invalid public-field edits raise `Error`.
 
 ```mojo
 var view = structural_view(building, default_options())
@@ -187,7 +187,7 @@ Every function raises `Error` for input it cannot use.
 | A section or material is not valid | `add_member`, `add_shell` |
 | The structure is a mechanism | `StaticSolver`, `solve_static`, `solve_modes` |
 | The mode count is out of range | `solve_modes` |
-| The view options are not valid, or a column or beam has no section | `structural_view` |
+| The building or view options are not valid | `structural_view` |
 
 ## Limits
 
