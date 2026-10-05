@@ -654,6 +654,9 @@ struct OutputEncoding(ImplicitlyCopyable):
         return flat^
 
 
+# Fold device address-space casts into these loads before a call boundary.
+# Metal has no generic address space for a separately compiled pointer callee.
+@always_inline
 def output_from(
     floats: MutPointer[Float32, MutAnyOrigin], start: Int
 ) -> OutputEncoding:
