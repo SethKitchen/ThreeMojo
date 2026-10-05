@@ -181,12 +181,12 @@ jobs:
   # suite, which was tuned on a fast many-core machine to catch the
   # instrumenter sending the compiler superlinear. A four-core hosted runner
   # exceeds that while behaving perfectly. Here it is only a hang detector:
-  # 300, 900 and 3600 each became the ceiling as the library grew, with
-  # every suite still progressing, and a genuine hang blows through any of
-  # them. The groups are balanced by the source their suites import, not
-  # by how long they run under coverage, so a group can run far longer
-  # than its share: six groups, not four, keep the slowest one well
-  # inside the budget.
+  # 300, 900, 3600 and 6000 each became the ceiling as the library grew,
+  # with every suite still progressing, and a genuine hang blows through
+  # any of them. The groups are balanced by each suite's measured capture
+  # time in tools/coverage_costs.json. The animals brought six groups to
+  # about 5600 seconds each, so 8000 leaves room inside the 150-minute job
+  # timeout.
   coverage-capture:
     if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
     name: coverage capture ${{ matrix.shard }}/6
@@ -218,7 +218,7 @@ jobs:
       - name: capture
         run: |
           make -B coverage-instrument AFFECTED="$AFFECTED"
-          make -B coverage-capture SHARD=${{ matrix.shard }}/6 COV_BUDGET=6000 AFFECTED="$AFFECTED"
+          make -B coverage-capture SHARD=${{ matrix.shard }}/6 COV_BUDGET=8000 AFFECTED="$AFFECTED"
 
       # Compressed as captured, so a group's streams are megabytes, not the
       # gigabytes the raw probes would be. Nothing to upload when no measured

@@ -136,6 +136,15 @@ def _tensor(v: SegmentInertia) -> SIMD[DType.float64, 8]:
     )
 
 
+def _refuses_unnamed_regions(estimate: SegmentEstimate) raises:
+    # In a helper, not in the loop below: Mojo 1.1.0 segfaults now and then
+    # compiling these raising calls inside that loop's body.
+    with assert_raises():
+        _ = estimate.region_volume(LimbRegion(7))
+    with assert_raises():
+        _ = estimate.region_mass(LimbRegion(-1))
+
+
 def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
     var low = Vector3(0.011, -0.027, 0.019)
     var high = Vector3(0.048, 0.026, 0.048)
@@ -189,10 +198,7 @@ def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
         assert_almost_equal(
             estimate.region_mass(LimbRegion(0)).value, 0.1, atol=1.0e-8
         )
-        with assert_raises():
-            _ = estimate.region_volume(LimbRegion(7))
-        with assert_raises():
-            _ = estimate.region_mass(LimbRegion(-1))
+        _refuses_unnamed_regions(estimate)
 
 
 def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:

@@ -170,11 +170,13 @@ The reporter reads the captures through named pipes, one suite at a time. Other 
 
 CPU test groups use imported source size. Coverage groups use `tools/coverage_shard.py` and `tools/coverage_costs.json`. Probe output can take much longer than compilation. The scheduler puts the longest estimated capture in the group with the lowest total cost. Each group starts its longest captures first.
 
-Ties use the suite path and group number. Every affected suite stays in exactly one group. The six CI groups and the 6000-second budget are unchanged.
+Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses six groups and a budget of 8000 seconds a group. The budget is a hang detector, not a target.
 
-The first profile uses [CI run 36903778725](https://github.com/SethKitchen/ThreeMojo/actions/runs/36903778725), from October 1, 2026. Its source commit is `a8f0651a165ffcc64d1b541f35304fda5dfb2e39`. It used Mojo `1.1.0` (`8189361e`) and four capture workers per runner. These costs are estimates, not direct timers.
+The current profile uses [CI run 37256337159](https://github.com/SethKitchen/ThreeMojo/actions/runs/37256337159), from October 5, 2026. Its source commit is `0fb66c60b1cb657be67c92a8284bf503aa38d3ed`. It used Mojo `1.1.0` (`8189361e`) and four capture workers per runner. Each cost is the elapsed time on the capture's completion line.
 
-The artifact ZIP files record completion times with two-second precision. The original groups ran in path order. The first four suites started together. Each completion started the next suite. This reconstructs compile-and-run time. The initial start estimate uses the last affected-selection log, so those first four costs also include Make setup.
+That run used a budget of 6000 seconds, which stopped the captures still in progress. Each of these has 1.25 times its elapsed time, and at least its earlier figure. A suite that was not in that run keeps its figure from the first profile.
+
+The first profile used [CI run 36903778725](https://github.com/SethKitchen/ThreeMojo/actions/runs/36903778725), from October 1, 2026. Its costs are estimates from artifact completion times, at two-second precision.
 
 A new suite gets a source-size estimate. The scheduler uses the median measured seconds per imported byte among the selected known suites. If none are known, it uses one second per 10000 bytes. The estimate is at least one second.
 
