@@ -26,6 +26,12 @@ uses exact stored-point distance ordering. Its reported Float64 norm is a
 scale-safe approximation. It visits every lane center, including centers
 after a farther one. Other methods retain the precision rules below.
 
+Lane orientation corrects CARLA's lateral-slope-as-angle calculation. It
+differentiates the selected reference position and offset frame, accumulated
+widths and lane offset before Float32 storage. Pitch uses actual horizontal
+speed. Border-only lane geometry remains a separate unsupported contract.
+Center coordinates and the fixed-s query arithmetic are unchanged.
+
 CARLA writes a point in single precision. This port computes in double
 and rounds at the end, where CARLA hands back a `Location`; the two agree
 to within a float's rounding.
@@ -58,7 +64,7 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from std.math import atan, cos, isfinite, sin, sqrt
+from std.math import atan2, cos, isfinite, sin, sqrt
 from units.si import DEGREE, Angle, Length, METER, RADIAN
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
@@ -855,10 +861,12 @@ struct Road(Copyable, Movable):
     ) raises -> CarlaTransform:
         """Return a lane's center at s in CARLA's frame, facing along it.
 
-        This follows `Lane::ComputeTransform`, except that the pitch is
-        the negative arctangent of the elevation grade. That matches the
-        corrected rotation convention and makes rising roads face uphill.
+        The heading and pitch follow the center derivative before storage
+        rounding. This corrects CARLA's lateral-slope-as-angle defect.
         A lane against s turns its yaw by 180 degrees and reverses pitch.
+        Zero horizontal speed keeps the reference heading. A stationary
+        center has zero grade; a vertical tangent has a 90-degree pitch.
+        Roll stays zero. Border-only geometry is not evaluated here.
 
         Args:
             section: The section's index.
@@ -869,30 +877,75 @@ struct Road(Copyable, Movable):
             The transform a vehicle in that lane would have.
 
         Raises:
-            Error: If the indices name no lane, s is off the road, or a
-                record the transform needs is missing.
+            Error: If the indices name no lane, s is nonfinite or off the
+                road, a required record is missing, the offset frame is
+                undefined, or the center or derivative is not representable.
         """
         self._check_lane(section, lane)
-        if s > self.length or s < 0.0:
-            raise Error("s is off the road")
+        if not isfinite(s) or s > self.length or s < 0.0:
+            raise Error("s is off the road or nonfinite")
         var lane_id = self.sections[section].lanes[lane].id
         var t_offset = Float32(0)
-        var lane_tangent = Float32(0)
+        var offset = 0.0
+        var slope = 0.0
         if lane_id.value != 0:
             var total = self._total_width(section, s, lane_id)
             t_offset = Float32(total[0])
-            lane_tangent = Float32(total[1])
+            offset = total[0]
+            slope = total[1]
         var lane_offset = info_at(self.info.lane_offsets, s)
         if not Bool(lane_offset):
             raise Error("The road has no lane offset record at s")
-        lane_tangent -= Float32(lane_offset.value().polynomial.tangent(s))
+        offset -= lane_offset.value().polynomial.evaluate(s)
+        slope -= lane_offset.value().polynomial.tangent(s)
+        if not isfinite(offset) or not isfinite(slope):
+            raise Error("Lane offset or derivative is not representable")
+        var at = info_index(self.info.geometries, s)
+        if at < 0:
+            raise Error("The road has no geometry at that s")
+        ref record = self.info.geometries[at]
+        var derivative = record.geometry._derivative_at(s - record.s)
+        # Preserve the existing center-coordinate arithmetic, including its
+        # two separate Float32 lateral offsets and elevation storage boundary.
         var point = self.directed_point(s)
         point.apply_lateral_offset(Length(t_offset, METER))
-        point.tangent -= Float64(lane_tangent)
-        # Rotation's positive pitch points down. The elevation derivative is
-        # a grade, not an angle; use its arctangent before reversing traffic.
-        var pitch = -Float32(atan(point.pitch)) * _TO_DEGREES
+        var c = cos(point.tangent)
+        var sn = sin(point.tangent)
+        var dx = derivative[0] + offset * derivative[2] * c + slope * sn
+        var dy = derivative[1] + offset * derivative[2] * sn - slope * c
+        if not isfinite(dx) or not isfinite(dy) or not isfinite(point.pitch):
+            raise Error("Lane center derivative is not representable")
+        if (
+            not isfinite(Float32(point.x))
+            or not isfinite(Float32(point.y))
+            or not isfinite(Float32(point.z))
+        ):
+            raise Error("Lane center is not representable in its transform")
+        var magnitude = max(abs(dx), abs(dy))
         var yaw = Float32(-point.tangent) * _TO_DEGREES
+        if magnitude > 0.0:
+            # Correct direction in the reference frame to retain yaw winding.
+            yaw = (
+                Float32(
+                    -point.tangent
+                    + atan2(
+                        (dx / magnitude) * sn - (dy / magnitude) * c,
+                        (dx / magnitude) * c + (dy / magnitude) * sn,
+                    )
+                )
+                * _TO_DEGREES
+            )
+        # Scale all three components together: a finite tangent can have a
+        # horizontal norm larger than the largest representable scalar.
+        var scale = max(magnitude, abs(point.pitch))
+        var pitch = Float32(0)
+        if scale > 0.0:
+            var horizontal = sqrt((dx / scale) ** 2 + (dy / scale) ** 2)
+            pitch = (
+                -Float32(atan2(point.pitch / scale, horizontal)) * _TO_DEGREES
+            )
+        if not isfinite(yaw):
+            raise Error("Lane yaw winding is not representable")
         if not self.is_positive_direction(lane_id):
             yaw += 180.0
             pitch = 360.0 - pitch
