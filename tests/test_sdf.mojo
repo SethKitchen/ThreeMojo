@@ -55,6 +55,7 @@ from extensions.sdf.mesher import (
     _mesh_part,
     _number_vertices,
     _sample_band,
+    _share_faces,
     _wake,
     check_cell,
     merge,
@@ -487,6 +488,74 @@ def test_moved_model() raises:
     assert_equal(len(SdfModel().moved(short).prims), 0)
 
 
+def _assert_same_mesh(actual: SurfaceMesh, expected: SurfaceMesh) raises:
+    assert_equal(len(actual.positions), len(expected.positions))
+    assert_equal(len(actual.normals), len(expected.normals))
+    assert_equal(len(actual.indices), len(expected.indices))
+    for i in range(len(expected.positions)):
+        assert_equal(actual.positions[i], expected.positions[i])
+    for i in range(len(expected.normals)):
+        assert_equal(actual.normals[i], expected.normals[i])
+    for i in range(len(expected.indices)):
+        assert_equal(actual.indices[i], expected.indices[i])
+
+
+def test_blended_multiblock_mesh_is_bitwise_thread_deterministic() raises:
+    var m = _ball()
+    _ = m.sphere("blend", BoneId(0), V3(0.8, 0.2, 0.1), 0.7, k=0.3)
+    var low = V3(-1, -1, -1)
+    var high = V3(1.5, 1, 1)
+    var cell = Length(0.25, METER)
+    var serial = mesh_part(m, [0, 1], low, high, cell, block=2, workers=1)
+    assert_true(len(serial.list_start) > 1)
+    assert_true(serial.vertex_count() > 50)
+    for workers in [2, 0]:
+        var parallel = mesh_part(
+            m, [0, 1], low, high, cell, block=2, workers=workers
+        )
+        _assert_same_mesh(parallel, serial)
+
+
+def _check_shared_point(
+    blocks: List[Int], point: SIMD[DType.int64, 4], owner: Int
+) raises:
+    var lt = Lattice(V3(0, 0, 0), 1.0, 2, 2, 2, 2)
+    var grid = _Grid(lt)
+    for b in blocks:
+        grid.slot_of[b] = len(grid.active)
+        grid.active.append(b)
+        for _ in range(27):
+            # Distinct signs make inconsistent ownership visible.
+            grid.samples.append(Float32(b - 4))
+    var expected = Float32(owner - 4)
+    var gx = Int(point[0])
+    var gy = Int(point[1])
+    var gz = Int(point[2])
+    assert_equal(grid.sample(gx, gy, gz), expected)
+    _share_faces(grid)
+    for slot in range(len(grid.active)):
+        var b = grid.active[slot]
+        var i = b % 2
+        var j = (b // 2) % 2
+        var k = b // 4
+        var local = (gx - i * 2) + 3 * ((gy - j * 2) + 3 * (gz - k * 2))
+        assert_equal(grid.samples[slot * 27 + local], expected)
+    assert_equal(grid.sample(gx, gy, gz), expected)
+    # Sharing a second time cannot change the selected value.
+    _share_faces(grid)
+    assert_equal(grid.sample(gx, gy, gz), expected)
+
+
+def test_shared_edges_and_corners_use_one_active_fallback_owner() raises:
+    _check_shared_point([6, 5, 3], SIMD[DType.int64, 4](2, 2, 2, 0), 3)
+    _check_shared_point([3, 5, 6], SIMD[DType.int64, 4](2, 2, 2, 0), 3)
+    _check_shared_point([2, 1], SIMD[DType.int64, 4](2, 2, 1, 0), 1)
+    _check_shared_point([1, 2], SIMD[DType.int64, 4](2, 2, 1, 0), 1)
+    # An active floor owner takes priority over every lower block.
+    _check_shared_point([3, 5, 6, 7], SIMD[DType.int64, 4](2, 2, 2, 0), 7)
+    _check_shared_point([7, 6, 5, 3], SIMD[DType.int64, 4](2, 2, 2, 0), 7)
+
+
 def test_mesh_a_ball() raises:
     var m = _ball()
     var mesh = mesh_part(
@@ -509,8 +578,7 @@ def test_mesh_a_ball() raises:
         block=4,
         workers=2,
     )
-    assert_equal(two.vertex_count(), mesh.vertex_count())
-    assert_equal(two.positions[7], mesh.positions[7])
+    _assert_same_mesh(two, mesh)
     var all = mesh_part(
         m,
         [0],
@@ -520,7 +588,7 @@ def test_mesh_a_ball() raises:
         block=4,
         workers=0,
     )
-    assert_equal(all.vertex_count(), mesh.vertex_count())
+    _assert_same_mesh(all, mesh)
 
 
 def test_spill_wakes_the_blocks_a_thin_first_pass_misses() raises:
