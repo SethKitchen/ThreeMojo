@@ -69,6 +69,11 @@ from extensions.animals.species.spider import (
     _leg_chain,
     _palp_chain,
 )
+from extensions.animals.species.swimmer_rig import (
+    fan_rays,
+    fin_outline,
+    fin_ray_coords,
+)
 from extensions.animals.traits import Traits
 from extensions.sdf.field import SdfModel
 from extensions.sdf.ids import BoneId
@@ -82,6 +87,18 @@ def _draw(species: SpeciesId, sex: Sex = FEMALE) raises -> Traits:
     )
     var r = body_random(options.seed)
     return species_traits(species, r, options)
+
+
+def test_fewer_than_two_fin_rays_have_no_outline_or_coordinates() raises:
+    for count in range(2):
+        var lengths = List[Float64](length=count, fill=0.3)
+        var rays = fan_rays(0, 0, 1, 0, 30, 60, lengths)
+        assert_equal(len(rays), count * 4)
+        assert_equal(len(fin_outline(rays, 0.02, 0.1)), 0)
+        for point in [V3(-0.1, 0.2, 0), V3(0.3, -0.2, 0)]:
+            var at = fin_ray_coords(rays, point.x, point.y)
+            assert_equal(at.phase, 0.0)
+            assert_equal(at.along, 0.0)
 
 
 def test_empty_fish_ray_tables_give_no_rays() raises:
