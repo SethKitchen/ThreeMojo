@@ -35,6 +35,7 @@ Facial morphs move the scanned skin, teeth, gums and tongue. They do not update 
 Use `BONES` for the anatomical view. Use `SKIN.plus(EYES).plus(MOUTH)` for the expression view. Adding `HAIR` also draws the scalp shell. A view with both tooth sets is an overlay, not one coupled dentition.
 
 `Speech` is a spelling-based visual animation. It does not supply muscle forces, jaw mechanics or audio alignment.
+[Audio-aligned game faces](Audio-aligned-game-faces) adds caller-provided alignment and an audio-clock contract. It remains visual-only and does not validate physical correspondence.
 
 ## Skin, mass and hair
 

@@ -436,8 +436,13 @@ def _read_mesh(geometry: BufferGeometry) raises -> WeldedMesh:
         faces.
 
     Raises:
-        Error: If it has no positions, or its triangles are not whole.
+        Error: If it has morph targets, no positions, or incomplete triangles.
     """
+    if geometry.morph_count() > 0:
+        raise Error(
+            "Simplification cannot preserve morph correspondence; keep facial"
+            " meshes"
+        )
     ref points = geometry.attribute_view(String(POSITION))
     var count = points.count()
     var positions = List[Vector3](capacity=count)
@@ -941,7 +946,7 @@ def simplify(geometry: BufferGeometry, target: Int) raises -> BufferGeometry:
 
     Raises:
         Error: If `target` is less than one, or the geometry has no
-            positions or holds a partial triangle.
+            positions, holds a partial triangle, or carries morph targets.
     """
     if target < 1:
         raise Error("A simplified mesh must keep at least one triangle")
@@ -1120,7 +1125,7 @@ def fit_triangle_budget_result(
     Raises:
         Error: If `budget` or `workers` is less than one, `first_mesh` is
             out of range, or a geometry has no positions or holds a
-            partial triangle. Also raises for an unnamed mode or a
+            partial triangle or morph targets. Also raises for an unnamed mode or a
             missed strict target. Invalid input leaves assets unchanged.
             Strict mode also leaves assets unchanged on conversion failure.
             Best effort can replace earlier geometries before that error.

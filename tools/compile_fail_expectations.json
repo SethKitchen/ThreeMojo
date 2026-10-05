@@ -4711,5 +4711,29 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/an_aligned_phoneme_is_not_a_string.mojo": {
+    "errors": [
+      {
+        "line": 11,
+        "column": 24,
+        "message": "invalid call to 'phoneme_viseme': value passed to 'phoneme' cannot be converted from 'StringLiteral[\"AA\"]' to 'Phoneme'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/audio_time_is_not_a_bare_float.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 23,
+        "message": "invalid call to 'sample': value passed to 'audio_position' cannot be converted from 'FloatLiteral[0.5]' to 'Quantity[Int(0), Int(0), Int(1), Int(0)]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }
