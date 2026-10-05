@@ -15305,3 +15305,193 @@ def test_shared_norm_consumers_preserve_extreme_product_directions() raises:
                 assert_almost_equal(actual, cpu[component], atol=2e-5)
                 if component < 4:
                     assert_almost_equal(actual, expected[component], atol=2e-6)
+
+
+# --- rectangle volume lighting, three.js r186 ---------------------------------
+
+
+def test_both_backends_march_rectangle_volume_lights_alike() raises:
+    # The camera frame must reach volume LTC on both paths. Exercise a
+    # rectangle-only ray and a ray that also gathers point and spot lights.
+    if skipped_for_lack_of_a_gpu("volume rays use rectangle lights"):
+        return
+    from tests.test_volume_rect_lighting import rect_volume_scene
+
+    for mixed in [False, True]:
+        var assets = Assets()
+        var scene = rect_volume_scene(assets, mixed)
+        var renderer = Renderer(24, 18)
+        renderer.set_background(BACKGROUND)
+        renderer.set_ltc_tables(load_ltc_tables())
+        var camera = PerspectiveCamera(
+            Angle(50, DEGREE),
+            Float32(24) / Float32(18),
+            Length(0.1, METER),
+            Length(100, METER),
+        )
+        for eye in [Vector3(0.4, 0.3, 4), Vector3(3, 0.4, 2)]:
+            camera.place(eye, Vector3(0, 0, 0))
+            var cpu = renderer.render(scene, assets, camera)
+            var frame = renderer.prepare_frame(scene, assets, camera)
+            var device = GpuRenderer(24, 18)
+            device.set_textures(assets.textures)
+            device.draw(
+                frame.whole_corners(),
+                BACKGROUND,
+                SHADE_TEXTURE,
+                Lighting(
+                    scene,
+                    eye=camera_position(scene, camera),
+                    up=camera_up(scene, camera),
+                    back=camera_back(scene, camera),
+                    ltc=load_ltc_tables(),
+                ),
+                lines=frame.segments,
+                draws=frame.draws,
+                points=frame.points,
+                programs=frame.programs,
+            )
+            var gpu = device.read_back()
+            assert_true(
+                count_background(cpu, BACKGROUND) < 24 * 18 - 15,
+                "the rectangle-lit volume drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- opaque depth for volume scattering, issue #616 --------------------------
+
+
+def test_both_backends_gate_mixed_volume_lights_at_opaque_depth() raises:
+    if skipped_for_lack_of_a_gpu("volume scattering uses opaque scene depth"):
+        return
+    from tests.test_volume_rect_lighting import rect_volume_scene
+
+    var assets = Assets()
+    var scene = rect_volume_scene(assets, mixed=True)
+    assets.materials.materials[0].set_volume_scene_depth(True)
+    var wall = scene.add(Object3D())
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(plane(Length(8, METER), Length(8, METER))),
+            assets.materials.add(Material(Color(0, 0, 0), kind=BASIC)),
+            wall,
+        )
+    )
+    var renderer = Renderer(15, 15)
+    renderer.set_ltc_tables(load_ltc_tables())
+    renderer.set_background(Color(0, 0, 0))
+    var camera = PerspectiveCamera(
+        Angle(50, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    var device = GpuRenderer(15, 15)
+    device.set_textures(assets.textures)
+    for mode in [STANDARD_DEPTH, REVERSED_DEPTH, LOGARITHMIC_DEPTH]:
+        renderer.set_depth_mode(mode)
+        for eye in [Vector3(0.2, 0.1, 4), Vector3(0.1, 0.1, 0.4)]:
+            camera.place(eye, Vector3(0, 0, -1))
+            for z in [Float32(2), Float32(0), Float32(-2)]:
+                scene.node(wall).set_position(0, 0, z)
+                scene.update()
+                var cpu = renderer.render(scene, assets, camera)
+                var frame = renderer.prepare_frame(scene, assets, camera)
+                var captured = renderer.transmission_target(
+                    scene, assets, camera
+                )
+                device.draw(
+                    frame.whole_corners(),
+                    Color(0, 0, 0),
+                    SHADE_TEXTURE,
+                    Lighting(
+                        scene,
+                        eye=camera_position(scene, camera),
+                        up=camera_up(scene, camera),
+                        back=camera_back(scene, camera),
+                        ltc=load_ltc_tables(),
+                    ),
+                    draws=frame.draws,
+                    programs=frame.programs,
+                    depth_mode=mode,
+                    transmission=captured,
+                )
+                assert_equal(
+                    count_mismatches(cpu, device.read_back(), tolerance=1), 0
+                )
+    # No stale snapshot can affect the next draw after opt-out.
+    assets.materials.materials[0].set_volume_scene_depth(False)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    device.draw(
+        frame.whole_corners(),
+        Color(0, 0, 0),
+        SHADE_TEXTURE,
+        Lighting(
+            scene,
+            eye=camera_position(scene, camera),
+            up=camera_up(scene, camera),
+            back=camera_back(scene, camera),
+            ltc=load_ltc_tables(),
+        ),
+        draws=frame.draws,
+        programs=frame.programs,
+        depth_mode=renderer.depth_mode_for(camera),
+    )
+    assert_equal(
+        count_mismatches(
+            renderer.render(scene, assets, camera),
+            device.read_back(),
+            tolerance=1,
+        ),
+        0,
+    )
+
+
+def test_gpu_refuses_missing_or_wrong_sized_volume_scene_depth() raises:
+    if skipped_for_lack_of_a_gpu(
+        "volume depth is validated before a GPU launch"
+    ):
+        return
+    from tests.test_volume_rect_lighting import rect_volume_scene
+
+    var assets = Assets()
+    var scene = rect_volume_scene(assets)
+    assets.materials.materials[0].set_volume_scene_depth(True)
+    var renderer = Renderer(15, 15)
+    renderer.set_ltc_tables(load_ltc_tables())
+    var camera = PerspectiveCamera(
+        Angle(50, DEGREE), 1, Length(0.1, METER), Length(20, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var captured = renderer.transmission_target(scene, assets, camera)
+    var device = GpuRenderer(15, 15)
+    with assert_raises(contains="raster target size"):
+        device.draw(frame.whole_corners(), Color(0, 0, 0), draws=frame.draws)
+    assert_false(device.drawn)
+    # A first scissored draw must validate before its full-target clear.
+    # Otherwise a refused snapshot still launches an empty frame.
+    with assert_raises(contains="raster target size"):
+        device.draw(
+            frame.whole_corners(),
+            Color(0, 0, 0),
+            draws=frame.draws,
+            scissor=Rect(2, 2, 11, 11),
+        )
+    assert_false(device.drawn)
+    _ = captured.volume_depth.pop()
+    with assert_raises(contains="raster target size"):
+        device.draw(
+            frame.whole_corners(),
+            Color(0, 0, 0),
+            draws=frame.draws,
+            transmission=captured,
+        )
+    assert_false(device.drawn)
+    with assert_raises(contains="raster target size"):
+        device.draw(
+            frame.whole_corners(),
+            Color(0, 0, 0),
+            draws=frame.draws,
+            transmission=captured,
+            scissor=Rect(2, 2, 11, 11),
+        )
+    assert_false(device.drawn)

@@ -169,7 +169,7 @@ A `STANDARD` material ignores the thickness outputs, as three.js's `MeshStandard
 
 ### Volumetric light
 
-A `VOLUME` material is three.js's `VolumeNodeMaterial`. Its surface shows the light that a ray through the mesh gathers from the point and spot lights. Build it with `volume_node_material`:
+A `VOLUME` material ports `VolumeNodeMaterial` within the limits below. Its ray gathers point, spot, and rectangle lights. Build it with `volume_node_material`:
 
 ```mojo
 var graph = NodeGraph()
@@ -186,13 +186,71 @@ The material is drawn from its back faces, blended, with no depth test and no de
 
 1. The ray runs from the camera to the fragment when the camera is more than twice the mesh's bounding radius from it. Otherwise the ray runs from the fragment to the camera. The radius is the geometry's bounding sphere in world space, three.js's `modelRadius`.
 2. The ray takes `steps` equal steps. The first step is `OFFSET_NODE` of a step from the start, or at the start.
-3. At each step, each point light and each spot light adds its color, times its falloff, its beam and its map. Its shadow multiplies it twice, as three.js multiplies it. A directional light adds nothing, because it has no distance.
+3. At each step, each point light and each spot light adds its color, times its falloff, beam, and map. Its shadow multiplies it twice. A rectangle adds the r186 volume LTC form factor times radiance, raised to the power 1.5 per channel. The form factor uses camera-space corners and the emitting side only. A directional light adds nothing.
 4. `SCATTERING_NODE` multiplies that density. In this output, `position_world()` is the position of the step. three.js hands the same position to `scatteringNode` as `positionRay`.
 5. What the ray lets through is multiplied by `exp(-density * 0.01 * step)` at each step, which is Beer's law.
 
 An IES profile or projector frame shapes the beam at each ray step, as it does on a surface. An IES light with no profile uses its cone. See [Lighting addons](Lighting-addons#ies-spot-light).
 
 The surface's color is one minus what the ray lets through, plus `EMISSIVE_NODE`. Its alpha is the material's. A volume refuses an emissive color and an emissive map, because three.js's material has neither. The functions are in `materials.volume_node_material`.
+
+#### Opaque scene depth
+
+Set `scene_depth=True` in `volume_node_material`, or call
+`material.set_volume_scene_depth(True)`, to gate scattering against opaque
+scene depth. The default is `False`, which keeps the existing ungated ray.
+Only a `VOLUME` material can enable this input. `DEPTH_NODE` keeps its generic
+fragment-depth contract on every material. It does not enable this gate.
+
+The renderer captures depth after opaque draws survive their depth, stencil,
+mask, and alpha tests. The capture excludes all volumes, all blended draws,
+and transmissive draws. It occurs before transmissive back faces. Later depth
+writes cannot change this snapshot, including writes by a volume whose
+`depth_write` or blend settings were changed.
+The capture uses the current scene. Depth left in a caller-owned target by
+an earlier render is not an extra occluder, even with `auto_clear=False`.
+
+The snapshot holds signed camera-axis distances in meters. Positive values
+are in front of the camera. Each fragment reads its exact raster pixel from
+the top-left origin. Depth has no bilinear filter or mip level. Supersampling
+captures at the larger raster size before color resolve. Resize, viewport,
+and scissor settings apply to the opaque capture too.
+
+Standard NDC depth, reversed depth, and logarithmic depth reconstruct the
+same camera-axis distance. Perspective and orthographic cameras are supported.
+A clear pixel uses the camera's far distance.
+
+Each original ray sample at or
+before the captured distance contributes. The gate preserves step size,
+offset, and direction. It does not move the ray start to the near plane.
+Camera clipping still removes geometry outside the view.
+
+The orthographic gate corrects a mixed-space comparison in r186. With near
+1 meter and far 9 meters, a sample at distance 2 is before an opaque surface
+at distance 3. r186 compares perspective sample depth 0.5625 with orthographic
+scene depth 0.25 and rejects that sample. This port compares axial distances
+and admits it.
+
+The same r186 expression also mixes depth spaces for reversed perspective
+cameras. With near 1 meter and far 9 meters, a sample at distance 3 has
+forward window depth 0.75. Reversed inversion reads that as distance 9/7,
+so r186 can admit it through an opaque surface at distance 2. This port
+rejects it. Independent projection and ordering tests cover both corrections.
+The source equations are in r186 [VolumetricLightingModel](https://github.com/mrdoob/three.js/blob/r186/src/nodes/functions/VolumetricLightingModel.js) and [ViewportDepthNode](https://github.com/mrdoob/three.js/blob/r186/src/nodes/display/ViewportDepthNode.js).
+
+Low-level rasterizer callers must pass a matching `TransmissionTarget` with
+`capture_volume_depth(opaque_target, to_screen, far)` applied before drawing
+volumes. `to_screen` maps camera space to raster pixels. Missing, nonfinite,
+or wrong-sized snapshots raise an error before drawing. A reused GPU target
+uploads the new snapshot on each draw.
+
+CPU and GPU use one ray gate and one rectangle-light calculation. The
+source-bound numerical fixtures target three.js r186. They check per-step
+light and depth decisions independently. They do not establish complete
+rendered r186 parity. This port retains one minus transmittance plus
+`EMISSIVE_NODE`; r186 separately accumulates outgoing ray light and supports
+ray emission. Those differences remain outside this feature.
+
 
 ## Outputs
 
@@ -815,12 +873,13 @@ classes with an explicit error.
 | TSL function bodies | Not stored in three.js node JSON; the loader rejects them. |
 | `ModelNode`, `MaterialNode`, `PropertyNode`, `StorageBufferNode` | Rejected. Use explicit graph inputs, textures, or attributes where available. |
 | Post-processing nodes | Use the corresponding composer passes. |
-| Volume `depthNode`, rectangle lights, ray `receivedShadowNode` | Not supported; see the limits below. |
+| Volume scene depth and rectangle lights | Native explicit depth capture and r186 volume LTC are supported. Serialized TSL depth expressions are not loaded. |
+| Volume ray `receivedShadowNode` | Not supported; see the limits below. |
 
 ## What is not ported
 
-- A `VOLUME` material's `depthNode`. three.js reads it as the depth of the scene, to stop a ray at the nearest opaque surface. That needs a pass's depth texture, and no node here reads one. Here `DEPTH_NODE` sets the fragment's depth, as on every other kind.
-- A rectangle of light in a volume, three.js's `LTC_Evaluate_Volume`. A `VOLUME` ray gathers the point and spot lights only.
+- Arbitrary TSL expressions for a volume's `depthNode`. Use the explicit [opaque scene depth](#opaque-scene-depth) input. `DEPTH_NODE` still sets fragment depth.
+- r186's separate outgoing-ray-light accumulation and `scatteringEmissiveNode`. The accepted outgoing transmittance model remains unchanged.
 - `receivedShadowNode` on a volume's ray. The shadows at each step are not shaped by the graph.
 - three.js's node JSON does not keep the name of a uniform, the update of a uniform or the type of an attribute. So `time` is a plain uniform named by its uuid. Set it with `set_uniform` before each frame.
 - The node classes of three.js that are TSL functions, and the classes that have no node here, such as `ModelNode`, `MaterialNode` and `PropertyNode`. A material that uses them cannot load.

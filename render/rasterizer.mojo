@@ -40,6 +40,7 @@ from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
+from units.si import Length, METER
 from materials.material import (
     BLEND,
     DEFAULT_IOR,
@@ -1165,6 +1166,7 @@ struct RasterVertex(ImplicitlyCopyable):
     # `materials.volume_node_material`.
     var steps: Int
     var model_radius: Float32
+    var volume_scene_depth: Bool
 
     def __init__(
         out self,
@@ -1345,6 +1347,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.previous = Vector3(0, 0, 0)
         self.lights = 0
         self.steps = DEFAULT_STEPS
+        self.volume_scene_depth = False
         self.model_radius = 0
 
 
@@ -1636,6 +1639,7 @@ struct Surface(ImplicitlyCopyable):
     # `materials.volume_node_material`.
     var steps: Int
     var model_radius: Float32
+    var volume_scene_depth: Bool
 
 
 def joined(corner: Corner, surface: Surface) -> RasterVertex:
@@ -1729,6 +1733,7 @@ def joined(corner: Corner, surface: Surface) -> RasterVertex:
     vertex.scatter_scale = surface.scatter_scale
     vertex.lights = surface.lights
     vertex.steps = surface.steps
+    vertex.volume_scene_depth = surface.volume_scene_depth
     vertex.model_radius = surface.model_radius
     return vertex^
 
@@ -1842,6 +1847,7 @@ def surface_of(vertex: RasterVertex) -> Surface:
         vertex.lights,
         vertex.steps,
         vertex.model_radius,
+        vertex.volume_scene_depth,
     )
 
 
@@ -2740,6 +2746,12 @@ def check_triangle_state(
         raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
         raise Error("A triangle's material kind is none of the thirteen")
+    if a.volume_scene_depth and a.kind != VOLUME:
+        raise Error("Only a VOLUME triangle reads volume scene depth")
+    if b.volume_scene_depth != a.volume_scene_depth or (
+        c.volume_scene_depth != a.volume_scene_depth
+    ):
+        raise Error("A triangle's corners disagree about volume scene depth")
     if a.kind == VOLUME:
         check_steps(a.steps)
         if not (a.model_radius >= 0):
@@ -3976,6 +3988,11 @@ def rasterize_shaded(
     if not checked:
         check_triangle_maps(a, mode, textures, cubes, programs, volumes, arrays)
         check_transmission(a, mode, transmission.is_ready(), programs)
+        transmission.check_volume_depth(
+            a.volume_scene_depth and mode != SHADE_UV,
+            target.width,
+            target.height,
+        )
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -5551,6 +5568,12 @@ def rasterize_shaded(
                     a.model_radius,
                     a.steps,
                     offset,
+                    transmission.volume_depth_at(
+                        x, y
+                    ) if a.volume_scene_depth else Length(
+                        inf[DType.float32](), METER
+                    ),
+                    lighting.back,
                 )
                 shaded = FloatColor(
                     ray.x + glow.r, ray.y + glow.g, ray.z + glow.b, shaded.a
@@ -7615,6 +7638,16 @@ def _draw_frame(
     and their surface as it is drawn, so they live in the cache for the one
     triangle and the frame's list is a quarter of the size.
     """
+    var needs_depth = False
+    for index in range(len(draws)):
+        ref draw = draws[index]
+        if draw.kind == DRAW_TRIANGLES:
+            for triangle in range(draw.first, draw.first + draw.count):
+                if surfaces[corners[triangle * 3].surface].volume_scene_depth:
+                    needs_depth = True
+    transmission.check_volume_depth(
+        needs_depth and mode != SHADE_UV, target.width, target.height
+    )
     var bands = min(workers, target.height)
     if bands == 1:
         for index in range(len(draws)):

@@ -63,7 +63,6 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [ ] [GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): unsigned types, explicit texture gradients and broader loops remain open. Unproved loop exits now fail explicitly [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
 - [ ] [OpenEXR compression coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): PXR24 and DWA from three.js r180; B44 and B44A from r186 [#615](https://github.com/SethKitchen/ThreeMojo/issues/615)
-- [ ] [Volume lighting and depth](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#what-is-not-ported): opaque-scene depth and rectangle lights from three.js r186 [#616](https://github.com/SethKitchen/ThreeMojo/issues/616)
 - [ ] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#ktx2-and-compressed-formats): 4x4 and 6x6 block formats from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
 
 ### Navigation safety
@@ -233,7 +232,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 
 <details>
-<summary>Ported: 35</summary>
+<summary>Ported: 36</summary>
+
+- [x] [Volume lighting and depth](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#opaque-scene-depth): explicit opaque-scene depth and shared r186 rectangle lighting, with documented depth-space corrections [#616](https://github.com/SethKitchen/ThreeMojo/issues/616)
 
 - [x] [TSL function library](https://github.com/SethKitchen/ThreeMojo/wiki/TSL-functions): triplanar maps, sprite sheets, oscillators, noises, hashes, bit packing, raymarching and GGX helpers on the node graph [#252](https://github.com/SethKitchen/ThreeMojo/issues/252)
 - [x] [MeshSSSNodeMaterial and VolumeNodeMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#lighting-models): light through a surface from behind, and light marched through a volume, on both rasterizers [#258](https://github.com/SethKitchen/ThreeMojo/issues/258)

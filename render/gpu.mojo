@@ -178,6 +178,7 @@ from lights.lighting import (
     occluded_light,
     physical_light,
     scattering_through,
+    rect_volume_light,
     shadowed_twice,
     physical_outgoing,
     physical_surface,
@@ -713,10 +714,10 @@ comptime LANE_SCATTER = LANE_GOURAUD_INDIRECT + 3
 # velocity attachment reads.
 comptime LANE_CURRENT = LANE_SCATTER + 8
 comptime LANE_PREVIOUS = LANE_CURRENT + 3
-# A `VOLUME` triangle's ray: its steps and the mesh's bounding radius in
-# world space; see `RasterVertex.steps`.
+# A `VOLUME` triangle's ray: its steps, bounding radius in world space,
+# and explicit scene-depth switch; see `RasterVertex.steps`.
 comptime LANE_VOLUME = LANE_PREVIOUS + 3
-comptime FLOATS_PER_VERTEX = LANE_VOLUME + 2
+comptime FLOATS_PER_VERTEX = LANE_VOLUME + 3
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -845,7 +846,9 @@ comptime STATE_PER_TRIANGLE = STATE_LIGHTS + 1
 comptime TRANSMISSION_WIDTH = VIEW_FLOATS
 comptime TRANSMISSION_HEIGHT = VIEW_FLOATS + 1
 comptime TRANSMISSION_LEVELS = VIEW_FLOATS + 2
-comptime TRANSMISSION_HEADER = VIEW_FLOATS + 3
+# Relative float offset of immutable volume depth, or zero when absent.
+comptime TRANSMISSION_DEPTH = VIEW_FLOATS + 3
+comptime TRANSMISSION_HEADER = VIEW_FLOATS + 4
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -1252,6 +1255,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.previous.z)
         flat.append(Float32(corner.steps))
         flat.append(corner.model_radius)
+        flat.append(Float32(1) if corner.volume_scene_depth else Float32(0))
     return flat^
 
 
@@ -1307,7 +1311,7 @@ def _append_float(mut bytes: List[UInt8], value: Float32):
     bytes.append(UInt8(bits >> 24))
 
 
-def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
+def flatten_transmission(target: TransmissionTarget) raises -> List[UInt8]:
     """Return a transmission target as the bytes that follow the backdrop.
 
     Args:
@@ -1315,8 +1319,12 @@ def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
 
     Returns:
         `TRANSMISSION_HEADER` floats -- the matrix, the width, the height
-        and the level count -- then the chain's floats, largest level
-        first, each four little-endian bytes.
+        and level count, plus the relative float offset of volume depth
+        or zero when absent. The color chain comes first, then immutable
+        camera-axis depth samples, each four little-endian bytes.
+
+    Raises:
+        Error: If the depth offset cannot be represented exactly.
     """
     var bytes = List[UInt8]()
     for index in range(VIEW_FLOATS):  # pragma: no branch
@@ -1324,8 +1332,16 @@ def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
     _append_float(bytes, Float32(target.image.width))
     _append_float(bytes, Float32(target.image.height))
     _append_float(bytes, Float32(target.image.levels))
+    var depth_offset = Float32(0)
+    if len(target.volume_depth) > 0:
+        depth_offset = _packed_offset(
+            TRANSMISSION_HEADER, len(target.image.data)
+        )
+    _append_float(bytes, depth_offset)
     for index in range(len(target.image.data)):
         _append_float(bytes, target.image.data[index])
+    for index in range(len(target.volume_depth)):
+        _append_float(bytes, target.volume_depth[index])
     return bytes^
 
 
@@ -3145,7 +3161,6 @@ def _scattered[
         )
         var toward = ray[0]
         var distance = ray[1]
-        var direction_length = ray[2]
         if distance == 0:
             continue
         var bare = falloff(
@@ -3232,8 +3247,8 @@ def _volume_light(
     receives: Bool,
 ) -> Vector3:
     """Return the light that one step of a volume's ray gathers: the device
-    counterpart of `Lighting.volume_light_at`, the point lights and then
-    the spot lights, each by `shadowed_twice`."""
+    counterpart of `Lighting.volume_light_at`: points and spots use
+    `shadowed_twice`, rectangles use the shared view-space volume LTC."""
     var total = Vector3(0, 0, 0)
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
@@ -3309,6 +3324,42 @@ def _volume_light(
             ),
             _shaped_through(
                 lights, at + 13, receives, place, normal, Unshaped()
+            ),
+        )
+    var first_rect = first_spot + spots * SPOT_FLOATS
+    for index in range(Int(lights[unsafe_offset=LIGHTS_RECT_COUNT])):
+        var at = first_rect + index * RECT_FLOATS
+        total = total + rect_volume_light(
+            place,
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(
+                lights[unsafe_offset=at + 3],
+                lights[unsafe_offset=at + 4],
+                lights[unsafe_offset=at + 5],
+            ),
+            Vector3(
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+                lights[unsafe_offset=at + 8],
+            ),
+            Vector3(
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+                lights[unsafe_offset=at + 11],
+            ),
+            Vector3(
+                lights[unsafe_offset=LIGHTS_UP],
+                lights[unsafe_offset=LIGHTS_UP + 1],
+                lights[unsafe_offset=LIGHTS_UP + 2],
+            ),
+            Vector3(
+                lights[unsafe_offset=LIGHTS_BACK],
+                lights[unsafe_offset=LIGHTS_BACK + 1],
+                lights[unsafe_offset=LIGHTS_BACK + 2],
             ),
         )
     return total
@@ -8651,6 +8702,16 @@ def rasterize_kernel(
                     var offset = Float32(0)
                     if noded and has_output(nodes, OFFSET_NODE):
                         offset = run_nodes(nodes, OFFSET_NODE, given)[0]
+                    var scene_depth = inf[DType.float32]()
+                    if corners[unsafe_offset=base + LANE_VOLUME + 2] != 0:
+                        var start = Int(width) * Int(height) * 4
+                        var offset_depth = Int(
+                            _float_at(backdrop, start + TRANSMISSION_DEPTH * 4)
+                        )
+                        scene_depth = _float_at(
+                            backdrop,
+                            start + (offset_depth + y * Int(width) + x) * 4,
+                        )
                     var ray = volumetric_light(
                         _DeviceRay(
                             lights,
@@ -8675,6 +8736,8 @@ def rasterize_kernel(
                         corners[unsafe_offset=base + LANE_VOLUME + 1],
                         Int(corners[unsafe_offset=base + LANE_VOLUME]),
                         offset,
+                        Length(scene_depth, METER),
+                        view_back,
                     )
                     red = ray.x + glow_r
                     green = ray.y + glow_g
@@ -9487,26 +9550,6 @@ struct GpuRenderer(Movable):
             kept = scissor.value()
             if not kept.fits(self.width, self.height):
                 raise Error("A scissor must lie inside the target")
-            # A pixel outside the scissor is left as it was, and on a
-            # fresh target "as it was" is whatever the device buffer held.
-            # The first draw clears the whole target first, so the rest
-            # is the background -- resolved through this draw's own mode,
-            # curve and exposure, as the host resolves a whole fresh target
-            # through one curve. Cleared with the defaults, a white
-            # background under Reinhard came back white outside the
-            # scissor and gray inside it.
-            if not self.drawn:
-                self.draw(
-                    List[RasterVertex](),
-                    background,
-                    mode,
-                    tone_mapping=tone_mapping,
-                    exposure=exposure,
-                    depth_mode=depth_mode,
-                    programs=programs,
-                    custom_tone_mapping=custom_tone_mapping,
-                    output_color_space=output_color_space,
-                )
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -9553,12 +9596,23 @@ struct GpuRenderer(Movable):
         # Asked of the triangles a draw names, as `rasterize_frame` asks
         # it: the kernel reads the target wherever a triangle transmits.
         var ready = transmission.is_ready()
+        var needs_volume_depth = False
         for index in range(len(order)):
             ref run = order[index]
             if run.kind != DRAW_TRIANGLES:
                 continue
             for triangle in range(run.first, run.first + run.count):
                 check_transmission(corners[triangle * 3], mode, ready, programs)
+                if corners[triangle * 3].volume_scene_depth:
+                    needs_volume_depth = True
+        transmission.check_volume_depth(
+            needs_volume_depth and mode != SHADE_UV, self.width, self.height
+        )
+        # Packing can reject an inexact offset. Do it before any device
+        # write, including the initial clear for a scissored frame.
+        var scene_bytes = List[UInt8]()
+        if ready:
+            scene_bytes = flatten_transmission(transmission)
         # Every node program a triangle names, and every texture it reads,
         # asked here for the reason a texture id is: the kernel reads the
         # buffers at whatever offset the state hands it. The uv view runs
@@ -9895,6 +9949,27 @@ struct GpuRenderer(Movable):
                         " with alpha=IGNORED"
                     )
 
+        # A pixel outside the scissor is left as it was, and on a
+        # fresh target "as it was" is whatever the device buffer held.
+        # The first draw clears the whole target first, so the rest
+        # is the background -- resolved through this draw's own mode,
+        # curve and exposure, as the host resolves a whole fresh target
+        # through one curve. Cleared with the defaults, a white
+        # background under Reinhard came back white outside the
+        # scissor and gray inside it.
+        if narrowed and not self.drawn:
+            self.draw(
+                List[RasterVertex](),
+                background,
+                mode,
+                tone_mapping=tone_mapping,
+                exposure=exposure,
+                depth_mode=depth_mode,
+                programs=programs,
+                custom_tone_mapping=custom_tone_mapping,
+                output_color_space=output_color_space,
+            )
+
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
             # same count repeatedly, so this settles after the first one.
@@ -10019,9 +10094,7 @@ struct GpuRenderer(Movable):
         # the backdrop before the backdrop is written: a new buffer holds
         # nothing, so it is cleared below as a painted one would be.
         var behind = self.width * self.height * Framebuffer.CHANNELS
-        var scene_bytes = List[UInt8]()
         if ready:
-            scene_bytes = flatten_transmission(transmission)
             if len(scene_bytes) > self.transmission_room:
                 self.context.synchronize()
                 self.backdrop = self.context.enqueue_create_buffer[DType.uint8](
