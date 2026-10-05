@@ -352,8 +352,52 @@ A channel is `byte * 2^(exponent - 128) / 255`, worked in doubles and stored as 
 | `ZIPS_COMPRESSION` | 1 | zlib through `render/inflate.mojo`, then the same. |
 | `ZIP_COMPRESSION` | 16 | The same, sixteen lines at a time. |
 | `PIZ_COMPRESSION` | 32 | A bitmap and a lookup table, a Huffman code, and a Haar wavelet per channel. |
+| `PXR24_COMPRESSION` | 16 | Lossless half and UINT samples; reduced-precision float deltas. three.js r180. |
+| `B44_COMPRESSION` | 32 | Lossy 4-by-4 half blocks; lossless float and UINT channels. three.js r186. |
+| `B44A_COMPRESSION` | 32 | B44 with three-byte flat blocks. three.js r186. |
+| `DWAA_COMPRESSION` | 32 | Lossy DCT color; lossless alpha and unknown channels. three.js r180. |
+| `DWAB_COMPRESSION` | 256 | The same DWA decoder with larger scanline blocks. three.js r180. |
 
 A channel holds halves or floats. A half widens to the float it spells, subnormals and all. `R`, `G` and `B` make RGBA, with `A` as the alpha or one where there is none. `Y` alone makes gray, with an alpha of one. Other channels are read past. Rows come out from the top line of the data window.
+
+The new codecs follow [OpenEXR 3.1.5](https://github.com/AcademySoftwareFoundation/openexr/tree/v3.1.5/src/lib/OpenEXR).
+B44 and DWA preserve each channel's `pLinear` flag.
+DWA supports versions zero, one and two, static-Huffman or DEFLATE AC data, grayscale, and separate RGB layers.
+Mixed half, float and ignored UINT channels keep their own sample widths.
+Raw fallback blocks remain supported.
+
+The reader checks DWA counters against the channel layout before stream allocation.
+It rejects truncated rules, impossible channel groups, nonfinite DCT coefficients, invalid runs, and incorrect stream lengths.
+Scanline chunks cannot overlap or start between block boundaries.
+The image pixel limit is unchanged.
+Decoded streams cannot exceed four bytes times that pixel limit.
+DWA coefficient allocations use the same byte budget, including their integer element width.
+
+#### EXR reference checks
+
+`tests/test_exr_codecs.mojo` checks every sample of 65 fixtures against independent OpenEXR 3.1.5 output.
+The fixture generator uses Imath 3.1.5.
+The fixtures cover half, float, alpha, grayscale, mixed channels, block edges, flat blocks, both `pLinear` values, and DWA stream variants.
+`assets/exr_codecs/manifest.json` records every compressed and raw chunk, source error, and fixture hash.
+The fixture README gives the regeneration commands.
+
+PXR24, B44 and B44A must match decoded reference samples exactly.
+DWA allows `abs(actual - reference) <= 0.003 * max(1, abs(reference))`.
+This preselected fixture budget permits scalar/SIMD DCT and half-rounding differences.
+It is not a universal numerical error bound.
+
+The largest observed scaled difference is `0.002522`, or three representable half steps in one fixture.
+All other fixtures match the decoded reference exactly.
+The fixture README explains the metric and nonlinear rounding amplification.
+These checks do not promise lossy source-image fidelity.
+The manifest records compression loss separately.
+
+The comparison scripts also run the unmodified three.js r180 and r186 loaders.
+They reverse three.js's output rows and request `FloatType`.
+They record upstream errors and mismatches, rather than treating those results as reference values.
+Mixed sample widths and ignored UINT channels expose upstream decoder errors.
+DWA also exposes grayscale, `pLinear`, unknown-stream and legacy-version differences.
+The recorded results name each reproducible fixture.
 
 ### Six HDR files as a cube
 
@@ -413,7 +457,7 @@ A standard or physical surface reads a PMREM. `prefilter_environments(scene, ass
 - The PMREM on first use. three.js builds it inside the renderer. Here the renderer only reads the assets, so you call `prefilter_environments` before the frame. The scene JSON reader calls it for you.
 - Light above one in a background. The backdrop crosses to both backends as sRGB bytes, so a background clips at one before tone mapping. A reflection keeps the floats.
 - RGBE: XYZE pixels, the old Radiance run-length scheme, and every orientation but `-Y +X`. The first is refused, and three.js reads none of them correctly.
-- EXR: tiled, deep and multi-part files, PXR24, B44, B44A, DWAA and DWAB compression, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name. three.js reads all but the last two.
+- EXR: tiled, deep and multi-part files, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name.
 - `EXRLoader.setOutputFormat`. The output is always RGBA, three.js's default.
 
 ### Where the HDR readers differ from three.js

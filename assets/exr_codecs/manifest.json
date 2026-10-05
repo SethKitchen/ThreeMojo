@@ -1,0 +1,2681 @@
+{
+  "reference": "OpenEXR 3.1.5; Imath 3.1.5",
+  "archive_sha256": {
+    "OpenEXR": "93925805c1fc4f8162b35f0ae109c4a75344e6decae5a240afdfce25f8a433ec",
+    "Imath": "1e9c7c94797cf7b7e61908aed1f80a331088cc7d8873318f70376e4aed5f25fb"
+  },
+  "fixtures": [
+    {
+      "name": "c5_s0.exr",
+      "codec": 5,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 549,
+          "raw_size": 1152,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 461,
+          "raw_size": 1152,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 109,
+          "raw_size": 216,
+          "compressed": true
+        }
+      ],
+      "sha256": "c241ef2ffd6ba614e4db02b32b263572b87ee8f677fd82d2607e81d8ef10be9e",
+      "sha256.rgba": "4048e1c15eebf1b5465416628e8f6dd20942fb861ac8cceb5f6c0bb1ab2e88a3",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s1.exr",
+      "codec": 5,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 742,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 624,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 149,
+          "raw_size": 432,
+          "compressed": true
+        }
+      ],
+      "sha256": "48d5205be4340b471ea59fc18398711a410ce9a88e769f8838cda636b1aaa621",
+      "sha256.rgba": "c244046020e81c2474821d47376442b92c9ffe444ce7f1ce16421c1afa2aefe1",
+      "max_source_absolute_error": 1.52587890625e-05,
+      "max_source_scaled_error": 1.4428788318452977e-05,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s2.exr",
+      "codec": 5,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 292,
+          "raw_size": 704,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 34,
+          "raw_size": 44,
+          "compressed": true
+        }
+      ],
+      "sha256": "5b718b33f70b8f9e0ea8207528507dd69f290d2253f5734a0f9ca77d8a7da560",
+      "sha256.rgba": "9a7168bb5815216610b42929d8dec8eed823defc674a594d3de8db2faaadc881",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s3.exr",
+      "codec": 5,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 388,
+          "raw_size": 1408,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 46,
+          "raw_size": 88,
+          "compressed": true
+        }
+      ],
+      "sha256": "bfeed7fe0ba63b74d4f47183d47d98f8178b1bee12c5d5cec6147267ba5551e3",
+      "sha256.rgba": "b194feccb1523da46a1a7351e4a7359c2fbe38fd4313e67862ec37f55cf3f1db",
+      "max_source_absolute_error": 1.5020370483398438e-05,
+      "max_source_scaled_error": 1.2881962982145804e-05,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s4.exr",
+      "codec": 5,
+      "width": 16,
+      "height": 32,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 34,
+          "raw_size": 2048,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 34,
+          "raw_size": 2048,
+          "compressed": true
+        }
+      ],
+      "sha256": "38335199e13739e99d04eb3ae628fa345cb54e172866035b0f243d645cab84ae",
+      "sha256.rgba": "84a1f4998919c39afef1681ab75bb2894f5e443a6a3ebea4a38fcfcb238d1447",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s5.exr",
+      "codec": 5,
+      "width": 17,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 160,
+          "raw_size": 2176,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 44,
+          "raw_size": 136,
+          "compressed": true
+        }
+      ],
+      "sha256": "ab97045240f27b59446e092c5a51b8d10f183ef48dd81e35edb824bc64f6f070",
+      "sha256.rgba": "69eb7cc0c0827c2b501b43fbc9be3f15fa6edca3d1388ecdbd7bbdb3b16f4596",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s6.exr",
+      "codec": 5,
+      "width": 1,
+      "height": 1,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 8,
+          "raw_size": 8,
+          "compressed": false
+        }
+      ],
+      "sha256": "79b0fd2065093f8bea5e2ee553f1fdb4b665f3e169e7d4c1894cb73b20920b23",
+      "sha256.rgba": "c4edcc68c18739e0377c7d5107a31f286a62f4b3038b89805cef981c4d7c7fd9",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s7.exr",
+      "codec": 5,
+      "width": 8,
+      "height": 8,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Z",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "aux.B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.R",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "id",
+          "type": 0,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 642,
+          "raw_size": 1664,
+          "compressed": true
+        }
+      ],
+      "sha256": "dfc9edd636b722c91a8da98def319243b9dca790d1844a20aed9379488dcdbb4",
+      "sha256.rgba": "2fbfee1aa70ac548cbe2174f390f8b2d6a898f8ca0f9ab4ee87f2ba45eed911f",
+      "max_source_absolute_error": 1.5020370483398438e-05,
+      "max_source_scaled_error": 1.3856431968768043e-05,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c5_s8.exr",
+      "codec": 5,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 497,
+          "raw_size": 1152,
+          "compressed": true
+        },
+        {
+          "line": 16,
+          "size": 512,
+          "raw_size": 1152,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 165,
+          "raw_size": 216,
+          "compressed": true
+        }
+      ],
+      "sha256": "38c07bad4f087db4585abe9e8b9c12000965ebf7b1d46d7b4236ab6955ad3c8e",
+      "sha256.rgba": "0378aff0df31c10aab21e562a21a1f9145622aacdd7052a7367144fcff828be1",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s0.exr",
+      "codec": 6,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1344,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 168,
+          "raw_size": 216,
+          "compressed": true
+        }
+      ],
+      "sha256": "06939a5969e4c8d907204bae4c96eed0e1c6c72bff43195520c257e95b7dc793",
+      "sha256.rgba": "af1d484e1d4ff5dafb1459b90f6e6a49d5259d505c4e966c12356571fe89a104",
+      "max_source_absolute_error": 0.10986328125,
+      "max_source_scaled_error": 0.10986328125,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s1.exr",
+      "codec": 6,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 4608,
+          "raw_size": 4608,
+          "compressed": false
+        },
+        {
+          "line": 32,
+          "size": 432,
+          "raw_size": 432,
+          "compressed": false
+        }
+      ],
+      "sha256": "ba1585a83f52094fd01d4498c7c9b208443107e373f5b523c921f36682562b0e",
+      "sha256.rgba": "4b79432f8b98d200b3e3d21701fc6fd98f2631c8165f21b9e3a302bef4040b04",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s2.exr",
+      "codec": 6,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 420,
+          "raw_size": 748,
+          "compressed": true
+        }
+      ],
+      "sha256": "57cdf9da05d262761061b3ec2efa6415c7c6834fc90f651afa45308a06622e08",
+      "sha256.rgba": "cc9c15d70a99976ec19171feaff01da7073871a06ac5b8945a70e5ba10511dfb",
+      "max_source_absolute_error": 0.0037841796875,
+      "max_source_scaled_error": 0.0037841796875,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s3.exr",
+      "codec": 6,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1496,
+          "raw_size": 1496,
+          "compressed": false
+        }
+      ],
+      "sha256": "13b997ca297072ef295f75fe53538468ebdcfa2691419099f68c012effc38c9c",
+      "sha256.rgba": "db9cdeabc9c57aa8efab256524bac1b5fdfc67c672291f69c8d2e31176a9015c",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s4.exr",
+      "codec": 6,
+      "width": 16,
+      "height": 32,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1792,
+          "raw_size": 4096,
+          "compressed": true
+        }
+      ],
+      "sha256": "9fce8784a8ca77c38c6f4c9c8e24add76aac7697a66f915869faa0da78f78c73",
+      "sha256.rgba": "84a1f4998919c39afef1681ab75bb2894f5e443a6a3ebea4a38fcfcb238d1447",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s5.exr",
+      "codec": 6,
+      "width": 17,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1400,
+          "raw_size": 2312,
+          "compressed": true
+        }
+      ],
+      "sha256": "6bc5ff80495857d83af0c57404516015ad9f6773d6e4a87ba02b888ce3634dfd",
+      "sha256.rgba": "2b8d3a5ec97462fe6b59183903d7966475f9ea754f1cbba70908df4ca3d82f3a",
+      "max_source_absolute_error": 0.01171875,
+      "max_source_scaled_error": 0.003125,
+      "max_alpha_error": 0.01171875
+    },
+    {
+      "name": "c6_s6.exr",
+      "codec": 6,
+      "width": 1,
+      "height": 1,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 8,
+          "raw_size": 8,
+          "compressed": false
+        }
+      ],
+      "sha256": "32dcfc555c46ac5e673b295ce60fee0615cdbe8577f6cca4497aea93c1b6d11e",
+      "sha256.rgba": "c4edcc68c18739e0377c7d5107a31f286a62f4b3038b89805cef981c4d7c7fd9",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s7.exr",
+      "codec": 6,
+      "width": 8,
+      "height": 8,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Z",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "aux.B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.R",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "id",
+          "type": 0,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1304,
+          "raw_size": 1664,
+          "compressed": true
+        }
+      ],
+      "sha256": "a8feaf7fa0e916c88b08c56ea1c29d7424b6091f59239e1034871f5c70216c05",
+      "sha256.rgba": "464618cc492e2457a5540c4f09c899c520f0d3bd3fd0e8d18fe5f4a4764c70da",
+      "max_source_absolute_error": 0.10986328125,
+      "max_source_scaled_error": 0.10986328125,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c6_s8.exr",
+      "codec": 6,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1344,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 168,
+          "raw_size": 216,
+          "compressed": true
+        }
+      ],
+      "sha256": "7d00ceae25551c883e7f0a36234d306346acb38d11a0e626d10b9e7645a2fbef",
+      "sha256.rgba": "0825df68813e3b16362d2273a2c6d7e1ff0660cdd500df1c872325a4110ab9c8",
+      "max_source_absolute_error": 0.515625,
+      "max_source_scaled_error": 0.3312421580928482,
+      "max_alpha_error": 0.08349609375
+    },
+    {
+      "name": "c7_s0.exr",
+      "codec": 7,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1256,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 157,
+          "raw_size": 216,
+          "compressed": true
+        }
+      ],
+      "sha256": "555fe4313221e84836c2ccd95a632a5882ce76dfa344ac2885b291c742ed731a",
+      "sha256.rgba": "af1d484e1d4ff5dafb1459b90f6e6a49d5259d505c4e966c12356571fe89a104",
+      "max_source_absolute_error": 0.10986328125,
+      "max_source_scaled_error": 0.10986328125,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s1.exr",
+      "codec": 7,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 4608,
+          "raw_size": 4608,
+          "compressed": false
+        },
+        {
+          "line": 32,
+          "size": 432,
+          "raw_size": 432,
+          "compressed": false
+        }
+      ],
+      "sha256": "2c24094d00f5a211b6a8ad8fae1f7d792de2b9c69774de63dbbff4d3b8f778f2",
+      "sha256.rgba": "4b79432f8b98d200b3e3d21701fc6fd98f2631c8165f21b9e3a302bef4040b04",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s2.exr",
+      "codec": 7,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 420,
+          "raw_size": 748,
+          "compressed": true
+        }
+      ],
+      "sha256": "4e65d0bd120b051bc603f603f024007d7622b6fb7775dee5a77c8af1b014893b",
+      "sha256.rgba": "cc9c15d70a99976ec19171feaff01da7073871a06ac5b8945a70e5ba10511dfb",
+      "max_source_absolute_error": 0.0037841796875,
+      "max_source_scaled_error": 0.0037841796875,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s3.exr",
+      "codec": 7,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1496,
+          "raw_size": 1496,
+          "compressed": false
+        }
+      ],
+      "sha256": "f356a9cc8b814316e965393c7c15d225d595c42e81b7ebbbdd7d107edd216943",
+      "sha256.rgba": "db9cdeabc9c57aa8efab256524bac1b5fdfc67c672291f69c8d2e31176a9015c",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s4.exr",
+      "codec": 7,
+      "width": 16,
+      "height": 32,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 384,
+          "raw_size": 4096,
+          "compressed": true
+        }
+      ],
+      "sha256": "4799d7c8f35f5cbdd2b94aab474b08266369577012c87247d7646e2cb34db9b7",
+      "sha256.rgba": "84a1f4998919c39afef1681ab75bb2894f5e443a6a3ebea4a38fcfcb238d1447",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s5.exr",
+      "codec": 7,
+      "width": 17,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1356,
+          "raw_size": 2312,
+          "compressed": true
+        }
+      ],
+      "sha256": "0488c46d5979b42889f5f6afecae43c1343ed52320a478868519e46fcd8cc414",
+      "sha256.rgba": "2b8d3a5ec97462fe6b59183903d7966475f9ea754f1cbba70908df4ca3d82f3a",
+      "max_source_absolute_error": 0.01171875,
+      "max_source_scaled_error": 0.003125,
+      "max_alpha_error": 0.01171875
+    },
+    {
+      "name": "c7_s6.exr",
+      "codec": 7,
+      "width": 1,
+      "height": 1,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 8,
+          "raw_size": 8,
+          "compressed": false
+        }
+      ],
+      "sha256": "f654fb6a45f26d879071e5c584bbca176c1a48a72eff892edfe9df6c244a2d4a",
+      "sha256.rgba": "c4edcc68c18739e0377c7d5107a31f286a62f4b3038b89805cef981c4d7c7fd9",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s7.exr",
+      "codec": 7,
+      "width": 8,
+      "height": 8,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Z",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "aux.B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.R",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "id",
+          "type": 0,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1304,
+          "raw_size": 1664,
+          "compressed": true
+        }
+      ],
+      "sha256": "9940374ee92d71f8d11165f7e6a3dc6d80dbe634d31f454a18a5c973181aafa5",
+      "sha256.rgba": "464618cc492e2457a5540c4f09c899c520f0d3bd3fd0e8d18fe5f4a4764c70da",
+      "max_source_absolute_error": 0.10986328125,
+      "max_source_scaled_error": 0.10986328125,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c7_s8.exr",
+      "codec": 7,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1344,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 168,
+          "raw_size": 216,
+          "compressed": true
+        }
+      ],
+      "sha256": "21d0a0d94478d8beec16bfdd3fc43643f84f3847345ea0cf82767a060ac95113",
+      "sha256.rgba": "0825df68813e3b16362d2273a2c6d7e1ff0660cdd500df1c872325a4110ab9c8",
+      "max_source_absolute_error": 0.515625,
+      "max_source_scaled_error": 0.3312421580928482,
+      "max_alpha_error": 0.08349609375
+    },
+    {
+      "name": "c8_deflate.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 769,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "324eaa315c86b0f9bb6958f7c397fa21acb4f99298c1e3b665c0dd10e8fedc63",
+      "sha256.rgba": "f54f1308d5c5b8fde1af0d8d986834c640b71ab5314e057ff048a9957c296e20"
+    },
+    {
+      "name": "c8_incomplete_csc.exr",
+      "codec": 8,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 125,
+          "raw_size": 1024,
+          "compressed": true
+        }
+      ],
+      "sha256": "d98197cadb0103057923c6cdefc0803123d4d785159b980fd3a340c3255c48d5",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c8_incomplete_rle.exr",
+      "codec": 8,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 124,
+          "raw_size": 512,
+          "compressed": true
+        }
+      ],
+      "sha256": "ab89cb57bfb91e80f06ffbd105b1aadb3eabac1978551413e8e601db0ccaa694",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c8_insensitive.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1209,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "5e8e57f63ee3bfc7b310af1fb44171ffe0a9518f40415a2412caef443bdeb34e",
+      "sha256.rgba": "f54f1308d5c5b8fde1af0d8d986834c640b71ab5314e057ff048a9957c296e20"
+    },
+    {
+      "name": "c8_legacy0.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 767,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "82e83f75c98ef0353baf7781a0cc02a3317ae2304f22fed45efa2bba781cba8b",
+      "sha256.rgba": "f54f1308d5c5b8fde1af0d8d986834c640b71ab5314e057ff048a9957c296e20"
+    },
+    {
+      "name": "c8_legacy1.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1191,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "d76b8cedebf1ef5a7fc39819f9585921d02b9944769209804549b0de933de5cf",
+      "sha256.rgba": "f54f1308d5c5b8fde1af0d8d986834c640b71ab5314e057ff048a9957c296e20"
+    },
+    {
+      "name": "c8_rle.exr",
+      "codec": 8,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 124,
+          "raw_size": 512,
+          "compressed": true
+        }
+      ],
+      "sha256": "e07694c724057fc581ad82449f2ec5e9a9cd614c8fa33501dfc538aebac099cc",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c8_rule_shadow.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1213,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "d5f6df52faf30cd4ad5a5dd8dabac02671ecec64491918aa68b3c526bfd1af67",
+      "sha256.rgba": "f54f1308d5c5b8fde1af0d8d986834c640b71ab5314e057ff048a9957c296e20"
+    },
+    {
+      "name": "c8_s0.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1209,
+          "raw_size": 2304,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "2247e6f6a47892c84183a6c9af99fb36569435751a10625fe35f4d9a98767674",
+      "sha256.rgba": "f54f1308d5c5b8fde1af0d8d986834c640b71ab5314e057ff048a9957c296e20",
+      "max_source_absolute_error": 0.009765625,
+      "max_source_scaled_error": 0.009765625,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s1.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1225,
+          "raw_size": 4608,
+          "compressed": true
+        },
+        {
+          "line": 32,
+          "size": 432,
+          "raw_size": 432,
+          "compressed": false
+        }
+      ],
+      "sha256": "bb6f3a106ecc8bc2abdc601f60ed4552a0dd1e0dfde6a9a4bb10c0bc315d7abb",
+      "sha256.rgba": "907d209aa0882400e727201b09776e6075733698c809209e3a30b20c4be5da18",
+      "max_source_absolute_error": 0.009687483310699463,
+      "max_source_scaled_error": 0.009687483310699463,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s2.exr",
+      "codec": 8,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 701,
+          "raw_size": 748,
+          "compressed": true
+        }
+      ],
+      "sha256": "81c3a8b86c9bdeaf790a32e092bf5b88d89df4c067ccf3a46a6b9d43983d0e4e",
+      "sha256.rgba": "a2a436f23990b2602e8ffd32bef82d5d11c2b666145fe556d170383a3bdb9d7c",
+      "max_source_absolute_error": 0.0009765625,
+      "max_source_scaled_error": 0.0009765625,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s3.exr",
+      "codec": 8,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 897,
+          "raw_size": 1496,
+          "compressed": true
+        }
+      ],
+      "sha256": "07483208e9ab2892a6590af8e8176dd9fa39afa4697ee5c3270df4a444341973",
+      "sha256.rgba": "0f38b6ad9ef6700e76626e817a80e1240e574489315a21e579a73e2894b04631",
+      "max_source_absolute_error": 0.005042970180511475,
+      "max_source_scaled_error": 0.005042970180511475,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s4.exr",
+      "codec": 8,
+      "width": 16,
+      "height": 32,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 168,
+          "raw_size": 4096,
+          "compressed": true
+        }
+      ],
+      "sha256": "56c6e991640592ab4b3315c1e8f9d1ef2b5851a19bdcbe5f1211d9cb7c328b98",
+      "sha256.rgba": "919f662b3dd820ea891ba94d17432a501e24dceffa3403c82c7163b9b2d8b05e",
+      "max_source_absolute_error": 0.00048828125,
+      "max_source_scaled_error": 0.00048828125,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s5.exr",
+      "codec": 8,
+      "width": 17,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1136,
+          "raw_size": 2312,
+          "compressed": true
+        }
+      ],
+      "sha256": "188b5242992d80febf90cf97557ad97f92249e0f33401471ab0e0ae3d3e75779",
+      "sha256.rgba": "c68fbd4384f41a61e5d2ffe6a6b2a27578a95431bcd667afefb1d8924858ff27",
+      "max_source_absolute_error": 0.01953125,
+      "max_source_scaled_error": 0.013748191027496382,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s6.exr",
+      "codec": 8,
+      "width": 1,
+      "height": 1,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 8,
+          "raw_size": 8,
+          "compressed": false
+        }
+      ],
+      "sha256": "d45e88837439d9c469cd367a30fc368a930c6d31b4fa8dc207288add93ee109f",
+      "sha256.rgba": "c4edcc68c18739e0377c7d5107a31f286a62f4b3038b89805cef981c4d7c7fd9",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s7.exr",
+      "codec": 8,
+      "width": 8,
+      "height": 8,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Z",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "aux.B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.R",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "id",
+          "type": 0,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1223,
+          "raw_size": 1664,
+          "compressed": true
+        }
+      ],
+      "sha256": "60e75fb8422575a8f38b84c164c51e33af333fc48e815ce2f59ba2c17acfdeb5",
+      "sha256.rgba": "e72e3b240a37df7f1e93b0684fc2954fc709723c269f3e0f1b1e6ea2e6895dc6",
+      "max_source_absolute_error": 0.009765625,
+      "max_source_scaled_error": 0.009765625,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_s8.exr",
+      "codec": 8,
+      "width": 9,
+      "height": 35,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2304,
+          "raw_size": 2304,
+          "compressed": false
+        },
+        {
+          "line": 32,
+          "size": 216,
+          "raw_size": 216,
+          "compressed": false
+        }
+      ],
+      "sha256": "74ae56adab1c670a682030bbf4dacacd2c697ee566ca4338d9308dea3310f58e",
+      "sha256.rgba": "0378aff0df31c10aab21e562a21a1f9145622aacdd7052a7367144fcff828be1",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c8_unknown.exr",
+      "codec": 8,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 121,
+          "raw_size": 1024,
+          "compressed": true
+        }
+      ],
+      "sha256": "d7ffd67bb0a4c288fe39e5f11b2a1e942f86eaa7eea561c8ccb84a2d4547f23b",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c8_uppercase_rule.exr",
+      "codec": 8,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 125,
+          "raw_size": 1024,
+          "compressed": true
+        }
+      ],
+      "sha256": "3824a9b7683872e8c953ee7acffe4174d33632bc1feaf9be1a26f75664b769c8",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c9_deflate.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2326,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "cb23138c94a068b08f7f5e5c6d9516853f7ed9699e983384216aa4b9353e8cb9",
+      "sha256.rgba": "254b168298aa5e513187ea1a5b21484cb5c73f11d3189997c7fbeb5dc7e821bf"
+    },
+    {
+      "name": "c9_incomplete_csc.exr",
+      "codec": 9,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 125,
+          "raw_size": 1024,
+          "compressed": true
+        }
+      ],
+      "sha256": "525d3b01389b0dc4304d62779f44f5ca7544e0423af927806a812976d03b0ea9",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c9_incomplete_rle.exr",
+      "codec": 9,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 124,
+          "raw_size": 512,
+          "compressed": true
+        }
+      ],
+      "sha256": "38d6794a7a44a82bb0ae78895f8c51ce71f63211cb4daff3fcd7258028b9c2a4",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c9_insensitive.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2884,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "45d5f86b01e31aa5e0286f158078f1f23b0d0334c9520abd8796d83dd7c0dd13",
+      "sha256.rgba": "254b168298aa5e513187ea1a5b21484cb5c73f11d3189997c7fbeb5dc7e821bf"
+    },
+    {
+      "name": "c9_legacy0.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2372,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "ef040fd7ca0aa3723538047d2fd37a13984c61c683cee587c0aee115689c178c",
+      "sha256.rgba": "254b168298aa5e513187ea1a5b21484cb5c73f11d3189997c7fbeb5dc7e821bf"
+    },
+    {
+      "name": "c9_legacy1.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2866,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "7ceb54119f962f9a5deddf34926867c11f6baf8baa2c5fa1b871ef5e4a2047cb",
+      "sha256.rgba": "254b168298aa5e513187ea1a5b21484cb5c73f11d3189997c7fbeb5dc7e821bf"
+    },
+    {
+      "name": "c9_rle.exr",
+      "codec": 9,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 124,
+          "raw_size": 512,
+          "compressed": true
+        }
+      ],
+      "sha256": "6c57825a5a51667ba6f1afdbaed1029295b45187bdddac850e1197d6ae6146cf",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c9_rule_shadow.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2888,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "5d34beea50f87c2b08ada60d5e84c1b08bde85aa6c16491f6bbc2e7132cc923d",
+      "sha256.rgba": "254b168298aa5e513187ea1a5b21484cb5c73f11d3189997c7fbeb5dc7e821bf"
+    },
+    {
+      "name": "c9_s0.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2884,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "efda7f8a107a4726ea4f564024bb3ab34518e8166652db40bb43e0bb52df84af",
+      "sha256.rgba": "254b168298aa5e513187ea1a5b21484cb5c73f11d3189997c7fbeb5dc7e821bf",
+      "max_source_absolute_error": 0.015625,
+      "max_source_scaled_error": 0.009765625,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s1.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 2909,
+          "raw_size": 36864,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 144,
+          "raw_size": 144,
+          "compressed": false
+        }
+      ],
+      "sha256": "b3f5c275591d2b536889e40d24363ee0a68409ac60087a4c29c52dfa58ff224e",
+      "sha256.rgba": "c7ea110f5ee0b9be69873cb4b8c1f72d6e2b767d9c7cdd49d2dd0094647e57bb",
+      "max_source_absolute_error": 0.016499996185302734,
+      "max_source_scaled_error": 0.009687483310699463,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s2.exr",
+      "codec": 9,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "Y",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 701,
+          "raw_size": 748,
+          "compressed": true
+        }
+      ],
+      "sha256": "58b2e1c99132c8d8234fd4dd1f084eab20069b92d6ff8556996688285238bbac",
+      "sha256.rgba": "a2a436f23990b2602e8ffd32bef82d5d11c2b666145fe556d170383a3bdb9d7c",
+      "max_source_absolute_error": 0.0009765625,
+      "max_source_scaled_error": 0.0009765625,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s3.exr",
+      "codec": 9,
+      "width": 11,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 897,
+          "raw_size": 1496,
+          "compressed": true
+        }
+      ],
+      "sha256": "64773b8b65455b549ec57d4addaa5ad44916a551c5a00a0d9525ac3fe47f7aa0",
+      "sha256.rgba": "0f38b6ad9ef6700e76626e817a80e1240e574489315a21e579a73e2894b04631",
+      "max_source_absolute_error": 0.005042970180511475,
+      "max_source_scaled_error": 0.005042970180511475,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s4.exr",
+      "codec": 9,
+      "width": 16,
+      "height": 32,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 168,
+          "raw_size": 4096,
+          "compressed": true
+        }
+      ],
+      "sha256": "e42163c2bf781f4faef13492ca0699c0034d7869aa18ddef8e106c1ea0cd6b57",
+      "sha256.rgba": "919f662b3dd820ea891ba94d17432a501e24dceffa3403c82c7163b9b2d8b05e",
+      "max_source_absolute_error": 0.00048828125,
+      "max_source_scaled_error": 0.00048828125,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s5.exr",
+      "codec": 9,
+      "width": 17,
+      "height": 17,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": true
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": true
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1136,
+          "raw_size": 2312,
+          "compressed": true
+        }
+      ],
+      "sha256": "d5ecfdf7ecb46b8591f30d8e5c990ffc14f9db6d32e505d352ed6bab05632737",
+      "sha256.rgba": "c68fbd4384f41a61e5d2ffe6a6b2a27578a95431bcd667afefb1d8924858ff27",
+      "max_source_absolute_error": 0.01953125,
+      "max_source_scaled_error": 0.013748191027496382,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s6.exr",
+      "codec": 9,
+      "width": 1,
+      "height": 1,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 8,
+          "raw_size": 8,
+          "compressed": false
+        }
+      ],
+      "sha256": "35419db54e8cf8e8fbe43e93854005fa5df26757e7b602686c9c4dc3689160fe",
+      "sha256.rgba": "c4edcc68c18739e0377c7d5107a31f286a62f4b3038b89805cef981c4d7c7fd9",
+      "max_source_absolute_error": 0.0,
+      "max_source_scaled_error": 0.0,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s7.exr",
+      "codec": 9,
+      "width": 8,
+      "height": 8,
+      "channels": [
+        {
+          "name": "A",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "Z",
+          "type": 2,
+          "pLinear": false
+        },
+        {
+          "name": "aux.B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "aux.R",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "id",
+          "type": 0,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 1223,
+          "raw_size": 1664,
+          "compressed": true
+        }
+      ],
+      "sha256": "0401e1175e770f3acda1a3fa7d1083d320cc20dd97afaf9ea67c037a74c3f9e8",
+      "sha256.rgba": "e72e3b240a37df7f1e93b0684fc2954fc709723c269f3e0f1b1e6ea2e6895dc6",
+      "max_source_absolute_error": 0.009765625,
+      "max_source_scaled_error": 0.009765625,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_s8.exr",
+      "codec": 9,
+      "width": 9,
+      "height": 257,
+      "channels": [
+        {
+          "name": "A",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "B",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "G",
+          "type": 1,
+          "pLinear": false
+        },
+        {
+          "name": "R",
+          "type": 1,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 17437,
+          "raw_size": 18432,
+          "compressed": true
+        },
+        {
+          "line": 256,
+          "size": 72,
+          "raw_size": 72,
+          "compressed": false
+        }
+      ],
+      "sha256": "55e75e6a8d8e5318c9f214a19db2c4bbf63d7c550906292723073b530ab286ca",
+      "sha256.rgba": "cbc7e32589db227738530d93ba61ba83bd96b43cde27935608c3070233802145",
+      "max_source_absolute_error": 0.044921875,
+      "max_source_scaled_error": 0.021677662582469368,
+      "max_alpha_error": 0.0
+    },
+    {
+      "name": "c9_unknown.exr",
+      "codec": 9,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 121,
+          "raw_size": 1024,
+          "compressed": true
+        }
+      ],
+      "sha256": "fb425c43861f45a283af358f8bc4ce725d2ff5bc60cf732806525d697e8d5035",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    },
+    {
+      "name": "c9_uppercase_rule.exr",
+      "codec": 9,
+      "width": 16,
+      "height": 16,
+      "channels": [
+        {
+          "name": "Y",
+          "type": 2,
+          "pLinear": false
+        }
+      ],
+      "chunks": [
+        {
+          "line": 0,
+          "size": 125,
+          "raw_size": 1024,
+          "compressed": true
+        }
+      ],
+      "sha256": "4b0d2616c0a40dab1c33ea5ad5585cd39321666fa0da24b9addac263ddb43888",
+      "sha256.rgba": "944919641ca8b0a0ea6439ffa50d37c652cffeb21d0676ae83422ff22149692b"
+    }
+  ]
+}
