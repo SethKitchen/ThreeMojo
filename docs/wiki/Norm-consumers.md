@@ -48,7 +48,7 @@ normal products and area weights without narrowing or early product rounding.
 | `geometries.polyhedron` | Latitude uses a scale-safe horizontal length. |
 | `geometries.sculptor`, `geometries.sculptor_tools`, `geometries.sculptor_mesh`, `geometries.sculptor_utils` | Native Float64 direction and length helpers use shared norms. The intentional zero-normal fallback to +x remains explicit. Range-limited stored face areas are reconstructed before drawing or normal-dependent tools use them. Stored squared brush radii keep their squared-value contract. |
 | `loaders.gltf`, `loaders.object_loader`, `loaders.model_nodes` | Matrix axes use shared lengths and `Matrix4.decompose`. Tiny axes are not flat. Mirror signs survive determinant range loss. Nonfinite entries and unrepresentable output scales are refused before node mutation. |
-| `loaders.ldraw` | Axis lengths, unit directions, and face normals are scale-safe. Rotation extraction reads normalized axes. |
+| `loaders.ldraw` | Axis lengths, unit directions, and face normals with finite Float32 positions are scale-safe. Rotation extraction reads normalized axes. Invalid stored corners retain the r180 normal arithmetic. |
 | `loaders.svg`, `loaders.svg_shapes`, `loaders.svg_path` | Signed vector angles, stroke directions and lengths, transform-axis lengths, and the symmetric eigensolver use scale-safe arithmetic. Ordinary stroke reciprocal rounding remains unchanged. |
 | `loaders.vrml`, `loaders.vrml_geometry` | Parsed Float64 rotation axes, vector angles, and face normals use safe directions. |
 | `loaders.amf`, `loaders.usd_geometry`, `loaders.lwo` | Normalization occurs before an unnormalized finite area is lost to Float32 storage. AMF's positive unit conversion does not change a normal's direction. |
@@ -100,6 +100,10 @@ extensions and CARLA quantity-boundary migration are outside this change.
 - Scalar helper NaN and infinity rules remain explicit in `math.norm`
 - The Float64 reciprocal helper retains direct IEEE nonfinite arithmetic
 - Loader matrix decomposition refuses nonfinite values and unrepresentable scales
+- LDraw retains malformed corners as r180 does. If a face coordinate becomes
+  NaN or infinity in its Float32 position buffer, that face keeps the r180
+  normal calculation, including zero and NaN components. This does not certify
+  invalid geometry as having a finite direction
 
 `Vector2.angle()` returns zero for two positive zeros. Signed zeros follow
 `atan2`; two negative zero components return a half turn. This documentation

@@ -51,8 +51,9 @@ are in `VkFormat`.
 **Raw ASTC.** The six 4x4 and 6x6 UNORM, sRGB and SFLOAT Vulkan
 formats in three.js r180 decode on the host. UNORM and sRGB give bytes;
 SFLOAT gives half-float values widened to floats. The format's sRGB flag
-must agree with the descriptor. Raw HDR alpha is supported independently
-of the Basis restrictions below.
+must agree with the descriptor. The descriptor must use the ASTC color
+model (162). Raw HDR alpha is supported independently of the Basis
+restrictions below.
 
 **What three.js cannot transcode is refused.** Its transcoder is Basis
 Universal 1.50. It does not know UASTC HDR 6x6, XUASTC LDR or XUBC7, and
@@ -114,6 +115,8 @@ from render.zstd import zstd_decompress
 comptime HEADER_BYTES = 80
 # A level index entry: three eight-byte numbers.
 comptime LEVEL_ENTRY_BYTES = 24
+# The data format descriptor's color model for raw ASTC data.
+comptime KHR_DF_MODEL_ASTC = 162
 # The data format descriptor's color models for Basis Universal data.
 comptime KHR_DF_MODEL_ETC1S = 163
 comptime KHR_DF_MODEL_UASTC = 166
@@ -164,7 +167,11 @@ struct VkFormat(Equatable, ImplicitlyCopyable, Writable):
         )
 
     def is_astc(self) -> Bool:
-        """Return True for the six raw ASTC formats in three.js r180."""
+        """Return True for the six raw ASTC formats in three.js r180.
+
+        Returns:
+            True for supported 4x4 and 6x6 UNORM, sRGB and SFLOAT formats.
+        """
         return (
             self.value == 157
             or self.value == 158
@@ -174,14 +181,22 @@ struct VkFormat(Equatable, ImplicitlyCopyable, Writable):
         )
 
     def is_astc_hdr(self) -> Bool:
-        """Return True for raw ASTC 4x4 or 6x6 SFLOAT."""
+        """Return True for raw ASTC 4x4 or 6x6 SFLOAT.
+
+        Returns:
+            True for either supported SFLOAT format.
+        """
         return (
             self == VK_FORMAT_ASTC_4x4_SFLOAT
             or self == VK_FORMAT_ASTC_6x6_SFLOAT
         )
 
     def astc_block_size(self) -> Int:
-        """Return the ASTC block width, or zero for a different format."""
+        """Return the ASTC block width, or zero for a different format.
+
+        Returns:
+            Four or six texels for a supported square ASTC block, or zero.
+        """
         if (
             self.value == 157
             or self.value == 158
@@ -907,6 +922,8 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
             supercompression scheme is one this reader does not decode;
             it is UASTC HDR 6x6, XUASTC LDR, XUBC7, or UASTC HDR with
             alpha; Basis Universal data names a Vulkan format it must not;
+            raw ASTC names a different descriptor color model or its
+            transfer function disagrees with its Vulkan format;
             its key and value data is malformed; ETC1S data does
             not use BasisLZ, or other data does; it is 1D or 3D; it has a
             face count other than one or six, or more levels than its size
@@ -980,6 +997,10 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
             " formats are not ported"
         )
     if not basis and container.vk_format.is_astc():
+        if container.color_model != KHR_DF_MODEL_ASTC:
+            raise Error(
+                "KTX2: raw ASTC must use the ASTC descriptor color model"
+            )
         var srgb = (
             container.vk_format == VK_FORMAT_ASTC_4x4_SRGB
             or container.vk_format == VK_FORMAT_ASTC_6x6_SRGB

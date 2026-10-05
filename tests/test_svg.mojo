@@ -15,6 +15,7 @@ from core.buffer_geometry import NORMAL, POSITION, UV
 from loaders.js_number import js_parse_float
 from loaders.json import JsonDocument, parse_json
 from loaders.svg import (
+    _svg_angle,
     SVG_CM,
     SVG_IN,
     SVG_MM,
@@ -984,6 +985,31 @@ def test_stroke_edges() raises:
     # Two equal points: the normal of no length stays zero.
     var dot = points_to_stroke([SvgVector(2, 2), SvgVector(2, 2)], style)
     assert_equal(dot.count, 18)
+
+
+def test_antipodal_arc_keeps_the_zero_cross_sign() raises:
+    # Products cancel exactly after separate binary64 rounding. A fused
+    # subtraction used to introduce a negative residual and select -pi.
+    var x = Float64(-0.9745186211145586)
+    var y = Float64(-0.22430661403752558)
+    near(_svg_angle(x, y, -x, -y), pi)
+    var path = parse_path_data("M30 30 A10 5 20 0 1 50 40")
+    ref curve = path.sub_paths[0].curves[0]
+    near(curve.start_angle, -2.915361192124688)
+    near(curve.end_angle, 0.2262314614651051)
+
+
+def test_oblique_round_cap_keeps_binary64_rounding() raises:
+    var stroke = points_to_stroke(
+        [SvgVector(0, 0), SvgVector(10, 0), SvgVector(0, 1)],
+        SvgStrokeStyle(6, SVG_JOIN_MITER, SVG_CAP_ROUND, 4),
+        3,
+        0.001,
+    )
+    # The complete r180 fixture case also stays in test_strokes_match_three_js.
+    assert_equal(stroke.count, 99)
+    near(stroke.vertices[75], -2.4359268748)
+    near(stroke.vertices[76], 2.7510740306)
 
 
 def main() raises:

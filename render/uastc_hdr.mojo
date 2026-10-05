@@ -80,7 +80,11 @@ struct AstcProfile(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True for one of the three supported profiles."""
+        """Return True for one of the three supported profiles.
+
+        Returns:
+            True for UNORM, sRGB or HDR; False for every other value.
+        """
         return self.value >= 0 and self.value <= 2
 
     def write_to(self, mut writer: Some[Writer]):

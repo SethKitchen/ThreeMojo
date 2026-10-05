@@ -5,7 +5,7 @@
 
 """Numbers that carry their units, checked at compile time.
 
-A `Quantity` is a single `Float32` tagged with the exponents of the base
+A `Quantity` is a single float tagged with the exponents of the base
 dimensions it is measured in. Those exponents are compile-time parameters, so
 the arithmetic on them happens in the type system and nothing survives to
 runtime: a `Quantity` is the same size as the float inside it, and adding two
@@ -23,6 +23,18 @@ scale factor applied on the way in and out, not a property of the value. That
 makes every comparison and sum trivially correct and means feet and meters can
 be mixed freely in one expression.
 
+The fifth exponent is the temperature difference, in kelvin. It defaults to
+zero, so `Quantity[1, 0, 0, 0]` is still a length. A thermal conductivity is
+`Quantity[1, 1, -3, 0, -1]`: watts per meter per kelvin. An absolute
+temperature is not a `Quantity`; see `units.temperature`.
+
+The float is a `Float32` unless the `dtype` parameter says otherwise. Graphics
+code keeps the default. Engineering code, where a stiffness matrix loses
+digits in `Float32`, names `DType.float64`; `units.si` has a `64` alias for
+each dimension, such as `Length64`. Two quantities combine only when their
+`dtype` matches. `cast` changes it explicitly. A unit has a `dtype` too, a
+`Float32` by default, and converts quantities of either float type.
+
 Angle is treated as a base dimension here, which strict SI does not do: a
 radian is properly dimensionless. Carrying it anyway is what makes passing
 degrees to a function expecting radians a compile error, and that mistake is
@@ -33,43 +45,124 @@ from std.math import sqrt as float_sqrt
 
 
 @fieldwise_init
-struct Unit[length: Int, mass: Int, time: Int, angle: Int](ImplicitlyCopyable):
+struct Unit[
+    length: Int,
+    mass: Int,
+    time: Int,
+    angle: Int,
+    temperature: Int = 0,
+    dtype: DType = DType.float32,
+](ImplicitlyCopyable):
     """A named scale factor on one particular dimension.
 
     `scale` is how many canonical units one of these is worth, so `FOOT` holds
     0.3048. The dimension exponents are part of the type, which is what stops
     a length being converted to seconds.
+
+    The scale is a `Float32` unless `dtype` says otherwise, so a unit is
+    safe in GPU code, which has no `Float64`. A unit of either float type
+    converts a quantity of either float type. Declare a `Float64` unit
+    where a `Float64` quantity must keep every digit of an inexact factor,
+    such as the foot's 0.3048.
     """
 
-    var scale: Float32
+    var scale: Scalar[Self.dtype]
     var symbol: StaticString
 
 
 @fieldwise_init
-struct Quantity[length: Int, mass: Int, time: Int, angle: Int](
-    Absable, ImplicitlyCopyable
-):
+struct Quantity[
+    length: Int,
+    mass: Int,
+    time: Int,
+    angle: Int,
+    temperature: Int = 0,
+    dtype: DType = DType.float32,
+](Absable, ImplicitlyCopyable):
     """A value measured in the dimension given by the exponents."""
 
-    var value: Float32
+    var value: Scalar[Self.dtype]
 
-    def __init__(
+    def __init__[
+        unit_dtype: DType
+    ](
         out self,
-        value: Float32,
-        unit: Unit[Self.length, Self.mass, Self.time, Self.angle],
+        value: Scalar[Self.dtype],
+        unit: Unit[
+            Self.length,
+            Self.mass,
+            Self.time,
+            Self.angle,
+            Self.temperature,
+            unit_dtype,
+        ],
     ):
         """Create a quantity from a value expressed in `unit`.
 
         The unit's dimensions must match this quantity's, which the type
         system enforces at the call site.
-        """
-        self.value = value * unit.scale
 
-    def to(
-        self, unit: Unit[Self.length, Self.mass, Self.time, Self.angle]
-    ) -> Float32:
-        """Return this quantity's magnitude expressed in `unit`."""
-        return self.value / unit.scale
+        Parameters:
+            unit_dtype: The unit's float type.
+
+        Args:
+            value: The magnitude in `unit`.
+            unit: The unit the magnitude is written in.
+        """
+        self.value = value * unit.scale.cast[Self.dtype]()
+
+    def to[
+        unit_dtype: DType
+    ](
+        self,
+        unit: Unit[
+            Self.length,
+            Self.mass,
+            Self.time,
+            Self.angle,
+            Self.temperature,
+            unit_dtype,
+        ],
+    ) -> Scalar[Self.dtype]:
+        """Return this quantity's magnitude expressed in `unit`.
+
+        Parameters:
+            unit_dtype: The unit's float type.
+
+        Args:
+            unit: The unit to read the magnitude in.
+
+        Returns:
+            The magnitude in `unit`.
+        """
+        return self.value / unit.scale.cast[Self.dtype]()
+
+    def cast[
+        target: DType
+    ](self) -> Quantity[
+        Self.length,
+        Self.mass,
+        Self.time,
+        Self.angle,
+        Self.temperature,
+        target,
+    ]:
+        """Return this quantity stored in another float type.
+
+        Parameters:
+            target: The float type to store the magnitude in.
+
+        Returns:
+            The same quantity, rounded to `target` if it is narrower.
+        """
+        return Quantity[
+            Self.length,
+            Self.mass,
+            Self.time,
+            Self.angle,
+            Self.temperature,
+            target,
+        ](self.value.cast[target]())
 
     # --- arithmetic that preserves the dimension --------------------------
 
@@ -89,7 +182,7 @@ struct Quantity[length: Int, mass: Int, time: Int, angle: Int](
         """Return this quantity's magnitude, discarding its sign."""
         return Self(abs(self.value))
 
-    def scaled(self, factor: Float32) -> Self:
+    def scaled(self, factor: Scalar[Self.dtype]) -> Self:
         """Return this quantity multiplied by a plain number.
 
         Scaling by a bare float cannot change the dimension, so this is kept
@@ -100,29 +193,54 @@ struct Quantity[length: Int, mass: Int, time: Int, angle: Int](
     # --- arithmetic that changes the dimension ----------------------------
 
     def __mul__[
-        l2: Int, m2: Int, t2: Int, a2: Int
-    ](self, other: Quantity[l2, m2, t2, a2]) -> Quantity[
-        Self.length + l2, Self.mass + m2, Self.time + t2, Self.angle + a2
+        l2: Int, m2: Int, t2: Int, a2: Int, k2: Int
+    ](self, other: Quantity[l2, m2, t2, a2, k2, Self.dtype]) -> Quantity[
+        Self.length + l2,
+        Self.mass + m2,
+        Self.time + t2,
+        Self.angle + a2,
+        Self.temperature + k2,
+        Self.dtype,
     ]:
         """Multiply two quantities, adding their dimension exponents."""
         return Quantity[
-            Self.length + l2, Self.mass + m2, Self.time + t2, Self.angle + a2
+            Self.length + l2,
+            Self.mass + m2,
+            Self.time + t2,
+            Self.angle + a2,
+            Self.temperature + k2,
+            Self.dtype,
         ](self.value * other.value)
 
     def __truediv__[
-        l2: Int, m2: Int, t2: Int, a2: Int
-    ](self, other: Quantity[l2, m2, t2, a2]) -> Quantity[
-        Self.length - l2, Self.mass - m2, Self.time - t2, Self.angle - a2
+        l2: Int, m2: Int, t2: Int, a2: Int, k2: Int
+    ](self, other: Quantity[l2, m2, t2, a2, k2, Self.dtype]) -> Quantity[
+        Self.length - l2,
+        Self.mass - m2,
+        Self.time - t2,
+        Self.angle - a2,
+        Self.temperature - k2,
+        Self.dtype,
     ]:
         """Divide two quantities, subtracting their dimension exponents."""
         return Quantity[
-            Self.length - l2, Self.mass - m2, Self.time - t2, Self.angle - a2
+            Self.length - l2,
+            Self.mass - m2,
+            Self.time - t2,
+            Self.angle - a2,
+            Self.temperature - k2,
+            Self.dtype,
         ](self.value / other.value)
 
     def sqrt(
         self,
     ) -> Quantity[
-        Self.length // 2, Self.mass // 2, Self.time // 2, Self.angle // 2
+        Self.length // 2,
+        Self.mass // 2,
+        Self.time // 2,
+        Self.angle // 2,
+        Self.temperature // 2,
+        Self.dtype,
     ]:
         """Return the square root, halving every dimension exponent.
 
@@ -136,8 +254,16 @@ struct Quantity[length: Int, mass: Int, time: Int, angle: Int](
         comptime assert Self.mass % 2 == 0, "sqrt needs an even mass exponent"
         comptime assert Self.time % 2 == 0, "sqrt needs an even time exponent"
         comptime assert Self.angle % 2 == 0, "sqrt needs an even angle exponent"
+        comptime assert (
+            Self.temperature % 2 == 0
+        ), "sqrt needs an even temperature exponent"
         return Quantity[
-            Self.length // 2, Self.mass // 2, Self.time // 2, Self.angle // 2
+            Self.length // 2,
+            Self.mass // 2,
+            Self.time // 2,
+            Self.angle // 2,
+            Self.temperature // 2,
+            Self.dtype,
         ](float_sqrt(self.value))
 
     # --- comparison -------------------------------------------------------

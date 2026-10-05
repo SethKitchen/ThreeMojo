@@ -82,7 +82,7 @@ from math.quaternion import Quaternion
 from math.ray import Ray
 from math.triangle import Line3, Triangle
 from math.vector3 import Vector3
-from std.math import inf, isfinite, sqrt
+from std.math import fma, inf, isfinite, sqrt
 from units.si import Duration, Length, METER, SECOND
 
 
@@ -1197,7 +1197,11 @@ def _sphere_hit(ray: Ray, center: Vector3, radius: Float32) -> Float32:
     var toward = center - ray.origin
     var foot = toward.dot(ray.direction)
     var drop = toward - ray.direction * foot
-    var h = radius * radius - drop.dot(drop)
+    # Round the radius square before subtracting the squared offset.
+    # A fused radius*radius - inf can produce -inf instead of the legacy
+    # inf - inf NaN. Rounding both squared terms also avoids a one-sided
+    # product residual at an exact axis-aligned tangent.
+    var h = fma(radius, radius, Float32(0)) - drop.dot(drop)
     if h < 0:
         return inf[DType.float32]()
     var t = foot - sqrt(h)

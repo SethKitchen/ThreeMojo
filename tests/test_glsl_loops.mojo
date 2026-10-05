@@ -12,6 +12,8 @@ or the frontend's loop budget. See docs/wiki/Node-materials.md.
 """
 
 from materials.glsl import (
+    _fold_integer_constants,
+    shader_graph,
     _loop_binary,
     _loop_constant,
     compile_raw_shader_material,
@@ -27,9 +29,14 @@ from tests.test_glsl import (
 )
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from std.math import inf, nan
+from std.memory import bitcast
 from materials.nodes import (
     NodeGraph,
     NodeRef,
+    NODE_CONSTANT,
+    NODE_UINT_ADD,
+    NODE_UINT_FIRST,
+    NODE_INT_LAST,
     NODE_FLOAT,
     NODE_COPY,
     NODE_ADD,
@@ -449,6 +456,83 @@ def test_scalar_return_uses_proved_control_without_more_registers() raises:
         ),
         63,
     )
+
+
+def test_scalar_integer_constants_keep_exact_bits() raises:
+    var graph = NodeGraph()
+    var high = graph.uint(UInt32(4294967295))
+    var two = graph.uint(UInt32(2))
+    var wrapped = graph.add(high, two)
+    var signed = graph.to_int(wrapped)
+    var numeric = graph.int_to_float(signed)
+    var runtime = graph.uniform_uint("runtime", UInt32(3))
+    var dynamic = graph.add(runtime, wrapped)
+    var float_sum = graph.add(graph.float(0.25), graph.float(0.5))
+    _fold_integer_constants(graph)
+    assert_equal(graph._kinds[wrapped.value], NODE_CONSTANT)
+    assert_equal(
+        bitcast[DType.uint32](graph._values[wrapped.value * 4]), UInt32(1)
+    )
+    assert_equal(graph._values[numeric.value * 4], Float32(1))
+    assert_equal(graph._kinds[dynamic.value], NODE_UINT_ADD)
+    assert_equal(graph._kinds[float_sum.value], NODE_ADD)
+
+
+def test_folded_integer_constants_share_only_exact_types_and_bits() raises:
+    var graph = NodeGraph()
+    var positive_zero = graph.float(0)
+    var negative_zero = graph.float(-Float32(0))
+    var existing = graph.float(7)
+    var integer = graph.to_int(existing)
+    var converted = graph.int_to_float(integer)
+    var zero = graph.uint_to_float(graph.uint(UInt32(0)))
+    var unsigned = graph.to_uint(integer)
+    var payload = graph.uint(UInt32(0x7FC00001))
+    var round_trip = graph.to_uint(graph.to_int(payload))
+    _fold_integer_constants(graph)
+    assert_equal(graph._kinds[converted.value], NODE_COPY)
+    assert_equal(graph._inputs[converted.value * 3], existing.value)
+    assert_equal(graph._kinds[integer.value], NODE_CONSTANT)
+    assert_equal(
+        bitcast[DType.uint32](graph._values[integer.value * 4]), UInt32(7)
+    )
+    assert_equal(graph._inputs[zero.value * 3], positive_zero.value)
+    assert_equal(graph._kinds[unsigned.value], NODE_CONSTANT)
+    assert_true(graph._types[unsigned.value] != graph._types[integer.value])
+    assert_equal(graph._kinds[round_trip.value], NODE_COPY)
+    assert_equal(graph._inputs[round_trip.value * 3], payload.value)
+    assert_equal(
+        bitcast[DType.uint32](graph._values[payload.value * 4]),
+        UInt32(0x7FC00001),
+    )
+    assert_equal(
+        bitcast[DType.uint32](graph._values[negative_zero.value * 4]),
+        UInt32(0x80000000),
+    )
+
+
+def test_unrolled_integer_indices_do_not_keep_runtime_arithmetic() raises:
+    var graph = shader_graph(
+        VERTEX,
+        """
+        uniform float scale;
+        void main() {
+            float sum = 0.0;
+            for (int i = 0; i < 256; i++) sum += float(i) * scale;
+            gl_FragColor = vec4(sum);
+        }
+    """,
+    )
+    for node in range(graph.count()):
+        var kind = graph._kinds[node]
+        assert_false(
+            kind.value >= NODE_UINT_FIRST.value
+            and kind.value <= NODE_INT_LAST.value
+        )
+    var program = graph.compile()
+    program.set_uniform("scale", Float32(2))
+    # Arithmetic progression: 2 * 256 * 255 / 2, exactly representable.
+    assert_equal(run(program)[0], Float32(65280))
 
 
 def main() raises:

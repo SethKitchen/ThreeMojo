@@ -14,10 +14,12 @@ one side's. The display minimum radius is not used.
 
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
     classify_soft,
 )
 from extensions.humanoid.skeleton.torso.bones.dimensions import (

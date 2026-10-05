@@ -87,6 +87,10 @@ keep their values. Both collision cycle caches are cleared together because
 a surviving boundary or pair distance can depend on a removed lock. A later
 update with no candidate cannot retain that removed lead's distance.
 
+Registering a live, observed vehicle preserves collision locks that name it
+as the lead. It also preserves both cycle caches until the normal cycle
+boundary. Leaving the unregistered list is not actor destruction.
+
 After `world.destroy_actor`, the next processed traffic-manager step removes
 the actor's parameter settings. It also removes other actors' collision-ignore
 references to that actor. This cleanup includes actors destroyed after

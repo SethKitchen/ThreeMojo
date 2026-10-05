@@ -7,6 +7,9 @@
 
 This module uses Float64 intermediates, not exact predicates. The world
 opts in through a typed mode and checks its narrower supported domain.
+Triangles have no adjacency data. Shared mesh edges can produce tilted
+contacts during shallow overlap, as in the discrete solver. See the
+continuous-collision wiki for the tessellated-floor limitation.
 """
 
 from extensions.physics.shape import _wide, _wide_cross, _wide_dot

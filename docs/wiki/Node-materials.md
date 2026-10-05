@@ -190,6 +190,11 @@ The material is drawn from its back faces, blended, with no depth test and no de
 4. `SCATTERING_NODE` multiplies that density. In this output, `position_world()` is the position of the step. three.js hands the same position to `scatteringNode` as `positionRay`.
 5. What the ray lets through is multiplied by `exp(-density * 0.01 * step)` at each step, which is Beer's law.
 
+An exactly zero-width or zero-height rectangle contributes no volume light.
+Its area is zero. The shared CPU and GPU helper returns zero before evaluating
+its edges, so rounding cannot leave a spurious contribution. This correction
+uses no near-zero cutoff. Nondegenerate rectangles retain the r186 formula.
+
 An IES profile or projector frame shapes the beam at each ray step, as it does on a surface. An IES light with no profile uses its cone. See [Lighting addons](Lighting-addons#ies-spot-light).
 
 The surface's color is one minus what the ray lets through, plus `EMISSIVE_NODE`. Its alpha is the material's. A volume refuses an emissive color and an emissive map, because three.js's material has neither. The functions are in `materials.volume_node_material`.

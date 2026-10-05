@@ -36,6 +36,7 @@ from render.color_spaces import (
     DISPLAY_P3_COLOR_SPACE,
     LINEAR_REC2020_COLOR_SPACE,
     LINEAR_SRGB_COLOR_SPACE,
+    SRGB_COLOR_SPACE,
 )
 from materials.material import (
     ADDITIVE,
@@ -13958,6 +13959,7 @@ def test_both_backends_write_every_output_color_space_alike() raises:
     var assets = Assets()
     var scene = _flagged_scene(assets, True)
     var spaces: List[ColorSpaceId] = [
+        SRGB_COLOR_SPACE,
         LINEAR_SRGB_COLOR_SPACE,
         DISPLAY_P3_COLOR_SPACE,
         LINEAR_REC2020_COLOR_SPACE,
@@ -15072,6 +15074,29 @@ struct _ScalarMathKernels:
         for component in range(5):
             output[unsafe_offset=at * 5 + component] = sample[component]
 
+    @staticmethod
+    def rect_volume_kernel(
+        output: MutPointer[Float32, MutAnyOrigin],
+        inputs: MutPointer[Float32, MutAnyOrigin],
+        count: Int32,
+    ):
+        """Evaluate exact rectangle degeneracy from device dimensions."""
+        from max.gpu import global_idx
+        from lights.ltc import ltc_evaluate_volume
+
+        var at = Int(global_idx.x)
+        if at >= Int(count):
+            return
+        var width = inputs[unsafe_offset=at * 2]
+        var height = inputs[unsafe_offset=at * 2 + 1]
+        output[unsafe_offset=at] = ltc_evaluate_volume(
+            Vector3(0, 0, 0),
+            Vector3(width, -height, 1),
+            Vector3(-width, -height, 1),
+            Vector3(-width, height, 1),
+            Vector3(width, height, 1),
+        )
+
 
 def test_shared_scalar_math_handles_finite_range_and_ieee_edges() raises:
     from math.arc_tangent import atan2_float32, atan_float32
@@ -15386,6 +15411,52 @@ def test_shared_norm_consumers_preserve_extreme_product_directions() raises:
 
 
 # --- rectangle volume lighting, three.js r186 ---------------------------------
+
+
+def test_both_backends_keep_collapsed_rectangle_volume_lights_zero() raises:
+    if skipped_for_lack_of_a_gpu("zero-area rectangle volume lights"):
+        return
+    from lights.ltc import ltc_evaluate_volume
+
+    var inputs: List[Float32] = [0, 1, 1, 0, 0, 0, 1, 1, 1e-25, 1]
+    var count = len(inputs) // 2
+    var context = DeviceContext()
+    var device_inputs = context.enqueue_create_buffer[DType.float32](
+        len(inputs)
+    )
+    var output = context.enqueue_create_buffer[DType.float32](count)
+    with device_inputs.map_to_host() as host:
+        for at in range(len(inputs)):
+            host[at] = inputs[at]
+    context.enqueue_function[_ScalarMathKernels.rect_volume_kernel](
+        output.unsafe_ptr(),
+        device_inputs.unsafe_ptr(),
+        Int32(count),
+        grid_dim=(1,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    with output.map_to_host() as host:
+        for at in range(count):
+            var width = inputs[at * 2]
+            var height = inputs[at * 2 + 1]
+            var cpu = ltc_evaluate_volume(
+                Vector3(0, 0, 0),
+                Vector3(width, -height, 1),
+                Vector3(-width, -height, 1),
+                Vector3(-width, height, 1),
+                Vector3(width, height, 1),
+            )
+            if at < 3:
+                assert_equal(cpu, Float32(0))
+                assert_equal(host[at], Float32(0))
+            else:
+                assert_true(cpu > 0 and host[at] > 0)
+                assert_almost_equal(host[at], cpu, atol=2e-6)
+                if at == 3:
+                    assert_almost_equal(
+                        host[at], Float32(0.5541262649761671), atol=2e-6
+                    )
 
 
 def test_both_backends_march_rectangle_volume_lights_alike() raises:

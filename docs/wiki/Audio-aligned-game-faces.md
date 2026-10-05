@@ -128,6 +128,12 @@ It requests at least 32 triangles per part during this extra reduction.
 An insufficient minimum or an unmet safe-collapse budget raises an error.
 The builder does not exceed the requested total or drop facial animation.
 These budget refusals occur before scene nodes or assets are added.
+
+A positive facial budget below 128 is refused before geometry is built.
+The body, each hand, and hair already require 32 reserved triangles each.
+The complete face and eyes require additional triangles. Spec and detail
+validation still run before this early refusal. Larger budgets retain the
+actual face-and-eye reserve and safe-collapse checks.
 The exact minimum depends on the character's retained scan topology.
 
 Build another body LOD with the same spec and asset input to keep the same
@@ -158,6 +164,18 @@ It does not authenticate files or prove source provenance.
 Missing or changed recipes, mappings, parts or correspondence are refused.
 Do not use generic decimation or mesh reordering on the facial parts after bake.
 If an external exporter changes those parts, rebuild instead of skipping checks.
+
+## Per-frame validation cost
+
+`GameFace.apply` checks correspondence on every call.
+It rereads vertex order, base positions and all named morph offsets, even when only the visual weights change.
+The cost grows with the preserved geometry and its targets.
+
+This protects callers that edit or replace geometry without changing its counts or target names.
+A `GeometryId` alone does not track those content changes.
+Do not skip validation merely because the ID is unchanged.
+A future immutable or content-versioned binding could avoid repeated scans; ownership and lifetime work remains under [#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
+The present API makes no per-frame latency guarantee.
 
 ## Existing spelling animation
 

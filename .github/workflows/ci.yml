@@ -181,21 +181,23 @@ jobs:
   # suite, which was tuned on a fast many-core machine to catch the
   # instrumenter sending the compiler superlinear. A four-core hosted runner
   # exceeds that while behaving perfectly. Here it is only a hang detector:
-  # 300, 900 and 3600 each became the ceiling as the library grew, with
-  # every suite still progressing, and a genuine hang blows through any of
-  # them. The groups are balanced by the source their suites import, not
-  # by how long they run under coverage, so a group can run far longer
-  # than its share: six groups, not four, keep the slowest one well
-  # inside the budget.
+  # 300, 900, 3600 and 6000 each became the ceiling as the library grew,
+  # with every suite still progressing, and a genuine hang blows through
+  # any of them. The groups are balanced by each suite's measured capture
+  # time in tools/coverage_costs.json. With the animals, six groups came
+  # to about 5600 seconds each, and one hosted runner took a quarter
+  # longer than another on the same group. Eight groups bring most to
+  # about 4600 seconds; the longest single suites set the rest. 9000
+  # leaves room for that spread inside the 170-minute job timeout.
   coverage-capture:
     if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
-    name: coverage capture ${{ matrix.shard }}/6
+    name: coverage capture ${{ matrix.shard }}/8
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    timeout-minutes: 170
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     steps:
       - uses: actions/checkout@v4
@@ -218,7 +220,7 @@ jobs:
       - name: capture
         run: |
           make -B coverage-instrument AFFECTED="$AFFECTED"
-          make -B coverage-capture SHARD=${{ matrix.shard }}/6 COV_BUDGET=6000 AFFECTED="$AFFECTED"
+          make -B coverage-capture SHARD=${{ matrix.shard }}/8 COV_BUDGET=9000 AFFECTED="$AFFECTED"
 
       # Compressed as captured, so a group's streams are megabytes, not the
       # gigabytes the raw probes would be. Nothing to upload when no measured

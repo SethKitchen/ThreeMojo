@@ -11,21 +11,25 @@ reports only "Metal Compiler failed to compile metallib"
 
 This bounded checker compares direct calls with definitions or declarations
 using scalar, opaque-pointer and literal aggregate types. It requires one
-nonempty module with a function body for every discovered kernel. Missing
-signatures and unsupported call/type syntax fail closed; this is not an LLVM
-verifier or a GPU execution test. Run with `make check-gpu-air`.
+nonempty module with a function body for every discovered kernel. Every
+enqueue_function reference must name a local, non-parameterized kernel;
+unsupported launches fail before emission. Missing signatures and unsupported
+call/type syntax fail closed; this is not an LLVM verifier or a GPU execution
+test. Run with `make check-gpu-air`.
 """
 
 import argparse
+import io
 from pathlib import Path
 import re
 import subprocess
 import sys
 import tempfile
+import tokenize
 
 ROOT = Path(__file__).resolve().parent.parent
-# Kernels are launched from these modules. Each `enqueue_function[name]`
-# with a plain name is checked.
+# Kernels are launched from these modules. Every `enqueue_function`
+# reference must resolve to a supported, plainly named local kernel.
 MODULES = ('render/gpu.mojo', 'render/gpu_vxgi.mojo')
 TARGET = 'metal:4'
 SEPARATOR = '; ===== kernel '
@@ -392,14 +396,42 @@ def mismatches(air, expected_kernel=None):
 
 
 def kernels(root):
-    """Return (module, kernel) for each plainly named kernel launch."""
+    """Resolve every launch, or refuse syntax the emitter cannot compile."""
     out = []
     for module in MODULES:
         text = (root / module).read_text()
-        for name in sorted(set(re.findall(
-                r'enqueue_function\[(\w+)\]', text))):
-            if re.search(rf'\ndef {name}\(', text):
-                out.append((module, name))
+        # Mojo uses Python's comment, string and identifier spelling here.
+        # Tokenization keeps examples in comments/docstrings out of discovery
+        # and catches spaced or multiline launches without parsing Mojo types.
+        try:
+            tokens = [token for token in tokenize.generate_tokens(io.StringIO(text).readline)
+                      if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                            tokenize.NEWLINE, tokenize.INDENT,
+                                            tokenize.DEDENT, tokenize.ENDMARKER)]
+        except (tokenize.TokenError, IndentationError) as exc:
+            raise AirError(f'{module}: unsupported kernel source syntax: {exc}') from exc
+        definitions = {tokens[index + 1].string
+                       for index, token in enumerate(tokens[:-2])
+                       if token.type == tokenize.NAME and token.string == 'def'
+                       and token.start[1] == 0
+                       and tokens[index + 1].type == tokenize.NAME
+                       and tokens[index + 2].string == '('}
+        launched = set()
+        for index, token in enumerate(tokens):
+            if token.type != tokenize.NAME or token.string != 'enqueue_function':
+                continue
+            args = tokens[index + 1:index + 5]
+            if (len(args) != 4 or args[0].string != '['
+                    or args[1].type != tokenize.NAME or args[2].string != ']'
+                    or args[3].string != '('):
+                raise AirError(f'{module}:{token.start[0]}: unsupported enqueue_function '
+                               'syntax; expected enqueue_function[local_kernel](...)')
+            name = args[1].string
+            if name not in definitions:
+                raise AirError(f'{module}:{token.start[0]}: kernel {name} must have a '
+                               'local, non-parameterized top-level definition')
+            launched.add(name)
+        out.extend((module, name) for name in sorted(launched))
     return out
 
 
@@ -464,7 +496,7 @@ def emit(root, mojo, found):
         program = Path(folder) / 'emit_air.mojo'
         program.write_text('\n'.join(lines) + '\n')
         result = subprocess.run(
-            [mojo, 'run', '-I', str(root), str(program)], cwd=root,
+            [mojo, 'run', '--Werror', '-I', str(root), str(program)], cwd=root,
             text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             timeout=1800)
     if result.returncode != 0:

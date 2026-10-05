@@ -75,7 +75,7 @@ from loaders.svg_path import (
 from loaders.js_number import js_parse_float
 from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
-from std.math import acos, cos, isnan, pi, sin, sqrt, tan
+from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
 
 # The namespace an `xlink:href` attribute is in.
@@ -605,7 +605,9 @@ def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
     var dot = ux * vx + uy * vy
     var length = sqrt(first_squared) * sqrt(second_squared)
     var cosine = dot / length
-    var cross = ux * vy - uy * vx
+    # JavaScript rounds the two products before subtracting. In particular,
+    # antipodal vectors have a zero cross, not a signed FMA residual.
+    var cross = fma(ux, vy, Float64(0)) - fma(uy, vx, Float64(0))
     if not (
         _ordinary_squared(first_squared)
         and _ordinary_squared(second_squared)

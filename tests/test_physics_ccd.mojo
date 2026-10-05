@@ -180,6 +180,63 @@ def test_edge_vertex_and_grazing_reference() raises:
     assert_almost_equal(lateral.fraction, (2 - edge_y) / 4, atol=1e-12)
 
 
+def _floor_peak_vertical_speed(
+    mode: CollisionDetection, tessellated: Bool
+) raises -> Float32:
+    # Both meshes cover the same triangle. Midpoints split it into four
+    # coplanar triangles without changing the physical surface or winding.
+    var a = Vector3(-1, -1, 0)
+    var b = Vector3(1, -1, 0)
+    var c = Vector3(0, 1, 0)
+    var ab = (a + b) * Float32(0.5)
+    var bc = (b + c) * Float32(0.5)
+    var ca = (c + a) * Float32(0.5)
+    var triangles: List[Triangle] = [Triangle(a, b, c)]
+    if tessellated:
+        triangles = [
+            Triangle(a, ab, ca),
+            Triangle(ab, b, bc),
+            Triangle(ca, bc, c),
+            Triangle(ab, bc, ca),
+        ]
+    var floor = RigidBody(
+        STATIC,
+        Shape.mesh(triangles^),
+        Mass(0),
+        Vector3(0, 0, 0),
+        Quaternion.identity(),
+    )
+    floor.material = PhysicsMaterial(0, 0)
+    var world = PhysicsWorld()
+    world.collision_detection = mode
+    _ = world.add_body(floor^)
+    var ball = _ball(0.1, 0.0996, 0)
+    ball.position.x = -0.5
+    ball.position.y = -0.5
+    ball.linear_velocity.x = 5
+    _ = world.add_body(ball^)
+    var peak = Float32(0)
+    for _ in range(20):
+        world.step(Duration(0.01))
+        peak = max(peak, world.bodies[1].linear_velocity.z)
+        assert_true(world.bodies[1].position.z > 0)
+    return peak
+
+
+def test_tessellated_floor_documents_existing_ghost_contacts() raises:
+    # Independent plane control: gravity has no tangential component and
+    # friction/restitution are zero, so a plane cannot launch the sphere.
+    # This deliberately records an unresolved limitation, not correct
+    # contact response. A topology-aware fix must replace this expectation.
+    for mode in [DISCRETE, SPHERE_MESH_CCD]:
+        assert_equal(_floor_peak_vertical_speed(mode, False), Float32(0))
+        var peak = _floor_peak_vertical_speed(mode, True)
+        assert_true(peak > 0.01)
+        # No impact may create more speed than the initial 5 m/s plus
+        # the complete 20-step gravity impulse, a conservative energy bound.
+        assert_true(peak < 7)
+
+
 def test_more_than_one_impact_and_limit_rollback() raises:
     var world = _world(0.1, 0.5, -300, 1)
     _ = world.add_body(_floor(1, True))

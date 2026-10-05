@@ -45,6 +45,31 @@ CCD rejects initial backface contacts, including a sphere that already overlaps 
 
 The opt-in mode corrects the tunneling example in [issue 292](https://github.com/SethKitchen/ThreeMojo/issues/292), recorded against the port at `af6c253`. The test uses radius 0.1 m, initial z 0.15 m, velocity -30 m/s and step 0.01 s. The sphere now stops at z = 0.1 m on a plastic horizontal mesh. Discrete mode still reaches z = -0.15 m. This is a correction to the port's own solver. It does not claim an identical CARLA trajectory.
 
+## Tessellated-floor limitation
+
+Shared triangle edges can produce false edge contacts. The mesh stores no
+adjacency or feature Voronoi regions. A sphere that overlaps a flat floor
+slightly can hit an internal edge with a tilted normal. That impulse can
+turn horizontal speed into vertical speed, even with zero restitution.
+Both `DISCRETE` and `SPHERE_MESH_CCD` have this limitation. It is not a new
+regression in CCD, and CCD does not make the result independent of mesh
+triangulation.
+
+The test `test_tessellated_floor_documents_existing_ghost_contacts` compares
+one triangle with the same surface split into four triangles. It uses a
+0.1 m sphere at z = 0.0996 m, horizontal speed 5 m/s, gravity, zero friction
+and restitution, and twenty 0.01 s steps. The single-triangle control has
+no upward launch. Both tessellated cases produce upward velocity. The test
+records the limitation; it does not certify that response as physically
+correct. Existing face, boundary-edge and vertex controls stay in place.
+
+A correction needs topology-aware feature admission for swept and initial
+contacts. It must retain real boundary edges, triangle tie order, mesh
+validation and transactional failure. This is separate contact-topology
+work for the [physics follow-up scope](https://github.com/SethKitchen/ThreeMojo/issues/635).
+No mesh-validity rule or collision edge is silently skipped to hide this
+limitation.
+
 ## Precision and refusal limits
 
 The algorithm is an analytic piecewise-linear sweep with Float64 intermediates. It does not use exact geometric predicates. Its public state remains Float32. The following limits are checked rather than treated as warnings:

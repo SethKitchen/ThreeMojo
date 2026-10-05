@@ -16,11 +16,28 @@ Import the API from `extensions.physics.query_snapshot`.
 - `snapshot.body_count()` returns the captured source slot count, including disabled bodies
 - `snapshot.check_owner(owner)` checks that a historical owner belongs to this capture
 
-A hit has `owner`, `point`, `normal`, `distance`, and `material` fields. Point and distance values use meters. The hit owns its material value and owner token. It can outlive both the source world and the snapshot.
+A hit has `owner`, `point`, `normal`, `distance`, and `material` fields. The point uses meters. The distance is a `Length`. Use `hit.distance.value` for its Float32 meter value or `hit.distance.to(unit)` for conversion. The hit owns its material value and owner token. It can outlive both the source world and the snapshot.
 
 `ignore` is a `BodyId` interpreted in the captured source-slot namespace. `BodyId(-1)` ignores none. A nonnegative index outside the capture ignores none. An index below -1 is invalid.
 
 The reach is inclusive for finite hit distances. Negative reach rejects those hits. Existing nonfinite narrow-phase answers keep their legacy behavior. NaN reach is invalid. Infinite reach is allowed. The origin and direction must be finite, and the direction must be nonzero.
+
+Callers that used a bare snapshot distance must now read `.distance.value`
+or compare with another `Length`. This wraps the same narrow-phase Float32
+value and keeps hit selection unchanged. The existing live-world
+`RaycastHit.distance` remains a bare Float32 for compatibility.
+
+### Sphere-ray rounding
+
+The sphere kernel rounds its radius square before subtraction. This keeps
+its documented overflow result independent of compiler contraction and
+coverage probes. It also prevents a product-rounding residual at an exact
+axis-aligned tangent when the radius square is finite.
+
+Finite answers can differ from earlier compiler-dependent scalar results.
+This change fixes those tangent misses and keeps the captured and live ray
+paths on the same arithmetic. It does not make the retained NaN hits
+geometrically correct or promise exact sphere intersections at every scale.
 
 ## Historical owners
 

@@ -125,6 +125,14 @@ struct Vec3d(ImplicitlyCopyable):
         """
         return Vec3d(self.x * factor, self.y * factor, self.z * factor)
 
+    def __neg__(self) -> Self:
+        """Return the vector pointing the other way, three.js's `negate`.
+
+        Returns:
+            The opposite vector.
+        """
+        return Vec3d(-self.x, -self.y, -self.z)
+
     def dot(self, other: Self) -> Float64:
         """Return the dot product.
 

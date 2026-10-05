@@ -1,6 +1,6 @@
 # Units
 
-`units/quantity.mojo` and `units/si.mojo`. Every measurement carries its dimension in its type. The compiler checks dimensions and erases them. A `Quantity` is the size of the `Float32` inside it.
+`units/quantity.mojo`, `units/si.mojo` and `units/temperature.mojo`. Every measurement carries its dimension in its type. The compiler checks dimensions and erases them. A `Quantity` is the size of the float inside it.
 
 ![A clock delta turns a cube by an angle in radians](out/units.png)
 
@@ -8,7 +8,7 @@ three.js has no units. It leaves world units to the application. Here world spac
 
 ## Quantity
 
-`Quantity[length, mass, time, angle]` holds one `Float32` in canonical units: meters, kilograms, seconds and radians. The four parameters are exponents.
+`Quantity[length, mass, time, angle, temperature, dtype]` holds one float in canonical units: meters, kilograms, seconds, radians and kelvin. The first five parameters are exponents. The temperature exponent defaults to zero, so `Quantity[1, 0, 0, 0]` is a length. The `dtype` parameter defaults to `DType.float32`.
 
 | Alias | Exponents |
 |---|---|
@@ -27,6 +27,41 @@ three.js has no units. It leaves world units to the application. Here world spac
 | `Pressure` | -1, 1, -2, 0 |
 
 Angle is a base dimension here. Strict SI treats a radian as dimensionless. The deviation makes degrees-for-radians a compile error.
+
+### Heat, structure and flow
+
+The engineering extensions use these aliases. A temperature exponent of one is a temperature difference in kelvin.
+
+| Alias | Exponents | Meaning |
+|---|---|---|
+| `Energy` | 2, 1, -2, 0 | Work or heat, in joules |
+| `Power` | 2, 1, -3, 0 | A heating load, in watts |
+| `HeatFlux` | 0, 1, -3, 0 | Power per area |
+| `ThermalConductivity` | 1, 1, -3, 0, -1 | Power per length per kelvin |
+| `ThermalTransmittance` | 0, 1, -3, 0, -1 | A U-value, power per area per kelvin |
+| `ThermalResistance` | 0, -1, 3, 0, 1 | An R-value, the inverse of a U-value |
+| `SpecificHeatCapacity` | 2, 0, -2, 0, -1 | Energy per mass per kelvin |
+| `HeatCapacity` | 2, 1, -2, 0, -1 | Energy per kelvin |
+| `ThermalConductance` | 2, 1, -3, 0, -1 | Power per kelvin |
+| `ThermalExpansion` | 0, 0, 0, 0, -1 | Strain per kelvin |
+| `Moment` | 2, 1, -2, 0 | A bending moment |
+| `LineLoad` | 0, 1, -2, 0 | Force per length |
+| `SecondMomentOfArea` | 4, 0, 0, 0 | The bending stiffness of a section shape |
+| `VolumeFlowRate` | 3, 0, -1, 0 | An air flow |
+| `MassFlowRate` | 0, 1, -1, 0 | Mass per time |
+
+### Float64 quantities
+
+Use a `Float64` quantity for engineering analysis. A `Float32` keeps about seven digits, and a stiffness matrix loses more than that. Each alias above, and each base alias, has a `64` form: `Length64`, `Force64`, `ThermalConductivity64`.
+
+```mojo
+var span = Length64(0.3048, METER)           # every digit kept
+var coarse = span.cast[DType.float32]()      # a Length
+```
+
+Two quantities combine only when their `dtype` is the same. A `Length64` plus a `Length` is a compile error. Use `cast` to change the float type.
+
+A `Unit` holds its factor as a `Float32` by default, so it is safe in GPU code, which has no `Float64`. A unit of either float type converts a quantity of either float type. `FOOT64`, `INCH64` and `DEGREE64` are `Float64` units for factors that a `Float32` rounds. Use them where a `Float64` quantity must keep every digit.
 
 ## Units
 
@@ -47,7 +82,48 @@ A `Unit` is a factor to the canonical unit and a symbol.
 | Velocity | `METER_PER_SECOND` |
 | Acceleration | `METER_PER_SECOND_SQUARED` |
 
+| Energy | `JOULE`, `KILOWATT_HOUR` |
+| Power | `WATT`, `KILOWATT` |
+| Heat flux | `WATT_PER_SQUARE_METER` |
+| Thermal conductivity | `WATT_PER_METER_KELVIN` |
+| Thermal transmittance | `WATT_PER_SQUARE_METER_KELVIN` |
+| Thermal resistance | `SQUARE_METER_KELVIN_PER_WATT` |
+| Specific heat capacity | `JOULE_PER_KILOGRAM_KELVIN` |
+| Heat capacity | `JOULE_PER_KELVIN` |
+| Thermal conductance | `WATT_PER_KELVIN` |
+| Thermal expansion | `PER_KELVIN` |
+| Moment | `NEWTON_METER`, `KILONEWTON_METER` |
+| Force, structural | `KILONEWTON` |
+| Line load | `NEWTON_PER_METER`, `KILONEWTON_PER_METER` |
+| Pressure, structural | `KILOPASCAL` |
+| Second moment of area | `METER_TO_THE_FOURTH` |
+| Flow | `CUBIC_METER_PER_SECOND`, `KILOGRAM_PER_SECOND` |
+
 `STANDARD_GRAVITY` is 9.80665 meters per second squared. Weight on Earth is mass times that acceleration.
+
+## Temperature
+
+`units/temperature.mojo`. A `Temperature` is an absolute temperature, kept in kelvin. It is not a `Quantity`, because the Celsius scale has a different zero. `KELVIN` and `CELSIUS` are its scales.
+
+| Member | Meaning |
+|---|---|
+| `Temperature(v, unit)` | A reading on a scale, in a `Float32`. |
+| `Temperature64(v, unit)` | The same in a `Float64`. |
+| `t.to(unit)` | The reading on a scale. |
+| `a - b` | A `TemperatureDifference`, which is a `Quantity` with a temperature exponent of one. |
+| `t + d` | A temperature raised by a difference. |
+| `a < b` | True when `a` is the colder. |
+| `t.is_valid()` | True when the value is finite and not below absolute zero. |
+
+```mojo
+var inside = Temperature64(20, CELSIUS)
+var outside = Temperature64(-5, CELSIUS)
+var drop = inside - outside                   # 25 K, a TemperatureDifference64
+var k = ThermalConductivity64(0.8, WATT_PER_METER_KELVIN)
+var flux = k * drop / Length64(0.2, METER)    # 100 W/m^2, a HeatFlux64
+```
+
+Two temperatures do not add. Only a difference adds to a temperature. `KELVIN_DIFFERENCE` is the unit of a difference.
 
 ## Light
 
@@ -85,7 +161,7 @@ turn.value                                # radians
 | `a + b`, `a - b` | Same dimension only. |
 | `a * b`, `a / b` | Exponents add or subtract. |
 | `a.sqrt()` | Exponents halve. Even exponents only. |
-| `a.to(unit)` | The value in that unit, as a `Float32`. |
+| `a.to(unit)` | The value in that unit, in the quantity's float type. |
 | `a.scaled(f)`, `-a`, `abs(a)` | Same dimension. |
 | `==`, `<`, `<=`, `>`, `>=` | Same dimension only. |
 
@@ -97,6 +173,8 @@ turn.value                                # radians
 Length(1.0, METER) + Duration(1.0, SECOND)   # error
 Length(1.0, METER).to(SECOND)                # error
 Volume(8.0).sqrt()                           # error: odd exponent
+Length64(1.0, METER) + Length(1.0, METER)    # error: dtype differs
+inside + outside                             # error: two temperatures
 rotation_z(90.0)                             # error: needs an Angle
 ```
 

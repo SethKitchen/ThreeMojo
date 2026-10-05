@@ -76,6 +76,32 @@ class PairInventoryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             av.pair_plan(rows, 'unchecked')
 
+    def test_representative_selects_the_largest_intersection_not_the_first_pair(self):
+        rows = catalog()
+        for row in rows:
+            row['high_m'] = [.001, .001, .001]
+        muscles = [row for row in rows
+                   if row['family'] == 'muscle' and row['component_id'].startswith('leg/')]
+        a, b, c = muscles[:3]
+        a['high_m'] = [.06, .06, .06]
+        b['high_m'] = [.02, .02, .02]
+        c['high_m'] = [.04, .04, .04]
+
+        def selected():
+            return {entry['pair_id'] for entry in av.pair_plan(rows, 'representative')
+                    if entry['status'] == 'checked' and entry['class'] == 'muscle|muscle'
+                    and entry['first_id'].startswith('leg/')
+                    and entry['second_id'].startswith('leg/')}
+
+        # The later A/C pair intersects in a 4 cm cube; A/B has only 2 cm.
+        self.assertEqual(selected(), {av.pair_identity(a, c)})
+        b['high_m'] = [.05, .05, .05]
+        c['high_m'] = [.03, .03, .03]
+        self.assertEqual(selected(), {av.pair_identity(a, b)})
+        # Equal maximum boxes retain the first pair in catalog order.
+        b['high_m'] = c['high_m'] = [.04, .04, .04]
+        self.assertEqual(selected(), {av.pair_identity(a, b)})
+
     def test_batches_are_exhaustive_bounded_and_never_drop_large_pairs(self):
         rows = catalog()
         plan = av.pair_plan(rows, 'full')

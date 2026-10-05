@@ -184,6 +184,54 @@ class MakeCacheTests(unittest.TestCase):
 
 
 class CoverageStagingTests(unittest.TestCase):
+    TEST_HELPERS = ('tests/carla_fixed_s_fixture.mojo',
+                    'tests/exact_predicates_oracle.mojo')
+
+    def test_import_only_helpers_are_libraries_and_coverage_passthrough(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        names = ('HELPER_LIBS', 'DOC_SOURCES', 'ENTRY_POINTS',
+                 'COVERAGE_PASSTHROUGH', 'COVERED')
+        with tempfile.TemporaryDirectory() as directory:
+            extra = Path(directory) / 'classification.mk'
+            extra.write_text('classification-test:\n' + ''.join(
+                f'\t@echo {name}=$({name})\n' for name in names))
+            output = subprocess.check_output([
+                'make', '--no-print-directory', '-s', '-f', 'Makefile',
+                '-f', str(extra), 'classification-test',
+            ], cwd=root, text=True)
+        values = dict(line.split('=', 1) for line in output.splitlines())
+        classified = {name: set(values[name].split()) for name in names}
+        for helper in self.TEST_HELPERS:
+            for name in ('HELPER_LIBS', 'DOC_SOURCES', 'COVERAGE_PASSTHROUGH'):
+                self.assertIn(helper, classified[name], name)
+            for name in ('ENTRY_POINTS', 'COVERED'):
+                self.assertNotIn(helper, classified[name], name)
+        # Measured production code stays instrumented, not copied through.
+        self.assertIn('math/vector3.mojo', classified['COVERED'])
+        self.assertTrue(classified['COVERED'].isdisjoint(
+            classified['COVERAGE_PASSTHROUGH']))
+
+    def test_import_only_helpers_are_copied_beside_their_suites(self):
+        import subprocess
+        root = Path(__file__).resolve().parent.parent
+        suites = ('tests/test_carla_fixed_s_fraction.mojo',
+                  'tests/test_exact_predicates.mojo')
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / 'instrumented'
+            # Only the compiler is stubbed; exercise the real copy-through
+            # recipe with its default helper classification.
+            subprocess.run([
+                'make', '--no-print-directory', '-s', 'coverage-instrument',
+                'MOJO=true', f'COV_DIR={destination}',
+                'LIB_SOURCES=math/vector3.mojo', 'COVERED=math/vector3.mojo',
+                f'COVERAGE_TESTS={" ".join(suites)}',
+                f'TESTS={" ".join(suites)}',
+            ], cwd=root, check=True, capture_output=True, text=True)
+            for path in self.TEST_HELPERS + suites:
+                self.assertEqual((destination / path).read_bytes(),
+                                 (root / path).read_bytes(), path)
+
     def test_unselected_sibling_modules_are_staged(self):
         import subprocess
         root = Path(__file__).resolve().parent.parent

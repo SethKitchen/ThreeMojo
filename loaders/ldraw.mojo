@@ -33,6 +33,8 @@ copied for each placement. A group's last run is as long as there is.
 ## Numerical range correction
 
 Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Faces whose positions become nonfinite in their Float32 output buffer keep
+three.js's normal arithmetic, including zero and NaN components.
 Extreme finite results can differ from direct three.js r180 arithmetic.
 See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
@@ -347,6 +349,26 @@ def _cross(a: Vec, b: Vec) -> Vec:
 
 def _dot(a: Vec, b: Vec) -> Float64:
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _stored_face_normal(vertices: List[Vec]) -> Vec:
+    """Preserve the normal rule for corners stored in Float32 geometry."""
+    # The loader deliberately retains malformed and unrepresentable corners.
+    # Their Float32 output positions are nonfinite; keep three.js's normal
+    # arithmetic there instead of giving invalid geometry a finite direction.
+    for vertex in vertices:
+        for lane in range(3):
+            if not isfinite(Float32(vertex[lane])):
+                var cross = _cross(
+                    vertices[1] - vertices[0], vertices[2] - vertices[1]
+                )
+                var magnitude = sqrt(_dot(cross, cross))
+                var divisor = (
+                    magnitude if magnitude != 0
+                    and magnitude == magnitude else Float64(1)
+                )
+                return cross * (1 / divisor)
+    return _face_normal(vertices)
 
 
 def _face_normal(vertices: List[Vec]) -> Vec:
@@ -961,7 +983,9 @@ struct LDrawBuilder(Movable):
         var normals = List[Vec]()
         if self.model.loader.smooth_normals:
             for k in range(len(info.faces)):  # pragma: no branch
-                info.faces[k].face_normal = _face_normal(info.faces[k].vertices)
+                info.faces[k].face_normal = _stored_face_normal(
+                    info.faces[k].vertices
+                )
                 info.faces[k].has_face_normal = True
             normals = smooth_normals(
                 info.faces, info.line_segments, len(face_codes) > 1
@@ -1049,7 +1073,7 @@ struct LDrawBuilder(Movable):
             if len(face.vertices) == 4:
                 corners = [0, 1, 2, 0, 2, 3]
             if not face.has_face_normal:
-                face.face_normal = _face_normal(face.vertices)
+                face.face_normal = _stored_face_normal(face.vertices)
                 face.has_face_normal = True
             for j in range(len(corners)):  # pragma: no branch
                 var v = face.vertices[corners[j]]

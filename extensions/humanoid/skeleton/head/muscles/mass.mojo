@@ -22,12 +22,14 @@ from extensions.humanoid.skeleton.head.muscles.dimensions import (
     head_muscle_distance,
     head_muscle_field,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
-    classify_soft,
     muscle_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
+    classify_soft,
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3

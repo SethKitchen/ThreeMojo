@@ -1,10 +1,18 @@
-# Canonical anatomy pair diagnostics: focused evidence
+# Pinned representative anatomy pair example
 
-Issue #596 has an executable complete lower-limb pair catalog. This evidence uses a representative run. Full batch qualification remains deferred.
+This historical example is pinned to source commit `2c91d60c660d05cf5e0fa093e6774558ba14332f`.
+It illustrates the representative report schema and its recorded measurements.
+It is not a report of the current checkout.
+`test_anatomy_pair_example.py` checks its exact bytes, historical source binding, probe fingerprint and representative counts.
+
+The current full report is `anatomy-template-report.json`.
+Its separate binding check requires the current source.
+Full pair execution there does not repair the diagnostic geometry findings or complete aggregate/platform qualification.
 
 ## Source and scope
 
-- Base commit: `720fcce4921fa1d83328c4ddfdb078501a253a74`
+- Original implementation base: `720fcce4921fa1d83328c4ddfdb078501a253a74`
+- Captured implemented source: `2c91d60c660d05cf5e0fa093e6774558ba14332f`
 - Compiler: `Mojo 1.1.0 (8189361e)`
 - Build flags: `--Werror --num-threads 1 -I .`
 - Source SHA-256: `b3dd9ea15888167980fcff72e43e489d52f1106784c01d52ce9484fb7a36bc4d`
@@ -35,7 +43,13 @@ All 36 existing findings match the earlier report exactly. Eleven new representa
 
 A sampled volume is an estimate. A signed field witness is not penetration depth or measured clearance. No sampled hit does not prove no overlap. Attachment allowances and biological tolerances remain unknown. No distinct named pair receives a positive-volume exemption.
 
-## Reproduce
+## Reproduce separately
+
+Keep the pinned example unchanged during ordinary source updates.
+The probe fingerprint identifies the original build; another machine or toolchain can produce different binary bytes.
+Write a new experiment to a separate output and retain its own source binding.
+Checkout the captured source commit to reproduce that revision's measurements.
+
 
 Run from the repository root with pinned Mojo 1.1.0:
 
@@ -46,9 +60,9 @@ mojo build --Werror --num-threads 1 -I . tests/test_anatomy_diagnostics.mojo -o 
 python3 tools/run_suite.py --seconds 5 --suite tests/test_anatomy_diagnostics.mojo -- .cache/test_anatomy_diagnostics
 mojo build --Werror --num-threads 1 -I . tests/test_anatomy_pair_catalog.mojo -o .cache/test_anatomy_pair_catalog
 python3 tools/run_suite.py --seconds 5 --suite tests/test_anatomy_pair_catalog.mojo -- .cache/test_anatomy_pair_catalog
-python3 tools/anatomy_validity.py --build --pair-scope representative --output docs/validation/anatomy-pair-example.json
+python3 tools/anatomy_validity.py --build --pair-scope representative --output .cache/anatomy-pair-example-current.json
 ```
 
-For full integrated pair evidence, omit `--pair-scope representative`. Regenerate `anatomy-template-report.json` after the integration batch. Aggregate checks and full coverage were not run for this focused change. The older full report remains evidence for its recorded source revision.
+For full integrated pair evidence, omit `--pair-scope representative`. Regenerate `anatomy-template-report.json` on the final integrated source. This historical example does not establish current coverage or CI status.
 
 Static template evidence does not establish whole-body, dynamic, clinical, constitutive or safety validity.

@@ -35,7 +35,7 @@ from extensions.humanoid.skeleton.occupancy import (
     finish_mass,
     grid_cells,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     BoneTissue,
     cortical_tissue,
     trabecular_tissue,

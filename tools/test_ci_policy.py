@@ -145,7 +145,9 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_coverage_keeps_all_shards_and_its_report_dependency(self):
         self.assertIn('needs: coverage-capture', self.jobs['coverage'])
-        self.assertIn('shard: [1, 2, 3, 4, 5, 6]', self.jobs['coverage-capture'])
+        self.assertIn('shard: [1, 2, 3, 4, 5, 6, 7, 8]', self.jobs['coverage-capture'])
+        # The group count in the command matches the matrix.
+        self.assertIn('SHARD=${{ matrix.shard }}/8 ', self.jobs['coverage-capture'])
         self.assertIn('make -B coverage-report AFFECTED="$AFFECTED"', self.jobs['coverage'])
 
 

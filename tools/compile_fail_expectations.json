@@ -299,7 +299,7 @@
       {
         "line": 13,
         "column": 24,
-        "message": "invalid call to 'kelvin_color': value passed to 'temperature' cannot be converted from 'FloatLiteral[6500]' to 'Temperature'"
+        "message": "invalid call to 'kelvin_color': value passed to 'temperature' cannot be converted from 'FloatLiteral[6500]' to 'TemperatureOf[.float32]'"
       }
     ],
     "notes": [
@@ -2788,7 +2788,7 @@
   "tests/compile_fail/a_soft_occupancy_is_not_a_bare_int.mojo": {
     "errors": [
       {
-        "line": 15,
+        "line": 13,
         "column": 34,
         "message": "invalid call to 'filled_density': value passed to 'fill' cannot be converted from 'IntLiteral[0]' to 'SoftOccupancy'"
       }
@@ -4429,7 +4429,7 @@
       "candidate not viable: missing required argument: 'copy'",
       "candidate not viable: missing required argument: 'move'",
       "candidate not viable: unexpected argument",
-      "candidate not viable: value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(1), Int(0), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0)]'"
+      "candidate not viable: value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(1), Int(0), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0), dtype=unit_dtype]'"
     ]
   },
   "tests/compile_fail/convert_length_to_seconds.mojo": {
@@ -4437,7 +4437,7 @@
       {
         "line": 12,
         "column": 33,
-        "message": "invalid call to 'to': value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(0), Int(1), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0)]'"
+        "message": "invalid call to 'to': value passed to 'unit' cannot be converted from 'Unit[Int(0), Int(0), Int(1), Int(0)]' to 'Unit[Int(1), Int(0), Int(0), Int(0), dtype=unit_dtype]'"
       }
     ],
     "notes": [
@@ -4541,7 +4541,7 @@
       }
     ],
     "notes": [
-      "call expansion failed with parameter value(s): (\"length\": 3, \"mass\": 0, \"time\": 0, \"angle\": 0)",
+      "call expansion failed with parameter value(s): (\"length\": 3, \"mass\": 0, \"time\": 0, \"angle\": 0, \"temperature\": 0, ...)",
       "constraint failed: sqrt needs an even length exponent",
       "function instantiation failed"
     ]
@@ -4751,5 +4751,581 @@
       "candidate not viable: value passed to 'value' cannot be converted from 'Float32' to 'SIMD[.uint32, width]'",
       "candidate not viable: value passed to 'value' cannot be converted from 'Float32' to 'UInt32'"
     ]
+  },
+  "tests/compile_fail/a_bone_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 15,
+        "message": "invalid call to 'check': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'BoneId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_primitive_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_kind': value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'PrimitiveKind'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_species_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 21,
+        "message": "invalid call to 'require_species': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'SpeciesId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_surface_class_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 14,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'surface' cannot be converted from 'IntLiteral[0]' to 'SurfaceClass'"
+    ]
+  },
+  "tests/compile_fail/a_surface_part_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_part': value passed to 'part' cannot be converted from 'IntLiteral[0]' to 'SurfacePart'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_tag_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 20,
+        "message": "invalid call to 'tag_name': value passed to 'id' cannot be converted from 'IntLiteral[0]' to 'TagId'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_warp_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 20,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'kind' cannot be converted from 'IntLiteral[0]' to 'WarpKind'"
+    ]
+  },
+  "tests/compile_fail/an_anatomy_mode_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'require_mode': value passed to 'mode' cannot be converted from 'IntLiteral[1]' to 'AnatomyMode'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_age_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 18,
+        "message": "invalid call to 'pick_age': value passed to 'requested' cannot be converted from 'IntLiteral[0]' to 'Age'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_quality_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "invalid call to 'animal_options': value passed to 'quality' cannot be converted from 'IntLiteral[0]' to 'Quality'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_sex_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "invalid call to 'animal_options': value passed to 'sex' cannot be converted from 'IntLiteral[0]' to 'Sex'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/an_animal_variant_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 35,
+        "message": "invalid call to 'animal_options': value passed to 'variant' cannot be converted from 'IntLiteral[0]' to 'Variant'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_plan_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "invalid call to 'segment_of': value passed to 'plan' cannot be converted from 'IntLiteral[0]' to 'BodyPlan'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_segment_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 35,
+        "message": "invalid call to 'segment_density': value passed to 'segment' cannot be converted from 'IntLiteral[0]' to 'Segment'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_body_tissue_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'tissue_density': value passed to 'tissue' cannot be converted from 'IntLiteral[2]' to 'BodyTissue'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_reference_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'ReferenceKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_evidence_grade_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "invalid call to 'evidence_label': value passed to 'grade' cannot be converted from 'IntLiteral[1]' to 'Evidence'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/physics_snapshot_distance.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'Float32' value to 'Length'"
+      }
+    ],
+    "notes": [
+      "'Length' is aka 'Quantity[Int(1), Int(0), Int(0), Int(0)]'"
+    ]
+  },
+  "tests/compile_fail/a_boundary_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'BoundaryKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_cell_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'CellId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_construction_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 30,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ConstructionId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_dof_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 19,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'Dof'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_face_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FaceId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_face_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FaceKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_float64_length_is_not_a_float32_length.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 19,
+        "message": "invalid call to '__add__': value passed to 'other' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_floor_program_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FloorProgram'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_flow_direction_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FlowDirection'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_furnishing_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FurnishingId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_furniture_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 29,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'FurnitureKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_load_case_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'LoadCaseId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_material_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MaterialId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_member_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'MemberId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_region_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'RegionId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_render_detail_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 32,
+        "message": "cannot implicitly convert 'IntLiteral[1]' value to 'RenderDetail'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_section_shape_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 28,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SectionShape'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_shell_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ShellId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_solve_status_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 31,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SolveStatus'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_space_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 23,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SpaceId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_space_use_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SpaceUse'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_step_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 26,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StepKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_storey_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'StoreyId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_structural_node_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'NodeId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_surface_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SurfaceId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_temperature_difference_is_not_a_length.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 16,
+        "message": "invalid call to '__add__': value passed to 'other' cannot be converted from 'Quantity[Int(0), Int(0), Int(0), Int(0), Int(1), .float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_temperature_is_not_a_temperature_difference.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 18,
+        "message": "invalid call to '__add__': value passed to 'difference' cannot be converted from 'TemperatureOf[.float64]' to 'Quantity[Int(0), Int(0), Int(0), Int(0), Int(1), .float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/a_vertex_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'VertexId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_window_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 24,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'WindowId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/a_zone_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ZoneId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_edge_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 22,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'EdgeId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_element_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ElementId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_element_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'ElementKind'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_opening_id_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 25,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'OpeningId'"
+      }
+    ],
+    "notes": []
+  },
+  "tests/compile_fail/an_opening_kind_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 27,
+        "message": "cannot implicitly convert 'IntLiteral[0]' value to 'OpeningKind'"
+      }
+    ],
+    "notes": []
   }
 }

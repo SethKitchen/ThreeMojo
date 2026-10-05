@@ -477,7 +477,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 41</summary>
+<summary>Implemented: 43</summary>
 
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
@@ -511,6 +511,8 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): exact wide stored-center ordering and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)
 - [x] [Direction-independent junction bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-maps#junction-bounds): complete connecting-lane sections, record boundaries and bounded curved-interior approximation [#487](https://github.com/SethKitchen/ThreeMojo/issues/487)
 - [x] [Traffic-direction trigger offsets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-world#trigger-offset-direction): light, stop, yield and speed-limit boxes follow right-hand and left-hand lane travel [#486](https://github.com/SethKitchen/ThreeMojo/issues/486)
+- [x] [Animals](https://github.com/SethKitchen/ThreeMojo/wiki/Animals): 24 procedural-animals species sculpted as distance fields, posed by re-meshing, with painted coats, baked occlusion and a walk [#605](https://github.com/SethKitchen/ThreeMojo/issues/605)
+- [x] [Animal anatomy](https://github.com/SethKitchen/ThreeMojo/wiki/Animal-anatomy): template anatomy and sampled SI estimates, Hill-type muscles, standing-load estimates, and an in-place visual walk [#620](https://github.com/SethKitchen/ThreeMojo/issues/620)
 - [x] [CARLA runtime bookkeeping](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#disabled-collisions): skip disabled contact pairs, index visual actors and trigger changes, and validate recorder text [#305](https://github.com/SethKitchen/ThreeMojo/issues/305)
 - [x] [CARLA search queues](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#search-queues): deterministic heap selection for route and pedestrian paths [#307](https://github.com/SethKitchen/ThreeMojo/issues/307)
 - [x] [Minimum-cost CARLA routes](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-agents#the-route-planner): exact sample-count search with zero-cost lane changes [#533](https://github.com/SethKitchen/ThreeMojo/issues/533)
@@ -526,6 +528,21 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 
 </details>
+
+### Buildings
+
+Procedural buildings for engineering analysis and for games share one canonical model. A checked box records implemented scope. It does not establish engineering validity. See [Why buildings have one canonical model](https://github.com/SethKitchen/ThreeMojo/wiki/Why-buildings-have-one-canonical-model).
+
+- [x] [Engineering units](https://github.com/SethKitchen/ThreeMojo/wiki/Units#heat-structure-and-flow): a temperature exponent, thermal and structural quantities, and `Float64` quantities [#641](https://github.com/SethKitchen/ThreeMojo/issues/641)
+- [x] [Numerics](https://github.com/SethKitchen/ThreeMojo/wiki/Numerics): sparse assembly, skyline and conjugate-gradient solvers, and lowest modes by subspace iteration with a Sturm check [#642](https://github.com/SethKitchen/ThreeMojo/issues/642)
+- [x] [Building topology](https://github.com/SethKitchen/ThreeMojo/wiki/Building-topology): a cell complex in which rooms share faces [#643](https://github.com/SethKitchen/ThreeMojo/issues/643)
+- [x] [Building model](https://github.com/SethKitchen/ThreeMojo/wiki/Building-model): storeys, spaces, elements, layered constructions and render views [#644](https://github.com/SethKitchen/ThreeMojo/issues/644)
+- [x] [IFC exchange](https://github.com/SethKitchen/ThreeMojo/wiki/IFC-exchange): STEP physical files and an IFC4 subset, read and written [#645](https://github.com/SethKitchen/ThreeMojo/issues/645)
+- [x] [Procedural towers](https://github.com/SethKitchen/ThreeMojo/wiki/Procedural-towers): a seeded tower as a building model [#646](https://github.com/SethKitchen/ThreeMojo/issues/646)
+- [x] [Floor plans and interiors](https://github.com/SethKitchen/ThreeMojo/wiki/Floor-plans-and-interiors): seeded rooms, doors, windows and furniture [#647](https://github.com/SethKitchen/ThreeMojo/issues/647)
+- [x] [Frame analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Frame-analysis): 3D frames, static and modal [#648](https://github.com/SethKitchen/ThreeMojo/issues/648)
+- [x] [Shell analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Shell-analysis): flat-shell slabs and walls [#649](https://github.com/SethKitchen/ThreeMojo/issues/649)
+- [x] [Building energy](https://github.com/SethKitchen/ThreeMojo/wiki/Building-energy): zones, transient conduction and a heat balance [#650](https://github.com/SethKitchen/ThreeMojo/issues/650)
 
 ### Out of scope
 
