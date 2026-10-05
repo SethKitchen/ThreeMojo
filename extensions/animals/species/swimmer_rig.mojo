@@ -256,9 +256,11 @@ def fin_outline(
         notch: How deep the membrane is notched between tips, zero to one.
 
     Returns:
-        The outline, flat `u, v` pairs.
+        The outline, flat `u, v` pairs. Empty for fewer than two rays.
     """
     var n = len(rays) // 4
+    if n < 2:
+        return List[Float64]()
     var b0u = rays[0]
     var b0v = rays[1]
     var bnu = rays[(n - 1) * 4]
@@ -278,8 +280,7 @@ def fin_outline(
     var poly = List[Float64]()
     poly.append(b0u - nx * sink)
     poly.append(b0v - ny * sink)
-    # The base points above read the first and the last ray, so a fin
-    # that gets here has one.
+    # The guard above requires at least two complete rays.
     for i in range(n):  # pragma: no branch
         poly.append(rays[i * 4 + 2])
         poly.append(rays[i * 4 + 3])
@@ -399,9 +400,12 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
         qv: The point's `v`.
 
     Returns:
-        The phase and the fraction along the ray.
+        The phase and the fraction along the ray. Both are zero for fewer
+        than two rays.
     """
     var n = len(rays) // 4
+    if n < 2:
+        return RayCoords(0.0, 0.0)
     var s0 = _side(rays, 0, qu, qv)
     var sn = _side(rays, n - 1, qu, qv)
     var t0u = rays[2] - rays[0]
