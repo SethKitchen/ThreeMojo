@@ -191,7 +191,8 @@ def _estimate[dtype: DType](expansion: List[_Scaled[dtype]]) -> _Scaled[dtype]:
         return _Scaled[dtype](0, 0)
     var exponent = expansion[len(expansion) - 1].exponent - 1
     var result = SIMD[dtype, 1](0)
-    for part in expansion:
+    # The empty expansion returned above; this list is not mutated.
+    for part in expansion:  # pragma: no branch
         if not isfinite(part.fraction):
             return part
         result += _at_exponent(part, exponent)
