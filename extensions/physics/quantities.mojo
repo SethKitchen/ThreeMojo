@@ -13,11 +13,18 @@ per speed.
 
 from std.math import pi
 from units.quantity import Quantity, Unit
-from units.si import AngularAccelerationUnit, AngularVelocityUnit, VelocityUnit
+from units.si import (
+    AngularAccelerationUnit,
+    AngularVelocityUnit,
+    Energy,
+    JOULE,
+    NEWTON_METER,
+    NEWTON_PER_METER,
+    VelocityUnit,
+)
 
 # Force times length: a torque, or the kinetic energy of a body.
 comptime Torque = Quantity[2, 1, -2, 0]
-comptime Energy = Quantity[2, 1, -2, 0]
 # Mass times speed: a linear momentum, or an impulse.
 comptime Momentum = Quantity[1, 1, -1, 0]
 # Force per length: a spring rate.
@@ -33,10 +40,7 @@ comptime StiffnessUnit = Unit[0, 1, -2, 0]
 comptime DampingRateUnit = Unit[0, 1, -1, 0]
 comptime CorneringStiffnessUnit = Unit[1, 1, -2, -1]
 
-comptime NEWTON_METER = TorqueUnit(1.0, "N m")
-comptime JOULE = TorqueUnit(1.0, "J")
 comptime NEWTON_SECOND = MomentumUnit(1.0, "N s")
-comptime NEWTON_PER_METER = StiffnessUnit(1.0, "N/m")
 # CARLA's lengths are in centimeters, so a spring rate is in N/cm.
 comptime NEWTON_PER_CENTIMETER = StiffnessUnit(100.0, "N/cm")
 comptime NEWTON_SECOND_PER_METER = DampingRateUnit(1.0, "N s/m")
