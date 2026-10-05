@@ -493,6 +493,20 @@ def test_walk_cycle() raises:
     assert_equal(len(walk_pose(rig, 0.5).local), 1)
 
 
+def test_quadruped_requires_both_endpoints_and_the_neck_bone() raises:
+    var wolf = create_animal(WOLF, animal_options(3))
+    for missing in [String("wristR"), "hockR"]:
+        var rig = wolf.rig.copy()
+        rig.joint_at[missing] = -1
+        assert_false(is_quadruped(rig))
+        assert_equal(len(walk_pose(rig, 0.5).local), len(rig.bones))
+    var rig = wolf.rig.copy()
+    var neck = rig.bone("neck2")
+    rig.bones[neck.value].name = "other"
+    assert_false(is_quadruped(rig))
+    assert_equal(len(walk_pose(rig, 0.5).local), len(rig.bones))
+
+
 def test_two_bone_reaches_the_projected_target() raises:
     var root = V3(0, 1, 0)
     var mid = V3(0, 0.5, 0.1)
