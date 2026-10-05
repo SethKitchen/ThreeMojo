@@ -609,9 +609,7 @@ def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
     # antipodal vectors have a zero cross, not a signed FMA residual.
     var cross = fma(ux, vy, Float64(0)) - fma(uy, vx, Float64(0))
     if not (
-        _ordinary_squared(first_squared)
-        and _ordinary_squared(second_squared)
-        and _ordinary_squared(length)
+        _ordinary_squared(first_squared) and _ordinary_squared(second_squared)
     ):
         if (ux != 0 or uy != 0) and (vx != 0 or vy != 0):
             var u = normalized2(ux, uy)
