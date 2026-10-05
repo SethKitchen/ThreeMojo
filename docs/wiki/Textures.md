@@ -163,6 +163,53 @@ A KTX2 file can also hold eight-bit, half and float texels. `R8`, `R8G8` and `R8
 | 2, Zstandard | Read through `render/zstd.mojo`. |
 | 3, zlib | Read through `render/inflate.mojo`. three.js refuses it. |
 
+### Raw ASTC
+
+KTX2 reads all six raw ASTC formats in three.js r180. Each block uses
+sixteen bytes. The host decoder shares the integer-sequence and endpoint
+decoder with Basis HDR. Its block footprint controls partition coordinates,
+weight interpolation and edge cropping.
+
+| Vulkan format | Number | Block | Texture |
+|---|---|---|---|
+| ASTC 4x4 UNORM | 157 | 4x4 | Linear RGBA bytes |
+| ASTC 4x4 SRGB | 158 | 4x4 | sRGB RGBA bytes |
+| ASTC 6x6 UNORM | 165 | 6x6 | Linear RGBA bytes |
+| ASTC 6x6 SRGB | 166 | 6x6 | sRGB RGBA bytes |
+| ASTC 4x4 SFLOAT | 1000066000 | 4x4 | Linear RGBA floats |
+| ASTC 6x6 SFLOAT | 1000066004 | 6x6 | Linear RGBA floats |
+
+The Vulkan format and descriptor transfer function must agree. sRGB
+stays encoded in the byte texture until sampling. UNORM endpoints expand
+by bit replication. sRGB endpoints expand by a shift and midpoint bias.
+Both LDR profiles use the top eight interpolated bits. The decoder does
+not convert LDR through half floats.
+
+SFLOAT uses the ASTC half-float
+conversion, then widens each half exactly to a float. LDR and HDR alpha
+are supported. The separate Basis HDR alpha restriction does not apply.
+
+The decoder reads every legal block mode for these footprints and all
+sixteen endpoint modes. It supports one to four partitions, dual planes,
+and bit, trit and quint sequences. HDR endpoints and HDR constant blocks in an
+LDR format are refused. Malformed blocks and nonfinite HDR constants
+raise an error instead of producing the hardware error color.
+
+The reference is Arm astcenc 5.3.0 at commit
+`30aabb3f42406df45a910d8496f9bee17eeba9bb`. The checked-in corpus compares
+2,152 decoded blocks with its UNORM8 and FP16 outputs. It covers all 145
+legal 4x4 block modes and all 370 legal 6x6 block modes. These comparisons
+require exact byte or half-bit equality, with zero tolerance.
+
+Hardware
+can select another permitted decode precision; identical GPU texels are
+not promised. Another 8,192 malformed blocks must be refused. See the
+[reproduction instructions](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/raw-astc.md).
+
+Mips, cube faces, array layers, edge dimensions and Zstandard use the
+same container bounds as the other KTX2 formats. Decoding allocates the
+final byte or float image directly, with only one block of temporary texels.
+
 ### Basis Universal
 
 A KTX2 file whose data format descriptor names the UASTC, UASTC HDR or ETC1S color model holds Basis Universal data. three.js transcodes the data to a GPU format with the Basis Universal WebAssembly transcoder. Here `texture` decodes UASTC and ETC1S to an RGBA byte texture, with the texels of that transcoder's `RGBA32` target. It decodes UASTC HDR to a float texture, with the texels of the `RGBA_HALF` target.
@@ -225,7 +272,7 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 - UASTC HDR with alpha. three.js has no transcoder target for it and throws, so `read` refuses it too.
 - The transcode from UASTC, UASTC HDR or ETC1S to a GPU block format. Each image decodes to the texels of the transcoder's `RGBA32` or `RGBA_HALF` target.
 - Zstandard dictionaries. A frame that names a dictionary is refused. three.js cannot read one either: its transcoder and its Zstandard decoder read no dictionary.
-- ASTC, PVRTC and ETC2 with punch-through alpha as Vulkan formats in KTX2, and ASTC and ETC2 with punch-through alpha in KTX 1. Each container refuses them by name. three.js uploads ASTC as it is, to a GPU that takes it.
+- ASTC footprints other than 4x4 and 6x6, PVRTC, and ETC2 with punch-through alpha as Vulkan formats in KTX2. ASTC and ETC2 with punch-through alpha remain excluded in KTX 1. three.js uploads ASTC to compatible GPU hardware.
 - PVRTC2, and PVRTC1 of a size that is not a power of two.
 - The premultiplied DXT2 and DXT4, and DDS texture arrays.
 - 1D, 3D and array textures in KTX 1, and 1D and 3D textures in KTX2.
