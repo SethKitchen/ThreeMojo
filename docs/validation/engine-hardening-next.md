@@ -73,7 +73,7 @@ No full anatomical calibration is claimed by this plan.
 - [#299](https://github.com/SethKitchen/ThreeMojo/issues/299): audio-aligned game faces implemented; 76 focused tests, two typed negatives and bake/load controls pass, with full batch validation pending
 - [#300](https://github.com/SethKitchen/ThreeMojo/issues/300): integrate persistent scene water and measure CPU/GPU paths
 - [#595](https://github.com/SethKitchen/ThreeMojo/issues/595): classify and resolve sampled canonical anatomy overlaps
-- [#596](https://github.com/SethKitchen/ThreeMojo/issues/596): complete executable canonical pair catalog and diagnostics implemented; focused checks and representative evidence pass, with full pair execution deferred to final batch validation
+- [#596](https://github.com/SethKitchen/ThreeMojo/issues/596): complete canonical pair catalog implemented; all 8,911 pairs executed on the selected checkpoint, with full coverage and CI pending
 
 ## Separate animal work
 
@@ -94,7 +94,8 @@ Run full coverage and aggregate checks on this selected checkpoint.
 Clearing draft status does not establish merge readiness.
 Regenerate the anatomy report on the final batch source.
 
-Its current source binding is stale after the decode-queue changes.
+Its current source binding matches the selected checkpoint.
+Later source integrations require another report refresh.
 Building-extension work remains in separate PR #655 for review.
 Keep CPU tests, GPU compilation and actual GPU execution as separate evidence.
 Each issue remains open until its complete acceptance criteria are verified.

@@ -257,7 +257,7 @@ endef
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
-        clean clean-images optimize-images draco-export-check
+        clean clean-images optimize-images draco-export-check audio-game-humanoid
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -716,6 +716,14 @@ ifneq ($(strip $(EXAMPLE_INPUTS_STATUS)),)
 $(error Cannot read example prerequisites)
 endif
 include $(CACHE_DIR)/example-inputs.mk
+
+# This example writes a GLB, so it has a separate non-image target.
+audio-game-humanoid: $(OUT_DIR)/audio-character.glb
+
+$(OUT_DIR)/audio-character.glb: $(EXAMPLE_INPUTS_audio_game_humanoid)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/audio_game_humanoid.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
 
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
