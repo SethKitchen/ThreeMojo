@@ -615,8 +615,8 @@ def test_unknown_supercompression_is_refused() raises:
 
 
 def test_formats_this_reader_does_not_decode_are_refused() raises:
-    # Undefined, ETC2 with punch-through alpha, ASTC 4x4, and R8G8B8.
-    for format in [0, 149, 150, 157, 23]:
+    # Undefined, ETC2 with punch-through alpha, ASTC 5x4, and R8G8B8.
+    for format in [0, 149, 150, 159, 23]:
         var file = Ktx2(format, 4, 4)
         file.level(bc1(0))
         with assert_raises(contains="not ported"):
@@ -629,7 +629,8 @@ def test_the_formats_say_what_they_are() raises:
     assert_true(VkFormat(131).is_valid())
     assert_true(VkFormat(156).is_valid())
     assert_false(VkFormat(130).is_valid())
-    assert_false(VkFormat(157).is_valid())
+    assert_true(VkFormat(157).is_valid())
+    assert_false(VkFormat(159).is_valid())
     assert_false(VK_FORMAT_UNDEFINED.is_valid())
     assert_equal(VkFormat(22).channels(), 2)
     assert_equal(VkFormat(15).channels(), 1)
@@ -642,8 +643,9 @@ def test_the_formats_say_what_they_are() raises:
     assert_equal(compressed_format_of(VkFormat(156)), SIGNED_RG11_EAC_FORMAT)
     with assert_raises(contains="block format"):
         _ = compressed_format_of(VkFormat(37))
-    with assert_raises(contains="block format"):
-        _ = compressed_format_of(VkFormat(157))
+    for raw in [157, 158, 165, 166, 1000066000, 1000066004]:
+        with assert_raises(contains="block format"):
+            _ = compressed_format_of(VkFormat(raw))
     assert_equal(String(BASISLZ_SUPERCOMPRESSION), "BasisLZ")
     assert_equal(String(ZSTD_SUPERCOMPRESSION), "Zstandard")
     assert_equal(String(Supercompression(-1)), "Supercompression(-1)")
