@@ -60,6 +60,7 @@ from extensions.humanoid.rig.game_face import (
 from extensions.humanoid.skeleton.head.expression import face_rig_shapes
 from extensions.humanoid.skeleton.head.face_model import TEETH, GUMS_AND_TONGUE
 from extensions.humanoid.skeleton.head.skin.mouth import mouth_mesh
+from extensions.humanoid.skeleton.isosurface import check_detail
 from extensions.humanoid.rig.weights import part_legs, skin_weights
 from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.skeleton.arm.assembly import UNSET_PAINT
@@ -263,6 +264,9 @@ def _budgeted(
     return fewer^
 
 
+comptime _FACIAL_PART_MINIMUM = 4 * 32
+
+
 def add_game_humanoid(
     mut scene: Scene,
     mut assets: Assets,
@@ -291,7 +295,8 @@ def add_game_humanoid(
             pelvis frame's.
         spec: Standing height, osteological sex, athleticism and genome.
         triangles: The skin's budget of triangles, or zero for the full
-            mesh.
+            mesh. A positive facial budget below 128 is refused before
+            geometry is built; the face and eyes require additional triangles.
         detail: Cells along the body's skin, eight through sixty-four.
         hand_detail: Cells along each hand's skin.
         hair_detail: Cells along the head for the hair's shell.
@@ -312,8 +317,10 @@ def add_game_humanoid(
         The humanoid: its rig, its bones and its meshes.
 
     Raises:
-        Error: If the spec, a detail or the style is refused, or the
-            scene refuses a node or a mesh.
+        Error: If the spec, a detail, style or visual use is refused; if
+            the budget is negative or cannot preserve the facial and body
+            requirements; if facial animation requests strand guides; or if
+            a scene node, mesh or geometry operation fails.
     """
     require_humanoid_use(use)
     var settings = game_build_settings(
@@ -344,6 +351,18 @@ def add_game_humanoid(
     var body: BufferGeometry
     var facial_meshes = List[BufferGeometry]()
     var dims = head_muscle_dimensions(spec)
+    if facial_animation and triangles > 0 and triangles < _FACIAL_PART_MINIMUM:
+        # Every positive facial budget already reserves 32 triangles each
+        # for the body, both hands, and hair before adding the face and eyes.
+        # Preserve cheap argument checks before refusing this impossible case.
+        check_detail(detail, "body skin")
+        check_detail(hair_detail, "scalp hair")
+        check_detail(hand_detail, "hand skin")
+        raise Error(
+            "Facial LOD budget must keep at least "
+            + String(_FACIAL_PART_MINIMUM)
+            + " triangles before the face and eyes"
+        )
     if facial_animation:
         var shapes = face_rig_shapes()
         var split = body_skin_parts(spec, detail, workers, gap, shapes)
@@ -383,13 +402,13 @@ def add_game_humanoid(
             reserve += eyes[i].triangle_count()
         # Preserve the complete facial submesh and reserve 32 per body,
         # hand and hair part. Safe-collapse limits can require more.
-        if triangles < reserve + 128:
+        if triangles < reserve + _FACIAL_PART_MINIMUM:
             raise Error(
                 "Facial LOD budget must keep at least "
-                + String(reserve + 128)
+                + String(reserve + _FACIAL_PART_MINIMUM)
                 + " triangles"
             )
-        remaining = triangles - reserve - 128
+        remaining = triangles - reserve - _FACIAL_PART_MINIMUM
     var body_budget = Int(Float32(remaining) * BODY_SHARE)
     var hand_budget = Int(
         Float32(remaining) * (1 - BODY_SHARE - HAIR_SHARE) / 2
@@ -574,7 +593,8 @@ def game_build_settings(
         A value snapshot independent of the canonical spec.
 
     Raises:
-        Error: If the hair style is unnamed.
+        Error: If the hair style is unnamed, the triangle budget is
+            negative, or facial animation requests guide strands.
     """
     if triangles < 0:
         raise Error("Game triangle budget must be nonnegative")
