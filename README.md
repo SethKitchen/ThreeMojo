@@ -63,7 +63,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [ ] [GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): unsigned types, explicit texture gradients and broader loops remain open. Unproved loop exits now fail explicitly [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
 - [ ] [OpenEXR compression coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): PXR24 and DWA from three.js r180; B44 and B44A from r186 [#615](https://github.com/SethKitchen/ThreeMojo/issues/615)
-- [ ] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#ktx2-and-compressed-formats): 4x4 and 6x6 block formats from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
+- [x] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#raw-astc): 4x4 and 6x6 UNORM, sRGB and SFLOAT from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
 
 ### Navigation safety
 

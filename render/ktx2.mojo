@@ -48,6 +48,12 @@ SFLOAT, and decodes to floats, the texels of the transcoder's
 `RGBA_HALF` target, through `render.uastc_hdr`. The Vulkan formats read
 are in `VkFormat`.
 
+**Raw ASTC.** The six 4x4 and 6x6 UNORM, sRGB and SFLOAT Vulkan
+formats in three.js r180 decode on the host. UNORM and sRGB give bytes;
+SFLOAT gives half-float values widened to floats. The format's sRGB flag
+must agree with the descriptor. Raw HDR alpha is supported independently
+of the Basis restrictions below.
+
 **What three.js cannot transcode is refused.** Its transcoder is Basis
 Universal 1.50. It does not know UASTC HDR 6x6, XUASTC LDR or XUBC7, and
 three.js finds no target for UASTC HDR with alpha, so this reader
@@ -94,7 +100,14 @@ from render.texture import (
     float_texture,
 )
 from render.uastc import UASTC_BLOCK_BYTES, uastc_image
-from render.uastc_hdr import uastc_hdr_image
+from render.uastc_hdr import (
+    ASTC_HDR,
+    ASTC_SRGB,
+    ASTC_UNORM,
+    astc_image,
+    astc_hdr_image,
+    uastc_hdr_image,
+)
 from render.zstd import zstd_decompress
 
 # The identifier, nine header words and the index.
@@ -131,7 +144,7 @@ struct VkFormat(Equatable, ImplicitlyCopyable, Writable):
     int.
 
     `is_valid` is True for the formats this reader decodes: the
-    block-compressed BC1 to BC7, ETC2 and EAC formats, and the
+    block-compressed BC1 to BC7, ETC2, EAC and raw ASTC formats, and the
     uncompressed eight-bit, half and float formats three.js reads.
     """
 
@@ -139,12 +152,49 @@ struct VkFormat(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this reader decodes the format."""
-        return self.is_uncompressed() or (
-            self.value >= 131
-            and self.value <= 156
-            and self.value != 149
-            and self.value != 150
+        return (
+            self.is_uncompressed()
+            or self.is_astc()
+            or (
+                self.value >= 131
+                and self.value <= 156
+                and self.value != 149
+                and self.value != 150
+            )
         )
+
+    def is_astc(self) -> Bool:
+        """Return True for the six raw ASTC formats in three.js r180."""
+        return (
+            self.value == 157
+            or self.value == 158
+            or self.value == 165
+            or self.value == 166
+            or self.is_astc_hdr()
+        )
+
+    def is_astc_hdr(self) -> Bool:
+        """Return True for raw ASTC 4x4 or 6x6 SFLOAT."""
+        return (
+            self == VK_FORMAT_ASTC_4x4_SFLOAT
+            or self == VK_FORMAT_ASTC_6x6_SFLOAT
+        )
+
+    def astc_block_size(self) -> Int:
+        """Return the ASTC block width, or zero for a different format."""
+        if (
+            self.value == 157
+            or self.value == 158
+            or self == VK_FORMAT_ASTC_4x4_SFLOAT
+        ):
+            return 4
+        if (
+            self.value == 165
+            or self.value == 166
+            or self == VK_FORMAT_ASTC_6x6_SFLOAT
+        ):
+            return 6
+        return 0
 
     def is_uncompressed(self) -> Bool:
         """Return True for an uncompressed format this reader decodes."""
@@ -201,7 +251,12 @@ comptime VK_R32G32B32A32_SFLOAT = VkFormat(109)
 # The number a Basis Universal file stores: no Vulkan format.
 comptime VK_FORMAT_UNDEFINED = VkFormat(0)
 # The number a UASTC HDR 4x4 file can store instead: ASTC 4x4 SFLOAT.
+comptime VK_FORMAT_ASTC_4x4_UNORM = VkFormat(157)
+comptime VK_FORMAT_ASTC_4x4_SRGB = VkFormat(158)
+comptime VK_FORMAT_ASTC_6x6_UNORM = VkFormat(165)
+comptime VK_FORMAT_ASTC_6x6_SRGB = VkFormat(166)
 comptime VK_FORMAT_ASTC_4x4_SFLOAT = VkFormat(1000066000)
+comptime VK_FORMAT_ASTC_6x6_SFLOAT = VkFormat(1000066004)
 
 
 def compressed_format_of(format: VkFormat) raises -> CompressedFormat:
@@ -246,7 +301,7 @@ def compressed_format_of(format: VkFormat) raises -> CompressedFormat:
         RG11_EAC_FORMAT,
         SIGNED_RG11_EAC_FORMAT,
     ]
-    if not format.is_valid() or format.is_uncompressed():
+    if not format.is_valid() or format.is_uncompressed() or format.is_astc():
         raise Error(
             "KTX2: "
             + String(format)
@@ -449,10 +504,10 @@ struct KTX2Container(Movable):
         """Return True if the format decodes to floats rather than bytes.
 
         Returns:
-            True for UASTC HDR, a half or float format, BC6H, the signed
+            True for UASTC HDR, ASTC SFLOAT, a half or float format, BC6H, the signed
             RGTC forms and the eleven-bit EAC forms.
         """
-        if self.is_uastc_hdr():
+        if self.is_uastc_hdr() or self.vk_format.is_astc_hdr():
             return True
         if self.vk_format.is_uncompressed():
             return self.vk_format.channel_bytes() > 1
@@ -474,7 +529,7 @@ struct KTX2Container(Movable):
 
         Returns:
             The size in bytes. For UASTC and UASTC HDR, sixteen bytes a
-            4x4 block.
+            4x4 block. Raw ASTC uses sixteen bytes per 4x4 or 6x6 block.
 
         Raises:
             Error: If the format is not one this reader decodes.
@@ -483,6 +538,14 @@ struct KTX2Container(Movable):
         var height = self.level_height(level)
         if self.is_uastc() or self.is_uastc_hdr():
             return (width + 3) // 4 * ((height + 3) // 4) * UASTC_BLOCK_BYTES
+        if self.vk_format.is_astc():
+            var block = self.vk_format.astc_block_size()
+            return (
+                (width + block - 1)
+                // block
+                * ((height + block - 1) // block)
+                * UASTC_BLOCK_BYTES
+            )
         if self.vk_format.is_uncompressed():
             return (
                 width
@@ -635,6 +698,44 @@ struct KTX2Container(Movable):
                 width,
                 height,
                 uastc_image(width, height, bytes),
+                wrap,
+                filter,
+                self.color_space,
+                mipmapped,
+                alpha,
+            )
+        if self.vk_format.is_astc():
+            var profile = ASTC_UNORM
+            if self.vk_format.is_astc_hdr():
+                self._check_linear()
+                profile = ASTC_HDR
+            elif (
+                self.vk_format == VK_FORMAT_ASTC_4x4_SRGB
+                or self.vk_format == VK_FORMAT_ASTC_6x6_SRGB
+            ):
+                profile = ASTC_SRGB
+            if profile == ASTC_HDR:
+                return float_texture(
+                    width,
+                    height,
+                    astc_hdr_image(
+                        width, height, bytes, self.vk_format.astc_block_size()
+                    ),
+                    wrap,
+                    filter,
+                    mipmapped,
+                    alpha,
+                )
+            return Texture(
+                width,
+                height,
+                astc_image(
+                    width,
+                    height,
+                    bytes,
+                    self.vk_format.astc_block_size(),
+                    profile,
+                ),
                 wrap,
                 filter,
                 self.color_space,
@@ -874,9 +975,19 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         raise Error(
             "KTX2: "
             + String(container.vk_format)
-            + " is not a format this reader decodes; ASTC, PVRTC, ETC2 with"
-            " punch-through alpha and the other Vulkan formats are not ported"
+            + " is not a format this reader decodes; other ASTC footprints,"
+            " PVRTC, ETC2 with punch-through alpha and the other Vulkan"
+            " formats are not ported"
         )
+    if not basis and container.vk_format.is_astc():
+        var srgb = (
+            container.vk_format == VK_FORMAT_ASTC_4x4_SRGB
+            or container.vk_format == VK_FORMAT_ASTC_6x6_SRGB
+        )
+        if srgb != (container.color_space == SRGB):
+            raise Error(
+                "KTX2: raw ASTC Vulkan format and transfer function disagree"
+            )
     var animated = False
     if basis:
         animated = _has_animation_key(bytes)
