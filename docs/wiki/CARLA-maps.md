@@ -94,6 +94,9 @@ exact section endpoints and both sides of each record boundary.
 It does not follow a successor road. Repeated connections do not change
 the result.
 A junction without lanes keeps CARLA's empty-box sentinel.
+Section bounds use the stored next-section or road endpoint. They do not
+reconstruct it by adding a rounded section length. This keeps valid decimal
+endpoints such as a 10.2 m section start on a 50.1 m road in range.
 
 The bound covers the supported lane-center model, not the lane surface.
 That model includes line, arc, spiral, poly3 and paramPoly3 geometry, lane
