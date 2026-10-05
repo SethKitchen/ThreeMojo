@@ -2,19 +2,46 @@
 
 This checkpoint preserves the authored building work in [#655](https://github.com/SethKitchen/ThreeMojo/pull/655), merged animal work in [#607](https://github.com/SethKitchen/ThreeMojo/pull/607), and the 18 implemented issues in [#632](https://github.com/SethKitchen/ThreeMojo/pull/632). It adds their reviewed corrections without rewriting the parent histories. Remaining issue work is paused; [#594](https://github.com/SethKitchen/ThreeMojo/pull/594) remains held.
 
-## Source and report
+## Current source and report
 
-The final production source contains 2,193 bound inputs. Its digest is:
+The update incorporates main's [#669](https://github.com/SethKitchen/ThreeMojo/pull/669) changes through a history-preserving merge. Its parents are the prior #632 head `c9908aca01bc9299c9e7b3a0f5d61eba9dcad417` and main `77b38aeb00c8a877be0f44d5b75daf0ddd1600b3`.
 
-`59204ba6f3107ad97254aa1014435f882ae7e61fb2357131fd992ff25acf38e7`
+The source contains 2,215 bound inputs. Its digest is:
+
+`7da9ab9c510810d311a4ef8a0f0aa513c8e6d3180269cfd1a5124b2c728757b2`
 
 The fresh [anatomy report](anatomy-template-report.json) has SHA-256:
 
-`020fa621576387ec5bdafa1715a3354a303599afc0ae057746a50651d8bca425`
+`c0c01eb11731ebf3dd9a35327cf22f631944e14fba057acc055453d8fdfb45b5`
 
-The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 68.09 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows. All 23 report and binding tests passed.
+The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 66.67 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows.
 
-**The report still contains 367 unallowlisted sampled-overlap findings.** That set is unchanged from the prior report. Completing the checks does not establish anatomical validity. The findings remain tracked in [#595](https://github.com/SethKitchen/ThreeMojo/issues/595); visual and rig mapping remains in [#297](https://github.com/SethKitchen/ThreeMojo/issues/297). Sampled fields do not prove clearance or engineering or clinical validity.
+**The report still contains 367 unallowlisted sampled-overlap findings.** All diagnostic content is unchanged from the prior report; only build provenance changed. Completing the checks does not establish anatomical validity. The findings remain tracked in [#595](https://github.com/SethKitchen/ThreeMojo/issues/595). Visual and rig mapping remains in [#297](https://github.com/SethKitchen/ThreeMojo/issues/297). Sampled fields do not prove clearance or engineering or clinical validity.
+
+## Main conflict resolution
+
+The SDF union retains coordinate lookup and the owner self-copy guard from main. It preserves deterministic lowest-block fallback ownership and both authored test additions. All 36 tests pass. Fresh coverage on that exact mesher source covers 569/569 obligations.
+
+The animal union preserves the new fin, muscle and translated-point tests. It keeps per-component inertia validation instead of a center-dependent tolerance that could admit an impossible tensor. A genuine local-cancellation control and an explicit counterexample cover the distinction. The resolved union passes 100 tests across nine suites, five API checks and 139 documentation files.
+
+## Coverage and CI follow-ups
+
+The coverage additions contain asserted boundary and reference controls. Reviewed redundant checks are simplified. Nonempty-loop annotations follow the repository's documented unreachable-outcome policy, with individual proofs and explicit denominator accounting. These exclusions are not counted as newly exercised paths. Existing thresholds, test workloads, assertions and time limits remain unchanged.
+
+- Math/core/geometry: four changed modules and unchanged Sculptor have complete fresh source-matching coverage. Ten other scoped modules have source-identical diagnostic evidence.
+- Loaders and texture formats: five changed modules cover 4,713/4,713 fresh obligations. Eight unchanged modules retain verified diagnostic evidence.
+- Renderer: six changed modules cover 11,752/11,752 fresh obligations across 35 captures. The packet also passes 134 compatibility tests and adds 57 controls.
+- Extensions: 33 new controls are included. Six animal mass-worker refusal paths remain unhit. Full module coverage is not established.
+
+The diagnostic evidence reconstructs scoped manifests from immutable source and tool bytes, then checks the original missing diagnostics exactly. It is not a substitute for final integrated-head CI. The composed doc-only edits retain renderer executable bytes, but their shifted source locations still require fresh hosted measurement.
+
+On this composed source, all seven repaired API-documentation checks pass. All 37 actual Metal AIR modules pass direct-call type checks. All 442 negative fixtures produce the expected source rejections with unchanged diagnostics and the original 120-second per-case limit. After report regeneration, all 319 Python tool tests, including source binding, and all 48 CARLA Python controls pass.
+
+The prior [c990 CI run](https://github.com/SethKitchen/ThreeMojo/actions/runs/37340945189) passes the unchanged full LOD test in 1.583080 seconds on Linux and 1.027728 seconds on Apple Silicon. Its Linux CPU jobs later time out during other builds. Those inferred stalled import closures are unchanged from successful earlier runs.
+
+Linux CPU compilation now uses one compiler thread while preserving outer suite parallelism. Immediate build/run progress records preserve captured diagnostics and exit propagation. Five mock controls, CI-policy tests and a nine-test native recipe witness pass. This is a bounded scheduling correction; the timeout cause is not proven. Fresh hosted validation remains required.
+
+**Strict full-repository coverage, exact-head aggregate/platform CI and the remaining mass-worker gaps are still open.** GPU device execution and Apple linker/device parity were not run. This update does not merge #632 into main. #594 remains held.
 
 ## Review corrections
 
@@ -42,7 +69,7 @@ All 52 focused native cases passed across 12 suites. New controls compare comple
 
 One warmup per variant and four balanced measured rounds used the original complete LOD test. Baseline median was 3.066649 seconds, packed-copy-only median 2.600157 seconds, and combined median 2.356132 seconds. The combined range was 2.308479–2.539037 seconds, a 23.17% local median reduction. All 15 runs passed locally; the local baseline also passed, so these results do not establish hosted success. No retry selection, test split, workload reduction or gate change is included.
 
-The follow-up also passed pinned formatting, documentation lint for all 139 files, and all 318 Python tool tests with inherited MAKEFLAGS. The fresh full report above binds these source changes. All diagnostic content and the 367 findings are unchanged; only build provenance changed. Fresh exact-head hosted timing, aggregate checks and full coverage remain required.
+The follow-up also passed pinned formatting, documentation lint for all 139 files, and all 318 Python tool tests with inherited MAKEFLAGS. At that checkpoint, a fresh full report bound the LOD source changes. Its diagnostic content and 367 findings were unchanged. Hosted LOD timing has since passed as recorded above; current aggregate checks and full coverage remain required.
 
 ## Earlier composed checks
 
@@ -56,6 +83,6 @@ The follow-up also passed pinned formatting, documentation lint for all 139 file
 
 The GPU entry was compiled only. GPU device execution and Apple linker/device parity were not run. Focused native and targeted coverage results do not replace the final exact-head aggregate/platform CI and full repository coverage.
 
-Main's eight coverage groups, 9,000-second capture budget and 170-minute job timeout are preserved. Existing per-test limits, coverage thresholds and protocol tests are unchanged. Older six-group runs produced billions of redundant probe records and timed out; the final workload must still be measured. No new shared probe-cache implementation or gate waiver is included.
+Main's eight coverage groups, 9,000-second capture budget and 170-minute job timeout are preserved. Existing per-test limits, coverage thresholds and protocol tests are unchanged. Older six-group runs produced billions of redundant probe records and timed out. The c990 run completed all eight capture groups but failed strict coverage on 57 modules. The additions above address those measured gaps, with the remaining extension limits stated explicitly. No new shared probe-cache implementation or gate waiver is included.
 
 Parallel decode early-stop work is tracked in [#668](https://github.com/SethKitchen/ThreeMojo/issues/668). Per-frame facial correspondence validation keeps the mutable-geometry contract; broader ownership/versioning remains in [#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
