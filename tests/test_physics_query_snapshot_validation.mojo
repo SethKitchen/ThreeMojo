@@ -13,11 +13,13 @@ from extensions.physics.query_snapshot import (
 from extensions.physics.primitive_index import _PrimitiveIndex
 from extensions.physics.collide import WorldShape
 from extensions.physics.shape import ShapeKind
-from extensions.physics.world import PhysicsWorld
+from extensions.physics.world import PhysicsWorld, _sphere_hit
 from math.quaternion import Quaternion
 from math.ray import Ray
 from math.vector3 import Vector3
+from std.benchmark import black_box
 from std.math import inf, isnan, nan
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -356,6 +358,54 @@ def test_tight_bounds_cannot_cull_current_finite_narrow_phase_answers() raises:
     _compare(snapshot, world, origin, direction, 30)
 
 
+@inline(.never)
+def _axis_sphere_entry(
+    radius: Float32, x: Float32, z: Float32
+) raises -> Float32:
+    # Keep a scalar call context as well as the existing paired public calls.
+    return _sphere_hit(
+        Ray(Vector3(x, 0, z), Vector3(0, 0, 1)), Vector3(0, 0, 0), radius
+    )
+
+
+def test_exact_stored_tangents_and_centerline_entries() raises:
+    for i in range(256):
+        var radius = bitcast[DType.float32](
+            UInt32(0x3F000000) + UInt32(i) * 65537
+        )
+        # Materialize the stored origin before the independent comparison.
+        var z = black_box(-3 * radius)
+        # In exact stored geometry x == radius, y == 0 and direction == +z.
+        # The tangent has h == 0 exactly, so its entry distance is -z.
+        assert_equal(_axis_sphere_entry(radius, radius, z), -z)
+        # Ordinary finite-square, axis-centered entries keep their formula.
+        assert_equal(_axis_sphere_entry(radius, 0, z), -z - radius)
+
+
+def test_radius_square_overflow_boundary_keeps_legacy_ieee_result() raises:
+    for bits in [
+        UInt32(0x5F7FFFFE),
+        UInt32(0x5F7FFFFF),
+        UInt32(0x5F800000),
+        UInt32(0x60AD78EC),
+    ]:
+        var radius = bitcast[DType.float32](bits)
+        var transverse = _axis_sphere_entry(radius, 2 * radius, 0)
+        var z = black_box(-3 * radius)
+        var axial = _axis_sphere_entry(radius, 0, z)
+        # The predecessor of 2**64 still has a finite square. The next
+        # representable radius has square +inf. This exact bit boundary
+        # comes from the binary32 spacing, not a measured tolerance.
+        if bits < UInt32(0x5F800000):
+            assert_equal(transverse, inf[DType.float32]())
+            assert_equal(axial, -z - radius)
+        else:
+            # Preserve the documented NaN hit convention; it is not a
+            # geometrically correct intersection outside the sphere.
+            assert_true(isnan(transverse))
+            assert_equal(axial, inf[DType.float32]())
+
+
 def test_tight_bounds_cannot_cull_existing_nonfinite_kernel_results() raises:
     var world = PhysicsWorld()
     var body = _body(0)
@@ -374,7 +424,7 @@ def test_tight_bounds_cannot_cull_existing_nonfinite_kernel_results() raises:
     # the old Float32 sphere kernel. Preserve its Optional and IEEE result;
     # changing that kernel is a separate numerical contract correction.
     assert_true(isnan(expected.value().distance))
-    assert_true(isnan(actual.value().distance))
+    assert_true(isnan(actual.value().distance.value))
     assert_true(isnan(expected.value().point.x))
     assert_true(isnan(actual.value().point.x))
     assert_true(isnan(actual.value().point.y))
@@ -421,7 +471,7 @@ def test_nonfinite_unsafe_results_keep_global_primitive_order() raises:
             assert_equal(actual.value().owner.source_body, BodyId(1))
         else:
             assert_true(isnan(expected.value().distance))
-            assert_true(isnan(actual.value().distance))
+            assert_true(isnan(actual.value().distance.value))
             assert_equal(actual.value().owner.source_body, BodyId(33))
 
 
