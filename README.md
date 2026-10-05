@@ -108,9 +108,11 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Numeric correctness
 
 <details>
-<summary>Implemented: 1</summary>
+<summary>Implemented: 2</summary>
 
 - [x] [Exact periodic remainders](https://github.com/SethKitchen/ThreeMojo/wiki/Math#periodic-scalar-helpers): finite binary reduction, strict Euclidean ranges, and range-safe positive pingpong periods [#603](https://github.com/SethKitchen/ThreeMojo/issues/603)
+
+- [x] [Ray-query throughput](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting#bounds-query-precision-and-cost): exact component validation and a complete performance matrix with accepted current costs [#550](https://github.com/SethKitchen/ThreeMojo/issues/550)
 
 </details>
 
