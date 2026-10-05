@@ -65,7 +65,8 @@ struct _Dyadic(ImplicitlyCopyable):
         while self.words[low] == 0:
             low += 1
         if low != 0:
-            for index in range(self.count - low):
+            # The retained high word is nonzero, so low < self.count.
+            for index in range(self.count - low):  # pragma: no branch
                 self.words[index] = self.words[index + low]
             self.count -= low
             self.exponent += 32 * low
@@ -119,7 +120,8 @@ struct _Dyadic(ImplicitlyCopyable):
         result.sign = self.sign
         if self.sign == other.sign:
             var carry = UInt64(0)
-            for index in range(size):
+            # Both signs are nonzero; canonical counts and size are positive.
+            for index in range(size):  # pragma: no branch
                 var total = (
                     self._word(index, result.exponent)
                     + other._word(index, result.exponent)
@@ -136,7 +138,8 @@ struct _Dyadic(ImplicitlyCopyable):
             if order < 0:
                 result.sign = other.sign
             var borrow = UInt64(0)
-            for index in range(size):
+            # Both canonical operands are nonzero, so size is positive.
+            for index in range(size):  # pragma: no branch
                 var a = self._word(index, result.exponent)
                 var b = other._word(index, result.exponent)
                 if order < 0:
@@ -162,9 +165,11 @@ struct _Dyadic(ImplicitlyCopyable):
         result.exponent = self.exponent + other.exponent
         result.sign = self.sign * other.sign
         result.count = self.count + other.count
-        for i in range(self.count):
+        # The zero-sign guard proves the canonical left count is positive.
+        for i in range(self.count):  # pragma: no branch
             var carry = UInt64(0)
-            for j in range(other.count):
+            # The same guard proves the canonical right count is positive.
+            for j in range(other.count):  # pragma: no branch
                 # The maximum is (2**32-1)**2 + 2*(2**32-1).
                 # It equals 2**64-1, so this accumulator cannot wrap.
                 var total = (
@@ -241,7 +246,8 @@ def _outward(low: Float64, high: Float64) -> _Interval:
 
 def _interval_difference(a: _P, b: _P) -> Array[_Interval, 3]:
     var result = Array[_Interval, 3](fill=_Interval(0, 0))
-    for i in range(3):
+    # A coordinate difference always has exactly three components.
+    for i in range(3):  # pragma: no branch
         result[i] = _outward(a[i] - b[i], a[i] - b[i])
     return result^
 
@@ -433,7 +439,8 @@ def _plane_above(a: _P, b: _P, c: _P, p: _P, tolerance: Float64) -> Bool:
 def _collinear(a: _P, b: _P, c: _P) -> Bool:
     """Return whether the exact affine cross product is zero."""
     var normal = _interval_normal(a, b, c)
-    for i in range(3):
+    # A 3D normal always has three components to inspect.
+    for i in range(3):  # pragma: no branch
         if normal[i].low > 0 or normal[i].high < 0:
             return False
     var exact = _exact_normal(a, b, c)
