@@ -75,7 +75,13 @@ from lights.light import (
     LightMask,
 )
 from lights.light_probe_grid import LightProbeGrid
-from lights.ltc import LtcTables, ltc_lookup, ltc_uv, rect_area_light
+from lights.ltc import (
+    LtcTables,
+    ltc_evaluate_volume,
+    ltc_lookup,
+    ltc_uv,
+    rect_area_light,
+)
 from lights.spot_profile import SpotProfile, needs_profile
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SphericalHarmonics3
@@ -1041,6 +1047,58 @@ def shadowed_twice(light: Vector3, reach: Float32, through: Vector3) -> Vector3:
     )
 
 
+def rect_volume_light(
+    position: Vector3,
+    light_position: Vector3,
+    half_width: Vector3,
+    half_height: Vector3,
+    radiance: Vector3,
+    up: Vector3,
+    back: Vector3,
+) -> Vector3:
+    """Return a rectangle's light at one volume ray step, on CPU and GPU.
+
+    three.js r186's `VolumetricLightingModel.directRectArea` raises each
+    channel of radiance times `LTC_Evaluate_Volume` to the power 1.5. No
+    Lambert scale, surface normal, LTC table, or shadow enters this term.
+    The view rotation is required by the clipped-sphere form factor.
+    Moving the view origin to the step cancels camera translation before
+    the corners are normalized. Multiplication by the square root is the
+    shared power operation and preserves zero channels exactly.
+
+    Args:
+        position: The ray step, in world space.
+        light_position: The rectangle's center, in world space.
+        half_width: The rectangle's half-width vector, in world space.
+        half_height: The rectangle's half-height vector, in world space.
+        radiance: The light's nonnegative linear color times intensity.
+        up: The camera's unit +y axis, in world space.
+        back: The camera's unit +z axis, in world space.
+
+    Returns:
+        The unscaled light added to scattering density at this step.
+
+    Raises:
+        None.
+    """
+    var center = view_direction(light_position - position, up, back)
+    var across = view_direction(half_width, up, back)
+    var along = view_direction(half_height, up, back)
+    var factor = ltc_evaluate_volume(
+        Vector3(0, 0, 0),
+        center + across - along,
+        center - across - along,
+        center - across + along,
+        center + across + along,
+    )
+    var light = radiance * factor
+    return Vector3(
+        light.x * sqrt(light.x),
+        light.y * sqrt(light.y),
+        light.z * sqrt(light.z),
+    )
+
+
 def gouraud_light(direct: Vector3, indirect: Vector3, mask: Float32) -> Vector3:
     """Return a Gouraud surface's arriving light at a fragment: the direct
     light interpolated from its corners, darkened by the shadows there, and
@@ -1232,9 +1290,9 @@ struct Lighting(Movable):
     var up: Vector3
     # Which way is back for the camera, in world space: the view space +z
     # axis, which the camera looks away from. With `up` it is the whole
-    # view rotation, which is what a render target's normal attachment is
-    # written in; see `view_direction`. World +z, the default, and world
-    # up make the identity.
+    # view rotation, used by volume rectangle lights and a render target's
+    # normal attachment; see `view_direction`. World +z, the default, and
+    # world up make the identity.
     var back: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
@@ -1347,10 +1405,10 @@ struct Lighting(Movable):
                 default, for one whose rays converge. `Renderer.render`
                 passes `toward_camera`, which asks the camera's own
                 projection. Normalized here, so a caller need not.
-            up: Which way is up for that camera, in world space. Only a
-                `MATCAP` material reads it, for the frame it is looked up
-                in. `Renderer.render` passes `camera_up`. World up, the
-                default, is what an upright camera has. Normalized here.
+            up: Which way is up for that camera, in world space. Matcaps,
+                volume rectangle lights, and normal attachments use it to
+                reach view space. `Renderer.render` passes `camera_up`.
+                World up is the default. Normalized here.
             shadows: The shadow maps drawn this frame, each naming the
                 light that drew it; `Renderer.shadow_maps` builds them.
                 None by default, which lights every surface in full.
@@ -1362,8 +1420,8 @@ struct Lighting(Movable):
                 them. None by default, which leaves every light's color
                 as it is.
             back: Which way is back for that camera, in world space: its
-                view space +z axis. Only a render target's normal
-                attachment reads it, with `up`, to turn a normal into view
+                view space +z axis. Volume rectangle lights and a render
+                target's normal attachment read it with `up` to reach view
                 space. `Renderer.render_into` passes `camera_back`. World
                 +z, the default, is an unturned camera. Normalized here.
             chosen: Which of the scene's lights to take, by their places:
@@ -2396,7 +2454,6 @@ struct Lighting(Movable):
             var ray = light_vector(self.positions[index], position)
             var toward = ray[0]
             var distance = ray[1]
-            var direction_length = ray[2]
             if distance == 0:
                 continue
             var bare = falloff(
@@ -2460,11 +2517,13 @@ struct Lighting(Movable):
     ) -> Vector3:
         """Return the light that one step of a volume's ray gathers:
         three.js's `VolumetricLightingModel.scatteringLight`, summed over
-        the point lights and then the spot lights. A directional light has
-        no distance and adds nothing, as three.js skips it. A spot light
-        adds nothing at its own position, where it has no direction. Each
-        light is `shadowed_twice`, not scaled. Spot lights use their cone,
+        the point, spot, and rectangle lights. A directional light has no
+        distance and adds nothing, as three.js skips it. A spot light adds
+        nothing at its own position, where it has no direction. Point and
+        spot lights are `shadowed_twice`, not scaled. Spots use their cone,
         IES profile or projector frame at the ray step, as surfaces do.
+        Rectangle lights use the r186 volume LTC form factor in view space
+        and raise their radiance times that factor to the power 1.5.
 
         Args:
             position: Where the step is, in world space.
@@ -2512,6 +2571,17 @@ struct Lighting(Movable):
                 self.shadow_through(
                     self.spot_shadows[index], position, normal, receives
                 ),
+            )
+        for index in range(len(self.rect_positions)):
+            ref glow = self.rect_radiances[index]
+            total = total + rect_volume_light(
+                position,
+                self.rect_positions[index],
+                self.rect_half_widths[index],
+                self.rect_half_heights[index],
+                Vector3(glow.r, glow.g, glow.b),
+                self.up,
+                self.back,
             )
         return total
 
