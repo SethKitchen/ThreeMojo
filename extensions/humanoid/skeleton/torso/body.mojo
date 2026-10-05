@@ -412,7 +412,8 @@ def body_skin_parts(
     )
     # Past each wrist the hand's own mesh draws the skin.
     _leave_hands_out(parts[0], field)
-    for i in range(len(parts)):
+    # The body branch and the head scan each appended a part.
+    for i in range(len(parts)):  # pragma: no branch
         share_height(parts[i], field.low.y, field.high.y - field.low.y)
         tint_head_skin(parts[i], head_muscle_dimensions(spec), field.head)
     return parts^
