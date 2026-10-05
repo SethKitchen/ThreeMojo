@@ -376,7 +376,8 @@ def add_game_humanoid(
         dims, SCALP_HAIR, RIGHT, hair_detail, workers, hair_style
     )
     var eyes = List[BufferGeometry]()
-    for side in [RIGHT, LEFT]:
+    # Both named sides receive an eye.
+    for side in [RIGHT, LEFT]:  # pragma: no branch
         eyes.append(eyeball_mesh(dims, side, 12))
     var arms = arm_muscle_dimensions(spec)
     var right = hand_skin_from_dimensions(arms, RIGHT, hand_detail)
@@ -396,9 +397,11 @@ def add_game_humanoid(
     var remaining = triangles
     var reserve = 0
     if facial_animation and triangles > 0:
-        for i in range(len(facial_meshes)):
+        # The facial path appended face, teeth, and gums/tongue.
+        for i in range(len(facial_meshes)):  # pragma: no branch
             reserve += facial_meshes[i].triangle_count()
-        for i in range(len(eyes)):
+        # The preceding side loop appended exactly two eyes.
+        for i in range(len(eyes)):  # pragma: no branch
             reserve += eyes[i].triangle_count()
         # Preserve the complete facial submesh and reserve 32 per body,
         # hand and hair part. Safe-collapse limits can require more.
@@ -447,12 +450,14 @@ def add_game_humanoid(
         shell = _budgeted(shell^, hair_budget)
     if facial_animation and triangles > 0:
         var retained = reserve + shell.triangle_count()
-        for i in range(len(parts)):
+        # Both preceding branches appended body and the two hands.
+        for i in range(len(parts)):  # pragma: no branch
             retained += parts[i].triangle_count()
         # A part can exceed its initial share at a safe-collapse limit.
         # Reclaim that excess from parts that can still shrink before
         # refusing the total budget. The face and eyes are never touched.
-        for i in range(len(parts)):
+        # The reclaim pass starts with body and the two hands.
+        for i in range(len(parts)):  # pragma: no branch
             if retained <= triangles:
                 break
             var before = parts[i].triangle_count()
