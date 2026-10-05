@@ -18,7 +18,7 @@ authored in template centimeters. They are not a cited width table.
 
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import CERVICAL, HeadDimensions
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftTissue,
     cartilage_tissue,
     ligament_tissue,

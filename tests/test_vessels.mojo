@@ -56,14 +56,16 @@ from extensions.humanoid.skeleton.look import (
     tendon_phong,
     vein_phong,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     ARTERIAL,
-    SOFT_EMPTY,
-    SOFT_FILL,
     VENOUS,
     SoftTissueKind,
     arterial_tissue,
     venous_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SOFT_EMPTY,
+    SOFT_FILL,
 )
 from materials.material import PHONG
 from math.vector3 import Vector3

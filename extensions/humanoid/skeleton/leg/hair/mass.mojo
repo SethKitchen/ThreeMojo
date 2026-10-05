@@ -20,12 +20,14 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     muscle_dimensions,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
-    classify_soft,
     hair_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
+    classify_soft,
 )
 from math.vector3 import Vector3
 from std.math import pi

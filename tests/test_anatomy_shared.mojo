@@ -18,12 +18,12 @@ from extensions.humanoid.skeleton.occupancy import (
     sample_bone_mass,
 )
 from extensions.humanoid.skeleton.look import resolved_paint
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     vessel_tissue,
     arterial_tissue,
     venous_tissue,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
