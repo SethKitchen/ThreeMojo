@@ -30,7 +30,7 @@ Keep workloads and numerical contracts fixed when comparing designs.
 - [#292](https://github.com/SethKitchen/ThreeMojo/issues/292): bounded opt-in sphere/static-mesh CCD completed; general CCD and acceleration remain separate
 - [#633](https://github.com/SethKitchen/ThreeMojo/issues/633): define owned physics query snapshots and their mutation contract
 - [#635](https://github.com/SethKitchen/ThreeMojo/issues/635): extend CCD beyond separated spheres and static meshes
-- [#636](https://github.com/SethKitchen/ThreeMojo/issues/636): reduce CCD cost with conservative triangle candidates
+- [#636](https://github.com/SethKitchen/ThreeMojo/issues/636): immutable-mesh CCD acceleration implemented; 79 focused tests and fixed/adverse benchmark controls pass, with full batch validation pending
 
 ## Assets and CARLA state
 

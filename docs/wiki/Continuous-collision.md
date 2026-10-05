@@ -23,6 +23,12 @@ A body with `collides = False` stays outside collision handling. Its forces and 
 
 Mesh geometry uses the immutable world-space triangles captured by `add_body`, as the existing mesh index does. Editing a mesh body's shape or pose after insertion does not update this snapshot. Build a new world when the mesh geometry changes.
 
+CCD validates every snapshot triangle before it builds an acceleration index. This includes distant triangles and triangles whose owner has collisions disabled. It retains the successful geometry check for that snapshot.
+
+Adding a mesh invalidates the check and index together. Adding a sphere does not invalidate either. The next CCD step validates the complete new snapshot before it queries the index. Direct edits to private triangle or index fields are unsupported.
+
+Body state, collision flags, materials, sphere radii and solver settings stay live. Each step checks them again. The cache does not extend the supported precision domain. Nearby candidates still pass the original radius-relative domain check.
+
 ## Step and contact behavior
 
 Forces, gravity and damping update velocity once per step. The swept path is piecewise linear at that post-update velocity. It is not the curved path of continuous acceleration.
@@ -66,16 +72,30 @@ Triangle ties retain triangle insertion order. Equal feature times retain face o
 
 `ccd_max_impacts` defaults to 16 per sphere per step. Valid limits are 1 through 1024. The loop does not discard remaining time, freeze a body or continue through a surface after exhaustion. It raises an error.
 
-A failed CCD step restores body positions, rotations, velocities, forces, torques, split state, previous contact count, previous events, primitive order and mesh dirty state. A failed step does not consume pending forces. A mesh index allocated during an unsuccessful rebuild can remain in memory. Restoring the dirty flag preserves ray-query behavior. The next successful step rebuilds that index. Tests cover equal-distance mesh ownership before and after failure.
+A failed CCD step restores body positions, rotations, velocities, forces, torques, split state, previous contact count, previous events, primitive order and mesh dirty state. A failed step does not consume pending forces. A mesh index allocated during an unsuccessful rebuild can remain in memory.
+
+Restoring the dirty flag preserves ray-query behavior. The next successful step rebuilds that contact index. A validated CCD index can remain valid after rollback because the immutable triangle snapshot did not change. Tests cover equal-distance mesh ownership before and after failure.
 
 Use a smaller step or change the model when a supported step exhausts its impact budget. Increasing the budget increases worst-case work. It does not improve unresolved geometry.
 
 ## Performance and verification
 
-The current implementation scans static triangles for each sweep. It does not claim a production acceleration structure. For B spheres, T triangles and an impact limit I, the swept work is bounded by O(B T (I + 1)). Support preflights add O(B T + B²), and rollback storage scales with mutable body state and reports. Initial discrete contacts retain the existing octree.
+CCD uses a private triangle bounds tree for meshes with more than eight triangles. Smaller meshes use the original linear scans. The independent brute-force diagnostic path also repeats all geometry and separation checks. It remains the comparison oracle.
 
-The [validation report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/continuous-collision-292.md) gives fixed vehicle-probe, separated-fleet and dense-sensor workloads. The benchmark includes geometry checks and transaction costs. These are synthetic sphere probes, not a validated vehicle fleet. Large measured scenes exceed a 10 ms step budget. Ray timings do not establish real-time capacity for a complete simulation.
+The index stores each triangle once. Median splits bound the depth by `ceil(log2(T))` for T triangles. Build work is O(T log² T), with O(T) temporary storage. The retained tree has `2T - 1` nodes.
+
+Queries use escape links and need no traversal stack or full-mesh visited array. Each query visits at most `2T - 1` nodes and returns at most T triangle indices. There is no candidate limit that can discard a possible hit.
+
+Swept query bounds use Float64. Each endpoint addition and radius expansion rounds outward. Stored Float32 triangle bounds convert exactly to Float64. The query covers the complete sphere path, including its endpoints. Existing face, edge, vertex and approach tests are unchanged. An equal-time hit uses triangle insertion order, regardless of tree order.
+
+The two separation checks query the complete reachable region, including the contact margin. They still perform the original domain check on each candidate. The second check uses post-solver velocity, spin and split correction. No early hit can skip another candidate's required refusal.
+
+The cached geometry check is O(1). Live-body validation is O(B) for B bodies. Moving-sphere separation still costs O(B²), plus tree visits and candidate checks. For S moving spheres, T triangles and impact limit I, worst-case swept work remains O(S T (I + 1)). Overlapping triangle bounds can defeat pruning.
+
+Rollback storage still scales with mutable body state and reports. Initial discrete contacts and rays retain the existing octree.
+
+The [acceleration report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/continuous-collision-636.md) reports complete steps, build cost, retained memory, requested allocations, small scenes and worst-overlap controls. It reuses the original 2048, 8192 and 32768 triangle workloads. These are synthetic sphere probes. Measured improvement does not establish universal real-time capacity. Ray costs and cold index construction remain additional concerns.
 
 Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
 
-General shapes and moving-pair CCD are tracked in [issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635). Conservative triangle candidates and enabled-step cost are tracked in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636). Both remain follow-up work outside this mode.
+General shapes and moving-pair CCD remain separate work in [issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635). The immutable-mesh acceleration in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636) does not provide the mutable primitive ownership API in [issue 633](https://github.com/SethKitchen/ThreeMojo/issues/633).

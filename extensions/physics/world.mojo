@@ -45,6 +45,7 @@ from extensions.physics.ccd import (
     _sweep_triangle,
     _sweep_domain,
 )
+from extensions.physics.ccd_index import _CCDIndex
 from extensions.physics.body import (
     BodyId,
     BodyKind,
@@ -189,6 +190,11 @@ struct PhysicsWorld(Movable):
     # The body each triangle belongs to.
     var _triangle_body: List[Int]
     var _dirty: Bool
+    # Validated acceleration belongs only to the immutable triangle snapshot.
+    # Independent of the contact octree's dirty/rebuild transaction state.
+    var _ccd_index: _CCDIndex
+    # Independent original scans for parity controls and diagnostic fallback.
+    var _ccd_brute_force: Bool
     # Non-mesh bodies, sorted by the low x of their bounds.
     var _order: List[Int]
 
@@ -210,6 +216,8 @@ struct PhysicsWorld(Movable):
         self._triangles = List[Triangle]()
         self._triangle_body = List[Int]()
         self._dirty = False
+        self._ccd_index = _CCDIndex()
+        self._ccd_brute_force = False
         self._order = List[Int]()
 
     def add_body(mut self, var body: RigidBody) raises -> BodyId:
@@ -240,6 +248,7 @@ struct PhysicsWorld(Movable):
                 )
                 self._triangle_body.append(id)
             self._dirty = True
+            self._ccd_index = _CCDIndex()
         else:
             self._order.append(id)
         self.bodies.append(body^)
@@ -392,7 +401,7 @@ struct PhysicsWorld(Movable):
                 )
             )
 
-    def _validate_ccd(self) raises:
+    def _validate_ccd(mut self) raises:
         if not (isfinite(self.margin) and self.margin >= 0):
             raise Error("CCD contact margin must be finite and nonnegative")
         if not (isfinite(self.slop) and self.slop >= 0):
@@ -451,6 +460,13 @@ struct PhysicsWorld(Movable):
                     "CCD sphere radius must be between 0.0001 and 10000 meters"
                 )
             _ccd_position(body.position, body.shape.radius)
+        # Never cache body flags, materials, radius or live solver state.
+        # All triangles, even disabled and distant ones, must pass once for
+        # this immutable snapshot. Failed validation never marks it valid.
+        if not self._ccd_brute_force and self._ccd_index.count == len(
+            self._triangles
+        ):
+            return
         for t in range(len(self._triangles)):
             var triangle = self._triangles[t]
             _ccd_coordinate(triangle.a)
@@ -475,11 +491,18 @@ struct PhysicsWorld(Movable):
                     "CCD requires resolved, well-conditioned static triangles"
                 )
 
+        if not self._ccd_brute_force:
+            self._ccd_index.rebuild(self._triangles)
+
     def _ccd_separation(self, h: Float32) raises:
         # A total-energy bound includes friction transferring spin to travel.
         # Disjoint reachable balls ensure there are no moving-body contacts,
         # including after an arbitrary number of static-mesh rebounds.
         var reach = List[Float64](length=len(self.bodies), fill=-1)
+        var indexed = (
+            not self._ccd_brute_force and len(self._ccd_index.nodes) > 0
+        )
+        var candidates = List[Int]()
         for i in range(len(self.bodies)):
             ref body = self.bodies[i]
             _finite_vector(body.linear_velocity)
@@ -502,7 +525,17 @@ struct PhysicsWorld(Movable):
                 raise Error(
                     "CCD travel exceeds the radius-relative precision bound"
                 )
-            for t in range(len(self._triangles)):
+            var count = len(self._triangles)
+            if indexed:
+                _ = self._ccd_index.query(
+                    _wide(body.position),
+                    SIMD[DType.float64, 4](0),
+                    reach[i] + Float64(self.margin),
+                    candidates,
+                )
+                count = len(candidates)
+            for k in range(count):
+                var t = candidates[k] if indexed else k
                 if self.bodies[self._triangle_body[t]].collides:
                     _ = _sweep_domain(
                         _wide(body.position),
@@ -600,18 +633,31 @@ struct PhysicsWorld(Movable):
         var radius = Float64(self.bodies[i].shape.radius)
         var remaining = Float64(h)
         var count = 0
+        var indexed = (
+            not self._ccd_brute_force and len(self._ccd_index.nodes) > 0
+        )
+        var candidates = List[Int]()
         while remaining > 0:
             var fraction = Float64(2)
             var normal = SIMD[DType.float64, 4](0)
             var triangle = -1
             var travel = velocity * remaining
-            for t in range(len(self._triangles)):
+            var candidate_count = len(self._triangles)
+            if indexed:
+                _ = self._ccd_index.query(at, travel, radius, candidates)
+                candidate_count = len(candidates)
+            for k in range(candidate_count):
+                var t = candidates[k] if indexed else k
                 if not self.bodies[self._triangle_body[t]].collides:
                     continue
                 var hit = _sweep_triangle(
                     at, travel, radius, self._triangles[t]
                 )
-                if hit.fraction < fraction:
+                # Tree traversal order cannot choose an equal-time owner.
+                # The miss sentinel (2, triangle -1) must never become a hit.
+                if hit.fraction < fraction or (
+                    hit.fraction == fraction and t < triangle
+                ):
                     fraction = hit.fraction
                     normal = hit.normal
                     triangle = t
