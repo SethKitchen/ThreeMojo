@@ -123,8 +123,8 @@ struct SnapshotRaycastHit(ImplicitlyCopyable):
     """The captured surface position, in meters."""
     var normal: Vector3
     """The existing narrow kernel's outward surface normal."""
-    var distance: Float32
-    """The existing narrow kernel's ray distance, in meters."""
+    var distance: Length
+    """The existing narrow kernel's ray distance as a typed length."""
     var material: PhysicsMaterial
     """The captured surface material value."""
 
@@ -576,7 +576,7 @@ struct PhysicsQuerySnapshot(Movable):
             SnapshotOwner(hit.body, self._capture),
             hit.point,
             hit.normal,
-            hit.distance,
+            Length(hit.distance),
             hit.material,
         )
 
