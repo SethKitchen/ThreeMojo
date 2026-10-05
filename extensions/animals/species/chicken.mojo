@@ -661,7 +661,8 @@ struct _Stack(Movable):
         var rr = Int(ceil(r))
         var m = -1e30
         for iy in range(iy0 - rr, iy0 + rr + 1):
-            for ix in range(ix0 - rr, ix0 + rr + 1):
+            # This range is as long as the one above, so it is not empty.
+            for ix in range(ix0 - rr, ix0 + rr + 1):  # pragma: no branch
                 var out = ix < 0 or iy < 0 or ix >= _NX or iy >= _NY
                 if out:
                     continue
@@ -1212,11 +1213,14 @@ def _bed(
     comptime G = 0.002
     comptime T = 0.03
     comptime INSET = 0.004
+    # No tail feathers need no pocket.
+    if len(frames) == 0:
+        return
     var o = V3(0.0, 0.0, 0.0)
     var sa = V3(0.0, 0.0, 0.0)
     var sn = V3(0.0, 0.0, 0.0)
-    # Its callers pass one frame per tail feather.
-    for f in frames:
+    # One frame at least, checked above.
+    for f in frames:  # pragma: no branch
         o = o + f.root
         sa = sa + f.axis
         sn = sn + f.normal
@@ -1229,8 +1233,8 @@ def _bed(
     var cx = 0.0
     var cy = 0.0
     var count = 0
-    # Its callers pass one frame per tail feather.
-    for i in range(len(frames)):
+    # One frame at least, checked above.
+    for i in range(len(frames)):  # pragma: no branch
         ref ff = frames[i]
         ref f = shapes[i]
         var ln = lens[i]

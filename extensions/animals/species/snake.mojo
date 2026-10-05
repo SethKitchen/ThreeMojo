@@ -239,16 +239,20 @@ struct _Plan(Movable):
 def _pchip_slopes(x: List[Float64], y: List[Float64]) -> List[Float64]:
     # Fritsch-Carlson slopes of a monotone cubic.
     var n = len(x)
+    # A curve of fewer than two points has no slope.
+    if n < 2 or len(y) != n:
+        return List[Float64](length=n, fill=0.0)
     var d = List[Float64]()
-    # Two points at least: `d[0]` and `d[n - 2]` are read below.
-    for i in range(n - 1):
+    # Two points at least, checked above: `d[0]` and `d[n - 2]` are read
+    # below.
+    for i in range(n - 1):  # pragma: no branch
         d.append((y[i + 1] - y[i]) / (x[i + 1] - x[i]))
     var m = List[Float64](length=n, fill=0.0)
     m[0] = d[0]
     m[n - 1] = d[n - 2]
     for i in range(1, n - 1):
         m[i] = 0.0 if d[i - 1] * d[i] <= 0.0 else (d[i - 1] + d[i]) / 2.0
-    for i in range(n - 1):
+    for i in range(n - 1):  # pragma: no branch
         if d[i] == 0.0:
             m[i] = 0.0
             m[i + 1] = 0.0

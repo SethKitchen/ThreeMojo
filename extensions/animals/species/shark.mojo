@@ -833,8 +833,11 @@ def _median_fin(
     var dorsal = which < 2
     var y0 = g.top(u0) - 0.004 * tl if dorsal else g.bot(u0) + 0.004 * tl
     var poly = List[Float64](capacity=len(src))
-    # The fin tables are literal outlines.
-    for i in range(len(src) // 2):
+    # The root reads the outline's second and next-to-last points.
+    if len(src) < 4:
+        return (V3(0.0, y0, g.z(u0)), poly^, 0.0, 0.0)
+    # Two points at least, checked above.
+    for i in range(len(src) // 2):  # pragma: no branch
         var a = src[i * 2] * tl
         var b = src[i * 2 + 1] * tl * kv
         var uu = min(u0 + a / tl, g.pc)

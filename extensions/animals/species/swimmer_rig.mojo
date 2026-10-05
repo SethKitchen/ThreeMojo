@@ -410,7 +410,8 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
     var bnv = rays[(n - 1) * 4 + 1] - rays[1]
     var sgn = 1.0 if bnu * -t0v + bnv * t0u >= 0.0 else -1.0
     var phase = 0.0
-    if s0 * sgn <= 0.0:
+    # A point that is not a number takes the first ray.
+    if not s0 * sgn > 0.0:
         phase = 0.0
     elif sn * sgn >= 0.0:
         phase = Float64(n - 1)
@@ -418,7 +419,7 @@ def fin_ray_coords(rays: List[Float64], qu: Float64, qv: Float64) -> RayCoords:
         var prev = s0 * sgn
         # The first and the last ray lie on opposite sides of the point,
         # so there are two rays at least.
-        for i in range(1, n):
+        for i in range(1, n):  # pragma: no branch
             var si = _side(rays, i, qu, qv) * sgn
             if si <= 0.0:
                 phase = Float64(i - 1) + prev / (prev - si)

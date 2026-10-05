@@ -1453,9 +1453,12 @@ def _line(
         _mm(e.x * s, e.y, e.z),
         _mm(f.x * s, f.y, f.z),
     ]
+    # A line needs a width at each of its points.
+    if len(w) < len(pts):
+        return 1e9
     var ws = List[Float64]()
-    # Each caller passes six widths.
-    for x in w:
+    # Six widths at least, checked above.
+    for x in w:  # pragma: no branch
         ws.append(x * 0.001)
     return _dist_line(p, n, pts, ws)
 

@@ -1088,7 +1088,7 @@ def frog_paint(
             var ia = joints.find_joint(ends[0])
             var ib = joints.find_joint(ends[1])
             # A caller may supply a limb name outside the reference rig.
-            if ia >= 0 and ib >= 0:
+            if min(ia, ib) >= 0:
                 var a = joints.joints[ia]
                 var b = joints.joints[ib]
                 var ax = normalize(b - a)

@@ -361,13 +361,17 @@ def _chain(
     # A planar chain from `base`. The elevation of segment `free` is
     # solved so the tip ends at height `y_tip`: procedural-animals'
     # `solveBindElevations` and `planarChain`.
+    # A chain needs an elevation for each segment, and the free one.
+    var unsolved = free < 0 or free >= len(lens) or len(el_deg) != len(lens)
+    if unsolved:
+        return [base]
     var el = List[Float64]()
-    # The dims tables give every leg its elevations.
-    for e in el_deg:
+    # One segment at least, checked above.
+    for e in el_deg:  # pragma: no branch
         el.append(e * pi / 180.0)
     var drop = 0.0
-    # Every leg has segments: `lens[free]` is read below.
-    for k in range(len(lens)):
+    # One segment at least, checked above.
+    for k in range(len(lens)):  # pragma: no branch
         if k != free:
             drop += lens[k] * sin(el[k])
     var s = (y_tip - base.y - drop) / lens[free]
@@ -375,8 +379,8 @@ def _chain(
     var out = List[V3]()
     var p = base
     out.append(p)
-    # Every leg has segments: `lens[free]` is read above.
-    for k in range(len(lens)):
+    # One segment at least, checked above.
+    for k in range(len(lens)):  # pragma: no branch
         p = p + _plane_dir(az, el[k], 1.0) * lens[k]
         out.append(p)
     return out^
