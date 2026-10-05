@@ -1046,7 +1046,8 @@ def astc_block(
                     )
                 )
     if profile != ASTC_HDR:
-        for mode in modes:
+        # Every block has one to four partitions, with one mode each.
+        for mode in modes:  # pragma: no branch
             if not mode.is_ldr():
                 raise Error("ASTC: an LDR profile cannot use HDR endpoints")
     var selector = -1
@@ -1187,8 +1188,10 @@ def _astc_image[
         raise Error("ASTC: the data is not one block per footprint")
     var tables = AstcTables()
     var out = List[SIMD[dtype, 1]](length=width * height * 4, fill=0)
-    for by in range(down):
-        for bx in range(across):
+    # Positive height and block size produce at least one block row.
+    for by in range(down):  # pragma: no branch
+        # Positive width and block size produce at least one block column.
+        for bx in range(across):  # pragma: no branch
             var block = astc_block(
                 data,
                 (by * across + bx) * UASTC_BLOCK_BYTES,
@@ -1196,12 +1199,19 @@ def _astc_image[
                 block_size,
                 profile,
             )
-            for y in range(min(block_size, height - by * block_size)):
-                for x in range(min(block_size, width - bx * block_size)):
+            # A produced block row has at least one remaining scanline.
+            for y in range(
+                min(block_size, height - by * block_size)
+            ):  # pragma: no branch
+                # A produced block column has at least one remaining pixel.
+                for x in range(
+                    min(block_size, width - bx * block_size)
+                ):  # pragma: no branch
                     var to = (
                         (by * block_size + y) * width + bx * block_size + x
                     ) * 4
-                    for channel in range(4):
+                    # The decoded pixel has exactly four channels.
+                    for channel in range(4):  # pragma: no branch
                         var value = block[(y * block_size + x) * 4 + channel]
                         comptime if dtype == DType.float32:
                             out[to + channel] = half_to_float(
