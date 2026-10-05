@@ -297,6 +297,7 @@ def test_raw_astc_boundaries_fail_before_unsafe_reads_or_allocations() raises:
                 )
     for vk in [157, 158, 165, 166, 1000066000, 1000066004]:
         var file = Ktx2(vk, 1, 1)
+        file.color_model = 162
         file.transfer = 2 if vk == 158 or vk == 166 else 1
         file.level(List[UInt8](length=15, fill=0))
         with assert_raises(contains="length"):
@@ -313,6 +314,7 @@ def test_each_raw_format_uses_its_decoded_allocation_guard() raises:
         var hdr = vk >= 1000066000
         var width = (1 << 26) + 1 if hdr else (1 << 28) + 1
         var file = Ktx2(vk, width, 1)
+        file.color_model = 162
         file.transfer = 2 if vk == 158 or vk == 166 else 1
         file.level(void_extent(0, [0, 0, 0, 0]))
         with assert_raises(contains="MAX_DECODED_BYTES"):
@@ -322,6 +324,21 @@ def test_each_raw_format_uses_its_decoded_allocation_guard() raises:
         file.faces = 6
         with assert_raises(contains="length"):
             _ = read(file.bytes())
+
+
+def test_raw_astc_requires_the_matching_descriptor_color_model() raises:
+    for vk in [157, 158, 165, 166, 1000066000, 1000066004]:
+        var file = Ktx2(vk, 1, 1)
+        file.transfer = 2 if vk == 158 or vk == 166 else 1
+        file.level(void_extent(0, [0, 0, 0, 0xFFFF]))
+        for model in [0, 1, 161, 164, 255]:
+            file.color_model = model
+            with assert_raises(contains="ASTC descriptor color model"):
+                _ = read(file.bytes())
+        file.color_model = 162
+        var container = read(file.bytes())
+        assert_equal(container.color_model, 162)
+        assert_equal(container.image_bytes(0), 16)
 
 
 def main() raises:
