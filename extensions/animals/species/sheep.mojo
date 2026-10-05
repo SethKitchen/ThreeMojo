@@ -82,8 +82,10 @@ from extensions.animals.warp import (
     length_warp,
     scale_about_warp,
 )
+from render.tasks import TaskGroup
 from std.collections import Dict
 from std.math import asin, atan2, cos, exp, floor, log, pi, pow, sin, sqrt
+from std.sys import num_logical_cores
 
 comptime TAIL_SEGS = 6
 # The head's origin: on the head's axis 0.07 m in front of the poll,
@@ -1643,6 +1645,34 @@ def _fgrad(m: SdfModel, list: List[Int], p: V3) -> V3:
     )
 
 
+async def _project_task(
+    model: Pointer[SdfModel, MutAnyOrigin],
+    fleece: Pointer[List[Int], ImmutAnyOrigin],
+    starts: Pointer[List[V3], MutAnyOrigin],
+    projected: MutPointer[V3, MutAnyOrigin],
+    landed: MutPointer[Bool, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Project a run of lock tries onto the fleece by Newton steps.
+
+    A try lands when six steps bring it within 3 mm of the surface.
+    """
+    for attempt in range(first, past):
+        var p = starts[][attempt]
+        var ok = True
+        for it in range(6):  # pragma: no branch
+            var d = model[].eval_list(fleece[], p)
+            if abs(d) < 3e-4:
+                break
+            p = p - _fgrad(model[], fleece[], p) * d
+            var far = it == 5 and abs(model[].eval_list(fleece[], p)) > 0.003
+            if far:
+                ok = False
+        projected[unsafe_offset=attempt] = p
+        landed[unsafe_offset=attempt] = ok
+
+
 def _cell_key(p: V3, cell: Float64) -> Int:
     var i = Int(floor(p.x / cell)) + 512
     var j = Int(floor(p.y / cell)) + 512
@@ -1680,7 +1710,11 @@ def _locks(
     var pts = List[V3]()
     var owners = List[Int]()
     var normals = List[V3]()
-    # Thousands of tries: the fleece's area over a lock's.
+    # Thousands of tries: the fleece's area over a lock's. A try's draws
+    # do not depend on its projection, so every start is drawn first, in
+    # order: the stream and each result are as if drawn and projected in
+    # turn.
+    var starts = List[V3](capacity=tries)
     for _ in range(tries):
         var x = R.next() * wsum
         var pi_ = 0
@@ -1706,17 +1740,30 @@ def _locks(
             var jy = (R.next() - 0.5) * 0.05
             var jz = (R.next() - 0.5) * 0.05
             p = pr.c + (pr.b - pr.c) * tt + V3(jx, jy, jz)
-        var ok = True
-        for it in range(6):  # pragma: no branch
-            var d = m.eval_list(fleece, p)
-            if abs(d) < 3e-4:
-                break
-            p = p - _fgrad(m, fleece, p) * d
-            var far = it == 5 and abs(m.eval_list(fleece, p)) > 0.003
-            if far:
-                ok = False
-        if not ok:
+        starts.append(p)
+    # Each projection onto the fleece is independent: share them out.
+    var projected = List[V3](length=tries, fill=V3(0.0, 0.0, 0.0))
+    var landed = List[Bool](length=tries, fill=False)
+    var tasks = max(1, min(num_logical_cores(), tries))
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _project_task(
+                Pointer(to=m).unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=fleece).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=starts).unsafe_origin_cast[MutAnyOrigin](),
+                projected.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                landed.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * tries // tasks,
+                (task + 1) * tries // tasks,
+            )
+        )
+    group.wait()
+    _ = len(starts)
+    for attempt in range(tries):
+        if not landed[attempt]:
             continue
+        var p = projected[attempt]
         if _neck_s(p, segs) > -0.03:
             continue
         if p.y < 0.1:
