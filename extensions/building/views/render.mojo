@@ -602,7 +602,9 @@ def _member(
     var width_dir = Vec3d(0, 1, 0)
     var start = element.start
     var w = section.width.value
-    var d = section.depth.value
+    var d = (
+        section.width.value if section.shape == CIRCLE else section.depth.value
+    )
     if element.kind == BEAM:
         depth_dir = Vec3d(0, 0, 1)
         width_dir = depth_dir.cross(along).normalized()
@@ -919,6 +921,7 @@ def add_building(
     var top = options.top_storey
     if top < -1 or top >= len(building.storeys):
         raise Error("The top storey must be -1 or a storey of the model")
+    building.validate()
     var mesher = _Mesher()
     for i in range(len(building.elements)):
         ref element = building.elements[i]

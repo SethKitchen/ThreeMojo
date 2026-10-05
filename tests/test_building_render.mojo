@@ -13,6 +13,7 @@ the meshes per storey and look, and the provenance the view records.
 from std.testing import (
     TestSuite,
     assert_equal,
+    assert_almost_equal,
     assert_false,
     assert_raises,
     assert_true,
@@ -227,6 +228,99 @@ def test_fingerprint_follows_the_content() raises:
     h.add_text("")
     assert_true(h.value != Fingerprint().value)
     assert_true(fingerprint(c) != fingerprint(a))
+
+
+def test_fingerprint_covers_semantic_properties_and_names() raises:
+    var b = _building()
+    var before = fingerprint(b)
+    b.materials[0].look.red = 0.123
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.site.north = Angle64(0.5)
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.materials[0].poisson_ratio = 0.25
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.materials[0].strength = b.materials[0].strength.scaled(2)
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.materials[0].thermal_expansion = b.materials[0].thermal_expansion.scaled(
+        2
+    )
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    var glazing = b.openings[0].glazing.value()
+    glazing.solar_heat_gain = 0.25
+    b.openings[0].glazing = glazing
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    glazing.u_value = glazing.u_value.scaled(2)
+    b.openings[0].glazing = glazing
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    glazing.visible_transmittance = 0.25
+    b.openings[0].glazing = glazing
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.storeys[0].name = "renamed storey"
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.spaces[0].name = "renamed room"
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.elements[0].name = "renamed floor"
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.openings[0].name = "renamed window"
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.topology.complex.welder.points[0].x += 0.25
+    assert_true(fingerprint(b) != before)
+    before = fingerprint(b)
+    b.face_element[0] = -1
+    assert_true(fingerprint(b) != before)
+
+
+def test_render_checks_model_before_adding_assets() raises:
+    var b = _building()
+    b.elements[0].faces.clear()
+    var scene = Scene()
+    var assets = Assets()
+    with assert_raises(contains="one face"):
+        _ = add_building(scene, assets, b, RenderOptions.default())
+    assert_equal(len(scene.meshes), 0)
+    assert_equal(len(scene._nodes), 0)
+
+
+def test_circular_beam_stays_below_its_axis() raises:
+    var b = _building()
+    var beam = b.add_beam(
+        StoreyId(0),
+        Point2(1, 1),
+        Point2(4, 1),
+        Section(CIRCLE, _m(0.4), _m(0), _m(0), _m(0)),
+        MaterialId(3),
+    )
+    var scene = Scene()
+    var assets = Assets()
+    _ = add_building(scene, assets, b, RenderOptions.default())
+    var low = Float32.MAX
+    var high = -Float32.MAX
+    var count = 0
+    for i in range(len(scene.meshes)):
+        ref geometry = assets.geometries.get(scene.meshes[i].geometry)
+        ref ids = geometry.attribute_view(String(ELEMENT_ID))
+        ref positions = geometry.attribute_view("position")
+        for k in range(ids.count()):
+            if ids.data[k] == Float32(beam.value):
+                var y = positions.vector3(k).y
+                low = min(low, y)
+                high = max(high, y)
+                count += 1
+    assert_true(count > 0)
+    assert_almost_equal(Float64(low), 3.1, atol=1e-6)
+    assert_almost_equal(Float64(high), 3.5, atol=1e-6)
 
 
 def test_empty_and_setback_buildings() raises:

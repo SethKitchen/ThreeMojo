@@ -263,14 +263,22 @@ def test_a_foreign_file_reads() raises:
         ):
             matched += 1
     assert_equal(matched, 2)
+    var names = Dict[String, Bool]()
+    for e in range(len(b.elements)):
+        names[b.elements[e].name] = True
+    assert_true("south" in names)
+    assert_true("north" in names)
+    assert_true("ground slab" in names)
     var members = 0
     for e in range(len(b.elements)):
         ref element = b.elements[e]
         if element.kind == COLUMN:
+            assert_equal(element.name, "post")
             assert_true(element.section.value().shape == CIRCLE)
             assert_equal(element.start.x, 1)
             members += 1
         elif element.kind == BEAM:
+            assert_equal(element.name, "girder")
             assert_almost_equal(element.end.x, 6, atol=1e-12)
             members += 1
     assert_equal(members, 2)
@@ -278,6 +286,10 @@ def test_a_foreign_file_reads() raises:
     # Only the desk is read: the lamp has no kind, the stool's profile is a
     # circle and the table is in no space.
     assert_equal(len(b.furnishings), 1)
+    assert_equal(b.furnishings[0].name, "desk")
+    assert_equal(b.openings[0].name, "w1")
+    assert_equal(b.openings[1].name, "d1")
+    assert_equal(b.openings[2].name, "w5")
     assert_almost_equal(b.furnishings[0].center.y, 1.5, atol=1e-12)
     assert_true(b.openings[0].kind == WINDOW)
     assert_equal(b.openings[0].glazing.value().solar_heat_gain, 0.4)
@@ -341,13 +353,12 @@ def test_a_foreign_file_without_optional_parts() raises:
         ),
         text.replace("=IFCSITE(", "=IFCSITEX("),
         text.replace("(51,30,0,0),(0,-7,-30,0)", "$,()"),
-        text.replace("=IFCSIUNIT(", "=IFCSIUNITX("),
         text.replace("=IFCBUILDING(", "=IFCBUILDINGX("),
     ]
     for i in range(len(variants)):
         var b = read_ifc(variants[i], Length64(1e-6, METER))
         assert_equal(len(b.spaces), 3)
-    var no_building = read_ifc(variants[4], Length64(1e-6, METER))
+    var no_building = read_ifc(variants[3], Length64(1e-6, METER))
     assert_equal(no_building.name, "building")
     # With no spaces there are no walls or slabs to match.
     var no_spaces = (
@@ -390,6 +401,14 @@ def test_a_foreign_file_refuses_empty_parts() raises:
         _read(text.replace("FILE_SCHEMA(('ifc4'));", ""))
     with assert_raises(contains="IFC4"):
         _read(text.replace("FILE_SCHEMA(('ifc4'));", "FILE_SCHEMA(());"))
+    with assert_raises(contains="schema list"):
+        _read(text.replace("FILE_SCHEMA(('ifc4'));", "FILE_SCHEMA();"))
+    with assert_raises(contains="schema list"):
+        _read(
+            text.replace(
+                "FILE_SCHEMA(('ifc4'));", "FILE_SCHEMA(('ifc4'),('ifc4'));"
+            )
+        )
     with assert_raises(contains="IFC4"):
         _read(
             text.replace(
@@ -408,6 +427,145 @@ def test_a_foreign_file_refuses_empty_parts() raises:
                 "#59=IFCMATERIALLAYERSET((#58),", "#59=IFCMATERIALLAYERSET((),"
             )
         )
+
+
+def test_assigned_length_units_are_required() raises:
+    var text = _foreign()
+    var variants: List[String] = [
+        text.replace("=IFCPROJECT(", "=IFCPROJECTX("),
+        text.replace("(#6),#3);", "(#6),$);"),
+        text.replace("(#6),#3);", "(#6),#2);"),
+        text.replace("IFCUNITASSIGNMENT((#1,#2))", "IFCUNITASSIGNMENT((#2))"),
+        text.replace("IFCUNITASSIGNMENT((#1,#2))", "IFCUNITASSIGNMENT(())"),
+        text.replace(
+            "IFCUNITASSIGNMENT((#1,#2))", "IFCUNITASSIGNMENT((#1,#1,#2))"
+        ),
+        text.replace("#1=IFCSIUNIT(", "#1=IFCSIUNITX("),
+        text.replace(".LENGTHUNIT.,$,.METRE.", ".LENGTHUNIT.,$,.FOOT."),
+        text.replace("#1=IFCSIUNIT(*,", "#1=IFCSIUNIT($,"),
+        text.replace("#3=IFCUNITASSIGNMENT", "#3=IFCUNITASSIGNMENTX"),
+        text.replace(
+            "#8=IFCLOCALPLACEMENT",
+            "#199=IFCPROJECT('p',$,$,$,$,$,$,(#6),#3);\n#8=IFCLOCALPLACEMENT",
+        ),
+        text.replace(
+            "#3=IFCUNITASSIGNMENT((#1,#2));",
+            "#182=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n#3=IFCUNITASSIGNMENT((#1,#182,#2));",
+        ),
+    ]
+    for i in range(len(variants)):
+        with assert_raises():
+            _read(variants[i])
+
+
+def _with_feet() -> String:
+    # The conversion uses a valid unprefixed meter base. Only the unit
+    # assigned to the project determines the scale of its coordinates.
+    return _foreign().replace(
+        "#3=IFCUNITASSIGNMENT((#1,#2));",
+        (
+            "#182=IFCDIMENSIONALEXPONENTS(1,0,0,0,0,0,0);\n"
+            "#183=IFCMEASUREWITHUNIT(IFCLENGTHMEASURE(0.3048),#1);\n"
+            "#184=IFCCONVERSIONBASEDUNIT(#182,.LENGTHUNIT.,'foot',#183);\n"
+            "#3=IFCUNITASSIGNMENT((#184,#2));"
+        ),
+    )
+
+
+def test_conversion_and_context_length_units_are_refused() raises:
+    var feet = _with_feet()
+    with assert_raises(contains="meters"):
+        _read(feet)
+    with assert_raises(contains="meters"):
+        _read(
+            feet.replace(
+                "IFCCONVERSIONBASEDUNIT(#182,.LENGTHUNIT.,'foot',#183)",
+                "IFCCONVERSIONBASEDUNITWITHOFFSET(#182,.LENGTHUNIT.,'foot',#183,0.)",
+            )
+        )
+    with assert_raises(contains="meters"):
+        _read(
+            feet.replace(
+                "IFCCONVERSIONBASEDUNIT(#182,.LENGTHUNIT.,'foot',#183)",
+                "IFCCONTEXTDEPENDENTUNIT(#182,.LENGTHUNIT.,'custom')",
+            )
+        )
+
+
+def test_unassigned_and_other_quantity_units_do_not_change_lengths() raises:
+    var text = _with_feet().replace(
+        "IFCUNITASSIGNMENT((#184,#2))", "IFCUNITASSIGNMENT((#1,#2))"
+    )
+    text = text.replace(
+        "#8=IFCLOCALPLACEMENT",
+        (
+            "#185=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);\n"
+            "#186=IFCUNITASSIGNMENT((#185));\n#8=IFCLOCALPLACEMENT"
+        ),
+    )
+    # Even the assigned area unit is irrelevant to this reader's length
+    # coordinates. It computes areas from those coordinates.
+    text = text.replace(
+        ".AREAUNIT.,$,.SQUARE_METRE.", ".AREAUNIT.,.MILLI.,.SQUARE_METRE."
+    )
+    text = text.replace(
+        "#3=IFCUNITASSIGNMENT((#1,#2));",
+        (
+            "#187=IFCMONETARYUNIT('USD');\n"
+            "#188=IFCSIUNIT(*,.TIMEUNIT.,$,.SECOND.);\n"
+            "#189=IFCDERIVEDUNITELEMENT(#1,1);\n"
+            "#190=IFCDERIVEDUNITELEMENT(#188,-1);\n"
+            "#191=IFCDERIVEDUNIT((#189,#190),.LINEARVELOCITYUNIT.,$);\n"
+            "#3=IFCUNITASSIGNMENT((#1,#2,#187,#191));"
+        ),
+    )
+    var b = read_ifc(text, Length64(1e-6, METER))
+    assert_equal(b.gross_floor_area().value, 36)
+    assert_equal(b.storeys[0].height.value, 3)
+
+
+def test_local_placement_cycles_and_wrong_kinds_raise() raises:
+    var text = _foreign()
+    with assert_raises(contains="cycle"):
+        _read(
+            text.replace(
+                "#8=IFCLOCALPLACEMENT($,#5)", "#8=IFCLOCALPLACEMENT(#8,#5)"
+            )
+        )
+    with assert_raises(contains="cycle"):
+        _read(
+            text.replace(
+                "#8=IFCLOCALPLACEMENT($,#5)", "#8=IFCLOCALPLACEMENT(#15,#5)"
+            )
+        )
+    with assert_raises(contains="IFCLOCALPLACEMENT"):
+        _read(
+            text.replace(
+                "#8=IFCLOCALPLACEMENT($,#5)", "#8=IFCLOCALPLACEMENT(#5,#5)"
+            )
+        )
+    with assert_raises(contains="IFCLOCALPLACEMENT"):
+        _read(text.replace("#13=IFCLOCALPLACEMENT", "#13=IFCAXIS2PLACEMENT2D"))
+    with assert_raises(contains="No STEP entity"):
+        _read(
+            text.replace(
+                "#8=IFCLOCALPLACEMENT($,#5)", "#8=IFCLOCALPLACEMENT(#999,#5)"
+            )
+        )
+
+
+def test_deep_acyclic_local_placements_preserve_geometry() raises:
+    var chain = String("#1000=IFCLOCALPLACEMENT($,#5);\n")
+    for i in range(1, 128):
+        chain += String(
+            "#", 1000 + i, "=IFCLOCALPLACEMENT(#", 999 + i, ",#5);\n"
+        )
+    chain += "#8=IFCLOCALPLACEMENT(#1127,#5);"
+    var text = _foreign().replace("#8=IFCLOCALPLACEMENT($,#5);", chain)
+    var b = read_ifc(text, Length64(1e-6, METER))
+    assert_equal(b.gross_floor_area().value, 36)
+    assert_equal(b.storeys[1].elevation.value, 3)
+    assert_equal(b.openings[0].name, "w1")
 
 
 def main() raises:

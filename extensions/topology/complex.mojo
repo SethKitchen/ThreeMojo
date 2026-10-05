@@ -21,7 +21,7 @@ information modeling of buildings using non-manifold topology with ASM
 and DesignScript" (2013).
 """
 
-from std.math import sqrt
+from std.math import isfinite, sqrt
 from extensions.topology.ids import CellId, EdgeId, FaceId, VertexId
 from extensions.topology.weld import Welder
 from generators.utils import Vec3d
@@ -263,7 +263,7 @@ struct CellComplex(Movable):
         var out = List[Vec3d]()
         ref loop = self.faces[f.value].loop
         for i in range(len(loop)):  # pragma: no branch
-            out.append(self.welder.points[loop[i].value])
+            out.append(self.vertex(loop[i]))
         return out^
 
     def faces_of(self, c: CellId) raises -> List[FaceId]:
@@ -501,11 +501,70 @@ struct CellComplex(Movable):
         Raises:
             Error: If a cell is open or a face is used twice by one cell.
         """
+        # Public arrays can be edited after construction. Check every
+        # reference before the closure walk indexes it.
+        if not (self.welder.tolerance > 0 and isfinite(self.welder.tolerance)):
+            raise Error("A weld tolerance must be positive and finite")
+        for i in range(len(self.welder.points)):
+            var point = self.welder.points[i]
+            if not (
+                isfinite(point.x) and isfinite(point.y) and isfinite(point.z)
+            ):
+                raise Error("A vertex must have finite coordinates")
+        if len(self.edge_faces) != len(self.edges):
+            raise Error("Each edge needs an incident-face list")
+        for i in range(len(self.edges)):
+            self._check_vertex(self.edges[i].a)
+            self._check_vertex(self.edges[i].b)
+            if self.edges[i].a == self.edges[i].b:
+                raise Error("An edge needs distinct vertices")
+            for k in range(len(self.edge_faces[i])):
+                self._check_face(self.edge_faces[i][k])
+        for i in range(len(self.faces)):
+            ref face = self.faces[i]
+            if not face.kind.is_valid():
+                raise Error("A face kind must be vertical or horizontal")
+            if len(face.loop) < 3:
+                raise Error("A face needs three corners or more")
+            # The preceding guard guarantees at least three corners.
+            for k in range(len(face.loop)):  # pragma: no branch
+                self._check_vertex(face.loop[k])
+                if face.loop[k] == face.loop[(k + 1) % len(face.loop)]:
+                    raise Error("A face must not repeat a corner")
+            if face.positive:
+                self._check_cell(face.positive.value())
+            if face.negative:
+                self._check_cell(face.negative.value())
+            if face.positive and face.negative:
+                if face.positive.value() == face.negative.value():
+                    raise Error("A face must not have one cell on both sides")
+            var sides = [face.positive, face.negative]
+            # This list always contains the two optional sides.
+            for side in sides:  # pragma: no branch
+                if side:
+                    ref incident = self.cell_faces[side.value().value]
+                    var matches = 0
+                    for k in range(len(incident)):
+                        if incident[k] == FaceId(i):
+                            matches += 1
+                    if matches != 1:
+                        raise Error(
+                            "Face and cell incidence must be reciprocal"
+                        )
         for c in range(len(self.cell_faces)):
             var directed = Dict[Int, Int]()
             ref faces = self.cell_faces[c]
             for i in range(len(faces)):
+                self._check_face(faces[i])
                 ref face = self.faces[faces[i].value]
+                var on_positive = (
+                    face.positive and face.positive.value() == CellId(c)
+                )
+                var on_negative = (
+                    face.negative and face.negative.value() == CellId(c)
+                )
+                if not (on_positive or on_negative):
+                    raise Error("A cell's face must name that cell")
                 var outward = not (
                     face.positive and face.positive.value() == CellId(c)
                 )

@@ -368,16 +368,24 @@ def symmetric_eigen(a: DenseMatrix) raises -> EigenPairs:
         The eigenvalues in ascending order and orthonormal eigenvectors.
 
     Raises:
-        Error: If the matrix is not square, has a non-finite entry, or
-            does not converge.
+        Error: If the matrix is not square, has a non-finite entry,
+            does not converge, or an eigenvalue is not finite.
     """
     if a.rows != a.cols:
         raise Error("An eigenproblem needs a square matrix")
     var n = a.rows
+    var scale = Float64(0)
     for i in range(n * n):
         if not isfinite(a.data[i]):
             raise Error("An eigenproblem needs finite entries")
+        scale = max(scale, abs(a.data[i]))
     var m = a.copy()
+    # Scaling preserves the eigenvectors and the relative stopping test.
+    # Divide directly: the reciprocal of a tiny scale can overflow.
+    if scale > 0:
+        # A positive scale requires at least one matrix entry.
+        for i in range(n * n):  # pragma: no branch
+            m.data[i] /= scale
     var v = DenseMatrix.identity(n)
     var converged = False
     var sweep = 0
@@ -455,7 +463,9 @@ def symmetric_eigen(a: DenseMatrix) raises -> EigenPairs:
     var vectors = DenseMatrix(n, n)
     for c in range(n):
         var source = order[c]
-        values[c] = m.data[source * n + source]
+        values[c] = m.data[source * n + source] * scale
+        if not isfinite(values[c]):
+            raise Error("The eigenvalues must be finite")
         var r = 0
         while r < n:
             vectors.data[r * n + c] = v.data[r * n + source]

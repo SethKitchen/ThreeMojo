@@ -29,7 +29,7 @@ var heating = result.heating_energy(ZoneId(0)).to(KILOWATT_HOUR)
 var air = result.air_temperature(12, ZoneId(0)).to(CELSIUS)
 ```
 
-An empty grouping gives one zone per space. Give one `ZoneId` per space to group spaces into zones. The zone ids must start at 0 and have no gap.
+An empty grouping gives one zone per space. Give one `ZoneId` per space to group spaces into zones. The zone ids must start at 0 and have no gap. Spaces in one group must use the same daily gain profile. The view refuses a group that mixes profiles; it cannot apply one profile to another use.
 
 `view.dropped` lists what the view leaves out. `view.space_zone`, `view.surface_face` and `view.window_opening` map the model back to the building.
 

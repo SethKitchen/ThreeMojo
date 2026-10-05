@@ -28,6 +28,7 @@ from extensions.topology.arrangement import (
 )
 from extensions.topology.complex import (
     CellComplex,
+    Edge,
     FaceKind,
     HORIZONTAL,
     VERTICAL,
@@ -41,7 +42,7 @@ from extensions.topology.ids import (
     VertexId,
 )
 from extensions.topology.loops import split_bridged, vector_area
-from extensions.topology.storeys import build_storeys
+from extensions.topology.storeys import StoreyComplex, build_storeys
 from extensions.topology.weld import Welder
 from generators.utils import Vec3d
 from units.si import Length64, METER
@@ -470,6 +471,58 @@ def test_validate_refuses_a_face_used_twice() raises:
     _ = c.add_face(tri.copy(), cell, None, HORIZONTAL)
     with assert_raises(contains="twice"):
         c.validate()
+
+
+def _validation_box() raises -> StoreyComplex:
+    var plans = List[List[Region]]()
+    plans.append([_rect(0, 0, 0, 0, 1, 1)])
+    return build_storeys(_levels([0.0, 1.0]), plans, _tol())
+
+
+def test_validate_refuses_mutated_same_cell_sides() raises:
+    var s = _validation_box()
+    s.complex.validate()
+    s.complex.faces[0].positive = CellId(0)
+    s.complex.faces[0].negative = CellId(0)
+    with assert_raises(contains="one cell on both sides"):
+        s.complex.validate()
+
+
+def test_validate_refuses_missing_and_empty_reciprocal_incidence() raises:
+    for empty in range(2):
+        var s = _validation_box()
+        s.complex.validate()
+        if empty == 0:
+            _ = s.complex.cell_faces[0].pop()
+        else:
+            s.complex.cell_faces[0].clear()
+        with assert_raises(contains="incidence must be reciprocal"):
+            s.complex.validate()
+
+
+def test_validate_refuses_a_cell_claiming_an_unrelated_face() raises:
+    var s = _validation_box()
+    var other = s.complex.add_cell()
+    # An empty cell is permitted by the complex's closure contract.
+    s.complex.validate()
+    # The face's legitimate side still has its reciprocal entry. This
+    # forged entry reaches the reverse check with both side tests false.
+    s.complex.cell_faces[other.value].append(FaceId(0))
+    with assert_raises(contains="A cell's face must name that cell"):
+        s.complex.validate()
+
+
+def test_validate_allows_an_isolated_edge_without_incident_faces() raises:
+    var c = CellComplex(1e-6)
+    var a = c.add_vertex(Vec3d(0, 0, 0))
+    var b = c.add_vertex(Vec3d(1, 0, 0))
+    c.edges.append(Edge(a, b))
+    c.edge_faces.append(List[FaceId]())
+    # The isolated edge introduces no face or unclosed cell.
+    c.validate()
+    assert_equal(len(c.edges), 1)
+    assert_equal(len(c.edge_faces[0]), 0)
+    assert_equal(c.cell_count(), 0)
 
 
 # --- storeys -----------------------------------------------------------------

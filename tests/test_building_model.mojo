@@ -83,7 +83,7 @@ from extensions.building.model import (
 )
 from extensions.topology.arrangement import Point2, Region
 from extensions.topology.storeys import build_storeys
-from extensions.topology.ids import FaceId
+from extensions.topology.ids import CellId, FaceId, VertexId
 from units.si import (
     Angle64,
     DEGREE,
@@ -395,6 +395,12 @@ def test_section_properties() raises:
 
 
 def test_section_check_refuses() raises:
+    with assert_raises(contains="depth"):
+        Section(CIRCLE, _m(0.4), _m(nan[DType.float64]()), _m(0), _m(0)).check()
+    with assert_raises(contains="plate dimensions"):
+        Section(CIRCLE, _m(0.4), _m(0), _m(inf[DType.float64]()), _m(0)).check()
+    with assert_raises(contains="plate dimensions"):
+        Section(CIRCLE, _m(0.4), _m(0), _m(0), _m(nan[DType.float64]())).check()
     with assert_raises(contains="shape"):
         Section(SectionShape(9), _m(1), _m(1), _m(0), _m(0)).check()
     with assert_raises(contains="width"):
@@ -716,6 +722,142 @@ def test_validate_refuses_bad_parts() raises:
     m.site.latitude = Angle64(100, DEGREE64)
     with assert_raises(contains="latitude"):
         m.validate()
+
+
+def test_validate_checks_mutated_references_before_views() raises:
+    var a = _two_storeys()
+    a.spaces[0].cell = CellId(999)
+    with assert_raises(contains="cell id"):
+        a.validate()
+    var b = _two_storeys()
+    b.elements[0].faces.clear()
+    with assert_raises(contains="one face"):
+        b.validate()
+    var c = _two_storeys()
+    c.elements[0].faces[0] = FaceId(999)
+    with assert_raises(contains="face id"):
+        c.validate()
+    var d = _two_storeys()
+    d.elements[0].construction = None
+    with assert_raises(contains="construction"):
+        d.validate()
+    var e = _two_storeys()
+    e.topology.complex.faces[0].loop[0] = VertexId(999)
+    with assert_raises(contains="vertex id"):
+        e.validate()
+    var f = _two_storeys()
+    f.storeys[0].height = _m(-1)
+    with assert_raises(contains="positive height"):
+        f.validate()
+    var g = _two_storeys()
+    g.topology.face_level.clear()
+    with assert_raises(contains="inconsistent sizes"):
+        g.validate()
+    var h = _two_storeys()
+    h.face_element[0] = 999
+    with assert_raises(contains="face-element map"):
+        h.validate()
+
+
+def test_validate_checks_mutated_member_and_opening_shapes() raises:
+    var a = _two_storeys()
+    var member = a.add_column(
+        StoreyId(0), Point2(1, 1), rectangle(_m(0.3), _m(0.3)), MaterialId(0)
+    )
+    a.elements[member.value].section = None
+    with assert_raises(contains="material and section"):
+        a.validate()
+    var b = _two_storeys()
+    var wall = ElementId(0)
+    while b.elements[wall.value].kind != WALL:
+        wall = ElementId(wall.value + 1)
+    _ = b.add_opening(
+        WINDOW, wall, _m(0.5), _m(0.5), _m(1), _m(1), double_glazing()
+    )
+    b.openings[0].glazing = None
+    with assert_raises(contains="glazing"):
+        b.validate()
+    b.openings[0].glazing = double_glazing()
+    b.openings[0].kind = OpeningKind(999)
+    with assert_raises(contains="opening kind"):
+        b.validate()
+    b.openings[0].kind = WINDOW
+    b.openings[0].offset = _m(inf[DType.float64]())
+    with assert_raises(contains="inside its wall"):
+        b.validate()
+
+
+def test_validate_keeps_outline_and_member_axes_canonical() raises:
+    var a = _two_storeys()
+    for i in range(len(a.spaces[0].outline)):
+        a.spaces[0].outline[i].x *= 2
+        a.spaces[0].outline[i].y *= 2
+    with assert_raises(contains="cell area"):
+        a.validate()
+    var b = _two_storeys()
+    var column = b.add_column(
+        StoreyId(0), Point2(1, 1), rectangle(_m(0.3), _m(0.3)), MaterialId(0)
+    )
+    b.elements[column.value].end.x += 0.1
+    with assert_raises(contains="vertical"):
+        b.validate()
+    b.elements[column.value].end.x -= 0.1
+    b.elements[column.value].start.z += 0.1
+    with assert_raises(contains="span its storey"):
+        b.validate()
+    var c = _two_storeys()
+    var beam = c.add_beam(
+        StoreyId(0),
+        Point2(1, 1),
+        Point2(2, 1),
+        rectangle(_m(0.3), _m(0.3)),
+        MaterialId(0),
+    )
+    c.elements[beam.value].end.z -= 0.1
+    with assert_raises(contains="storey's top"):
+        c.validate()
+    var d = _two_storeys()
+    var wall = ElementId(0)
+    while d.elements[wall.value].kind != WALL:
+        wall = ElementId(wall.value + 1)
+    with assert_raises(contains="only for a window"):
+        _ = d.add_opening(
+            DOOR, wall, _m(0.5), _m(0), _m(1), _m(2), double_glazing()
+        )
+    _ = d.add_opening(DOOR, wall, _m(0.5), _m(0), _m(1), _m(2), None)
+    d.openings[0].glazing = double_glazing()
+    with assert_raises(contains="only for a window"):
+        d.validate()
+
+
+def test_wall_frame_refuses_a_loop_without_a_leading_base() raises:
+    var b = _two_storeys()
+    var wall = ElementId(0)
+    while b.elements[wall.value].kind != WALL:
+        wall = ElementId(wall.value + 1)
+    var face = b.elements[wall.value].faces[0]
+    ref loop = b.topology.complex.faces[face.value].loop
+    var first = loop[0]
+    for i in range(len(loop) - 1):
+        loop[i] = loop[i + 1]
+    loop[len(loop) - 1] = first
+    with assert_raises(contains="horizontal base"):
+        _ = b.wall_frame(wall)
+    with assert_raises(contains="horizontal base"):
+        b.validate()
+
+
+def test_validate_refuses_forged_cell_adjacency() raises:
+    var b = _two_storeys()
+    var exterior = b.topology.complex.exterior_faces(CellId(0))
+    var face = exterior[0]
+    ref f = b.topology.complex.faces[face.value]
+    if f.positive:
+        f.negative = CellId(1)
+    else:
+        f.positive = CellId(1)
+    with assert_raises(contains="reciprocal"):
+        b.validate()
 
 
 def test_assemble_refuses() raises:

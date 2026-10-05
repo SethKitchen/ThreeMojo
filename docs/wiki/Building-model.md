@@ -53,7 +53,9 @@ Then add frame members and openings:
 | `add_opening(kind, wall, offset, sill, width, height, glazing)` | A door or a window in a wall, placed in the wall's frame |
 | `add_furnishing(kind, space, center, rotation, width, depth, height)` | A piece of furniture: a box on the space's floor |
 
-`add_opening` refuses an opening that does not fit its wall, overlaps another opening, or is a door that does not start at the floor. A window needs a `Glazing`. `add_furnishing` refuses a piece that leaves its space or overlaps another piece in it.
+All views check the model before they use it. Validation checks mutable ids, dimensions, required fields and topology maps, as well as opening and furnishing placement. A surface element must have one face, as `assemble` creates it.
+
+`add_opening` refuses an opening that does not fit its wall, overlaps another opening, or is a door that does not start at the floor. A window needs a `Glazing`. Glazing on a door is not supported and is refused. `add_furnishing` refuses a piece that leaves its space or overlaps another piece in it.
 
 ## Read the model
 
@@ -101,7 +103,7 @@ A `Section` is a rectangle, a doubly symmetric I or a circle. It gives the area,
 
 Each vertex carries an `elementId` attribute. It is the element index for an element. It is the opening index plus the element count for a door or window. It is the furnishing index plus the element and opening counts for furniture. Full detail draws each piece of furniture as a few boxes in wood, fabric, ceramic or metal.
 
-The building node's user data records `model`, `fingerprint`, `detail`, `topStorey` and `dropped`. A game can compare the fingerprint with the model's fingerprint to tell whether a baked mesh is current.
+The building node's user data records `model`, `fingerprint`, `detail`, `topStorey` and `dropped`. A game can compare the fingerprint with the model's fingerprint to tell whether a baked mesh is current. The hash includes names, site, physical properties, looks, glazing, geometry and model maps. It excludes private acceleration caches and the weld tolerance used to assemble or import geometry. This version changes fingerprints made by the earlier incomplete hash.
 
 The model is z up and the scene is y up. A model point (x, y, z) is the scene point (x, z, -y).
 

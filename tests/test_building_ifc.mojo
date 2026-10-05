@@ -6,9 +6,8 @@
 """Tests for IFC exchange: the STEP physical file of ISO 10303-21 and the
 IFC4 mapping of the building model.
 
-The reference for the mapping is the round trip: a model written and read
-back has the same fingerprint, so every storey, space, element, opening,
-material and construction came back exactly.
+The round-trip tests compare fields directly as well as fingerprints.
+They cover the site, names, physical properties, geometry and mappings.
 """
 
 from std.testing import (
@@ -290,6 +289,84 @@ def _bad(body: String) raises -> String:
     )
 
 
+def _nested_step_value(
+    depth: Int, typed: Bool, var leaf: String = "7"
+) -> String:
+    """Build a small boundary fixture without recursive fixture code."""
+    for _ in range(depth):
+        leaf = String("T(" if typed else "(", leaf, ")")
+    return leaf^
+
+
+def test_step_accepts_the_value_nesting_limit() raises:
+    # The entity's outer attribute list adds one level to each value.
+    # Exercise total depths 255 and 256, and reset depth for siblings.
+    for depth in range(254, 256):
+        var values: List[String] = [
+            _nested_step_value(depth, False),
+            _nested_step_value(depth, True),
+            _nested_step_value(
+                depth - 127, False, _nested_step_value(127, True)
+            ),
+        ]
+        for value in values:
+            var f = parse(_bad(String("#1=X(", value, ",", value, ");")))
+            assert_equal(len(f.entity(1).arguments), 2)
+            for position in range(2):
+                var index = f.argument(1, position)
+                for _ in range(depth):
+                    assert_true(
+                        f.kind_of(index) == LIST or f.kind_of(index) == TYPED
+                    )
+                    assert_equal(len(f.values[index].children), 1)
+                    index = f.values[index].children[0]
+                assert_equal(f.as_integer(index), 7)
+    # Empty lists also count as containers, despite having no child call.
+    var empty = _nested_step_value(254, False, "()")
+    var f = parse(_bad(String("#1=X(", empty, ");")))
+    var index = f.argument(1, 0)
+    for _ in range(254):
+        index = f.as_list(index)[0]
+    assert_equal(len(f.as_list(index)), 0)
+
+
+def test_step_refuses_excess_value_nesting() raises:
+    # Each fixture has exactly 257 containers including the outer list.
+    var values: List[String] = [
+        _nested_step_value(256, False),
+        _nested_step_value(256, True),
+        _nested_step_value(128, False, _nested_step_value(128, True)),
+        _nested_step_value(255, False, "()"),
+    ]
+    for value in values:
+        with assert_raises(
+            contains=(
+                "STEP line 5: value nesting exceeds the supported maximum"
+                " of 256"
+            )
+        ):
+            _ = parse(_bad(String("#1=X(", value, ");")))
+
+
+def test_step_header_values_use_the_same_nesting_limit() raises:
+    var prefix = String("ISO-10303-21;\nHEADER;\nX(")
+    var suffix = String(");\nENDSEC;\nDATA;\nENDSEC;\nEND-ISO-10303-21;\n")
+    var value = _nested_step_value(255, True)
+    var f = parse(prefix + value + suffix)
+    assert_equal(len(f.header), 1)
+    var index = f.header[0].arguments[0]
+    for _ in range(255):
+        assert_true(f.kind_of(index) == TYPED)
+        index = f.values[index].children[0]
+    assert_equal(f.as_integer(index), 7)
+    with assert_raises(
+        contains=(
+            "STEP line 3: value nesting exceeds the supported maximum of 256"
+        )
+    ):
+        _ = parse(prefix + String("T(", value, ")") + suffix)
+
+
 def test_parse_refuses_malformed_files() raises:
     with assert_raises(contains="ISO-10303-21"):
         _ = parse("HELLO;")
@@ -352,8 +429,295 @@ def test_guids_are_22_characters_and_distinct() raises:
     assert_true(first == "0" or first == "1" or first == "2" or first == "3")
 
 
+def _assert_model_fields(a: Building, b: Building) raises:
+    """Compare round-trip data directly, independently of the fingerprint."""
+    assert_equal(a.name, b.name)
+    assert_equal(a.site.latitude.value, b.site.latitude.value)
+    assert_equal(a.site.longitude.value, b.site.longitude.value)
+    assert_equal(a.site.elevation.value, b.site.elevation.value)
+    assert_equal(a.site.north.value, b.site.north.value)
+    assert_equal(len(a.storeys), len(b.storeys))
+    for i in range(len(a.storeys)):
+        assert_equal(a.storeys[i].name, b.storeys[i].name)
+        assert_equal(a.storeys[i].elevation.value, b.storeys[i].elevation.value)
+        assert_equal(a.storeys[i].height.value, b.storeys[i].height.value)
+    assert_equal(len(a.spaces), len(b.spaces))
+    for i in range(len(a.spaces)):
+        assert_equal(a.spaces[i].name, b.spaces[i].name)
+        assert_equal(a.spaces[i].storey.value, b.spaces[i].storey.value)
+        assert_equal(a.spaces[i].use.value, b.spaces[i].use.value)
+        assert_equal(a.spaces[i].cell.value, b.spaces[i].cell.value)
+        assert_equal(len(a.spaces[i].outline), len(b.spaces[i].outline))
+        for j in range(len(a.spaces[i].outline)):
+            assert_equal(a.spaces[i].outline[j].x, b.spaces[i].outline[j].x)
+            assert_equal(a.spaces[i].outline[j].y, b.spaces[i].outline[j].y)
+    assert_equal(len(a.elements), len(b.elements))
+    for i in range(len(a.elements)):
+        assert_equal(a.elements[i].name, b.elements[i].name)
+        assert_equal(a.elements[i].kind.value, b.elements[i].kind.value)
+        assert_equal(a.elements[i].storey.value, b.elements[i].storey.value)
+        assert_equal(a.elements[i].start.x, b.elements[i].start.x)
+        assert_equal(a.elements[i].start.y, b.elements[i].start.y)
+        assert_equal(a.elements[i].start.z, b.elements[i].start.z)
+        assert_equal(a.elements[i].end.x, b.elements[i].end.x)
+        assert_equal(a.elements[i].end.y, b.elements[i].end.y)
+        assert_equal(a.elements[i].end.z, b.elements[i].end.z)
+        assert_equal(len(a.elements[i].faces), len(b.elements[i].faces))
+        for j in range(len(a.elements[i].faces)):
+            assert_equal(
+                a.elements[i].faces[j].value, b.elements[i].faces[j].value
+            )
+        assert_equal(
+            1 if a.elements[i].construction else 0,
+            1 if b.elements[i].construction else 0,
+        )
+        if a.elements[i].construction:
+            assert_equal(
+                a.elements[i].construction.value().value,
+                b.elements[i].construction.value().value,
+            )
+        assert_equal(
+            1 if a.elements[i].material else 0,
+            1 if b.elements[i].material else 0,
+        )
+        if a.elements[i].material:
+            assert_equal(
+                a.elements[i].material.value().value,
+                b.elements[i].material.value().value,
+            )
+        assert_equal(
+            1 if a.elements[i].section else 0, 1 if b.elements[i].section else 0
+        )
+        if a.elements[i].section:
+            assert_equal(
+                a.elements[i].section.value().shape.value,
+                b.elements[i].section.value().shape.value,
+            )
+            assert_equal(
+                a.elements[i].section.value().width.value,
+                b.elements[i].section.value().width.value,
+            )
+            assert_equal(
+                a.elements[i].section.value().depth.value,
+                b.elements[i].section.value().depth.value,
+            )
+            assert_equal(
+                a.elements[i].section.value().flange_thickness.value,
+                b.elements[i].section.value().flange_thickness.value,
+            )
+            assert_equal(
+                a.elements[i].section.value().web_thickness.value,
+                b.elements[i].section.value().web_thickness.value,
+            )
+    assert_equal(len(a.openings), len(b.openings))
+    for i in range(len(a.openings)):
+        assert_equal(a.openings[i].name, b.openings[i].name)
+        assert_equal(a.openings[i].kind.value, b.openings[i].kind.value)
+        assert_equal(a.openings[i].host.value, b.openings[i].host.value)
+        assert_equal(a.openings[i].offset.value, b.openings[i].offset.value)
+        assert_equal(a.openings[i].sill.value, b.openings[i].sill.value)
+        assert_equal(a.openings[i].width.value, b.openings[i].width.value)
+        assert_equal(a.openings[i].height.value, b.openings[i].height.value)
+        assert_equal(
+            1 if a.openings[i].glazing else 0, 1 if b.openings[i].glazing else 0
+        )
+        if a.openings[i].glazing:
+            assert_equal(
+                a.openings[i].glazing.value().u_value.value,
+                b.openings[i].glazing.value().u_value.value,
+            )
+            assert_equal(
+                a.openings[i].glazing.value().solar_heat_gain,
+                b.openings[i].glazing.value().solar_heat_gain,
+            )
+            assert_equal(
+                a.openings[i].glazing.value().visible_transmittance,
+                b.openings[i].glazing.value().visible_transmittance,
+            )
+    assert_equal(len(a.furnishings), len(b.furnishings))
+    for i in range(len(a.furnishings)):
+        assert_equal(a.furnishings[i].name, b.furnishings[i].name)
+        assert_equal(a.furnishings[i].kind.value, b.furnishings[i].kind.value)
+        assert_equal(a.furnishings[i].space.value, b.furnishings[i].space.value)
+        assert_equal(a.furnishings[i].center.x, b.furnishings[i].center.x)
+        assert_equal(a.furnishings[i].center.y, b.furnishings[i].center.y)
+        assert_equal(
+            a.furnishings[i].rotation.value, b.furnishings[i].rotation.value
+        )
+        assert_equal(a.furnishings[i].width.value, b.furnishings[i].width.value)
+        assert_equal(a.furnishings[i].depth.value, b.furnishings[i].depth.value)
+        assert_equal(
+            a.furnishings[i].height.value, b.furnishings[i].height.value
+        )
+    assert_equal(len(a.materials), len(b.materials))
+    for i in range(len(a.materials)):
+        assert_equal(a.materials[i].name, b.materials[i].name)
+        assert_equal(a.materials[i].density.value, b.materials[i].density.value)
+        assert_equal(
+            a.materials[i].elastic_modulus.value,
+            b.materials[i].elastic_modulus.value,
+        )
+        assert_equal(a.materials[i].poisson_ratio, b.materials[i].poisson_ratio)
+        assert_equal(
+            a.materials[i].strength.value, b.materials[i].strength.value
+        )
+        assert_equal(
+            a.materials[i].conductivity.value, b.materials[i].conductivity.value
+        )
+        assert_equal(
+            a.materials[i].specific_heat.value,
+            b.materials[i].specific_heat.value,
+        )
+        assert_equal(
+            a.materials[i].thermal_expansion.value,
+            b.materials[i].thermal_expansion.value,
+        )
+        assert_equal(a.materials[i].look.red, b.materials[i].look.red)
+        assert_equal(a.materials[i].look.green, b.materials[i].look.green)
+        assert_equal(a.materials[i].look.blue, b.materials[i].look.blue)
+        assert_equal(
+            a.materials[i].look.roughness, b.materials[i].look.roughness
+        )
+        assert_equal(
+            a.materials[i].look.metalness, b.materials[i].look.metalness
+        )
+        assert_equal(
+            a.materials[i].look.transmission, b.materials[i].look.transmission
+        )
+    assert_equal(len(a.constructions), len(b.constructions))
+    for i in range(len(a.constructions)):
+        assert_equal(a.constructions[i].name, b.constructions[i].name)
+        assert_equal(
+            len(a.constructions[i].layers), len(b.constructions[i].layers)
+        )
+        for j in range(len(a.constructions[i].layers)):
+            assert_equal(
+                a.constructions[i].layers[j].material.value,
+                b.constructions[i].layers[j].material.value,
+            )
+            assert_equal(
+                a.constructions[i].layers[j].thickness.value,
+                b.constructions[i].layers[j].thickness.value,
+            )
+    # The topology is rebuilt from the same plans and tolerance.
+    assert_equal(
+        a.topology.complex.welder.tolerance, b.topology.complex.welder.tolerance
+    )
+    assert_equal(
+        len(a.topology.complex.welder.points),
+        len(b.topology.complex.welder.points),
+    )
+    for i in range(len(a.topology.complex.welder.points)):
+        assert_equal(
+            a.topology.complex.welder.points[i].x,
+            b.topology.complex.welder.points[i].x,
+        )
+        assert_equal(
+            a.topology.complex.welder.points[i].y,
+            b.topology.complex.welder.points[i].y,
+        )
+        assert_equal(
+            a.topology.complex.welder.points[i].z,
+            b.topology.complex.welder.points[i].z,
+        )
+    assert_equal(len(a.topology.complex.edges), len(b.topology.complex.edges))
+    for i in range(len(a.topology.complex.edges)):
+        assert_equal(
+            a.topology.complex.edges[i].a.value,
+            b.topology.complex.edges[i].a.value,
+        )
+        assert_equal(
+            a.topology.complex.edges[i].b.value,
+            b.topology.complex.edges[i].b.value,
+        )
+    assert_equal(len(a.topology.complex.faces), len(b.topology.complex.faces))
+    for i in range(len(a.topology.complex.faces)):
+        assert_equal(
+            a.topology.complex.faces[i].kind.value,
+            b.topology.complex.faces[i].kind.value,
+        )
+        assert_equal(
+            len(a.topology.complex.faces[i].loop),
+            len(b.topology.complex.faces[i].loop),
+        )
+        for j in range(len(a.topology.complex.faces[i].loop)):
+            assert_equal(
+                a.topology.complex.faces[i].loop[j].value,
+                b.topology.complex.faces[i].loop[j].value,
+            )
+        assert_equal(
+            1 if a.topology.complex.faces[i].positive else 0,
+            1 if b.topology.complex.faces[i].positive else 0,
+        )
+        if a.topology.complex.faces[i].positive:
+            assert_equal(
+                a.topology.complex.faces[i].positive.value().value,
+                b.topology.complex.faces[i].positive.value().value,
+            )
+        assert_equal(
+            1 if a.topology.complex.faces[i].negative else 0,
+            1 if b.topology.complex.faces[i].negative else 0,
+        )
+        if a.topology.complex.faces[i].negative:
+            assert_equal(
+                a.topology.complex.faces[i].negative.value().value,
+                b.topology.complex.faces[i].negative.value().value,
+            )
+    assert_equal(
+        len(a.topology.complex.cell_faces), len(b.topology.complex.cell_faces)
+    )
+    for i in range(len(a.topology.complex.cell_faces)):
+        assert_equal(
+            len(a.topology.complex.cell_faces[i]),
+            len(b.topology.complex.cell_faces[i]),
+        )
+        for j in range(len(a.topology.complex.cell_faces[i])):
+            assert_equal(
+                a.topology.complex.cell_faces[i][j].value,
+                b.topology.complex.cell_faces[i][j].value,
+            )
+    assert_equal(
+        len(a.topology.complex.edge_faces), len(b.topology.complex.edge_faces)
+    )
+    for i in range(len(a.topology.complex.edge_faces)):
+        assert_equal(
+            len(a.topology.complex.edge_faces[i]),
+            len(b.topology.complex.edge_faces[i]),
+        )
+        for j in range(len(a.topology.complex.edge_faces[i])):
+            assert_equal(
+                a.topology.complex.edge_faces[i][j].value,
+                b.topology.complex.edge_faces[i][j].value,
+            )
+    assert_equal(len(a.topology.cell_storey), len(b.topology.cell_storey))
+    for i in range(len(a.topology.cell_storey)):
+        assert_equal(a.topology.cell_storey[i], b.topology.cell_storey[i])
+    assert_equal(len(a.topology.cell_region), len(b.topology.cell_region))
+    for i in range(len(a.topology.cell_region)):
+        assert_equal(
+            a.topology.cell_region[i].value, b.topology.cell_region[i].value
+        )
+    assert_equal(len(a.topology.face_level), len(b.topology.face_level))
+    for i in range(len(a.topology.face_level)):
+        assert_equal(a.topology.face_level[i], b.topology.face_level[i])
+    assert_equal(len(a.face_element), len(b.face_element))
+    for i in range(len(a.face_element)):
+        assert_equal(a.face_element[i], b.face_element[i])
+
+
 def test_a_model_round_trips_exactly() raises:
     var b = _building()
+    for i in range(len(b.elements)):
+        b.elements[i].name = String("Custom part café ", i)
+    for i in range(len(b.openings)):
+        b.openings[i].name = String("Custom opening ", i)
+    b.elements[0].name = ""
+    b.materials[0].poisson_ratio = 0.23
+    b.materials[0].look.red = 0.123
+    var glazing = b.openings[0].glazing.value()
+    glazing.solar_heat_gain = 0.37
+    glazing.visible_transmittance = 0.63
+    b.openings[0].glazing = glazing
     var text = write_ifc(b, "2026-01-01T00:00:00")
     assert_true(text.find("FILE_SCHEMA(('IFC4'))") >= 0)
     assert_true(text.find("IFCARBITRARYPROFILEDEFWITHVOIDS") >= 0)
@@ -378,9 +742,52 @@ def test_a_model_round_trips_exactly() raises:
     assert_equal(
         back.materials[4].strength.value, b.materials[4].strength.value
     )
+    _assert_model_fields(back, b)
     assert_equal(fingerprint(back), fingerprint(b))
     # The same model gives the same file.
     assert_true(write_ifc(back, "2026-01-01T00:00:00") == text)
+
+
+def test_circular_beam_profile_hangs_below_its_axis() raises:
+    var b = _building()
+    var section = Section(CIRCLE, _m(0.4), _m(0), _m(0), _m(0))
+    var beam = b.add_beam(
+        StoreyId(0), Point2(1, 1), Point2(5, 1), section, MaterialId(4)
+    )
+    b.elements[beam.value].name = "circular beam"
+    var text = write_ifc(b, "t")
+    var f = parse(text)
+    var circular = 0
+    var beams = f.all_of("IFCBEAM")
+    assert_equal(len(beams), 3)
+    for id in beams:
+        var shape = f.as_reference(f.argument(id, 6))
+        var representations = f.as_list(f.argument(shape, 2))
+        var representation = f.as_reference(representations[0])
+        var items = f.as_list(f.argument(representation, 3))
+        var solid = f.as_reference(items[0])
+        var profile = f.as_reference(f.argument(solid, 0))
+        var placement = f.as_reference(f.argument(profile, 2))
+        var point = f.as_reference(f.argument(placement, 0))
+        var coordinates = f.as_list(f.argument(point, 0))
+        assert_equal(f.as_real(coordinates[0]), 0)
+        var center = f.as_real(coordinates[1])
+        if f.entity(profile).name == "IFCCIRCLEPROFILEDEF":
+            assert_equal(f.as_string(f.argument(id, 2)), "circular beam")
+            var radius = f.as_real(f.argument(profile, 3))
+            assert_equal(radius, 0.2)
+            assert_equal(center, -radius)
+            assert_equal(center + radius, 0)
+            assert_equal(center - radius, -section.width.value)
+            circular += 1
+        else:
+            # Rectangle and I-shape beams still hang below the axis by
+            # their depth, independently of the circular diameter.
+            assert_equal(center, -f.as_real(f.argument(profile, 4)) / 2)
+    assert_equal(circular, 1)
+    var back = read_ifc(text, Length64(1e-6, METER))
+    _assert_model_fields(back, b)
+    assert_equal(fingerprint(back), fingerprint(b))
 
 
 def test_read_ifc_refuses() raises:
@@ -498,8 +905,11 @@ def test_a_furnished_tower_round_trips() raises:
     var params = SkyscraperParameters()
     params.total_height = Length(8, METER)
     var tower = generate_tower(TowerOptions(params^))
+    for i in range(len(tower.furnishings)):
+        tower.furnishings[i].name = String("Custom furniture ", i)
     var back = read_ifc(write_ifc(tower, "t"), Length64(1e-6, METER))
     assert_equal(len(back.furnishings), len(tower.furnishings))
+    _assert_model_fields(back, tower)
     assert_equal(fingerprint(back), fingerprint(tower))
 
 

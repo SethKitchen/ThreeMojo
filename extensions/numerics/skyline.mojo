@@ -21,7 +21,7 @@ diagonal. The column-by-column elimination is the active-column method of
 Bathe and Wilson. A symmetric indefinite matrix factors too, as long as no
 pivot is zero; `negative_pivots` counts the negative entries of D. By
 Sylvester's law of inertia, that count is the number of eigenvalues of A
-below zero. The eigensolver uses it as a Sturm sequence check.
+below zero when this no-pivot factorization succeeds.
 
 See Cuthill and McKee, "Reducing the bandwidth of sparse symmetric
 matrices" (1969); George and Liu, "An implementation of a
@@ -224,11 +224,15 @@ def _column_tops(
     """Return the first row of each new column's skyline."""
     var top = List[Int](capacity=a.size)
     for j in range(a.size):
-        var original = order[j]
-        var first = j
+        top.append(j)
+    # Use exactly the reordered upper entries consumed by the scatter.
+    # The lower pattern need not mirror them.
+    for row in range(a.size):
+        var original = order[row]
         for k in range(a.row_start[original], a.row_start[original + 1]):
-            first = min(first, inverse[a.columns[k]])
-        top.append(first)
+            var col = inverse[a.columns[k]]
+            if col >= row:
+                top[col] = min(top[col], row)
     return top^
 
 

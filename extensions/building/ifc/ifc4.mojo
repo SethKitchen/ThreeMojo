@@ -16,12 +16,14 @@ their glazing. Each storey carries its height as a gross-height quantity.
 `read_ifc` reads such a file back into a model. It rebuilds the cell
 complex from the space outlines, so the walls and slabs come from the
 topology, as `assemble` makes them. It then gives each wall and slab the
-construction of the file element that lies on the same place, and adds
-the columns, beams, doors and windows. A model written and read back has
-the same fingerprint.
+name and construction of the file element that lies on the same place,
+and adds the named columns, beams, doors, windows and furniture. The
+round-trip tests compare fields directly as well as fingerprints. Exact
+exchange uses the supported order and layout from `assemble` and `add_*`,
+not arbitrary collection reordering or unused struct fields.
 
 A file from another program can be read when its spaces are extruded
-polygons on storeys. Elements that do not found_element a face of the rebuilt
+polygons on storeys. Elements that do not match a face of the rebuilt
 complex keep the first construction. A material with no properties takes
 the library values of the material its name suggests.
 
@@ -45,6 +47,7 @@ from extensions.building.ids import (
 )
 from extensions.building.ifc.step import (
     StepFile,
+    DERIVED,
     INTEGER,
     LIST,
     REAL,
@@ -865,7 +868,11 @@ def write_ifc(building: Building, timestamp: String) raises -> String:
                 var along = axis.normalized()
                 var across = Vec3d(0, 0, 1).cross(along)
                 axes = w.placement3(origin, along, across)
-                cy = -section.depth.value / 2
+                var depth = (
+                    section.width.value if section.shape
+                    == CIRCLE else section.depth.value
+                )
+                cy = -depth / 2
                 entity = "IFCBEAM"
                 predefined = "BEAM"
             place = w.local(storey_places[s], axes)
@@ -1238,10 +1245,29 @@ struct _Reader(Movable):
 
     def local(self, id: Int) raises -> _Frame:
         """Resolve an IFCLOCALPLACEMENT through its chain."""
-        var frame = self.placement(self.ref_arg(id, 1))
-        if self.is_unset(id, 0):
-            return frame
-        return self.local(self.ref_arg(id, 0)).then(frame)
+        var visited = Dict[Int, Bool]()
+        var chain = List[_Frame]()
+        var current = id
+        # Each successful step visits a distinct entity. The extra step
+        # must find the root, a repeated id, or an invalid reference.
+        # A nonnegative entity count plus one makes this range nonempty.
+        for _ in range(len(self.f.entities) + 1):  # pragma: no branch
+            if current in visited:
+                raise Error("A local placement chain contains a cycle")
+            if self.name(current) != "IFCLOCALPLACEMENT":
+                raise Error(
+                    "A local placement must reference IFCLOCALPLACEMENT"
+                )
+            visited[current] = True
+            chain.append(self.placement(self.ref_arg(current, 1)))
+            if self.is_unset(current, 0):
+                break
+            current = self.ref_arg(current, 0)
+        # Compose from the root down, in the same order as nested frames.
+        var frame = chain.pop()
+        while len(chain) > 0:
+            frame = frame.then(chain.pop())
+        return frame
 
     def solid(self, product: Int) raises -> Int:
         """Return the first IFCEXTRUDEDAREASOLID of a product's shape."""
@@ -1440,6 +1466,56 @@ def _read_site(r: _Reader) raises -> Site:
     return site
 
 
+def _check_length_unit(r: _Reader) raises:
+    """Require one unprefixed meter length unit in the project's assignment.
+
+    Other assigned quantities do not change coordinates. Unassigned unit
+    entities do not define the project's lengths and are not inspected.
+    """
+    var projects = r.f.all_of("IFCPROJECT")
+    if len(projects) != 1:
+        raise Error("The file must have exactly one project with length units")
+    if r.is_unset(projects[0], 8):
+        raise Error("The project must assign length units in meters")
+    var assignment = r.ref_arg(projects[0], 8)
+    if r.name(assignment) != "IFCUNITASSIGNMENT":
+        raise Error("The project's units must reference IFCUNITASSIGNMENT")
+    var lengths = 0
+    for item in r.f.as_list(r.arg(assignment, 0)):
+        var unit = r.f.as_reference(item)
+        var kind = r.name(unit)
+        # These unit categories cannot define a project's length unit.
+        if kind == "IFCMONETARYUNIT" or kind == "IFCDERIVEDUNIT":
+            continue
+        var named = (
+            kind == "IFCSIUNIT"
+            or kind == "IFCCONVERSIONBASEDUNIT"
+            or kind == "IFCCONVERSIONBASEDUNITWITHOFFSET"
+            or kind == "IFCCONTEXTDEPENDENTUNIT"
+        )
+        if not named:
+            raise Error("Unsupported entity in the project's unit assignment")
+        if r.f.as_enumeration(r.arg(unit, 1)) != "LENGTHUNIT":
+            continue
+        lengths += 1
+        if lengths > 1:
+            raise Error("The project must assign exactly one length unit")
+        if kind != "IFCSIUNIT":
+            raise Error(
+                "The assigned length unit must be meters, with no conversion"
+            )
+        if (
+            r.f.kind_of(r.arg(unit, 0)) != DERIVED
+            or not r.is_unset(unit, 2)
+            or r.f.as_enumeration(r.arg(unit, 3)) != "METRE"
+        ):
+            raise Error(
+                "The assigned length unit must be meters, with no prefix"
+            )
+    if lengths != 1:
+        raise Error("The project must assign exactly one length unit")
+
+
 def read_ifc(text: String, tolerance: Length64) raises -> Building:
     """Return the building model of an IFC4 STEP file.
 
@@ -1451,23 +1527,23 @@ def read_ifc(text: String, tolerance: Length64) raises -> Building:
         The model, with the complex rebuilt from the space outlines.
 
     Raises:
-        Error: If the text is not STEP, the schema is not IFC4, the length
-            unit is not meters, a space or member has a form this reader
-            does not support or is not on a storey, or the model does not
+        Error: If the text is not STEP, the schema is not IFC4, the project
+            does not assign exactly one supported meter length unit, a
+            placement chain has a cycle or wrong kind, a space or member
+            has an unsupported form or no storey, or the model does not
             validate.
     """
     var r = _Reader(parse(text))
     var schema = String("")
     for i in range(len(r.f.header)):
         if r.f.header[i].name == "FILE_SCHEMA":
+            if len(r.f.header[i].arguments) != 1:
+                raise Error("The IFC4 FILE_SCHEMA needs one schema list")
             for item in r.f.as_list(r.f.header[i].arguments[0]):
                 schema = r.f.as_string(item).upper()
     if schema != "IFC4":
         raise Error("The file's schema must be IFC4")
-    for unit in r.f.all_of("IFCSIUNIT"):
-        var is_length = r.f.as_enumeration(r.arg(unit, 1)) == "LENGTHUNIT"
-        if is_length and not r.is_unset(unit, 2):
-            raise Error("The length unit must be meters, with no prefix")
+    _check_length_unit(r)
     var materials = List[BuildingMaterial]()
     var material_index = _read_materials(r, materials)
     # Constructions from layer sets.
@@ -1599,8 +1675,10 @@ def _match_surfaces(
     construction_index: Dict[Int, Int],
     tol: Float64,
 ) raises -> Dict[Int, Int]:
-    """Give each model wall and slab the construction of the file element
-    on the same place. Return the model wall of each file wall."""
+    """Give each matched wall and slab its file name and construction.
+
+    Return the model wall of each file wall.
+    """
     var file_wall = Dict[Int, Int]()
     for id in r.f.all_of("IFCWALL") + r.f.all_of("IFCSLAB"):
         var s = storey_of.get(r.container.get(id, -1), -1)
@@ -1649,10 +1727,12 @@ def _match_surfaces(
                 if abs(points[0].z - top) + mine.distance_to(outer) <= 2 * tol:
                     found_element = e
         var layers = construction_index.get(r.material_of.get(id, -1), -1)
-        if found_element >= 0 and layers >= 0:
-            building.elements[found_element].construction = ConstructionId(
-                layers
-            )
+        if found_element >= 0:
+            building.elements[found_element].name = r.name_arg(id, 2)
+            if layers >= 0:
+                building.elements[found_element].construction = ConstructionId(
+                    layers
+                )
     return file_wall^
 
 
@@ -1686,14 +1766,16 @@ def _read_members(
             _get(exact, "StartY", at.origin.y),
         )
         var end = Point2(_get(exact, "EndX", tip.x), _get(exact, "EndY", tip.y))
+        var element: ElementId
         if kind == "IFCCOLUMN":
-            _ = building.add_column(
+            element = building.add_column(
                 StoreyId(s), start, section, MaterialId(material)
             )
         else:
-            _ = building.add_beam(
+            element = building.add_beam(
                 StoreyId(s), start, end, section, MaterialId(material)
             )
+        building.elements[element.value].name = r.name_arg(id, 2)
 
 
 def _read_openings(
@@ -1747,7 +1829,7 @@ def _read_openings(
                 _get(glass_type, "SolarHeatGainTransmittance", 0.4),
                 _get(glass_type, "VisibleLightTransmittance", 0.7),
             )
-        _ = building.add_opening(
+        var opening = building.add_opening(
             kind,
             ElementId(host),
             Length64(offset, METER),
@@ -1756,6 +1838,7 @@ def _read_openings(
             Length64(height, METER),
             glazing,
         )
+        building.openings[opening.value].name = r.name_arg(filler, 2)
 
 
 def _section(r: _Reader, profile: Int) raises -> Section:
@@ -1834,7 +1917,7 @@ def _read_furniture(
             _get(exact, "CenterY", at.origin.y),
         )
         var rotation = _get(exact, "Rotation", atan2(at.x.y, at.x.x))
-        _ = building.add_furnishing(
+        var furnishing = building.add_furnishing(
             kind,
             SpaceId(space),
             center,
@@ -1843,3 +1926,4 @@ def _read_furniture(
             Length64(r.real_arg(profile, 4), METER),
             Length64(r.real_arg(solid, 3), METER),
         )
+        building.furnishings[furnishing.value].name = r.name_arg(id, 2)

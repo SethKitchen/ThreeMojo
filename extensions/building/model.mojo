@@ -48,7 +48,13 @@ from extensions.building.kinds import (
     WINDOW,
 )
 from extensions.building.material import BuildingMaterial
-from extensions.topology.arrangement import Point2, Region, contains
+from extensions.topology.arrangement import (
+    Point2,
+    Region,
+    contains,
+    polygon_area,
+    _check_region,
+)
 from extensions.topology.complex import HORIZONTAL, VERTICAL
 from extensions.topology.ids import CellId, FaceId, RegionId
 from extensions.topology.storeys import StoreyComplex, build_storeys
@@ -68,6 +74,26 @@ from units.si import (
     CUBIC_METER,
     METER_TO_THE_FOURTH,
 )
+
+
+def _check_space_measures(area: Float64, volume: Float64) raises:
+    """Check derived space measurements before consistency comparisons."""
+    if not (area > 0 and isfinite(area) and volume > 0 and isfinite(volume)):
+        raise Error("A space must have positive finite area and volume")
+
+
+def _check_outline_area(
+    outline_area: Float64, area: Float64, area_error: Float64
+) raises:
+    """Check the independently computed outline against the cell area."""
+    if not isfinite(outline_area) or abs(outline_area - area) > area_error:
+        raise Error("A space outline and its cell area must agree")
+
+
+def _check_face_area(area: Float64) raises:
+    """Check a derived face area before view conversion."""
+    if not (area > 0 and isfinite(area)):
+        raise Error("A face must have positive finite area")
 
 
 @fieldwise_init
@@ -176,8 +202,9 @@ struct Section(ImplicitlyCopyable):
         """Refuse a section that cannot be made.
 
         Raises:
-            Error: If the shape is not valid, a used dimension is not
-                positive and finite, or an I-shape's plates do not fit.
+            Error: If the shape is not valid, a stored dimension is not
+                finite, a used dimension is not positive, or an I-shape's
+                plates do not fit.
         """
         if not self.shape.is_valid():
             raise Error("A section shape must be a rectangle, an I or a circle")
@@ -185,9 +212,17 @@ struct Section(ImplicitlyCopyable):
         var d = self.depth.to(METER)
         if not (b > 0 and isfinite(b)):
             raise Error("A section width must be positive and finite")
+        if not isfinite(d):
+            raise Error("A section depth must be finite")
+        if not (
+            isfinite(self.flange_thickness.value)
+            and isfinite(self.web_thickness.value)
+        ):
+            raise Error("Section plate dimensions must be finite")
         if self.shape == CIRCLE:
             return
-        if not (d > 0 and isfinite(d)):
+        # Finiteness was checked before the circle return above.
+        if not d > 0:
             raise Error("A section depth must be positive and finite")
         if self.shape == I_SHAPE:
             var tf = self.flange_thickness.to(METER)
@@ -888,21 +923,81 @@ struct Building(Movable):
         ref element = self.elements[wall.value]
         if element.kind != WALL:
             raise Error("The element is not a wall")
+        if len(element.faces) != 1:
+            raise Error("A wall needs one face")
         var face = element.faces[0]
         var points = self.topology.complex.face_points(face)
+        if len(points) < 4:
+            raise Error("A wall needs a prismatic face")
         var a = points[0]
         var z0 = a.z
+        if points[1].z != z0:
+            raise Error("A wall face must start along its horizontal base")
         # The base runs from the first corner to the last corner at z0.
         var k = 1
-        while points[k + 1].z == z0:
+        while k + 1 < len(points) and points[k + 1].z == z0:
             k += 1
+        if k + 1 >= len(points):
+            raise Error("A wall needs a positive height")
         var b = points[k]
         var top = points[k + 1].z
+        var length = a.distance_to(b)
+        var height = top - z0
+        if not (length > 0 and height > 0 and isfinite(length + height)):
+            raise Error("A wall needs positive finite dimensions")
         var along = (b - a).normalized()
         var normal = self.topology.complex.face_normal(face)
         return WallFrame(
             a, along, Vec3d(0, 0, 1), normal, a.distance_to(b), top - z0
         )
+
+    def _check_opening_shape(
+        self,
+        kind: OpeningKind,
+        wall: ElementId,
+        offset: Length64,
+        sill: Length64,
+        width: Length64,
+        height: Length64,
+        glazing: Optional[Glazing],
+        before: Int,
+    ) raises:
+        """Check an opening against its host and earlier openings."""
+        if not kind.is_valid():
+            raise Error("An opening kind must be a door or a window")
+        var frame = self.wall_frame(wall)
+        var u0 = offset.to(METER)
+        var v0 = sill.to(METER)
+        var w = width.to(METER)
+        var h = height.to(METER)
+        if not (w > 0 and h > 0 and isfinite(w) and isfinite(h)):
+            raise Error("An opening's size must be positive and finite")
+        if not (u0 >= 0 and v0 >= 0 and isfinite(u0) and isfinite(v0)):
+            raise Error("An opening must lie inside its wall")
+        if u0 + w > frame.length + 1e-9 or v0 + h > frame.height + 1e-9:
+            raise Error("An opening must lie inside its wall")
+        if kind == DOOR and v0 != 0:
+            raise Error("A door must start at the floor")
+        if kind == DOOR and glazing:
+            raise Error("Glazing is supported only for a window")
+        if kind == WINDOW:
+            if not glazing:
+                raise Error("A window needs a glazing")
+            glazing.value().check()
+        for i in range(before):
+            ref other = self.openings[i]
+            if other.host != wall:
+                continue
+            var ou = other.offset.to(METER)
+            var ov = other.sill.to(METER)
+            var apart = (
+                u0 >= ou + other.width.to(METER)
+                or ou >= u0 + w
+                or v0 >= ov + other.height.to(METER)
+                or ov >= v0 + h
+            )
+            if not apart:
+                raise Error("Two openings in one wall must not overlap")
 
     def add_opening(
         mut self,
@@ -934,39 +1029,9 @@ struct Building(Movable):
                 wall, it overlaps another opening, a door does not start at
                 the floor, or a window has no glazing.
         """
-        if not kind.is_valid():
-            raise Error("An opening kind must be a door or a window")
-        var frame = self.wall_frame(wall)
-        var u0 = offset.to(METER)
-        var v0 = sill.to(METER)
-        var w = width.to(METER)
-        var h = height.to(METER)
-        if not (w > 0 and h > 0 and isfinite(w) and isfinite(h)):
-            raise Error("An opening's size must be positive and finite")
-        if not (u0 >= 0 and v0 >= 0):
-            raise Error("An opening must lie inside its wall")
-        if u0 + w > frame.length + 1e-9 or v0 + h > frame.height + 1e-9:
-            raise Error("An opening must lie inside its wall")
-        if kind == DOOR and v0 != 0:
-            raise Error("A door must start at the floor")
-        if kind == WINDOW:
-            if not glazing:
-                raise Error("A window needs a glazing")
-            glazing.value().check()
-        for i in range(len(self.openings)):
-            ref other = self.openings[i]
-            if other.host != wall:
-                continue
-            var ou = other.offset.to(METER)
-            var ov = other.sill.to(METER)
-            var apart = (
-                u0 >= ou + other.width.to(METER)
-                or ou >= u0 + w
-                or v0 >= ov + other.height.to(METER)
-                or ov >= v0 + h
-            )
-            if not apart:
-                raise Error("Two openings in one wall must not overlap")
+        self._check_opening_shape(
+            kind, wall, offset, sill, width, height, glazing, len(self.openings)
+        )
         self.openings.append(
             Opening(
                 String(kind.name(), " ", len(self.openings)),
@@ -1211,23 +1276,155 @@ struct Building(Movable):
                 return True
         return False
 
+    def _check_wall_geometry(
+        self, id: ElementId, level: Int, tol: Float64
+    ) raises:
+        """Check a wall's derived frame against its storey and plane.
+
+        The caller checked the element, face and storey references.
+        wall_frame checks positive finite dimensions before returning.
+        """
+        var wall = self.wall_frame(id)
+        ref storey = self.storeys[level]
+        if (
+            abs(wall.origin.z - storey.elevation.value) > tol
+            or abs(wall.height - storey.height.value) > tol
+        ):
+            raise Error("A wall must span its storey")
+        var points = self.topology.complex.face_points(
+            self.elements[id.value].faces[0]
+        )
+        # wall_frame requires at least four corners before returning.
+        for k in range(len(points)):  # pragma: no branch
+            var offset = points[k] - wall.origin
+            if abs(offset.dot(wall.normal)) > tol:
+                raise Error("A wall face must be planar")
+
     def validate(self) raises:
         """Refuse a model whose parts do not agree.
 
         Raises:
-            Error: If a cell is not closed, a material or construction is
-                not valid, or an id in any part is out of range.
+            Error: If geometry, dimensions, typed values, references or
+                model-to-topology maps are not valid, or parts overlap.
         """
         self.site.check()
         self.topology.complex.validate()
+        ref complex = self.topology.complex
+        var cells = complex.cell_count()
+        var faces = len(complex.faces)
+        var tol = complex.welder.tolerance
+        if (
+            len(self.topology.cell_storey) != cells
+            or len(self.topology.cell_region) != cells
+            or len(self.spaces) != cells
+            or len(self.topology.face_level) != faces
+            or len(self.face_element) != faces
+        ):
+            raise Error("Building topology maps have inconsistent sizes")
+        for i in range(len(self.storeys)):
+            ref storey = self.storeys[i]
+            var z = storey.elevation.value
+            var h = storey.height.value
+            if not (isfinite(z) and h > 0 and isfinite(h) and isfinite(z + h)):
+                raise Error(
+                    "A storey needs finite elevation and positive height"
+                )
+            if i > 0:
+                ref previous = self.storeys[i - 1]
+                if (
+                    abs(z - previous.elevation.value - previous.height.value)
+                    > tol
+                ):
+                    raise Error("Storey levels must agree with their heights")
         for i in range(len(self.materials)):
             self.materials[i].check()
         for i in range(len(self.constructions)):
             self.constructions[i].check(self.materials)
+        var region_count = List[Int](length=len(self.storeys), fill=0)
         for i in range(len(self.spaces)):
-            self.check_storey(self.spaces[i].storey)
-            if not self.spaces[i].use.is_valid():
+            ref space = self.spaces[i]
+            self.check_storey(space.storey)
+            if not space.use.is_valid():
                 raise Error("A space use is not valid")
+            if not space.cell.is_valid() or space.cell.value >= cells:
+                raise Error("A cell id is out of range")
+            if space.cell.value != i:
+                raise Error("Spaces must follow cell order")
+            if self.topology.cell_storey[i] != space.storey.value:
+                raise Error("A space and its cell must share a storey")
+            if (
+                self.topology.cell_region[i].value
+                != region_count[space.storey.value]
+            ):
+                raise Error("A region id must follow its storey's space order")
+            region_count[space.storey.value] += 1
+            if len(space.outline) < 3:
+                raise Error("A space outline needs three corners")
+            # The outline's minimum of three corners was checked above.
+            for k in range(len(space.outline)):  # pragma: no branch
+                var point = space.outline[k]
+                if not (isfinite(point.x) and isfinite(point.y)):
+                    raise Error("A space outline must have finite coordinates")
+            _check_region(Region(0, RegionId(0), space.outline.copy()), 1, tol)
+            var boundaries = complex.faces_of(space.cell)
+            for f in range(len(boundaries)):
+                var points = complex.face_points(boundaries[f])
+                # Complex.validate checked that every face has >=3 corners.
+                for k in range(len(points)):  # pragma: no branch
+                    if not _inside(
+                        space.outline, Point2(points[k].x, points[k].y), tol
+                    ):
+                        raise Error("A space outline and its cell must agree")
+            var area = self.floor_area(SpaceId(i)).value
+            var volume = self.volume(SpaceId(i)).value
+            _check_space_measures(area, volume)
+            var outline_area = abs(polygon_area(space.outline))
+            var perimeter = Float64(0)
+            # The same checked outline still has at least three corners.
+            for k in range(len(space.outline)):  # pragma: no branch
+                var delta = (
+                    space.outline[k]
+                    - space.outline[(k + 1) % len(space.outline)]
+                )
+                perimeter += Vec3d(delta.x, delta.y, 0).length()
+            var area_error = tol * perimeter + 1e-12 * max(area, outline_area)
+            _check_outline_area(outline_area, area, area_error)
+            var expected_volume = (
+                area * self.storeys[space.storey.value].height.value
+            )
+            if (
+                abs(volume - expected_volume)
+                > tol * area + 1e-12 * expected_volume
+            ):
+                raise Error("A space volume and its storey height must agree")
+        for i in range(faces):
+            ref face = complex.faces[i]
+            if not face.positive and not face.negative:
+                raise Error("A building face needs an adjacent cell")
+            var level = self.topology.face_level[i]
+            var vertical = face.kind == VERTICAL
+            var last = len(self.storeys) - 1 if vertical else len(self.storeys)
+            if level < 0 or level > last:
+                raise Error("A face level is out of range")
+            var low: Float64
+            var high: Float64
+            if level == len(self.storeys):
+                ref last_storey = self.storeys[level - 1]
+                low = last_storey.elevation.value + last_storey.height.value
+                high = low
+            else:
+                low = self.storeys[level].elevation.value
+                high = (
+                    low + self.storeys[level].height.value if vertical else low
+                )
+            var points = complex.face_points(FaceId(i))
+            # Complex.validate checked this face's minimum corner count.
+            for k in range(len(points)):  # pragma: no branch
+                if points[k].z < low - tol or points[k].z > high + tol:
+                    raise Error("A face and its storey levels must agree")
+            var area = complex.face_area(FaceId(i))
+            _check_face_area(area)
+        var owner = List[Int](length=faces, fill=-1)
         for i in range(len(self.elements)):
             ref element = self.elements[i]
             self.check_storey(element.storey)
@@ -1237,12 +1434,120 @@ struct Building(Movable):
                 self.check_construction(element.construction.value())
             if element.material:
                 self.check_material(element.material.value())
+            var frame = element.kind == COLUMN or element.kind == BEAM
+            if frame:
+                if not element.material or not element.section:
+                    raise Error("A frame member needs a material and section")
+                if element.construction or len(element.faces) != 0:
+                    raise Error(
+                        "A frame member must not own a face or construction"
+                    )
+                element.section.value().check()
+                var a = element.start
+                var b = element.end
+                if not (
+                    isfinite(a.x)
+                    and isfinite(a.y)
+                    and isfinite(a.z)
+                    and isfinite(b.x)
+                    and isfinite(b.y)
+                    and isfinite(b.z)
+                ):
+                    raise Error("A member axis must be finite")
+                var length = a.distance_to(b)
+                if not (length > 0 and isfinite(length)):
+                    raise Error(
+                        "A member axis must have positive finite length"
+                    )
+                ref storey = self.storeys[element.storey.value]
+                var bottom = storey.elevation.value
+                var top = bottom + storey.height.value
+                if element.kind == COLUMN:
+                    if abs(a.x - b.x) > tol or abs(a.y - b.y) > tol:
+                        raise Error("A building column must be vertical")
+                    if abs(a.z - bottom) > tol or abs(b.z - top) > tol:
+                        raise Error("A column must span its storey")
+                else:
+                    if abs(a.z - top) > tol or abs(b.z - top) > tol:
+                        raise Error(
+                            "A building beam must lie at its storey's top"
+                        )
+                    var plan = Point2(b.x - a.x, b.y - a.y)
+                    if plan.dot(plan) <= 1e-12:
+                        raise Error("A beam's ends must differ in plan")
+            else:
+                if not element.construction:
+                    raise Error("A surface element needs a construction")
+                if element.material or element.section:
+                    raise Error(
+                        "A surface element uses its layered construction"
+                    )
+                if len(element.faces) != 1:
+                    raise Error("A surface element needs one face")
+                var id = element.faces[0]
+                if not id.is_valid() or id.value >= faces:
+                    raise Error("A face id is out of range")
+                if owner[id.value] >= 0:
+                    raise Error("Two elements must not own one face")
+                owner[id.value] = i
+                var vertical = complex.faces[id.value].kind == VERTICAL
+                if (element.kind == WALL) != vertical:
+                    raise Error("An element kind must agree with its face")
+                var level = self.topology.face_level[id.value]
+                var expected_storey = level
+                if element.kind == ROOF:
+                    expected_storey = level - 1
+                if element.storey.value != expected_storey:
+                    raise Error("An element and its face must share a storey")
+                if vertical:
+                    self._check_wall_geometry(ElementId(i), level, tol)
+        for i in range(faces):
+            if self.face_element[i] != owner[i]:
+                raise Error("The face-element map must agree with the elements")
         for i in range(len(self.openings)):
-            self.check_element(self.openings[i].host)
+            ref opening = self.openings[i]
+            self._check_opening_shape(
+                opening.kind,
+                opening.host,
+                opening.offset,
+                opening.sill,
+                opening.width,
+                opening.height,
+                opening.glazing,
+                i,
+            )
+        var furnishings_in = Dict[Int, List[Int]]()
+        var footprints = List[List[Point2]]()
         for i in range(len(self.furnishings)):
-            self.check_space(self.furnishings[i].space)
-            if not self.furnishings[i].kind.is_valid():
+            ref item = self.furnishings[i]
+            self.check_space(item.space)
+            if not item.kind.is_valid():
                 raise Error("A furniture kind is not valid")
+            var sizes = [item.width.value, item.depth.value, item.height.value]
+            for k in range(3):  # pragma: no branch (three dimensions)
+                if not (sizes[k] > 0 and isfinite(sizes[k])):
+                    raise Error(
+                        "A furnishing's size must be positive and finite"
+                    )
+            if not (
+                isfinite(item.center.x)
+                and isfinite(item.center.y)
+                and isfinite(item.rotation.value)
+            ):
+                raise Error("A furnishing's place must be finite")
+            var corners = item.corners()
+            var space = item.space.value
+            for k in range(4):  # pragma: no branch (four generated corners)
+                if not _inside(self.spaces[space].outline, corners[k], 1e-9):
+                    raise Error("A furnishing must stand inside its space")
+            if space not in furnishings_in:
+                furnishings_in[space] = List[Int]()
+            for k in range(len(furnishings_in[space])):
+                var other = furnishings_in[space][k]
+                if not quads_apart(corners, footprints[other]):
+                    raise Error("Two furnishings must not overlap")
+            footprints.append(corners^)
+            furnishings_in[space].append(i)
 
 
 def assemble(

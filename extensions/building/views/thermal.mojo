@@ -34,6 +34,7 @@ from extensions.energy.zone import (
     interior_film,
     outside_film_coefficient,
     typical_gains,
+    gain_fraction,
 )
 from extensions.topology.ids import CellId, FaceId
 from generators.utils import Vec3d
@@ -114,6 +115,8 @@ def _zone_ids(
     for i in range(spaces):  # pragma: no branch
         if not grouping[i].is_valid():
             raise Error("A zone id is out of range")
+        if grouping[i].value >= spaces:
+            raise Error("A grouping must use every zone from 0 up")
         count = max(count, grouping[i].value + 1)
     var used = List[Bool](length=count, fill=False)
     for i in range(spaces):  # pragma: no branch
@@ -202,6 +205,14 @@ def thermal_view(
                 first = i
                 name = space.name
             else:
+                # A Zone has one daily profile. Refuse a grouping that
+                # would silently replace another space's schedule.
+                # Every comparison has 24 hours, so this range is nonempty.
+                for hour in range(24):  # pragma: no branch
+                    if gain_fraction(space.use, hour) != gain_fraction(
+                        building.spaces[first].use, hour
+                    ):
+                        raise Error("Grouped spaces must share a gain profile")
                 name += String(" + ", space.name)
             var a = building.floor_area(SpaceId(i)).to(SQUARE_METER)
             volume += building.volume(SpaceId(i)).value

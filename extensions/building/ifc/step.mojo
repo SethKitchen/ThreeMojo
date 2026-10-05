@@ -14,6 +14,9 @@ a reference such as `#12`, a list in parentheses, a typed value such as
 `StepFile` holds the values in one arena: each value is a `StepValue` with
 a kind, and a list or a typed value names its children by index. `parse`
 reads the text, refusing malformed input with the line of the error.
+It accepts at most 256 nested lists and typed values, including the outer
+attribute list of each header entry or entity. A deeper value raises Error
+before the parser descends into it.
 `StepFile.write` writes the text back. A real is written with the shortest
 digits that read back to the same number, so values round-trip exactly.
 
@@ -24,6 +27,10 @@ every non-ASCII character as `\\X2\\` or `\\X4\\`.
 """
 
 from std.math import isfinite
+
+# Lists and typed values share one nesting budget. The outer attribute
+# list counts as one level, so each recursive call has a bounded stack.
+comptime _MAX_VALUE_NESTING = 256
 
 
 @fieldwise_init
@@ -786,8 +793,10 @@ struct _Reader:
             self.at += 1
 
 
-def _parse_value(mut reader: _Reader, mut file: StepFile) raises -> Int:
-    """Read one attribute value into the arena and return its index."""
+def _parse_value(
+    mut reader: _Reader, mut file: StepFile, depth: Int
+) raises -> Int:
+    """Read one value with the count of enclosing lists and typed values."""
     reader.skip_space()
     var c = reader.peek()
     if c == 36:
@@ -810,6 +819,10 @@ def _parse_value(mut reader: _Reader, mut file: StepFile) raises -> Int:
         reader.expect(46, "a dot after an enumeration")
         return file.enumeration(name)
     if c == 40:
+        if depth >= _MAX_VALUE_NESTING:
+            raise reader.fail(
+                "value nesting exceeds the supported maximum of 256"
+            )
         reader.at += 1
         var children = List[Int]()
         reader.skip_space()
@@ -817,7 +830,7 @@ def _parse_value(mut reader: _Reader, mut file: StepFile) raises -> Int:
             reader.at += 1
             return file.list(children^)
         while True:
-            children.append(_parse_value(reader, file))
+            children.append(_parse_value(reader, file, depth + 1))
             reader.skip_space()
             var next = reader.peek()
             reader.at += 1
@@ -835,7 +848,11 @@ def _parse_value(mut reader: _Reader, mut file: StepFile) raises -> Int:
     if letter:
         var name = reader.keyword()
         reader.expect(40, "a parenthesis after a type name")
-        var child = _parse_value(reader, file)
+        if depth >= _MAX_VALUE_NESTING:
+            raise reader.fail(
+                "value nesting exceeds the supported maximum of 256"
+            )
+        var child = _parse_value(reader, file, depth + 1)
         reader.expect(41, "a closing parenthesis after a typed value")
         return file.typed(name, child)
     raise reader.fail("expected a value")
@@ -845,7 +862,7 @@ def _parse_arguments(
     mut reader: _Reader, mut file: StepFile
 ) raises -> List[Int]:
     """Read a parenthesized list of attribute values."""
-    var list_index = _parse_value(reader, file)
+    var list_index = _parse_value(reader, file, 0)
     if file.kind_of(list_index) != LIST:
         raise reader.fail("expected attributes in parentheses")
     return file.as_list(list_index)
@@ -863,7 +880,8 @@ def parse(text: String) raises -> StepFile:
     Raises:
         Error: If the text is not a well-formed STEP file, giving the line:
             a missing section, a bad value, an unclosed string or comment,
-            or a repeated instance number.
+            a repeated instance number, or more than 256 nested lists and
+            typed values, including the outer attribute list.
     """
     var reader = _Reader(text)
     var file = StepFile()
