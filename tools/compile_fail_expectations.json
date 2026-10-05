@@ -4679,5 +4679,17 @@
     "notes": [
       "function declared here"
     ]
+  },
+  "tests/compile_fail/an_astc_profile_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 70,
+        "message": "invalid call to 'astc_image': value passed to 'profile' cannot be converted from 'IntLiteral[0]' to 'AstcProfile'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
   }
 }
