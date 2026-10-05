@@ -766,8 +766,11 @@ struct ALSM(Movable):
         else:
             _drop(self.unregistered_actors, a)
             _drop(self.hero_actors, a)
-        # Observed unregistered actors can also be collision-lock leads.
-        collision.remove_actor(actor)
+        # A live unregistered-to-registered transition only refreshes the
+        # observation. update() removes dead registered ids first, so a
+        # remaining registered id here is a live promotion, not destruction.
+        if registered_actor or not registered.contains(actor):
+            collision.remove_actor(actor)
         shared.track_traffic.delete_actor(actor)
         shared.simulation_state.remove_actor(actor)
 
