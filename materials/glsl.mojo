@@ -465,9 +465,9 @@ struct _Lexer(Movable):
             for digit_at in range(digits_at, end):
                 var byte = Int(bytes[digit_at])
                 var digit = byte - ord("0")
-                if byte >= ord("a") and byte <= ord("f"):
+                if byte >= ord("a"):
                     digit = byte - ord("a") + 10
-                elif byte >= ord("A") and byte <= ord("F"):
+                elif byte >= ord("A"):
                     digit = byte - ord("A") + 10
                 if digit >= base:
                     raise self.error(
@@ -493,6 +493,8 @@ struct _Lexer(Movable):
             raise self.error(
                 line, "an int literal exceeds 2147483647; use a u suffix"
             )
+        if written == "":
+            raise self.error(line, "a number needs digits")
         out.append(_Token(kind, written, number, line))
         return suffix_end
 
@@ -1469,7 +1471,7 @@ def _loop_constants(
             and kind.value <= NODE_INT_LAST.value
         ):
             var known = True
-            for slot in range(3):
+            for slot in range(3):  # pragma: no branch
                 if graph._inputs[node * 3 + slot] >= 0 and not inputs[slot]:
                     known = False
             if known:
@@ -1536,7 +1538,7 @@ def _fold_integer_constants(mut graph: NodeGraph) raises:
             continue
         var known = True
         var inputs = Array[Lanes, 3](fill=Lanes(0))
-        for slot in range(3):
+        for slot in range(3):  # pragma: no branch
             var input = graph._inputs[node * 3 + slot]
             while input >= 0 and graph._kinds[input] == NODE_COPY:
                 input = graph._inputs[input * 3]
@@ -1556,7 +1558,7 @@ def _fold_integer_constants(mut graph: NodeGraph) raises:
         var key = (UInt64(type.value) << 32) | UInt64(
             bitcast[DType.uint32](value[0])
         )
-        for slot in range(3):
+        for slot in range(3):  # pragma: no branch
             graph._inputs[node * 3 + slot] = -1
         if key in constants:
             graph._kinds[node] = NODE_COPY
@@ -1579,7 +1581,7 @@ def _simplify_proved_control(
     for node in range(len(values)):
         if values[node]:
             graph._kinds[node] = NODE_CONSTANT
-            for slot in range(3):
+            for slot in range(3):  # pragma: no branch
                 graph._inputs[node * 3 + slot] = -1
             graph._values[node * 4] = values[node].value()
         elif graph._kinds[node] == NODE_SELECT:
@@ -4225,11 +4227,8 @@ struct _Compiler(Movable):
             node = self.graph.mul(x, y)
         elif mark == "/":
             node = self.graph.div(x, y)
-        elif type.is_uint() or type.is_int():
-            node = self.graph.mod(x, y)
         else:
-            var quotient = self.graph.trunc(self.graph.div(x, y))
-            node = self.graph.sub(x, self.graph.mul(y, quotient))
+            node = self.graph.mod(x, y)
         var value = self.derived(type, node, left, right)
         if left.known and right.known:
             value.known = True
