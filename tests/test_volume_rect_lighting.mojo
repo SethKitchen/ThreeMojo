@@ -283,6 +283,27 @@ def test_rectangles_change_the_rendered_volume() raises:
     assert_true(changed > 15, "the volume ignored its rectangle lights")
 
 
+def test_exactly_collapsed_rectangles_have_zero_volume_factor() raises:
+    for point in [ORIGIN, Vector3(0, 0, 1), Vector3(0.3, -0.4, -0.2)]:
+        assert_equal(ltc_evaluate_volume(point, C0, C0, C3, C3), 0)
+        assert_equal(ltc_evaluate_volume(point, C3, C3, C0, C0), 0)
+        assert_equal(ltc_evaluate_volume(point, C0, C1, C1, C0), 0)
+        assert_equal(ltc_evaluate_volume(point, C0, C0, C0, C0), 0)
+    # This nonzero rectangle has an area whose Float32 square underflows.
+    # A squared-area or epsilon test must not classify it as collapsed.
+    var half = Float32(1e-25)
+    assert_true(
+        ltc_evaluate_volume(
+            ORIGIN,
+            Vector3(half, -1, 1),
+            Vector3(-half, -1, 1),
+            Vector3(-half, 1, 1),
+            Vector3(half, 1, 1),
+        )
+        > 0
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 
