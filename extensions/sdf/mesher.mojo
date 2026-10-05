@@ -368,27 +368,40 @@ struct _Grid:
         self.samples = List[Float32]()
         self.vertex_of = List[Int]()
 
-    def sample(self, gx: Int, gy: Int, gz: Int) -> Float32:
-        """Return one lattice sample, or `UNSAMPLED` outside every block.
-
-        A point on a face between blocks belongs to both. The block below
-        it is read when the block above it is not active.
-        """
+    def _sample_index(self, gx: Int, gy: Int, gz: Int) -> Int:
+        # Prefer the floor-division owner. If it is inactive, use the
+        # lowest lattice block index among all active blocks at the point.
+        # This rule is independent of activation and sharing order.
         var f = self.lattice.block
         var side = f + 1
+        var best = -1
+        var lowest = Int.MAX
         for n in range(8):  # pragma: no branch
             var i = min((gx - (n & 1)) // f, self.lattice.bx - 1)
             var j = min((gy - ((n >> 1) & 1)) // f, self.lattice.by - 1)
             var k = min((gz - (n >> 2)) // f, self.lattice.bz - 1)
             if min(i, min(j, k)) < 0:
                 continue
-            var slot = self.slot_of[self.lattice.block_index(i, j, k)]
-            if slot >= 0:
+            var b = self.lattice.block_index(i, j, k)
+            var slot = self.slot_of[b]
+            if slot >= 0 and b < lowest:
                 var local = (gx - i * f) + side * (
                     (gy - j * f) + side * (gz - k * f)
                 )
-                return self.samples[slot * side * side * side + local]
-        return UNSAMPLED
+                best = slot * side * side * side + local
+                if n == 0:
+                    return best
+                lowest = b
+        return best
+
+    def sample(self, gx: Int, gy: Int, gz: Int) -> Float32:
+        """Return one lattice sample, or `UNSAMPLED` outside every block.
+
+        A shared point uses its floor-division block when active. Otherwise
+        it uses the active block with the lowest lattice block index.
+        """
+        var at = self._sample_index(gx, gy, gz)
+        return self.samples[at] if at >= 0 else UNSAMPLED
 
     def vertex(self, gx: Int, gy: Int, gz: Int) -> Int:
         """Return the vertex of one cell, or -1."""
@@ -646,8 +659,10 @@ def _share_faces(mut grid: _Grid):
     Neighboring blocks sample their shared faces apart, each with its own
     culled solids, and rounding can tell the two apart in sign. The
     block a point lies in by floor division owns it, and every other
-    active block takes the owner's value. A cell then sees the same
-    crossings as its neighbors, and the surface has no pinholes.
+    active block takes the owner's value. If that block is inactive, the
+    lowest-index active lattice block at the point owns it. `sample` uses
+    the same rule. A cell then sees the same crossings as its neighbors,
+    and the surface has no pinholes.
     """
     var lt = grid.lattice
     var f = lt.block
@@ -664,16 +679,12 @@ def _share_faces(mut grid: _Grid):
             var lz = n // (side * side)
             if max(lx, max(ly, lz)) < f:
                 continue
-            var oi = min(bi + lx // f, lt.bx - 1)
-            var oj = min(bj + ly // f, lt.by - 1)
-            var ok = min(bk + lz // f, lt.bz - 1)
-            var owner = grid.slot_of[lt.block_index(oi, oj, ok)]
-            if owner < 0 or owner == slot:
-                continue
-            var local = (bi * f + lx - oi * f) + side * (
-                (bj * f + ly - oj * f) + side * (bk * f + lz - ok * f)
+            var owner = grid._sample_index(
+                bi * f + lx, bj * f + ly, bk * f + lz
             )
-            grid.samples[slot * per + n] = grid.samples[owner * per + local]
+            # The current active block holds the point, so an owner exists.
+            debug_assert(owner >= 0, "An active block holds the shared point")
+            grid.samples[slot * per + n] = grid.samples[owner]
 
 
 def _spill(
