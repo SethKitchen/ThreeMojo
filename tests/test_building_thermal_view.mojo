@@ -27,7 +27,14 @@ from extensions.building.ids import (
     MaterialId,
     StoreyId,
 )
-from extensions.building.kinds import CORRIDOR, DOOR, OFFICE, WALL, WINDOW
+from extensions.building.kinds import (
+    CORRIDOR,
+    DOOR,
+    LIVING,
+    OFFICE,
+    WALL,
+    WINDOW,
+)
 from extensions.building.material import (
     BuildingMaterial,
     brick,
@@ -316,6 +323,19 @@ def test_grouped_zones() raises:
     bad.cooling_setpoint = Temperature64(10, CELSIUS)
     with assert_raises(contains="above cooling"):
         _ = thermal_view(b, bad, List[ZoneId]())
+
+
+def test_mixed_gain_profiles_are_refused() raises:
+    var b = _building()
+    b.spaces[1].use = LIVING
+    with assert_raises(contains="gain profile"):
+        _ = thermal_view(
+            b, default_thermal_options(), [ZoneId(0), ZoneId(0), ZoneId(1)]
+        )
+    with assert_raises(contains="every zone"):
+        _ = thermal_view(
+            b, default_thermal_options(), [ZoneId(0), ZoneId(999), ZoneId(1)]
+        )
 
 
 def test_empty_building() raises:
