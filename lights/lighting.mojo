@@ -1077,9 +1077,6 @@ def rect_volume_light(
 
     Returns:
         The unscaled light added to scattering density at this step.
-
-    Raises:
-        None.
     """
     var center = view_direction(light_position - position, up, back)
     var across = view_direction(half_width, up, back)
