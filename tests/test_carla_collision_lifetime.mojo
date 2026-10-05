@@ -368,7 +368,7 @@ def test_alsm_removes_registered_and_observed_unregistered_dead_leads() raises:
         assert_true(world.is_alive(follower))
 
 
-def test_observed_lead_promotion_refreshes_locks_without_destroying_it() raises:
+def test_observed_lead_promotion_preserves_locks_and_cycle_caches() raises:
     var world = _world(straight_town())
     var tm = _manager(world)
     var follower = _spawn(world, 20, 1.75)
@@ -377,18 +377,86 @@ def test_observed_lead_promotion_refreshes_locks_without_destroying_it() raises:
     tm.step(world)
     assert_true(follower.value in tm.collision_stage.collision_locks)
     assert_true(lead.value in tm.alsm.unregistered_actors)
+    var held = tm.collision_stage.collision_locks[follower.value]
+    _ = tm.collision_stage.get_geometry_between_actors(
+        follower, lead, tm.shared
+    )
+    var pair_key = (follower.value << 32) | lead.value
+    var geometry = tm.collision_stage.geometry_cache[pair_key]
+    var boundary = tm.collision_stage.geodesic_boundary_map[
+        follower.value
+    ].copy()
+    assert_true(len(boundary) > 0)
     tm.register_vehicles(world, [lead])
     _update_actors(tm, world)
     assert_true(world.is_alive(lead))
     assert_true(tm.registered_vehicles.contains(lead))
     assert_true(tm.shared.simulation_state.contains_actor(lead))
     assert_false(lead.value in tm.alsm.unregistered_actors)
-    assert_false(follower.value in tm.collision_stage.collision_locks)
-    _empty_caches(tm.collision_stage)
+    assert_true(follower.value in tm.collision_stage.collision_locks)
+    _same_lock(tm.collision_stage.collision_locks[follower.value], held)
+    var cached = tm.collision_stage.geometry_cache[pair_key]
+    assert_equal(
+        cached.reference_vehicle_to_other_geodesic,
+        geometry.reference_vehicle_to_other_geodesic,
+    )
+    assert_equal(
+        cached.other_vehicle_to_reference_geodesic,
+        geometry.other_vehicle_to_reference_geodesic,
+    )
+    assert_equal(
+        cached.inter_geodesic_distance, geometry.inter_geodesic_distance
+    )
+    assert_equal(cached.inter_bbox_distance, geometry.inter_bbox_distance)
+    var after = tm.collision_stage.geodesic_boundary_map[follower.value].copy()
+    assert_equal(len(after), len(boundary))
+    for i in range(len(boundary)):
+        assert_true(after[i] == boundary[i])
+    _update_actors(tm, world)
+    _same_lock(tm.collision_stage.collision_locks[follower.value], held)
     tm.step(world)
     assert_equal(
         tm.collision_stage.collision_locks[follower.value].lead_vehicle_id, lead
     )
+
+
+def test_direct_observed_removal_and_dead_promotion_clear_locks() raises:
+    for promoted in [False, True]:
+        var world = _world(straight_town())
+        var tm = _manager(world)
+        var follower = _spawn(world, 20, 1.75)
+        var lead = _spawn(world, 26, 1.75)
+        tm.register_vehicles(world, [follower])
+        tm.step(world)
+        assert_true(follower.value in tm.collision_stage.collision_locks)
+        assert_true(lead.value in tm.alsm.unregistered_actors)
+        _ = tm.collision_stage.get_geometry_between_actors(
+            follower, lead, tm.shared
+        )
+        if promoted:
+            tm.register_vehicles(world, [lead])
+        assert_true(world.destroy_actor(lead))
+        if promoted:
+            # It is still in both sets. update() removes dead registered
+            # actors before it processes the old unregistered observation.
+            _update_actors(tm, world)
+            assert_false(tm.registered_vehicles.contains(lead))
+        else:
+            # The public removal method also retains its standalone cleanup.
+            tm.alsm.remove_actor(
+                lead,
+                False,
+                tm.registered_vehicles,
+                tm.shared,
+                tm.localization_stage,
+                tm.collision_stage,
+                tm.traffic_light_stage,
+                tm.motion_plan_stage,
+            )
+        assert_false(follower.value in tm.collision_stage.collision_locks)
+        assert_false(tm.shared.simulation_state.contains_actor(lead))
+        assert_false(lead.value in tm.alsm.unregistered_actors)
+        _empty_caches(tm.collision_stage)
 
 
 def test_cycle_clear_preserves_locks_and_reset_forgets_them() raises:
