@@ -1945,9 +1945,6 @@ def texture_grad_finite(
 
     Returns:
         Whether all six components are finite.
-
-    Raises:
-        Never.
     """
     return (
         isfinite(u)
@@ -1965,6 +1962,7 @@ def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
     Ordinary coordinates keep their exact arithmetic. Reduction keeps the
     representable wrap phase of larger finite coordinates and avoids
     overflowing a texel-index conversion after a large finite gradient.
+    The caller supplies a checked wrap mode.
 
     Args:
         value: A finite coordinate of an explicit-gradient tap.
@@ -1972,9 +1970,6 @@ def gradient_sample_coordinate(value: Float32, mode: Wrap) -> Float32:
 
     Returns:
         The same coordinate or a bounded coordinate with the same wrap.
-
-    Raises:
-        Never. The caller supplies a checked wrap mode.
     """
     if abs(value) <= Float32(1048576):
         return value
@@ -2181,8 +2176,7 @@ def _major_direction(
 def _scaled_footprint(
     along_x: Vector2, along_y: Vector2, width: Int, height: Int, anisotropy: Int
 ) -> Footprint:
-    """Keep a finite derivative's length in log space when texel products overflow.
-    """
+    """Keep a finite derivative's length in log space when texel products overflow."""
     var derivative_scale = max(
         max(abs(along_x.x), abs(along_x.y)), max(abs(along_y.x), abs(along_y.y))
     )
@@ -2289,8 +2283,7 @@ def anisotropic_footprint(
     var longest = in_x
     if in_y > in_x:
         longest = in_y
-    if longest <= 0:
-        return Footprint(0, 1, Vector2(0, 0))
+    # The normal finite squared norm above guarantees a positive length.
     # The isotropic read, unchanged: the longer derivative's own level,
     # negative where the texture is magnified.
     if anisotropy <= 1:
