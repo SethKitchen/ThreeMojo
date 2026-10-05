@@ -321,7 +321,9 @@ def _span_box(
 
 def _lane_section_box(road: Road, section: Int, lane: Int) raises -> Box3:
     var a = road.sections[section].s
-    var b = a + road.section_length(section)
+    # Use the stored endpoint. Re-adding a rounded section length can
+    # overshoot it, including for a=10.2 and road.length=50.1.
+    var b = min(road.upper_bound(a), road.length)
     if not (isfinite(a) and isfinite(b) and a >= 0.0 and b >= a):
         raise Error("A junction lane has an invalid section interval")
     var breaks: List[Float64] = [a, b]
@@ -338,7 +340,7 @@ def _lane_section_box(road: Road, section: Int, lane: Int) raises -> Box3:
     for i in range(len(breaks) - 1):
         # Keep both sides of a discontinuous record boundary. The previous
         # representable s is the final API input that uses the old records.
-        var end = breaks[i + 1]
+        var end = min(breaks[i + 1], b)
         if end > breaks[i]:
             end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
         out.union(_span_box(road, section, lane, breaks[i], end))
