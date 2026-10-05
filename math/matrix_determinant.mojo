@@ -162,13 +162,17 @@ def _determinant_f32[
     Two widened Float32 factors are exact; higher orders use expansions.
     """
     comptime assert 1 <= size <= 4
+    # Nested rather than `elif`: the coverage tool reads an `elif` as a run
+    # time decision, and in a compile-time chain it is not one.
     comptime if size == 1:
         return Float64(entries[0])
-    elif size == 2:
-        return Float64(entries[0]) * Float64(entries[3]) - Float64(
-            entries[1]
-        ) * Float64(entries[2])
-    elif size == 3:
-        return _determinant3_f32(rebind[Array[Float32, 9]](entries))
     else:
-        return _determinant4_f32(rebind[Array[Float32, 16]](entries))
+        comptime if size == 2:
+            return Float64(entries[0]) * Float64(entries[3]) - Float64(
+                entries[1]
+            ) * Float64(entries[2])
+        else:
+            comptime if size == 3:
+                return _determinant3_f32(rebind[Array[Float32, 9]](entries))
+            else:
+                return _determinant4_f32(rebind[Array[Float32, 16]](entries))

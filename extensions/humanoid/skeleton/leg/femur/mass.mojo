@@ -29,7 +29,7 @@ from extensions.humanoid.skeleton.occupancy import (
     sample_bone_mass,
     in_shaft_span,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     BoneTissue,
     cortical_tissue,
     trabecular_tissue,

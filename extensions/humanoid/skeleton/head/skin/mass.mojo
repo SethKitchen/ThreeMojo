@@ -19,14 +19,16 @@ from extensions.humanoid.skeleton.head.frame import (
 from extensions.humanoid.skeleton.head.skin.dimensions import (
     HeadSkinLayerField,
 )
+from extensions.anatomy.soft_tissue import (
+    SoftMass,
+    SoftTissue,
+    skin_tissue,
+)
 from extensions.humanoid.skeleton.soft_tissue import (
     SOFT_STEP,
-    SoftMass,
     SoftOccupancy,
-    SoftTissue,
     classify_soft,
     sample_soft_mass,
-    skin_tissue,
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3

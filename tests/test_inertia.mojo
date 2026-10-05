@@ -16,7 +16,7 @@ from extensions.humanoid.skeleton.limb.inertia import (
     LimbSegment,
     segment_inertia,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     ADIPOSE,
     adipose_tissue,
 )

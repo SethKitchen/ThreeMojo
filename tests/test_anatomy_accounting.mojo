@@ -5,11 +5,9 @@
 
 """Independent controls for exact cut cells and exclusive tissue assignment."""
 
+from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.humanoid.skeleton.limb.inertia import (
-    SegmentInertia,
     SegmentEstimate,
-    _add_cell,
-    _inertia,
     _occupied_region,
 )
 from extensions.humanoid.skeleton.limb.regions import (
@@ -103,13 +101,9 @@ def test_grid_rejects_non_finite_and_unbounded_work_before_counts() raises:
             _ = grid.cell(0, 0, index)
 
 
-def _box(
-    low: Vector3, high: Vector3, step: Float32
-) raises -> Tuple[Float64, SIMD[DType.float64, 4], SIMD[DType.float64, 8]]:
+def _box(low: Vector3, high: Vector3, step: Float32) raises -> InertiaTally:
     var grid = SampleGrid(low, high, Length(step))
-    var mass = Float64(0)
-    var first = SIMD[DType.float64, 4](0)
-    var second = SIMD[DType.float64, 8](0)
+    var tally = InertiaTally()
     for iz in range(grid.nz):
         for iy in range(grid.ny):
             for ix in range(grid.nx):
@@ -125,8 +119,8 @@ def _box(
                 var m = (
                     Float64(1200) * Float64(w.x) * Float64(w.y) * Float64(w.z)
                 )
-                _add_cell(mass, first, second, m, p, w)
-    return (mass, first, second)
+                tally.add_cell(m, p, w)
+    return tally^
 
 
 def _tensor(v: SegmentInertia) -> SIMD[DType.float64, 8]:
@@ -140,6 +134,15 @@ def _tensor(v: SegmentInertia) -> SIMD[DType.float64, 8]:
         0,
         0,
     )
+
+
+def _refuses_unnamed_regions(estimate: SegmentEstimate) raises:
+    # In a helper, not in the loop below: Mojo 1.1.0 segfaults now and then
+    # compiling these raising calls inside that loop's body.
+    with assert_raises():
+        _ = estimate.region_volume(LimbRegion(7))
+    with assert_raises():
+        _ = estimate.region_mass(LimbRegion(-1))
 
 
 def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
@@ -159,8 +162,11 @@ def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
         0,
     )
     for step in [Float32(0.02), Float32(0.01), Float32(0.005)]:
-        var m, first, second = _box(low, high, step)
-        var result = _inertia(m, first, second, size.y)
+        var whole = _box(low, high, step)
+        var m = whole.mass
+        var first = whole.first
+        var second = whole.second
+        var result = whole.result(size.y)
         assert_almost_equal(result.mass.value, expected_mass, atol=2.0e-8)
         for axis in range(3):
             assert_almost_equal(
@@ -174,13 +180,13 @@ def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
                 actual[index], Float64(expected[index]), atol=1.0e-10
             )
         # The cut is not aligned with any of the three grids.
-        var ma, fa, sa = _box(low, Vector3(high.x, 0.0043, high.z), step)
-        var mb, fb, sb = _box(Vector3(low.x, 0.0043, low.z), high, step)
-        assert_almost_equal(ma + mb, m, atol=2.0e-8)
+        var cut = _box(low, Vector3(high.x, 0.0043, high.z), step)
+        cut.add(_box(Vector3(low.x, 0.0043, low.z), high, step))
+        assert_almost_equal(cut.mass, m, atol=2.0e-8)
         for axis in range(3):
-            assert_almost_equal(fa[axis] + fb[axis], first[axis], atol=2.0e-9)
+            assert_almost_equal(cut.first[axis], first[axis], atol=2.0e-9)
         for axis in range(6):
-            assert_almost_equal(sa[axis] + sb[axis], second[axis], atol=2.0e-10)
+            assert_almost_equal(cut.second[axis], second[axis], atol=2.0e-10)
         var counts = SIMD[DType.float64, 8](0)
         counts[0] = 0.1
         var estimate = SegmentEstimate(
@@ -192,10 +198,7 @@ def test_cuboid_and_arbitrary_cut_composition_are_exact_at_three_steps() raises:
         assert_almost_equal(
             estimate.region_mass(LimbRegion(0)).value, 0.1, atol=1.0e-8
         )
-        with assert_raises():
-            _ = estimate.region_volume(LimbRegion(7))
-        with assert_raises():
-            _ = estimate.region_mass(LimbRegion(-1))
+        _refuses_unnamed_regions(estimate)
 
 
 def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:
@@ -203,12 +206,12 @@ def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:
     var b = Vector3(0.05, -0.04, 0.01)
     var d = b - a
     var expected_center = (a * 2 + b * 3) * 0.2
-    var mass = Float64(0)
-    var first = SIMD[DType.float64, 4](0)
-    var second = SIMD[DType.float64, 8](0)
-    _add_cell(mass, first, second, 2, a, Vector3(0, 0, 0))
-    _add_cell(mass, first, second, 3, b, Vector3(0, 0, 0))
-    var result = _inertia(mass, first, second, 1)
+    var tally = InertiaTally()
+    tally.add_cell(2, a, Vector3(0, 0, 0))
+    tally.add_cell(3, b, Vector3(0, 0, 0))
+    var mass = tally.mass
+    var second = tally.second
+    var result = tally.result(1)
     # Closed form: central second moment = (m1*m2/M) * d*d^T.
     var expected = SIMD[DType.float32, 8](
         1.2 * (d.y * d.y + d.z * d.z),
@@ -261,12 +264,10 @@ def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:
     var shift = Vector3(0.13, -0.11, 0.09)
     var ra = Vector3(-a.y, a.x, a.z) + shift
     var rb = Vector3(-b.y, b.x, b.z) + shift
-    var rm = Float64(0)
-    var rf = SIMD[DType.float64, 4](0)
-    var rs = SIMD[DType.float64, 8](0)
-    _add_cell(rm, rf, rs, 2, ra, Vector3(0, 0, 0))
-    _add_cell(rm, rf, rs, 3, rb, Vector3(0, 0, 0))
-    var rotated = _inertia(rm, rf, rs, 1)
+    var turned = InertiaTally()
+    turned.add_cell(2, ra, Vector3(0, 0, 0))
+    turned.add_cell(3, rb, Vector3(0, 0, 0))
+    var rotated = turned.result(1)
     var rotation_expected = SIMD[DType.float64, 8](
         actual[1], actual[0], actual[2], -actual[3], -actual[5], actual[4], 0, 0
     )
@@ -289,8 +290,10 @@ def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:
         inf[DType.float64](),
         nan[DType.float64](),
     ]:
+        var broken = tally.copy()
+        broken.mass = bad
         with assert_raises(contains="mass"):
-            _ = _inertia(bad, first, second, 1)
+            _ = broken.result(1)
 
 
 def main() raises:

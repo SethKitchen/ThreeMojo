@@ -23,10 +23,12 @@ from extensions.humanoid.skeleton.arm.ligaments.dimensions import (
     arm_ligament_field,
     arm_ligament_tissue,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
     classify_soft,
 )
 from extensions.humanoid.spec import HumanoidSpec

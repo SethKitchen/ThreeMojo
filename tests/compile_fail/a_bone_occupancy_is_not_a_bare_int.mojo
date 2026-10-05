@@ -5,7 +5,7 @@
 
 """A bone fill must be a `BoneOccupancy`, not a bare integer."""
 
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )

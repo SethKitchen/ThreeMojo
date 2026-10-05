@@ -262,7 +262,7 @@
         "BoneTissue.porosity"
       ],
       "source_files": [
-        "extensions/humanoid/skeleton/tissue.mojo"
+        "extensions/anatomy/tissue.mojo"
       ],
       "classification": "research_metadata_with_authored_nominal_porosity",
       "units": [
@@ -303,7 +303,7 @@
         "muscle_tissue().wet_density"
       ],
       "source_files": [
-        "extensions/humanoid/skeleton/soft_tissue.mojo"
+        "extensions/anatomy/soft_tissue.mojo"
       ],
       "classification": "named_density_with_cited_mammalian_research",
       "units": [
@@ -329,7 +329,7 @@
         "marrow and unresolved soft assignments"
       ],
       "source_files": [
-        "extensions/humanoid/skeleton/soft_tissue.mojo",
+        "extensions/anatomy/soft_tissue.mojo",
         "extensions/humanoid/skeleton/limb/inertia.mojo",
         "extensions/humanoid/skeleton/limb/regions.mojo"
       ],

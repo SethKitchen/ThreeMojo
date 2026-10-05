@@ -30,15 +30,17 @@ from extensions.humanoid.skeleton.leg.knee.dimensions import (
     knee_distance,
     knee_part_label,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
-    SOFT_STEP,
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
     cartilage_tissue,
-    classify_soft,
     ligament_tissue,
     meniscus_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SOFT_STEP,
+    SoftOccupancy,
+    classify_soft,
     sample_soft_mass,
 )
 from math.vector3 import Vector3
