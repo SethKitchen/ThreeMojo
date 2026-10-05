@@ -412,9 +412,10 @@ def structural_view(
         shell comes from, and notes on what the view dropped.
 
     Raises:
-        Error: If the options are not valid, a column or beam has no
-            section or material, or a member or shell cannot be made.
+        Error: If the building or options are not valid, or a member
+            or shell cannot be made.
     """
+    building.validate()
     options.check()
     var tol = options.tolerance.to(METER)
     var g = options.gravity.to(METER_PER_SECOND_SQUARED)
@@ -427,8 +428,7 @@ def structural_view(
     for i in range(len(building.elements)):
         ref e = building.elements[i]
         if e.kind == COLUMN or e.kind == BEAM:
-            if not (e.section and e.material):
-                raise Error("A column or beam needs a section and a material")
+            # Building.validate checked both fields before any model mutation.
             frames.append(i)
             _ = _node_at(model, e.start, tol)
             _ = _node_at(model, e.end, tol)
