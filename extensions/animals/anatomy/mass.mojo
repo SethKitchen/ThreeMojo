@@ -34,7 +34,7 @@ from extensions.animals.anatomy.density import (
 from extensions.animals.build import Animal, part_box
 from extensions.animals.parts import EYEBALL, HORN, TEETH, TONGUE, WATTLE
 from extensions.animals.rig import Pose
-from extensions.sdf.field import SdfModel
+from extensions.sdf.field import FAR, SdfModel, smin
 from extensions.sdf.ids import (
     CONE,
     ELLIPSOID,
@@ -202,6 +202,8 @@ comptime BODY_HIGH = 3
 comptime TOTAL_LOW = 4
 comptime TOTAL_HIGH = 5
 comptime VOLUME = 6
+# Each worker owns one error flag, checked after all workers have stopped.
+comptime INVALID_FIELD = 7
 comptime STATS = 8
 
 
@@ -235,6 +237,21 @@ def _fresh_stats() -> SIMD[DType.float64, STATS]:
     return s
 
 
+def _sample_distance(model: SdfModel, ids: List[Int], q: V3) -> Float64:
+    # Match eval_list's order and arithmetic, but stop on a nonfinite
+    # operand or blend before a later primitive can hide it.
+    var d = Float64(FAR)
+    for i in ids:
+        var di = model.distance(i, q)
+        if not isfinite(di):
+            return di
+        ref p = model.prims[i]
+        d = -smin(-d, di, p.k) if p.carve else smin(d, di, p.k)
+        if not isfinite(d):
+            return d
+    return d
+
+
 async def _sample_task(
     model: Pointer[SdfModel, ImmutAnyOrigin],
     input: Pointer[_Input, ImmutAnyOrigin],
@@ -266,13 +283,28 @@ async def _sample_task(
         lists.clear()
         var near = 1e30
         for p in range(len(input[].parts)):  # pragma: no branch
+            # Validate before culling can discard a nonfinite operand.
+            if not isfinite(_sample_distance(model[], input[].parts[p], c)):
+                stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+                return
             # A part's nearest solid always survives its own cull.
             var cand = model[].cull(input[].parts[p], c, rho, kmax)
-            near = min(near, model[].eval_list(cand, c))
+            var d = _sample_distance(model[], cand, c)
+            if not isfinite(d):
+                stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+                return
+            near = min(near, d)
             lists.append(cand^)
+        if not isfinite(_sample_distance(model[], input[].coat, c)):
+            stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+            return
         var coat = model[].cull(input[].coat, c, rho, kmax)
         if len(coat) > 0:
-            near = min(near, model[].eval_list(coat, c))
+            var d = _sample_distance(model[], coat, c)
+            if not isfinite(d):
+                stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+                return
+            near = min(near, d)
         if near > 1.5 * rho + h:
             continue
         for n in range(BLOCK * BLOCK * BLOCK):  # pragma: no branch
@@ -283,20 +315,28 @@ async def _sample_task(
                 continue
             var q = grid.center(i, j, k)
             if len(coat) > 0:
-                var d = model[].eval_list(coat, q)
+                var d = _sample_distance(model[], coat, q)
+                if not isfinite(d):
+                    stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+                    return
                 if d < 0.0 and d > -h:
                     s[TOTAL_LOW] = min(s[TOTAL_LOW], q.z + d)
                     s[TOTAL_HIGH] = max(s[TOTAL_HIGH], q.z - d)
             var best = 1e30
             var solid = -1
             for p in range(len(lists)):  # pragma: no branch
-                var d = model[].eval_list(lists[p], q)
+                var d = _sample_distance(model[], lists[p], q)
+                if not isfinite(d):
+                    stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+                    return
                 if d > 0.5 * h:
                     continue
-                # A list of carvers alone evaluates to `FAR`, so a list this
-                # near the cell holds a solid.
+                # Finite primitive inputs do not guarantee representable
+                # distance arithmetic. Check before indexing by the result.
                 var candidate = model[].nearest(lists[p], q)
-                debug_assert(candidate >= 0, "A near list holds a solid")
+                if candidate < 0 or candidate >= len(input[].reach):
+                    stats[unsafe_offset=task * STATS + INVALID_FIELD] = 1.0
+                    return
                 # Choose the nearest flesh surface after coat erosion.
                 # An uneroded eye can remain outside an eroded skin part.
                 d += min(input[].erode[p], input[].reach[candidate])
@@ -410,6 +450,14 @@ def _check_sampling_model(model: SdfModel) raises:
                 raise Error("A sampled fin must have positive thickness")
 
 
+def _grid_dimension(count: Float64) raises -> Int:
+    # Finite primitive fields can still overflow or round a box to zero
+    # width. Refuse those derived counts before conversion or worker loops.
+    if not (isfinite(count) and count >= 1.0 and count <= 400.0):
+        raise Error("A mass grid must be finite and have 1 to 400 cells a side")
+    return Int(count)
+
+
 def sample_mass(
     animal: Animal, pose: Pose, step: Length, workers: Int = 0
 ) raises -> BodyMass:
@@ -430,8 +478,9 @@ def sample_mass(
 
     Raises:
         Error: If the step is not positive and finite, the grid would be
-            larger than 400 cells a side, the pose is for another rig,
-            or the sculpt has no flesh.
+            empty, nonfinite or larger than 400 cells a side, a sampled
+            field value is not representable, the pose is for another
+            rig, or the sculpt has no flesh.
     """
     if (
         animal.model.visual_only
@@ -495,17 +544,9 @@ def sample_mass(
         ceil((high.y - low.y) / h),
         ceil((high.z - low.z) / h),
     )
-    # The model was checked finite and every box holds a solid, so each
-    # count is finite and one at least; only the size limit can fail.
-    for count in [counts.x, counts.y, counts.z]:  # pragma: no branch
-        debug_assert(isfinite(count) and count >= 1.0, "A grid count is finite")
-        if count > 400.0:
-            raise Error(
-                "A mass grid must be finite and at most 400 cells a side"
-            )
-    var nx = Int(counts.x)
-    var ny = Int(counts.y)
-    var nz = Int(counts.z)
+    var nx = _grid_dimension(counts.x)
+    var ny = _grid_dimension(counts.y)
+    var nz = _grid_dimension(counts.z)
     var grid = _Grid(
         low,
         h,
@@ -525,6 +566,11 @@ def sample_mass(
         tallies.append(InertiaTally())
     var stats = List[Float64](length=tasks * STATS, fill=0.0)
     _launch(posed, input, grid, tallies, stats, bones)
+    # Workers cannot raise through TaskGroup. Reject their partial results
+    # only after the join, while all captured storage is still alive.
+    for task in range(tasks):  # pragma: no branch
+        if stats[task * STATS + INVALID_FIELD] != 0.0:
+            raise Error("A sampled field must have finite valid distances")
     var out = List[InertiaTally](capacity=bones)
     for b in range(bones):  # pragma: no branch
         var sum = InertiaTally()
