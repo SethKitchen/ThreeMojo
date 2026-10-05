@@ -134,6 +134,15 @@ Traffic-manager waypoint junction flags use road topology, not these boxes.
 Scenario replay can therefore differ where the old box omitted a curved
 interior. Ordering remains deterministic.
 
+## Fixed-s road queries
+
+`Road.nearest_lane` selects a lane at one supplied s in the OpenDRIVE frame.
+It retains Float64 centers and compares their stored-point distances exactly.
+It returns a scale-safe approximate Float64 distance and checks its finite range.
+This helper visits all eligible lane centers and preserves exact-tie ordering.
+It does not call or change the Map nearest-waypoint search.
+See [fixed-s nearest lane queries](CARLA-fixed-s-nearest) for limits and record rules.
+
 ## Traffic rules
 
 A road with `rule="LHT"` keeps traffic to the left. Its left lanes run with s and its right lanes against it. `right`, `left`, the lane change and the sign placement all follow the rule.
@@ -181,7 +190,8 @@ This port keeps CARLA's numbers except for the corrections listed here.
 - Backward lane traversal measures the remainder toward the lane start. The pinned [CARLA `Waypoint.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/client/Waypoint.cpp) uses the forward remainder for its final backward step. That can leave the starting road or fail at an isolated end. The port deliberately corrects that behavior and handles exact and unlinked section endpoints. See [issue #286](https://github.com/SethKitchen/ThreeMojo/issues/286).
 - Junction bounds include reverse-running curved lane interiors. The pinned CARLA `CreateJunctionBoundingBoxes` uses a signed ten-step interval and skips those interiors. The port uses the [bounded approximation](#junction-bounds) above. A 100 m semicircle with a positive RHT lane is the reproducible counterexample. See [issue #487](https://github.com/SethKitchen/ThreeMojo/issues/487).
 - CARLA walks roads, junctions and signals in hash order. This port walks them in order of id.
-- CARLA computes a point in single precision. This port computes in double and rounds where CARLA returns a float.
+- CARLA computes a point in single precision. This port computes in double and rounds where CARLA returns a float, except for the fixed-s nearest-lane correction.
+- Fixed-s nearest-lane selection keeps wide stored centers and checks every center. It no longer turns narrowed centers or underflowed squares into false ties. See [issue #604](https://github.com/SethKitchen/ThreeMojo/issues/604) and the [precision limits](CARLA-fixed-s-nearest).
 - A spiral uses Gauss-Legendre quadrature, as [CARLA](CARLA) explains.
 - The segment search breaks a tie by the order the segments were made. Boost leaves that order open.
 - A lane link that names no lane is dropped. CARLA stores a null pointer and crashes on it.
