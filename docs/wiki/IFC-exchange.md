@@ -1,6 +1,6 @@
 # IFC exchange
 
-`extensions/building/ifc/` writes the [building model](Building-model) as an IFC4 STEP file and reads one back. A model written and read back has the same fingerprint: every storey, space, element, opening, material and construction returns exactly.
+`extensions/building/ifc/` writes the [building model](Building-model) as an IFC4 STEP file and reads one back. The round-trip tests compare model fields directly and check the fingerprint. They cover the site, names, storeys, spaces, elements, openings, furniture, materials, constructions and rebuilt topology.
 
 ![A small tower read back from its IFC file, cut away above its first storey, turns under a lamp](out/ifc-exchange.png)
 
@@ -21,7 +21,7 @@ var back = read_ifc(text, Length64(1e-6, METER))
 
 `write_ifc` validates the model first. The time stamp goes into the header. A fixed time stamp gives the same file for the same model. Each GlobalId comes from the model's fingerprint and a counter, so the ids are stable too.
 
-`read_ifc` rebuilds the cell complex from the space outlines with `assemble`. It then gives each wall and slab the construction of the file element at the same place, and adds the columns, beams, doors and windows.
+`read_ifc` rebuilds the cell complex from the space outlines with `assemble`. It then gives each wall and slab the name and construction of the file element at the same place. It adds the columns, beams, doors, windows and furniture with their names.
 
 ## What is written
 
@@ -42,11 +42,13 @@ var back = read_ifc(text, Length64(1e-6, METER))
 | Construction | `IfcMaterialLayerSet`, associated with each wall and slab |
 | Containment | `IfcRelAggregates` and `IfcRelContainedInSpatialStructure` |
 
+Beams hang below their axes. A circular beam profile is offset by half its diameter. Rectangle and I-shape profiles are offset by half their depth.
+
 Four property sets keep values that IFC4 has no exact place for. `ThreeMojo_Material` keeps the strength and the look. `ThreeMojo_Member` keeps the exact plan points of a column or beam axis. `ThreeMojo_Furnishing` keeps the exact center and rotation of a piece of furniture. `ThreeMojo_Site` keeps the exact latitude, longitude and north angle. A reader that does not know them ignores them.
 
 ## Read a file from another program
 
-`read_ifc` reads a file when its spaces are extruded polygons on storeys. It follows placement chains, including unset axes and 2D profile placements.
+`read_ifc` reads a file when its spaces are extruded polygons on storeys. It follows placement chains, including unset axes and 2D profile placements. It checks each local placement reference and refuses a cycle. Traversal is iterative and bounded by the number of entities in the file.
 
 | Missing in the file | What the reader does |
 |---|---|
@@ -63,13 +65,18 @@ A wall or slab that matches no face of the rebuilt complex keeps the first const
 
 `parse` reads a physical file. It refuses malformed text and gives the line of the error. `StepFile.write` writes it back. A real is written with the shortest digits that read back to the same number. A string escapes every character outside printable ASCII as `\X2\` or `\X4\`.
 
+STEP value nesting is limited to 256 containers. Lists and typed values share this limit. The outer attribute list of each header entry or entity counts as one container. The parser raises an `Error` with the line number before it descends past this limit. The limit applies independently to each attribute path.
+
 ## Errors
 
 | Case | Function |
 |---|---|
 | The text is not a well-formed STEP file | `parse`, `read_ifc` |
+| A STEP value exceeds 256 nested containers, including its outer attribute list | `parse`, `read_ifc` |
 | The schema is not IFC4 | `read_ifc` |
-| The length unit has a prefix, such as millimeters | `read_ifc` |
+| The project or its unit assignment is missing or ambiguous | `read_ifc` |
+| The assigned length unit is missing, repeated, prefixed, conversion-based or not meters | `read_ifc` |
+| A local placement chain contains a cycle or a reference of the wrong kind | `read_ifc` |
 | A space is not on a storey, or its profile is not a closed polyline | `read_ifc` |
 | A column or beam is not on a storey, has no material, or has an unknown profile | `read_ifc` |
 | A product has no extruded solid, or a profile curve is not a polyline | `read_ifc` |
@@ -79,7 +86,9 @@ A wall or slab that matches no face of the rebuilt complex keeps the first const
 
 - The reader supports only extruded solids. It does not read boundary representations, Boolean results, swept disks or mapped items.
 - The reader rebuilds walls and slabs from spaces. A wall with no space on either side is not read.
-- Lengths must be in meters.
+- The file must have one project with one assigned length unit: unprefixed meters. The reader follows `IfcProject.UnitsInContext` to its `IfcUnitAssignment`. It does not convert feet or other length units. Unassigned units and units for other quantities do not change this check.
+- Exact round trips apply to the supported order and layout made by `assemble` and `add_*`, with the section fields used by its shape. The file preserves customized names, site values, materials and glazing. It does not preserve arbitrary collection reordering or unused extra struct fields.
+- The reader rebuilds topology with the supplied tolerance. Use the original model tolerance for an exact topology round trip. An empty model without constructions receives the documented default construction.
 - The look of a material leaves IFC only through `ThreeMojo_Material`. The file has no `IfcSurfaceStyle`.
 - The writer writes the Reference View subset of entities that this table lists. It is not a certified IFC exporter.
 
