@@ -65,7 +65,8 @@ struct _Builder(Movable):
         self.nodes = List[_CCDNode](capacity=2 * count - 1)
         self.boxes = List[Box3](capacity=count)
         self.order = List[Int](capacity=count)
-        for i in range(count):
+        # The index selects this builder only above eight triangles.
+        for i in range(count):  # pragma: no branch
             var box = Box3(triangles[i].a, triangles[i].a)
             box.expand_by_point(triangles[i].b)
             box.expand_by_point(triangles[i].c)
