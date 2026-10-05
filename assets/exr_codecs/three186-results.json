@@ -1,0 +1,428 @@
+{
+  "revision": "three.js r186",
+  "packageVersion": "0.186.0",
+  "loaderSha256": "1355b32a2ee1226bffd0f96558f3d21e300832813ab70d51ec971025ebc34d5d",
+  "comparisonMetric": "abs(actual-reference)/max(1,abs(reference))",
+  "tolerance": 0.004,
+  "results": [
+    {
+      "name": "c5_s0.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s1.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s2.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s3.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s4.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s5.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s6.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c5_s7.exr.hex",
+      "status": "difference",
+      "maxAbs": 3.948355761307967e+36,
+      "maxRelative": 3.948355761307967e+36,
+      "mismatches": 236
+    },
+    {
+      "name": "c5_s8.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s0.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s1.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s2.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0009765625,
+      "maxRelative": 0.0009718172983479105,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s3.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s4.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s5.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.00390625,
+      "maxRelative": 0.0009652509652509653,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s6.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c6_s7.exr.hex",
+      "status": "difference",
+      "maxAbs": 0.8079692106693983,
+      "maxRelative": 0.8079692106693983,
+      "mismatches": 127
+    },
+    {
+      "name": "c6_s8.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s0.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s1.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s2.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0009765625,
+      "maxRelative": 0.0009718172983479105,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s3.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s4.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s5.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.00390625,
+      "maxRelative": 0.0009652509652509653,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s6.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c7_s7.exr.hex",
+      "status": "difference",
+      "maxAbs": 0.8079692106693983,
+      "maxRelative": 0.8079692106693983,
+      "mismatches": 127
+    },
+    {
+      "name": "c7_s8.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_deflate.exr.hex",
+      "status": "upstream-error",
+      "error": "unexpected EOF"
+    },
+    {
+      "name": "c8_incomplete_csc.exr.hex",
+      "status": "upstream-error",
+      "error": "Cannot read properties of undefined (reading '0')"
+    },
+    {
+      "name": "c8_incomplete_rle.exr.hex",
+      "status": "upstream-error",
+      "error": "Cannot read properties of undefined (reading '0')"
+    },
+    {
+      "name": "c8_insensitive.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: unsupported channel compression"
+    },
+    {
+      "name": "c8_legacy0.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: DWAA_COMPRESSION version 0 is unsupported"
+    },
+    {
+      "name": "c8_legacy1.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: DWAA_COMPRESSION version 1 is unsupported"
+    },
+    {
+      "name": "c8_rle.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_rule_shadow.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.001953125,
+      "maxRelative": 0.0019230769230769232,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_s0.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.001953125,
+      "maxRelative": 0.0019230769230769232,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_s1.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.001953125,
+      "maxRelative": 0.0019230769230769232,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_s2.exr.hex",
+      "status": "difference",
+      "maxAbs": 0.6416015625,
+      "maxRelative": 0.49287321830457614,
+      "mismatches": 552
+    },
+    {
+      "name": "c8_s3.exr.hex",
+      "status": "difference",
+      "maxAbs": 1.3056640625,
+      "maxRelative": 1,
+      "mismatches": 558
+    },
+    {
+      "name": "c8_s4.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.00048828125,
+      "maxRelative": 0.00048828125,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_s5.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0078125,
+      "maxRelative": 0.0018587360594795538,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_s6.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_s7.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: Something wrong with HUF_ENCSIZE"
+    },
+    {
+      "name": "c8_s8.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c8_unknown.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: unsupported channel compression"
+    },
+    {
+      "name": "c8_uppercase_rule.exr.hex",
+      "status": "upstream-error",
+      "error": "Cannot read properties of undefined (reading '0')"
+    },
+    {
+      "name": "c9_deflate.exr.hex",
+      "status": "upstream-error",
+      "error": "invalid zlib data"
+    },
+    {
+      "name": "c9_incomplete_csc.exr.hex",
+      "status": "upstream-error",
+      "error": "Cannot read properties of undefined (reading '0')"
+    },
+    {
+      "name": "c9_incomplete_rle.exr.hex",
+      "status": "upstream-error",
+      "error": "Cannot read properties of undefined (reading '0')"
+    },
+    {
+      "name": "c9_insensitive.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: unsupported channel compression"
+    },
+    {
+      "name": "c9_legacy0.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: DWAB_COMPRESSION version 0 is unsupported"
+    },
+    {
+      "name": "c9_legacy1.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: DWAB_COMPRESSION version 1 is unsupported"
+    },
+    {
+      "name": "c9_rle.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_rule_shadow.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0078125,
+      "maxRelative": 0.001949317738791423,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_s0.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0078125,
+      "maxRelative": 0.001949317738791423,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_s1.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0078125,
+      "maxRelative": 0.001949317738791423,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_s2.exr.hex",
+      "status": "difference",
+      "maxAbs": 0.6416015625,
+      "maxRelative": 0.49287321830457614,
+      "mismatches": 552
+    },
+    {
+      "name": "c9_s3.exr.hex",
+      "status": "difference",
+      "maxAbs": 1.3056640625,
+      "maxRelative": 1,
+      "mismatches": 558
+    },
+    {
+      "name": "c9_s4.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.00048828125,
+      "maxRelative": 0.00048828125,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_s5.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.0078125,
+      "maxRelative": 0.0018587360594795538,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_s6.exr.hex",
+      "status": "pass",
+      "maxAbs": 0,
+      "maxRelative": 0,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_s7.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: Something wrong with HUF_ENCSIZE"
+    },
+    {
+      "name": "c9_s8.exr.hex",
+      "status": "pass",
+      "maxAbs": 0.00390625,
+      "maxRelative": 0.0019474196689386564,
+      "mismatches": 0
+    },
+    {
+      "name": "c9_unknown.exr.hex",
+      "status": "upstream-error",
+      "error": "THREE.EXRLoader: unsupported channel compression"
+    },
+    {
+      "name": "c9_uppercase_rule.exr.hex",
+      "status": "upstream-error",
+      "error": "Cannot read properties of undefined (reading '0')"
+    }
+  ]
+}
