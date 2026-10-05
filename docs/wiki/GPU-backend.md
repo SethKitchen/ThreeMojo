@@ -192,10 +192,12 @@ Follow these rules in the converted rasterizer and device-helper code:
 - Declare the pointer parameters of a helper as `DevicePointer[T]`.
 - Declare the pointer fields of a device struct as `DevicePointer[T, Self.origin]`.
 - Pass a buffer to a kernel that takes a `DevicePointer` with `_device(buffer)`.
-- Cast to a generic pointer only where kernel code calls a module that the CPU shares, for example `output_from`.
+- Cast to a generic pointer only at a CPU-shared helper that is `@always_inline`, such as `output_from`. Check that emitted loads retain device address spaces.
 - Read a `SIMD` value from device memory one lane at a time. A `SIMD` built from several loads in one constructor call reads zeros on Metal. See [modular/modular#7158](https://github.com/modular/modular/issues/7158).
 
 `make check-gpu-air` requires one nonempty AIR module for each discovered, plainly named kernel launch. Each generated record prints `function_name` and AIR from the same compiler result. `!air.kernel` metadata must select a complete, `metal.kernel`-marked definition with that exact symbol. Missing, duplicate or reused entry names fail the check.
+
+Every `enqueue_function` reference in the two GPU modules must name a local, non-parameterized top-level kernel. Imported kernels, specialized launches and other unsupported syntax fail before emission. Comments and strings do not count as launches.
 
 Source-name prefixes can be ambiguous because the pinned emitter truncates names and includes specialization text. The check uses the exact compiler-returned symbol. Other metadata forms fail closed.
 
