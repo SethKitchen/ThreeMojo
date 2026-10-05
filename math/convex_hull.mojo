@@ -405,11 +405,8 @@ struct ConvexHull(Movable):
         """Rank already certified exterior faces, retaining ordinary order."""
         var distance = self._distance(face, self._points[vertex])
         var previous = self._distance(best, self._points[vertex])
-        if (
-            not self._exact_ranking
-            and isfinite(distance)
-            and isfinite(previous)
-        ):
+        # Conditioned points and unit ranking normals bound both distances.
+        if not self._exact_ranking:
             if distance > 0 and previous > 0:
                 return distance > previous
         var a = self._corners(face)
@@ -433,11 +430,8 @@ struct ConvexHull(Movable):
         """Rank certified exterior vertices on one face."""
         var distance = self._distance(face, self._points[vertex])
         var previous = self._distance(face, self._points[best])
-        if (
-            not self._exact_ranking
-            and isfinite(distance)
-            and isfinite(previous)
-        ):
+        # Conditioned points and unit ranking normals bound both distances.
+        if not self._exact_ranking:
             if distance > 0 and previous > 0:
                 return distance > previous
         var corners = self._corners(face)
@@ -516,7 +510,8 @@ struct ConvexHull(Movable):
             raise Error(
                 "A convex hull face needs points that are not in a line"
             )
-        if legacy.magnitude() == 0 or not isfinite(legacy.magnitude()):
+        # Bounded ranking coordinates keep this normalized cross finite.
+        if legacy.magnitude() == 0:
             legacy = normal
         var midpoint = (pa + pb + pc) * (Float64(1) / 3)
         self._normal.append(normal)
@@ -635,11 +630,12 @@ struct ConvexHull(Movable):
                     # This early exit changes speed, not admission. Retain
                     # three.js's ordinary search order without overflow.
                     var threshold = 1000 * self.tolerance
-                    if isfinite(threshold):
-                        if self._sees(
-                            max_face, self._source_points[vertex], threshold
-                        ):
-                            break
+                    # Tolerance is at most 9*epsilon times a finite
+                    # coordinate. Multiplying it by 1000 remains finite.
+                    if self._sees(
+                        max_face, self._source_points[vertex], threshold
+                    ):
+                        break
             if max_face != -1:
                 self._add_vertex_to_face(vertex, max_face)
             vertex = next
@@ -723,7 +719,8 @@ struct ConvexHull(Movable):
                 ):
                     continue
                 var distance = Float64(0)
-                if delta_squared > 0 and isfinite(delta_squared):
+                # Conditioned coordinate differences have finite squares.
+                if delta_squared > 0:
                     var point = self._points[vertex]
                     var t = delta.dot(point - start) / delta_squared
                     t = min(max(t, 0), 1)
@@ -734,7 +731,6 @@ struct ConvexHull(Movable):
                     if (
                         not self._exact_ranking
                         and distance > 0
-                        and isfinite(distance)
                         and max_distance > 0
                     ):
                         farther = distance > max_distance
@@ -792,7 +788,6 @@ struct ConvexHull(Movable):
                     if (
                         not self._exact_ranking
                         and distance > 0
-                        and isfinite(distance)
                         and max_distance > 0
                     ):
                         farther = distance > max_distance

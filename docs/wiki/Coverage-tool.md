@@ -172,9 +172,7 @@ CPU test groups use imported source size. Coverage groups use `tools/coverage_sh
 
 Ties use the suite path and group number. Every affected suite stays in exactly one group. CI uses eight groups and a budget of 9000 seconds a group. The budget is a hang detector, not a target. Hosted runners differ: one took a quarter longer than another on the same group.
 
-The current profile uses [CI run 37256337159](https://github.com/SethKitchen/ThreeMojo/actions/runs/37256337159), from October 5, 2026. Its source commit is `0fb66c60b1cb657be67c92a8284bf503aa38d3ed`. It used Mojo `1.1.0` (`8189361e`) and four capture workers per runner. Each cost is the elapsed time on the capture's completion line.
-
-That run used a budget of 6000 seconds, which stopped the captures still in progress. Each of these has 1.25 times its elapsed time, and at least its earlier figure. A suite that was not in that run keeps its figure from the first profile.
+The current profile uses [CI run 37301265769](https://github.com/SethKitchen/ThreeMojo/actions/runs/37301265769), from October 5, 2026. Its source commit is `c115c0f51f601638bc7fc22dae04d70e7382ded3`. It used Mojo `1.1.0` (`8189361e`), eight groups and four capture workers per runner. Each cost is the elapsed time on the capture's completion line. Every suite of that run completed. A suite that was not in that run keeps its earlier figure.
 
 The first profile used [CI run 36903778725](https://github.com/SethKitchen/ThreeMojo/actions/runs/36903778725), from October 1, 2026. Its costs are estimates from artifact completion times, at two-second precision.
 

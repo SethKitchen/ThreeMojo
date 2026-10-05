@@ -25,7 +25,13 @@ from extensions.anatomy.muscle import (
 from generators.utils import Vec3d
 from math.vector3 import Vector3
 from std.math import inf, nan
-from std.testing import TestSuite, assert_raises, assert_almost_equal
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_raises,
+    assert_true,
+)
 from units.si import (
     Mass,
     Length,
@@ -234,11 +240,29 @@ def test_result_refuses_corrupt_sums_and_unrepresentable_si_output() raises:
 
 
 def test_tiny_negative_inertia_diagonal_is_never_exported() raises:
-    var bad = InertiaTally()
-    bad.mass = 1
-    bad.second = SIMD[DType.float64, 8](-1e-11, 0, 1, 0, 0, 0, 0, 0)
+    # A residual inside this component's raw-minus-shift rounding bound
+    # exports as zero. An unrelated axis does not set that bound.
+    var tiny = InertiaTally()
+    tiny.mass = 1
+    tiny.first[0] = 1
+    tiny.second = SIMD[DType.float64, 8](
+        1.0 - 1.1102230246251565e-16, 0, 1, 0, 0, 0, 0, 0
+    )
+    var r = tiny.result(0)
+    assert_equal(r.zz.value, 0.0)
+    assert_true(r.xx.value >= 0.0 and r.yy.value >= 0.0)
+    # A tensor mutated below zero after export is refused.
+    r.zz = MomentOfInertia(-1e-12)
     with assert_raises(contains="nonnegative"):
-        _ = bad.result(0)
+        r.check()
+    # With a zero center there is no cancellation to excuse either
+    # negative raw moment, including the smaller original regression.
+    for negative in [Float64(-1e-11), Float64(-1e-9)]:
+        var bad = InertiaTally()
+        bad.mass = 1
+        bad.second = SIMD[DType.float64, 8](negative, 0, 1, 0, 0, 0, 0, 0)
+        with assert_raises(contains="nonnegative"):
+            _ = bad.result(0)
 
 
 def test_equilibrium_refuses_finite_fiber_that_overflows_si_length() raises:

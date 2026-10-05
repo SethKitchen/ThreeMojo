@@ -511,12 +511,12 @@ def species_table(species: SpeciesId) raises -> List[MuscleRow]:
         t.append(_row("supraspinatus", 206.4, 33.1, 7.9, 18.0, f, g, d, wf))
         t.append(_row("superficial digital flexor", 23.4, 33.1, 1.0, 41.0, f, g, d, wf))
     elif species == HORSE:
-        # Payne et al. 2005, Table 4, p. 561: seven horses, mean 510 kg
-        # (Table 3): five Thoroughbreds, one Thoroughbred cross and one
-        # Arab. The biceps femoris sums its intermediate (870 g,
-        # 235 mm, 27), vertebral (6112 g, 258 mm, 37) and caudal (946 g,
-        # 245 mm, 39) heads; the gastrocnemius its medial (817 g, 48 mm,
-        # 36) and lateral (808 g, 56 mm, 34) heads.
+        # Payne et al. 2005, Table 4, p. 561: one pelvic limb from each of
+        # seven horses, mean 510 kg (Table 3): five Thoroughbreds, one
+        # Thoroughbred cross and one Arab. The biceps femoris sums its
+        # intermediate (870 g, 235 mm, 27), vertebral (6112 g, 258 mm, 37)
+        # and caudal (946 g, 245 mm, 39) heads; the gastrocnemius its
+        # medial (817 g, 48 mm, 36) and lateral (808 g, 56 mm, 34) heads.
         var p = String("Payne2005")
         t.append(_row("biceps femoris", 7928.0, 510.0, 25.37, 36.1, f, p, f, p))
         t.append(_row("rectus femoris", 2291.0, 510.0, 9.8, 40.0, f, p, f, p))

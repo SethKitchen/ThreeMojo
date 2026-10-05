@@ -168,7 +168,8 @@ def phoneme_viseme(phoneme: Phoneme) raises -> Viseme:
         SS,
         CH,
     ]
-    for i in range(len(names)):
+    # The phoneme mapping is a fixed nonempty table.
+    for i in range(len(names)):  # pragma: no branch
         if phoneme.symbol == names[i]:
             return values[i]
     raise Error("Unknown aligned phoneme: " + phoneme.symbol)

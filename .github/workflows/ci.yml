@@ -112,7 +112,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: test-cpu
-        run: make -B test-cpu SHARD=${{ matrix.shard }}/3 AFFECTED="$AFFECTED"
+        # Keep suite parallelism. Bound the threads inside each compiler.
+        run: make -B test-cpu SHARD=${{ matrix.shard }}/3 MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"
 
   # The same check on Apple Silicon. Months of work on Linux alone let three
   # suites break on a Mac without a sign: a pseudo-terminal there holds far

@@ -400,6 +400,18 @@ def _launch(
     group.wait()
 
 
+def _check_sampled_fields(stats: List[Float64], tasks: Int) raises:
+    """Check completed scalar flags after every sampling task has joined.
+
+    The caller provides the same positive task count and tasks * STATS
+    storage allocated for _launch. This helper does not inspect geometry,
+    launch work, change storage, or accept partial worker results.
+    """
+    for task in range(tasks):  # pragma: no branch
+        if stats[task * STATS + INVALID_FIELD] != 0.0:
+            raise Error("A sampled field must have finite valid distances")
+
+
 def _check_sampling_model(model: SdfModel) raises:
     # Mutable models are checked before culling, integer grid conversion,
     # pointer-indexed worker writes or unchecked tally accumulation.
@@ -568,9 +580,7 @@ def sample_mass(
     _launch(posed, input, grid, tallies, stats, bones)
     # Workers cannot raise through TaskGroup. Reject their partial results
     # only after the join, while all captured storage is still alive.
-    for task in range(tasks):  # pragma: no branch
-        if stats[task * STATS + INVALID_FIELD] != 0.0:
-            raise Error("A sampled field must have finite valid distances")
+    _check_sampled_fields(stats, tasks)
     var out = List[InertiaTally](capacity=bones)
     for b in range(bones):  # pragma: no branch
         var sum = InertiaTally()

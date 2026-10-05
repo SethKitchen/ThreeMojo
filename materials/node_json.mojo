@@ -118,7 +118,7 @@ def _integer_program(program: NodeProgram) -> Bool:
     for type in program.uniform_types:
         if type.is_integer():
             return True
-    for output in range(nodes.NODE_OUTPUT_COUNT):
+    for output in range(nodes.NODE_OUTPUT_COUNT):  # pragma: no branch
         var start = Int(program.code[output * 2])
         var count = Int(program.code[output * 2 + 1])
         for instruction in range(count):

@@ -139,9 +139,12 @@ def _integer_instruction(
         or kind == nodes.NODE_INT_ABS
         or kind == nodes.NODE_INT_SIGN
     )
-    if (width and (immediate < 1 or immediate > 4)) or (
-        not width and immediate != 0
-    ):
+    if width:
+        if immediate < 1 or immediate > 4:
+            raise Error(
+                "Object JSON: an integer instruction has an invalid immediate"
+            )
+    elif immediate != 0:
         raise Error(
             "Object JSON: an integer instruction has an invalid immediate"
         )
@@ -274,11 +277,6 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             var kind = nodes.NodeKind(
                 _whole(program.code[at], nodes.NODE_INT_LAST.value)
             )
-            if not kind.is_valid():
-                raise Error(
-                    "Object JSON: an opcode is not a serialized surface"
-                    " instruction"
-                )
             if (
                 kind == nodes.NODE_VARYING
                 or kind == nodes.NODE_DFDX

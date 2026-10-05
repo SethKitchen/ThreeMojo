@@ -466,9 +466,6 @@ def ltc_evaluate_volume(
 
     Returns:
         The form factor, zero on the back side or for zero width or height.
-
-    Raises:
-        None.
     """
     var width = corner1 - corner0
     var height = corner3 - corner0

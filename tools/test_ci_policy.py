@@ -74,6 +74,17 @@ class CiPolicyTests(unittest.TestCase):
             with self.subTest(job=name):
                 self.assertNotRegex(self.jobs[name], r'\bJOBS\s*=')
 
+    def test_linux_cpu_compilers_use_one_thread_without_changing_the_suites(self):
+        job = self.jobs['cpu']
+        self.assertRegex(job, r'(?m)^    timeout-minutes: 120$')
+        self.assertIn('shard: [1, 2, 3]', job)
+        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        self.assertEqual(commands, [
+            'make -B test-cpu SHARD=${{ matrix.shard }}/3 '
+            'MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"',
+        ])
+        self.assertNotRegex(job, r'\bJOBS\s*=')
+
     def test_draft_pull_requests_skip_every_check_job(self):
         self.assertTrue(CHECK_JOBS <= self.jobs.keys())
         # A future check job must opt out of draft PRs too. Only the wiki

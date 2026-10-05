@@ -101,36 +101,36 @@ The canonical male mass is an input to normalization. It cannot also serve as in
 
 The calibration uses the selected adult male template. An adult female, drawn on her own, then gives a mass from her authored geometry and the same density normalization. This table compares that result with the selected female reference mass. These reference values are DESIGN parameters; agreement is not validation.
 
-The check calibrates each species with `calibrate(id, Variant(-1), allow_estimates=True)`. It draws the female with `animal_options(1, quality=CROWD, sex=FEMALE, age=ADULT)` and the selected reference morph, and weighs her with `calibrated_mass` at 60 cells a reference length.
+The check calibrates each species with `calibrate(id, Variant(-1), allow_estimates=True)`. It draws the female with `animal_options(1, quality=CROWD, sex=FEMALE, age=ADULT)` and the selected reference morph, and weighs her with `calibrated_mass` at its default. That default is 40 cells a reference length, the resolution `calibrate` measures at.
 
 | Species | Predicted female mass | Selected female reference mass | Ratio |
 |---|---|---|---|
-| Bear | 61.0 kg | 60 kg | 1.02 |
-| Boar | 52.4 kg | 70 kg | 0.75 |
-| Cat | 3.26 kg | 3.5 kg | 0.93 |
-| Cheetah | 40.9 kg | 30 kg | 1.36 |
-| Chicken | 1.40 kg | 1.705 kg | 0.82 |
-| Cow | 531 kg | 680 kg | 0.78 |
-| Crow | 0.381 kg | 0.43 kg | 0.89 |
-| Deer | 49.3 kg | 50 kg | 0.99 |
-| Dog | 25.9 kg | 27 kg | 0.96 |
-| Eagle | 5.05 kg | 5.2 kg | 0.97 |
-| Fish | 0.818 kg | 1.0 kg | 0.82 |
-| Fox | 4.97 kg | 5.0 kg | 0.99 |
-| Frog | 0.386 kg | 0.30 kg | 1.29 |
-| Goat | 50.9 kg | 65 kg | 0.78 |
-| Horse | 457 kg | 450 kg | 1.02 |
+| Bear | 61.1 kg | 60 kg | 1.02 |
+| Boar | 52.6 kg | 70 kg | 0.75 |
+| Cat | 3.27 kg | 3.5 kg | 0.93 |
+| Cheetah | 41.1 kg | 30 kg | 1.37 |
+| Chicken | 1.42 kg | 1.705 kg | 0.83 |
+| Cow | 533 kg | 680 kg | 0.78 |
+| Crow | 0.390 kg | 0.43 kg | 0.91 |
+| Deer | 49.5 kg | 50 kg | 0.99 |
+| Dog | 26.0 kg | 27 kg | 0.96 |
+| Eagle | 5.13 kg | 5.2 kg | 0.99 |
+| Fish | 0.827 kg | 1.0 kg | 0.83 |
+| Fox | 5.01 kg | 5.0 kg | 1.00 |
+| Frog | 0.387 kg | 0.30 kg | 1.29 |
+| Goat | 51.2 kg | 65 kg | 0.79 |
+| Horse | 458 kg | 450 kg | 1.02 |
 | Lion | 132 kg | 126 kg | 1.05 |
-| Pig | 232 kg | 250 kg | 0.93 |
-| Rabbit | 1.67 kg | 1.8 kg | 0.93 |
-| Rat | 0.198 kg | 0.25 kg | 0.79 |
-| Shark | 1455 kg | 1400 kg | 1.04 |
-| Sheep | 67.1 kg | 80 kg | 0.84 |
-| Snake | 0.317 kg | 0.5 kg | 0.63 |
-| Spider | 23.6 g | 20 g | 1.18 |
-| Wolf | 44.1 kg | 45 kg | 0.98 |
+| Pig | 233 kg | 250 kg | 0.93 |
+| Rabbit | 1.68 kg | 1.8 kg | 0.94 |
+| Rat | 0.200 kg | 0.25 kg | 0.80 |
+| Shark | 1470 kg | 1400 kg | 1.05 |
+| Sheep | 67.4 kg | 80 kg | 0.84 |
+| Snake | 0.421 kg | 0.5 kg | 0.84 |
+| Spider | 23.9 g | 20 g | 1.19 |
+| Wolf | 44.3 kg | 45 kg | 0.98 |
 
-Nine species fall within 5 % of the selected targets. Fish, frog, rabbit and snake use the same selected mass for both sexes. Their rows compare authored female geometry with that target. The selected cheetah female mass, 30 kg, is not a measured mean from Hudson2011a. Its Table 1 gives female masses of 29.5 and 45.5 kg and three male masses from 27.5 to 32.0 kg.
+Seven species fall within 5 % of the selected targets. Fish, frog, rabbit and snake use the same selected mass for both sexes. Their rows compare authored female geometry with that target. The selected cheetah female mass, 30 kg, is not a measured mean from Hudson2011a. Its Table 1 gives female masses of 29.5 and 45.5 kg and three male masses from 27.5 to 32.0 kg.
 
 ## Mass and inertia
 
@@ -202,7 +202,7 @@ The other muscles keep the rat's ratios to the biceps femoris and the rat's penn
 
 Eng2008 reports fiber lengths normalized to a 2.4 micrometer sarcomere length. These are not bone lengths. The template divides them by fixed 41.0 mm femur and 46.2 mm tibia references that Eng2008 does not report. Their source remains untraced.
 
-The current rat rig instead authors 36 mm and 41 mm segments. The ratios below remain DESIGN choices. `fiber_source` grades each ratio as `DESIGN` and names Eng2008 to trace only the fiber input. The rig supplies each individual's segment lengths.
+The current rat rig instead authors 36 mm and 41 mm segments. The ratios below remain DESIGN choices because the denominator is untraced. `fiber_source` grades each ratio as `DESIGN` and names Eng2008 only for the fiber input. The rig supplies each individual's segment lengths.
 
 | Muscle | Mass over the biceps femoris | Fiber length over its segment | Pennation |
 |---|---|---|---|
@@ -326,7 +326,7 @@ All selected masses and reference lengths below are `DESIGN` parameters. The fin
 | Fox | Red fox | 6.5, 5.0 kg | 0.40 m shoulder | `FROM_TEXT` |
 | Frog | American bullfrog | 0.30 kg | 0.155 m snout-vent | mass `UNVERIFIED`: the sources found give only an upper bound, 0.5 kg |
 | Goat | Saanen dairy goat | 85, 65 kg | 0.94 m shoulder, the buck's | mass `UNVERIFIED`: NSW DPI gives only the doe's minimum, 64 kg |
-| Horse | Thoroughbred | 500, 450 kg | 1.62 m shoulder | `FROM_TEXT`. Payne 2005, Table 3, p. 561, lists seven horses, including five Thoroughbreds of 480 to 600 kg and 1.47 to 1.57 m tall. The full cohort has a mean mass of 510 kg. Sex is not given. |
+| Horse | Thoroughbred | 500, 450 kg | 1.62 m shoulder | `FROM_TEXT`. Payne 2005, Table 3, p. 561, lists seven horses: five Thoroughbreds, one Thoroughbred cross and one Arab. The Thoroughbreds weigh 480 to 600 kg and stand 1.47 to 1.57 m. The full cohort has a mean mass of 510 kg. Sex is not given. |
 | Lion | African lion | 190, 126 kg | 1.15 m shoulder | `FROM_TEXT` |
 | Pig | Large White | 300, 250 kg | 0.90 m shoulder | length `UNVERIFIED`. 2068 Large White sows of 100 kg stand 0.614 m (Hong 2021, Table 1). Isometric scaling to 300 kg gives 0.886 m. |
 | Rabbit | European rabbit | 1.8 kg | 0.38 m head-body | `FROM_TEXT` |

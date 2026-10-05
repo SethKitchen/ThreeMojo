@@ -305,8 +305,8 @@ def calibrated_mass(
     Args:
         animal: The individual, as `create_animal` made it.
         cal: Its species' calibration.
-        cells: Samples per published reference length. The default matches
-            the canonical calibration grid.
+        cells: Samples per published reference length. The default is
+            the resolution that `calibrate` used for the canonical grid.
 
     Returns:
         Per-bone mass, center and inertia, in SI units, with the

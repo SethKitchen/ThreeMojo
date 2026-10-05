@@ -344,9 +344,20 @@ $(TEST_CPU_STAMP):
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
+	             exec 3>&1; \
+	             progress() { printf "%s suite=%s %s\n" \
+	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
+	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
 	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
-	                    2>&1 && python3 tools/run_suite.py \
-	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"); \
+	                    2>&1; build_rc=$$?; \
+	                    progress "$$1" "build-end: exit=$$build_rc"; \
+	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \
+	                    progress "$$1" "run-start: python3 tools/run_suite.py --seconds $(TEST_TIMEOUT) --suite $$1 -- $$bin"; \
+	                    python3 tools/run_suite.py \
+	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"; \
+	                    run_rc=$$?; \
+	                    progress "$$1" "run-end: exit=$$run_rc"; \
+	                    exit $$run_rc); \
 	             rc=$$?; rm -f "$$bin"; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; \
 	             if [ $$rc -eq 0 ]; then \

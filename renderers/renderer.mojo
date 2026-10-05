@@ -736,6 +736,7 @@ def _march_volume(
         steps: The material's `steps`.
         geometry: The draw's geometry.
         world: The draw's world matrix.
+        scene_depth: Whether the volume uses captured opaque-scene depth.
 
     Raises:
         Error: If `steps` is below one, or the geometry has no positions.

@@ -382,7 +382,8 @@ struct PhysicsQuerySnapshot(Movable):
         var entries = List[Int]()
         var boxes = List[Box3]()
         var common = Box3.empty()
-        for i in range(len(self._shapes)):
+        # The preceding guard returned for fewer than thirty-two shapes.
+        for i in range(len(self._shapes)):  # pragma: no branch
             ref shape = self._shapes[i]
             var axes = _admitted_axes(shape)
             masks.append(axes)
@@ -404,7 +405,8 @@ struct PhysicsQuerySnapshot(Movable):
         self._safe_axes = masks^
         for axis in range(3):  # pragma: no branch
             var linear = List[Int]()
-            for i in range(len(self._shapes)):
+            # The earlier guard established at least thirty-two shapes.
+            for i in range(len(self._shapes)):  # pragma: no branch
                 if self._safe_axes[i] & (1 << axis) == 0:
                     linear.append(i)
             self._axis_linear.append(linear^)
