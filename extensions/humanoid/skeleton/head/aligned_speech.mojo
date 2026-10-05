@@ -381,7 +381,8 @@ def aligned_phonemes(
 
 
 def _json_time(seconds: Float64) raises -> Duration:
-    """Validate JSON precision before reducing to the media clock's precision."""
+    """Validate JSON precision before reducing to the media clock's precision.
+    """
     if not isfinite(seconds) or seconds < 0:
         raise Error("JSON audio time must be finite and nonnegative")
     var clock = Float32(seconds)
