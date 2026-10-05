@@ -146,6 +146,38 @@ def test_multiple_connections_unlinked_sections_and_duplicate_roads() raises:
     assert_true(box.max == single.max)
 
 
+def test_nonbinary_last_section_uses_the_stored_road_end() raises:
+    # Binary64 subtraction and re-addition overshoot this ordinary endpoint.
+    var start = Float64(10.2)
+    var length = Float64(50.1)
+    assert_true(start + (length - start) > length)
+    for sign in [-1, 1]:
+        var b = MapBuilder()
+        var r = _road(b, 1, length, sign)
+        var sec = b.add_road_section(r, SectionId(1), start)
+        _ = b.add_road_section_lane(
+            r, sec, LaneId(sign), LANE_DRIVING, False, LaneId(0), LaneId(0)
+        )
+        b.create_lane_width(
+            b.lane(RoadId(1), LaneId(sign), start), start, 3.5, 0, 0, 0
+        )
+        b.add_road_geometry_line(r, 0, 0, 0, 0, length)
+        _connect(b, [1])
+        var map = b.build()
+        var box = map.junction(JuncId(7)).bounding_box
+        # Independent straight-line coordinates, including both exact ends.
+        for i in range(258):
+            var s = length * Float64(i) / 257.0
+            _contains(box, s, -Float64(sign) * 1.75)
+        ref road = map.road(RoadId(1))
+        var last = _lane_section_box(road, sec, 0)
+        _contains(last, start, -Float64(sign) * 1.75)
+        _contains(last, length, -Float64(sign) * 1.75)
+        var again = junction_box(map, JuncId(7))
+        assert_true(again.min == box.min)
+        assert_true(again.max == box.max)
+
+
 def test_cubic_profiles_and_inner_lane_records() raises:
     var b = MapBuilder()
     var r = _road(b, 1, 10, 1)
