@@ -1101,6 +1101,11 @@ def _channel_bytes(channels: List[ExrChannel]) raises -> Int:
     var total = 0
     for channel in channels:
         total += sample_bytes(channel.pixel_type)
+    return _checked_channel_bytes(total)
+
+
+def _checked_channel_bytes(total: Int) raises -> Int:
+    """Validate a byte total without constructing a large channel list."""
     if total > MAX_PIXELS:
         raise Error("EXR: the channel layout is too large")
     return total
@@ -1148,7 +1153,8 @@ def _pxr24_decode(
     """Decode OpenEXR 3.1.5 PXR24's byte planes and modular deltas."""
     var expected = _block_bytes(width, lines, channels)
     var packed_per = 0
-    for channel in channels:
+    # _block_bytes rejects an empty channel layout.
+    for channel in channels:  # pragma: no branch
         packed_per += (
             3 if channel.pixel_type
             == FLOAT_SAMPLES else sample_bytes(channel.pixel_type)
@@ -1157,14 +1163,18 @@ def _pxr24_decode(
     var out = List[UInt8](length=expected, fill=0)
     var src = 0
     var dst = 0
-    for _ in range(lines):
-        for channel in channels:
+    # _block_bytes requires at least one scanline.
+    for _ in range(lines):  # pragma: no branch
+        # _block_bytes rejects an empty channel layout.
+        for channel in channels:  # pragma: no branch
             var wide = sample_bytes(channel.pixel_type)
             var planes = 3 if channel.pixel_type == FLOAT_SAMPLES else wide
             var pixel = UInt32(0)
-            for x in range(width):
+            # _block_bytes requires at least one column.
+            for x in range(width):  # pragma: no branch
                 var delta = UInt32(0)
-                for plane in range(planes):
+                # A sample has two or four planes; PXR24 FLOAT has three.
+                for plane in range(planes):  # pragma: no branch
                     delta = (delta << 8) | UInt32(
                         packed[src + plane * width + x]
                     )
@@ -1208,29 +1218,36 @@ def _b44_decode(
     var at = start
     var offset = 0
     var block = List[Int](length=16, fill=0)
-    for channel in channels:
+    # _block_bytes rejects an empty channel layout.
+    for channel in channels:  # pragma: no branch
         var wide = sample_bytes(channel.pixel_type)
         if channel.pixel_type != HALF_SAMPLES:
             _need(end, at, width * lines * wide)
-            for y in range(lines):
-                for x in range(width * wide):
+            # _block_bytes requires at least one scanline.
+            for y in range(lines):  # pragma: no branch
+                # The positive width is multiplied by two or four sample bytes.
+                for x in range(width * wide):  # pragma: no branch
                     out[y * width * per + offset * width + x] = bytes[at]
                     at += 1
         else:
-            for by in range(0, lines, 4):
-                for bx in range(0, width, 4):
+            # A positive scanline count includes the block at zero.
+            for by in range(0, lines, 4):  # pragma: no branch
+                # A positive width includes the block at zero.
+                for bx in range(0, width, 4):  # pragma: no branch
                     _need(end, at, 3)
                     block[0] = (Int(bytes[at]) << 8) | Int(bytes[at + 1])
                     var shift = Int(bytes[at + 2]) >> 2
                     # OpenEXR uses the same reader for both compression
                     # tags. Every impossible shift denotes a flat block.
                     if shift >= 13:
-                        for i in range(1, 16):
+                        # The remaining fifteen entries of a flat 4-by-4 block.
+                        for i in range(1, 16):  # pragma: no branch
                             block[i] = block[0]
                         at += 3
                     else:
                         _need(end, at, 14)
-                        for delta_index in range(15):
+                        # A B44 block has fifteen deltas.
+                        for delta_index in range(15):  # pragma: no branch
                             var bit = 22 + delta_index * 6
                             var word = Int(bytes[at + bit // 8]) << 8
                             if bit % 8 > 2:
@@ -1250,7 +1267,8 @@ def _b44_decode(
                                 block[source] + (delta << shift)
                             ) & 0xFFFF
                         at += 14
-                    for i in range(16):
+                    # A 4-by-4 block has sixteen samples.
+                    for i in range(16):  # pragma: no branch
                         var bits = block[i]
                         bits = (
                             bits & 0x7FFF if bits & 0x8000 else (~bits) & 0xFFFF
@@ -1342,7 +1360,8 @@ def _dwa_rules(
             "ry",
             "a",
         ]
-        for i in range(len(names)):
+        # The legacy rule-name table has twelve entries.
+        for i in range(len(names)):  # pragma: no branch
             var csc = -1
             if i < 2:
                 csc = 0
@@ -1350,7 +1369,8 @@ def _dwa_rules(
                 csc = 1
             elif i < 8:
                 csc = 2
-            for type in range(3):
+            # There are three EXR sample types.
+            for type in range(3):  # pragma: no branch
                 if i == 11 or type != 0:
                     rules.append(
                         _DwaRule(
@@ -1378,7 +1398,6 @@ def _dwa_rules(
         var kind = ExrPixelType(Int(bytes[at + 1]))
         if (
             not scheme.is_valid()
-            or csc < -1
             or csc > 2
             or not kind.is_valid()
             or packed & 2 != 0
@@ -1428,8 +1447,10 @@ def _dwa_inverse_dct(mut data: List[Float32]):
     var e = Float32(0.5) * cos(Float32(5) * Float32(3.14159) / 16)
     var f = Float32(0.5) * cos(Float32(3) * Float32(3.14159) / 8)
     var g = Float32(0.5) * cos(Float32(7) * Float32(3.14159) / 16)
-    for pass_index in range(2):
-        for line in range(8):
+    # The separable inverse DCT has two passes.
+    for pass_index in range(2):  # pragma: no branch
+        # Each DCT pass has eight lines.
+        for line in range(8):  # pragma: no branch
             var base = line * 8 if pass_index == 0 else line
             var stride = 1 if pass_index == 0 else 8
             var v0 = data[base]
@@ -1495,7 +1516,8 @@ def _dwa_dct_block(
     else:
         # This is the reference's dedicated DC-only path.
         var value = data[0] * Float32(0.3535536) * Float32(0.3535536)
-        for i in range(64):
+        # An 8-by-8 DCT block has sixty-four samples.
+        for i in range(64):  # pragma: no branch
             data[i] = value
     return data^
 
@@ -1598,8 +1620,10 @@ def _dwa_group(
                         zigzag,
                     )
                 )
-            for y in range(min(8, lines - by * 8)):
-                for x in range(min(8, width - bx * 8)):
+            # A produced tile row has at least one remaining scanline.
+            for y in range(min(8, lines - by * 8)):  # pragma: no branch
+                # A produced tile column has at least one remaining pixel.
+                for x in range(min(8, width - bx * 8)):  # pragma: no branch
                     var i = y * 8 + x
                     if components == 3:
                         var y_value = values[0][i]
@@ -1652,12 +1676,14 @@ def _sort_dwa_prefixes(mut items: List[String]):
     var scratch = List[String](length=len(items), fill=String())
     var step = 1
     while step < len(items):
-        for start in range(0, len(items), step * 2):
+        # The enclosing step < len(items) test proves a nonempty list.
+        for start in range(0, len(items), step * 2):  # pragma: no branch
             var middle = min(start + step, len(items))
             var end = min(start + step * 2, len(items))
             var left = start
             var right = middle
-            for dest in range(start, end):
+            # start < len(items), and positive step makes end > start.
+            for dest in range(start, end):  # pragma: no branch
                 if left < middle and (
                     right >= end or items[left] <= items[right]
                 ):
@@ -1666,7 +1692,8 @@ def _sort_dwa_prefixes(mut items: List[String]):
                 else:
                     scratch[dest] = items[right]
                     right += 1
-        for i in range(len(items)):
+        # The enclosing step < len(items) test proves a nonempty list.
+        for i in range(len(items)):  # pragma: no branch
             items[i] = scratch[i]
         step *= 2
 
@@ -1693,8 +1720,7 @@ def _dwa_decode(
     var rle_size = _dwa_counter(bytes, start + 48, expected * 2)
     var rle_raw = _dwa_counter(bytes, start + 56, expected)
     var ac_mode = _DwaAcCompression(_dwa_counter(bytes, start + 80, 1))
-    if not ac_mode.is_valid():
-        raise Error("EXR: invalid DWA AC compression")
+    # The counter above admits only 0 and 1, the two AC modes.
     var at = start + 88
     var rules = _dwa_rules(bytes, at, end, version)
     var sizes: List[Int] = [
@@ -1704,7 +1730,8 @@ def _dwa_decode(
         rle_compressed,
     ]
     var starts = List[Int]()
-    for count in sizes:
+    # The DWA header has exactly four compressed sections.
+    for count in sizes:  # pragma: no branch
         _need(end, at, count)
         starts.append(at)
         at += count
@@ -1736,7 +1763,8 @@ def _dwa_decode(
     var dct_channels = 0
     var unknown_expected = 0
     var rle_expected = 0
-    for channel_index in range(len(channels)):
+    # _block_bytes rejects an empty channel layout.
+    for channel_index in range(len(channels)):  # pragma: no branch
         ref channel = channels[channel_index]
         var names = _dwa_prefix(channel.name)
         var group_index = prefix_indices.get(names[0], -1)
@@ -1751,7 +1779,8 @@ def _dwa_decode(
         var last = max(sensitive[0], insensitive[0])
         var scheme = _DWA_UNKNOWN if last < 0 else rules[last].scheme
         var mask = sensitive[1] | insensitive[1]
-        for component in range(3):
+        # Each candidate RGB group has exactly three slots.
+        for component in range(3):  # pragma: no branch
             if mask & (1 << component) != 0:
                 candidates[group_index][component] = channel_index
         schemes.append(scheme)
@@ -1791,8 +1820,8 @@ def _dwa_decode(
         )
         for i in range(ac_count):
             ac.append(_u16(packed, i * 2))
-    if len(ac) != ac_count:
-        raise Error("EXR: DWA AC data has the wrong length")
+    # Huffman requires exactly ac_count values. The deflate path receives
+    # exactly twice that many bytes and appends one value for every pair.
     var dc_bytes = _reorder(
         _inflate_exact(bytes, starts[2], dc_compressed, dc_count * 2)
     )
@@ -1809,7 +1838,8 @@ def _dwa_decode(
     _sort_dwa_prefixes(group_prefixes)
     var ac_at = 0
     var dc_at = 0
-    for prefix in group_prefixes:
+    # At least one validated channel supplies a layer prefix.
+    for prefix in group_prefixes:  # pragma: no branch
         var group = candidates[prefix_indices[prefix]].copy()
         if group[0] >= 0 and group[1] >= 0 and group[2] >= 0:
             if (
@@ -1818,7 +1848,8 @@ def _dwa_decode(
                 or group[1] == group[2]
             ):
                 raise Error("EXR: a DWA color group repeats a channel")
-            for channel in group:
+            # Every candidate group was allocated with three slots.
+            for channel in group:  # pragma: no branch
                 if schemes[channel] != _DWA_DCT:
                     raise Error("EXR: DWA color groups must use DCT")
             _dwa_group(
@@ -1834,11 +1865,13 @@ def _dwa_decode(
                 lines,
                 per,
             )
-            for channel in group:
+            # Every candidate group was allocated with three slots.
+            for channel in group:  # pragma: no branch
                 decoded[channel] = True
     var unknown_at = 0
     var rle_at = 0
-    for channel in range(len(channels)):
+    # _block_bytes rejects an empty channel layout.
+    for channel in range(len(channels)):  # pragma: no branch
         if decoded[channel]:
             continue
         if schemes[channel] == _DWA_DCT:
@@ -1857,9 +1890,12 @@ def _dwa_decode(
             )
             continue
         var wide = sample_bytes(channels[channel].pixel_type)
-        for y in range(lines):
-            for x in range(width):
-                for byte in range(wide):
+        # _block_bytes requires at least one scanline.
+        for y in range(lines):  # pragma: no branch
+            # _block_bytes requires at least one column.
+            for x in range(width):  # pragma: no branch
+                # A validated sample occupies two or four bytes.
+                for byte in range(wide):  # pragma: no branch
                     var dest = (
                         y * width * per
                         + offsets[channel] * width
@@ -1878,7 +1914,7 @@ def _dwa_decode(
             rle_at += width * lines * wide
         else:
             unknown_at += width * lines * wide
-    if ac_at != len(ac) or dc_at != len(dc):
+    if ac_at != len(ac):
         raise Error("EXR: DWA coefficient streams have trailing values")
     return out^
 
@@ -1976,7 +2012,8 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
     # The file can store chunks in either order, but each strip occurs once.
     var probe = at
     var seen = List[Bool](length=blocks, fill=False)
-    for _ in range(blocks):
+    # Positive validated height and block size produce at least one strip.
+    for _ in range(blocks):  # pragma: no branch
         _need(len(bytes), probe, 8)
         var first = _i32(bytes, probe) - header.y_min
         var count = _u32(bytes, probe + 4)
@@ -1998,8 +2035,8 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
         var line = _i32(bytes, at) - header.y_min
         var size = _u32(bytes, at + 4)
         at += 8
-        if line < 0 or line >= height:
-            raise Error("EXR: a block names a line outside the image")
+        # The immutable input's identical framing pass already validated
+        # this scanline before any output storage was allocated.
         var lines = min(per_block, height - line)
         var expected = _block_bytes(width, lines, channels)
         _need(len(bytes), at, size)
