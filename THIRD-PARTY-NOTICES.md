@@ -114,6 +114,30 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---
 
+## Arm ASTC Encoder
+
+<https://github.com/ARM-software/astc-encoder/tree/30aabb3f42406df45a910d8496f9bee17eeba9bb>
+
+The raw ASTC tests use Arm astcenc 5.3.0 as an independent reference.
+`tools/references/astc_reference.cpp` calls its public API. The generated
+hex fixtures under `assets/ktx2/raw_astc_*` store the reference texels.
+No Arm binary or source file is bundled. The raw decode rounding in
+`render/uastc_hdr.mojo` follows its UNORM8 and FP16 profiles.
+
+Arm astcenc is licensed under Apache-2.0, reproduced in the Basis Universal
+section below. The endpoint and interpolation source notices state:
+
+```
+Copyright 2011-2023 Arm Limited
+Copyright 2011-2024 Arm Limited
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+```
+
+---
+
 ## Basis Universal
 
 <https://github.com/BinomialLLC/basis_universal>
@@ -146,7 +170,8 @@ otherwise explicitly indicated.
 
 The test files under `assets/ktx2/` were written by the Basis Universal
 encoder that the ktx2-encoder package bundles, except
-`uastc_hdr_blocks.ktx2`, which holds random ASTC blocks.
+`uastc_hdr_blocks.ktx2`, which holds random ASTC blocks. The raw ASTC
+text fixtures use the separate Arm reference described above.
 
 ```
                                  Apache License
