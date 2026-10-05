@@ -1264,7 +1264,9 @@ def fit_triangle_budget(
 
     Raises:
         Error: If the budget, worker count, first mesh or geometry is
-            invalid. A conversion error can follow earlier replacements,
-            as in the original best-effort implementation.
+            invalid, including geometry with morph targets. Morph-bearing
+            geometry is refused even if no reduction is needed. A conversion
+            error can follow earlier replacements, as in the original
+            best-effort implementation.
     """
     _ = fit_triangle_budget_result(scene, assets, first_mesh, budget, workers)
