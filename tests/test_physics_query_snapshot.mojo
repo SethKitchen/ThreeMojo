@@ -29,7 +29,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, Mass
+from units.si import CENTIMETER, Angle, DEGREE, Length, Mass
 
 
 def _shape(kind: Int) raises -> Shape:
@@ -83,7 +83,7 @@ def _same_hit(
     assert_equal(Bool(actual), Bool(expected))
     if Bool(expected):
         assert_equal(actual.value().owner.source_body, expected.value().body)
-        assert_equal(actual.value().distance, expected.value().distance)
+        assert_equal(actual.value().distance.value, expected.value().distance)
         assert_true(actual.value().point == expected.value().point)
         assert_true(actual.value().normal == expected.value().normal)
         assert_equal(
@@ -101,7 +101,7 @@ def _same_snapshot_hit(
     assert_equal(Bool(actual), Bool(expected))
     if Bool(expected):
         assert_true(actual.value().owner == expected.value().owner)
-        assert_equal(actual.value().distance, expected.value().distance)
+        assert_true(actual.value().distance == expected.value().distance)
         assert_true(actual.value().point == expected.value().point)
         assert_true(actual.value().normal == expected.value().normal)
         assert_equal(
@@ -178,9 +178,29 @@ def test_empty_disabled_and_singleton_snapshots() raises:
     assert_equal(
         enabled.raycast(origin, direction, Length(10), BodyId(-1))
         .value()
-        .distance,
+        .distance.value,
         Float32(2.5),
     )
+
+
+def test_snapshot_distance_keeps_length_units_and_live_scalar_compatibility() raises:
+    var world = PhysicsWorld()
+    _ = world.add_body(_body(0))
+    var snapshot = PhysicsQuerySnapshot(world)
+    var origin = Vector3(0, 0, 3)
+    var direction = Vector3(0, 0, -1)
+    var hit = snapshot.raycast(
+        origin, direction, Length(10), BodyId(-1)
+    ).value()
+    var distance: Length = hit.distance
+    assert_true(distance == Length(2.5))
+    assert_equal(distance.to(CENTIMETER), Float32(250))
+    var live: Float32 = (
+        world.raycast(origin, direction, Length(10), BodyId(-1))
+        .value()
+        .distance
+    )
+    assert_equal(distance.value, live)
 
 
 def test_all_primitives_modes_and_exact_narrow_phase_answers() raises:
@@ -288,7 +308,7 @@ def test_insertion_removal_replacement_and_independent_captures() raises:
     var later = second.raycast(origin, direction, Length(10), BodyId(-1))
     assert_equal(before.value().owner.source_body, BodyId(0))
     assert_equal(later.value().owner.source_body, BodyId(1))
-    assert_equal(later.value().distance, Float32(1.5))
+    assert_equal(later.value().distance.value, Float32(1.5))
     assert_true(before.value().owner != later.value().owner)
     assert_true(before.value().owner.is_valid())
     var second_first = second.raycast(origin, direction, Length(10), BodyId(1))
@@ -358,7 +378,7 @@ def test_source_destruction_moves_and_owner_tokens_do_not_alias() raises:
     moved.check_owner(before.value().owner)
     var escaped = _escaped_hit()
     assert_equal(escaped.owner.source_body, BodyId(0))
-    assert_equal(escaped.distance, Float32(2))
+    assert_equal(escaped.distance.value, Float32(2))
     # Retained hit owners keep their capture token alive across destruction.
     for _ in range(32):
         var fresh = _escaped_snapshot()
@@ -424,7 +444,7 @@ def test_registered_mesh_view_geometry_material_and_enablement_are_owned() raise
         var origin = Vector3(0, 0, 3)
         var direction = Vector3(0, 0, -1)
         var before = snapshot.raycast(origin, direction, Length(10), BodyId(-1))
-        assert_equal(before.value().distance, Float32(3))
+        assert_equal(before.value().distance.value, Float32(3))
         world.bodies[0].position = Vector3(0, 0, 20)
         world.bodies[0].shape_position = Vector3(10, 0, 0)
         world.bodies[0].rotation = Quaternion.from_axis_angle(
@@ -441,7 +461,7 @@ def test_registered_mesh_view_geometry_material_and_enablement_are_owned() raise
         assert_equal(
             after_edits.raycast(origin, direction, Length(10), BodyId(-1))
             .value()
-            .distance,
+            .distance.value,
             Float32(3),
         )
         world.bodies[0].material = PhysicsMaterial(0.9, 0.8)
@@ -626,10 +646,10 @@ def test_returned_hit_fields_are_independent_values() raises:
     var edited = before.value()
     edited.point = Vector3(10, 20, 30)
     edited.normal = Vector3(1, 0, 0)
-    edited.distance = 90
+    edited.distance = Length(90)
     edited.material = PhysicsMaterial(0.9, 0.8)
     edited.owner.source_body = BodyId(99)
-    assert_equal(edited.distance, Float32(90))
+    assert_equal(edited.distance.value, Float32(90))
     _same_snapshot_hit(
         snapshot.raycast(origin, direction, Length(10), BodyId(-1)), before
     )
