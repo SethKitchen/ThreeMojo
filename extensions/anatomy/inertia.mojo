@@ -28,6 +28,27 @@ from units.si import (
 )
 
 
+def _central_moment(raw: Float64, shift: Float64) raises -> Float64:
+    # Bound cancellation in raw - m*c_i*c_j in the raw-moment units.
+    # u = 2**-53 and gamma(16) = 16*u/(1-16*u). Six rounded operations
+    # suffice for a single point's raw/first moments and center shift;
+    # gamma(16) also covers forming the bound. This is not a tolerance
+    # proportional to an unrelated axis or to the central tensor.
+    # A resolved residual still goes through the full PSD checks below.
+    comptime U = 1.1102230246251565e-16
+    comptime ROUNDING = (16.0 * U) / (1.0 - 16.0 * U)
+    # Sixteen least Float64 subnormals cover absolute rounding at zero.
+    comptime UNDERFLOW = 7.9050503334599447e-323
+    var central = raw - shift
+    if not isfinite(central):
+        raise Error("Central second moments must be finite")
+    # Multiply first so two finite raw moments cannot overflow the bound.
+    var error = abs(raw) * ROUNDING + abs(shift) * ROUNDING + UNDERFLOW
+    # Both signs are discarded: a smaller true moment is unresolved in
+    # these raw sums, rather than proved to be mathematically zero.
+    return 0.0 if abs(central) <= error else central
+
+
 def _check_second_moments(
     xx: Float64,
     yy: Float64,
@@ -258,17 +279,20 @@ struct InertiaTally(Copyable, Movable):
         # _check_sums already established finite nonnegative mass.
         if mass == 0.0:
             raise Error("A sampled segment must have finite positive mass")
+        var mass_si = Float32(mass)
+        if not (isfinite(mass_si) and mass_si > 0.0):
+            raise Error("A sampled segment mass must fit positive finite SI")
         var c = self.first / mass
         # Second moments about the center, by the parallel-axis theorem.
-        var sxx = self.second[0] - mass * c[0] * c[0]
-        var syy = self.second[1] - mass * c[1] * c[1]
-        var szz = self.second[2] - mass * c[2] * c[2]
-        var sxy = self.second[3] - mass * c[0] * c[1]
-        var sxz = self.second[4] - mass * c[0] * c[2]
-        var syz = self.second[5] - mass * c[1] * c[2]
+        var sxx = _central_moment(self.second[0], mass * c[0] * c[0])
+        var syy = _central_moment(self.second[1], mass * c[1] * c[1])
+        var szz = _central_moment(self.second[2], mass * c[2] * c[2])
+        var sxy = _central_moment(self.second[3], mass * c[0] * c[1])
+        var sxz = _central_moment(self.second[4], mass * c[0] * c[2])
+        var syz = _central_moment(self.second[5], mass * c[1] * c[2])
         _check_second_moments(sxx, syy, szz, sxy, sxz, syz, 1e-10)
         var result = SegmentInertia(
-            Mass(Float32(mass), KILOGRAM),
+            Mass(mass_si, KILOGRAM),
             Vector3(Float32(c[0]), Float32(c[1]), Float32(c[2])),
             MomentOfInertia(Float32(syy + szz), KILOGRAM_SQUARE_METER),
             MomentOfInertia(Float32(sxx + szz), KILOGRAM_SQUARE_METER),
