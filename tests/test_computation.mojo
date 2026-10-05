@@ -12,6 +12,8 @@ neighbor read across a wrapped edge, a texel thrown away, and data whose
 alpha is zero. `tests/test_gpu.mojo` holds the device to these images.
 """
 
+from math.vector2 import Vector2
+from std.math import nan
 from materials.nodes import (
     AT_FRAGMENT,
     AT_RIGHT,
@@ -22,7 +24,7 @@ from materials.nodes import (
 )
 from postprocessing.sampling import Untracked
 from render.computation import ComputeNodes, GPUComputationRenderer
-from render.texture import MIRROR, REPEAT
+from render.texture import CLAMP, MIRROR, REPEAT
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -286,6 +288,41 @@ def test_a_computation_refuses_what_it_cannot_run() raises:
         computation.compute()
     with assert_raises(contains="no variable"):
         _ = computation.current_image(3)
+
+
+def test_explicit_compute_gradients_fail_closed_before_sampling() raises:
+    var code = List[Float32](length=1, fill=0)
+    var images: List[Float32] = [0.25, 0.5, 0.75, 1]
+    var wraps: List[Int32] = [Int32(CLAMP.value), Int32(CLAMP.value)]
+    var source = ComputeNodes(
+        code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        images.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        wraps.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked](),
+        1,
+        1,
+        0,
+        0,
+    )
+    var zero = Vector2(0, 0)
+    var valid = source.sample_grad(0, 0.5, 0.5, zero, zero)
+    assert_equal(valid.r, 0.25)
+    assert_equal(valid.g, 0.5)
+    assert_equal(valid.b, 0.75)
+    assert_equal(valid.a, 1)
+    var refused = source.sample_grad(0, nan[DType.float32](), 0.5, zero, zero)
+    assert_equal(refused.r, 0)
+    assert_equal(refused.g, 0)
+    assert_equal(refused.b, 0)
+    assert_equal(refused.a, 0)
+    _ = code^
+    _ = images^
+    _ = wraps^
 
 
 def main() raises:
