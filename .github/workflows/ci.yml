@@ -112,6 +112,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
       - name: test-cpu
+        env:
+          THREEMOJO_COMPILER_TELEMETRY: "1"
         # Keep suite parallelism. Bound the threads inside each compiler.
         run: make -B test-cpu SHARD=${{ matrix.shard }}/3 MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"
 
