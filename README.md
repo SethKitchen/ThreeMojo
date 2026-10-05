@@ -59,9 +59,9 @@ The checklist covers three.js ports, project tools and extensions. A checked ite
 Some portable features remain partial, including [GLSL shaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset), [volume materials](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#what-is-not-ported) and [image formats](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#what-is-not-ported). [Out of scope](#out-of-scope) lists excluded APIs and addons. Expand a dropdown to see implemented entries; open entries remain visible.
 
 <!-- features -->
-### Remaining three.js parity
+### Implemented three.js features
 
-- [ ] [GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): unsigned types, explicit texture gradients and broader loops remain open. Unproved loop exits now fail explicitly [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
+- [x] [Bounded GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): exact 32-bit unsigned scalars and vectors, explicit 2D texture gradients, and checked finite loops [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
 - [x] [OpenEXR compression coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): PXR24 and DWA from three.js r180; B44 and B44A from r186 [#615](https://github.com/SethKitchen/ThreeMojo/issues/615)
 - [x] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#raw-astc): 4x4 and 6x6 UNORM, sRGB and SFLOAT from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
 
