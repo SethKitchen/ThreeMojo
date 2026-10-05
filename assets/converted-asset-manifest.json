@@ -1,11 +1,13 @@
 {
-  "schema_version": 1,
-  "evidence_commit": "0a73a7342988e508b875eb8512f36a26f111936e",
-  "status": "production-source-unverified",
+  "schema_version": 2,
+  "status": "production-regeneration-verified",
   "notes": [
-    "Hashes pin the committed output bytes and current converter source. They do not prove that this converter produced the historical assets.",
-    "Production recipes and license declarations come from the converter source and THIRD-PARTY-NOTICES.md. No upstream source bytes, immutable source revision, or historical command log were available for verification.",
-    "Synthetic sources are original test data, licensed PolyForm-Noncommercial-1.0.0. Their regeneration is independent of the unavailable production inputs."
+    "The pinned upstream inputs and converter recipes reproduce all three unchanged production output hashes. This proves a reproducible recipe, not the original historical command log.",
+    "The reference verification used CPython 3.12.14 on Linux x86-64 on 2026-10-05. The standard library is the only Python dependency. Every reproduction must match the exact recorded output hashes.",
+    "THRS fitting uses explicit left-to-right binary64 addition. Built-in sum changed in Python 3.12 and otherwise changes four quantized Sintel offset components.",
+    "Input files are listed individually. License and context files are verified too, but are not converter inputs. Extra cache files are never staged for conversion.",
+    "The default check is offline and regenerates only small synthetic fixtures. Full production reproduction requires an explicit source cache; downloads require a separate flag.",
+    "Synthetic sources are original test data, licensed PolyForm-Noncommercial-1.0.0."
   ],
   "files": {
     "assets/converted-fixtures/face/generic_neutral_mesh.obj": "e2fecd8d1aceeac1463349b1bec6c75a696ec15fe417efe6a44b76be816fedb0",
@@ -17,7 +19,7 @@
     "assets/face/ict_face.bin": "a1e9423fdbd88363e3ab9582e395720003d1459c8ed8ea5d55214b0148163271",
     "assets/hair/layered.bin": "1b28e421245802d24d408884e0949388f40d25d5f3e43228d75453858ecc5230",
     "assets/hair/mohawk.bin": "a23fb2b8170e9b9b2968339b1c797f0cdb96d1d837a4412a5559cc827a817ff4",
-    "tools/hair_style.py": "5ad28d8166329ae12753fbc00e8e46248433bd01129543c5b3092e787840305c",
+    "tools/hair_style.py": "984fe7d2c3d5231b0233dac8e31238ae39f5fb91d019de323bb5184f6e7a443f",
     "tools/ict_face_model.py": "0796033cf514d1668c40c5fb673be4c7e1d4bc02266aa805a3ff5f6352f2e27b"
   },
   "production_assets": [
@@ -27,22 +29,29 @@
       "format_version": 6,
       "output_size_bytes": 9177816,
       "source": {
-        "status": "unverified",
-        "repository": "https://github.com/USC-ICT/ICT-FaceKit",
-        "documented_input": "FaceXModel/*.obj",
-        "revision": null,
-        "sha256": null
+        "id": "ict",
+        "input": "FaceXModel"
       },
-      "documented_recipe": {
+      "regeneration_verified": true,
+      "parameters": {
         "identities": 60,
         "skin_end": 11248,
         "coarse_target": 6000,
         "to_meters": 0.01,
         "still_meters": 1e-07
       },
-      "declared_license": "MIT",
-      "license_evidence": "THIRD-PARTY-NOTICES.md",
-      "regeneration_verified": false
+      "license": {
+        "spdx": "MIT",
+        "notice": "THIRD-PARTY-NOTICES.md",
+        "source_files": [
+          "LICENSE",
+          "README.md"
+        ],
+        "evidence_urls": [
+          "https://github.com/USC-ICT/ICT-FaceKit/blob/da5f95a607f5e6b37755b38d3385d7f2853732e5/LICENSE",
+          "https://github.com/USC-ICT/ICT-FaceKit/blob/da5f95a607f5e6b37755b38d3385d7f2853732e5/README.md"
+        ]
+      }
     },
     {
       "path": "assets/hair/layered.bin",
@@ -50,19 +59,28 @@
       "format_version": 1,
       "output_size_bytes": 1162820,
       "source": {
-        "status": "unverified",
-        "repository": "https://github.com/Scthe/frostbitten-hair-webgpu",
-        "documented_input": "SintelHairOriginal-sintel_hair.16points.tfx",
-        "revision": null,
-        "sha256": null
+        "id": "sintel",
+        "input": "static/models/SintelHairOriginal-sintel_hair.16points.tfx"
       },
-      "documented_recipe": {
+      "regeneration_verified": true,
+      "parameters": {
         "style": "layered",
-        "points": 16
+        "points": 16,
+        "summation": "left-to-right-binary64"
       },
-      "declared_license": "CC-BY-3.0",
-      "license_evidence": "THIRD-PARTY-NOTICES.md",
-      "regeneration_verified": false
+      "license": {
+        "spdx": "CC-BY-3.0",
+        "notice": "THIRD-PARTY-NOTICES.md",
+        "source_files": [
+          "README.md"
+        ],
+        "evidence_urls": [
+          "https://github.com/Scthe/frostbitten-hair-webgpu/blob/4478dd129525ff7db92978178b55f760716cbd72/README.md",
+          "https://blendswap.com/blend/2847",
+          "https://durian.blender.org/about/",
+          "https://creativecommons.org/licenses/by/3.0/"
+        ]
+      }
     },
     {
       "path": "assets/hair/mohawk.bin",
@@ -70,15 +88,14 @@
       "format_version": 1,
       "output_size_bytes": 89272,
       "source": {
-        "status": "unverified",
-        "repository": "https://github.com/GPUOpen-Effects/TressFX",
-        "documented_input": "RATBOY_MOHAWK.tfx",
-        "revision": null,
-        "sha256": null
+        "id": "ratboy",
+        "input": "bin/Objects/HairAsset/Ratboy/Ratboy_mohawk.tfx"
       },
-      "documented_recipe": {
+      "regeneration_verified": true,
+      "parameters": {
         "style": "mohawk",
         "points": 16,
+        "summation": "left-to-right-binary64",
         "mohawk_from_degrees": -15.0,
         "mohawk_to_degrees": 100.0,
         "scalp_from_degrees": -55.0,
@@ -92,9 +109,18 @@
           10.6
         ]
       },
-      "declared_license": "MIT",
-      "license_evidence": "THIRD-PARTY-NOTICES.md",
-      "regeneration_verified": false
+      "license": {
+        "spdx": "MIT",
+        "notice": "THIRD-PARTY-NOTICES.md",
+        "source_files": [
+          "license.txt",
+          "README.md"
+        ],
+        "evidence_urls": [
+          "https://github.com/GPUOpen-Effects/TressFX/blob/6957058e29dceb25a0c2a82849bb892f3d9fbce5/license.txt",
+          "https://github.com/GPUOpen-Effects/TressFX/blob/6957058e29dceb25a0c2a82849bb892f3d9fbce5/README.md"
+        ]
+      }
     }
   ],
   "synthetic_regeneration": [
@@ -132,5 +158,901 @@
       "output_sha256": "815028649d2f125c50509ce4512a805d799932c2b2048665a156baf09521c142",
       "output_size_bytes": 1144
     }
-  ]
+  ],
+  "sources": {
+    "ict": {
+      "repository": "https://github.com/USC-ICT/ICT-FaceKit",
+      "revision": "da5f95a607f5e6b37755b38d3385d7f2853732e5",
+      "files": [
+        {
+          "path": "FaceXModel/PupilDilate_L.obj",
+          "size_bytes": 2642802,
+          "git_blob_sha1": "0712c327145be97ab48b3399f8c7e18adca2c66d",
+          "sha256": "ab28968a231bb184b73e4103b6026f22bf2a2201d242b601326d121ee25d285c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/PupilDilate_R.obj",
+          "size_bytes": 2553162,
+          "git_blob_sha1": "193726648e3fa056f5eea3a784000940c848d564",
+          "sha256": "72a3ad704e509c22a004d279e0a1460e8abafcff0afe1eee5ef794302e42087c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/browDown_L.obj",
+          "size_bytes": 2557185,
+          "git_blob_sha1": "7e34b9da45c5633f622cf9b81bc0b013becb6d4e",
+          "sha256": "d1dcd14fc085a9e258dec62a4bfe4a31d592cce5d8918a3892c20f480653f4c1",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/browDown_R.obj",
+          "size_bytes": 2557221,
+          "git_blob_sha1": "06cfa929feb5c8ddb15b1e593be4575bdd2b3bc3",
+          "sha256": "66a2c72ab64999af168795f27182d011f52b90958c402d719d3ec8ff7d1c8939",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/browInnerUp_L.obj",
+          "size_bytes": 2557407,
+          "git_blob_sha1": "11a22ab5c58e01b99d8c75d7550a58e7a45f7016",
+          "sha256": "81fb1625794ea36fb13303234ce06cef798acfdbc489077e22ae195a705bc92e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/browInnerUp_R.obj",
+          "size_bytes": 2557536,
+          "git_blob_sha1": "f79d32c69b7f4ae6b8563dd9223b3162029e4dab",
+          "sha256": "5e66b46cdad89fd1237273db2b885511688cf37636cedfdde432a4844c9109e7",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/browOuterUp_L.obj",
+          "size_bytes": 2557263,
+          "git_blob_sha1": "f5ab5d4039f61d11384010de8f1f92871943d8b4",
+          "sha256": "022d5342687e51351f4cad6dd1abd42c3bb1b752d0b235bdc7fc588ab0d79c90",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/browOuterUp_R.obj",
+          "size_bytes": 2557349,
+          "git_blob_sha1": "5660b3401b7c06bb38face182d4466832c8c60b7",
+          "sha256": "1e4722060538b274ed49ed872525d770b5bfd9262b7bce1b6310f49356f5b531",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/cheekPuff_L.obj",
+          "size_bytes": 2557393,
+          "git_blob_sha1": "0687efb7cd8d8a484bc2015a43b77a1650767336",
+          "sha256": "f53fd2bdeb8e26d0db8a684ab9c095c6bb113b74575dec329facae2799ff18c6",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/cheekPuff_R.obj",
+          "size_bytes": 2557558,
+          "git_blob_sha1": "4b447ef6ec4b8236703d907ebc42eb6f48d606bb",
+          "sha256": "cd5b5d0f3a653a1fa31abeb65daf8fd6ffdf83a4d1bf22333a469b13b96fa801",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/cheekRaiser_L.obj",
+          "size_bytes": 2557063,
+          "git_blob_sha1": "548d3b1613aab28dd333e85a4f0227cfb108a38b",
+          "sha256": "56596066c17425a0446f9ba5566cb574de306792dac8fb8bbe3d6420197e76c5",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/cheekRaiser_R.obj",
+          "size_bytes": 2557174,
+          "git_blob_sha1": "ce4eae6e7cb1b22b0af2806cce7187ffb0feaf99",
+          "sha256": "475ba0a741e74e8343b3b912b90ee6d0fc657196a5b7aeb1c0b6620ddf3781be",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/cheekSquint_L.obj",
+          "size_bytes": 2557264,
+          "git_blob_sha1": "55340def319bafda8c35ef807fdd07240846f0f3",
+          "sha256": "572fe87f2e0cdd0a7ff868b9173d0ff08ee2bc73bf94c17b603f6e5d5b8fbe26",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/cheekSquint_R.obj",
+          "size_bytes": 2557282,
+          "git_blob_sha1": "bd658466c400908b10f1c577746c3e4145800e3f",
+          "sha256": "a9afa0aac432159e89eb54dbbb3139864b8cc1c4208c3c0e9c420d0d8050b99a",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeBlink_L.obj",
+          "size_bytes": 2558269,
+          "git_blob_sha1": "558766e17c65c329632c5fbe77741bdcaea50e1e",
+          "sha256": "f5ed1c3072a400083b7d4f7f5cb3d73882b7ebb95c3232f957394db8cf7fe19e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeBlink_R.obj",
+          "size_bytes": 2558238,
+          "git_blob_sha1": "8f77c2ad8d653a5cc7fab2df4f7261af4c3473ce",
+          "sha256": "d281ad0af03e89a70abf1214d52c295b3a279c9b35f6795938c4487f467ca003",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookDown_L.obj",
+          "size_bytes": 2556857,
+          "git_blob_sha1": "2ee49ccdffa75a0f6212f47d08a8736c54994efc",
+          "sha256": "e7da4fa6509af5da25fab1a34255889a68f06b90fd37f65c6c05e5bdbbe2f755",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookDown_R.obj",
+          "size_bytes": 2557046,
+          "git_blob_sha1": "c895728b1821337ccee511022b7749b23526fde6",
+          "sha256": "ac466de6decf619701f3ee7f80fa7371020d325084b41ad7f4b2840e232abf83",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookIn_L.obj",
+          "size_bytes": 2556734,
+          "git_blob_sha1": "e72380c87cb0c96f36fa148df695d1dda8264be6",
+          "sha256": "1e037332bc059a95d05fcb24728ae297a2d4d268ff0cf623d3647d2a4f86bd31",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookIn_R.obj",
+          "size_bytes": 2556912,
+          "git_blob_sha1": "4f06d0090df51171a407809df0c27d41aaf00a9e",
+          "sha256": "3d64db0e51ad28e76eff56217da401c5ee563b5e76a207cb192046465bbab14a",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookOut_L.obj",
+          "size_bytes": 2556671,
+          "git_blob_sha1": "129fc32d94d038ef051cdd29363d9943bdc8fdfb",
+          "sha256": "235739695136c40b7a2c3239a100ff75b7bfc271ae195aeb55330848c999c9c8",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookOut_R.obj",
+          "size_bytes": 2556899,
+          "git_blob_sha1": "bb93edb47a4f8d93cbe2c5bbcb9869ba6c179248",
+          "sha256": "ac10dfa83ccaca7fd76fe96d74f8cbc80582e2ef914d1092827b54f88125650e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookUp_L.obj",
+          "size_bytes": 2556663,
+          "git_blob_sha1": "ece4bd7f13ff19def425f89979eac7698c3f5019",
+          "sha256": "72ed342df43489a76e9d468df3ca7f48328f41c924af0c03d88fde9905d82848",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeLookUp_R.obj",
+          "size_bytes": 2556887,
+          "git_blob_sha1": "719807148c61ed5b73664e0fda047e7cae703395",
+          "sha256": "d8ade1cab9f7f0c4ef6ec007f33e9c9df90a58c666b9aac5a784192cd389e899",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeSquint_L.obj",
+          "size_bytes": 2557184,
+          "git_blob_sha1": "4fb2c1a07c18c9408f9b64aa632911cbbdbe925e",
+          "sha256": "ecb8244f083cf55fa9f0277427b8213315176a624d9ac3a09b533c7fbc68917e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeSquint_R.obj",
+          "size_bytes": 2557220,
+          "git_blob_sha1": "43ed0edaefc79f677ea68815158e78e0c87cbe20",
+          "sha256": "0dffbbc651b9cdbc346ead32ba102051200c72ed8a93e7b33f07149e18390b8a",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeWide_L.obj",
+          "size_bytes": 2556638,
+          "git_blob_sha1": "4ee003313b4b2525b6bec4d8b51c6ae9c359cba9",
+          "sha256": "015a995b0f09783683f5575af7e4c939cd758d194d7ca2e8ffacb9ddbabf0078",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/eyeWide_R.obj",
+          "size_bytes": 2556824,
+          "git_blob_sha1": "f4dc7ff516a147e3b2b3d5dc323551eaf79fd314",
+          "sha256": "4b8207f6013a751ae35affba62cc70bd6b53e046bbe48e8fd5a150450a7789ed",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/generic_neutral_mesh.obj",
+          "size_bytes": 2555599,
+          "git_blob_sha1": "95f024e9aaf27db239f3fe43957e988b993cd1ca",
+          "sha256": "eedbc2576d8e5ea57f55255b8f98263213a1efb5431d8bfceed1d7aef10271f9",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity000.obj",
+          "size_bytes": 2559425,
+          "git_blob_sha1": "63b34c3b216b3396a59addb5df0fe725f47701a6",
+          "sha256": "918160cf82d541336b4c367cf93199c9827832bde02511b8fbdf9019d6f1a773",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity001.obj",
+          "size_bytes": 2558978,
+          "git_blob_sha1": "0b1f8e1ebffb03be9dc525a676e846fb9579b823",
+          "sha256": "325115059deb6691cb2d55da07ae38bb08ce36e4ea146982f294a17513155b3b",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity002.obj",
+          "size_bytes": 2559778,
+          "git_blob_sha1": "dd90138d3b80a7f094ea09f31d715f4e3296d636",
+          "sha256": "e140e8305cd5232def3b94331d08450a13f312e525130fca8eeaa653231decc3",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity003.obj",
+          "size_bytes": 2559601,
+          "git_blob_sha1": "9d29deee9b06b6701fc1260089eeaf0f53f0d1d7",
+          "sha256": "be3481a6bed8953a6d9dd7f811a04bc6d2ab94d1bd76ecfaa6d4cae87a450f9d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity004.obj",
+          "size_bytes": 2559142,
+          "git_blob_sha1": "5efb8a521b701526070ae24c5c602f14aca9c04b",
+          "sha256": "a2f411cc763e881cff250eb23c04fe8375b63a05a7dfa0492422e3b943e8a01d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity005.obj",
+          "size_bytes": 2559787,
+          "git_blob_sha1": "ea69539e34562832856e04e6e17f4d1ecc3e329f",
+          "sha256": "274178eb33e33c555e6024535a51a62ee50050abd4f7014bbc7a4dc90a638c65",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity006.obj",
+          "size_bytes": 2559268,
+          "git_blob_sha1": "212b3d5caa9fb5adddb189a4271f0baa8fbcca37",
+          "sha256": "c9ae0426ab88b49065c852148f7bcff8cb09253fbee068b78955bd76c19a3e0f",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity007.obj",
+          "size_bytes": 2559156,
+          "git_blob_sha1": "3d9f4c1ac5a40d1d49801336fea7e66a07e0efdd",
+          "sha256": "ba38037151277b94e2b6b9b9800275d92d2c0aa8d61057b0718c9d7b90fffc44",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity008.obj",
+          "size_bytes": 2559269,
+          "git_blob_sha1": "830799f121b018e71eefe20560cd3f81b8fa3d45",
+          "sha256": "b03543b783a15c1d28c5a384cd93657eda915227756780f682bc7370cd94ce1d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity009.obj",
+          "size_bytes": 2558646,
+          "git_blob_sha1": "13614e5bb639df727dc65a9367dc936c10be02e9",
+          "sha256": "0cbb5ca5db9c61fa91df8d1c04b9b383b40d797032ca3f5a28a234d495e31b54",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity010.obj",
+          "size_bytes": 2559280,
+          "git_blob_sha1": "ec426ac63bd1678cc29457b20ab3ca354ecc119b",
+          "sha256": "7bd1c31b76428cfb4bf29a2ac38bc2711d8c254aec25bba7ebd7a9b7dc81ebc7",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity011.obj",
+          "size_bytes": 2559530,
+          "git_blob_sha1": "8b1c3f15886ff54dd8870a179934c42576301bb4",
+          "sha256": "68684bafa7e460ce7dd69c618a260143e6ecfa1254d0d49ec40202092a4b05f3",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity012.obj",
+          "size_bytes": 2559442,
+          "git_blob_sha1": "817579dd697113018412814fe55a6c92b9f1a751",
+          "sha256": "b899f17f8727b903b36f9a879ec95427c4df93d415956a211745bf44ed2be2dd",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity013.obj",
+          "size_bytes": 2559747,
+          "git_blob_sha1": "470f7df0e160b26b18cfe6a1cdc362833d3d3607",
+          "sha256": "57a17eb9945a21c0a869dca4401964742c8d47e512d680fef94447aff826abc3",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity014.obj",
+          "size_bytes": 2559520,
+          "git_blob_sha1": "16908bae735d9ad7591255d09eb23df7b902414a",
+          "sha256": "8a1a490f6e695c9116b820a95137823282415fb20bb0362725bedf0a1c2d8bd3",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity015.obj",
+          "size_bytes": 2559388,
+          "git_blob_sha1": "baab3357e432a47b63815754b9093d7ef3789ce1",
+          "sha256": "9f3da084848efabf5b898f72d3006db7442497a560185483358a8d4aefb8ac2d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity016.obj",
+          "size_bytes": 2559604,
+          "git_blob_sha1": "9d96e48c006854f57a147647f4148eb82f9208c3",
+          "sha256": "184d17ffd35e7796777bf6008e0f904810e3781b46b37f37f9a550f1969c2525",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity017.obj",
+          "size_bytes": 2559398,
+          "git_blob_sha1": "f00bc79f123ab5f34b27f37f1964a68705ba8bd9",
+          "sha256": "5b55b7a104f561d5df44a9d0249f21bcf80890dd59666d777c2db9eccd128759",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity018.obj",
+          "size_bytes": 2559320,
+          "git_blob_sha1": "57f54b8089d582ea4ff5f249556001dc90e4457c",
+          "sha256": "8ae8dd9cb5c7173f49643974420261f10f0437a7636531a50c2ae9a2badaf9a3",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity019.obj",
+          "size_bytes": 2559500,
+          "git_blob_sha1": "bae481bc043baf295b5823f1207effbcc1f8619a",
+          "sha256": "a22d531cddb3a0aaed12e6feddf45993f73545253d35642300dc4eca6438117a",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity020.obj",
+          "size_bytes": 2558496,
+          "git_blob_sha1": "904cb689ef4fcaa22dfd85339d0d266fb156615f",
+          "sha256": "3cabf614779ef2e625dfd4323a8db70a174e80e20aa083cd4cd3310503a66f1d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity021.obj",
+          "size_bytes": 2559513,
+          "git_blob_sha1": "379377a2a48cefa6fe4e15fbf5b70a57353291d7",
+          "sha256": "9ab18156977d76b6651868c68ddf5e3da529678606c9cc451cefe1bbc29cd4e5",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity022.obj",
+          "size_bytes": 2559136,
+          "git_blob_sha1": "ede67db0cd46fa9a64fe47192fe08f3006d93fd3",
+          "sha256": "6d6d1fb2c7af1d8bf14b65c2f60aa3312b3c6ad5c5315218559f3f9dd16f4f73",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity023.obj",
+          "size_bytes": 2559425,
+          "git_blob_sha1": "abb5886e3e97946e7ab3ae358490514fba3daaa0",
+          "sha256": "8b0e809b2b07c36eefaf5a4e6be9efed0ac0e3a8d1cc84130f112e12b188b457",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity024.obj",
+          "size_bytes": 2559557,
+          "git_blob_sha1": "7c60c5e572b5a75ff3f5d4a04e3c128530b414ec",
+          "sha256": "23f6b0c1ffa4395aae606a199aa29be6b10800e46fd05c804b5a79fd87f718ff",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity025.obj",
+          "size_bytes": 2558955,
+          "git_blob_sha1": "021efcab42724645512481b70a251b6dc4c88026",
+          "sha256": "93089be89ad88e7fe701dad51b07ecfa7eddfa81afaf13e27976bf97cc43a000",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity026.obj",
+          "size_bytes": 2559520,
+          "git_blob_sha1": "e27caeca5d23d814ee40eabb3cf2df0abb62dcfc",
+          "sha256": "66c02f3e68e7e298b5e0938003df67a804bf0b153342acaa9ec19e63a7043896",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity027.obj",
+          "size_bytes": 2559452,
+          "git_blob_sha1": "8b6c98794a0b9fc34ebbbcebf4c0e558f8b9e5be",
+          "sha256": "d652ae8402706cd0eafa78b3745dea8435c496ca8585fe7300718e992b8fe690",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity028.obj",
+          "size_bytes": 2558839,
+          "git_blob_sha1": "18fb9771671d688a34acd25395f67d64357e4a13",
+          "sha256": "9857adc057878d3d6f54a058e373a4ce471f77ccd49497008e2700c9d89e3d98",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity029.obj",
+          "size_bytes": 2559532,
+          "git_blob_sha1": "048b0c6c88a59408bb1634ec4380ae1120d6f0a3",
+          "sha256": "cf5c15dcf37e3d8973be8c86696894d1a8f902ba80cca28d3fda5cff87a70f09",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity030.obj",
+          "size_bytes": 2559442,
+          "git_blob_sha1": "ea1f1dbd7338a005b188fb8210f95b2ae7d61607",
+          "sha256": "ed70813c94cbbbf57b417016c760f2da44406da63d2b4bbbf8eb55711478c75c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity031.obj",
+          "size_bytes": 2559664,
+          "git_blob_sha1": "5ef4ba483e35197cca25a2a4873e1765509332a5",
+          "sha256": "c45f199b1e6dca582513863acb625ed1e2b61b5646098cc29d042db071e57ef2",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity032.obj",
+          "size_bytes": 2559436,
+          "git_blob_sha1": "b904ae5eae2674c20fdaf374fa6dd5d5b56fd7ab",
+          "sha256": "b15d9d537ac8bf0408f321dc16fdd825fb1f52eb771e0d5201f75c02c94301c6",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity033.obj",
+          "size_bytes": 2558789,
+          "git_blob_sha1": "5bd06bb5bb8161bb1274d3cbea3017a8ed712236",
+          "sha256": "3dec9b7de7830d43eb7e7239469c07b0d02a7a61614565ae880182411a3931fb",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity034.obj",
+          "size_bytes": 2559442,
+          "git_blob_sha1": "9e11f834cfe26daaf07b74bd5f9396e0bec59e65",
+          "sha256": "bdef7f09c2bd200e026eeaceec519683033d6967ec831e0f32a1d1fcadd47ae1",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity035.obj",
+          "size_bytes": 2559549,
+          "git_blob_sha1": "a2040ad66e7caec58514cb3140f1d3896b9b7899",
+          "sha256": "f3ada8ae8bc42a604835d3752d6ac7d30d71652ea459560f9b8e528ae1e611df",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity036.obj",
+          "size_bytes": 2559401,
+          "git_blob_sha1": "1c4ee2ae84903646e924ed7650f9614f65878623",
+          "sha256": "e18ae8cfc06d376584f9b12fc2dd6535f3784c37128b66ae49ec0bdc53babfa6",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity037.obj",
+          "size_bytes": 2558790,
+          "git_blob_sha1": "2624ed1a283a3fbb92646a0d3702db8b30129bf3",
+          "sha256": "e2a78ab5ea24dc03a2369e86086afca681373e7a33e84490a63749f54aae8f5f",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity038.obj",
+          "size_bytes": 2559709,
+          "git_blob_sha1": "26e418d49239a8697dc0ac73fc64f098b4a726d6",
+          "sha256": "37080e0e0aef74921514d4fe6e4d9054fd49b317ab328bfed9ecf4452c8d39ab",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity039.obj",
+          "size_bytes": 2559527,
+          "git_blob_sha1": "10ed56be367d8d3c45879fd3223dcf206b2a984d",
+          "sha256": "bc1e7dc17ea65e0acd7cec7a54c4fb16fbd1a15982c5eda853d4a409850da3b5",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity040.obj",
+          "size_bytes": 2559255,
+          "git_blob_sha1": "e2011be3723fae889f2c7ca8dbad293624f15ac6",
+          "sha256": "904a520b80658b1a58605109d2a1a0ec765e326afa63a6b57ccdb7b37178fdeb",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity041.obj",
+          "size_bytes": 2559423,
+          "git_blob_sha1": "a034dc734164b1d6a273eee7c8e4b39ef6c4e04f",
+          "sha256": "b38ac35811e8ce84b517bbcc6769754004adae0207f25067c111f290a5f3283e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity042.obj",
+          "size_bytes": 2559565,
+          "git_blob_sha1": "ba92f761128c1760588db2e76c97abb4decf3cf9",
+          "sha256": "19f9dcb5fdc1a29da1f61a86c00b2e5d29b6649d13bfe88ec9d737424b464cda",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity043.obj",
+          "size_bytes": 2558955,
+          "git_blob_sha1": "ff3be80abaa2b0d1b45cb8da1f980042525c5dad",
+          "sha256": "65fbc36dfb2a3ebe9a77d2f895d0342e8537a9d8c61d202c3feef27d442c995c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity044.obj",
+          "size_bytes": 2559590,
+          "git_blob_sha1": "b86c34250bd6433fffd51723f0e0bd38c0148e9c",
+          "sha256": "d1f69e1a428a9d68a536e53b65fc62db14f70feaadf2dd1374949a2e728aa543",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity045.obj",
+          "size_bytes": 2559212,
+          "git_blob_sha1": "ce40e7a8636cbf3d9b9ce1b2d7e5dc54947d7d83",
+          "sha256": "322357988af125bcf58141e4a90a3c1a475c0271013a2326e6ad610188415d2d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity046.obj",
+          "size_bytes": 2559286,
+          "git_blob_sha1": "e112a0e4cd14e4ee4503cd2bdff67826c365b683",
+          "sha256": "694d4f4d4f4700f7e2c97cdc26f343259298328434943664f33616c699d93bc7",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity047.obj",
+          "size_bytes": 2559570,
+          "git_blob_sha1": "1fb2d7c616fdb583e087aa1425b689610d19ec07",
+          "sha256": "1c7e6758628334115ceca708def3151e4e7d0a7641d67579d939c0d71b99aa92",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity048.obj",
+          "size_bytes": 2559570,
+          "git_blob_sha1": "3a5999738dfde113496341c3eec55222c4821354",
+          "sha256": "a75dcc8e295d06ef9df565dc1acb4bf6e0829963d552c9138587b141c8514958",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity049.obj",
+          "size_bytes": 2559256,
+          "git_blob_sha1": "835a52ad5e751c87998c940633677c26bce36184",
+          "sha256": "bd7238c27895a311f2b743535b3026d911a65039a858de89cc76f1922cabf21a",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity050.obj",
+          "size_bytes": 2559437,
+          "git_blob_sha1": "2a855c8eb09414e25aaf3ea95d86ece875850983",
+          "sha256": "8549f4a4a884cce460605acc2e1b0b3273759f38ae79eeb5712e4c14fe9e959f",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity051.obj",
+          "size_bytes": 2559068,
+          "git_blob_sha1": "2e79e0e32ac13bc10abc4f865af4c9cc160e24bf",
+          "sha256": "82dc080a3e3db45e916425305e9b4394046c4c4473f0bab7871720a69084a08e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity052.obj",
+          "size_bytes": 2559265,
+          "git_blob_sha1": "57f2f1d80bb5e2149a2c5fbc454a7846e23b38e5",
+          "sha256": "fbab456a6d5e24f9c51a5fb184775af67a39b5795588aef32dc486b1199d1a78",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity053.obj",
+          "size_bytes": 2559092,
+          "git_blob_sha1": "f9bc35a8e26dbefef86cad9224090e3d225c364c",
+          "sha256": "3b43055487765ffbf6382bbcbe4715ce67e318fab131365fb300b9253426f174",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity054.obj",
+          "size_bytes": 2559381,
+          "git_blob_sha1": "98becf6ed20d9682cb19c04be333d27eb697e50f",
+          "sha256": "f3ca0b1e431571cf42f66ccfd214f9a7da7d202ca3543c762ce71be3f1a09ac1",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity055.obj",
+          "size_bytes": 2559534,
+          "git_blob_sha1": "4fd6fcf08884f8050d0cc1aa2525566bf52017c7",
+          "sha256": "2541899c09da268e71a6f016b549e61ca24d2f4155d118b523b0556ec9102b86",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity056.obj",
+          "size_bytes": 2559431,
+          "git_blob_sha1": "2ca6d47f039bb5abce1649a44ed9a5fbbf82ca86",
+          "sha256": "f2efa2690a737fe4ea1e722dc0c2dfe0befbbf847a0feba37bc8c364ae1cf11c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity057.obj",
+          "size_bytes": 2559718,
+          "git_blob_sha1": "3e10811669852d873616ee7c233cd13662fd9c18",
+          "sha256": "054ce6afa96c165b738c83e3a06beb21b8dd6cb2df6a3c110627878b09ff006c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity058.obj",
+          "size_bytes": 2558868,
+          "git_blob_sha1": "761483d5970f5613c2101603a96c49285889e7b4",
+          "sha256": "d6c74d031636be8474e1ec2476095df688618e805cc4a561f08dd771761f0620",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/identity059.obj",
+          "size_bytes": 2559547,
+          "git_blob_sha1": "53b901a07b6967f76747d5458b01756b9242c21d",
+          "sha256": "9c1686ae731f54d4935a231e411fc1e42d118024bf9a66806586df4ffa8cf17e",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/jawForward.obj",
+          "size_bytes": 2558382,
+          "git_blob_sha1": "d987feb743d3886ca64946a8fedb976be9be00e4",
+          "sha256": "a0126b2926b69540f478e4c48f05e370868050e6c33718e53c2f17e190a3b239",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/jawLeft.obj",
+          "size_bytes": 2557576,
+          "git_blob_sha1": "002bd92a56a8d9a6c3f1569d0cc823d3fd931aae",
+          "sha256": "5af90cd941660fb0116948866414e4321035de754b7ebec787f8144445d2d9e9",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/jawOpen.obj",
+          "size_bytes": 2558596,
+          "git_blob_sha1": "c8c8e01e9fa77d8493ca769216211214ba4a29c8",
+          "sha256": "8d84355e10f48b05550980cee385bcd426f4797090da76a20de0535bb2f99f4a",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/jawRight.obj",
+          "size_bytes": 2558778,
+          "git_blob_sha1": "ced92617a49908a4749b3070a63da70a9fdd5413",
+          "sha256": "d719335ad69a8f18797501d4728910c7a467aecbbae260923192b1bf242eec97",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthClose.obj",
+          "size_bytes": 2558396,
+          "git_blob_sha1": "0bdaf95d8e8075713355351ed39c6b71173ba90e",
+          "sha256": "4a44b94c269407cf1171483d87d99d2cbdea9c66242aabf2ad0f57cb785aa193",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthDimple_L.obj",
+          "size_bytes": 2557203,
+          "git_blob_sha1": "00c84c8482aab3fa6e94626fd3878b4ff0adccd7",
+          "sha256": "189f6e01adbf1e13147fe4d505d1f3006e5ce4590ae150064b810274093d29b0",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthDimple_R.obj",
+          "size_bytes": 2557190,
+          "git_blob_sha1": "7cfe795457818f8363b4c17792c87c7634085911",
+          "sha256": "4cf674b98d6d34a16fab462fbd9ecb2cb5e39ccaf3f50459b9ac7d59fbd6a215",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthFrown_L.obj",
+          "size_bytes": 2557212,
+          "git_blob_sha1": "66652a96ee961ea8096754d3a560bbf63b360bbd",
+          "sha256": "1bfd720ad024e5805ac8472df170c2c96c09e817e02b66f916057d6e2d31ee9b",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthFrown_R.obj",
+          "size_bytes": 2557343,
+          "git_blob_sha1": "cfc292f6bdf8d7a8147dd16c20338ba9caf7fcc7",
+          "sha256": "ae3da92fa1dc70010c6bec810338d740287c71b8730694c97876cab5af241f74",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthFunnel.obj",
+          "size_bytes": 2558785,
+          "git_blob_sha1": "b131876583ffc7fa624deef76cbd59b198ad7fa7",
+          "sha256": "d4f1dba04c1af5fc37452c88cc54a72f1133296c26d9abe0f8adb74dc5c2577f",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthLeft.obj",
+          "size_bytes": 2557806,
+          "git_blob_sha1": "6a9582301b99cc0787fa84da52fb1dce8eb476d7",
+          "sha256": "01fb69aa8ac07c5762719c9bb2eec5372652c9f1e73509a63d01e7e60e28b885",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthLowerDown_L.obj",
+          "size_bytes": 2557198,
+          "git_blob_sha1": "3606d0e2a878b9d2bb63c22bb548940aab94abc2",
+          "sha256": "8847660d51e2a72f2bce6ce9add7d58abab1cef967420db83056891291c0b2de",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthLowerDown_R.obj",
+          "size_bytes": 2557217,
+          "git_blob_sha1": "ee7ecb31d13207838f0f060af493a9c7767ae2a6",
+          "sha256": "b5143ed50d41c91d80ddc8b565f6274eaf514509ec6f895797db34ca92a85b68",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthPress_L.obj",
+          "size_bytes": 2557371,
+          "git_blob_sha1": "d0316744e21de8d255b34498d5cfe4689c4716bb",
+          "sha256": "de2bdaf2fa7199294ff7a281cd8f6647bf5ca9a6f84588bd7f7779fff4c61396",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthPress_R.obj",
+          "size_bytes": 2557400,
+          "git_blob_sha1": "b2ee7f5d519302cd8f1efd0f2220dd3770111038",
+          "sha256": "ca8d9973b3231e51b8b76d3e7af7f7f3432959b7c37148fc25e7c643252847b6",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthPucker.obj",
+          "size_bytes": 2558649,
+          "git_blob_sha1": "b3ca3067c63de3de05de40b36e723594e8b038a4",
+          "sha256": "9929c31025667683809f70df7dce612f72e3acfc7f9e8acb939f6636509dbc5c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthRight.obj",
+          "size_bytes": 2559046,
+          "git_blob_sha1": "a0bffa43c787a4a9643de5be3ab30cba02fa4d50",
+          "sha256": "e3faaf5ed51715e77122d76e8187d5ba83ea9f54e15e29c52e64f26c52e66bda",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthRollLower.obj",
+          "size_bytes": 2558326,
+          "git_blob_sha1": "2672dc8c00f6f35a7a77354e2fc931dd1815a1c6",
+          "sha256": "1f577e1129eef4f9e9dc26aa739c6d0f15b27253dee89af3428db6816666e910",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthRollUpper.obj",
+          "size_bytes": 2558554,
+          "git_blob_sha1": "609a70cb96660d22674847ffe7374dc1078a53ab",
+          "sha256": "a69ec7407adfd6a5f4c818179bb4604d9e506c07671976f75ac33ef8f54a1bb0",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthShrugLower.obj",
+          "size_bytes": 2558293,
+          "git_blob_sha1": "a9d9c6578f3808697ac74baa782fa2011f7ab9ae",
+          "sha256": "1eedd7831b0408bdcbc9aefe23b11803c54f81da5fc9be1fe81fc7a5117c0b88",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthShrugUpper.obj",
+          "size_bytes": 2645083,
+          "git_blob_sha1": "ce275d0fd505cf9175c8684f1e26cc6ecb791924",
+          "sha256": "2bd3e3f1568366f2fd84717f0f63aee9f56eed4c303fc4f234aadd81d430032c",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthSmile_L.obj",
+          "size_bytes": 2556954,
+          "git_blob_sha1": "a14dbeec97d5e0c97fae7c6a3ac442eb9a722c22",
+          "sha256": "91794e73cef330f1c7d1f4541723544708536b39d5dd6ed35fd8f83f676b7af4",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthSmile_R.obj",
+          "size_bytes": 2556994,
+          "git_blob_sha1": "938568ab15338b99015859c2ca9ceeac311418fb",
+          "sha256": "3fb3de3da9f8358edbb933a65ce6e44c25a2501f30dcb240daea725b68adac84",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthStretch_L.obj",
+          "size_bytes": 2644789,
+          "git_blob_sha1": "aa0f11ec9e01e7a036b65f29ad14eff31a52500d",
+          "sha256": "9187105730bad43023c63e2a91c979091b9289dd8fc1b587885412b8f7a3d2b7",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthStretch_R.obj",
+          "size_bytes": 2556437,
+          "git_blob_sha1": "07d3662e6a292fb796bea511e446b2115ae82bd9",
+          "sha256": "d985452085a19d6b3da397ca2cd2f938d8e08761d2e684e87640f3639bdf5f6d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthUpperUp_L.obj",
+          "size_bytes": 2645019,
+          "git_blob_sha1": "9110453713a325a1e980fba7f7a2e5b93cfb3c72",
+          "sha256": "d49483aca6cbbb7a559edf4865aec62970560ddf3a0d34e5b208488bff59f722",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/mouthUpperUp_R.obj",
+          "size_bytes": 2556207,
+          "git_blob_sha1": "f9aca9a572b323548fd8904ad8c53c756c171a54",
+          "sha256": "299e3da0f36ca80c0c74e51900b67bfe6bb5b0101aaf46ce30075064c26a7f02",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/noseSneer_L.obj",
+          "size_bytes": 2557159,
+          "git_blob_sha1": "407f142c4fba235ed98dfb81ade6a04de53ee52b",
+          "sha256": "47c5d66ddc1ba146480f0e43b1084f439e0e7d2af31bcec3e6a3bffc420ffa4d",
+          "role": "input"
+        },
+        {
+          "path": "FaceXModel/noseSneer_R.obj",
+          "size_bytes": 2557058,
+          "git_blob_sha1": "404f0af81c0f735165fe2b93eae9af0503fd9898",
+          "sha256": "c384c41331124b9cd4b99c1bbe8aef56318cae2b8db6ff0f573a7347ebbe8caa",
+          "role": "input"
+        },
+        {
+          "path": "LICENSE",
+          "size_bytes": 1096,
+          "git_blob_sha1": "b48fef2f199ff2009537e07175b87ec334f23ec4",
+          "sha256": "b20a78d8fc51657e14f3e00c8abb538d786ad00aa63210328c22565e583167e1",
+          "role": "license"
+        },
+        {
+          "path": "README.md",
+          "size_bytes": 15029,
+          "git_blob_sha1": "f2c28d2df697af93f8174cab595f93275f709610",
+          "sha256": "614116987854431bbdadbf7772f7352edeeca55580f62021dccb78aaf76febf6",
+          "role": "context"
+        }
+      ]
+    },
+    "sintel": {
+      "repository": "https://github.com/Scthe/frostbitten-hair-webgpu",
+      "revision": "4478dd129525ff7db92978178b55f760716cbd72",
+      "files": [
+        {
+          "path": "README.md",
+          "size_bytes": 22771,
+          "git_blob_sha1": "bc2298bf252fe2ef87995d05df9a1eff88cd13a3",
+          "sha256": "cd85a628803cf462cd5422c9bf9e3c821aac113f9b6df1fb220a03e7ed99118d",
+          "role": "context"
+        },
+        {
+          "path": "static/models/SintelHairOriginal-sintel_hair.16points.tfx",
+          "size_bytes": 2918560,
+          "git_blob_sha1": "eaf857d8397fa4454226f74e8ad8a5fd93b1e695",
+          "sha256": "66489d49e61fb740932de79954806549100c5382281829a3d16211c832ad008e",
+          "role": "input"
+        }
+      ]
+    },
+    "ratboy": {
+      "repository": "https://github.com/GPUOpen-Effects/TressFX",
+      "revision": "6957058e29dceb25a0c2a82849bb892f3d9fbce5",
+      "files": [
+        {
+          "path": "README.md",
+          "size_bytes": 8994,
+          "git_blob_sha1": "4f532b77b4794983b3bdd44119dd5855eceab35a",
+          "sha256": "cd18572ce77e9b5e5a34572da13fcc0b68b5e891d2a73d487868e5ae4bc32ff4",
+          "role": "context"
+        },
+        {
+          "path": "bin/Objects/HairAsset/Ratboy/Ratboy_mohawk.tfx",
+          "size_bytes": 1158720,
+          "git_blob_sha1": "87e16d55aaa55a10e735aa3e3287bd5d3db93a9e",
+          "sha256": "3193a7cd8ed22645087e2b96dbb9998edadc0d5b33795a73c64060e86478e3ad",
+          "role": "input"
+        },
+        {
+          "path": "license.txt",
+          "size_bytes": 1094,
+          "git_blob_sha1": "6adade01787c4a679e61de9bf39fe865f15ee21f",
+          "sha256": "e008031a95f6f655def9eaf914118531c9e1055b8ea201eb98b9f95f1af9bec4",
+          "role": "license"
+        }
+      ]
+    }
+  },
+  "asset_baseline_commit": "e53600eb4b0551bbe9900ea0e8b7151e49553a2d"
 }
