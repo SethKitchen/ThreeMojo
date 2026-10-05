@@ -2176,7 +2176,8 @@ def _major_direction(
 def _scaled_footprint(
     along_x: Vector2, along_y: Vector2, width: Int, height: Int, anisotropy: Int
 ) -> Footprint:
-    """Keep a finite derivative's length in log space when texel products overflow."""
+    """Keep a finite derivative's length in log space when texel products overflow.
+    """
     var derivative_scale = max(
         max(abs(along_x.x), abs(along_x.y)), max(abs(along_y.x), abs(along_y.y))
     )
