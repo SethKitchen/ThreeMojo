@@ -12137,6 +12137,84 @@ def test_both_backends_read_a_texture_at_a_level_alike() raises:
     assert_true(extreme > 0)
 
 
+def test_both_backends_read_explicit_texture_gradients_alike() raises:
+    if skipped_for_lack_of_a_gpu(
+        "both backends read explicit texture gradients"
+    ):
+        return
+    for anisotropy in [1, 8]:
+        var image = checkerboard(
+            64,
+            8,
+            Color(240, 60, 20, 192),
+            Color(20, 40, 200, 64),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+        image.anisotropy = anisotropy
+        image.flip_y = anisotropy == 8
+        # Explicit nodes receive placed UVs. These fields must not add a
+        # second transform when their sampler uses explicit gradients.
+        image.repeat = Vector2(3, 2)
+        image.offset = Vector2(0.2, 0.1)
+        var textures = TextureStore()
+        var board = textures.add(image^)
+        var graph = NodeGraph()
+        var uv = graph.add(
+            graph.mul(graph.uv(), graph.vec2(0.5, 2)), graph.vec2(0.125, 0)
+        )
+        var dx = graph.mul(
+            graph.uniform("dx", Vector2(0.125, 0.03125)),
+            graph.add(graph.float(1), graph.swizzle(graph.uv(), "x")),
+        )
+        var dy = graph.uniform("dy", Vector2(0.03125, 0.0625))
+        var sampled = graph.texture_grad(
+            graph.texture_uniform("map", board), uv, dx, dy
+        )
+        graph.set_output(NODES_COLOR, graph.swizzle(sampled, "rgb"))
+        graph.set_output(NODES_OPACITY, graph.swizzle(sampled, "a"))
+        var store = NodeProgramStore()
+        var id = store.add(graph.compile())
+        var corners = List[RasterVertex]()
+        corners.append(lit_corner(0, 0, 1, 0, 4, board))
+        corners.append(lit_corner(24, 0, 1, 4, 4, board))
+        corners.append(lit_corner(24, 24, 1, 4, 0, board))
+        corners.append(lit_corner(0, 0, 1, 0, 4, board))
+        corners.append(lit_corner(24, 24, 1, 4, 0, board))
+        corners.append(lit_corner(0, 24, 1, 0, 0, board))
+        corners = with_nodes(corners^, id.value)
+        var lighting = phong_lighting()
+        var target = RenderTarget(24, 24, BACKGROUND)
+        rasterize_all(
+            corners,
+            target,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+            1,
+            programs=store,
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            24,
+            24,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+            programs=store,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        var center = cpu.get_pixel(12, 12)
+        assert_true(
+            center.r != BACKGROUND.r
+            or center.g != BACKGROUND.g
+            or center.b != BACKGROUND.b
+        )
+
+
 def test_both_backends_fetch_a_texel_and_a_size_alike() raises:
     # texelFetch and textureSize: whole numbers name the texel, wrapped,
     # at a level held inside the chain.
@@ -15495,3 +15573,259 @@ def test_gpu_refuses_missing_or_wrong_sized_volume_scene_depth() raises:
             scissor=Rect(2, 2, 11, 11),
         )
     assert_false(device.drawn)
+
+
+# --- exact integer node register transport ------------------------------------
+
+from materials.nodes import (
+    NodeContext as _IntegerNodeContext,
+    NodeInputs as _IntegerNodeInputs,
+    NodeSource as _IntegerNodeSource,
+    ProgramSource as _IntegerProgramSource,
+    run_code as _integer_run_code,
+)
+
+
+@fieldwise_init
+struct _IntegerDeviceSource[origin: Origin[mut=True]](_IntegerNodeSource):
+    """Read the actual Float32 program buffer without changing payload bits."""
+
+    var code: MutPointer[Float32, Self.origin]
+
+    def word(self, at: Int) -> Float32:
+        return self.code[unsafe_offset=at]
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        return FloatColor(1, 1, 1, 1)
+
+    def sample_level(
+        self, slot: Int, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        return FloatColor(1, 1, 1, 1)
+
+    def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
+        return FloatColor(1, 1, 1, 1)
+
+    def size(self, slot: Int, level: Int) -> SIMD[DType.float32, 4]:
+        return SIMD[DType.float32, 4](0)
+
+    def shares(self, context: _IntegerNodeContext) -> SIMD[DType.float32, 4]:
+        return SIMD[DType.float32, 4](1, 0, 0, 0)
+
+    def frag_coord(
+        self, context: _IntegerNodeContext
+    ) -> SIMD[DType.float32, 4]:
+        return SIMD[DType.float32, 4](0)
+
+    def corner(self, context: _IntegerNodeContext) -> _IntegerNodeInputs:
+        return _IntegerNodeInputs(
+            0,
+            0,
+            Vector3(0, 0, 0),
+            Vector3(0, 0, 0),
+            Vector3(0, 0, 0),
+            Vector3(0, 0, 0),
+            False,
+        )
+
+
+struct _IntegerNodeKernels:
+    """Keep the device-only bytecode entry out of host test discovery."""
+
+    @staticmethod
+    def run(
+        output: MutPointer[UInt32, MutAnyOrigin],
+        code: MutPointer[Float32, MutAnyOrigin],
+        starts: MutPointer[Int32, MutAnyOrigin],
+        roots: Int32,
+    ):
+        from max.gpu import global_idx
+
+        var root = Int(global_idx.x)
+        if root >= Int(roots):
+            return
+        var source = _IntegerDeviceSource(code)
+        var input = _IntegerNodeInputs(
+            0,
+            0,
+            Vector3(0, 0, 0),
+            Vector3(0, 0, 0),
+            Vector3(0, 0, 0),
+            Vector3(0, 0, 0),
+            False,
+        )
+        var result = _integer_run_code(
+            source,
+            Int(starts[unsafe_offset=2 * root]),
+            Int(starts[unsafe_offset=2 * root + 1]),
+            input,
+        )
+        var bits = bitcast[DType.uint32, 4](result)
+        for lane in range(4):
+            output[unsafe_offset=4 * root + lane] = bits[lane]
+
+
+def test_exact_integer_node_words_survive_cpu_and_gpu_registers() raises:
+    # Expected answers are independent integer identities. They are never
+    # stored as numeric Float32s. The words include signaling and quiet
+    # NaNs, negative zero, and a subnormal when viewed as floats.
+    if skipped_for_lack_of_a_gpu("exact integer node register words"):
+        return
+    comptime Words = SIMD[DType.uint32, 4]
+    var g = NodeGraph()
+    var roots = List[NodeRef]()
+    var expected = List[Words]()
+    var input = g.uniform_uint(
+        "word_bits", Words(0xFFFFFFFF, 0x80000000, 0x7F800001, 1)
+    )
+    roots.append(input)
+    expected.append(Words(0xFFFFFFFF, 0x80000000, 0x7F800001, 1))
+    roots.append(g.add(input, g.uint(1)))
+    expected.append(Words(0, 0x80000001, 0x7F800002, 2))
+    roots.append(g.mul(input, g.uint(2)))
+    expected.append(Words(0xFFFFFFFE, 0, 0xFF000002, 2))
+    var divisors = g.uvec4(2, 3, 0, 1)
+    roots.append(g.div(input, divisors))
+    expected.append(Words(0x7FFFFFFF, 0x2AAAAAAA, 0, 1))
+    roots.append(g.mod(input, divisors))
+    expected.append(Words(1, 2, 0, 0))
+    roots.append(g.swizzle(input, "wzyx"))
+    expected.append(Words(1, 0x7F800001, 0x80000000, 0xFFFFFFFF))
+    roots.append(
+        g.join(
+            [
+                g.swizzle(input, "y"),
+                g.swizzle(input, "zw"),
+                g.swizzle(input, "x"),
+            ]
+        )
+    )
+    expected.append(Words(0x80000000, 0x7F800001, 1, 0xFFFFFFFF))
+    roots.append(g.select(g.vec4(1, 0, 1, 0), input, g.uint(16777217)))
+    expected.append(Words(0xFFFFFFFF, 16777217, 0x7F800001, 16777217))
+    roots.append(g.to_uint(g.uint_to_int(input)))
+    expected.append(Words(0xFFFFFFFF, 0x80000000, 0x7F800001, 1))
+    roots.append(g.div(g.int32(-7), g.int32(2)))
+    expected.append(Words(0xFFFFFFFD, 0, 0, 0))
+    roots.append(g.shift_right(g.int32(-2147483648), g.uint(1)))
+    expected.append(Words(0xC0000000, 0, 0, 0))
+    roots.append(g.to_uint(g.vec4(-1.75, 16777216, 4294967040.0, 0.5)))
+    expected.append(Words(0, 16777216, 0xFFFFFF00, 0))
+    roots.append(g.to_uint(g.uint_to_float(input)))
+    expected.append(Words(0, 0x80000000, 0x7F800000, 1))
+    roots.append(g.bit_xor(input, g.uint(0xFFFFFFFF)))
+    expected.append(Words(0, 0x7FFFFFFF, 0x807FFFFE, 0xFFFFFFFE))
+    roots.append(g.to_uint(g.less_than(input, g.uint(0xFFFFFFFF))))
+    expected.append(Words(0, 1, 1, 1))
+    roots.append(g.shift_left(g.uint(1), g.uint(32)))
+    expected.append(Words(0))
+    var starts = List[Int]()
+    var program = g.compile_roots(roots, starts)
+    # Update after compilation, as a renderer does between frames.
+    program.set_uniform_uint(
+        "word_bits", Words(0xFFFFFFFF, 0x80000000, 0x7F800001, 1)
+    )
+    var context = DeviceContext()
+    var device_code = context.enqueue_create_buffer[DType.float32](
+        len(program.code)
+    )
+    var device_starts = context.enqueue_create_buffer[DType.int32](len(starts))
+    var output = context.enqueue_create_buffer[DType.uint32](4 * len(roots))
+    with device_code.map_to_host() as host:
+        for at in range(len(program.code)):
+            host[at] = program.code[at]
+    with device_starts.map_to_host() as host:
+        for at in range(len(starts)):
+            host[at] = Int32(starts[at])
+    context.enqueue_function[_IntegerNodeKernels.run](
+        output.unsafe_ptr(),
+        device_code.unsafe_ptr(),
+        device_starts.unsafe_ptr(),
+        Int32(len(roots)),
+        grid_dim=((len(roots) + 31) // 32,),
+        block_dim=(32,),
+    )
+    context.synchronize()
+    var attributes = _IntegerNodeInputs(
+        0,
+        0,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        False,
+    )
+    with output.map_to_host() as host:
+        for root in range(len(roots)):
+            var cpu = bitcast[DType.uint32, 4](
+                _integer_run_code(
+                    _IntegerProgramSource(Pointer(to=program)),
+                    starts[2 * root],
+                    starts[2 * root + 1],
+                    attributes,
+                )
+            )
+            for lane in range(4):
+                assert_equal(cpu[lane], expected[root][lane])
+                assert_equal(host[4 * root + lane], expected[root][lane])
+
+
+def test_gpu_rejects_nonfinite_explicit_gradients_before_sampling() raises:
+    """Keep invalid runtime gradients out of both texture samplers."""
+    from materials.nodes import FRAGMENT_NODE
+    from std.math import nan
+
+    if skipped_for_lack_of_a_gpu("nonfinite explicit texture gradients"):
+        return
+    var graph = NodeGraph()
+    var uv = graph.uniform("uv", Vector2(0.5, 0.5))
+    var dx = graph.uniform("dx", Vector2(0, 0))
+    var dy = graph.uniform("dy", Vector2(0, 0))
+    var sampled = graph.texture_grad(TextureId(0), uv, dx, dy)
+    graph.set_output(FRAGMENT_NODE, sampled)
+    var program = graph.compile()
+    var starts: List[Int32] = [
+        Int32(program.code[FRAGMENT_NODE.value * 2]),
+        Int32(program.code[FRAGMENT_NODE.value * 2 + 1]),
+    ]
+    var context = DeviceContext()
+    var code = context.enqueue_create_buffer[DType.float32](len(program.code))
+    var offsets = context.enqueue_create_buffer[DType.int32](2)
+    var output = context.enqueue_create_buffer[DType.uint32](4)
+    with offsets.map_to_host() as host:
+        host[0] = starts[0]
+        host[1] = starts[1]
+    var invalid: List[Float32] = [
+        nan[DType.float32](),
+        inf[DType.float32](),
+        -inf[DType.float32](),
+    ]
+    for component in range(3):
+        for bad in invalid:
+            program.set_uniform("uv", Vector2(0.5, 0.5))
+            program.set_uniform("dx", Vector2(0, 0))
+            program.set_uniform("dy", Vector2(0, 0))
+            var name = "uv" if component == 0 else (
+                "dx" if component == 1 else "dy"
+            )
+            program.set_uniform(name, Vector2(bad, 0.5))
+            with code.map_to_host() as host:
+                for at in range(len(program.code)):
+                    host[at] = program.code[at]
+            context.enqueue_function[_IntegerNodeKernels.run](
+                output.unsafe_ptr(),
+                code.unsafe_ptr(),
+                offsets.unsafe_ptr(),
+                Int32(1),
+                grid_dim=(1,),
+                block_dim=(1,),
+            )
+            context.synchronize()
+            var source = _IntegerProgramSource(Pointer(to=program))
+            var cpu = _integer_run_code(
+                source, Int(starts[0]), Int(starts[1]), source.vertex
+            )
+            with output.map_to_host() as host:
+                for lane in range(4):
+                    assert_equal(bitcast[DType.uint32](cpu[lane]), UInt32(0))
+                    assert_equal(host[lane], UInt32(0))
