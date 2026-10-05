@@ -100,7 +100,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 ### Numerical range
 
 <details>
-<summary>Implemented: 1</summary>
+<summary>Implemented: 2</summary>
+
+- [x] [Exact adaptive convex hull predicates](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#convex-hull): original-coordinate orientation, exact tolerance comparisons and bounded extreme-range fallbacks [#538](https://github.com/SethKitchen/ThreeMojo/issues/538)
 
 - [x] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Norm-consumers): finite directions, angles, geometry normals and tangents, loader axes, lighting, and texture footprints across scalar ranges [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
 

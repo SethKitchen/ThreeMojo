@@ -524,17 +524,52 @@ var inside = hull.contains_point(Vector3(0, 0, 0))
 | `face_vertex(face, corner) -> Int` | Which input point is at one corner. |
 | `face_normal(face) -> Vector3` | The outward unit normal of one face. |
 | `contains_point(point) -> Bool` | Whether no face can see the point. |
-| `tolerance` | How far outside a face a point must be before the face can see it. |
+| `tolerance` | Containment padding and the initial simplex height threshold, in original units. |
 
-The hull does its arithmetic in `Float64`, as JavaScript does. Both the constructor and `contains_point` accept a `List[SIMD[DType.float64, 4]]` and a `SIMD[DType.float64, 4]`, respectively. These forms use the first three components and ignore the fourth. They do not narrow coordinates to `Float32`. The `Vector3` forms are also available. A query with a nonfinite spatial component returns False.
+The hull stores original `Float64` coordinates. Both the constructor and `contains_point` accept a `List[SIMD[DType.float64, 4]]` and a `SIMD[DType.float64, 4]`, respectively. These forms use the first three components and ignore the fourth. They do not narrow coordinates to `Float32`. The `Vector3` forms are also available. A query with a nonfinite spatial component returns False.
 
-The tolerance is three.js's: three times the `Float64` epsilon, times the sum of the greatest absolute coordinate on each axis. It uses the original coordinate units. You can change `tolerance` for later containment queries. At subnormal scales, the stored tolerance can round to zero. Zero stays the comparison threshold; the hull does not replace it with a hidden positive threshold.
+The tolerance is three.js's: three times the `Float64` epsilon, times the sum of the greatest absolute coordinate on each axis. It uses the original coordinate units. You can change `tolerance` for later containment queries. A change does not rebuild the hull.
 
-Extreme coordinates are scaled by an exact power of two before construction. Original point indices stay unchanged. Ordinary coordinates keep the three.js operation order for resolved, normal-range calculations. A nonzero normal whose squared length is subnormal is normalized after scaling.
+A negative or nonfinite tolerance makes containment return False. At subnormal scales, the stored tolerance can round to zero. Zero stays the comparison threshold. There is no hidden positive threshold.
 
-A range error means that scaling would lose input detail, or that a geometric direction cannot be resolved in `Float64`. A conditioned face must place its own vertices on its plane within the stored tolerance. A zero tolerance can therefore cause a range error for slanted faces. An unresolved plane at zero tolerance also gives a range error. This is different from the error for points on a plane within a positive tolerance.
+Adaptive predicates decide exact orientation and affine differences. They compare the exact signed distance to the stored tolerance. Equality is inside. Ordinary calculations first use conservative arithmetic error bounds. Uncertain cases use outward-rounded intervals, then fixed-capacity signed dyadic integers. An error bound only certifies a comparison; it never replaces the public tolerance.
 
-These checks do not implement exact geometric predicates for every Float64 input. Coplanar faces are not merged, as in three.js.
+The exact comparison squares the determinant and tolerance-scaled normal length. It does not round a tiny distance to zero or normalize a plane before comparison.
+
+The predicates read the original coordinates, including subnormal components. A common power-of-two scale can still improve ranking arithmetic. It cannot remove detail from a predicate. A slanted tetrahedron made from representable subnormal coordinates is accepted when it has exact nonzero volume and zero tolerance. Exactly collinear and coplanar input gives a degeneracy error. Noncoplanar input that does not exceed the positive construction tolerance gives a separate tolerance error.
+
+After the initial dimension check, construction uses strict exact visibility. Assignment, horizon deletion and point reassignment use zero as the threshold. Thus every emitted plane supports all source points. Tolerance-based horizon deletion can retain a geometrically visible neighbor and fold the new face fan. Near-plane source points are retained when they are exact hull vertices, even when their distance is below tolerance. This corrects three.js r180 and can add faces for nearly coplanar input.
+
+Ordinary-range distance ranks retain the three.js r180 calculation order. A rank is a search heuristic among points or faces that passed the exact geometric test. It cannot admit a point or change a visibility decision. Extreme or unresolved ranks use exact squared segment distances or exact plane-distance comparisons. Original vertex indices stay unchanged. Coplanar faces are not merged, as in three.js.
+
+`face_normal` returns a normalized estimate of the cross product as a `Vector3`. A certified ordinary normal has direction error below 128 times 2^-53 before Float32 rounding. Difficult directions use an exact cross-product estimate. This estimate is for display and mesh normals. Containment does not use the rounded normal.
+
+### Convex hull bounds and verification
+
+Each exact scalar uses 672 32-bit words and three integer fields. The fixed capacity is 21,504 bits. Finite binary64 coordinates are multiples of 2^-1074 and have magnitude below 2^1024. Affine differences have magnitude below 2^1025. The largest predicate compares two squared plane distances. Its degree is ten, and fewer than 21,010 bits suffice for its full exponent span and carries.
+
+Addition visits the aligned active words. Multiplication visits at most 672 by 672 word pairs. Predicate storage and work do not grow with the point count.
+
+Quickhull keeps its existing point, face and half-edge lists. The original coordinates add 32 bytes per point before list capacity. Separate ordinary ranking normals add 24 bytes per created face before list capacity. There is no exhaustive supporting-plane construction fallback. Overall hull work still depends on the input and the faces that Quickhull creates.
+
+`tools/generate_exact_predicates_oracle.py` generates rational-arithmetic controls for the shared predicates. `tools/reference_convex_hull.py` separately enumerates exact supporting facets for small test clouds. The tests check positive-tolerance boundaries, original indices, winding, paired edges, source support, mutable zero tolerance and the retained three.js face-order fixture. `bench/convex_hull_bench.mojo` measures the same ordinary workload against a baseline and exercises accepted subnormal and mixed-range clouds. The following measurements are machine-specific.
+
+The Linux x86_64 measurements used Mojo 1.1.0 on one logical CPU. Five native candidate repetitions used the same source as ten baseline repetitions. Baseline repetitions ran before and after the candidate. Compilation and input setup are excluded. Ordinary checksums matched.
+
+| Workload | Calls per repetition | Baseline `e53600eb` | Exact hull | Ratio |
+|---|---:|---:|---:|---:|
+| Build a 300-point ordinary cloud | 100 | 0.107 ms | 0.256 ms | 2.39 |
+| Ordinary containment | 10,000 | 0.136 microseconds | 0.784 microseconds | 5.76 |
+| Build a slanted subnormal tetrahedron | 100 | Not timed | 0.0385 ms | Not compared |
+| Build a mixed-exponent tetrahedron | 100 | Not timed | 0.654 ms | Not compared |
+
+The added correctness has measurable ordinary-range overhead. Exact predicate scalars use 2,712 bytes of fixed storage on this host. A self-tested runtime allocation hook measured zero requested heap allocations in all 45 predicate benchmark rows. This excludes stack memory, allocator metadata and process RSS. `bench/exact_predicates_bench.mojo` includes the ordinary filters and full-span exact fallbacks.
+
+### Convex mesh storage
+
+`geometries.convex` stores positions and normals as `Float32`. It rounds input positions first, then constructs their exact supporting hull. Face normals come from these stored positions. This prevents a tiny Float64 face from becoming a collapsed triangle after triangulation. It raises if a coordinate cannot be stored as a finite Float32, or if the rounded cloud no longer spans a usable solid.
+
+The mesh is the hull of rounded positions, not the original Float64 cloud. Rounding can change its topology. This corrects three.js r180 near storage limits and preserves the ordinary geometry and object-breaker fixtures. Use `ConvexHull` and original Float64 coordinates when the wider coordinate domain is required.
 
 three.js returns an empty hull for fewer than four points. It returns a flat or broken hull for points on one line or one plane. This port raises in all three cases. `setFromObject` and `intersectRay` are not ported.
 

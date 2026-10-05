@@ -18,7 +18,9 @@ TOOLS = Path(__file__).resolve().parent
 CHECKS = (('reference_volume_lighting.py', '--check'),
           ('reference_remainders.py', '--check'),
           ('reference_animation_loops.py', '--check'),
-          ('reference_segment_geometry.py',))
+          ('reference_segment_geometry.py',),
+          ('generate_exact_predicates_oracle.py', '--check'),
+          ('reference_convex_hull.py', '--check'))
 
 
 class ReferenceCheckTests(unittest.TestCase):
