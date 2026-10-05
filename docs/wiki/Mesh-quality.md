@@ -71,6 +71,20 @@ The allocator reserves minimum shares before it assigns larger shares. For a fea
 
 `share_budget(areas, counts, budget)` does the sharing alone. `simplify(geometry, target)` decimates one geometry.
 
+### Morph targets and migration
+
+`simplify`, `fit_triangle_budget` and `fit_triangle_budget_result` refuse geometry with morph targets, even when the requested count needs no reduction.
+Earlier generic decimation could silently drop those targets.
+Keep morph-bearing geometries outside a generic budget pass.
+For game faces, use `add_game_humanoid(..., facial_animation=True)` to preserve the original facial topology and fit only the supported body meshes.
+Do not remove target data merely to bypass the refusal.
+
+Facial animation counts the preserved face, mouth parts and eyes toward the total budget.
+An insufficient budget raises; guide-strand hair is unsupported on this path.
+Use shell hair instead.
+A negative game triangle budget also raises.
+These refusals replace silent correspondence loss or an unmet facial budget.
+
 ### Read the result
 
 `fit_triangle_budget_result` fits the same meshes and returns a `TriangleBudgetResult`. Its first five arguments match `fit_triangle_budget`. Its last argument is a `TriangleBudgetMode`: `BEST_EFFORT` by default, or `STRICT`.
