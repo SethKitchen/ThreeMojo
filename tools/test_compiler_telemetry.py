@@ -143,12 +143,21 @@ class FakeProcTests(unittest.TestCase):
         (self.proc / 'self/mountinfo').write_text(
             f'1 0 0:1 /host {self.cg} rw - cgroup2 none rw\n')
         (self.proc / '100/cgroup').write_text('0::/host/job\n')
-        self.assertEqual(self.reader.cgroup(100), self.cg / 'job')
+        self.assertEqual(self.reader.cgroup(100), (self.cg / 'job').resolve())
         sampler = self.sampler()
         sampler.sample()
         self.counters(2, 1)
         result = sampler.sample()
         self.assertEqual(result['cgroup_oom_delta']['memory.events']['oom_kill'], 1)
+
+    def test_symlinked_cgroup_mount_preserves_mapping_and_counter_deltas(self):
+        canonical = (self.cg / 'job').resolve()
+        alias = self.root / 'cgroup-alias'
+        alias.symlink_to(self.cg, target_is_directory=True)
+        self.cg = alias
+        self.assertNotEqual(self.cg / 'job', canonical)
+        self.test_subtree_cgroup_mount_mapping_and_shared_counter_deltas()
+        self.assertEqual(self.reader.cgroup(100), canonical)
 
     def test_unmappable_or_traversal_cgroup_never_uses_a_global_fallback(self):
         (self.proc / 'self/mountinfo').write_text(
