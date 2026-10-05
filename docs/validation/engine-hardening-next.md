@@ -37,7 +37,7 @@ Keep workloads and numerical contracts fixed when comparing designs.
 Preserve source attribution, input validation and resource ownership.
 Hosting work requires a specified destination and verified source material.
 
-- [#303](https://github.com/SethKitchen/ThreeMojo/issues/303): validate the converted ICTF/THRS input contract
+- [#303](https://github.com/SethKitchen/ThreeMojo/issues/303): pinned production asset provenance and exact reproduction implemented; 26 Python and 22 native checks pass, with full batch validation pending
 - [#306](https://github.com/SethKitchen/ThreeMojo/issues/306): reclaim destroyed actors' physics and render resources
 - [#309](https://github.com/SethKitchen/ThreeMojo/issues/309): complete durable asset hosting and integrity controls
 - [#333](https://github.com/SethKitchen/ThreeMojo/issues/333): retain double precision at typed quantity boundaries

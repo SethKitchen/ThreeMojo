@@ -123,10 +123,10 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
-- [ ] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion and synthetic reproduction; historical production source provenance remains open [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
-
 <details>
-<summary>Implemented: 9</summary>
+<summary>Implemented: 10</summary>
+
+- [x] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion, pinned upstream inputs and exact production reproduction [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
 
 - [x] [Bounded image decode scheduling](https://github.com/SethKitchen/ThreeMojo/wiki/Image-decode-queue): shared dynamic workers, ordered results, bounded active staging, and atomic cache publication [#505](https://github.com/SethKitchen/ThreeMojo/issues/505)
 
