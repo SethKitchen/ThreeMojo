@@ -6,6 +6,7 @@ import contextlib
 import io
 from pathlib import Path
 import subprocess
+import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -60,6 +61,72 @@ class AirCallTests(unittest.TestCase):
     def test_kernels_are_found_from_launches(self):
         found = air.kernels(air.ROOT)
         self.assertIn(('render/gpu.mojo', 'rasterize_kernel'), found)
+        self.assertEqual(len(found), 37)
+
+
+class DiscoveryTests(unittest.TestCase):
+    def discover(self, source):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'fixture.mojo').write_text(source)
+            with patch.object(air, 'MODULES', ('fixture.mojo',)):
+                return air.kernels(root)
+
+    def test_all_launch_sites_resolve_before_unique_kernels_are_returned(self):
+        source = ('def kernel():\n    pass\n'
+                  'ctx.enqueue_function[kernel]()\n'
+                  'ctx.enqueue_function [\n    kernel\n] ()\n')
+        self.assertEqual(self.discover(source), [('fixture.mojo', 'kernel')])
+
+    def test_comments_and_strings_are_not_launches_or_definitions(self):
+        source = ('# enqueue_function[unknown]()\n'
+                  'var text = "enqueue_function[unknown[T]]()"\n'
+                  '"""\ndef unknown():\n    pass\n"""\n')
+        self.assertEqual(self.discover(source), [])
+        with self.assertRaisesRegex(air.AirError, 'local, non-parameterized'):
+            self.discover(source + 'ctx.enqueue_function[unknown]()\n')
+
+    def test_parameterized_imported_or_missing_definitions_fail(self):
+        for definition in ['def other[T: Int]():\n    pass\n',
+                           'from imported import other\n', '',
+                           'def outer():\n    def other():\n        pass\n']:
+            with self.subTest(definition=definition):
+                source = ('def good():\n    pass\n'
+                          'ctx.enqueue_function[good]()\n' + definition +
+                          'ctx.enqueue_function[other]()\n')
+                with self.assertRaisesRegex(air.AirError, 'kernel other must have a local'):
+                    self.discover(source)
+
+    def test_unsupported_launch_syntax_cannot_hide_beside_a_good_launch(self):
+        for launch in ['ctx.enqueue_function[good[T]]()',
+                       'ctx.enqueue_function[module.good]()',
+                       'ctx.enqueue_function[good, T]()',
+                       'ctx.enqueue_function[](good)',
+                       'ctx.enqueue_function(good)',
+                       'var launch = ctx.enqueue_function']:
+            with self.subTest(launch=launch):
+                with self.assertRaisesRegex(air.AirError, 'unsupported enqueue_function syntax'):
+                    self.discover('def good():\n    pass\n'
+                                  'ctx.enqueue_function[good]()\n' + launch + '\n')
+
+    def test_unterminated_source_fails(self):
+        with self.assertRaisesRegex(air.AirError, 'unsupported kernel source syntax'):
+            self.discover('ctx.enqueue_function[good\n')
+
+    def test_unsupported_discovery_fails_cli_before_emitting(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / 'fixture.mojo').write_text(
+                'from imported import kernel\nctx.enqueue_function[kernel]()\n')
+            out, err = io.StringIO(), io.StringIO()
+            with patch.object(air, 'ROOT', root), patch.object(air, 'MODULES', ('fixture.mojo',)):
+                with patch.object(air.subprocess, 'run') as run:
+                    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                        code = air.main([])
+            run.assert_not_called()
+            self.assertEqual(code, 1)
+            self.assertNotIn('PASS', out.getvalue())
+            self.assertIn('local, non-parameterized', err.getvalue())
 
 
 BODY = 'define void @kernel() {\n  ret void\n}\n'
@@ -380,6 +447,7 @@ class EmissionTests(unittest.TestCase):
 
     def test_emitter_pairs_name_and_asm_from_each_compile_result(self):
         def capture(command, **kwargs):
+            self.assertIn('--Werror', command)
             program = Path(command[-1]).read_text()
             for index, (module, name) in enumerate(self.found):
                 self.assertIn(f'var compiled_{index} = _compile_code[kernel_{index},', program)
