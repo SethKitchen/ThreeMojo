@@ -942,13 +942,14 @@ def test_trees() raises:
     var trees = trees_transform(
         map, Vector3(-1, 50, 0), Vector3(61, -50, 0), _m(10), _m(2)
     )
-    # Road 1 only: both sections, beside lane -1, 2 m out. The Python copy
-    # of `GetTreesTransform` gives these.
+    # Road 1 only: both sections, beside lane -1, 2 m out. Positions retain
+    # `GetTreesTransform` parity. The geometric yaw is atan(0.025), as
+    # tools/generate_carla_lane_orientation_controls.py derives.
     assert_equal(len(trees), 6)
     _near(trees[0].transform.location, 0.0, 5.5, 0.0)
     _near(trees[5].transform.location, 50.0, 6.0, 0.0)
     assert_almost_equal(
-        trees[5].transform.rotation.yaw, 1.4323944878270582, atol=1e-4
+        trees[5].transform.rotation.yaw, 1.4320961841646465, atol=1e-4
     )
     assert_equal(trees[0].type, "Town")
     with assert_raises():

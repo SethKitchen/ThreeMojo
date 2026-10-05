@@ -601,13 +601,15 @@ def test_straight_lanes() raises:
 
 def test_lane_transforms() raises:
     var map = load_opendrive_file(TOWN)
-    # Values from the Python copy of `Lane::ComputeTransform`.
+    # Positions retain CARLA parity. Corrected orientations come from
+    # tools/generate_carla_lane_orientation_controls.py, which reads only
+    # the authored town XML and independent geometry equations.
     var t = map.compute_transform(_w(1, 0, -1, 10.0))
     _near(t.location, 10.0, 1.75, 0.0)
     assert_almost_equal(t.rotation.yaw, 0.0, atol=1e-5)
     t = map.compute_transform(_w(1, 1, -1, 50.0))
     _near(t.location, 50.0, 2.0, 0.0)
-    assert_almost_equal(t.rotation.yaw, 1.4323944878270582, atol=1e-4)
+    assert_almost_equal(t.rotation.yaw, 1.4320961841646465, atol=1e-4)
     t = map.compute_transform(_w(1, 0, 1, 10.0))
     _near(t.location, 10.0, -1.75, 0.0)
     assert_almost_equal(t.rotation.yaw, 180.0, atol=1e-4)
@@ -617,15 +619,15 @@ def test_lane_transforms() raises:
     assert_almost_equal(t.rotation.yaw, 28.64788975654116, atol=1e-4)
     t = map.compute_transform(_w(5, 0, -1, 10.0))
     _near(t.location, 10.140229715463569, -99.17595478399882, 1.2, 1e-3)
-    assert_almost_equal(t.rotation.pitch, -1.1457628381751033, atol=1e-4)
+    assert_almost_equal(t.rotation.pitch, -1.1110515913233194, atol=1e-4)
     assert_almost_equal(t.rotation.yaw, -7.16197243913529, atol=1e-3)
     t = map.compute_transform(_w(5, 0, 1, 40.0))
     _near(t.location, 37.0165078846415, -116.97860369629684, 1.7, 1e-3)
-    assert_almost_equal(t.rotation.pitch, 361.1457628381751, atol=1e-4)
-    assert_almost_equal(t.rotation.yaw, 133.52474222667973, atol=1e-3)
+    assert_almost_equal(t.rotation.pitch, 361.2666524315157, atol=1e-4)
+    assert_almost_equal(t.rotation.yaw, 133.9651124804412, atol=1e-3)
     t = map.compute_transform(_w(5, 0, -2, 50.0))
     _near(t.location, 50.69409544732411, -117.7093508614975, 2.0, 1e-3)
-    assert_almost_equal(t.rotation.yaw, -47.50675315890087, atol=1e-3)
+    assert_almost_equal(t.rotation.yaw, -46.954509986767036, atol=1e-3)
     # A left-hand road's left lanes run with s.
     t = map.compute_transform(_w(6, 0, 1, 5.0))
     _near(t.location, 5.0, -201.75, 0.0)
@@ -875,7 +877,9 @@ def test_lane_markings_and_change() raises:
 
 def test_closest_waypoints() raises:
     var map = load_opendrive_file(TOWN)
-    assert_equal(map.segment_count(), 227)
+    # Independent XML/geometry reconstruction of the heading threshold:
+    # tools/generate_carla_lane_orientation_controls.py.
+    assert_equal(map.segment_count(), 230)
     # Values from the Python copy of `GetClosestWaypointOnRoad`.
     _same(
         map.closest_waypoint_on_road(Vector3(20, 1, 0)).value(), 1, 0, -1, 20.0

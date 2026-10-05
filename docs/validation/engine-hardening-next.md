@@ -16,7 +16,7 @@ Resolve correctness and bounded-work contracts before accepting performance resu
 The held implementation in [PR #594](https://github.com/SethKitchen/ThreeMojo/pull/594) still needs qualification against this base.
 
 - [#302](https://github.com/SethKitchen/ThreeMojo/issues/302): index curved lane offsets correctly
-- [#485](https://github.com/SethKitchen/ThreeMojo/issues/485): derive heading from the lane centerline tangent
+- [#485](https://github.com/SethKitchen/ThreeMojo/issues/485): geometric lane heading and pitch implemented; 203 focused tests and exact-center benchmark controls pass, with full batch validation pending
 - [#487](https://github.com/SethKitchen/ThreeMojo/issues/487): direction-independent complete-section junction bounds implemented; 147 focused tests pass, with full batch validation pending
 - [#577](https://github.com/SethKitchen/ThreeMojo/issues/577): support border-only lane widths and centerlines
 - [#580](https://github.com/SethKitchen/ThreeMojo/issues/580): bound subdivision and nearest-query work
@@ -75,26 +75,27 @@ No full anatomical calibration is claimed by this plan.
 - [#595](https://github.com/SethKitchen/ThreeMojo/issues/595): classify and resolve sampled canonical anatomy overlaps
 - [#596](https://github.com/SethKitchen/ThreeMojo/issues/596): complete executable canonical pair catalog and diagnostics implemented; focused checks and representative evidence pass, with full pair execution deferred to final batch validation
 
-## Separate animal draft
+## Separate animal work
 
 [#605](https://github.com/SethKitchen/ThreeMojo/issues/605) and [#620](https://github.com/SethKitchen/ThreeMojo/issues/620) continue in [PR #607](https://github.com/SethKitchen/ThreeMojo/pull/607).
-That branch is rebased and reviewed, with focused CPU checks and a source-bound report.
-Complete animal coverage and aggregate platform checks remain pending.
+That branch is reviewed separately on its current head.
+Its review findings and aggregate/platform checks remain separate merge gates.
 Its changes are not part of this main-backed batch.
 
 ## Qualification
 
-Land reviewed changes through child PRs into this draft branch.
+Land reviewed changes through child PRs into this batch branch.
 Keep all existing test workloads, the five-second limit, and the full coverage requirement.
 Preserve the CI draft and target-branch policy.
 
-Compile changed code and run focused regressions for each complete issue implementation.
-Run full coverage and aggregate checks after all in-scope issues are implemented.
-Keep this base draft until that point.
+The October 5 stopping point retains the implemented work in this batch.
+Further issue implementation is paused for review, CI and the open-PR merge pass.
+Run full coverage and aggregate checks on this selected checkpoint.
+Clearing draft status does not establish merge readiness.
 Regenerate the anatomy report on the final batch source.
 
 Its current source binding is stale after the decode-queue changes.
-Building-extension work and related issues are outside this batch.
+Building-extension work remains in separate PR #655 for review.
 Keep CPU tests, GPU compilation and actual GPU execution as separate evidence.
 Each issue remains open until its complete acceptance criteria are verified.
 
