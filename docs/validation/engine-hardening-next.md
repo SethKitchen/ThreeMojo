@@ -70,7 +70,7 @@ No full anatomical calibration is claimed by this plan.
 
 - [#297](https://github.com/SethKitchen/ThreeMojo/issues/297): finish the canonical-to-visual fidelity contract
 - [#298](https://github.com/SethKitchen/ThreeMojo/issues/298): close the selected strand-hair rendering and simulation gaps
-- [#299](https://github.com/SethKitchen/ThreeMojo/issues/299): integrate audio-aligned face animation with LOD and baked characters
+- [#299](https://github.com/SethKitchen/ThreeMojo/issues/299): audio-aligned game faces implemented; 76 focused tests, two typed negatives and bake/load controls pass, with full batch validation pending
 - [#300](https://github.com/SethKitchen/ThreeMojo/issues/300): integrate persistent scene water and measure CPU/GPU paths
 - [#595](https://github.com/SethKitchen/ThreeMojo/issues/595): classify and resolve sampled canonical anatomy overlaps
 - [#596](https://github.com/SethKitchen/ThreeMojo/issues/596): complete executable canonical pair catalog and diagnostics implemented; focused checks and representative evidence pass, with full pair execution deferred to final batch validation
