@@ -12,20 +12,22 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "9eb16609226cd8c81aa6793fdd7e18e77e8a7f92b1efae4b5f8905916da15ed1",
+    "source_sha256": "769bd271faa906d4eadc97f5f9c19778767b7fa11cf3788a951de1fdb85e9bbe",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "f2634f7a60ecab2297314601d30676616308cb761dc9a67a52d6e6627d1a2c8d"
+    "binary_sha256": "2639bd5facb3806f66c78992528b0df5437ca4d2b27bd62946bbc3ae52b2ad9b"
   },
   "source_file_sha256": {
+    "extensions/anatomy/soft_tissue.mojo": "3af2496ae83428e477d5e8ec2eb364a88a3a5435235faeb88f776dbfdaed3238",
+    "extensions/anatomy/tissue.mojo": "9f1403527a86ccc37620fb0a867c077e614e222308aed168494bcfe878735e3c",
     "extensions/humanoid/athleticism.mojo": "e9452e65b527c6f0ccd9c30663f1d0466dbd506753fb8346d8f663bd805a3735",
     "extensions/humanoid/sex.mojo": "7110a634bb2136b9897096b2a8dbb6a4b17c2772a72fe04bb639de266d85cc2f",
     "extensions/humanoid/skeleton/foot/bones/dimensions.mojo": "c722263b25e6febf3ca34070751905fba797fc8a9eee34ef1e2d1b55c6e2890d",
-    "extensions/humanoid/skeleton/foot/bones/mass.mojo": "3dfabf8f605492bf80f315607e3d014468013c745ba6e40848bc61178f810ded",
+    "extensions/humanoid/skeleton/foot/bones/mass.mojo": "3e7bab7d964abe2752bcd4dc9a5929270a05c9ebde2ceb067e5f669c74c06863",
     "extensions/humanoid/skeleton/foot/ligaments/dimensions.mojo": "7851c21bfe58174da25be8bec8e3d511bf993896899e66acea62fa8085193082",
     "extensions/humanoid/skeleton/foot/lymph/dimensions.mojo": "eb7960e5d962c9ab4c5e180c7957a13ca1b1b71f082c42a70a6f9bbcafb9b216",
     "extensions/humanoid/skeleton/foot/muscles/dimensions.mojo": "8e54c6ab5e146a6c01e9f6c938f31b068b685aee4074aef341984bcb2ead6f0b",
@@ -34,37 +36,35 @@
     "extensions/humanoid/skeleton/foot/vessels/dimensions.mojo": "c8f83ac9a5f7bda8c1467a34ff323d9f36a2a68fd4c61f4642ed5caa0cb0a74a",
     "extensions/humanoid/skeleton/head/bones/dimensions.mojo": "0ee3309096fed55d448fd85460ae93b0ca91cfa6d8b6c728737663fab29ad44a",
     "extensions/humanoid/skeleton/head/frame.mojo": "11660ba46ddd5c464a77284e5330dc8569981226a00ef597a2ebd913a7945f97",
-    "extensions/humanoid/skeleton/head/ligaments/dimensions.mojo": "f79a8e1376d78a97178661fd5e0dd3b227acf0bd3ccae5876c87142850ebc94d",
+    "extensions/humanoid/skeleton/head/ligaments/dimensions.mojo": "91f3ff00cd323a949fdaec570edc7d8203f363973e7454691fa2bf0462a48957",
     "extensions/humanoid/skeleton/leg/assembly.mojo": "634f34f4aeb12ba601c67d0757309055e2e4f42f0d266a6e28b0d574170a66ea",
     "extensions/humanoid/skeleton/leg/femur/dimensions.mojo": "b45a19a8db52730f781ab7090fcb4f90325b9955d71ec949d3a5bd3ae8cfb538",
-    "extensions/humanoid/skeleton/leg/femur/mass.mojo": "a35b92f796315e992b4cbf6d89a1d92f9cc1f1170cf0dea834d2f898d299fff6",
+    "extensions/humanoid/skeleton/leg/femur/mass.mojo": "e860110f78b7417d2a57be4d10f02659661d690f85401c2bcdcf29b013b11d72",
     "extensions/humanoid/skeleton/leg/fibula/dimensions.mojo": "2510dec677ccc768348d78f98bf4d7cc94fe33e6248596e21fe5045c2dba62db",
-    "extensions/humanoid/skeleton/leg/fibula/mass.mojo": "60d9ac0433b30c2b3685a9ad7679b0b29f28d403c764abec32aee95ad26fe6cb",
+    "extensions/humanoid/skeleton/leg/fibula/mass.mojo": "1c483409a8f1fbc9ddc6213be0d46273b8d365589f272ba9e0012183c36236a3",
     "extensions/humanoid/skeleton/leg/knee/dimensions.mojo": "b54568988ad3624f2a848920455eebe43e41c6816a9cae7858047c7ddf774977",
     "extensions/humanoid/skeleton/leg/lymph/dimensions.mojo": "2f12dd049231fec2b150a51c768fa48819145091e00dbfaa25d4ab6e201fabcd",
     "extensions/humanoid/skeleton/leg/muscles/dimensions.mojo": "799aa64fd7fbb05e95698a429b3c62fb74933417057769bd65115374f0f85cbc",
     "extensions/humanoid/skeleton/leg/nerves/dimensions.mojo": "1ce726959104eb4731bd205315fdd2b7d2019207bc517bd040e543a9e2c81f87",
     "extensions/humanoid/skeleton/leg/patella/dimensions.mojo": "0ff13ee04349990b58ee3b37f9b928ad36a9ffcf6237d6032f8d7de2aedd17ff",
-    "extensions/humanoid/skeleton/leg/patella/mass.mojo": "949d82709f61b7ac6eb4a62f1cdff41b72bbc85f4f321ac6489decce1032e444",
+    "extensions/humanoid/skeleton/leg/patella/mass.mojo": "ed53c9de204f382bb575584f8aefee5c0039a06fda5e35e3c865192fd2ff2e33",
     "extensions/humanoid/skeleton/leg/skin/dimensions.mojo": "2bea123a1c5577d6167f9f17ef576df4b738c3ba175d854830141777f9d62d4c",
     "extensions/humanoid/skeleton/leg/tibia/dimensions.mojo": "85d9ffbc97e4568e142446f15b604626f8466aa71c049c25b9f12331c0379805",
-    "extensions/humanoid/skeleton/leg/tibia/mass.mojo": "0d9c65318808dda1ef58fb38476952d158d38226cb854cdf9ad13e8fd7a48a50",
+    "extensions/humanoid/skeleton/leg/tibia/mass.mojo": "d18bacad628db89cefe62b24dcf52d328e212d2eecd8d1cf8e6e79bb3c71ed36",
     "extensions/humanoid/skeleton/leg/vessels/dimensions.mojo": "e8b7ebb3877bc5b516fa6b884e2ea2e30fec2860cf497d285677856d906f73e7",
-    "extensions/humanoid/skeleton/limb/inertia.mojo": "a7c78afb97156ab4c254301965004e43d2ad7e85411434652e91ffd08670a757",
+    "extensions/humanoid/skeleton/limb/inertia.mojo": "7e9a22544b173a1eaa4b37471d42ce34d53c90996d3ce3c17410b8f905a81d09",
     "extensions/humanoid/skeleton/limb/regions.mojo": "866f8f763a463a4eb53208a8bd14ce2f3481488409cda5da4ceaf658bb33d593",
     "extensions/humanoid/skeleton/limb/skin.mojo": "254d9e773d8e2c4f2a538f0a5dfbd8eaf7a423e93e6f1730f8dff8318eef5adf",
     "extensions/humanoid/skeleton/loft.mojo": "fc5468dc5334781781ca905c2cb211d5a7d79dd66752a98f0849a1a58905219e",
     "extensions/humanoid/skeleton/morph.mojo": "fc078cbc0475bf57f9f038ed58269be78adfc03083bff67e344f03d5542a30e0",
     "extensions/humanoid/skeleton/pelvis/bones/dimensions.mojo": "dd3f908676ae3948f78423030e8ac01551b5706e897e183675e67c42313a97f5",
-    "extensions/humanoid/skeleton/soft_tissue.mojo": "0f0fd022c2f37c0780ba2d6b05a5c83b97f641af18cb4218e1559aa016afac61",
-    "extensions/humanoid/skeleton/tissue.mojo": "9f1403527a86ccc37620fb0a867c077e614e222308aed168494bcfe878735e3c",
     "extensions/humanoid/skeleton/torso/bones/dimensions.mojo": "1a5b3831f60be5c17f4136d8a26912f683afaa5dea1be91b879a3f7894b0e426",
-    "extensions/humanoid/skeleton/torso/ligaments/dimensions.mojo": "75fd5884fc70f8be8168750a08ffb1f5868720484009e7b862e7ba7744360e62",
+    "extensions/humanoid/skeleton/torso/ligaments/dimensions.mojo": "f777a693e54b73b83861cf641e600a7745a5fc9a654dbdf270e4de7718605ba2",
     "extensions/humanoid/skeleton/torso/sweep.mojo": "30b8d75082c062a4a45925f2d884da28cb08410c7f43bb03a99b5e77bd096410",
     "extensions/humanoid/spec.mojo": "994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224"
   },
   "report_logic_sha256": "e4c6cdfb841921935960dc72cfdbb01132e3cc49c0d7f6022865b3e153837676",
-  "inventory_sha256": "346da07584ae3ad05b59c1b9fae9a5c7ffa9b2a9019b3a1d7e728031694f5114",
+  "inventory_sha256": "1b483e96bbd0914a3fbda83cfd0fb7964847c3e353e01e4022acd2b114b16f8c",
   "follow_ups": [
     "https://github.com/SethKitchen/ThreeMojo/issues/595",
     "https://github.com/SethKitchen/ThreeMojo/issues/297"
@@ -231917,7 +231917,7 @@
           "BoneTissue.porosity"
         ],
         "source_files": [
-          "extensions/humanoid/skeleton/tissue.mojo"
+          "extensions/anatomy/tissue.mojo"
         ],
         "classification": "research_metadata_with_authored_nominal_porosity",
         "units": [
@@ -231958,7 +231958,7 @@
           "muscle_tissue().wet_density"
         ],
         "source_files": [
-          "extensions/humanoid/skeleton/soft_tissue.mojo"
+          "extensions/anatomy/soft_tissue.mojo"
         ],
         "classification": "named_density_with_cited_mammalian_research",
         "units": [
@@ -231984,7 +231984,7 @@
           "marrow and unresolved soft assignments"
         ],
         "source_files": [
-          "extensions/humanoid/skeleton/soft_tissue.mojo",
+          "extensions/anatomy/soft_tissue.mojo",
           "extensions/humanoid/skeleton/limb/inertia.mojo",
           "extensions/humanoid/skeleton/limb/regions.mojo"
         ],
