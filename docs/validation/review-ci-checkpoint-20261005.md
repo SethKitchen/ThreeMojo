@@ -4,15 +4,15 @@ This checkpoint preserves the authored building work in [#655](https://github.co
 
 ## Source and report
 
-The final production source contains 2,191 bound inputs. Its digest is:
+The final production source contains 2,193 bound inputs. Its digest is:
 
-`769bd271faa906d4eadc97f5f9c19778767b7fa11cf3788a951de1fdb85e9bbe`
+`59204ba6f3107ad97254aa1014435f882ae7e61fb2357131fd992ff25acf38e7`
 
 The fresh [anatomy report](anatomy-template-report.json) has SHA-256:
 
-`2ae45667c08e33e4944d609e848cfd0704d96511d8e9f1096c04e303040c6f76`
+`020fa621576387ec5bdafa1715a3354a303599afc0ae057746a50651d8bca425`
 
-The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 92.33 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows. All 23 report and binding tests passed.
+The pinned Mojo 1.1.0 (`8189361e`) build and full report completed in 68.09 seconds. All 8,911 catalog pairs were checked, with zero omitted and 8,446 additional diagnostic rows. All 23 report and binding tests passed.
 
 **The report still contains 367 unallowlisted sampled-overlap findings.** That set is unchanged from the prior report. Completing the checks does not establish anatomical validity. The findings remain tracked in [#595](https://github.com/SethKitchen/ThreeMojo/issues/595); visual and rig mapping remains in [#297](https://github.com/SethKitchen/ThreeMojo/issues/297). Sampled fields do not prove clearance or engineering or clinical validity.
 
@@ -32,7 +32,19 @@ A minimal preflight rejects an impossible positive facial budget below 128 befor
 
 Four balanced measured runs passed the existing five-second gate at 2.803–3.123 seconds, with a 3.017-second median. The old implementation took 3.682–7.221 seconds, with a 5.247-second median and two of four runs over the gate. These local results provide headroom; hosted timing remains a separate check. The rejected mouth-cache experiment is not included.
 
-## Final composed checks
+### Further repair after hosted timing failures
+
+The preflight still took 5.94 seconds in [run 37327561821](https://github.com/SethKitchen/ThreeMojo/actions/runs/37327561821/job/111822068983) and 5.87 seconds in [run 37330440961](https://github.com/SethKitchen/ThreeMojo/actions/runs/37330440961/job/111831843819). Functional assertions passed; the unchanged five-second gate failed.
+
+The follow-up removes temporary copies of validated packed face arrays and uses their known packed mouth-target layout. It also replaces the scalar-indexed 128-lane SIMD traversal stack with an equal-capacity Int32 array. There is no retained cache or pointer. Validation, ownership, triangle order, traversal, geometry and test workloads remain unchanged.
+
+All 52 focused native cases passed across 12 suites. New controls compare complete face arrays and all 39 mouth targets bitwise. The stack control explicitly reaches 128 pending nodes and compares the complete returned query tuple with the original SIMD path. Both new suites are discovered; the production coverage inventory remains 886 modules.
+
+One warmup per variant and four balanced measured rounds used the original complete LOD test. Baseline median was 3.066649 seconds, packed-copy-only median 2.600157 seconds, and combined median 2.356132 seconds. The combined range was 2.308479–2.539037 seconds, a 23.17% local median reduction. All 15 runs passed locally; the local baseline also passed, so these results do not establish hosted success. No retry selection, test split, workload reduction or gate change is included.
+
+The follow-up also passed pinned formatting, documentation lint for all 139 files, and all 318 Python tool tests with inherited MAKEFLAGS. The fresh full report above binds these source changes. All diagnostic content and the 367 findings are unchanged; only build provenance changed. Fresh exact-head hosted timing, aggregate checks and full coverage remain required.
+
+## Earlier composed checks
 
 - Pinned formatting check passed for all changed Mojo files
 - Documentation lint passed all 139 files
