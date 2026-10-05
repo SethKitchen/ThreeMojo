@@ -397,5 +397,22 @@ def test_option_refusals() raises:
         _ = structural_view(b, default_options())
 
 
+def test_mutated_building_references_are_refused_before_conversion() raises:
+    for field in range(4):
+        var b = _building(True)
+        if field == 0:
+            # Surface ownership must be checked before e.faces[0] is read.
+            b.elements[0].faces.clear()
+        elif field == 1:
+            b.elements[0].faces[0] = FaceId(999)
+        elif field == 2:
+            b.topology.face_level.clear()
+        else:
+            var last = len(b.elements) - 1
+            b.elements[last].material = MaterialId(999)
+        with assert_raises(contains=""):
+            _ = structural_view(b, default_options())
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
