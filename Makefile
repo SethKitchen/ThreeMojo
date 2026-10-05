@@ -32,8 +32,10 @@ LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
-# Import-only diagnostic adapters must not be compiled as CLI entry points.
-HELPER_LIBS  := tools/anatomy_pairs.mojo
+# Import-only diagnostic adapters and test fixtures have no CLI entry point.
+# Copy them through unchanged beside instrumented test suites.
+HELPER_LIBS  := tools/anatomy_pairs.mojo tests/carla_fixed_s_fixture.mojo \
+                tests/exact_predicates_oracle.mojo
 TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo)) $(HELPER_LIBS)
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
@@ -773,6 +775,9 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
            $(OUT_DIR)/head.png \
            $(OUT_DIR)/water.png \
+           $(OUT_DIR)/animals.png \
+           $(OUT_DIR)/walk.png \
+           $(OUT_DIR)/animal_anatomy.png \
            $(OUT_DIR)/carla_towns.png \
            $(OUT_DIR)/game_humanoid.png \
            $(OUT_DIR)/hairstyles.png \
@@ -1406,6 +1411,27 @@ $(OUT_DIR)/integument.png: $(EXAMPLE_INPUTS_integument)
 $(OUT_DIR)/water.png: $(EXAMPLE_INPUTS_water) assets/pebbles.jpg
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Every procedural animal, one to a tile, turning.
+$(OUT_DIR)/animals.png: $(EXAMPLE_INPUTS_animals)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animals.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A wolf walks one stride, re-meshed in each pose.
+$(OUT_DIR)/walk.png: $(EXAMPLE_INPUTS_walk)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/walk.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Game mode beside engineering mode, at real size and walking speed.
+$(OUT_DIR)/animal_anatomy.png: $(EXAMPLE_INPUTS_animal_anatomy)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animal_anatomy.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 
