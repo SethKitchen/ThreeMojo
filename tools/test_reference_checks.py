@@ -15,7 +15,8 @@ import unittest
 TOOLS = Path(__file__).resolve().parent
 
 # The segment script checks with top-level asserts and takes no --check flag.
-CHECKS = (('reference_remainders.py', '--check'),
+CHECKS = (('reference_volume_lighting.py', '--check'),
+          ('reference_remainders.py', '--check'),
           ('reference_animation_loops.py', '--check'),
           ('reference_segment_geometry.py',))
 
