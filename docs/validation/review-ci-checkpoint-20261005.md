@@ -32,6 +32,8 @@ The composed recipe passes a bounded real-compiler smoke and all nine exact-pred
 
 The full tool suite exposed two mock-repository inventories missing the new helper. Both now include it, and the existing cache-invalidation assertion covers it. No assertion is removed. The complete 342-tool/48-CARLA suites pass with opt-in both disabled and enabled.
 
+The Apple lint job on `17037be` passes formatting, then exposes a fake-cgroup assertion comparing a canonical path with its symlink spelling. The fixture now compares canonical paths, preserving the production mapper. A new Linux-runnable symlink control repeats both the subtree mapping and shared OOM-counter delta assertions. The old assertion fails on that control; the corrected 23 telemetry tests pass. The complete 343-tool/48-CARLA suites pass with opt-in both disabled and enabled. Production code, all 2,217 report inputs and the report bytes are unchanged. Fresh hosted qualification remains required.
+
 The report snapshot binds Mojo sources, report logic and provenance inventory. The additional Makefile/Python/YAML tooling is separately bound by the committed tree and exact file hashes. The docstring change required the full report refresh above; all 367 diagnostic findings remain unchanged.
 
 The preceding 5d9 MAX/no-GPU job compiles the GPU entries, passes 47 host-side cases and checks all 37 actual Metal AIR modules. It performs no GPU device execution. These results remain bound to that prior head; fresh exact-head CI must qualify this update.
