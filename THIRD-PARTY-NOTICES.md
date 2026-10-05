@@ -665,8 +665,10 @@ work. TressFX is distributed under the MIT License, reproduced below.
 `assets/hair/mohawk.bin` is the crest of Ratboy's mohawk, TressFX's sample
 hair `Ratboy_mohawk.tfx`, as `tools/hair_style.py` converts it: the strands from
 the brow to the nape, narrowed and laid on a human cranium. The sample is
-distributed under the same MIT License, copyright 2017 Advanced Micro Devices,
-Inc.
+distributed under the same MIT License. The pinned TressFX 4.1
+[license file](https://github.com/GPUOpen-Effects/TressFX/blob/6957058e29dceb25a0c2a82849bb892f3d9fbce5/license.txt)
+states copyright 2020 Advanced Micro Devices, Inc.
+The exact source and recipe are in `assets/converted-asset-manifest.json`.
 
 ```
 Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
@@ -743,6 +745,12 @@ converts it: each strand kept as offsets from its root on a fitted cranium, so
 it can be laid on any head. The character Sintel is (c) copyright Blender
 Foundation | durian.blender.org, licensed under the Creative Commons
 Attribution 3.0 License, <https://creativecommons.org/licenses/by/3.0/>.
+The [Sintel Lite author page](https://blendswap.com/blend/2847) states this
+license. The pinned
+[exporter README](https://github.com/Scthe/frostbitten-hair-webgpu/blob/4478dd129525ff7db92978178b55f760716cbd72/README.md)
+identifies the model and its author. The manifest records the exact exported
+TFX bytes and the conversion recipe. The software repository's MIT license
+does not replace this model license.
 
 ---
 
@@ -758,6 +766,9 @@ the mesh. `extensions/humanoid/skeleton/head/face_model.mojo` reads
 it; the Mojo implementation is original work. Only the Light model is used,
 which ICT-FaceKit releases under the MIT License, reproduced below. ICT's Full
 face model, under a different license, is not used.
+The manifest pins all 118 consumed OBJ files and the upstream
+[license](https://github.com/USC-ICT/ICT-FaceKit/blob/da5f95a607f5e6b37755b38d3385d7f2853732e5/LICENSE)
+and README at the same immutable revision.
 
 ```
 MIT License
