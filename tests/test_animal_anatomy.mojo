@@ -387,11 +387,12 @@ def test_calibration_scales_to_the_published_size() raises:
         ),
     )
     var m = calibrated_mass(canon, cal)
-    # The canonical male weighs the published mass.
+    # At the calibration's own resolution, the canonical male weighs the
+    # published mass.
     assert_almost_equal(
         Float64(m.total().mass.value),
         Float64(cal.published_mass.to(KILOGRAM)),
-        rtol=0.03,
+        rtol=1e-4,
     )
     var young = create_animal(
         SPIDER,
