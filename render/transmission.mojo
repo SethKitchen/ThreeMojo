@@ -230,13 +230,12 @@ struct TransmissionTarget(Movable):
     ) raises:
         """Copy opaque depth before any volume or transmissive back face.
 
+        The snapshot is independent of later target writes.
+
         Args:
             target: The completed opaque pass, at the raster resolution.
             to_screen: The camera-space to raster-pixel projection.
             far: The camera's far distance, used for clear pixels.
-
-        Returns:
-            Nothing. The snapshot is independent of later target writes.
 
         Raises:
             Error: If the size, depth mode, projection or depth is invalid.
@@ -246,13 +245,15 @@ struct TransmissionTarget(Movable):
             or target.height != self.image.height
         ):
             raise Error("Volume scene depth must match the captured image")
+        if target.width <= 0 or target.height <= 0:
+            raise Error("Volume scene depth needs positive raster dimensions")
         if len(target.depth) != target.width * target.height:
             raise Error("Volume scene depth needs one depth per raster pixel")
         if not target.depth_mode.is_valid():
             raise Error("A depth mode that is none of the three")
         if not isfinite(far.value):
             raise Error("Volume scene depth needs a finite far distance")
-        for index in range(VIEW_FLOATS):
+        for index in range(VIEW_FLOATS):  # pragma: no branch
             if not isfinite(to_screen.elements[index]):
                 raise Error("Volume scene depth needs a finite projection")
         if to_screen._determinant_wide() == 0:
@@ -260,8 +261,8 @@ struct TransmissionTarget(Movable):
         var inverse = to_screen
         inverse.invert()
         var values = List[Float32](capacity=target.width * target.height)
-        for y in range(target.height):
-            for x in range(target.width):
+        for y in range(target.height):  # pragma: no branch
+            for x in range(target.width):  # pragma: no branch
                 var stored = target.depth[y * target.width + x]
                 var distance = far.value
                 if isfinite(stored):
@@ -295,26 +296,27 @@ struct TransmissionTarget(Movable):
             width: The raster target width.
             height: The raster target height.
 
-        Returns:
-            Nothing.
-
         Raises:
             Error: If a requested snapshot is absent, malformed or stale.
         """
         if not requested:
             return
+        if len(self.volume_depth) == 0:
+            raise Error("A volume needs scene depth at the raster target size")
         if (
             self.image.width != width
             or self.image.height != height
             or len(self.volume_depth) != width * height
         ):
             raise Error("A volume needs scene depth at the raster target size")
-        for index in range(len(self.volume_depth)):
+        for index in range(len(self.volume_depth)):  # pragma: no branch
             if not isfinite(self.volume_depth[index]):
                 raise Error("Volume scene depth must contain finite distances")
 
     def volume_depth_at(self, x: Int, y: Int) -> Length:
         """Return a checked snapshot's exact raster sample, without filtering.
+
+        The caller must validate the snapshot first.
 
         Args:
             x: Raster column from the left, checked by the rasterizer.
@@ -322,9 +324,6 @@ struct TransmissionTarget(Movable):
 
         Returns:
             Signed camera-axis distance in meters, positive in front.
-
-        Raises:
-            Nothing. The caller must validate the snapshot first.
         """
         return Length(self.volume_depth[y * self.image.width + x], METER)
 
