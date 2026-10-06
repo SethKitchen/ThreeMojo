@@ -63,12 +63,14 @@ Right and left are as the lane's traffic sees them. A lane that runs against s f
 
 `LaneType` is a bit mask. A query takes a mask, such as `LANE_DRIVING | LANE_SHOULDER`, and keeps the lanes whose type shares a bit with it.
 
+`Road.nearest_lane` is the separate [fixed-s OpenDRIVE query](CARLA-fixed-s-nearest).
+Its centers and returned distance retain Float64 precision.
+
 ## Lane orientation
 
 A known waypoint uses the derivative of its evaluated offset-plus-width
 centerline for heading and pitch. This covers all five reference geometries,
-inner-lane widths, lane offsets, and both traffic directions. It preserves
-center coordinates and zero roll. See [lane orientation](CARLA-lane-orientation)
+inner-lane widths, lane offsets, and both traffic directions. The query and transform share one Float64 lane center and keep zero roll. See [lane orientation](CARLA-lane-orientation)
 for record boundaries, singular tangents, rounding and remaining limits.
 
 ## Lane endpoints
@@ -173,6 +175,30 @@ A road with `rule="LHT"` keeps traffic to the left. Its left lanes run with s an
 9. It moves each sign that stands on a driving lane off that lane.
 
 The segments are in `extensions.carla.rtree.SegmentCloudRtree`.
+`segment_count()` and `segment()` return this nearest-waypoint index.
+They do not promise a fixed partition. Accuracy changes can add segments.
+The lane order and index tie rules stay deterministic.
+
+The quarter-point chord target is one millimeter. A required split needs
+an interior Float64 road-s value. Construction raises a resolution error
+when that value is unavailable. A positive nonterminal sampling step must
+also advance in lane order. A rounded unchanged step raises a resolution
+error. Terminal zero-span index entries remain valid.
+
+See [road-s resolution](CARLA-road-s-resolution).
+
+Sampling does not bound unsampled extrema. Candidate admission uses a separate full-center enclosure
+and the corrected R-tree distance bound. An unknown bound keeps a candidate.
+The minimum search proves candidate dominance and strict on-road status.
+
+It resumes overlapping candidates without resetting their work budgets.
+If the remaining budget cannot prove the result, the query raises an
+accuracy error. It does not return an unproved waypoint or off-road result.
+
+The [lane correction controls](CARLA-lane-correction-controls) explain the
+intentional pose, minimum, index and mesh changes. This work is still held
+for final qualification. Border-only lane support in issue #577 and global
+map work budgets in issue #580 remain separate work.
 
 ## Meshes
 
@@ -197,6 +223,10 @@ The map functions are `generate_mesh`, `generate_chunked_mesh`, `generate_ordere
 This port keeps CARLA's numbers except for the corrections listed here.
 
 - Waypoint orientation follows the geometric centerline tangent, including lateral and curvature derivatives. Pitch uses vertical speed over actual horizontal speed, with the sign required by the [corrected CARLA rotation basis](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/geom/Rotation.h). CARLA used a lateral slope as an angle and a raw elevation grade as positive pitch. See [issue #485](https://github.com/SethKitchen/ThreeMojo/issues/485) and the [orientation contract](CARLA-lane-orientation).
+- The fixed-s `Road.nearest_lane` query compares every eligible Float64 center before rounding. It returns a scale-safe Float64 distance in the OpenDRIVE frame. It removes CARLA's early-distance stop because rounded centers can make an outer lane closer. See [fixed-s query precision and limits](CARLA-fixed-s-nearest).
+- Nearest-waypoint queries minimize the lane-center distance. They do not treat distance along an offset chord as road s. Internal selection and strict on-road checks keep the Float64 center. Only the public transform narrows the position.
+- The nearest-waypoint index splits at record boundaries and for lane-center chord error. Its public count can differ from CARLA's heading-only partition. A required split without an interior Float64 road-s value raises a resolution error.
+- A width-record kink prevents the straight-lane mesh shortcut. The existing mesh resolution then adds rows through that section. MeshFactory does not use the nearest-waypoint index as its mesh partition.
 - Topology retains dead-end lanes and their section identity. The pinned [CARLA `Map.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/road/Map.cpp) narrows the endpoint to a float before lookup. This can drop an increasing-s lane at the road end. The port deliberately corrects that behavior. See [issue #285](https://github.com/SethKitchen/ThreeMojo/issues/285).
 - Backward lane traversal measures the remainder toward the lane start. The pinned [CARLA `Waypoint.cpp`](https://github.com/carla-simulator/carla/blob/1360bb9/LibCarla/source/carla/client/Waypoint.cpp) uses the forward remainder for its final backward step. That can leave the starting road or fail at an isolated end. The port deliberately corrects that behavior and handles exact and unlinked section endpoints. See [issue #286](https://github.com/SethKitchen/ThreeMojo/issues/286).
 - Junction bounds include reverse-running curved lane interiors. The pinned CARLA `CreateJunctionBoundingBoxes` uses a signed ten-step interval and skips those interiors. The port uses the [bounded approximation](#junction-bounds) above. A 100 m semicircle with a positive RHT lane is the reproducible counterexample. See [issue #487](https://github.com/SethKitchen/ThreeMojo/issues/487).
