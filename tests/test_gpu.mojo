@@ -14960,6 +14960,139 @@ def test_both_backends_draw_marschner_strand_colors() raises:
     assert_equal(count_mismatches(host, device, tolerance=1), 0)
 
 
+def test_both_backends_draw_partial_hashed_strand_coverage() raises:
+    from objects.line_segments2 import STRAND_LINE_COVERAGE
+
+    if skipped_for_lack_of_a_gpu("partial hashed strand coverage and motion"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    for index in range(3):
+        var z = Float32(index) * -0.15
+        var points: List[Vector3] = [
+            Vector3(-0.8, -0.5 + Float32(index) * 0.4, z),
+            Vector3(0.8, 0.5 - Float32(index) * 0.3, z),
+        ]
+        var geometry = assets.geometries.add(line_segments_geometry(points))
+        var material = assets.materials.add(
+            line_material(
+                Color(220, UInt8(80 + index * 60), 30),
+                LineWidth(pixels=Float32(index + 1) * 0.7),
+                opacity=0.55,
+                blending=OPAQUE,
+            )
+        )
+        var node = scene.add(Object3D())
+        scene.add_wide_line(
+            LineSegments2(
+                geometry,
+                material,
+                node,
+                coverage=STRAND_LINE_COVERAGE,
+                cast_shadow=True,
+            )
+        )
+    scene.update()
+    var camera = centered(
+        Length(2, METER), 1, Length(0.1, METER), Length(10, METER)
+    )
+    var renderer = Renderer(48, 48)
+    renderer.set_background(BACKGROUND)
+    var gpu = GpuRenderer(48, 48)
+    for frame_index in range(3):
+        camera.place(
+            Vector3(Float32(frame_index) * 0.03, 0, 4), Vector3(0, 0, 0)
+        )
+        var cpu = renderer.render(scene, assets, camera)
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        gpu.draw(frame.whole_corners(), BACKGROUND, draws=frame.draws)
+        var device = gpu.read_back()
+        assert_true(count_background(cpu, BACKGROUND) < 48 * 48 - 15)
+        # One byte only permits interpolation/color rounding. A wrong
+        # kept/discarded strand sample is far outside that tolerance.
+        assert_equal(count_mismatches(cpu, device, tolerance=1), 0)
+
+
+def test_both_backends_receive_hashed_strand_cast_shadows() raises:
+    from objects.line_segments2 import STRAND_LINE_COVERAGE
+
+    if skipped_for_lack_of_a_gpu("hashed strand cast shadow on a receiver"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    var shape = assets.geometries.add(
+        line_segments_geometry([Vector3(-0.8, 0, 0), Vector3(0.8, 0, 0)])
+    )
+    var material = assets.materials.add(
+        line_material(
+            Color(220, 70, 20),
+            LineWidth(pixels=5),
+            opacity=0.6,
+            blending=OPAQUE,
+        )
+    )
+    var node = scene.add(Object3D())
+    scene.add_wide_line(
+        LineSegments2(
+            shape,
+            material,
+            node,
+            coverage=STRAND_LINE_COVERAGE,
+            cast_shadow=True,
+        )
+    )
+    var receiver = Object3D()
+    receiver.set_position(0, 0, -0.4)
+    var receiver_node = scene.add(receiver^)
+    var plane_id = assets.geometries.add(
+        plane(Length(2, METER), Length(2, METER))
+    )
+    var paint = assets.materials.add(
+        Material(Color(150, 170, 210), side=DOUBLE_SIDE)
+    )
+    scene.add_mesh(Mesh(plane_id, paint, receiver_node, receive_shadow=True))
+    var lamp = Object3D()
+    lamp.set_position(0.5, 1, 4)
+    var lamp_node = scene.add(lamp^)
+    var light = directional_light(Color(255, 255, 255), lamp_node)
+    light.cast_shadow = True
+    light.shadow.map_size = 48
+    light.shadow.set_extent(Length(1.2, METER))
+    light.shadow.near = Length(0.1, METER)
+    light.shadow.far = Length(10, METER)
+    scene.add_light(light)
+    scene.update()
+    var camera = centered(
+        Length(2.2, METER), 1, Length(0.1, METER), Length(10, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var renderer = Renderer(48, 48)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+    )
+    var gpu = render_triangles(
+        frame.whole_corners(),
+        48,
+        48,
+        BACKGROUND,
+        lighting=lighting,
+        draws=frame.draws,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    scene.wide_lines[0].cast_shadow = False
+    var unshadowed = renderer.render(scene, assets, camera)
+    assert_true(count_mismatches(cpu, unshadowed) > 5)
+
+
 def test_both_backends_keep_subpixel_wide_line_caps() raises:
     if skipped_for_lack_of_a_gpu("subpixel wide-line caps"):
         return
