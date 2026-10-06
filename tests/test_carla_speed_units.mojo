@@ -51,10 +51,13 @@ def speed_town(
         OpenDRIVE with unchanged geometry and lane identities.
     """
     return (
-        "<OpenDRIVE><road id='1' length='40' junction='-1'><type s='0' type='town'>"
+        "<OpenDRIVE><road id='1' length='40' junction='-1'><type s='0'"
+        " type='town'>"
         + road_speed
-        + "</type><planView><geometry s='0' x='0' y='0' hdg='0' length='40'><line/></geometry></planView>"
-        + "<lanes><laneSection s='0'><center><lane id='0' type='none'/></center><right><lane id='-1' type='driving'>"
+        + "</type><planView><geometry s='0' x='0' y='0' hdg='0'"
+        " length='40'><line/></geometry></planView>"
+        + "<lanes><laneSection s='0'><center><lane id='0'"
+        " type='none'/></center><right><lane id='-1' type='driving'>"
         + "<width sOffset='0' a='3.5' b='0' c='0' d='0'/>"
         + lane_speed
         + "</lane></right></laneSection></lanes><signals>"
@@ -75,7 +78,8 @@ def speed_signal(value: String, unit: String) -> String:
     """
     var attribute = " value='" + value + "'" if value != "" else ""
     return (
-        "<signal id='7' s='20' t='-5' type='274' subtype='40' name='limit' orientation='+' zOffset='2'"
+        "<signal id='7' s='20' t='-5' type='274' subtype='40' name='limit'"
+        " orientation='+' zOffset='2'"
         + attribute
         + unit
         + "><validity fromLane='-1' toLane='-1'/></signal>"
