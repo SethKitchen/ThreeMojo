@@ -250,3 +250,9 @@ This port keeps CARLA's numbers except for the corrections listed here.
 - `SDFToMesh`, which needs the MeshReconstruction library.
 
 The geographic reference comes from `extensions.carla.geo`. See [CARLA geometry](CARLA-geometry).
+
+## Speed record units
+
+Road and lane speed records keep their source number and unit. The checked
+runtime accessor returns Velocity64. See [OpenDRIVE speed limits](CARLA-speed-limits)
+for defaults, road keywords, signal validation and simulation conversion.
