@@ -26,6 +26,22 @@ The road hash starts at the first import, so module commentary can change.
 hexadecimal values and exact fractions. The source pin checks the quadrature
 nodes and weights; rounded `1 + node` values are checked independently.
 
+The canonical scalar graph is now the private `lane_geometry.mojo` adapter
+called by Road lane centers. Main's public reference/fixed-s geometry remains
+a separate evaluator. `canonical-source-correspondence.json` records the
+reviewed authored-to-adapter operation correspondence, retained table/constant
+inputs and unchanged oracle arithmetic. Whole-file source binding includes
+that canonical module; the Road scope is its actual first import, regardless
+of which helper is imported first. Source-pin failures remain explicit under
+optimized Python, although the mathematical scripts should still be run with
+the documented normal Python commands so their arithmetic assertions execute.
+
+The pose script differentiates the unchanged stored center expression. Main's
+finite-input/refusal guards and scale-safe final pose angles have separate
+native controls; the source correspondence does not claim byte-identical
+public pose arithmetic. The optional roundoff envelope and query shortcuts
+also need their own runtime/certificate/budget qualification.
+
 `oracle.py` uses exact rational coefficients and Gauss-Legendre moments.
 It checks derivative signs, convexity perturbations and root brackets.
 High-precision mpmath values display the roots; they are not substituted
