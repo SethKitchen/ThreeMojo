@@ -106,6 +106,17 @@ jobs:
           uv pip install "mojo==1.1.0"
           .venv/bin/mojo --version
 
+      - name: Compiler identity and effective target
+        run: .venv/bin/python tools/compiler_metadata.py > compiler-metadata.json
+
+      - name: Preserve compiler metadata before CPU compilation
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-metadata-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: compiler-metadata.json
+          if-no-files-found: error
+          retention-days: 1
+
       # The native window's suite starts its own X server. Xvfb draws in
       # memory, so the runner needs no display.
       - name: Install Xvfb
