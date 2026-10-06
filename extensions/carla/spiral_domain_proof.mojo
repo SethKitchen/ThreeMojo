@@ -76,7 +76,8 @@ def _spiral_proof_geometry(geometry: RoadGeometry) -> Bool:
         and isfinite(geometry.y)
         and isfinite(geometry.curvature_end)
         and isfinite(
-            (geometry.curvature_end - geometry.curvature_start) / geometry.length
+            (geometry.curvature_end - geometry.curvature_start)
+            / geometry.length
         )
     )
 
@@ -134,7 +135,11 @@ def _try_pack_spiral_proof(
     if not _spiral_proof_geometry(geometry):
         return None
     var domain = captured.d.rounded_value()
-    if not domain.is_finite() or domain.low <= 0.0 or domain.high >= geometry.length:
+    if (
+        not domain.is_finite()
+        or domain.low <= 0.0
+        or domain.high >= geometry.length
+    ):
         return None
     if (
         not captured.d.value.is_finite()
@@ -143,10 +148,14 @@ def _try_pack_spiral_proof(
     ):
         return None
     if (
-        not isfinite(captured.first_x_error) or captured.first_x_error < 0.0
-        or not isfinite(captured.first_y_error) or captured.first_y_error < 0.0
-        or not isfinite(captured.last_x_error) or captured.last_x_error < 0.0
-        or not isfinite(captured.last_y_error) or captured.last_y_error < 0.0
+        not isfinite(captured.first_x_error)
+        or captured.first_x_error < 0.0
+        or not isfinite(captured.first_y_error)
+        or captured.first_y_error < 0.0
+        or not isfinite(captured.last_x_error)
+        or captured.last_x_error < 0.0
+        or not isfinite(captured.last_y_error)
+        or captured.last_y_error < 0.0
     ):
         return None
     if not _all_spiral_nodes_quadrant_zero(
@@ -159,9 +168,15 @@ def _try_pack_spiral_proof(
         ):
             return None
     return _SpiralDomainProof(
-        segment_index, at, domain, captured.first_count, captured.last_count,
-        captured.first_x_error, captured.first_y_error,
-        captured.last_x_error, captured.last_y_error,
+        segment_index,
+        at,
+        domain,
+        captured.first_count,
+        captured.last_count,
+        captured.first_x_error,
+        captured.first_y_error,
+        captured.last_x_error,
+        captured.last_y_error,
     )
 
 
@@ -199,19 +214,27 @@ def _spiral_proof_matches(
     if record_at != proof.record_at or not _spiral_proof_geometry(geometry):
         return False
     if (
-        not isfinite(low) or not isfinite(high)
-        or not isfinite(root_low) or not isfinite(root_high)
-        or high < low or root_high < root_low
-        or low < root_low or high > root_high
+        not isfinite(low)
+        or not isfinite(high)
+        or not isfinite(root_low)
+        or not isfinite(root_high)
+        or high < low
+        or root_high < root_low
+        or low < root_low
+        or high > root_high
     ):
         return False
     var domain = d.rounded_value()
     if (
-        not domain.is_finite() or domain.low <= 0.0 or domain.high >= geometry.length
+        not domain.is_finite()
+        or domain.low <= 0.0
+        or domain.high >= geometry.length
         or not proof.rounded_d.is_finite()
-        or proof.rounded_d.low <= 0.0 or proof.rounded_d.high >= geometry.length
+        or proof.rounded_d.low <= 0.0
+        or proof.rounded_d.high >= geometry.length
         or proof.rounded_d.high < proof.rounded_d.low
-        or domain.low < proof.rounded_d.low or domain.high > proof.rounded_d.high
+        or domain.low < proof.rounded_d.low
+        or domain.high > proof.rounded_d.high
         or not d.value.is_finite()
         or not d.first.is_finite()
         or not d.second.is_finite()
@@ -223,13 +246,20 @@ def _spiral_proof_matches(
         return False
     if proof.first_count < 1 or proof.last_count > 64:
         return False
-    if proof.last_count < proof.first_count or proof.last_count - proof.first_count > 1:
+    if (
+        proof.last_count < proof.first_count
+        or proof.last_count - proof.first_count > 1
+    ):
         return False
     if (
-        not isfinite(proof.first_x_error) or proof.first_x_error < 0.0
-        or not isfinite(proof.first_y_error) or proof.first_y_error < 0.0
-        or not isfinite(proof.last_x_error) or proof.last_x_error < 0.0
-        or not isfinite(proof.last_y_error) or proof.last_y_error < 0.0
+        not isfinite(proof.first_x_error)
+        or proof.first_x_error < 0.0
+        or not isfinite(proof.first_y_error)
+        or proof.first_y_error < 0.0
+        or not isfinite(proof.last_x_error)
+        or proof.last_x_error < 0.0
+        or not isfinite(proof.last_y_error)
+        or proof.last_y_error < 0.0
     ):
         return False
     return counts[0] >= proof.first_count and counts[1] <= proof.last_count

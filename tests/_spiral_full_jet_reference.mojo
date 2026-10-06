@@ -12,12 +12,21 @@ This file is test support, not production code.
 """
 
 from extensions.carla.curve_interval import (
-    _Interval, _next_up, _next_down, _roundoff,
-    _tight_sum_bound, _tight_product_bound, _tight_quotient_bound,
+    _Interval,
+    _next_up,
+    _next_down,
+    _roundoff,
+    _tight_sum_bound,
+    _tight_product_bound,
+    _tight_quotient_bound,
 )
 from extensions.carla.curve_trig import (
-    _PHASE_LIMIT, _INV_HALF_PI, _HALF_PI_HIGH, _HALF_PI_LOW,
-    _SIN_COEFFICIENTS, _COS_COEFFICIENTS,
+    _PHASE_LIMIT,
+    _INV_HALF_PI,
+    _HALF_PI_HIGH,
+    _HALF_PI_LOW,
+    _SIN_COEFFICIENTS,
+    _COS_COEFFICIENTS,
 )
 from extensions.carla.geometry import RoadGeometry, _GL_NODES, _GL_WEIGHTS
 from math.vector3 import Vector3
@@ -187,7 +196,9 @@ struct _FullJet(ImplicitlyCopyable):
         )
 
 
-def _full_polynomial[n: Int](coefficients: Array[Float64, n], x: _FullJet) -> _FullJet:
+def _full_polynomial[
+    n: Int
+](coefficients: Array[Float64, n], x: _FullJet) -> _FullJet:
     var result = _FullJet.constant(coefficients[n - 1])
     var i = n - 2
     while i >= 0:
@@ -196,12 +207,16 @@ def _full_polynomial[n: Int](coefficients: Array[Float64, n], x: _FullJet) -> _F
     return result
 
 
-def _full_sincos_branch(value: _FullJet, quadrant: Int) -> Tuple[_FullJet, _FullJet]:
+def _full_sincos_branch(
+    value: _FullJet, quadrant: Int
+) -> Tuple[_FullJet, _FullJet]:
     # Products of constants are the same stored scalar values as the helper.
     # The derivative therefore includes only the variable subtraction and
     # the polynomial, not an ideal trigonometric identity.
     var high = Float64(quadrant) * _HALF_PI_HIGH
-    var low = _FullJet.constant(Float64(quadrant)) * _FullJet.constant(_HALF_PI_LOW)
+    var low = _FullJet.constant(Float64(quadrant)) * _FullJet.constant(
+        _HALF_PI_LOW
+    )
     var reduced = (value - _FullJet.constant(high)) - low
     var square = reduced * reduced
     var sine = reduced * _full_polynomial(
@@ -225,12 +240,18 @@ def _full_uncertain(value: _Interval) -> _FullJet:
 def _full_sincos_jet(value: _FullJet) -> Tuple[_FullJet, _FullJet]:
     var domain = value.rounded_value()
     if not domain.is_finite():
-        return (_full_uncertain(_Interval.whole()), _full_uncertain(_Interval.whole()))
+        return (
+            _full_uncertain(_Interval.whole()),
+            _full_uncertain(_Interval.whole()),
+        )
     if domain.magnitude() > _PHASE_LIMIT:
         if domain.low > _PHASE_LIMIT or domain.high < -_PHASE_LIMIT:
             var unknown = _full_uncertain(_Interval(-1.0, 1.0))
             return (unknown, unknown)
-        return (_full_uncertain(_Interval.whole()), _full_uncertain(_Interval.whole()))
+        return (
+            _full_uncertain(_Interval.whole()),
+            _full_uncertain(_Interval.whole()),
+        )
     var selection = (
         value * _FullJet.constant(_INV_HALF_PI) + _FullJet.constant(0.5)
     ).rounded_value()
@@ -241,7 +262,10 @@ def _full_sincos_jet(value: _FullJet) -> Tuple[_FullJet, _FullJet]:
     if high - low > 4:
         # Polynomial output differs from exact [-1,1] by its arithmetic.
         # Evaluate possible branches only after further domain subdivision.
-        return (_full_uncertain(_Interval.whole()), _full_uncertain(_Interval.whole()))
+        return (
+            _full_uncertain(_Interval.whole()),
+            _full_uncertain(_Interval.whole()),
+        )
     var source = _FullJet.variable(domain.low, domain.high)
     var result = _full_sincos_branch(source, low)
     var sine = result[0].rounded_value()
@@ -301,14 +325,23 @@ def _full_spiral_jet(
         k0 + _FullJet.constant(0.5) * rate * d
     )
     return (
-        (_FullJet.constant(geometry.x) - _FullJet.constant(Float64(translation.x))) + x,
-        (_FullJet.constant(geometry.y) + _FullJet.constant(Float64(translation.y))) + y,
+        (
+            _FullJet.constant(geometry.x)
+            - _FullJet.constant(Float64(translation.x))
+        )
+        + x,
+        (
+            _FullJet.constant(geometry.y)
+            + _FullJet.constant(Float64(translation.y))
+        )
+        + y,
         heading,
     )
 
 
 def _full_union_points(
-    one: Tuple[_FullJet, _FullJet, _FullJet], two: Tuple[_FullJet, _FullJet, _FullJet]
+    one: Tuple[_FullJet, _FullJet, _FullJet],
+    two: Tuple[_FullJet, _FullJet, _FullJet],
 ) -> Tuple[_FullJet, _FullJet, _FullJet]:
     return (
         _full_uncertain(one[0].rounded_value().hull(two[0].rounded_value())),

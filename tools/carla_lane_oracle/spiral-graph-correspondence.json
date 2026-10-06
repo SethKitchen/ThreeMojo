@@ -1,0 +1,117 @@
+{
+  "authored_commit": "68a87145a71fe92252a26614b06da2e8e9965497",
+  "composed_base_tree": "51c2ea2c159dd14fc2baeebf22fbfcf48915f615",
+  "scope": "Same stored scalar/ideal operation grouping and literals. Public reference geometry is distinct. This migration does not certify optional envelope, rounded graph, branch eligibility, codegen, queries or performance.",
+  "blocks": {
+    "geometry_trig_aliases": {
+      "previous_path": "extensions/carla/geometry.mojo",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "previous_sha256": "24c5ddbff4bc4c7c581c29ce03e5a8726bf822246058426457a8fc84874c12c7",
+      "sha256": "24c5ddbff4bc4c7c581c29ce03e5a8726bf822246058426457a8fc84874c12c7",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "scalar_spiral": {
+      "previous_path": "extensions/carla/geometry.mojo",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "previous_sha256": "fb35746883516ceb4833466ecba905d59a8890f476eb85cb11ee7f0fc1e5c395",
+      "sha256": "9a9a4c195e310031373618f02e8eeb423c28b9bfeedb2cd75e98cc48407cdf9d",
+      "correspondence": "Exact operation AST after receiver/function renaming and receiver type removal only"
+    },
+    "scalar_horner": {
+      "previous_path": "extensions/carla/curve_trig.mojo",
+      "path": "extensions/carla/curve_trig.mojo",
+      "previous_sha256": "bf0c064e296966ce80c0f40ae1579aec0cada28bfe06ad89a1e330fe0f13cf61",
+      "sha256": "bf0c064e296966ce80c0f40ae1579aec0cada28bfe06ad89a1e330fe0f13cf61",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "scalar_sincos": {
+      "previous_path": "extensions/carla/curve_trig.mojo",
+      "path": "extensions/carla/curve_trig.mojo",
+      "previous_sha256": "045eb52b44f376b8f34e7a6791fad4a742949c8cdf5005b20a0824bb600bd430",
+      "sha256": "045eb52b44f376b8f34e7a6791fad4a742949c8cdf5005b20a0824bb600bd430",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "scalar_trig_wrappers": {
+      "previous_path": "extensions/carla/curve_trig.mojo",
+      "path": "extensions/carla/curve_trig.mojo",
+      "previous_sha256": "28620259ae57e84d366848fa2e1d1e33b52ba5f2a820114a8828cebfb098987c",
+      "sha256": "28620259ae57e84d366848fa2e1d1e33b52ba5f2a820114a8828cebfb098987c",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "ideal_sincos_selector": {
+      "previous_path": "extensions/carla/curve_trig.mojo",
+      "path": "extensions/carla/curve_trig.mojo",
+      "previous_sha256": "56061b0775a4da91c0c6b472eea8ec0040a0cd528c873dc707a1a8473755ad72",
+      "sha256": "56061b0775a4da91c0c6b472eea8ec0040a0cd528c873dc707a1a8473755ad72",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "ideal_horner": {
+      "previous_path": "extensions/carla/curve_trig.mojo",
+      "path": "extensions/carla/curve_trig.mojo",
+      "previous_sha256": "64de25b06c5c1dfdff3a1e787abc30381bb3c4c36a631c217cdf94c0c1285e26",
+      "sha256": "64de25b06c5c1dfdff3a1e787abc30381bb3c4c36a631c217cdf94c0c1285e26",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "ideal_sincos_branch": {
+      "previous_path": "extensions/carla/curve_trig.mojo",
+      "path": "extensions/carla/curve_trig.mojo",
+      "previous_sha256": "efef6b1e8bdec16fe5f6575717d9893c16dced3dfd2d817c86d9e857e9438701",
+      "sha256": "efef6b1e8bdec16fe5f6575717d9893c16dced3dfd2d817c86d9e857e9438701",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    },
+    "ideal_spiral": {
+      "previous_path": "extensions/carla/curve_bounds.mojo",
+      "path": "extensions/carla/curve_bounds.mojo",
+      "previous_sha256": "c7f7228e845924163fc58ea584861145e84a26a90f5159e730e0a3cc2b6f28a6",
+      "sha256": "270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733",
+      "correspondence": "Exact operation AST; only source path or whitespace changed"
+    }
+  },
+  "array_and_scalar_pins_unchanged": true,
+  "rounded_node_sums_unchanged": true,
+  "require_verifier_unchanged": true,
+  "source_sha256": {
+    "extensions/carla/lane_geometry.mojo": "6de54ea23ac296fdf65b8805a1e4b31fc8e5237c2e8a4539163bb162f6e6577a",
+    "extensions/carla/curve_trig.mojo": "b7966c5a30494145b8a0d5a0806e4fcabc41eeeed4b530ed9095752485f057e2",
+    "extensions/carla/curve_bounds.mojo": "62972820ca1f04ef27ddd3fd7cba37f62ed23195a92089fd20db03c7f5391c8a"
+  },
+  "proposed_files": {
+    "tools/carla_lane_oracle/test_spiral_moments.py": "ae981a829db390616039aaa67b56ef52cd47d86f9db40db74359b137d57f77fb",
+    "tools/carla_lane_oracle/spiral-moment-pins.json": "870522361562690586022102e8ef556e57ef4754d630dc58c2017033e9669eda",
+    "tools/carla_lane_oracle/spiral_moments.py": "8214e1f369f2fa3e596adef2e4d4d4e99a285b621ccc32a6a1b6b16802752f4b"
+  },
+  "formatter_binding": {
+    "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee",
+    "receipt_sha256": "2e5c1de3f003196e8b4b81791a12902dc7cc7b5175b7422f1b95faa1f88cbaaf",
+    "changed_blocks": [
+      {
+        "name": "ideal_sincos_selector",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "56061b0775a4da91c0c6b472eea8ec0040a0cd528c873dc707a1a8473755ad72",
+        "after_sha256": "660c00106a75d0b4c17ad87aebc4b7b71d1ab017945b3dc0874b895cc266fdc2",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      },
+      {
+        "name": "ideal_horner",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "64de25b06c5c1dfdff3a1e787abc30381bb3c4c36a631c217cdf94c0c1285e26",
+        "after_sha256": "aacc0792f0e340f1859a6ed4e1d64aa4b35961a53f807f3e4f276857c111c22f",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      },
+      {
+        "name": "ideal_sincos_branch",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "efef6b1e8bdec16fe5f6575717d9893c16dced3dfd2d817c86d9e857e9438701",
+        "after_sha256": "b8a1c365598f4f40a29af377f5189359f200baf1386ec08e8b73650344dd709e",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      }
+    ],
+    "current_source_sha256": {
+      "extensions/carla/lane_geometry.mojo": "6de54ea23ac296fdf65b8805a1e4b31fc8e5237c2e8a4539163bb162f6e6577a",
+      "extensions/carla/curve_trig.mojo": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+      "extensions/carla/curve_bounds.mojo": "62972820ca1f04ef27ddd3fd7cba37f62ed23195a92089fd20db03c7f5391c8a"
+    },
+    "all_stored_constant_pins_unchanged": true,
+    "canonical_table_sha256": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c"
+  }
+}

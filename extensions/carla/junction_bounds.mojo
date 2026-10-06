@@ -15,6 +15,15 @@ target. The returned bounds must fit in finite Float32 coordinates.
 """
 
 from extensions.carla.geometry import ARC, LINE, POLY3, SPIRAL, RoadGeometry
+from extensions.carla.curve_bounds import _lane_jet, _reference_work
+from extensions.carla.curve_interval import _Interval, _next_up
+from extensions.carla.lane_refinement import _midpoint
+from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
+from extensions.carla.map_validation import (
+    _preflight_road_records,
+    _reserve_lane_boundaries,
+    _reserve_lane_scalars,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import RoadInfo, info_index
@@ -145,7 +154,12 @@ def _geometry_rates(
 
 
 def _span_box(
-    road: Road, section: Int, lane: Int, a: Float64, b: Float64
+    road: Road,
+    section: Int,
+    lane: Int,
+    a: Float64,
+    b: Float64,
+    mut work: _MapBuildWork,
 ) raises -> Box3:
     var geometry_index = info_index(road.info.geometries, a)
     var offset_index = info_index(road.info.lane_offsets, a)
@@ -161,6 +175,7 @@ def _span_box(
     var lane_id = road.sections[section].lanes[lane].id.value
     # The valid selected lane belongs to this nonempty lane list.
     for other in road.sections[section].lanes:  # pragma: no branch
+        work.step()
         if other.id.value * lane_id <= 0 or abs(other.id.value) > abs(lane_id):
             continue
         var at = info_index(other.info.widths, a)
@@ -208,8 +223,8 @@ def _span_box(
     if geometry.kind == ARC and q[1] == 0.0 and z[2] == 0.0:
         # A constant-offset arc has its plan extrema at cardinal headings.
         # Evaluate those directly; ordinary arcs do not need chord padding.
-        out.expand_by_point(road.lane_transform(section, lane, a).location)
-        out.expand_by_point(road.lane_transform(section, lane, b).location)
+        out.expand_by_point(_budgeted_pose(road, section, lane, a, work))
+        out.expand_by_point(_budgeted_pose(road, section, lane, b, work))
         comptime half_pi = 1.5707963267948966
         var theta_a = (
             geometry.heading + (a - geometry.s) * geometry.curvature_start
@@ -227,9 +242,7 @@ def _span_box(
                     + (theta - geometry.heading) / geometry.curvature_start
                 )
                 out.expand_by_point(
-                    road.lane_transform(
-                        section, lane, min(max(s, a), b)
-                    ).location
+                    _budgeted_pose(road, section, lane, min(max(s, a), b), work)
                 )
         out.expand_by_vector(
             Vector3(
@@ -265,10 +278,13 @@ def _span_box(
         1.1e-7 * geometry.length if geometry.kind == SPIRAL else 0.0
     )
     if not rates[3] or wanted > Float64(_MAX_PIECES):
-        # Conservative fallback for a singular tangent or excessive work.
-        # The reference chord gets its own curvature padding, then the
-        # complete offset disk. This deliberately has no 1 cm tightness claim.
+        # Uncertified proposal for a singular tangent or excessive work.
+        # The historical reference chord and offset disk only suggest a box;
+        # _certify_junction_span must still prove the actual lane graph fits.
+        # This proposal deliberately has no 1 cm tightness claim.
+        _reserve_reference_point(road, a, work)
         var first = road.directed_point_no_lane_offset(a).to_carla().location
+        _reserve_reference_point(road, b, work)
         var last = road.directed_point_no_lane_offset(b).to_carla().location
         var pad = (
             rates[2] * (b - a) * (b - a) / 8.0
@@ -311,7 +327,7 @@ def _span_box(
         var s = b if i == pieces else a + (b - a) * (
             Float64(i) / Float64(pieces)
         )
-        var point = road.lane_transform(section, lane, s).location
+        var point = _budgeted_pose(road, section, lane, s, work)
         var padding = Vector3(
             Float32(xy_pad + _ROUNDING * (1.0 + q[0] + abs(Float64(point.x)))),
             Float32(xy_pad + _ROUNDING * (1.0 + q[0] + abs(Float64(point.y)))),
@@ -322,13 +338,223 @@ def _span_box(
     return out
 
 
+def _reserve_reference_point(
+    road: Road, s: Float64, mut work: _MapBuildWork
+) raises:
+    work.step()
+    var terms = _reference_work(road, s, s)
+    if terms < 0:
+        raise Error(
+            "Junction construction cannot resolve scalar quadrature work"
+        )
+    work.term(terms)
+
+
+def _budgeted_pose(
+    road: Road, section: Int, lane: Int, s: Float64, mut work: _MapBuildWork
+) raises -> Vector3:
+    _reserve_lane_scalars(road, section, work, 2)
+    _reserve_reference_point(road, s, work)
+    var terms = _reference_work(road, s, s)
+    work.term(terms)
+    return road.lane_transform(section, lane, s).location
+
+
+def _canonical_endpoint(
+    road: Road, section: Int, lane: Int, s: Float64, mut work: _MapBuildWork
+) raises -> Vector3:
+    _reserve_lane_scalars(road, section, work)
+    _reserve_reference_point(road, s, work)
+    var point = road._lane_center(section, lane, s)
+    var result = Vector3(
+        Float32(point[0]), Float32(point[1]), Float32(point[2])
+    )
+    if not (isfinite(result.x) and isfinite(result.y) and isfinite(result.z)):
+        raise Error(
+            "Junction canonical endpoint is not finite in public storage"
+        )
+    return result
+
+
+def _outward_float(value: Float64, lower: Bool) raises -> Float32:
+    var result = Float32(value)
+    if not isfinite(result):
+        raise Error(
+            "Junction canonical enclosure is not finite in public storage"
+        )
+    if (lower and Float64(result) > value) or (
+        not lower and Float64(result) < value
+    ):
+        if result == 0.0:
+            return bitcast[DType.float32](
+                UInt32(0x80000001) if lower else UInt32(1)
+            )
+        var bits = bitcast[DType.uint32](result)
+        if (result > 0.0) == lower:
+            bits -= 1
+        else:
+            bits += 1
+        result = bitcast[DType.float32](bits)
+        if not isfinite(result):
+            raise Error(
+                "Junction canonical enclosure is not finite in public storage"
+            )
+    return result
+
+
+def _centered_elevation_enclosure(
+    road: Road,
+    low: Float64,
+    high: Float64,
+    original: _Interval,
+    scalar_error: Float64,
+    mut work: _MapBuildWork,
+) raises -> _Interval:
+    # Re-expand the exact real cubic in stored coefficients using outward
+    # interval arithmetic. Keep the original canonical Horner roundoff bound;
+    # this never treats the reordered polynomial as the scalar evaluator.
+    work.step()
+    work.term(128)
+    if not isfinite(scalar_error) or scalar_error < 0.0:
+        return original
+    var at = info_index(road.info.elevations, low)
+    if at < 0 or info_index(road.info.elevations, high) != at:
+        return original
+    ref p = road.info.elevations[at].polynomial
+    var m = _Interval.point(_midpoint(low, high))
+    var a = _Interval.point(p.a)
+    var b = _Interval.point(p.b)
+    var c = _Interval.point(p.c)
+    var d = _Interval.point(p.d)
+    var value = a + m * (b + m * (c + m * d))
+    var first = b + m * (
+        _Interval.point(2.0) * c + m * _Interval.point(3.0) * d
+    )
+    var second = c + _Interval.point(3.0) * m * d
+    var delta = _Interval(low, high) - m
+    var ideal = value + delta * (first + delta * (second + delta * d))
+    var stored = ideal + _Interval(-scalar_error, scalar_error)
+    var lower = max(original.low, stored.low)
+    var upper = min(original.high, stored.high)
+    if not stored.is_finite() or lower > upper:
+        return original
+    return _Interval(lower, upper)
+
+
+def _certify_junction_span(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    mut box: Box3,
+    mut work: _MapBuildWork,
+) raises:
+    if low == high:
+        box.expand_by_point(_canonical_endpoint(road, section, lane, low, work))
+        return
+    work.step()
+    var pending: List[Tuple[Float64, Float64, Int]] = [(low, high, 0)]
+    while len(pending) > 0:
+        work.step()
+        var cell = pending.pop()
+        var terms = _reference_work(road, cell[0], cell[1])
+        var finite = False
+        var x = _Interval.whole()
+        var y = _Interval.whole()
+        var z = _Interval.whole()
+        if terms >= 0:
+            work.term(terms)
+            _reserve_lane_scalars(road, section, work)
+            var point = _lane_jet(road, section, lane, cell[0], cell[1])
+            x = point[0].rounded_value()
+            y = -point[1].rounded_value()
+            z = point[2].rounded_value()
+            if z.is_finite() and z.width() > 4.0 * max(
+                1.0, Float64(box.max.z) - Float64(box.min.z)
+            ):
+                z = _centered_elevation_enclosure(
+                    road, cell[0], cell[1], z, point[2].error, work
+                )
+            finite = x.is_finite() and y.is_finite() and z.is_finite()
+            if (
+                finite
+                and x.low >= Float64(box.min.x)
+                and x.high <= Float64(box.max.x)
+                and y.low >= Float64(box.min.y)
+                and y.high <= Float64(box.max.y)
+                and z.low >= Float64(box.min.z)
+                and z.high <= Float64(box.max.z)
+            ):
+                continue
+        var middle = _midpoint(cell[0], cell[1])
+        if middle <= cell[0] or middle >= cell[1]:
+            # The domain is stored Float64 road stations; the enclosure
+            # covers their public Float32 lane-center positions. These are
+            # the only two representable stations in this adjacent cell.
+            box.expand_by_point(
+                _canonical_endpoint(road, section, lane, cell[0], work)
+            )
+            box.expand_by_point(
+                _canonical_endpoint(road, section, lane, cell[1], work)
+            )
+            continue
+        if cell[2] >= 24:
+            if not finite:
+                raise Error(
+                    "Junction canonical enclosure exhausted its numerical"
+                    " subdivision limit"
+                )
+            # Keep the entire certified boundary enclosure. No chord or
+            # point sample is used as a substitute for unresolved coverage.
+            box.expand_by_point(
+                Vector3(
+                    _outward_float(x.low, True),
+                    _outward_float(y.low, True),
+                    _outward_float(z.low, True),
+                )
+            )
+            box.expand_by_point(
+                Vector3(
+                    _outward_float(x.high, False),
+                    _outward_float(y.high, False),
+                    _outward_float(z.high, False),
+                )
+            )
+            continue
+        # Both child allocations are admitted before appending either one.
+        work.step(2)
+        pending.append((middle, cell[1], cell[2] + 1))
+        pending.append((cell[0], middle, cell[2] + 1))
+
+
 def _lane_section_box(road: Road, section: Int, lane: Int) raises -> Box3:
+    var work = _MapBuildWork(MapBuildBudget())
+    work.record(1)
+    _preflight_road_records(road, work)
+    return _lane_section_box_with_work(road, section, lane, work)
+
+
+def _lane_section_box_with_work(
+    road: Road, section: Int, lane: Int, mut work: _MapBuildWork
+) raises -> Box3:
+    road._check_lane(section, lane)
     var a = road.sections[section].s
     # Use the stored endpoint. Re-adding a rounded section length can
     # overshoot it, including for a=10.2 and road.length=50.1.
+    work.step(len(road.sections))
     var b = min(road.upper_bound(a), road.length)
     if not (isfinite(a) and isfinite(b) and a >= 0.0 and b >= a):
         raise Error("A junction lane has an invalid section interval")
+    if a == b:
+        var point = _canonical_endpoint(road, section, lane, a, work)
+        return Box3(point, point)
+    var before = work.steps
+    _reserve_lane_boundaries(road, section, work)
+    var boundary_count = work.steps - before
+    work.step(2)
+    boundary_count += 2
+    work.sort_work(boundary_count)
     var breaks: List[Float64] = [a, b]
     _record_breaks(breaks, road.info.geometries)
     _record_breaks(breaks, road.info.elevations)
@@ -348,6 +574,32 @@ def _lane_section_box(road: Road, section: Int, lane: Int) raises -> Box3:
         var end = min(breaks[i + 1], b)
         if end > breaks[i]:
             end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
-        out.union(_span_box(road, section, lane, breaks[i], end))
-    out.expand_by_point(road.lane_transform(section, lane, b).location)
+        work.step()
+        out.union(_span_box(road, section, lane, breaks[i], end, work))
+    if not (
+        isfinite(out.min.x)
+        and isfinite(out.min.y)
+        and isfinite(out.min.z)
+        and isfinite(out.max.x)
+        and isfinite(out.max.y)
+        and isfinite(out.max.z)
+    ):
+        raise Error("Junction proposal is not finite in public storage")
+    # The old analytic expression is only a proposal. Prove the actual
+    # canonical lane graph is covered, including both sides of record jumps.
+    for i in range(len(breaks) - 1):
+        work.step()
+        var start = breaks[i]
+        out.expand_by_point(
+            _canonical_endpoint(road, section, lane, start, work)
+        )
+        var end = min(breaks[i + 1], b)
+        if end > start:
+            end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
+            start = _next_up(start)
+            if start <= end:
+                _certify_junction_span(
+                    road, section, lane, start, end, out, work
+                )
+    out.expand_by_point(_canonical_endpoint(road, section, lane, b, work))
     return out

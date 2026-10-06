@@ -841,22 +841,18 @@ struct Road(Copyable, Movable):
         # lane 0 and its rate of change. Plus is to the right.
         ref lanes = self.sections[section].lanes
         var negative = lane_id.value < 0
-        var order = List[Int]()
-        if negative:
-            # The section holds the lane, so it has lanes.
-            for i in range(len(lanes) - 1, -1, -1):  # pragma: no branch
-                if lanes[i].id.value < 0:
-                    order.append(i)
-        else:
-            # The section holds the lane, so it has lanes.
-            for i in range(len(lanes)):  # pragma: no branch
-                if lanes[i].id.value >= 1:
-                    order.append(i)
         var dist = 0.0
         var tangent = 0.0
         var sign = 1.0 if negative else -1.0
-        # The order holds the lane itself, so the loop breaks.
-        for i in order:  # pragma: no branch
+        # Visit the same inner-to-outer order without allocating a list.
+        # The section holds the lane, so this loop reaches it and breaks.
+        for position in range(len(lanes)):  # pragma: no branch
+            var i = len(lanes) - 1 - position if negative else position
+            if negative:
+                if lanes[i].id.value >= 0:
+                    continue
+            elif lanes[i].id.value < 1:
+                continue
             var width = info_at(lanes[i].info.widths, s)
             if not Bool(width):
                 raise Error("A lane has no width record at s")

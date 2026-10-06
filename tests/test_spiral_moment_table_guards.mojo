@@ -12,7 +12,12 @@ payload/count tests below are adversarial API controls, never production callers
 """
 
 from extensions.carla.curve_bounds import _geometry_distance, _spiral_counts
-from extensions.carla.curve_interval import _Interval, _Jet, _next_down, _next_up
+from extensions.carla.curve_interval import (
+    _Interval,
+    _Jet,
+    _next_down,
+    _next_up,
+)
 from extensions.carla.geometry import RoadGeometry, SPIRAL, LINE
 from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof,
@@ -186,7 +191,9 @@ def test_nonfinite_distance_error_and_unknown_derivatives_are_misses() raises:
     var second = _Jet.variable(2.125, 2.125)
     second.second = _Interval.whole()
     _assert_miss_site(geometry, second)
-    _assert_miss_site(geometry, _Jet.variable(-inf[DType.float64](), inf[DType.float64]()))
+    _assert_miss_site(
+        geometry, _Jet.variable(-inf[DType.float64](), inf[DType.float64]())
+    )
 
 
 def test_unsupported_65_and_malformed_payload_or_counts_are_misses() raises:

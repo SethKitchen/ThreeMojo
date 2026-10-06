@@ -34,8 +34,8 @@ ARRAY_SPECS = {
 }
 SCALAR_NAMES = {'_PHASE_LIMIT', '_INV_HALF_PI', '_HALF_PI_HIGH', '_HALF_PI_LOW'}
 BLOCK_PATHS = {
-    'geometry_trig_aliases': 'extensions/carla/geometry.mojo',
-    'scalar_spiral': 'extensions/carla/geometry.mojo',
+    'geometry_trig_aliases': 'extensions/carla/lane_geometry.mojo',
+    'scalar_spiral': 'extensions/carla/lane_geometry.mojo',
     'scalar_horner': 'extensions/carla/curve_trig.mojo',
     'scalar_sincos': 'extensions/carla/curve_trig.mojo',
     'scalar_trig_wrappers': 'extensions/carla/curve_trig.mojo',

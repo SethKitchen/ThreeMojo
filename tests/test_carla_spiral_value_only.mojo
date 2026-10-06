@@ -192,8 +192,13 @@ def test_trig_modes_quadrant_joins_phase_guards_and_whole_fallback() raises:
             var expected = _full_sincos_branch(_full(source), quadrant)
             _fields(actual[0], expected[0])
             _fields(actual[1], expected[1])
-    for join in [-3.9269908169872414, -0.7853981633974483, 0.7853981633974483,
-                 2.356194490192345, 3.9269908169872414]:
+    for join in [
+        -3.9269908169872414,
+        -0.7853981633974483,
+        0.7853981633974483,
+        2.356194490192345,
+        3.9269908169872414,
+    ]:
         _trig(_Jet.variable(_next_down(join), _next_up(join)))
         var source = _Jet.variable(join - 1e-8, join + 1e-8)
         source.error = 1e-10
@@ -216,7 +221,9 @@ def _fixed_count(
     var actual = _spiral_expression(
         geometry, _without_derivatives(source), pieces, translation
     )
-    var expected = _full_spiral_jet(geometry, _full(source), pieces, translation)
+    var expected = _full_spiral_jet(
+        geometry, _full(source), pieces, translation
+    )
     _point_bits(_spiral_jet(geometry, source, pieces, translation), expected)
     _fields(actual[0], expected[0])
     _fields(actual[1], expected[1])
@@ -227,16 +234,25 @@ def test_both_gauss_counts_keep_all_fields_before_the_final_hull() raises:
     var geometry = with_spiral(
         RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 8.0), 0.01, 0.2
     )
-    for interval in [_Interval(-0.0, 0.0), _Interval(0.1, 0.2),
-                     _Interval(1.9, 2.1), _Interval(4.9, 5.1)]:
+    for interval in [
+        _Interval(-0.0, 0.0),
+        _Interval(0.1, 0.2),
+        _Interval(1.9, 2.1),
+        _Interval(4.9, 5.1),
+    ]:
         var source = _Jet.variable(interval.low, interval.high)
         source.error = 1e-12
         for count in [1, 2, 3, 6, 7]:
             _fixed_count(geometry, source, count, Vector3(0, 0, 0))
     var inherited = _Jet.variable(0.99, 1.01)
     inherited.error = 1e-9
-    for heading in [0.0, 0.7853981633974483, 1048576.0, 1048577.0,
-                    inf[DType.float64]()]:
+    for heading in [
+        0.0,
+        0.7853981633974483,
+        1048576.0,
+        1048577.0,
+        inf[DType.float64](),
+    ]:
         geometry.heading = heading
         _fixed_count(geometry, inherited, 2, Vector3(0, 0, 0))
         _fixed_count(geometry, inherited, 3, Vector3(0, 0, 0))
@@ -274,7 +290,9 @@ def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
         _fixed_count(geometry, d, counts[0], Vector3(0, 0, 0))
         _fixed_count(geometry, d, counts[1], Vector3(0, 0, 0))
         var actual = _reference_jet(geometry, crossing, Vector3(0, 0, 0))
-        _point_bits(actual, _full_reference(geometry, crossing, Vector3(0, 0, 0)))
+        _point_bits(
+            actual, _full_reference(geometry, crossing, Vector3(0, 0, 0))
+        )
         assert_false(actual[0].first.is_finite())
         assert_false(actual[0].second.is_finite())
         _bits(actual[0].error, 0.0)
@@ -285,17 +303,26 @@ def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
             _reference_jet(geometry, point, Vector3(0, 0, 0)),
             _full_reference(geometry, point, Vector3(0, 0, 0)),
         )
-    for interval in [_Interval(-2.0, -1.0), _Interval(-1e-8, 1e-8),
-                     _Interval(0.1, 0.2), _Interval(3.99999999, 4.00000001),
-                     _Interval(5.0, 6.0), _Interval(0.0, 4.0)]:
+    for interval in [
+        _Interval(-2.0, -1.0),
+        _Interval(-1e-8, 1e-8),
+        _Interval(0.1, 0.2),
+        _Interval(3.99999999, 4.00000001),
+        _Interval(5.0, 6.0),
+        _Interval(0.0, 4.0),
+    ]:
         var source = _Jet.variable(interval.low, interval.high)
         _point_bits(
             _reference_jet(geometry, source, Vector3(0, 0, 0)),
             _full_reference(geometry, source, Vector3(0, 0, 0)),
         )
-    var smooth = _reference_jet(geometry, _Jet.variable(0.1, 0.2), Vector3(0, 0, 0))
+    var smooth = _reference_jet(
+        geometry, _Jet.variable(0.1, 0.2), Vector3(0, 0, 0)
+    )
     assert_true(smooth[0].first.is_finite())
-    var unresolved = _reference_jet(geometry, _Jet.variable(0.0, 4.0), Vector3(0, 0, 0))
+    var unresolved = _reference_jet(
+        geometry, _Jet.variable(0.0, 4.0), Vector3(0, 0, 0)
+    )
     assert_false(unresolved[0].value.is_finite())
     geometry.length = 1e12
     var unsupported = _Jet.variable(1e10, 1e10 + 1.0)

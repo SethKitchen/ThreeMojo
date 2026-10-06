@@ -49,6 +49,7 @@ keeps nearest-query node bounds conservative. This correction does not change
 CARLA's segment construction or the insertion-order tie rule.
 """
 
+from extensions.carla.map_search import _MapQueryWork, _MapBuildWork
 from std.math import fma
 from math.bounds import Box3
 from math.vector3 import Vector3
@@ -628,6 +629,62 @@ struct _Rtree(Movable):
                     )
         return found^
 
+    def _nearest_begin(
+        self, point: Vector3, mut work: _MapQueryWork
+    ) raises -> _Heap:
+        var heap = _Heap()
+        if self.size() > 0:
+            work.queue_push(0)
+            heap.push(
+                _Candidate(
+                    _box_distance2(self.nodes[self.root].box, point),
+                    0,
+                    self.root,
+                )
+            )
+        return heap^
+
+    def _nearest_next[
+        F: _EntryFilter
+    ](
+        self,
+        point: Vector3,
+        filter: F,
+        mut heap: _Heap,
+        mut work: _MapQueryWork,
+    ) raises -> Optional[Int]:
+        # This is the same heap key and tie ordering as nearest(). Retaining
+        # the frontier avoids repeated prefix allocation and repeated pops.
+        while len(heap.items) > 0:
+            work.index_pop()
+            var item = heap.pop()
+            if item.kind == 1:
+                if filter.accepts_entry(self, item.index):
+                    return item.index
+                continue
+            ref node = self.nodes[item.index]
+            for child in node.children:
+                work.queue_push(len(heap.items))
+                if node.leaf:
+                    heap.push(
+                        _Candidate(
+                            _segment_distance2(
+                                self.starts[child], self.ends[child], point
+                            ),
+                            1,
+                            child,
+                        )
+                    )
+                else:
+                    heap.push(
+                        _Candidate(
+                            _box_distance2(self.nodes[child].box, point),
+                            0,
+                            child,
+                        )
+                    )
+        return None
+
     def intersections(self, box: Box3) -> List[Int]:
         var found = List[Int]()
         var stack = List[Int]()
@@ -644,6 +701,31 @@ struct _Rtree(Movable):
                     self.starts[child], self.ends[child], box
                 ):
                     found.append(child)
+        sort(found)
+        return found^
+
+    def _intersections_with_work(
+        self, box: Box3, mut work: _MapBuildWork
+    ) raises -> List[Int]:
+        var found = List[Int]()
+        var stack = List[Int]()
+        work.step()
+        stack.append(self.root)
+        while len(stack) > 0:
+            work.step()
+            var index = stack.pop()
+            ref node = self.nodes[index]
+            if not node.box.intersects_box(box):
+                continue
+            for child in node.children:  # pragma: no branch
+                work.step()
+                if not node.leaf:
+                    stack.append(child)
+                elif segment_intersects_box(
+                    self.starts[child], self.ends[child], box
+                ):
+                    found.append(child)
+        work.sort_work(len(found))
         sort(found)
         return found^
 
@@ -855,6 +937,27 @@ struct SegmentCloudRtree(Movable):
             )
         )
 
+    def _nearest_begin(
+        self, point: Vector3, mut work: _MapQueryWork
+    ) raises -> _Heap:
+        return self._tree._nearest_begin(point, work)
+
+    def _nearest_next[
+        F: SegmentFilter & ImplicitlyCopyable & Deinitable
+    ](
+        self,
+        point: Vector3,
+        filter: F,
+        mut heap: _Heap,
+        mut work: _MapQueryWork,
+    ) raises -> Optional[SegmentElement]:
+        var found = self._tree._nearest_next(
+            point, _SegmentAdapter(filter), heap, work
+        )
+        if found:
+            return self._tree.segment(found.value())
+        return None
+
     def get_intersections(self, box: Box3) -> List[SegmentElement]:
         """Return the segments that meet a box, `GetIntersections`.
 
@@ -865,6 +968,13 @@ struct SegmentCloudRtree(Movable):
             The segments, in the order they were inserted.
         """
         return self._elements(self._tree.intersections(box))
+
+    def _intersections_with_work(
+        self, box: Box3, mut work: _MapBuildWork
+    ) raises -> List[SegmentElement]:
+        var entries = self._tree._intersections_with_work(box, work)
+        work.step(len(entries))
+        return self._elements(entries)
 
     def get_tree_size(self) -> Int:
         """Return how many segments the tree holds, `GetTreeSize`.

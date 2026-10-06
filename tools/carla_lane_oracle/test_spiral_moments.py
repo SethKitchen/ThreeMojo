@@ -252,7 +252,12 @@ class TableTests(unittest.TestCase):
             m.verify_inputs(self.root)
 
     def test_changed_scalar_phase_graph_rejected(self):
-        self.change('extensions/carla/geometry.mojo', 'start + step * 0.5 * (1.0 + nodes[i])', 'start + step * 0.25 * (1.0 + nodes[i])')
+        self.change('extensions/carla/lane_geometry.mojo', 'start + step * 0.5 * (1.0 + nodes[i])', 'start + step * 0.25 * (1.0 + nodes[i])')
+        with self.assertRaisesRegex(m.CheckError, 'operation graph changed'):
+            m.verify_inputs(self.root)
+
+    def test_changed_canonical_alias_rejected(self):
+        self.change('extensions/carla/lane_geometry.mojo', '_curve_cos as cos,', '_curve_sin as cos,')
         with self.assertRaisesRegex(m.CheckError, 'operation graph changed'):
             m.verify_inputs(self.root)
 

@@ -181,16 +181,22 @@ for reverse in (False, True):
 # scalar graph change: review the proof and each fixture first.
 def method_bytes(path, name):
     text=(SOURCE/path).read_text()
-    match=re.search(r'(?m)^(?:    )?def '+re.escape(name)+r'\(',text)
-    assert match, (path,name)
+    matches=list(re.finditer(r'(?m)^(?:    )?def '+re.escape(name)+r'[\[(]',text))
+    if len(matches) != 1:
+        raise ValueError(('Translated method is missing or ambiguous', path, name))
+    match=matches[0]
     rest=text[match.start():]
     following=re.search(r'(?m)^(?:    def |def |struct |comptime )',rest[1:])
     return (rest[:following.start()+1] if following else rest).encode()
 
 pin=json.loads((PACKAGE/'translated-parameter-source.json').read_text())
+for path, expected in pin['dependency_sha256'].items():
+    if hashlib.sha256((SOURCE/path).read_bytes()).hexdigest() != expected:
+        raise ValueError(('Review translated build dependency after source change', path))
 for method in pin['methods']:
     actual=hashlib.sha256(method_bytes(method['path'],method['name'])).hexdigest()
-    assert actual == method['sha256'], ('Review translated-parameter proof after source change',method['path'],method['name'])
+    if actual != method['sha256']:
+        raise ValueError(('Review translated-parameter proof after source change', method['path'], method['name']))
 
 report={
     'status':'Source-only exact arithmetic proof; no Mojo build or run',

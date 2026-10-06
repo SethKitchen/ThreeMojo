@@ -50,7 +50,8 @@ writes. Generation is a review step, not an automatic installation or re-pin.
 
 The only production-source inputs are the relevant tracked portions of:
 
-- `extensions/carla/geometry.mojo`
+- `extensions/carla/geometry.mojo` (stored GL node and weight arrays)
+- `extensions/carla/lane_geometry.mojo` (canonical lane scalar expression)
 - `extensions/carla/curve_trig.mojo`
 - `extensions/carla/curve_bounds.mojo`
 - `extensions/carla/spiral_moment_table_data.mojo` (check mode)
@@ -62,6 +63,21 @@ scalar trig aliases/wrappers, scalar and ideal Horner expressions, the scalar
 SPIRAL phase/GL expression, and the ideal SPIRAL/trig branch expressions and
 selector. Each region includes the source text used to derive the identity;
 reviewers need not reverse-engineer an opaque whole-module hash.
+
+The main-line reference/fixed-s geometry and canonical lane geometry are
+separate operation graphs. The scalar SPIRAL and trig-alias pins follow the
+private lane adapter used by Road lane centers. They do not bind the public
+reference evaluator. `spiral-graph-correspondence.json` records the reviewed
+migration from the authored receiver method to that helper: only receiver and
+function names, receiver type annotation, source location, comments and
+formatting changed. All operation grouping, literal words, rounded node sums
+and 2816 table endpoints are preserved. The verifier remains fail-closed under
+optimized Python. Its mutation controls target the canonical helper.
+
+This checker does not certify optional roundoff-envelope dispatch, runtime
+eligibility and budget guards, or the rounded value/error graph. Those require
+their separate source review and native controls; a passing table replay must
+not be used as their acceptance result.
 
 Decimal literals are read as exact rational decimals and rounded to binary64
 by integer arithmetic. Stored words, including signed zero, must match the

@@ -13,6 +13,7 @@ never reports an off-road result or a partially searched minimum.
 from extensions.carla.curve_bounds import (
     _lane_jet,
     _lane_jet_capture,
+    _try_lane_envelope_capture,
     _lane_jet_with_proof,
     _lane_width_box,
     _scaled_plan_width_box,
@@ -21,6 +22,7 @@ from extensions.carla.curve_bounds import (
     _scaled_point_distance_jet,
     _unknown_point,
     _expansion_distance_jet,
+    _try_proof_expansion_jet,
 )
 from extensions.carla.curve_distance import (
     _finite_point,
@@ -38,7 +40,10 @@ from extensions.carla.curve_interval import (
     _next_down,
     _next_up,
 )
-from extensions.carla.spiral_domain_proof import _SpiralRootCapture, _SpiralDomainProof
+from extensions.carla.spiral_domain_proof import (
+    _SpiralRootCapture,
+    _SpiralDomainProof,
+)
 from extensions.carla.geometry import ARC, LINE
 from extensions.carla.curve_rounded_arc import _rounded_arc_context
 from extensions.carla.polynomial import CubicPolynomial
@@ -1099,6 +1104,24 @@ def _run_lane_search(
             ).low
             if natural > best_upper:
                 continue
+            # The natural enclosure is already a global lower bound on this
+            # cell. Avoid an optional local seed when the existing witness
+            # already satisfies the unchanged gap. Keep the cell so later
+            # incumbent/width/binade changes trigger the same revalidation.
+            var natural_tolerance = _search_accuracy(
+                road,
+                section,
+                lane,
+                low,
+                high,
+                best,
+                best_bounds.low,
+                scale,
+                requested_gap,
+            )
+            if _next_up(best_upper - natural) <= natural_tolerance:
+                closed.add(_ClosedInterval(lo, hi, task[2], natural, scale))
+                continue
             var domain = _scaled_point_distance_jet(
                 point_domain, location, scale
             )
@@ -1152,6 +1175,58 @@ def _run_lane_search(
                         "Lane refinement exhausted its quadrature work limit"
                     )
                 certificate.terms += center_work
+                # The original full-domain second derivative and scalar
+                # error also apply to this ideal moment-backed expansion.
+                # Retain headroom for the unchanged translated fallback.
+                if (
+                    spiral_proof
+                    and domain.second.is_finite()
+                    and center_work <= max_terms - certificate.terms
+                ):
+                    var fast_center = _try_proof_expansion_jet(
+                        road,
+                        section,
+                        lane,
+                        center_s,
+                        location,
+                        scale,
+                        low,
+                        high,
+                        spiral_proof,
+                    )
+                    if fast_center:
+                        var fast_delta = _Interval(lo, hi) - _Interval.point(
+                            center_s
+                        )
+                        var fast_lower = max(
+                            natural,
+                            _global_lower(
+                                domain, fast_center.value(), fast_delta
+                            ),
+                        )
+                        if fast_lower > best_upper:
+                            continue
+                        var fast_tolerance = _search_accuracy(
+                            road,
+                            section,
+                            lane,
+                            low,
+                            high,
+                            best,
+                            best_bounds.low,
+                            scale,
+                            requested_gap,
+                        )
+                        if _next_up(best_upper - fast_lower) <= fast_tolerance:
+                            closed.add(
+                                _ClosedInterval(
+                                    lo, hi, task[2], fast_lower, scale
+                                )
+                            )
+                            continue
+                        # A failed optional attempt is charged before the
+                        # original traversal; neither work cap is enlarged.
+                        certificate.terms += center_work
                 # A nonfinite second derivative makes _global_lower ignore
                 # its expansion argument. A finite rounded domain value also
                 # establishes that this is an evaluated expression enclosure,
@@ -1221,6 +1296,32 @@ def _finite_lane_box(box: Tuple[_Interval, _Interval, _Interval]) -> Bool:
     return box[0].is_finite() and box[1].is_finite() and box[2].is_finite()
 
 
+struct _ProofNodeWork(ImplicitlyCopyable):
+    # Global callers request hard refusal. Legacy local wrappers can retain
+    # their original whole-box fallback when their unchanged local cap ends.
+    var limit: Int
+    var used: Int
+    var fail_on_limit: Bool
+
+    def __init__(out self, limit: Int = 16384, fail_on_limit: Bool = True):
+        self.limit = limit
+        self.used = 0
+        self.fail_on_limit = fail_on_limit
+
+    def take(mut self) raises -> Bool:
+        if self.limit < 0 or self.used < 0 or self.used > self.limit:
+            raise Error("Construction proof node budget is not valid")
+        if self.used == self.limit:
+            if self.fail_on_limit:
+                raise Error(
+                    "Map construction exhausted its global proof node budget"
+                )
+            return False
+        # Charge before popping a cell or evaluating its unresolved count.
+        self.used += 1
+        return True
+
+
 def _subdivided_lane_box(
     road: Road,
     section: Int,
@@ -1230,15 +1331,29 @@ def _subdivided_lane_box(
     max_terms: Int,
     max_nodes: Int = 16384,
 ) raises -> Tuple[Tuple[_Interval, _Interval, _Interval], Int]:
+    # Preserve the original local exhaustion result for existing callers.
+    var nodes = _ProofNodeWork(max(0, max_nodes), fail_on_limit=False)
+    return _subdivided_lane_box_with_nodes(
+        road, section, lane, low, high, max_terms, nodes
+    )
+
+
+def _subdivided_lane_box_with_nodes(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    max_terms: Int,
+    mut nodes: _ProofNodeWork,
+) raises -> Tuple[Tuple[_Interval, _Interval, _Interval], Int]:
     var pending: List[Tuple[Float64, Float64]] = [(low, high)]
-    var nodes = 0
     var terms = 0
     var result = _whole_lane_box()
     var have_result = False
     while len(pending) > 0:
-        if nodes >= max_nodes:
+        if not nodes.take():
             return (_whole_lane_box(), terms)
-        nodes += 1
         var task = pending.pop()
         var lo = task[0]
         var hi = task[1]
@@ -1309,8 +1424,14 @@ def _chord_error(
 
 
 def _chord_certificate(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
-    start: Vector3, end: Vector3, max_terms: Int = 2000000,
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    start: Vector3,
+    end: Vector3,
+    max_terms: Int = 2000000,
 ) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
     var captured = _SpiralRootCapture()
     return _chord_certificate_impl[False](
@@ -1319,17 +1440,6 @@ def _chord_certificate(
 
 
 def _chord_certificate_capture(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
-    start: Vector3, end: Vector3, mut captured: _SpiralRootCapture,
-    max_terms: Int = 2000000,
-) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
-    captured = _SpiralRootCapture()
-    return _chord_certificate_impl[True](
-        road, section, lane, low, high, start, end, captured, max_terms
-    )
-
-
-def _chord_certificate_impl[capture: Bool](
     road: Road,
     section: Int,
     lane: Int,
@@ -1340,23 +1450,128 @@ def _chord_certificate_impl[capture: Bool](
     mut captured: _SpiralRootCapture,
     max_terms: Int = 2000000,
 ) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    captured = _SpiralRootCapture()
+    return _chord_certificate_impl[True](
+        road, section, lane, low, high, start, end, captured, max_terms
+    )
+
+
+def _chord_certificate_capture_with_nodes(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    start: Vector3,
+    end: Vector3,
+    mut captured: _SpiralRootCapture,
+    mut nodes: _ProofNodeWork,
+    max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    captured = _SpiralRootCapture()
+    return _chord_certificate_impl_with_nodes[True, False](
+        road, section, lane, low, high, start, end, captured, nodes, max_terms
+    )
+
+
+def _chord_certificate_impl[
+    capture: Bool
+](
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    start: Vector3,
+    end: Vector3,
+    mut captured: _SpiralRootCapture,
+    max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    var nodes = _ProofNodeWork(fail_on_limit=False)
+    return _chord_certificate_impl_with_nodes[capture, False](
+        road, section, lane, low, high, start, end, captured, nodes, max_terms
+    )
+
+
+def _chord_certificate_capture_fast(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    start: Vector3,
+    end: Vector3,
+    mut captured: _SpiralRootCapture,
+    max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    var nodes = _ProofNodeWork(fail_on_limit=False)
+    return _chord_certificate_capture_fast_with_nodes(
+        road, section, lane, low, high, start, end, captured, nodes, max_terms
+    )
+
+
+def _chord_certificate_capture_fast_with_nodes(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    start: Vector3,
+    end: Vector3,
+    mut captured: _SpiralRootCapture,
+    mut nodes: _ProofNodeWork,
+    max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
+    captured = _SpiralRootCapture()
+    return _chord_certificate_impl_with_nodes[True, True](
+        road, section, lane, low, high, start, end, captured, nodes, max_terms
+    )
+
+
+def _chord_certificate_impl_with_nodes[
+    capture: Bool, use_envelope: Bool
+](
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    start: Vector3,
+    end: Vector3,
+    mut captured: _SpiralRootCapture,
+    mut nodes: _ProofNodeWork,
+    max_terms: Int = 2000000,
+) raises -> Tuple[Float64, Tuple[_Interval, _Interval, _Interval], Int]:
     var work = _reference_work(road, low, high)
     var point = _unknown_point()
     var spent = 0
     if work >= 0 and work <= max_terms:
+        spent = work
         comptime if capture:
-            point = _lane_jet_capture(road, section, lane, low, high, captured)
+            comptime if use_envelope:
+                var fast = _try_lane_envelope_capture(
+                    road, section, lane, low, high, captured, spent, max_terms
+                )
+                if fast:
+                    point = fast.value()
+                else:
+                    point = _lane_jet_capture(
+                        road, section, lane, low, high, captured
+                    )
+            else:
+                point = _lane_jet_capture(
+                    road, section, lane, low, high, captured
+                )
         else:
             point = _lane_jet(road, section, lane, low, high)
-        spent = work
     var box = (
         point[0].rounded_value(),
         -point[1].rounded_value(),
         point[2].rounded_value(),
     )
     if not _finite_lane_box(box):
-        var enclosure = _subdivided_lane_box(
-            road, section, lane, low, high, max_terms - spent
+        var enclosure = _subdivided_lane_box_with_nodes(
+            road, section, lane, low, high, max_terms - spent, nodes
         )
         box = enclosure[0]
         spent += enclosure[1]

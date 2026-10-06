@@ -24,6 +24,7 @@ class CoverageInputTests(unittest.TestCase):
         self.inputs = ('math/measured.mojo', 'math/unmeasured.mojo',
                        'bench/helper.mojo', 'bench/nested/driver.mojo',
                        'coverage/runtime.mojo', 'tests/test_driver.mojo',
+                       'tests/_shared.mojo', 'tests/_nested.mojo',
                        'examples/unrelated.mojo')
         for name in self.inputs:
             path = self.root / name
@@ -51,6 +52,7 @@ class CoverageInputTests(unittest.TestCase):
         (self.root / 'Makefile').write_text(
             'MOJO := python3 compiler.py\nMOJOFLAGS :=\nCOV_DIR := build\n'
             'LIB_SOURCES := math/measured.mojo math/unmeasured.mojo\n'
+            'HELPER_LIBS := tests/_shared.mojo tests/_nested.mojo\n'
             'ENTRY_POINTS := bench/helper.mojo bench/nested/driver.mojo '
             'tests/test_driver.mojo examples/unrelated.mojo\n'
             'TESTS := tests/test_driver.mojo\n'
@@ -83,6 +85,18 @@ class CoverageInputTests(unittest.TestCase):
                          'instrumented bench/helper.mojo\n')
         self.assertEqual((self.root / 'build/bench/nested/driver.mojo').read_bytes(),
                          (self.root / 'bench/nested/driver.mojo').read_bytes())
+
+    def test_nested_test_helpers_copy_unchanged_without_new_obligations(self):
+        nested = b'from math.measured import value\r\n'
+        shared = b'from tests._nested import value\n'
+        (self.root / 'tests/_nested.mojo').write_bytes(nested)
+        (self.root / 'tests/_shared.mojo').write_bytes(shared)
+        result = self.make()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.root / 'build/tests/_nested.mojo').read_bytes(), nested)
+        self.assertEqual((self.root / 'build/tests/_shared.mojo').read_bytes(), shared)
+        self.assertEqual((self.root / 'build/manifest.txt').read_text(),
+                         'math/measured.mojo')
 
     def test_empty_measurement_stays_unmeasured(self):
         result = self.make('COVERED=')
