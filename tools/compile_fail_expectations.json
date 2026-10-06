@@ -5327,5 +5327,27 @@
       }
     ],
     "notes": []
+  },
+  "tests/compile_fail/a_moved_texture_input_cannot_keep_a_writable_borrow.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 13,
+        "message": "use of uninitialized value 'values'"
+      }
+    ],
+    "notes": [
+      "'values' declared here"
+    ]
+  },
+  "tests/compile_fail/a_shared_texture_read_pointer_is_not_mutable.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 12,
+        "message": "expression must be mutable in assignment"
+      }
+    ],
+    "notes": []
   }
 }
