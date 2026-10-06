@@ -16,6 +16,7 @@ snapshot; this module does not add a mutable cache or a new update API.
 """
 
 from extensions.carla.curve_bounds import _lane_jet, _reference_work
+from extensions.carla.lane_value_bounds import _sampled_lane_value_bound
 from extensions.carla.curve_interval import _Interval
 from extensions.carla.geometry import PARAM_POLY3, POLY3
 from extensions.carla.lane_refinement import (
@@ -41,6 +42,36 @@ struct _LaneBoxCover(ImplicitlyCopyable):
 
 
 def _sampled_lane_box_cover(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    mut terms: Int,
+    max_terms: Int = 2000000,
+) -> Optional[_LaneBoxCover]:
+    return _sampled_lane_box_cover_impl[False](
+        road, section, lane, low, high, terms, max_terms
+    )
+
+
+def _sampled_lane_box_cover_fast(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    mut terms: Int,
+    max_terms: Int = 2000000,
+) -> Optional[_LaneBoxCover]:
+    return _sampled_lane_box_cover_impl[True](
+        road, section, lane, low, high, terms, max_terms
+    )
+
+
+def _sampled_lane_box_cover_impl[
+    value_only: Bool
+](
     road: Road,
     section: Int,
     lane: Int,
@@ -106,12 +137,24 @@ def _sampled_lane_box_cover(
         # Reserve before evaluation, including one that produces no proof.
         terms += work
         try:
-            var point = _lane_jet(road, section, lane, edges[i], edges[i + 1])
-            boxes[i] = (
-                point[0].rounded_value(),
-                -point[1].rounded_value(),
-                point[2].rounded_value(),
-            )
+            comptime if value_only:
+                var point = _sampled_lane_value_bound(
+                    road, section, lane, edges[i], edges[i + 1]
+                )
+                boxes[i] = (
+                    point[0].rounded_value(),
+                    -point[1].rounded_value(),
+                    point[2].rounded_value(),
+                )
+            else:
+                var point = _lane_jet(
+                    road, section, lane, edges[i], edges[i + 1]
+                )
+                boxes[i] = (
+                    point[0].rounded_value(),
+                    -point[1].rounded_value(),
+                    point[2].rounded_value(),
+                )
         except:
             # Optional proof failure must not turn a successful original
             # index construction into a new failure.
