@@ -4,67 +4,133 @@
     {
       "path": "extensions/carla/map.mojo",
       "name": "_start_of_lane",
-      "sha256": "82ea1414e34d897b744e8de1a37b1baaef3aca406c89bbcd19173d83d3ed4242"
+      "sha256": "82ea1414e34d897b744e8de1a37b1baaef3aca406c89bbcd19173d83d3ed4242",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "extensions/carla/map.mojo",
       "name": "_step",
-      "sha256": "cf7a4fa5a89ba46741d916dc81342899429d63b669d45bbf710e65ddf16a5161"
+      "sha256": "cf7a4fa5a89ba46741d916dc81342899429d63b669d45bbf710e65ddf16a5161",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "extensions/carla/map.mojo",
       "name": "_subdivide_segment",
-      "sha256": "63aa1ba6520dcb805b9920f2e359cd00b2cea39ce157ca5d0b1a43899708176e"
+      "sha256": "85f470a8d40728f65525e20268ac239eacaa290c5c855df20037964376c590c5",
+      "correspondence": "Writer-tree numerical AST correspondence in canonical-source-correspondence.json"
     },
     {
       "path": "extensions/carla/map.mojo",
       "name": "_create_segments",
-      "sha256": "7bd4c6db06a7c89ba817d837f0e4795cf39aa609858bb629f918a13160156053"
+      "sha256": "9c90ae1de854d95e68b941fa48c73006a0c6723eeefb8b351a993fa073869e73",
+      "correspondence": "Writer-tree numerical AST correspondence in canonical-source-correspondence.json"
     },
     {
       "path": "extensions/carla/road.mojo",
       "name": "section_length",
-      "sha256": "bd95dc8f4f0cff0d44e92de456b0c2d1df604e434096284f8544e392d2c9e2a7"
+      "sha256": "bd95dc8f4f0cff0d44e92de456b0c2d1df604e434096284f8544e392d2c9e2a7",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "extensions/carla/road.mojo",
       "name": "_plan_point",
-      "sha256": "2d51191373b7f82631fa1e266841af25f241f80cc12778f6992c2762519da90f"
+      "sha256": "2d51191373b7f82631fa1e266841af25f241f80cc12778f6992c2762519da90f",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "extensions/carla/road.mojo",
       "name": "lane_is_straight",
-      "sha256": "a60fee57bbabf326431bfc75b0b1e4adf8d861c2c0e57c5f31ef65abf1705bcd"
+      "sha256": "a60fee57bbabf326431bfc75b0b1e4adf8d861c2c0e57c5f31ef65abf1705bcd",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "extensions/carla/road.mojo",
       "name": "_total_width",
-      "sha256": "080b8f6e42f31289d8f1272a06ef7e811626b2491829587403f85c5dde9695d9"
+      "sha256": "080b8f6e42f31289d8f1272a06ef7e811626b2491829587403f85c5dde9695d9",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "extensions/carla/road.mojo",
       "name": "_lane_point",
-      "sha256": "47ecf5fc00aa746af86af70a77b67555dfd0a3ff9736e7e786c9486f4c22c1a0"
+      "sha256": "4f481acc29a56e04db1413efe0ea826f2ee0ff30418ed53e5691be758c809190",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization"
     },
     {
       "path": "extensions/carla/road.mojo",
       "name": "_offset_lane_point",
-      "sha256": "fb8b53c4e23ae4b52911394ec15526db769c90dc27d504f3166fd90ad8210911"
+      "sha256": "f839fcc7026cc7a59979dadda69a0a67a5085de8d064bfa866c70e1b55d0adf0",
+      "correspondence": "Reviewed immutable lookup inlining and canonical helper correspondence above"
     },
     {
-      "path": "extensions/carla/geometry.mojo",
-      "name": "pos_at",
-      "sha256": "58784c2445a262b59afd10e4c8cfae95ec15aea3286418278e7db44af6145a17"
+      "path": "extensions/carla/lane_geometry.mojo",
+      "name": "_lane_geometry_pos_at",
+      "sha256": "0fe7bf11c92f594a0cebfbe355855a3978153190f2f71e93fd2b5be6e1ab14ad",
+      "correspondence": "Canonical scalar dispatcher correspondence above"
     },
     {
       "path": "extensions/carla/polynomial.mojo",
       "name": "evaluate",
-      "sha256": "428e87f664beb43a89d9ef4d1627bd640e4ad14fbb73fac2020b2bfcbbc991ab"
+      "sha256": "428e87f664beb43a89d9ef4d1627bd640e4ad14fbb73fac2020b2bfcbbc991ab",
+      "correspondence": "Byte-identical selected method"
     },
     {
       "path": "tests/test_carla_axis_translated_map_blocker.mojo",
       "name": "_flat_map",
-      "sha256": "3ee31730603ecc6c614a4660f530bb5ecc20b9ae269270402e8c95455340f701"
+      "sha256": "3ee31730603ecc6c614a4660f530bb5ecc20b9ae269270402e8c95455340f701",
+      "correspondence": "Byte-identical selected method"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_build_next",
+      "sha256": "10a46a6f6e85844517514f904007a766c9427c699515e57e845ffc9fa8203561",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_build_transform",
+      "sha256": "8444002449f394723dc3b9c578c330d87b1272c8e924b753df22cdaa3436d381",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_build_locate",
+      "sha256": "e0e589f3e05ecd7838ff14a9c66c7a1b60344e08fa31fb11ca5b4affc0cc4362",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_reserve_build_point",
+      "sha256": "c9cbc9eabce0b885f5751f09305eb0d4a8266fbaa4d2ca289a38226fdf96b699",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_map_locate_with_work",
+      "sha256": "40c6f191fd54dd9bad3e8c79929c2fb1fda00515aeb7f926b9f820fd0daa068c",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "compute_transform",
+      "sha256": "1e0066fdddeb2131eb7a15457de8ce54347d910162f44c961eacd4a1c1b41a5c",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "_locate",
+      "sha256": "9ab2a0603df657b3fd483317f231f73b327b212f49c7bb3e99aa84bf5f379433",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+    },
+    {
+      "path": "extensions/carla/map.mojo",
+      "name": "next",
+      "sha256": "a41d2fc1277b27e3283aa8974745057f83884ef01e4d8ad7f348d67eee14bb2e",
+      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
     }
-  ]
+  ],
+  "dependency_sha256": {
+    "extensions/carla/map_validation.mojo": "c8457abae67e989ae6de1131e3d30c8f101a0ae6fee9ec4f0afabc0f67be7bef",
+    "extensions/carla/map_search.mojo": "53c5a1369203b2f57c915f4cacfe2935360bd6f4a676934f1a5dc67df69956a3"
+  },
+  "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee"
 }
