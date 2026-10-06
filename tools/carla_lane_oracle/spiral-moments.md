@@ -20,6 +20,8 @@ From the repository root, with Python 3.9 or later:
 python3 -B tools/carla_lane_oracle/spiral_moments.py
 python3 -B tools/carla_lane_oracle/spiral_moments.py --check
 python3 -B tools/carla_lane_oracle/test_spiral_moments.py -v
+python3 -O -B tools/carla_lane_oracle/spiral_moments.py --check
+python3 -O -B tools/carla_lane_oracle/test_spiral_moments.py -v
 ```
 
 Default and `--check` are read-only, including when
@@ -48,31 +50,42 @@ writes. Generation is a review step, not an automatic installation or re-pin.
 
 ## Inputs and source binding
 
-The only production-source inputs are the relevant tracked portions of:
+The coefficient inputs and selected expression regions come from:
 
 - `extensions/carla/geometry.mojo` (stored GL node and weight arrays)
 - `extensions/carla/lane_geometry.mojo` (canonical lane scalar expression)
 - `extensions/carla/curve_trig.mojo`
 - `extensions/carla/curve_bounds.mojo`
+- `extensions/carla/curve_interval.mojo` (complete stored-half dependency closure)
 - `extensions/carla/spiral_moment_table_data.mojo` (check mode)
+
+The current source gate also binds the complete canonical accumulation closure:
+`curve_sum2`, `spiral_roundoff_proof`, `spiral_domain_proof`,
+`spiral_moment_proof`, `spiral_moment_table`, `lane_refinement`, `map` and
+`map_builder`, together with the complete `curve_interval`, `curve_bounds`
+and `lane_geometry` modules listed above. These are source contracts, not
+a mathematical or compiled-runtime qualification of every consumer.
 
 `spiral-moment-pins.json` records all 32 stored binary64 GL/trig array constants,
 the five rounded `1 + node` words, four scalar phase/reduction constants, and
-nine readable operation-graph regions with SHA-256 values. The regions bind
+ten readable operation-graph regions with SHA-256 values. The regions bind
 scalar trig aliases/wrappers, scalar and ideal Horner expressions, the scalar
 SPIRAL phase/GL expression, and the ideal SPIRAL/trig branch expressions and
-selector. Each region includes the source text used to derive the identity;
+selector, plus the uncertainty constructor used by that selector. Each region includes the source text used to derive the identity;
 reviewers need not reverse-engineer an opaque whole-module hash.
 
-The main-line reference/fixed-s geometry and canonical lane geometry are
-separate operation graphs. The scalar SPIRAL and trig-alias pins follow the
+The `RoadGeometry` and `Road._plan_point` reference routes are separate from
+canonical lane geometry. The scalar SPIRAL and trig-alias pins follow the
 private lane adapter used by Road lane centers. They do not bind the public
-reference evaluator. `spiral-graph-correspondence.json` records the reviewed
-migration from the authored receiver method to that helper: only receiver and
-function names, receiver type annotation, source location, comments and
-formatting changed. All operation grouping, literal words, rounded node sums
-and 2816 table endpoints are preserved. The verifier remains fail-closed under
-optimized Python. Its mutation controls target the canonical helper.
+reference evaluator. `spiral-graph-correspondence.json` retains the historical
+authored-to-adapter migration, which changed only names, receiver annotation,
+source location, comments and formatting. The later approved Sum2 migration
+intentionally changes canonical scalar accumulation and its error graph. It
+also adds invocation-local refusal for unsupported arithmetic modes. Canonical
+fixed-s `Road.lane_transform` and `Map.compute_transform` coordinates can change.
+The ideal polynomial, stored constants, rounded node sums and all 2,816 table
+endpoints remain unchanged. The verifier stays fail-closed under optimized
+Python. Its mutation controls target the canonical helper and guard closure.
 
 This checker does not certify optional roundoff-envelope dispatch, runtime
 eligibility and budget guards, or the rounded value/error graph. Those require
@@ -83,11 +96,144 @@ Decimal literals are read as exact rational decimals and rounded to binary64
 by integer arithmetic. Stored words, including signed zero, must match the
 pins. A decimal spelling with the same stored word is accepted. Source blocks
 ignore comments/blank lines but retain indentation and operation spelling.
-Unrelated module changes do not trigger a blind whole-file re-pin. Any stored
-word or selected expression change requires mathematical review and renewed
-controls; there is intentionally no automatic update-pins mode. These are
+Bodies in the declared canonical dependency closure are bound in full. Other
+repository bodies remain outside this gate. The stored-arithmetic dependency
+is a complete tokenized module, so every changed helper, import, primitive,
+error dependency or qualifier there requires renewed review. Any stored word,
+selected expression or top-level routing change likewise requires review; there is intentionally no automatic update-pins mode. These are
 scoped source-change detectors, not a Mojo parser, language-semantics proof,
 or a guarantee against deliberately editing the proof and all its inputs.
+
+## Reviewed stored-half migration (historical)
+
+The schema-2 source contract added an executed ideal-polynomial correspondence,
+not a two-hash refresh. The historical ideal source is retained verbatim in
+`spiral-moment-pins.json` and in the appended provenance record. Its SHA-256 is
+`270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733`.
+The reviewed input is composed base
+`367d8e03ebc57d69dc7d027279c5ca0f695857b5` plus frozen runtime inventory
+`83c3845e325714fbd1db5599735a847954d1492d85b832010e959839024b766c`.
+The later unchanged-evaluator goal/lazy composition has inventory
+`14cd7ccbf54734b0cf59dc0136eea5c6228ffb4f1a7053cac7910f2ea2775cb4`;
+its additional runtime consumers are separate qualification obligations.
+That historical stage did not include a compensated scalar evaluator. Its
+canonical `_lane_spiral` body, stored constants, coefficient arithmetic, table
+bytes and payload words were unchanged. The later schema-3 Sum2 stage below
+changes scalar accumulation while retaining the ideal polynomial and table.
+
+At that stage, `ideal_projection.py` compared the two complete selected ideal
+function declarations after exactly these transformations:
+
+1. Project exactly five `_stored_half` calls, with ordered arguments
+   `step, rate, step, step, rate`, to `argument * Expression.constant(0.5)`
+2. Commute exactly two historical `Expression.constant(0.5) * rate` products
+   to `rate * Expression.constant(0.5)`
+3. Require equality of every remaining AST field, operation, argument, loop,
+   type/generic declaration, stored node-sum boundary and result index
+
+The projected graph digest is
+`f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06`.
+Commutation is justified only in the exact real polynomial ring. It does not
+claim the old floating-point evaluation order, interval rounding graph,
+error graph, compiler contraction, native behavior or eligibility is unchanged.
+
+The helper starts with `value * _JetExpression[derivatives].constant(0.5)`.
+Its only subsequent mutation of that result is `result.error`, and every
+return is the same result. The projection verifies this property; it does
+not itself validate the optimized error bound. `source_contracts.py` also
+requires the complete `curve_interval.mojo` token contract from the exact
+`stored_arithmetic` path in `runtime-source-pins.json`. This binds the entire
+helper, `_JetExpression` constructors and operators, `_Interval` operations,
+rounded-value/error operations, tight/directed endpoint routines, residuals,
+range tests, roundoff bounds, bitcast and math import routes. It retains every
+Mojo qualifier and decorator. Because this module imports only standard
+library primitives, there is no unbound repository helper beyond that module
+in the new stored-half closure. Standard-library and builtin semantics,
+including binary64 rounding, `fma`, `isfinite`, `bitcast`, and compiler behavior,
+remain explicit native/toolchain assumptions rather than claims of this check.
+
+The error optimization is provenance-specific. Finite ordered ideal intervals
+and finite nonnegative inherited error are required before considering the
+fast path. The absolute rounded operand must lie between bitcast exponent
+bounds 623 and 1423 (inclusive), corresponding to `2^-400` and `2^400`.
+Otherwise the original product error is retained. Within that reviewed
+stored-operand domain, halving a binary64 operand is exact; inherited error
+is bounded by the outward interval product with one-half. These conditions
+are source-bound here. Their mathematical/native justification and approved
+call sites beyond this ideal function remain separate review obligations.
+
+Complete top-level routing/declaration token records bind caller, trig, stored
+GL geometry and canonical scalar imports, aliases, signatures, decorators, function inventory,
+ordering and other top-level statements. Separately word-checked constant
+right-hand sides are represented by their names in this routing contract only
+after validating the complete actual top-level logical declaration. Each array
+RHS must be exactly the checked bracketed literal; each scalar RHS must be
+exactly the checked `Float64` literal constructor. Each element/argument is one
+decimal NUMBER token, optionally preceded by one unary sign. Conditional
+alternatives, concatenation/indexing, executable suffixes, adjacent number/name
+tokens and empty array elements are rejected. Alternate decimal spellings with
+the same stored words, whitespace and comments remain accepted. Declarations
+quoted inside a docstring cannot substitute for the live declaration.
+Missing, additional, redirected or shadowing declarations/imports fail closed.
+Fixed hard-coded path/key sets and block sentinels cannot be redirected by a
+pin edit. Starts/ends must be unique and top-level, correctly ordered, and
+correspond to actual top-level declaration/import/decorator token starts outside
+strings, comments and indented bodies, and include relevant decorators.
+`_curve_sincos` now explicitly includes its
+`@no_inline` decorator. Historical provenance is appended, never rewritten.
+
+The 34 existing tests remain, with only fixture dependencies and the equivalent
+formatter-aware ideal-node mutation target adapted. Additional fixed-pin
+controls mutate helper factors/operands/inherited error, both exponent bounds
+and comparisons, every fallback class, dependency primitives/imports/qualifiers,
+caller placement/arguments, pre-rounded nodes, scalar operand order, routing,
+block boundaries and pin keys/paths. Review-driven controls also cover array
+and scalar docstring decoys, full-RHS alternatives, GL shadow/import routes,
+function-sentinel decoys and malformed adjacent literal tokens. Each negative checks its intended
+rejection and nonzero CLI result; unchanged and benign-comment/equal-word
+controls pass. Both normal and optimized Python run the same tests. Neither
+these source controls nor the exact coefficient replay substitutes for the
+separate runtime support/translated-consumer source gate, native tests,
+coverage, whole-query station accuracy, termination or performance.
+
+## Reviewed canonical Sum2 migration
+
+The current schema-3 contract includes the compensated canonical SPIRAL graph.
+`sum2-correspondence-migration.json` preserves each earlier binding and records
+the reviewed transitions. It never describes the new accumulator as
+operation-identical to ordinary summation.
+
+The ideal projection first requires the exact invocation-local environment
+check. Its refusal branch returns unknown value/derivative intervals and
+infinite error. On the supported branch, it accounts for exactly four M/E
+state declarations, two immutable term definitions, four outward updates and
+two scalar-error writes. It inlines only those two terms and removes only
+those reviewed auxiliary/error statements. Restricted uses and fixed statement
+placement prevent a value/derivative mutation, loop change or auxiliary escape.
+The retained function then passes the historical five-half/two-commutation
+comparison above. Its complete projected AST digest remains unchanged.
+
+`sum2_contracts.py` separately binds the original six-operation TwoSum
+recurrence and correction update. It proves that `_sum2_error_checked` retains
+the initial arithmetic leaf after its function rename. The error formula is
+E + (u + gamma_(n-1)^2) M, where E bounds inherited term error and M bounds the
+sum of absolute rounded terms. Its count and magnitude guards remain required.
+`rounding.py` independently propagates this bound for the finite town controls.
+Nearest rounding, gradual underflow, materialized terms, no reassociation and
+no intermediate overflow are required. FTZ/DAZ is unsupported.
+
+The full helper and 16 actual caller declarations have a separate lexical
+contract in `sum2-guard-pins.json`. It retains every unsafe_offset and volatile
+keyword-subscript operation. It checks exact enclosing method ownership,
+decorators, class-level bindings and helper import/use routing. No keyword
+subscript is erased to make it look like Python syntax. The wrapper controls
+exercise both explicitly injected predicate outcomes; they do not execute
+native volatile probes or qualify machine-code behavior.
+
+Frozen FullJet and half-only references are retained. Stored coefficients,
+1,408 fractions, 2,816 endpoint words, heading and derivative algebra remain
+unchanged. Runtime/codegen, whole-query behavior, work limits, coverage and
+performance remain separate obligations even when every portable gate passes.
 
 ## Exact identity
 
