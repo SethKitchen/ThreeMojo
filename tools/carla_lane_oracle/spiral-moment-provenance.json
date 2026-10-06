@@ -74,5 +74,47 @@
     "numerical_words_preserved": 2816,
     "words_be64_sha256": "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446",
     "formatter_evidence": "Canonical source is byte-identical to the retained formatted output. No formatter or native execution was run for this source-only delta."
+  },
+  "canonical_lane_binding_migration": {
+    "authored_commit": "68a87145a71fe92252a26614b06da2e8e9965497",
+    "main_commit": "3b134f2f2c8a56cdc62878d98bd6c5dae1cbeeea",
+    "composed_baseline_tree": "51c2ea2c159dd14fc2baeebf22fbfcf48915f615",
+    "correspondence_file": "tools/carla_lane_oracle/spiral-graph-correspondence.json",
+    "correspondence_sha256": "6ea4c0ca50b821a603805f931439279cb09cd1efa044ae53bdd545031acc178e",
+    "change": "Scalar and alias bindings follow private lane_geometry; receiver/function renaming and formatting only; canonical/public evaluator distinction explicit",
+    "array_scalar_and_rounded_node_words_unchanged": true,
+    "numerical_table_words_unchanged": 2816,
+    "fresh_portable_controls": 34,
+    "independent_optimized_python_mutations_rejected": 11,
+    "scope": "Portable operation/literal/table binding only; runtime fast-proof guards and rounded execution remain separate obligations"
+  },
+  "final_formatter_binding": {
+    "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee",
+    "receipt_sha256": "2e5c1de3f003196e8b4b81791a12902dc7cc7b5175b7422f1b95faa1f88cbaaf",
+    "blocks": [
+      {
+        "name": "ideal_sincos_selector",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "56061b0775a4da91c0c6b472eea8ec0040a0cd528c873dc707a1a8473755ad72",
+        "after_sha256": "660c00106a75d0b4c17ad87aebc4b7b71d1ab017945b3dc0874b895cc266fdc2",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      },
+      {
+        "name": "ideal_horner",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "64de25b06c5c1dfdff3a1e787abc30381bb3c4c36a631c217cdf94c0c1285e26",
+        "after_sha256": "aacc0792f0e340f1859a6ed4e1d64aa4b35961a53f807f3e4f276857c111c22f",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      },
+      {
+        "name": "ideal_sincos_branch",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "efef6b1e8bdec16fe5f6575717d9893c16dced3dfd2d817c86d9e857e9438701",
+        "after_sha256": "b8a1c365598f4f40a29af377f5189359f200baf1386ec08e8b73650344dd709e",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      }
+    ],
+    "table_bytes_unchanged": true,
+    "numerical_words_preserved": 2816
   }
 }
