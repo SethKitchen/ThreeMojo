@@ -73,6 +73,29 @@ centerline for heading and pitch. This covers all five reference geometries,
 inner-lane widths, lane offsets, and both traffic directions. The query and transform share one Float64 lane center and keep zero roll. See [lane orientation](CARLA-lane-orientation)
 for record boundaries, singular tangents, rounding and remaining limits.
 
+## Canonical spiral arithmetic
+
+Canonical SPIRAL lane positions use compensated Sum2 accumulation of the
+stored Gauss-Legendre terms. The stored nodes, weights, term order, polynomial
+trigonometry, heading, and derivative arithmetic stay the same. This change
+can alter a fixed-s lane position, the closest station, and scenario replay.
+It applies to `Road.lane_transform`, `Map.compute_transform`, and lane queries.
+The separate `RoadGeometry` and road-reference point routes keep their
+existing arithmetic.
+
+The Sum2 bound encloses the stored polynomial computation. It is not a
+true-clothoid accuracy guarantee. The ideal full-Jet and value-only models
+share the new scalar-error bound. Optional envelopes use the same bound.
+The search keeps its accuracy limits, cumulative work caps, and tie rules.
+
+Map construction and nearest queries require round-to-nearest arithmetic
+with gradual underflow. Canonical SPIRAL evaluation has the same requirement.
+Fresh checks refuse unsupported rounding, flush-to-zero, or denormals-are-zero
+modes. Cached proofs do not bypass those checks. Production code does not
+change the caller's floating-point controls. See
+[CPU mode controls](How-to-run-the-checks#run-cpu-mode-controls) for maintained
+negative-mode tests and platform qualification limits.
+
 ## Lane endpoints
 
 `generate_topology` keeps each dead-end driving lane. Its terminal waypoint uses the known road, section and lane with an s in double precision. It does not look the endpoint up again through `waypoint_xodr`. This keeps the endpoint in its own section when rounding would select the next section or reject the road end. Connected pairs keep their existing order.
@@ -237,7 +260,7 @@ This port keeps CARLA's numbers except for the corrections listed here.
 - CARLA walks roads, junctions and signals in hash order. This port walks them in order of id.
 - CARLA computes a point in single precision. This port computes in double and rounds where CARLA returns a float, except for the fixed-s nearest-lane correction.
 - Fixed-s nearest-lane selection keeps wide stored centers and checks every center. It no longer turns narrowed centers or underflowed squares into false ties. See [issue #604](https://github.com/SethKitchen/ThreeMojo/issues/604) and the [precision limits](CARLA-fixed-s-nearest).
-- A spiral uses Gauss-Legendre quadrature, as [CARLA](CARLA) explains.
+- A spiral uses Gauss-Legendre quadrature, as [CARLA](CARLA) explains. Canonical lane positions use [compensated stored-term summation](#canonical-spiral-arithmetic), which can change positions and closest stations.
 - The segment search breaks a tie by the order the segments were made. Boost leaves that order open.
 - A lane link that names no lane is dropped. CARLA stores a null pointer and crashes on it.
 - A signal reference that names no signal is refused. CARLA crashes on it.
