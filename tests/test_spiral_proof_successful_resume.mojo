@@ -33,10 +33,25 @@ from tests._spiral_acceptance_controls import (
 )
 
 
+def _acceptance_resume_terms(with_proof: Bool) -> Int:
+    # Every station in this three-value domain has two GL5 panels: ten
+    # logical terms per center or Jet. Independently inventory the search:
+    # initial witness, three root samples, one domain Jet, the seed's two
+    # initial samples plus forty iterations, one translated expansion, and
+    # three samples for each of two adjacent terminal children.
+    var evaluations = 1 + 3 + 1 + (2 + 40) + 1 + 2 * 3
+    if with_proof:
+        # The admitted optional expansion cannot certify the requested zero
+        # gap here. Its work remains charged before the translated fallback.
+        evaluations += 1
+    return evaluations * (2 * 5)
+
+
 def _complete_resume(
     road: Road,
     location: Vector3,
     proof: Optional[_SpiralDomainProof],
+    max_terms: Int = 2000000,
 ) raises -> _LaneCertificate:
     var certificate = _initial_acceptance_certificate(road, location)
     var initial_point = certificate.point.copy()
@@ -82,6 +97,7 @@ def _complete_resume(
         certificate,
         0.0,
         1.0,
+        max_terms=max_terms,
         spiral_proof=proof,
     )
     assert_true(certificate.exact_witness)
@@ -141,10 +157,11 @@ def test_successful_proof_resume_preserves_consumed_work_incumbent_and_cells() r
     var query = Vector3(0.5, 1.0, 0.0)
     var cached = _complete_resume(road, query, proof)
     var generic = _complete_resume(road, query, None)
-    # Both process this same finite root and two adjacent children. Logical
-    # GL reservations include the root hit and unchanged expansion work.
+    # Both process the same root and adjacent children. The cached path also
+    # evaluates an optional expansion before its charged translated fallback.
     assert_equal(cached.nodes, generic.nodes)
-    assert_equal(cached.terms, generic.terms)
+    assert_equal(cached.terms, _acceptance_resume_terms(True))
+    assert_equal(generic.terms, _acceptance_resume_terms(False))
     assert_equal(len(cached.cells), len(generic.cells))
     _bits(cached.s, generic.s)
     for axis in range(3):
@@ -171,6 +188,124 @@ def test_successful_proof_resume_preserves_consumed_work_incumbent_and_cells() r
     assert_equal(cached.nodes, nodes)
     assert_equal(cached.terms, terms)
     assert_equal(len(cached.cells), cells)
+
+
+def test_optional_resume_work_obeys_exact_cap_and_survives_retry() raises:
+    var road = _acceptance_road()
+    var proof = _capture_acceptance_proof(road, 0.5, _narrow_high())
+    _assert_acceptance_hit(road, 0.5, _narrow_high(), proof)
+    var query = Vector3(0.5, 1.0, 0.0)
+    var generic_limit = _acceptance_resume_terms(False)
+    var cached_limit = _acceptance_resume_terms(True)
+    var generic = _complete_resume(road, query, None, generic_limit)
+    var cached = _complete_resume(road, query, proof, cached_limit)
+    assert_equal(generic.terms, generic_limit)
+    assert_equal(cached.terms, cached_limit)
+    var limited = _initial_acceptance_certificate(road, query)
+    var initial_terms = limited.terms
+    var initial_point = limited.point.copy()
+    with assert_raises(contains="quadrature work limit"):
+        _resume_lane_certificate(
+            road,
+            0,
+            0,
+            0.5,
+            _narrow_high(),
+            query,
+            limited,
+            0.0,
+            1.0,
+            max_terms=cached_limit - 1,
+            spiral_proof=proof,
+        )
+    # Refusal occurs before the final ten-term sample, retaining all work
+    # already consumed, including the optional attempt and its fallback.
+    assert_equal(limited.terms, cached_limit - (2 * 5))
+    assert_true(limited.terms <= cached_limit - 1)
+    assert_false(limited.exact_witness)
+    assert_equal(len(limited.cells), 1)
+    _bits(limited.cells[0].low, 0.5)
+    _bits(limited.cells[0].high, _narrow_high())
+    for axis in range(3):
+        _bits(limited.point[axis], initial_point[axis])
+    var spent = limited.terms
+    var nodes = limited.nodes
+    _resume_lane_certificate(
+        road,
+        0,
+        0,
+        0.5,
+        _narrow_high(),
+        query,
+        limited,
+        0.0,
+        1.0,
+        spiral_proof=proof,
+    )
+    assert_true(limited.exact_witness)
+    assert_true(limited.nodes > nodes)
+    assert_equal(limited.terms, spent + cached_limit - initial_terms)
+    _bits(limited.s, cached.s)
+    for axis in range(3):
+        _bits(limited.point[axis], cached.point[axis])
+
+
+def test_optional_expansion_requires_headroom_before_its_work() raises:
+    var road = _acceptance_road()
+    var proof = _capture_acceptance_proof(road, 0.5, _narrow_high())
+    _assert_acceptance_hit(road, 0.5, _narrow_high(), proof)
+    var query = Vector3(0.5, 1.0, 0.0)
+    var unit = 2 * 5
+    var root_terms = _acceptance_resume_terms(False) - (2 * 3) * unit
+    for with_proof in [False, True]:
+        var optional: Optional[_SpiralDomainProof] = None
+        if with_proof:
+            optional = proof
+        for kind in range(4):
+            var limit = root_terms - 1
+            if kind == 1:
+                limit = root_terms
+            elif kind == 2:
+                limit = root_terms + unit - 1
+            elif kind == 3:
+                limit = root_terms + unit
+            var certificate = _initial_acceptance_certificate(road, query)
+            var initial_point = certificate.point.copy()
+            var message = String("interval work limit")
+            if kind == 0:
+                message = "quadrature work limit"
+            # One closed-cell recheck and one root node isolate expansion
+            # work before either child's scalar evaluations can mask it.
+            with assert_raises(contains=message):
+                _resume_lane_certificate(
+                    road,
+                    0,
+                    0,
+                    0.5,
+                    _narrow_high(),
+                    query,
+                    certificate,
+                    0.0,
+                    1.0,
+                    max_nodes=2,
+                    max_terms=limit,
+                    spiral_proof=optional,
+                )
+            var expected = root_terms
+            if kind == 0:
+                expected -= unit
+            elif with_proof and kind == 3:
+                expected += unit
+            assert_equal(certificate.nodes, 2)
+            assert_equal(certificate.terms, expected)
+            assert_true(certificate.terms <= limit)
+            assert_false(certificate.exact_witness)
+            assert_equal(len(certificate.cells), 1)
+            _bits(certificate.cells[0].low, 0.5)
+            _bits(certificate.cells[0].high, _narrow_high())
+            assert_equal(certificate.cells[0].depth, 0)
+            for axis in range(3):
+                _bits(certificate.point[axis], initial_point[axis])
 
 
 def main() raises:
