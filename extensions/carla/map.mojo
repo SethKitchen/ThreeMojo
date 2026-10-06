@@ -24,8 +24,16 @@ bounded distance key control candidate admission. An unknown bound keeps
 the candidate. Each remaining candidate exports a bounded minimum-distance
 certificate. Overlapping candidates resume with their remaining work budget.
 Selection requires proved dominance; unresolved work raises an accuracy
-error. Strict waypoint classification covers every possible minimizing
-cell. It uses the selected Float64 center before public location narrowing.
+error. Approximate witnesses require strict classification agreement across
+all possible minimizing cells. An exact witness uses its proved minimizer.
+Classification uses the Float64 center before public location narrowing.
+
+Nearest queries minimize three-dimensional distance to the stored canonical
+Float64 lane center over the indexed station domains. Station s is the road
+reference parameter, not lane chord length. Public `compute_transform` narrows
+that same center. Road reference and fixed-s helpers describe separate geometry.
+Segment indices resolve exact distance ties. A rounded station plateau keeps
+its incumbent; the API does not promise the first station on that plateau.
 
 The public `segment_count` and `segment` methods expose this accuracy-driven
 index. Its partition and count can change when the geometry requires more
@@ -58,6 +66,7 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/Map.cpp`,
 and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 """
 
+from extensions.carla.curve_sum2 import _require_sum2_environment
 from extensions.carla.geo import GeoLocation, GeoProjection
 from extensions.carla.curve_bounds import _reference_work
 from extensions.carla.map_search import (
@@ -94,17 +103,19 @@ from extensions.carla.lane_distance import (
 )
 from extensions.carla.lane_refinement import (
     _LaneCertificate,
+    _LaneExclusionGoal,
     _indexed_curve_lower,
     _chord_certificate_capture_fast_with_nodes as _chord_certificate_capture_with_nodes,
     _ProofNodeWork,
     _lane_certificate_contains,
     _lane_box_can_improve,
     _lane_certificate_dominates,
+    _lane_certificate_dominates_cells,
     _legacy_square,
     _midpoint,
     _next_resume_gap,
     _refine_lane_certificate,
-    _resume_lane_certificate,
+    _continue_lane_certificate,
 )
 from extensions.carla.speed_limits import opendrive_speed, NUMERIC_SPEED_LIMIT
 from extensions.carla.math import (
@@ -1081,16 +1092,27 @@ def _map_locate_with_work(
     return (r, section, lane)
 
 
-def _query_node_step_cost(lanes: Int) raises -> Int:
-    # Solver inventory through width11:3 edge centers,42 local-seed centers,
-    # one initial center, and3 Jets cost at most98*lanes profile visits.
-    # Reserve100*lanes,16 bounded node/cell bookkeeping units, and4 fixed
-    # single-lane binary width-lookup units. The latter cover natural, fast
-    # and fallback accuracy checks; they do not accumulate all lane widths.
+def _query_node_step_cost(lanes: Int, goal: Bool = False) raises -> Int:
+    # A generic node has at most 3 edge centers, 42 seed centers, one
+    # initial center and 4 Jets: at most 100*lanes profile visits.
+    # Its 20 fixed units cover 16 node/cell operations, 2 selected-width
+    # lookups, one tightened Taylor recheck, and one bounded tiny-cell
+    # eligibility/depth check. The latter check
+    # uses local words only and at most 5 depth iterations. A closed-cell
+    # recheck uses its own node and at most one selected-width lookup.
+    # A discrete leaf has at most 3 centers and 3 terminals. Including the
+    # first node's initial center, 8*lanes+80 bounds its profile and fixed
+    # work, which is <=100*lanes+20 for every valid lane count >=1.
     # A later solver with more centers/Jets needs a new audited inventory.
-    if lanes < 0 or lanes > (9223372036854775807 - 20) // 100:
+    # Goal search adds at most six bounded exclusion comparisons: natural,
+    # post-seed natural, cached Taylor, tightened natural, tightened Taylor,
+    # and fallback Taylor.
+    # A closed-cell recheck has only one such comparison, mutually exclusive
+    # with that path. Reserve these units before any goal node can execute.
+    var fixed = 26 if goal else 20
+    if lanes < 0 or lanes > (9223372036854775807 - fixed) // 100:
         raise Error("Map query profile work is not representable")
-    return 100 * lanes + 20
+    return 100 * lanes + fixed
 
 
 def _preflight_map_metadata(
@@ -1174,7 +1196,8 @@ struct Map(Movable):
             Error: If a lane's records are missing where the segments need
                 them, an index endpoint is not finite in Float32 storage,
                 or Float64 road-s resolution prevents a required split or
-                a positive nonterminal index step.
+                a positive nonterminal index step, or the floating-point
+                mode is not round-to-nearest with gradual underflow.
         """
         budget.validate()
         self._construction_work = _MapBuildWork(budget)
@@ -1409,6 +1432,9 @@ struct Map(Movable):
     def compute_transform(self, waypoint: Waypoint) raises -> CarlaTransform:
         """Return where a waypoint is, `Map::ComputeTransform`.
 
+        Narrow the same canonical Float64 lane center used by nearest queries.
+        Station s is the road-reference parameter, not lane chord length.
+
         Args:
             waypoint: The waypoint.
 
@@ -1416,7 +1442,8 @@ struct Map(Movable):
             Its lane's center at s, facing the way the lane runs.
 
         Raises:
-            Error: If the lane is not in the map or s is off the road.
+            Error: If the lane is not in the map, s is off the road, or a
+                SPIRAL uses an unsupported floating-point mode.
         """
         var at = self._locate(waypoint)
         return self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
@@ -1610,6 +1637,10 @@ struct Map(Movable):
     ) raises -> Optional[Waypoint]:
         """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
 
+        Minimize three-dimensional distance to the stored Float64 canonical
+        lane center over the indexed domains. The returned s is road-reference
+        station, not lane chord length. Public compute_transform narrows that
+        same center. A rounded plateau need not return its first station.
         R-tree and full-center bounds admit eligible candidates.
         Segment indices resolve proved exact-distance ties.
         Certified full-center boxes can exclude strictly farther candidates.
@@ -1628,7 +1659,9 @@ struct Map(Movable):
         Raises:
             Error: If the mask is not valid, a center is not finite, or
                 refinement exhausts its numerical or work limit, or candidate
-                minimum bounds overlap without a dominance proof.
+                minimum bounds overlap without a dominance proof, or the
+                floating-point mode is not round-to-nearest with gradual
+                underflow.
         """
         var found = self._closest_lane(location, lane_type, budget)
         if not Bool(found):
@@ -1679,9 +1712,11 @@ struct Map(Movable):
             Float64(location.z),
         ]
         _finite_point(query)
+        _require_sum2_environment()
         var indices = List[Int]()
         var certificates = List[_LaneCertificate]()
         var waypoints = List[Waypoint]()
+        var accurate = List[Bool]()
         var best = -1
         var frontier = self._tree._nearest_begin(location, work)
         var best_radius = Float64(0.0)
@@ -1714,7 +1749,7 @@ struct Map(Movable):
             # Candidate storage is admitted before refinement or any append.
             work.candidate()
             var result = self._nearest_on_segment_certificate(
-                index, location, work
+                index, location, work, seed_only=True
             )
             var improves = best < 0
             if best >= 0:
@@ -1725,10 +1760,11 @@ struct Map(Movable):
             if improves:
                 best = len(indices)
                 best_radius = _wide_distance_upper(result[1].point, query)
-            work._step(len(result[1].cells))
+            work._step(len(result[1].cells) + 1)
             indices.append(index)
             waypoints.append(result[0])
             certificates.append(result[1].copy())
+            accurate.append(result[1].exact_witness)
         if best < 0:
             return None
         # Admission's strict full-domain exclusions remain valid
@@ -1749,12 +1785,37 @@ struct Map(Movable):
                 )
                 if order < 0 or (order == 0 and indices[i] < indices[best]):
                     best = i
+            if not accurate[best]:
+                # A seed or goal-closed candidate is not an accurate result.
+                # Finish the current winner under the original local accuracy
+                # and the same cumulative counters before selecting a pose.
+                self._resume_on_segment_certificate(
+                    indices[best],
+                    location,
+                    certificates[best],
+                    None,
+                    certificates[best].scale,
+                    work,
+                )
+                accurate[best] = True
+                waypoints[best].s = certificates[best].s
             var target = -1
             for i in range(len(indices)):
                 work._step()
                 if i == best:
                     continue
                 if _lane_certificate_dominates(
+                    certificates[best],
+                    indices[best],
+                    certificates[i],
+                    indices[i],
+                    query,
+                ):
+                    continue
+                # The terminal-aware proof scans the retained cover only
+                # after the constant-time bound did not establish dominance.
+                work._step(len(certificates[i].cells))
+                if _lane_certificate_dominates_cells(
                     certificates[best],
                     indices[best],
                     certificates[i],
@@ -1770,12 +1831,11 @@ struct Map(Movable):
                         "Exact lane witnesses have inconsistent dominance"
                     )
                 target = i
-                if not certificates[best].exact_witness:
-                    if (
-                        certificates[i].exact_witness
-                        or certificates[best].nodes <= certificates[i].nodes
-                    ):
-                        target = best
+                # Dominance needs a tighter lower bound on the competitor.
+                # The current winner contributes an actual scalar witness;
+                # proving its own exact minimum is unnecessary here. If the
+                # competitor finds a closer witness, the next pass switches
+                # the winner and refines this candidate in its new role.
                 break
             if target < 0:
                 # A valid wide center does not by itself guarantee that the
@@ -1797,7 +1857,13 @@ struct Map(Movable):
                 request,
                 requested_scales[target],
                 work,
+                _LaneExclusionGoal(
+                    certificates[best].upper,
+                    certificates[best].scale,
+                    indices[best] < indices[target],
+                ),
             )
+            accurate[target] = certificates[target].exact_witness
             waypoints[target].s = certificates[target].s
 
     def _resume_on_segment_certificate(
@@ -1805,9 +1871,10 @@ struct Map(Movable):
         index: Int,
         location: Vector3,
         mut certificate: _LaneCertificate,
-        requested_gap: Float64,
+        requested_gap: Optional[Float64],
         request_scale: Float64,
         mut work: _MapQueryWork,
+        goal: Optional[_LaneExclusionGoal] = None,
     ) raises:
         var previous_nodes = certificate.nodes
         var previous_terms = certificate.terms
@@ -1816,8 +1883,8 @@ struct Map(Movable):
         var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
         work._step(lane_count)
         work._step_product(4, len(certificate.cells))
-        var node_cost = _query_node_step_cost(lane_count)
-        _resume_lane_certificate(
+        var node_cost = _query_node_step_cost(lane_count, Bool(goal))
+        _continue_lane_certificate(
             self.roads[at[0]],
             at[1],
             at[2],
@@ -1830,6 +1897,7 @@ struct Map(Movable):
             max_nodes=work.node_cap(previous_nodes, node_cost),
             max_terms=work.term_cap(previous_terms),
             spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
+            goal=goal,
         )
         work.charge(
             certificate.nodes - previous_nodes,
@@ -1855,7 +1923,11 @@ struct Map(Movable):
         )
 
     def _nearest_on_segment_certificate(
-        self, index: Int, location: Vector3, mut work: _MapQueryWork
+        self,
+        index: Int,
+        location: Vector3,
+        mut work: _MapQueryWork,
+        seed_only: Bool = False,
     ) raises -> Tuple[Waypoint, _LaneCertificate]:
         ref segment = self._segments[index]
         var waypoint = segment.first
@@ -1897,6 +1969,7 @@ struct Map(Movable):
             max_nodes=work.node_cap(step_cost=node_cost),
             max_terms=work.term_cap(),
             spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
+            seed_only=seed_only,
         )
         work.charge(result.nodes, result.terms, node_cost)
         waypoint.s = result.s
@@ -1910,6 +1983,11 @@ struct Map(Movable):
     ) raises -> Optional[Waypoint]:
         """Return the waypoint under a point, `Map::GetWaypoint`.
 
+        Select by canonical three-dimensional lane-center distance. Then
+        require strict planar distance below half the width at the proved
+        minimizer. Approximate witnesses require all possible minimizing
+        cells to agree. An exact half-width boundary is outside.
+
         Args:
             location: The point, in CARLA's frame.
             lane_type: The lane types to search.
@@ -1922,7 +2000,9 @@ struct Map(Movable):
         Raises:
             Error: If the mask is not valid, a center or width is not finite,
                 the width record is absent, refinement exhausts a limit, or
-                lane selection or strict cell classification is unresolved.
+                lane selection or strict cell classification is unresolved,
+                or the floating-point mode is not round-to-nearest with
+                gradual underflow.
         """
         var work = _MapQueryWork(budget)
         var found = self._closest_lane_certificate_with_work(
@@ -3342,6 +3422,7 @@ struct Map(Movable):
         )
 
     def _create_segments(mut self) raises:
+        _require_sum2_environment()
         # `Map::CreateRtree`.
         comptime tiny = 0.000001
         comptime min_delta = 1.0
