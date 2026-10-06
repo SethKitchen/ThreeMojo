@@ -24,8 +24,11 @@ SUPPORTED=json.loads((PACKAGE/'supported-source.json').read_text())
 for name, expected in SUPPORTED['source_sha256'].items():
     data=(SOURCE/name).read_bytes()
     if name.endswith('/road.mojo'):
-        data=data[data.index(b'from extensions.carla.geometry import ('):]
-    assert hashlib.sha256(data).hexdigest()==expected, ('Review oracle graph after source change', name)
+        start=re.search(rb'(?m)^from ',data)
+        if start is None: raise ValueError('Road import scope missing')
+        data=data[start.start():]
+    if hashlib.sha256(data).hexdigest()!=expected:
+        raise ValueError(('Review oracle graph after source change', name))
 
 def b64(x): return F(float(x))
 def mf(x):
