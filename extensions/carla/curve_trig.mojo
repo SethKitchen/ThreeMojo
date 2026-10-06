@@ -99,7 +99,9 @@ def _jet_polynomial[n: Int](coefficients: Array[Float64, n], x: _Jet) -> _Jet:
     return _expression_polynomial(coefficients, x)
 
 
-def _expression_polynomial[n: Int, derivatives: Bool](
+def _expression_polynomial[
+    n: Int, derivatives: Bool
+](
     coefficients: Array[Float64, n], x: _JetExpression[derivatives]
 ) -> _JetExpression[derivatives]:
     comptime Expression = _JetExpression[derivatives]
@@ -314,9 +316,11 @@ def _sincos_branch(value: _Jet, quadrant: Int) -> Tuple[_Jet, _Jet]:
     return _sincos_branch_expression(value, quadrant)
 
 
-def _sincos_branch_expression[derivatives: Bool](
-    value: _JetExpression[derivatives], quadrant: Int
-) -> Tuple[_JetExpression[derivatives], _JetExpression[derivatives]]:
+def _sincos_branch_expression[
+    derivatives: Bool
+](value: _JetExpression[derivatives], quadrant: Int) -> Tuple[
+    _JetExpression[derivatives], _JetExpression[derivatives]
+]:
     comptime Expression = _JetExpression[derivatives]
     # Products of constants are the same stored scalar values as the helper.
     # The derivative therefore includes only the variable subtraction and
@@ -330,7 +334,9 @@ def _sincos_branch_expression[derivatives: Bool](
     var sine = reduced * _expression_polynomial(
         materialize[_SIN_COEFFICIENTS](), square
     )
-    var cosine = _expression_polynomial(materialize[_COS_COEFFICIENTS](), square)
+    var cosine = _expression_polynomial(
+        materialize[_COS_COEFFICIENTS](), square
+    )
     var mode = quadrant & 3
     if mode == 0:
         return (sine, cosine)
@@ -345,9 +351,9 @@ def _uncertain(value: _Interval) -> _Jet:
     return _Jet(value, _Interval.whole(), _Interval.whole(), 0.0)
 
 
-def _uncertain_expression[derivatives: Bool](
-    value: _Interval
-) -> _JetExpression[derivatives]:
+def _uncertain_expression[
+    derivatives: Bool
+](value: _Interval) -> _JetExpression[derivatives]:
     return _JetExpression[derivatives](
         value, _Interval.whole(), _Interval.whole(), 0.0
     )
@@ -357,9 +363,11 @@ def _sincos_jet(value: _Jet) -> Tuple[_Jet, _Jet]:
     return _sincos_expression(value)
 
 
-def _sincos_expression[derivatives: Bool](
-    value: _JetExpression[derivatives]
-) -> Tuple[_JetExpression[derivatives], _JetExpression[derivatives]]:
+def _sincos_expression[
+    derivatives: Bool
+](value: _JetExpression[derivatives]) -> Tuple[
+    _JetExpression[derivatives], _JetExpression[derivatives]
+]:
     comptime Expression = _JetExpression[derivatives]
     var domain = value.rounded_value()
     if not domain.is_finite():
