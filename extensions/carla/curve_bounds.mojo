@@ -22,6 +22,7 @@ from extensions.carla.curve_interval import (
     _power_quotient_bound,
 )
 from extensions.carla.curve_trig import (
+    _sign_bit,
     _constant_sincos_jet,
     _atan2_jet,
     _atan_jet,
@@ -48,6 +49,7 @@ from extensions.carla.spiral_domain_proof import (
     _spiral_proof_matches,
     _spiral_proof_branch,
 )
+from extensions.carla.spiral_roundoff_proof import _try_spiral_roundoff_envelope
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import info_index
@@ -111,7 +113,9 @@ def _spiral_jet(
     return _spiral_expression(geometry, d, pieces, translation)
 
 
-def _spiral_expression[derivatives: Bool](
+def _spiral_expression[
+    derivatives: Bool
+](
     geometry: RoadGeometry,
     d: _JetExpression[derivatives],
     pieces: Int,
@@ -136,11 +140,9 @@ def _spiral_expression[derivatives: Bool](
         var start = step * Expression.constant(Float64(piece))
         var i = 0
         while i < 5:
-            var t = (
-                start
-                + step * Expression.constant(0.5)
-                * Expression.constant(1.0 + nodes[i])
-            )
+            var t = start + step * Expression.constant(
+                0.5
+            ) * Expression.constant(1.0 + nodes[i])
             var theta = Expression.constant(geometry.heading) + t * (
                 k0 + Expression.constant(0.5) * rate * t
             )
@@ -168,11 +170,13 @@ def _spiral_expression[derivatives: Bool](
         (
             Expression.constant(geometry.x)
             - Expression.constant(Float64(translation.x))
-        ) + x,
+        )
+        + x,
         (
             Expression.constant(geometry.y)
             + Expression.constant(Float64(translation.y))
-        ) + y,
+        )
+        + y,
         heading,
     )
 
@@ -232,6 +236,20 @@ def _sample_jet(
         heading = _atan2_jet(tv, tu)
         var domain = d.rounded_value()
         if domain.low >= one.s and domain.high <= two.s:
+            # Convex nonnegative weights preserve positive-zero vertical
+            # samples. A strict rounded horizontal sign therefore fixes
+            # atan2 even when the stored horizontal endpoints disagree.
+            var horizontal = tu.rounded_value()
+            if (
+                one.tv == 0.0
+                and two.tv == 0.0
+                and not _sign_bit(one.tv)
+                and not _sign_bit(two.tv)
+            ):
+                if horizontal.low > 0.0:
+                    heading = _Jet.constant(0.0)
+                elif horizontal.high < 0.0:
+                    heading = _Jet.constant(_curve_atan2(0.0, -1.0))
             if one.tv == 0.0 and two.tv == 0.0:
                 if one.tu > 0.0 and two.tu > 0.0:
                     heading = _Jet.constant(_curve_atan2(one.tv + two.tv, 1.0))
@@ -254,7 +272,9 @@ def _sample_jet(
     )
 
 
-def _union_points[derivatives: Bool](
+def _union_points[
+    derivatives: Bool
+](
     one: Tuple[
         _JetExpression[derivatives],
         _JetExpression[derivatives],
@@ -301,11 +321,17 @@ def _reference_jet(
     geometry: RoadGeometry, distance: _Jet, translation: Vector3
 ) -> Tuple[_Jet, _Jet, _Jet]:
     var captured = _SpiralRootCapture()
-    return _reference_jet_capture[False](geometry, distance, translation, captured)
+    return _reference_jet_capture[False](
+        geometry, distance, translation, captured
+    )
 
 
-def _reference_jet_capture[capture: Bool](
-    geometry: RoadGeometry, distance: _Jet, translation: Vector3,
+def _reference_jet_capture[
+    capture: Bool
+](
+    geometry: RoadGeometry,
+    distance: _Jet,
+    translation: Vector3,
     mut captured: _SpiralRootCapture,
 ) -> Tuple[_Jet, _Jet, _Jet]:
     var d = _geometry_distance(geometry, distance)
@@ -402,25 +428,136 @@ def _lane_jet_model(
 
 
 def _lane_jet_capture(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
     mut captured: _SpiralRootCapture,
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
     captured = _SpiralRootCapture()
     return _lane_jet_model_proof[True](
-        road, section, lane, low, high, Vector3(0, 0, 0), None, low, high, captured
+        road,
+        section,
+        lane,
+        low,
+        high,
+        Vector3(0, 0, 0),
+        None,
+        low,
+        high,
+        captured,
     )
 
 
 def _lane_jet_with_proof(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
-    root_low: Float64, root_high: Float64,
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    root_low: Float64,
+    root_high: Float64,
     proof: Optional[_SpiralDomainProof],
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
     var captured = _SpiralRootCapture()
     return _lane_jet_model_proof[False](
-        road, section, lane, low, high, Vector3(0, 0, 0), proof,
-        root_low, root_high, captured,
+        road,
+        section,
+        lane,
+        low,
+        high,
+        Vector3(0, 0, 0),
+        proof,
+        root_low,
+        root_high,
+        captured,
     )
+
+
+def _try_lane_envelope_capture(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    mut captured: _SpiralRootCapture,
+    mut terms: Int,
+    max_terms: Int,
+) raises -> Optional[Tuple[_Jet, _Jet, _Jet]]:
+    # Eligibility does no GL traversal. Original quadrature work is already
+    # reserved by the caller. The fixed optional charge covers both count
+    # envelopes, moment reconstruction, and the finite proof checks.
+    if terms < 0 or terms > max_terms or 1024 > max_terms - terms:
+        return None
+    var at = info_index(road.info.geometries, low)
+    if at < 0 or info_index(road.info.geometries, high) != at:
+        return None
+    ref geometry = road.info.geometries[at].geometry
+    if (
+        geometry.kind != SPIRAL
+        or geometry.heading != 0.0
+        or geometry.curvature_start != 0.0
+    ):
+        return None
+    var d = _geometry_distance(
+        geometry,
+        _Jet.variable(low, high) - _Jet.constant(road.info.geometries[at].s),
+    )
+    var counts = _spiral_counts(geometry, d)
+    if (
+        counts[0] < 1
+        or counts[1] > 64
+        or counts[1] < counts[0]
+        or counts[1] - counts[0] > 1
+    ):
+        return None
+    var branches = 1 if counts[0] == counts[1] else 2
+    var optional_work = 1024 * branches
+    if terms < 0 or terms > max_terms or optional_work > max_terms - terms:
+        return None
+    # Debit before attempting either error envelope, including failures.
+    terms += optional_work
+    var first = _try_spiral_roundoff_envelope(geometry, d, counts[0])
+    if not first:
+        return None
+    var last = first
+    if counts[1] != counts[0]:
+        last = _try_spiral_roundoff_envelope(geometry, d, counts[1])
+        if not last:
+            return None
+    var proof = _SpiralDomainProof(
+        0,
+        at,
+        d.rounded_value(),
+        counts[0],
+        counts[1],
+        first.value()[0],
+        first.value()[1],
+        last.value()[0],
+        last.value()[1],
+    )
+    if not _spiral_proof_matches(
+        proof, geometry, at, low, high, low, high, d, counts
+    ):
+        return None
+    # Use the one canonical lane graph. If a reordered moment branch is
+    # nonfinite, that graph executes the original GL fallback once under its
+    # existing reservation. Do not run another fallback after this call.
+    var point = _lane_jet_with_proof(
+        road, section, lane, low, high, low, high, proof
+    )
+    captured.record_at = at
+    captured.low = low
+    captured.high = high
+    captured.d = d
+    captured.first_count = counts[0]
+    captured.last_count = counts[1]
+    captured.first_x_error = first.value()[0]
+    captured.first_y_error = first.value()[1]
+    captured.last_x_error = last.value()[0]
+    captured.last_y_error = last.value()[1]
+    return point
 
 
 def _finite_spiral_moment_jet(value: _Jet) -> Bool:
@@ -445,7 +582,9 @@ def _finite_spiral_moment_branch(point: Tuple[_Jet, _Jet, _Jet]) -> Bool:
     )
 
 
-def _lane_jet_model_proof[capture: Bool](
+def _lane_jet_model_proof[
+    capture: Bool
+](
     road: Road,
     section: Int,
     lane: Int,
@@ -519,8 +658,15 @@ def _lane_jet_model_proof[capture: Bool](
                 )
                 var counts = _spiral_counts(record.geometry, d)
                 if _spiral_proof_matches(
-                    proof.value(), record.geometry, geometry_at, low, high,
-                    root_low, root_high, d, counts,
+                    proof.value(),
+                    record.geometry,
+                    geometry_at,
+                    low,
+                    high,
+                    root_low,
+                    root_high,
+                    d,
+                    counts,
                 ):
                     var first = _spiral_proof_branch(
                         proof.value(), record.geometry, d, counts[0]
@@ -695,6 +841,48 @@ def _expansion_distance_jet(
     # Its hypothetical scalar error is NOT the actual world evaluator error.
     # _global_lower retains the original domain.error for that difference.
     # Infinity prevents accidental reuse as a standalone rounded-value bound.
+    result.error = inf[DType.float64]()
+    return result
+
+
+def _try_proof_expansion_jet(
+    road: Road,
+    section: Int,
+    lane: Int,
+    s: Float64,
+    location: Vector3,
+    scale: Float64,
+    root_low: Float64,
+    root_high: Float64,
+    proof: Optional[_SpiralDomainProof],
+) raises -> Optional[_Jet]:
+    # Reuse only the owning immutable proof at its original smooth branch.
+    # A singleton variable keeps derivative one; a constant Jet would not.
+    if not proof or not isfinite(s):
+        return None
+    var at = info_index(road.info.geometries, s)
+    if at < 0:
+        return None
+    ref geometry = road.info.geometries[at].geometry
+    if geometry.kind != SPIRAL:
+        return None
+    var d = _geometry_distance(
+        geometry,
+        _Jet.variable(s, s) - _Jet.constant(road.info.geometries[at].s),
+    )
+    var counts = _spiral_counts(geometry, d)
+    if counts[0] != counts[1]:
+        return None
+    if not _spiral_proof_matches(
+        proof.value(), geometry, at, s, s, root_low, root_high, d, counts
+    ):
+        return None
+    var point = _lane_jet_with_proof(
+        road, section, lane, s, s, root_low, root_high, proof
+    )
+    var result = _scaled_point_distance_jet(point, location, scale)
+    # The full-domain scalar error remains mandatory in _global_lower.
+    # This expansion cannot be used as a standalone rounded-value bound.
     result.error = inf[DType.float64]()
     return result
 
