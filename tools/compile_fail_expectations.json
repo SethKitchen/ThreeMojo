@@ -1838,6 +1838,20 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/a_line_coverage_is_not_a_bare_int.mojo": {
+    "errors": [
+      {
+        "column": 29,
+        "line": 15,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'coverage' cannot be converted from 'IntLiteral[1]' to 'LineCoverage'"
+    ]
+  },
   "tests/compile_fail/a_line_mode_is_not_a_bare_int.mojo": {
     "errors": [
       {
