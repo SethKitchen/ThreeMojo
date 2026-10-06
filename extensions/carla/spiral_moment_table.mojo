@@ -109,7 +109,11 @@ def _try_spiral_moment_expansion(
     var domain = d.rounded_value()
     # Reject every clamped or possibly clamped join. The unchanged evaluator
     # remains responsible for endpoints, unknowns, and count/quadrant joins.
-    if not domain.is_finite() or domain.low <= 0.0 or domain.high >= geometry.length:
+    if (
+        not domain.is_finite()
+        or domain.low <= 0.0
+        or domain.high >= geometry.length
+    ):
         return None
     if not d.first.is_finite() or not d.second.is_finite():
         return None
