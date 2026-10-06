@@ -1,7 +1,12 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
-"""Successful admitted-proof resumption over three exact stored parameters."""
+"""Successful resumption over three exact stored parameters.
+
+This fixture now completes by exact finite enumeration. Separate non-tiny
+controls in test_spiral_lazy_taylor_paths retain actual optional-expansion,
+fallback and resumed-work coverage. The zero-gap request here is unchanged.
+"""
 
 from extensions.carla.curve_distance import _wide_point_order
 from extensions.carla.lane_distance import _normalized_square
@@ -34,17 +39,10 @@ from tests._spiral_acceptance_controls import (
 
 
 def _acceptance_resume_terms(with_proof: Bool) -> Int:
-    # Every station in this three-value domain has two GL5 panels: ten
-    # logical terms per center or Jet. Independently inventory the search:
-    # initial witness, three root samples, one domain Jet, the seed's two
-    # initial samples plus forty iterations, one translated expansion, and
-    # three samples for each of two adjacent terminal children.
-    var evaluations = 1 + 3 + 1 + (2 + 40) + 1 + 2 * 3
-    if with_proof:
-        # The admitted optional expansion cannot certify the requested zero
-        # gap here. Its work remains charged before the translated fallback.
-        evaluations += 1
-    return evaluations * (2 * 5)
+    # One retained incumbent and the three actual Float64 parameters each
+    # evaluate two GL5 panels. The finite leaf performs no Jet, seed loop,
+    # cached expansion or translated fallback, whether proof is present.
+    return (1 + 3) * (2 * 5)
 
 
 def _complete_resume(
@@ -76,7 +74,7 @@ def _complete_resume(
         )
     var retained_nodes = certificate.nodes
     var retained_terms = certificate.terms
-    assert_true(retained_nodes > 0)
+    assert_equal(retained_nodes, 2)
     assert_equal(retained_terms, 10)
     assert_equal(len(certificate.cells), 1)
     _bits(certificate.cells[0].low, 0.5)
@@ -101,8 +99,8 @@ def _complete_resume(
         spiral_proof=proof,
     )
     assert_true(certificate.exact_witness)
-    assert_true(certificate.nodes > retained_nodes)
-    assert_true(certificate.terms > retained_terms + 30)
+    assert_equal(certificate.nodes, retained_nodes + 2)
+    assert_equal(certificate.terms, retained_terms + 3 * (2 * 5))
     assert_equal((certificate.terms - retained_terms) % 10, 0)
     assert_true(certificate.nodes <= 16384)
     assert_true(certificate.terms <= 2000000)
@@ -157,8 +155,8 @@ def test_successful_proof_resume_preserves_consumed_work_incumbent_and_cells() r
     var query = Vector3(0.5, 1.0, 0.0)
     var cached = _complete_resume(road, query, proof)
     var generic = _complete_resume(road, query, None)
-    # Both process the same root and adjacent children. The cached path also
-    # evaluates an optional expansion before its charged translated fallback.
+    # Both enumerate exactly the same three parameters. Optional cached
+    # proof presence cannot add work to this finite completion path.
     assert_equal(cached.nodes, generic.nodes)
     assert_equal(cached.terms, _acceptance_resume_terms(True))
     assert_equal(generic.terms, _acceptance_resume_terms(False))
@@ -218,8 +216,8 @@ def test_optional_resume_work_obeys_exact_cap_and_survives_retry() raises:
             max_terms=cached_limit - 1,
             spiral_proof=proof,
         )
-    # Refusal occurs before the final ten-term sample, retaining all work
-    # already consumed, including the optional attempt and its fallback.
+    # Refusal occurs before the final ten-term center. Earlier scalar work
+    # remains charged, and retry must search the retained safe cover again.
     assert_equal(limited.terms, cached_limit - (2 * 5))
     assert_true(limited.terms <= cached_limit - 1)
     assert_false(limited.exact_witness)
@@ -250,33 +248,44 @@ def test_optional_resume_work_obeys_exact_cap_and_survives_retry() raises:
         _bits(limited.point[axis], cached.point[axis])
 
 
-def test_optional_expansion_requires_headroom_before_its_work() raises:
+def test_finite_leaf_requires_headroom_before_each_scalar_center() raises:
     var road = _acceptance_road()
     var proof = _capture_acceptance_proof(road, 0.5, _narrow_high())
     _assert_acceptance_hit(road, 0.5, _narrow_high(), proof)
     var query = Vector3(0.5, 1.0, 0.0)
     var unit = 2 * 5
-    var root_terms = _acceptance_resume_terms(False) - (2 * 3) * unit
     for with_proof in [False, True]:
         var optional: Optional[_SpiralDomainProof] = None
         if with_proof:
             optional = proof
-        for kind in range(4):
-            var limit = root_terms - 1
-            if kind == 1:
-                limit = root_terms
-            elif kind == 2:
-                limit = root_terms + unit - 1
-            elif kind == 3:
-                limit = root_terms + unit
+        # The original zero-gap fixture and all three stations are retained.
+        # Check exact and one-short caps at EVERY scalar boundary. A cached
+        # optional proof is not used by this independently inventoried leaf.
+        for limit in [10, 19, 20, 29, 30, 39, 40]:
             var certificate = _initial_acceptance_certificate(road, query)
             var initial_point = certificate.point.copy()
-            var message = String("interval work limit")
-            if kind == 0:
-                message = "quadrature work limit"
-            # One closed-cell recheck and one root node isolate expansion
-            # work before either child's scalar evaluations can mask it.
-            with assert_raises(contains=message):
+            if limit < (1 + 3) * unit:
+                with assert_raises(contains="quadrature work limit"):
+                    _resume_lane_certificate(
+                        road,
+                        0,
+                        0,
+                        0.5,
+                        _narrow_high(),
+                        query,
+                        certificate,
+                        0.0,
+                        1.0,
+                        max_nodes=2,
+                        max_terms=limit,
+                        spiral_proof=optional,
+                    )
+                assert_false(certificate.exact_witness)
+                assert_equal(len(certificate.cells), 1)
+                _bits(certificate.cells[0].low, 0.5)
+                _bits(certificate.cells[0].high, _narrow_high())
+                assert_equal(certificate.cells[0].depth, 0)
+            else:
                 _resume_lane_certificate(
                     road,
                     0,
@@ -291,19 +300,15 @@ def test_optional_expansion_requires_headroom_before_its_work() raises:
                     max_terms=limit,
                     spiral_proof=optional,
                 )
-            var expected = root_terms
-            if kind == 0:
-                expected -= unit
-            elif with_proof and kind == 3:
-                expected += unit
+                assert_true(certificate.exact_witness)
+                for cell in certificate.cells:
+                    _bits(cell.low, cell.high)
+                    assert_equal(cell.depth, 1)
+            # A ten-term initial incumbent plus each affordable ten-term
+            # center is the complete term ledger, with no hidden reset.
             assert_equal(certificate.nodes, 2)
-            assert_equal(certificate.terms, expected)
+            assert_equal(certificate.terms, (limit // unit) * unit)
             assert_true(certificate.terms <= limit)
-            assert_false(certificate.exact_witness)
-            assert_equal(len(certificate.cells), 1)
-            _bits(certificate.cells[0].low, 0.5)
-            _bits(certificate.cells[0].high, _narrow_high())
-            assert_equal(certificate.cells[0].depth, 0)
             for axis in range(3):
                 _bits(certificate.point[axis], initial_point[axis])
 
