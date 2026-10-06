@@ -9,9 +9,11 @@ from extensions.carla.geometry import POLY3, _Sample
 from extensions.carla.junction_bounds import (
     _geometry_rates,
     _lane_section_box,
+    _lane_section_box_with_work,
     _span_box,
 )
 from extensions.carla.map_builder import MapBuilder
+from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
 from extensions.carla.polynomial import CubicPolynomial
 from std.math import inf
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
@@ -57,8 +59,9 @@ def test_each_missing_span_record_is_refused() raises:
             builder.roads[r].info.lane_offsets.clear()
         else:
             builder.roads[r].info.elevations.clear()
+        var work = _MapBuildWork(MapBuildBudget())
         with assert_raises(contains="missing a geometry, offset, or elevation"):
-            _ = _span_box(builder.roads[r], 0, 0, 0, 1)
+            _ = _span_box(builder.roads[r], 0, 0, 0, 1, work)
 
 
 def test_nonfinite_and_reversed_section_intervals_are_refused() raises:
@@ -72,8 +75,13 @@ def test_nonfinite_and_reversed_section_intervals_are_refused() raises:
             builder.roads[r].length = inf[DType.float64]()
         else:
             builder.roads[r].sections[0].s = 3
-        with assert_raises(contains="invalid section interval"):
+        # The wrapper rejects invalid input during global preflight.
+        with assert_raises(contains="invalid finite domain"):
             _ = _lane_section_box(builder.roads[r], 0, 0)
+        # Keep coverage of the original lower interval guard as well.
+        var work = _MapBuildWork(MapBuildBudget())
+        with assert_raises(contains="invalid section interval"):
+            _ = _lane_section_box_with_work(builder.roads[r], 0, 0, work)
 
 
 def test_nonfinite_bounds_fail_before_sampling() raises:
@@ -91,8 +99,9 @@ def test_nonfinite_bounds_fail_before_sampling() raises:
             builder.roads[r].info.elevations[0].polynomial = CubicPolynomial(
                 inf[DType.float64](), 0, 0, 0, 0
             )
+        var work = _MapBuildWork(MapBuildBudget())
         with assert_raises(contains="non-finite bounds"):
-            _ = _span_box(builder.roads[r], 0, 0, 0, 1)
+            _ = _span_box(builder.roads[r], 0, 0, 0, 1, work)
 
 
 def test_lane_transform_refuses_missing_geometry_and_nonfinite_slope() raises:
@@ -135,7 +144,8 @@ def test_curved_lane_slope_and_elevation_disable_constant_arc_shortcut() raises:
             builder.roads[r].info.elevations[0].polynomial.c = 1
         else:
             builder.roads[r].info.lane_offsets[0].polynomial.b = 1
-        var box = _span_box(builder.roads[r], 0, 0, 0, 1)
+        var work = _MapBuildWork(MapBuildBudget())
+        var box = _span_box(builder.roads[r], 0, 0, 0, 1, work)
         for i in range(18):
             var s = Float64(i) / 17.0
             assert_true(
