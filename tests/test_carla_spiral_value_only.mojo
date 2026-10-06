@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Bitwise full-jet controls for the isolated value-only SPIRAL prototype.
+"""Bitwise full/value controls with independent half and Sum2 error bounds.
 
 These source tests require a native run. They are not a proof of compiled
 parity or a replacement for paired certificate and budget controls.
@@ -23,6 +23,7 @@ from extensions.carla.curve_interval import (
     _next_down,
     _next_up,
     _without_derivatives,
+    _stored_half,
 )
 from extensions.carla.curve_trig import (
     _COS_COEFFICIENTS,
@@ -33,9 +34,21 @@ from extensions.carla.curve_trig import (
 )
 from extensions.carla.geometry import SPIRAL, RoadGeometry, with_spiral
 from math.vector3 import Vector3
-from std.math import inf
+from std.math import inf, isfinite
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from tests._spiral_half_error_reference import (
+    _reference_half,
+    _reference_half_error,
+    _reference_half_supported,
+    _half_reference_spiral,
+    _independent_child_hull,
+)
+from tests._spiral_sum2_reference import (
+    _sum2_reference_spiral,
+    _sum2_reference_error,
+)
+from extensions.carla.curve_sum2 import _sum2_error
 from tests._spiral_full_jet_reference import (
     _FullJet,
     _full_polynomial,
@@ -100,6 +113,69 @@ def _full_reference(
         return first
     return _full_union_points(
         first, _full_spiral_jet(geometry, _full(d), counts[1], translation)
+    )
+
+
+def _frozen_invariants(actual: _FullJet, frozen: _FullJet) raises:
+    # Error tightening must not alter the pre-union ideal/derivative graph.
+    _interval_bits(actual.value, frozen.value)
+    _interval_bits(actual.first, frozen.first)
+    _interval_bits(actual.second, frozen.second)
+    if isfinite(frozen.error):
+        assert_true(isfinite(actual.error))
+        assert_true(actual.error >= 0.0 and actual.error <= frozen.error)
+    else:
+        _bits(actual.error, frozen.error)
+
+
+def _sum2_ideal_invariants(actual: _FullJet, frozen: _FullJet) raises:
+    # Compensation changes the rounded graph, not these ideal fields. Its
+    # error is checked against the independent Sum2 reference, never assumed
+    # to be a subset of a particular old sequential bound.
+    _interval_bits(actual.value, frozen.value)
+    _interval_bits(actual.first, frozen.first)
+    _interval_bits(actual.second, frozen.second)
+    assert_true(actual.error >= 0.0)
+
+
+def _full_fields_equal(one: _FullJet, two: _FullJet) raises:
+    _interval_bits(one.value, two.value)
+    _interval_bits(one.first, two.first)
+    _interval_bits(one.second, two.second)
+    _interval_bits(one.rounded_value(), two.rounded_value())
+    _bits(one.error, two.error)
+
+
+def _reviewed_reference(
+    geometry: RoadGeometry, distance: _Jet, translation: Vector3
+) raises -> Tuple[_FullJet, _FullJet, _FullJet]:
+    var d = _geometry_distance(geometry, distance)
+    var counts = _spiral_counts(geometry, d)
+    if counts[0] < 1 or counts[1] - counts[0] > 1:
+        # Unsupported paths retain the original oracle byte-for-byte.
+        return _full_reference(geometry, distance, translation)
+    var first = _sum2_reference_spiral(
+        geometry, _full(d), counts[0], translation
+    )
+    var old_first = _full_spiral_jet(geometry, _full(d), counts[0], translation)
+    _sum2_ideal_invariants(first[0], old_first[0])
+    _sum2_ideal_invariants(first[1], old_first[1])
+    _frozen_invariants(first[2], old_first[2])
+    if counts[0] == counts[1]:
+        return first
+    var last = _sum2_reference_spiral(
+        geometry, _full(d), counts[1], translation
+    )
+    var old_last = _full_spiral_jet(geometry, _full(d), counts[1], translation)
+    _sum2_ideal_invariants(last[0], old_last[0])
+    _sum2_ideal_invariants(last[1], old_last[1])
+    _frozen_invariants(last[2], old_last[2])
+    # Exact reconstruction from independently qualified children, not merely
+    # acceptance of any subset of the former, wider union.
+    return (
+        _independent_child_hull(first[0], last[0]),
+        _independent_child_hull(first[1], last[1]),
+        _independent_child_hull(first[2], last[2]),
     )
 
 
@@ -221,10 +297,18 @@ def _fixed_count(
     var actual = _spiral_expression(
         geometry, _without_derivatives(source), pieces, translation
     )
-    var expected = _full_spiral_jet(
+    var frozen = _full_spiral_jet(geometry, _full(source), pieces, translation)
+    var expected = _sum2_reference_spiral(
         geometry, _full(source), pieces, translation
     )
+    _sum2_ideal_invariants(expected[0], frozen[0])
+    _sum2_ideal_invariants(expected[1], frozen[1])
+    _frozen_invariants(expected[2], frozen[2])
     _point_bits(_spiral_jet(geometry, source, pieces, translation), expected)
+    var half_only = _half_reference_spiral(
+        geometry, _full(source), pieces, translation
+    )
+    _full_fields_equal(expected[2], half_only[2])
     _fields(actual[0], expected[0])
     _fields(actual[1], expected[1])
     _fields(actual[2], expected[2])
@@ -291,7 +375,7 @@ def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
         _fixed_count(geometry, d, counts[1], Vector3(0, 0, 0))
         var actual = _reference_jet(geometry, crossing, Vector3(0, 0, 0))
         _point_bits(
-            actual, _full_reference(geometry, crossing, Vector3(0, 0, 0))
+            actual, _reviewed_reference(geometry, crossing, Vector3(0, 0, 0))
         )
         assert_false(actual[0].first.is_finite())
         assert_false(actual[0].second.is_finite())
@@ -301,7 +385,7 @@ def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
         var point = _Jet.variable(station, station)
         _point_bits(
             _reference_jet(geometry, point, Vector3(0, 0, 0)),
-            _full_reference(geometry, point, Vector3(0, 0, 0)),
+            _reviewed_reference(geometry, point, Vector3(0, 0, 0)),
         )
     for interval in [
         _Interval(-2.0, -1.0),
@@ -314,7 +398,7 @@ def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
         var source = _Jet.variable(interval.low, interval.high)
         _point_bits(
             _reference_jet(geometry, source, Vector3(0, 0, 0)),
-            _full_reference(geometry, source, Vector3(0, 0, 0)),
+            _reviewed_reference(geometry, source, Vector3(0, 0, 0)),
         )
     var smooth = _reference_jet(
         geometry, _Jet.variable(0.1, 0.2), Vector3(0, 0, 0)
@@ -329,13 +413,75 @@ def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
     assert_equal(_spiral_counts(geometry, unsupported)[0], -1)
     _point_bits(
         _reference_jet(geometry, unsupported, Vector3(0, 0, 0)),
-        _full_reference(geometry, unsupported, Vector3(0, 0, 0)),
+        _reviewed_reference(geometry, unsupported, Vector3(0, 0, 0)),
     )
     unsupported.error = inf[DType.float64]()
     _point_bits(
         _reference_jet(geometry, unsupported, Vector3(0, 0, 0)),
-        _full_reference(geometry, unsupported, Vector3(0, 0, 0)),
+        _reviewed_reference(geometry, unsupported, Vector3(0, 0, 0)),
     )
+
+
+def test_half_reference_uses_exact_word_rules_and_keeps_fallback() raises:
+    var smallest = bitcast[DType.float64](UInt64(1))
+    for error in [
+        0.0,
+        -0.0,
+        smallest,
+        2.0 * smallest,
+        3.0 * smallest,
+        1e-300,
+        1e-12,
+        0.5,
+        1.0,
+        2.0,
+    ]:
+        for value in [-2.0, -0.0, 0.0, smallest, 0.25, 1.0, 2.0]:
+            var full = _FullJet.variable(value, value)
+            full.error = error
+            var source = _Jet.variable(value, value)
+            source.error = error
+            var expected = _reference_half(full)
+            _jet_bits(_stored_half(source), expected)
+            _fields(_stored_half(_without_derivatives(source)), expected)
+            if _reference_half_supported(full):
+                _bits(expected.error, _reference_half_error(error))
+            else:
+                var fallback = full * _FullJet.constant(0.5)
+                _interval_bits(expected.value, fallback.value)
+                _interval_bits(expected.first, fallback.first)
+                _interval_bits(expected.second, fallback.second)
+                _bits(expected.error, fallback.error)
+
+
+def test_sum2_error_matches_independent_upper_endpoint_reference() raises:
+    var tiny = bitcast[DType.float64](UInt64(1))
+    var bound = bitcast[DType.float64](UInt64(0x7830000000000000))
+    for count in [-1, 0, 1, 2, 3, 7, 320, 1073741824, 1073741825]:
+        for magnitude in [
+            Float64(0.0),
+            -0.0,
+            tiny,
+            1.0,
+            2.0,
+            bound,
+            _next_up(bound),
+            inf[DType.float64](),
+            -1.0,
+        ]:
+            for inherited in [
+                Float64(0.0),
+                -0.0,
+                tiny,
+                1e-14,
+                1.0,
+                inf[DType.float64](),
+                -1.0,
+            ]:
+                _bits(
+                    _sum2_error(magnitude, inherited, count),
+                    _sum2_reference_error(magnitude, inherited, count),
+                )
 
 
 def main() raises:
