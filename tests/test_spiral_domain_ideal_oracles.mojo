@@ -20,7 +20,7 @@ from extensions.carla.curve_bounds import (
     _reference_jet,
     _lane_jet_with_proof,
 )
-from extensions.carla.curve_interval import _Jet
+from extensions.carla.curve_interval import _Jet, _stored_difference
 from extensions.carla.geometry import RoadGeometry, _GL_NODES
 from extensions.carla.curve_trig import _INV_HALF_PI, _PHASE_LIMIT
 from extensions.carla.spiral_domain_proof import (
@@ -29,7 +29,7 @@ from extensions.carla.spiral_domain_proof import (
 )
 from math.vector3 import Vector3
 from std.math import floor, isfinite
-from std.testing import TestSuite, assert_true, assert_equal
+from std.testing import TestSuite, assert_true, assert_equal, assert_false
 from tests._spiral_domain_controls import (
     _f64,
     _encloses,
@@ -2722,7 +2722,9 @@ def test_root_error_ideal_nonzero_record_station() raises:
     var record_s = Float64(128.0)
     var station = record_s + local_station
     geometry.s = record_s
-    var distance = _Jet.variable(station, station) - _Jet.constant(record_s)
+    var distance = _stored_difference(
+        _Jet.variable(station, station), _Jet.constant(record_s)
+    )
     var d = _geometry_distance(geometry, distance)
     var counts = _spiral_counts(geometry, d)
     assert_equal(counts[0], counts[1])
@@ -2751,8 +2753,31 @@ def test_root_error_ideal_nonzero_record_station() raises:
         )
     )
     var candidate = _spiral_proof_branch(proof, geometry, d, counts[0])
+    # This boundary models two stored Float64 operands. Sterbenz applies
+    # over the whole positive station/record range, as in production.
     var root_d = _geometry_distance(
+        geometry,
+        _stored_difference(
+            _Jet.variable(root_low, root_high), _Jet.constant(record_s)
+        ),
+    )
+    # The older generic subtraction carries fictitious rounding beyond the
+    # captured root domain. It must remain an unsupported proof request.
+    var legacy_root_d = _geometry_distance(
         geometry, _Jet.variable(root_low, root_high) - _Jet.constant(record_s)
+    )
+    assert_false(
+        _spiral_proof_matches(
+            proof,
+            geometry,
+            0,
+            root_low,
+            root_high,
+            root_low,
+            root_high,
+            legacy_root_d,
+            _spiral_counts(geometry, legacy_root_d),
+        )
     )
     assert_true(
         _spiral_proof_matches(
