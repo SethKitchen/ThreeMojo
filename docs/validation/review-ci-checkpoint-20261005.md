@@ -48,6 +48,20 @@ The Linux CPU jobs now collect the pinned compiler version, launcher/driver hash
 
 Compiler targets, flags, cache settings, suite concurrency, workloads, job limits and acceptance gates are unchanged. The Linux procfs-specific fixture is gated to that platform; portable timeout and output controls remain enabled. All 356 tool tests and 48 CARLA controls pass in both normal and telemetry-enabled configurations, including the exact artifact path/name/order policy controls. All 2,217 report inputs and report bytes remain identical. Fresh exact-head CI is required, and the diagnostic change is not a claimed stall fix.
 
+## Portable Linux CPU build candidate
+
+The diagnostic run on `f0607cc` records two Linux CPU runners selecting `znver3` and one selecting `znver5`, all with the same pinned Mojo 1.1.0 driver. Those observations describe that run, not the undocumented targets of earlier failures. With identical source and a matched target locally, the exact-predicate build completes in 38.1 seconds for `znver3`; `znver5` exceeds a bounded 300-second diagnostic window. The latter uses sustained CPU but has a different memory-growth shape from the older hosted captures. This does not prove a common compiler phase or root cause.
+
+A portable `x86-64-v3` build at the unchanged O3, warnings-as-errors and one compiler thread completes in 43.1 seconds. All nine original tests pass their unchanged five-second limit. The explicit Linux triple plus CPU resolves to the same 24-feature target as the independently checked full feature vector, without native-host additions. These controls establish a candidate target, not unchanged whole-application performance.
+
+Linux CPU suite builds now select `--target-triple=x86_64-unknown-linux-gnu --target-cpu=x86-64-v3`, retaining their existing one-thread setting and outer suite concurrency. Linux non-test lint builds use the same target through a dedicated build-only flag. That flag is included in the cache key. Pinned `mojo doc` rejects CPU-target flags, so API docs retain their original arguments and compiler threading. Optional bounded per-module start/end records identify both lint build and doc commands; default local lint remains quiet.
+
+The lint phases retain their exact original order. The 442 negative fixtures and their expectations, formatting, coverage-tool and portability probes, docs-check, native-host coverage, macOS, GPU and Metal commands are unchanged. Coverage therefore continues to measure its native-host target; it is distinct from the portable ordinary-CPU qualification. No acceptance threshold, workload, optimization level or time budget is relaxed.
+
+The actual composed recipe passes a tiny `bench/noop.mojo` build and the exact-predicate module's API doc check in 4.01 seconds, with correct target isolation and successful progress/exit records. Two attempted full default-thread lint-build smokes were stopped at the existing local memory floor; neither is claimed as a pass. The separate full one-thread portable build and its nine tests above are retained. All 359 Python tool tests and 48 CARLA controls pass in both telemetry configurations, including exact arguments, failures, default behavior, flag scope and phase-order checks.
+
+The collector now reports the selected portable flags. All 2,217 source-bound report inputs and report bytes remain unchanged. Fresh hosted aggregate/platform CI is still required. The portable target is a scoped qualification choice, not a claim that all native-host compiler behavior is repaired.
+
 ## Main conflict resolution
 
 The SDF union retains coordinate lookup and the owner self-copy guard from main. It preserves deterministic lowest-block fallback ownership and both authored test additions. All 36 tests pass. Fresh coverage on that exact mesher source covers 569/569 obligations.
