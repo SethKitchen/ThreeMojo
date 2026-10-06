@@ -162,7 +162,7 @@ from math.triangle import Triangle
 from math.vector3 import Vector3
 from std.hashlib import Hasher
 from std.collections import Set
-from std.math import ceil
+from std.math import ceil, isfinite
 from std.time import perf_counter_ns
 from units.si import (
     Acceleration,
@@ -220,15 +220,20 @@ struct EpisodeSettings(Copyable, Equatable, Movable, Writable):
         synchronous_mode: Bool,
         no_rendering_mode: Bool,
         fixed_delta_seconds: Duration,
-    ):
+    ) raises:
         """Create settings in CARLA's argument order, the rest defaults.
 
         Args:
             synchronous_mode: Whether the client drives each tick.
             no_rendering_mode: Whether cameras stay dark.
-            fixed_delta_seconds: The step. Zero or less means none, as in
-                CARLA.
+            fixed_delta_seconds: The step. Finite zero or less means none,
+                as in CARLA.
+
+        Raises:
+            Error: If the supplied duration is not finite.
         """
+        if not isfinite(fixed_delta_seconds.value):
+            raise Error("fixed_delta_seconds must be finite")
         self = EpisodeSettings()
         self.synchronous_mode = synchronous_mode
         self.no_rendering_mode = no_rendering_mode
@@ -239,20 +244,26 @@ struct EpisodeSettings(Copyable, Equatable, Movable, Writable):
         """Refuse settings a world cannot step with.
 
         Raises:
-            Error: If the fixed step is set and not more than zero, the
-                substep time is not more than zero, or `max_substeps` is
-                not from 1 to 16, CARLA's range.
+            Error: If a time is not finite and positive, or `max_substeps`
+                is not from 1 to 16, CARLA's range.
         """
-        if Bool(self.fixed_delta_seconds) and not (
-            self.fixed_delta_seconds.value().value > 0
+        if Bool(self.fixed_delta_seconds):
+            var fixed = self.fixed_delta_seconds.value().value
+            if not isfinite(fixed) or fixed <= 0:
+                raise Error(
+                    "fixed_delta_seconds must be finite and more than zero"
+                )
+        if (
+            not isfinite(self.max_substep_delta_time.value)
+            or self.max_substep_delta_time.value <= 0
         ):
-            raise Error("fixed_delta_seconds must be more than zero")
-        if not (self.max_substep_delta_time.value > 0):
-            raise Error("max_substep_delta_time must be more than zero")
+            raise Error(
+                "max_substep_delta_time must be finite and more than zero"
+            )
         if self.max_substeps < 1 or self.max_substeps > 16:
             raise Error("max_substeps must be from 1 to 16")
 
-    def substep_count(self, dt: Duration) -> Int:
+    def substep_count(self, dt: Duration) raises -> Int:
         """Return how many physics steps one tick is cut into.
 
         Args:
@@ -261,16 +272,24 @@ struct EpisodeSettings(Copyable, Equatable, Movable, Writable):
         Returns:
             One without substepping. Otherwise the fewest steps no longer
             than `max_substep_delta_time`, at most `max_substeps`.
+
+        Raises:
+            Error: If the settings or the positive finite duration are invalid.
         """
+        self.check()
+        if not isfinite(dt.value) or dt.value <= 0:
+            raise Error("Physics tick duration must be finite and positive")
         if not self.substepping:
             return 1
-        var n = Int(
-            ceil(
-                Float64(dt.value) / Float64(self.max_substep_delta_time.value)
-                - _SUBSTEP_SLACK
-            )
+        var required = ceil(
+            Float64(dt.value) / Float64(self.max_substep_delta_time.value)
+            - _SUBSTEP_SLACK
         )
-        return min(max(n, 1), self.max_substeps)
+        # Clamp in Float64 before narrowing. A valid Float32 duration ratio
+        # can be much larger than Int, even though only 16 steps are allowed.
+        if required >= Float64(self.max_substeps):
+            return self.max_substeps
+        return max(Int(required), 1)
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if every setting matches, as CARLA compares.
@@ -481,7 +500,9 @@ struct World(Movable):
         self.signs = List[TrafficSign]()
         self.spawn_points = List[CarlaTransform]()
         self.spectator = NO_ACTOR
-        self.snapshot = WorldSnapshot(episode_id, Timestamp(0, 0, 0, 0))
+        self.snapshot = WorldSnapshot(
+            episode_id, Timestamp.from_seconds(0, 0, 0, 0)
+        )
         self._road_bodies = List[BodyId]()
         self._road_tags = List[SemanticTag]()
         self._light_actors = List[ActorId]()
@@ -2232,15 +2253,32 @@ struct World(Movable):
             The new frame.
 
         Raises:
-            Error: If `fixed_delta_seconds` is not set, or the physics
-                fails.
+            Error: If timing settings or clock advancement are invalid,
+                or the physics fails. Timing refusal occurs before mutation.
         """
         if not Bool(self.settings.fixed_delta_seconds):
             raise Error("A tick needs fixed_delta_seconds")
         var dt = self.settings.fixed_delta_seconds.value()
+        var substeps = self.settings.substep_count(dt)
+        if self.frame < 0 or self.frame == 9223372036854775807:
+            raise Error(
+                "World frame cannot advance within the nonnegative Int range"
+            )
+        if not isfinite(self.elapsed_seconds) or self.elapsed_seconds < 0:
+            raise Error("World elapsed time must be finite and nonnegative")
+        var next_elapsed = self.elapsed_seconds + Float64(dt.value)
+        # A finite Float32 step cannot overflow a finite Float64 clock: its
+        # maximum is far below one ULP near Float64's upper limit. Refuse a
+        # step lost to rounding rather than changing actors at a frozen time.
+        if next_elapsed <= self.elapsed_seconds:
+            raise Error(
+                "World elapsed time cannot advance within Float64 range"
+            )
+        # All timing preconditions are checked before any clock, sign,
+        # traffic-light, actor or physics state changes.
         self.frame += 1
         self.delta_seconds = Float64(dt.value)
-        self.elapsed_seconds += self.delta_seconds
+        self.elapsed_seconds = next_elapsed
         for s in range(len(self.signs)):
             self._apply(self.signs[s].tick_timers(dt.value))
         self.traffic_lights.tick(dt)
@@ -2260,7 +2298,7 @@ struct World(Movable):
                 self.physics.world.bodies[
                     body.value
                 ].linear_velocity = t.rotation.rotate_vector(held.value())
-        self.physics.tick(dt, self.settings.substep_count(dt))
+        self.physics.tick(dt, substeps)
         self._park_destroyed()
         # The spectator is always in the list.
         for i in range(len(self.actors)):  # pragma: no branch
@@ -2288,7 +2326,7 @@ struct World(Movable):
         return self.frame
 
     def _take_snapshot(mut self) raises -> WorldSnapshot:
-        var stamp = Timestamp(
+        var stamp = Timestamp.from_seconds(
             self.frame,
             self.elapsed_seconds,
             self.delta_seconds,

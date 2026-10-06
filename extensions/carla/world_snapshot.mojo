@@ -21,10 +21,11 @@ simulator plugin, `Carla/Sensor/WorldObserver.cpp`:
 - The acceleration is the change of the velocity since the last tick,
   over the tick. It is zero in the first snapshot.
 
-**Time.** CARLA keeps the elapsed and the delta seconds in `double`. A
-`Duration` holds a `Float32`, which counts a long run only to a
-millisecond. So `Timestamp` keeps them as `Float64` seconds, and
-`elapsed` and `delta` give them as `Duration`s.
+**Time.** CARLA keeps elapsed, delta and platform seconds in `double`.
+`Timestamp` takes and returns `Duration64`, so its quantity boundary does
+not round through Float32. Named `from_seconds` reads the unchanged raw
+Float64 record fields. Runtime boundaries reject nonfinite values;
+elapsed and delta must be nonnegative, while platform time can be signed.
 """
 
 from extensions.carla.actor import (
@@ -36,10 +37,10 @@ from extensions.carla.physics.walker import WalkerControl
 from extensions.carla.transform import CarlaTransform
 from extensions.carla.vehicle import VehicleData
 from math.vector3 import Vector3
-from units.si import SECOND, Duration
+from std.math import isfinite
+from units.si import Duration, Duration64
 
 
-@fieldwise_init
 struct Timestamp(Equatable, ImplicitlyCopyable, Writable):
     """When a snapshot was taken, CARLA's `Timestamp`."""
 
@@ -52,21 +53,109 @@ struct Timestamp(Equatable, ImplicitlyCopyable, Writable):
     # The system clock when the frame ended, in seconds.
     var platform_timestamp: Float64
 
-    def elapsed(self) -> Duration:
+    def __init__(
+        out self,
+        frame: Int,
+        elapsed: Duration64,
+        delta: Duration64,
+        platform: Duration64,
+    ) raises:
+        """Create a timestamp without narrowing its runtime quantities.
+
+        Args:
+            frame: The nonnegative frame count.
+            elapsed: The nonnegative simulated time since the world started.
+            delta: The nonnegative simulated time since the last frame.
+            platform: The signed system-clock time.
+
+        Raises:
+            Error: If the frame is negative or any duration is invalid.
+        """
+        self.frame = frame
+        self.elapsed_seconds = elapsed.value
+        self.delta_seconds = delta.value
+        self.platform_timestamp = platform.value
+        self.check()
+
+    @staticmethod
+    def from_seconds(
+        frame: Int,
+        elapsed_seconds: Float64,
+        delta_seconds: Float64,
+        platform_timestamp: Float64,
+    ) raises -> Timestamp:
+        """Read CARLA's raw Float64 second fields without changing their bits.
+
+        Args:
+            frame: The nonnegative frame count.
+            elapsed_seconds: The nonnegative elapsed seconds.
+            delta_seconds: The nonnegative seconds since the last frame.
+            platform_timestamp: The signed system-clock seconds.
+
+        Returns:
+            The checked timestamp with the original Float64 precision.
+
+        Raises:
+            Error: If the frame is negative or any duration is invalid.
+        """
+        return Timestamp(
+            frame,
+            Duration64(elapsed_seconds),
+            Duration64(delta_seconds),
+            Duration64(platform_timestamp),
+        )
+
+    def check(self) raises:
+        """Check the mutable record before a runtime boundary reads it.
+
+        Raises:
+            Error: If the frame is negative, a time is nonfinite, or a
+                simulated time is negative. Signed platform time is valid.
+        """
+        if self.frame < 0:
+            raise Error("Timestamp frame must be nonnegative")
+        if not isfinite(self.elapsed_seconds) or self.elapsed_seconds < 0:
+            raise Error("Timestamp elapsed time must be finite and nonnegative")
+        if not isfinite(self.delta_seconds) or self.delta_seconds < 0:
+            raise Error("Timestamp delta time must be finite and nonnegative")
+        if not isfinite(self.platform_timestamp):
+            raise Error("Timestamp platform time must be finite")
+
+    def elapsed(self) raises -> Duration64:
         """Return the simulated time since the world started.
 
         Returns:
-            `elapsed_seconds` as a `Duration`.
-        """
-        return Duration(Float32(self.elapsed_seconds), SECOND)
+            The unchanged Float64 elapsed time as a Duration64.
 
-    def delta(self) -> Duration:
+        Raises:
+            Error: If the mutable timestamp is invalid.
+        """
+        self.check()
+        return Duration64(self.elapsed_seconds)
+
+    def delta(self) raises -> Duration64:
         """Return the simulated time since the last frame.
 
         Returns:
-            `delta_seconds` as a `Duration`.
+            The unchanged Float64 delta time as a Duration64.
+
+        Raises:
+            Error: If the mutable timestamp is invalid.
         """
-        return Duration(Float32(self.delta_seconds), SECOND)
+        self.check()
+        return Duration64(self.delta_seconds)
+
+    def platform(self) raises -> Duration64:
+        """Return the system-clock time when the frame ended.
+
+        Returns:
+            The unchanged signed Float64 platform time as a Duration64.
+
+        Raises:
+            Error: If the mutable timestamp is invalid.
+        """
+        self.check()
+        return Duration64(self.platform_timestamp)
 
     def __eq__(self, other: Self) -> Bool:
         """Return True for the same frame, as CARLA compares.
@@ -170,13 +259,17 @@ struct WorldSnapshot(Copyable, Movable):
     var timestamp: Timestamp
     var actors: List[ActorSnapshot]
 
-    def __init__(out self, id: Int, timestamp: Timestamp):
+    def __init__(out self, id: Int, timestamp: Timestamp) raises:
         """Create a snapshot with no actors.
 
         Args:
             id: The episode id.
             timestamp: The frame and its time.
+
+        Raises:
+            Error: If the mutable timestamp is invalid.
         """
+        timestamp.check()
         self.id = id
         self.timestamp = timestamp
         self.actors = List[ActorSnapshot]()
