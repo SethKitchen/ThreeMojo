@@ -20,8 +20,8 @@ import compiler_metadata as metadata
 
 TARGET = ('Effective target configuration:\n'
           '  --target-triple x86_64-unknown-linux-gnu\n'
-          '  --target-cpu emeraldrapids\n'
-          '  --target-features +avx2,+avx512f\n')
+          '  --target-cpu x86-64-v3\n'
+          '  --target-features +avx,+avx2,+fma\n')
 
 
 class CompilerMetadataTests(unittest.TestCase):
@@ -39,10 +39,12 @@ class CompilerMetadataTests(unittest.TestCase):
         self.assertEqual(result['driver']['sha256'], hashlib.sha256(b'native driver').hexdigest())
         self.assertNotEqual(result['driver']['sha256'], result['launcher']['sha256'])
         self.assertEqual(result['version'], 'Mojo 1.1.0 (8189361e)')
-        self.assertEqual(result['effective_target']['target-features'], '+avx2,+avx512f')
+        self.assertEqual(result['effective_target']['target-features'], '+avx,+avx2,+fma')
         self.assertEqual(commands[1], [str(launcher), 'build', '--print-effective-target',
                                       *metadata.BUILD_ARGS])
-        self.assertEqual(metadata.BUILD_ARGS, ['-I', '.', '--num-threads', '1', '--Werror',
+        self.assertEqual(metadata.BUILD_ARGS, ['-I', '.', '--num-threads', '1',
+                                             '--target-triple=x86_64-unknown-linux-gnu',
+                                             '--target-cpu=x86-64-v3', '--Werror',
                                              '-o', '.cache/bin/test_exact_predicates',
                                              'tests/test_exact_predicates.mojo'])
 
