@@ -1089,7 +1089,8 @@ struct Road(Copyable, Movable):
         Raises:
             Error: If the indices name no lane, s is nonfinite or off the
                 road, a required record is missing, the offset frame is
-                undefined, or the center or derivative is not representable.
+                undefined, the center or derivative is not representable,
+                or a SPIRAL uses an unsupported floating-point mode.
         """
         self._check_lane(section, lane)
         if not isfinite(s) or s > self.length or s < 0.0:
