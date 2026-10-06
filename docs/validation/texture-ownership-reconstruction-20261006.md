@@ -62,11 +62,52 @@ Each source has 84 bytes, including its mip chain. The five payloads therefore
 hold 420 bytes. This count excludes metadata, allocation headers and other
 stores. It is a payload-identity check, not a whole-town performance result.
 
-## Limits
+## Fresh Town benchmark
 
-A new elapsed-time benchmark has not run for this reconstruction.
-The old checkpoint's timings and payload figures are historical evidence.
-They are not presented as results of these builds.
+The common benchmark source ran on pristine main and the reconstructed candidate.
+One warmup pair preceded eight measured pairs with alternating execution order.
+All samples are retained in `texture-ownership-town-20261006.json`.
+No outlier was removed.
+
+The synthetic fixture binds one 512-square PNG to four PBR roles across nine
+Town surfaces. The registry decodes it in sRGB and linear space before timing.
+The pinned map is `assets/carla/town.xodr`.
+Procedural textures are 64 square and road mesh spacing is two meters.
+Buildings, trees and lamps are disabled.
+
+- Retained texel and mip payload: 54,656,964 to 2,927,264 bytes, a 94.64 percent reduction
+- Median Town construction: 19.474 to 4.414 milliseconds, a 77.33 percent reduction
+- Unique nonempty byte allocations: 45 to 8
+- Every run: two decoded cache textures, 42 stored textures, nine materials and 13 meshes
+- Full payload and sampling-state hashes matched between both versions
+- Geometry hashes, 44,272 geometry bytes and all object counts matched
+
+Payload accounting compares live allocation addresses across the registry,
+texture store and the map retained by Town. It excludes metadata and allocator
+headers. Timing covers only the Town constructor. These fixture results do not
+measure complete rendering, GPU use, asset downloads or other town workloads.
+The old checkpoint's timings and payload figures remain historical evidence.
+
+Generate the inputs with:
+
+```sh
+python3 bench/carla_texture_ownership_fixture.py /tmp/town-ownership assets/carla/town.xodr
+```
+
+Compile the same benchmark source on each revision. Use the pinned toolchain
+and the exact flags in the result JSON. Run each executable with the fixture
+folder, its label and a sample number:
+
+```sh
+town_payload_bench /tmp/town-ownership candidate 0
+```
+
+The published benchmark differs from the measured source only by docstrings.
+An executable-token comparison and regenerated input hashes both matched.
+The result JSON records both source hashes and the fixture hashes.
+The native ELF driver and its Python launcher have separate recorded hashes.
+
+## Limits
 
 The full repository check, coverage capture and GPU qualification have not run
 on this packet. The focused results do not replace those integration gates.
