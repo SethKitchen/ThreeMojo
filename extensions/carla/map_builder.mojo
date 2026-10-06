@@ -458,16 +458,46 @@ struct MapBuilder(Movable):
         )
 
     def create_lane_speed(
-        mut self, lane: Tuple[Int, Int, Int], s: Float64, max: Float64
-    ):
-        """Add a lane speed record, `CreateLaneSpeed`. CARLA drops the unit.
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        max: Float64,
+        unit: String = "",
+    ) raises:
+        """Add a numeric lane speed without dropping its source unit.
 
         Args:
             lane: The lane.
             s: Where the record starts, in meters along the road.
-            max: The limit, in the file's unit.
+            max: The finite nonnegative limit in the source unit.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If the source number or unit is invalid.
         """
-        self._lane(lane).info.speeds.append(RoadInfoSpeed(s, max, "Town"))
+        var record = RoadInfoSpeed(s, max, "Town", unit)
+        self._lane(lane).info.speeds.append(record^)
+
+    def create_lane_speed(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        max: String,
+        unit: String,
+    ) raises:
+        """Add a numeric lane speed directly from OpenDRIVE text.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            max: The original numeric max text. Road keywords are invalid.
+            unit: The original unit; omitted means m/s.
+
+        Raises:
+            Error: If the source number or unit is invalid.
+        """
+        var record = RoadInfoSpeed.from_opendrive(s, max, "Town", unit, False)
+        self._lane(lane).info.speeds.append(record^)
 
     def create_road_mark(
         mut self,
@@ -616,22 +646,46 @@ struct MapBuilder(Movable):
         type: String,
         max: Float64,
         unit: String,
-    ):
-        """Add a road speed record, `CreateRoadSpeed`.
-
-        CARLA drops the road type and the unit, so the record's type is
-        "Town" and its speed is the file's number.
+    ) raises:
+        """Add a numeric road speed without dropping its unit.
 
         Args:
             road: The road's index.
             s: Where the record starts, in meters.
-            type: The road type, such as "town". Dropped.
-            max: The limit, in the file's unit.
-            unit: The unit. Dropped.
+            type: The road type; the compatibility record type stays Town.
+            max: The finite nonnegative source limit.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If the number or unit is invalid.
         """
         _ = type
-        _ = unit
-        self.roads[road].info.speeds.append(RoadInfoSpeed(s, max, "Town"))
+        var record = RoadInfoSpeed(s, max, "Town", unit)
+        self.roads[road].info.speeds.append(record^)
+
+    def create_road_speed(
+        mut self,
+        road: Int,
+        s: Float64,
+        type: String,
+        max: String,
+        unit: String,
+    ) raises:
+        """Add a numeric, unrestricted, undefined or absent road speed.
+
+        Args:
+            road: The road's index.
+            s: Where the record starts, in meters.
+            type: The road type; the compatibility record type stays Town.
+            max: The original max text; empty means no speed element.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If a numeric limit or source unit is invalid.
+        """
+        _ = type
+        var record = RoadInfoSpeed.from_opendrive(s, max, "Town", unit, True)
+        self.roads[road].info.speeds.append(record^)
 
     def add_road_object_crosswalk(
         mut self,
@@ -882,6 +936,7 @@ struct MapBuilder(Movable):
         h_offset: Float64,
         pitch: Float64,
         roll: Float64,
+        value_present: Bool = True,
     ) raises -> SignalReferenceHandle:
         """Add a signal and a reference to it on its road, `AddSignal`.
 
@@ -906,6 +961,7 @@ struct MapBuilder(Movable):
             h_offset: The turn from the road's heading, in radians.
             pitch: Its pitch, in radians.
             roll: Its roll, in radians.
+            value_present: Whether the source supplied a numeric value.
 
         Returns:
             The reference's handle.
@@ -933,6 +989,7 @@ struct MapBuilder(Movable):
             h_offset,
             pitch,
             roll,
+            value_present,
         )
         var replaced = False
         for i in range(len(self.signals)):
