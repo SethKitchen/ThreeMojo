@@ -14,18 +14,17 @@ pixel of the next, in the header's channel order.
 
 **What is read.** Single-part scanline files, version two, with channels
 of half or float samples at full resolution, compressed with none, RLE,
-ZIPS, ZIP or PIZ. An image with `R`, `G` and `B` becomes RGBA, with `A` as
+ZIPS, ZIP, PIZ, PXR24, B44, B44A, DWAA or DWAB. An image with `R`, `G` and `B` becomes RGBA, with `A` as
 its alpha or one where it has none; an image with `Y` alone becomes gray,
 alpha one. Any other channel is read past. This is three.js's default
 `RGBAFormat` output. three.js's default `type` is `HalfFloatType`; the
 reader returns floats, which hold every half exactly and every float as it
 is, as three.js's `FloatType` output does.
 
-**What is not.** Tiled, deep and multi-part files; PXR24, B44, B44A, DWAA
-and DWAB compression; luminance-chroma images with `RY` and `BY`, whose
+**What is not.** Tiled, deep and multi-part files; luminance-chroma images with `RY` and `BY`, whose
 chroma is stored at a quarter of the resolution; subsampled channels; and
-`UINT` color channels. three.js reads the first four groups; this reader
-refuses each by name. three.js does not read `UINT` color either.
+`UINT` color channels. This reader refuses each by name.
+three.js does not read `UINT` color either.
 
 **Where it differs from three.js, it refuses rather than guesses.** three.js
 reads every color channel with the pixel type of the last one it met, so a
@@ -35,6 +34,15 @@ misreads a subsampled one; this reader refuses it. three.js reads past the
 end of a block, a Huffman table or the file as whatever the array holds
 there; this reader refuses each. A block that names a line outside the
 image is refused, and so is a block that does not expand to its lines.
+
+**Codec references.** PXR24 and DWA target three.js r180; B44/B44A target
+r186. The arithmetic and channel layout follow OpenEXR 3.1.5, including
+round-to-nearest half conversion, pLinear, layered DWA color groups,
+lossless unknown channels, and DWA versions zero through two. The decoder
+supports both static-Huffman and DEFLATE AC streams. Independent fixtures
+and reproducible three.js counterexamples are in `assets/exr_codecs/`.
+DWA does not copy the JavaScript decoder's mixed-channel, grayscale,
+unknown-stream or pLinear defects. Nonfinite DCT coefficients are refused.
 
 The rows come out from the top, the first line of the data window first,
 as every other reader here returns them. three.js flips them and marks the
@@ -46,37 +54,61 @@ from render.inflate import zlib_inflate
 from render.png import MAX_PIXELS
 from render.texture import float_from_bytes
 from std.memory import bitcast
+from std.collections import Dict
+from std.math import cos, log, pow
 
 # The first four bytes of every OpenEXR file, as a little-endian integer.
 comptime MAGIC = 20000630
+"""The little-endian magic number of an OpenEXR file."""
 # The only file version there is.
 comptime VERSION = 2
+"""The supported OpenEXR file version."""
 # The version field's flag bits for the layouts this reader does not read.
 comptime SINGLE_TILE = 0x02
+"""The tiled-image version flag."""
 comptime DEEP_DATA = 0x08
+"""The deep-image version flag."""
 comptime MULTI_PART = 0x10
+"""The multipart-image version flag."""
 
 # PIZ's constants, named as OpenEXR and three.js name them.
 comptime USHORT_RANGE = 1 << 16
+"""The number of distinct sixteen-bit values."""
 comptime BITMAP_SIZE = USHORT_RANGE >> 3
+"""The number of bytes in a full PIZ value bitmap."""
 comptime HUF_ENCBITS = 16
+"""The width of a Huffman symbol in bits."""
 comptime HUF_DECBITS = 14
+"""The number of bits in a Huffman decoding-table index."""
 comptime HUF_ENCSIZE = (1 << HUF_ENCBITS) + 1
+"""The number of Huffman symbols, including the run marker."""
 comptime HUF_DECSIZE = 1 << HUF_DECBITS
+"""The number of entries in the short-code decoding table."""
 comptime HUF_DECMASK = HUF_DECSIZE - 1
+"""The mask for a short-code decoding-table index."""
 comptime SHORT_ZEROCODE_RUN = 59
+"""The first short zero-length-run marker."""
 comptime LONG_ZEROCODE_RUN = 63
+"""The long zero-length-run marker."""
 comptime SHORTEST_LONG_RUN = 2 + LONG_ZEROCODE_RUN - SHORT_ZEROCODE_RUN
+"""The minimum zero-length run encoded by a long marker."""
 # The longest code length a packed table can spell: six bits, less the
 # five values that mean a run of zeros.
 comptime MAX_CODE_LENGTH = 58
+"""The maximum Huffman code length."""
 # How many bits of the Huffman reader's accumulator are kept. Only the
 # bits not yet consumed matter, and a code is never longer than
 # `MAX_CODE_LENGTH`, so this is room enough and no shift can overflow.
 comptime ACCUMULATOR_MASK = (1 << 62) - 1
+"""The mask that keeps the bit accumulator bounded."""
 # The two wavelet decoders: 14-bit when every value fits, 16-bit else.
 comptime A_OFFSET = 1 << 15
+"""The offset in the sixteen-bit PIZ wavelet."""
 comptime MOD_MASK = (1 << 16) - 1
+"""The sixteen-bit modular arithmetic mask."""
+# Bound each decoded stream and coefficient allocation in bytes. DWA's
+# padded 8-by-8 blocks can have far more coefficients than real pixels.
+comptime _MAX_EXR_STREAM_BYTES = MAX_PIXELS * 4
 
 
 @fieldwise_init
@@ -85,56 +117,73 @@ struct ExrCompression(Equatable, ImplicitlyCopyable, Writable):
     `compression` byte.
 
     See `core.object3d.NodeId` for why it is wrapped. The type does not
-    stop `ExrCompression(9)`, so `lines_per_block` asks `is_valid`.
+    stop `ExrCompression(10)`, so `lines_per_block` asks `is_valid`.
     """
 
     var value: Int
+    """The stored format code."""
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the five this reader reads.
+        """Return True if this is a scanline compression code from zero to nine.
 
         Returns:
-            Whether it is none, RLE, ZIPS, ZIP or PIZ. PXR24, B44, B44A,
-            DWAA and DWAB are compressions OpenEXR defines and this
-            reader does not read.
+            Whether the code names a supported scanline compression.
         """
         return self.value >= NO_COMPRESSION.value and (
-            self.value <= PIZ_COMPRESSION.value
+            self.value <= DWAB_COMPRESSION.value
         )
 
 
 # Each scanline as it stands, one to a block.
 comptime NO_COMPRESSION = ExrCompression(0)
+"""Uncompressed samples, one scanline per block."""
 # Run-length encoded bytes, one scanline to a block.
 comptime RLE_COMPRESSION = ExrCompression(1)
+"""Run-length compression, one scanline per block."""
 # zlib, one scanline to a block.
 comptime ZIPS_COMPRESSION = ExrCompression(2)
+"""ZIP compression, one scanline per block."""
 # zlib, sixteen scanlines to a block.
 comptime ZIP_COMPRESSION = ExrCompression(3)
+"""ZIP compression, sixteen scanlines per block."""
 # A wavelet and Huffman coding, thirty-two scanlines to a block.
 comptime PIZ_COMPRESSION = ExrCompression(4)
+"""PIZ wavelet compression, thirty-two scanlines per block."""
+# zlib over channel deltas, with float mantissas reduced to 24 bits.
+comptime PXR24_COMPRESSION = ExrCompression(5)
+"""PXR24 compression: sixteen scanlines per block."""
+# Lossy half blocks, with an optional short constant block in B44A.
+comptime B44_COMPRESSION = ExrCompression(6)
+"""B44 half compression: thirty-two scanlines per block."""
+comptime B44A_COMPRESSION = ExrCompression(7)
+"""B44 with short flat blocks: thirty-two scanlines per block."""
+# Lossy DCT color, with lossless alpha and other channels.
+comptime DWAA_COMPRESSION = ExrCompression(8)
+"""DWA compression: thirty-two scanlines per block."""
+comptime DWAB_COMPRESSION = ExrCompression(9)
+"""DWA compression: 256 scanlines per block."""
 
 
 def lines_per_block(compression: ExrCompression) raises -> Int:
     """Return how many scanlines one block of a compression holds.
 
     Args:
-        compression: One of the five this reader reads.
+        compression: One of the ten supported scanline compressions.
 
     Returns:
-        One for none, RLE and ZIPS; sixteen for ZIP; thirty-two for PIZ.
+        One for none, RLE and ZIPS; sixteen for ZIP and PXR24;
+        thirty-two for PIZ, B44, B44A and DWAA; 256 for DWAB.
 
     Raises:
         Error: If the compression is not one this reader reads.
     """
     if not compression.is_valid():
-        raise Error(
-            "EXR: only none, RLE, ZIPS, ZIP and PIZ compression are read;"
-            " PXR24, B44 and DWA are not ported"
-        )
-    if compression == ZIP_COMPRESSION:
+        raise Error("EXR: invalid scanline compression code")
+    if compression == ZIP_COMPRESSION or compression == PXR24_COMPRESSION:
         return 16
-    if compression == PIZ_COMPRESSION:
+    if compression == DWAB_COMPRESSION:
+        return 256
+    if compression.value >= PIZ_COMPRESSION.value:
         return 32
     return 1
 
@@ -149,10 +198,15 @@ struct ExrPixelType(Equatable, ImplicitlyCopyable, Writable):
     """
 
     var value: Int
+    """The stored format code."""
 
     def is_valid(self) -> Bool:
         """Return True if this is `UINT_SAMPLES`, `HALF_SAMPLES` or
-        `FLOAT_SAMPLES`."""
+        `FLOAT_SAMPLES`.
+
+        Returns:
+            Whether the code names a defined sample representation.
+        """
         return (
             self == UINT_SAMPLES
             or self == HALF_SAMPLES
@@ -162,10 +216,13 @@ struct ExrPixelType(Equatable, ImplicitlyCopyable, Writable):
 
 # An unsigned 32-bit integer: an id, not light. Read past, never shown.
 comptime UINT_SAMPLES = ExrPixelType(0)
+"""Unsigned integer samples, four bytes each."""
 # An IEEE 754 half, two bytes.
 comptime HALF_SAMPLES = ExrPixelType(1)
+"""IEEE half-float samples, two bytes each."""
 # An IEEE 754 single, four bytes.
 comptime FLOAT_SAMPLES = ExrPixelType(2)
+"""IEEE single-precision samples, four bytes each."""
 
 
 def sample_bytes(kind: ExrPixelType) raises -> Int:
@@ -215,30 +272,66 @@ def half_to_float(bits: UInt16) -> Float32:
     )
 
 
-@fieldwise_init
 struct ExrChannel(Copyable, Movable):
     """One entry of a header's channel list."""
 
     var name: String
+    """The channel name, including its optional layer prefix."""
     var pixel_type: ExrPixelType
+    """The channel sample representation."""
     # How many pixels apart the channel's samples are, across and down.
     # One for a full-resolution channel, the only kind this reader reads.
     var x_sampling: Int
+    """Horizontal sample spacing in pixels."""
     var y_sampling: Int
+    """Vertical sample spacing in scanlines."""
+    # B44 and DWA use this flag for their perceptual transfer functions.
+    var p_linear: Bool
+    """Whether this channel's samples are perceptually linear."""
+
+    def __init__(
+        out self,
+        name: String,
+        pixel_type: ExrPixelType,
+        x_sampling: Int,
+        y_sampling: Int,
+        p_linear: Bool = False,
+    ):
+        """Create a channel descriptor.
+
+        Args:
+            name: The channel name, including any layer prefix.
+            pixel_type: The on-disk sample type.
+            x_sampling: Horizontal sample spacing.
+            y_sampling: Vertical sample spacing.
+            p_linear: Whether the samples are perceptually linear.
+        """
+        self.name = name
+        self.pixel_type = pixel_type
+        self.x_sampling = x_sampling
+        self.y_sampling = y_sampling
+        self.p_linear = p_linear
 
 
 struct ExrHeader(Movable):
     """What an EXR file's header says, and where its offset table starts."""
 
     var channels: List[ExrChannel]
+    """The channels in their on-disk order."""
     var compression: ExrCompression
+    """The scanline compression method."""
     # The data window, inclusive at both ends.
     var x_min: Int
+    """The first column of the data window."""
     var y_min: Int
+    """The first scanline of the data window."""
     var x_max: Int
+    """The last column of the data window."""
     var y_max: Int
+    """The last scanline of the data window."""
     # The offset of the first entry of the line offset table.
     var start: Int
+    """The byte offset of the scanline offset table."""
 
     def __init__(out self):
         """Create a header that says nothing yet."""
@@ -251,18 +344,26 @@ struct ExrHeader(Movable):
         self.start = 0
 
     def width(self) -> Int:
-        """Return how many pixels across the data window is."""
+        """Return the width of the data window.
+
+        Returns:
+            The number of columns in the inclusive window.
+        """
         return self.x_max - self.x_min + 1
 
     def height(self) -> Int:
-        """Return how many scanlines the data window holds."""
+        """Return the height of the data window.
+
+        Returns:
+            The number of scanlines in the inclusive window.
+        """
         return self.y_max - self.y_min + 1
 
 
 def _need(end: Int, at: Int, count: Int) raises:
     """Refuse to read `count` bytes at `at` when fewer than that remain
     before `end`."""
-    if at + count > end:
+    if at < 0 or count < 0 or at > end or count > end - at:
         raise Error("EXR: the file is cut short")
 
 
@@ -321,16 +422,30 @@ def _channels(
             of the three.
     """
     var out = List[ExrChannel]()
+    var seen = Dict[String, Bool]()
     var at = start
     while at < end - 1:
         var name = _string(bytes, at, end)
         _need(end, at, 16)
+        if name.byte_length() == 0 or name in seen:
+            raise Error("EXR: empty or duplicate channel name")
+        seen[name] = True
+        if bytes[at + 4] > 1:
+            raise Error("EXR: pLinear must be zero or one")
         var kind = ExrPixelType(_i32(bytes, at))
         _ = sample_bytes(kind)
         out.append(
-            ExrChannel(name, kind, _i32(bytes, at + 8), _i32(bytes, at + 12))
+            ExrChannel(
+                name,
+                kind,
+                _i32(bytes, at + 8),
+                _i32(bytes, at + 12),
+                bytes[at + 4] != 0,
+            )
         )
         at += 16
+    if at != end - 1 or bytes[at] != 0:
+        raise Error("EXR: the channel list has no final null byte")
     return out^
 
 
@@ -402,7 +517,7 @@ def read_header(bytes: List[UInt8]) raises -> ExrHeader:
     _ = lines_per_block(header.compression)
     if header.width() <= 0 or header.height() <= 0:
         raise Error("EXR: the data window must hold at least one pixel")
-    if header.width() * header.height() > MAX_PIXELS:
+    if header.width() > MAX_PIXELS // header.height():
         raise Error("EXR: the image has more pixels than a texture")
     header.start = at
     return header^
@@ -975,6 +1090,835 @@ def piz_decode(
     return out^
 
 
+def _store_word(mut out: List[UInt8], at: Int, bits: Int, width: Int):
+    """Store the low bytes of a word at an already checked output offset."""
+    for byte in range(width):
+        out[at + byte] = UInt8((bits >> (8 * byte)) & 255)
+
+
+def _channel_bytes(channels: List[ExrChannel]) raises -> Int:
+    """Return a bounded number of bytes per full-resolution pixel."""
+    var total = 0
+    for channel in channels:
+        total += sample_bytes(channel.pixel_type)
+    return _checked_channel_bytes(total)
+
+
+def _checked_channel_bytes(total: Int) raises -> Int:
+    """Validate a byte total without constructing a large channel list."""
+    if total > MAX_PIXELS:
+        raise Error("EXR: the channel layout is too large")
+    return total
+
+
+def _block_bytes(
+    width: Int, lines: Int, channels: List[ExrChannel]
+) raises -> Int:
+    """Bound a decoded block before multiplying or allocating its storage."""
+    var per = _channel_bytes(channels)
+    if width <= 0 or lines <= 0 or per == 0:
+        raise Error("EXR: invalid block dimensions or channels")
+    # The output image has the same four-byte sample budget. Bound all
+    # intermediate channels too, including channels omitted from RGBA.
+    if width > MAX_PIXELS // lines or per > (MAX_PIXELS * 4) // (width * lines):
+        raise Error("EXR: the decoded block is too large")
+    return width * lines * per
+
+
+def _inflate_exact(
+    bytes: List[UInt8], at: Int, size: Int, expected: Int
+) raises -> List[UInt8]:
+    """Inflate a checked range and require the declared output length."""
+    _need(len(bytes), at, size)
+    if expected < 0 or expected > _MAX_EXR_STREAM_BYTES:
+        raise Error("EXR: a decoded stream exceeds its byte budget")
+    if size == 0:
+        if expected != 0:
+            raise Error("EXR: a compressed stream is missing")
+        return List[UInt8]()
+    var out = zlib_inflate(List[UInt8](bytes[at : at + size]), expected)
+    if len(out) != expected:
+        raise Error("EXR: a compressed stream has the wrong length")
+    return out^
+
+
+def _pxr24_decode(
+    bytes: List[UInt8],
+    start: Int,
+    size: Int,
+    width: Int,
+    lines: Int,
+    channels: List[ExrChannel],
+) raises -> List[UInt8]:
+    """Decode OpenEXR 3.1.5 PXR24's byte planes and modular deltas."""
+    var expected = _block_bytes(width, lines, channels)
+    var packed_per = 0
+    # _block_bytes rejects an empty channel layout.
+    for channel in channels:  # pragma: no branch
+        packed_per += (
+            3 if channel.pixel_type
+            == FLOAT_SAMPLES else sample_bytes(channel.pixel_type)
+        )
+    var packed = _inflate_exact(bytes, start, size, width * lines * packed_per)
+    var out = List[UInt8](length=expected, fill=0)
+    var src = 0
+    var dst = 0
+    # _block_bytes requires at least one scanline.
+    for _ in range(lines):  # pragma: no branch
+        # _block_bytes rejects an empty channel layout.
+        for channel in channels:  # pragma: no branch
+            var wide = sample_bytes(channel.pixel_type)
+            var planes = 3 if channel.pixel_type == FLOAT_SAMPLES else wide
+            var pixel = UInt32(0)
+            # _block_bytes requires at least one column.
+            for x in range(width):  # pragma: no branch
+                var delta = UInt32(0)
+                # A sample has two or four planes; PXR24 FLOAT has three.
+                for plane in range(planes):  # pragma: no branch
+                    delta = (delta << 8) | UInt32(
+                        packed[src + plane * width + x]
+                    )
+                if channel.pixel_type == FLOAT_SAMPLES:
+                    delta <<= 8
+                pixel += delta
+                _store_word(out, dst, Int(pixel), wide)
+                dst += wide
+            src += planes * width
+    return out^
+
+
+def _half_bits(value: Float32) -> Int:
+    """Round to IEEE half, ties to even, as the OpenEXR reference does."""
+    return Int(bitcast[DType.uint16](Float16(value)))
+
+
+def _b44_linear(bits: Int) -> Int:
+    """Evaluate the OpenEXR 3.1.5 half-to-half B44 log lookup."""
+    if bits & 0x7C00 == 0x7C00 or bits > 0x8000:
+        return 0
+    # Both positive and negative zero map to negative infinity in the
+    # reference table. The final texture boundary retains its finite check.
+    return _half_bits(Float32(8 * log(Float64(half_to_float(UInt16(bits))))))
+
+
+def _b44_decode(
+    bytes: List[UInt8],
+    start: Int,
+    size: Int,
+    width: Int,
+    lines: Int,
+    channels: List[ExrChannel],
+) raises -> List[UInt8]:
+    """Decode B44/B44A 4-by-4 half blocks and verbatim other channels."""
+    _need(len(bytes), start, size)
+    var end = start + size
+    var expected = _block_bytes(width, lines, channels)
+    var per = _channel_bytes(channels)
+    var out = List[UInt8](length=expected, fill=0)
+    var at = start
+    var offset = 0
+    var block = List[Int](length=16, fill=0)
+    # _block_bytes rejects an empty channel layout.
+    for channel in channels:  # pragma: no branch
+        var wide = sample_bytes(channel.pixel_type)
+        if channel.pixel_type != HALF_SAMPLES:
+            _need(end, at, width * lines * wide)
+            # _block_bytes requires at least one scanline.
+            for y in range(lines):  # pragma: no branch
+                # The positive width is multiplied by two or four sample bytes.
+                for x in range(width * wide):  # pragma: no branch
+                    out[y * width * per + offset * width + x] = bytes[at]
+                    at += 1
+        else:
+            # A positive scanline count includes the block at zero.
+            for by in range(0, lines, 4):  # pragma: no branch
+                # A positive width includes the block at zero.
+                for bx in range(0, width, 4):  # pragma: no branch
+                    _need(end, at, 3)
+                    block[0] = (Int(bytes[at]) << 8) | Int(bytes[at + 1])
+                    var shift = Int(bytes[at + 2]) >> 2
+                    # OpenEXR uses the same reader for both compression
+                    # tags. Every impossible shift denotes a flat block.
+                    if shift >= 13:
+                        # The remaining fifteen entries of a flat 4-by-4 block.
+                        for i in range(1, 16):  # pragma: no branch
+                            block[i] = block[0]
+                        at += 3
+                    else:
+                        _need(end, at, 14)
+                        # A B44 block has fifteen deltas.
+                        for delta_index in range(15):  # pragma: no branch
+                            var bit = 22 + delta_index * 6
+                            var word = Int(bytes[at + bit // 8]) << 8
+                            if bit % 8 > 2:
+                                word |= Int(bytes[at + bit // 8 + 1])
+                            var delta = ((word >> (10 - bit % 8)) & 63) - 32
+                            var dest = (
+                                delta_index + 1
+                            ) * 4 if delta_index < 3 else (
+                                (delta_index - 3) % 4
+                            ) * 4 + (
+                                delta_index - 3
+                            ) // 4 + 1
+                            var source = (
+                                dest - 4 if delta_index < 3 else dest - 1
+                            )
+                            block[dest] = (
+                                block[source] + (delta << shift)
+                            ) & 0xFFFF
+                        at += 14
+                    # A 4-by-4 block has sixteen samples.
+                    for i in range(16):  # pragma: no branch
+                        var bits = block[i]
+                        bits = (
+                            bits & 0x7FFF if bits & 0x8000 else (~bits) & 0xFFFF
+                        )
+                        if channel.p_linear:
+                            bits = _b44_linear(bits)
+                        var x = bx + i % 4
+                        var y = by + i // 4
+                        if x < width and y < lines:
+                            _store_word(
+                                out,
+                                y * width * per + offset * width + x * 2,
+                                bits,
+                                2,
+                            )
+        offset += wide
+    if at != end:
+        raise Error("EXR: a B44 block has trailing bytes")
+    return out^
+
+
+@fieldwise_init
+struct _DwaScheme(Equatable, ImplicitlyCopyable):
+    """The three per-channel schemes in a DWA rule."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this names UNKNOWN, LOSSY_DCT or RLE."""
+        return self.value >= 0 and self.value <= 2
+
+
+comptime _DWA_UNKNOWN = _DwaScheme(0)
+comptime _DWA_DCT = _DwaScheme(1)
+comptime _DWA_RLE = _DwaScheme(2)
+
+
+@fieldwise_init
+struct _DwaAcCompression(Equatable, ImplicitlyCopyable):
+    """The entropy coding of DWA AC tokens."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this names static Huffman or zlib."""
+        return self.value == 0 or self.value == 1
+
+
+comptime _DWA_HUFFMAN = _DwaAcCompression(0)
+comptime _DWA_DEFLATE = _DwaAcCompression(1)
+
+
+@fieldwise_init
+struct _DwaRule(Copyable, Movable):
+    """A validated DWA suffix, sample type, scheme and color component."""
+
+    var suffix: String
+    var pixel_type: ExrPixelType
+    var scheme: _DwaScheme
+    var csc: Int
+    var insensitive: Bool
+
+
+def _dwa_counter(bytes: List[UInt8], at: Int, limit: Int) raises -> Int:
+    """Read a little-endian counter only if it fits a derived size limit."""
+    var lo = _u32(bytes, at)
+    if _u32(bytes, at + 4) != 0 or lo > limit:
+        raise Error("EXR: a DWA counter exceeds its bounded layout")
+    return lo
+
+
+def _dwa_rules(
+    bytes: List[UInt8], mut at: Int, end: Int, version: Int
+) raises -> List[_DwaRule]:
+    """Read version-two rules or construct the legacy case-insensitive set."""
+    var rules = List[_DwaRule]()
+    if version < 2:
+        var names: List[String] = [
+            "r",
+            "red",
+            "g",
+            "grn",
+            "green",
+            "b",
+            "blu",
+            "blue",
+            "y",
+            "by",
+            "ry",
+            "a",
+        ]
+        # The legacy rule-name table has twelve entries.
+        for i in range(len(names)):  # pragma: no branch
+            var csc = -1
+            if i < 2:
+                csc = 0
+            elif i < 5:
+                csc = 1
+            elif i < 8:
+                csc = 2
+            # There are three EXR sample types.
+            for type in range(3):  # pragma: no branch
+                if i == 11 or type != 0:
+                    rules.append(
+                        _DwaRule(
+                            names[i],
+                            ExrPixelType(type),
+                            _DWA_RLE if i == 11 else _DWA_DCT,
+                            csc,
+                            True,
+                        )
+                    )
+        return rules^
+    _need(end, at, 2)
+    var size = _u16(bytes, at)
+    if size < 2:
+        raise Error("EXR: a DWA rule table is too short")
+    _need(end, at, size)
+    var stop = at + size
+    at += 2
+    while at < stop:
+        var suffix = _string(bytes, at, stop)
+        _need(stop, at, 2)
+        var packed = Int(bytes[at])
+        var scheme = _DwaScheme((packed >> 2) & 3)
+        var csc = (packed >> 4) - 1
+        var kind = ExrPixelType(Int(bytes[at + 1]))
+        if (
+            not scheme.is_valid()
+            or csc > 2
+            or not kind.is_valid()
+            or packed & 2 != 0
+        ):
+            raise Error("EXR: an invalid DWA channel rule")
+        if scheme == _DWA_DCT and kind == UINT_SAMPLES:
+            raise Error("EXR: DWA DCT channels must be HALF or FLOAT")
+        rules.append(_DwaRule(suffix, kind, scheme, csc, packed & 1 != 0))
+        at += 2
+    return rules^
+
+
+def _dwa_prefix(name: String) -> Tuple[String, String]:
+    """Separate a channel's last dot suffix from its layer prefix."""
+    var dot = -1
+    for i in range(name.byte_length()):
+        if name.as_bytes()[i] == 46:
+            dot = i
+    if dot < 0:
+        return (String(), name)
+    return (String(name[byte=:dot]), String(name[byte = dot + 1 :]))
+
+
+def _dwa_linear(bits: Int) -> Int:
+    """Evaluate the OpenEXR 3.1.5 nonlinear-half to linear-half lookup."""
+    if bits & 0x7C00 == 0x7C00:
+        return 0
+    var value = half_to_float(UInt16(bits))
+    var magnitude = abs(value)
+    var linear: Float64
+    if magnitude <= 1:
+        linear = pow(Float64(magnitude), Float64(Float32(2.2)))
+    else:
+        var base = Float32(pow(Float64(2.7182818), Float64(2.2)))
+        linear = pow(Float64(base), Float64(magnitude - 1))
+    if value < 0:
+        linear = -linear
+    return _half_bits(Float32(linear))
+
+
+def _dwa_inverse_dct(mut data: List[Float32]):
+    """Invert a DCT using the pinned OpenEXR scalar factorization."""
+    var a = Float32(0.5) * cos(Float32(3.14159) / 4)
+    var b = Float32(0.5) * cos(Float32(3.14159) / 16)
+    var c = Float32(0.5) * cos(Float32(3.14159) / 8)
+    var d = Float32(0.5) * cos(Float32(3) * Float32(3.14159) / 16)
+    var e = Float32(0.5) * cos(Float32(5) * Float32(3.14159) / 16)
+    var f = Float32(0.5) * cos(Float32(3) * Float32(3.14159) / 8)
+    var g = Float32(0.5) * cos(Float32(7) * Float32(3.14159) / 16)
+    # The separable inverse DCT has two passes.
+    for pass_index in range(2):  # pragma: no branch
+        # Each DCT pass has eight lines.
+        for line in range(8):  # pragma: no branch
+            var base = line * 8 if pass_index == 0 else line
+            var stride = 1 if pass_index == 0 else 8
+            var v0 = data[base]
+            var v1 = data[base + stride]
+            var v2 = data[base + 2 * stride]
+            var v3 = data[base + 3 * stride]
+            var v4 = data[base + 4 * stride]
+            var v5 = data[base + 5 * stride]
+            var v6 = data[base + 6 * stride]
+            var v7 = data[base + 7 * stride]
+            var beta0 = b * v1 + d * v3 + e * v5 + g * v7
+            var beta1 = d * v1 - g * v3 - b * v5 - e * v7
+            var beta2 = e * v1 - b * v3 + g * v5 + d * v7
+            var beta3 = g * v1 - e * v3 + d * v5 - b * v7
+            var theta0 = a * (v0 + v4)
+            var theta3 = a * (v0 - v4)
+            var theta1 = c * v2 + f * v6
+            var theta2 = f * v2 - c * v6
+            var gamma0 = theta0 + theta1
+            var gamma1 = theta3 + theta2
+            var gamma2 = theta3 - theta2
+            var gamma3 = theta0 - theta1
+            data[base] = gamma0 + beta0
+            data[base + stride] = gamma1 + beta1
+            data[base + 2 * stride] = gamma2 + beta2
+            data[base + 3 * stride] = gamma3 + beta3
+            data[base + 4 * stride] = gamma3 - beta3
+            data[base + 5 * stride] = gamma2 - beta2
+            data[base + 6 * stride] = gamma1 - beta1
+            data[base + 7 * stride] = gamma0 - beta0
+
+
+def _dwa_dct_block(
+    ac: List[Int], mut at: Int, dc: Int, zigzag: List[Int]
+) raises -> List[Float32]:
+    """Read one bounded 8-by-8 AC token sequence and invert its DCT."""
+    var data = List[Float32](length=64, fill=0)
+    data[0] = half_to_float(UInt16(dc))
+    var pos = 1
+    var nonzero = False
+    while pos < 64:
+        if at >= len(ac):
+            raise Error("EXR: DWA AC data does not fill its block")
+        var token = ac[at]
+        at += 1
+        if token == 0xFF00:
+            break
+        if token >> 8 == 0xFF:
+            var run = token & 255
+            if run > 64 - pos:
+                raise Error("EXR: a DWA AC run exceeds its block")
+            pos += run
+        else:
+            if token & 0x7C00 == 0x7C00:
+                raise Error("EXR: a DWA coefficient is not finite")
+            data[zigzag[pos]] = half_to_float(UInt16(token))
+            pos += 1
+            nonzero = True
+    if dc & 0x7C00 == 0x7C00:
+        raise Error("EXR: a DWA coefficient is not finite")
+    if nonzero:
+        _dwa_inverse_dct(data)
+    else:
+        # This is the reference's dedicated DC-only path.
+        var value = data[0] * Float32(0.3535536) * Float32(0.3535536)
+        # An 8-by-8 DCT block has sixty-four samples.
+        for i in range(64):  # pragma: no branch
+            data[i] = value
+    return data^
+
+
+def _dwa_group(
+    mut out: List[UInt8],
+    ac: List[Int],
+    dc: List[Int],
+    mut ac_at: Int,
+    mut dc_at: Int,
+    group: List[Int],
+    channels: List[ExrChannel],
+    offsets: List[Int],
+    width: Int,
+    lines: Int,
+    per: Int,
+) raises:
+    """Decode one RGB layer or one standalone DCT channel."""
+    var blocks_x = (width + 7) // 8
+    var blocks_y = (lines + 7) // 8
+    var blocks = blocks_x * blocks_y
+    var components = len(group)
+    if dc_at > len(dc) or components * blocks > len(dc) - dc_at:
+        raise Error("EXR: DWA DC data does not fill its channels")
+    var zigzag: List[Int] = [
+        0,
+        1,
+        8,
+        16,
+        9,
+        2,
+        3,
+        10,
+        17,
+        24,
+        32,
+        25,
+        18,
+        11,
+        4,
+        5,
+        12,
+        19,
+        26,
+        33,
+        40,
+        48,
+        41,
+        34,
+        27,
+        20,
+        13,
+        6,
+        7,
+        14,
+        21,
+        28,
+        35,
+        42,
+        49,
+        56,
+        57,
+        50,
+        43,
+        36,
+        29,
+        22,
+        15,
+        23,
+        30,
+        37,
+        44,
+        51,
+        58,
+        59,
+        52,
+        45,
+        38,
+        31,
+        39,
+        46,
+        53,
+        60,
+        61,
+        54,
+        47,
+        55,
+        62,
+        63,
+    ]
+    for by in range(blocks_y):
+        for bx in range(blocks_x):
+            var values = List[List[Float32]]()
+            for component in range(components):
+                values.append(
+                    _dwa_dct_block(
+                        ac,
+                        ac_at,
+                        dc[dc_at + component * blocks + by * blocks_x + bx],
+                        zigzag,
+                    )
+                )
+            # A produced tile row has at least one remaining scanline.
+            for y in range(min(8, lines - by * 8)):  # pragma: no branch
+                # A produced tile column has at least one remaining pixel.
+                for x in range(min(8, width - bx * 8)):  # pragma: no branch
+                    var i = y * 8 + x
+                    if components == 3:
+                        var y_value = values[0][i]
+                        var cb = values[1][i]
+                        var cr = values[2][i]
+                        values[0][i] = y_value + Float32(1.5747) * cr
+                        values[1][i] = (
+                            y_value
+                            - Float32(0.1873) * cb
+                            - Float32(0.4682) * cr
+                        )
+                        values[2][i] = y_value + Float32(1.8556) * cb
+                    for component in range(components):
+                        var channel = group[component]
+                        var bits = _half_bits(values[component][i])
+                        if components == 3 or not channels[channel].p_linear:
+                            bits = _dwa_linear(bits)
+                        var wide = sample_bytes(channels[channel].pixel_type)
+                        var at = (
+                            (by * 8 + y) * width * per
+                            + offsets[channel] * width
+                            + (bx * 8 + x) * wide
+                        )
+                        if wide == 4:
+                            bits = Int(
+                                bitcast[DType.uint32](
+                                    half_to_float(UInt16(bits))
+                                )
+                            )
+                        _store_word(out, at, bits, wide)
+    dc_at += components * blocks
+
+
+def _dwa_lower(name: String) -> String:
+    """Fold ASCII only, as OpenEXR's rules do in the C locale."""
+    var out = String()
+    for codepoint in name.codepoint_slices():
+        var text = String(codepoint)
+        if text.byte_length() == 1:
+            var byte = Int(text.as_bytes()[0])
+            if byte >= 65 and byte <= 90:
+                out += chr(byte + 32)
+                continue
+        out += text
+    return out^
+
+
+def _sort_dwa_prefixes(mut items: List[String]):
+    """Sort layer prefixes in O(n log n) comparisons, without recursion."""
+    var scratch = List[String](length=len(items), fill=String())
+    var step = 1
+    while step < len(items):
+        # The enclosing step < len(items) test proves a nonempty list.
+        for start in range(0, len(items), step * 2):  # pragma: no branch
+            var middle = min(start + step, len(items))
+            var end = min(start + step * 2, len(items))
+            var left = start
+            var right = middle
+            # start < len(items), and positive step makes end > start.
+            for dest in range(start, end):  # pragma: no branch
+                if left < middle and (
+                    right >= end or items[left] <= items[right]
+                ):
+                    scratch[dest] = items[left]
+                    left += 1
+                else:
+                    scratch[dest] = items[right]
+                    right += 1
+        # The enclosing step < len(items) test proves a nonempty list.
+        for i in range(len(items)):  # pragma: no branch
+            items[i] = scratch[i]
+        step *= 2
+
+
+def _dwa_decode(
+    bytes: List[UInt8],
+    start: Int,
+    size: Int,
+    width: Int,
+    lines: Int,
+    channels: List[ExrChannel],
+) raises -> List[UInt8]:
+    """Decode DWA versions zero through two with layout-derived bounds."""
+    _need(len(bytes), start, size)
+    var end = start + size
+    _need(end, start, 88)
+    var expected = _block_bytes(width, lines, channels)
+    var version = _dwa_counter(bytes, start, 2)
+    var unknown_size = _dwa_counter(bytes, start + 8, expected)
+    var unknown_compressed = _dwa_counter(bytes, start + 16, size)
+    var ac_compressed = _dwa_counter(bytes, start + 24, size)
+    var dc_compressed = _dwa_counter(bytes, start + 32, size)
+    var rle_compressed = _dwa_counter(bytes, start + 40, size)
+    var rle_size = _dwa_counter(bytes, start + 48, expected * 2)
+    var rle_raw = _dwa_counter(bytes, start + 56, expected)
+    var ac_mode = _DwaAcCompression(_dwa_counter(bytes, start + 80, 1))
+    # The counter above admits only 0 and 1, the two AC modes.
+    var at = start + 88
+    var rules = _dwa_rules(bytes, at, end, version)
+    var sizes: List[Int] = [
+        unknown_compressed,
+        ac_compressed,
+        dc_compressed,
+        rle_compressed,
+    ]
+    var starts = List[Int]()
+    # The DWA header has exactly four compressed sections.
+    for count in sizes:  # pragma: no branch
+        _need(end, at, count)
+        starts.append(at)
+        at += count
+    if at != end:
+        raise Error("EXR: DWA streams have trailing bytes")
+    # Index rules once. Keep both their last matching position and every
+    # CSC assignment. This preserves overlapping rules without a rules x
+    # channels scan, and later channels still overwrite the same CSC slot.
+    var exact = Dict[String, Tuple[Int, Int]]()
+    var folded = Dict[String, Tuple[Int, Int]]()
+    for index in range(len(rules)):
+        ref rule = rules[index]
+        var key = String(rule.pixel_type.value) + rule.suffix
+        var mask = 0 if rule.csc < 0 else 1 << rule.csc
+        if rule.insensitive:
+            # Serialized rules already contain their intended folded
+            # suffix. OpenEXR folds the candidate, not this stored value.
+            var previous = folded.get(key, (-1, 0))
+            folded[key] = (index, previous[1] | mask)
+        else:
+            var previous = exact.get(key, (-1, 0))
+            exact[key] = (index, previous[1] | mask)
+    var schemes = List[_DwaScheme]()
+    var prefix_indices = Dict[String, Int]()
+    var group_prefixes = List[String]()
+    var candidates = List[List[Int]]()
+    var offsets = List[Int]()
+    var per = 0
+    var dct_channels = 0
+    var unknown_expected = 0
+    var rle_expected = 0
+    # _block_bytes rejects an empty channel layout.
+    for channel_index in range(len(channels)):  # pragma: no branch
+        ref channel = channels[channel_index]
+        var names = _dwa_prefix(channel.name)
+        var group_index = prefix_indices.get(names[0], -1)
+        if group_index < 0:
+            group_index = len(candidates)
+            prefix_indices[names[0]] = group_index
+            group_prefixes.append(names[0])
+            candidates.append(List[Int](length=3, fill=-1))
+        var key = String(channel.pixel_type.value) + names[1]
+        var sensitive = exact.get(key, (-1, 0))
+        var insensitive = folded.get(_dwa_lower(key), (-1, 0))
+        var last = max(sensitive[0], insensitive[0])
+        var scheme = _DWA_UNKNOWN if last < 0 else rules[last].scheme
+        var mask = sensitive[1] | insensitive[1]
+        # Each candidate RGB group has exactly three slots.
+        for component in range(3):  # pragma: no branch
+            if mask & (1 << component) != 0:
+                candidates[group_index][component] = channel_index
+        schemes.append(scheme)
+        offsets.append(per)
+        var wide = sample_bytes(channel.pixel_type)
+        per += wide
+        if scheme == _DWA_DCT:
+            dct_channels += 1
+        elif scheme == _DWA_RLE:
+            rle_expected += width * lines * wide
+        else:
+            unknown_expected += width * lines * wide
+    if unknown_size != unknown_expected or rle_raw != rle_expected:
+        raise Error("EXR: DWA channel sizes do not match their rules")
+    var dc_expected = ((width + 7) // 8) * ((lines + 7) // 8) * dct_channels
+    # At least one AC token and at most 63 tokens per DCT block.
+    var max_coefficients = _MAX_EXR_STREAM_BYTES // 8
+    var ac_count = _dwa_counter(
+        bytes, start + 64, min(dc_expected * 63, max_coefficients)
+    )
+    var dc_count = _dwa_counter(
+        bytes, start + 72, min(dc_expected, max_coefficients)
+    )
+    if dc_count != dc_expected or ac_count < dc_expected:
+        raise Error("EXR: DWA coefficient counts do not match their channels")
+    if rle_size > rle_raw * 2:
+        raise Error("EXR: DWA RLE data exceeds its channel layout")
+    var unknown = _inflate_exact(
+        bytes, starts[0], unknown_compressed, unknown_size
+    )
+    var ac = List[Int]()
+    if ac_mode == _DWA_HUFFMAN and ac_compressed > 0:
+        ac = huffman_decode(bytes, starts[1], ac_compressed, ac_count)
+    else:
+        var packed = _inflate_exact(
+            bytes, starts[1], ac_compressed, ac_count * 2
+        )
+        for i in range(ac_count):
+            ac.append(_u16(packed, i * 2))
+    # Huffman requires exactly ac_count values. The deflate path receives
+    # exactly twice that many bytes and appends one value for every pair.
+    var dc_bytes = _reorder(
+        _inflate_exact(bytes, starts[2], dc_compressed, dc_count * 2)
+    )
+    var dc = List[Int](capacity=dc_count)
+    for i in range(dc_count):
+        dc.append(_u16(dc_bytes, i * 2))
+    var rle_bytes = _inflate_exact(bytes, starts[3], rle_compressed, rle_size)
+    var rle = run_length_decode(rle_bytes, 0, len(rle_bytes), rle_raw)
+    if len(rle) != rle_raw:
+        raise Error("EXR: DWA RLE data has the wrong length")
+    var out = List[UInt8](length=expected, fill=0)
+    var decoded = List[Bool](length=len(channels), fill=False)
+    # OpenEXR's ordered prefix map encodes complete RGB layers first.
+    _sort_dwa_prefixes(group_prefixes)
+    var ac_at = 0
+    var dc_at = 0
+    # At least one validated channel supplies a layer prefix.
+    for prefix in group_prefixes:  # pragma: no branch
+        var group = candidates[prefix_indices[prefix]].copy()
+        if group[0] >= 0 and group[1] >= 0 and group[2] >= 0:
+            if (
+                group[0] == group[1]
+                or group[0] == group[2]
+                or group[1] == group[2]
+            ):
+                raise Error("EXR: a DWA color group repeats a channel")
+            # Every candidate group was allocated with three slots.
+            for channel in group:  # pragma: no branch
+                if schemes[channel] != _DWA_DCT:
+                    raise Error("EXR: DWA color groups must use DCT")
+            _dwa_group(
+                out,
+                ac,
+                dc,
+                ac_at,
+                dc_at,
+                group,
+                channels,
+                offsets,
+                width,
+                lines,
+                per,
+            )
+            # Every candidate group was allocated with three slots.
+            for channel in group:  # pragma: no branch
+                decoded[channel] = True
+    var unknown_at = 0
+    var rle_at = 0
+    # _block_bytes rejects an empty channel layout.
+    for channel in range(len(channels)):  # pragma: no branch
+        if decoded[channel]:
+            continue
+        if schemes[channel] == _DWA_DCT:
+            _dwa_group(
+                out,
+                ac,
+                dc,
+                ac_at,
+                dc_at,
+                [channel],
+                channels,
+                offsets,
+                width,
+                lines,
+                per,
+            )
+            continue
+        var wide = sample_bytes(channels[channel].pixel_type)
+        # _block_bytes requires at least one scanline.
+        for y in range(lines):  # pragma: no branch
+            # _block_bytes requires at least one column.
+            for x in range(width):  # pragma: no branch
+                # A validated sample occupies two or four bytes.
+                for byte in range(wide):  # pragma: no branch
+                    var dest = (
+                        y * width * per
+                        + offsets[channel] * width
+                        + x * wide
+                        + byte
+                    )
+                    if schemes[channel] == _DWA_RLE:
+                        out[dest] = rle[
+                            rle_at + byte * width * lines + y * width + x
+                        ]
+                    else:
+                        out[dest] = unknown[
+                            unknown_at + (y * width + x) * wide + byte
+                        ]
+        if schemes[channel] == _DWA_RLE:
+            rle_at += width * lines * wide
+        else:
+            unknown_at += width * lines * wide
+    if ac_at != len(ac):
+        raise Error("EXR: DWA coefficient streams have trailing values")
+    return out^
+
+
 def _uncompress(
     bytes: List[UInt8],
     start: Int,
@@ -990,6 +1934,24 @@ def _uncompress(
         return _reorder(run_length_decode(bytes, start, size, expected))
     if header.compression == PIZ_COMPRESSION:
         return piz_decode(
+            bytes, start, size, header.width(), lines, header.channels
+        )
+    if header.compression == PXR24_COMPRESSION:
+        return _pxr24_decode(
+            bytes, start, size, header.width(), lines, header.channels
+        )
+    if (
+        header.compression == B44_COMPRESSION
+        or header.compression == B44A_COMPRESSION
+    ):
+        return _b44_decode(
+            bytes, start, size, header.width(), lines, header.channels
+        )
+    if (
+        header.compression == DWAA_COMPRESSION
+        or header.compression == DWAB_COMPRESSION
+    ):
+        return _dwa_decode(
             bytes, start, size, header.width(), lines, header.channels
         )
     return _reorder(
@@ -1042,20 +2004,41 @@ def decode(bytes: List[UInt8]) raises -> FloatImage:
     var fill = Float32(0)
     if gray or not _has(channels, "A"):
         fill = 1
-    var pixels = List[Float32](length=width * height * 4, fill=fill)
     var per_block = lines_per_block(header.compression)
     var blocks = (height + per_block - 1) // per_block
     var at = header.start + 8 * blocks
     _need(len(bytes), header.start, 8 * blocks)
+    # Validate every chunk's framing and line coverage before image storage.
+    # The file can store chunks in either order, but each strip occurs once.
+    var probe = at
+    var seen = List[Bool](length=blocks, fill=False)
+    # Positive validated height and block size produce at least one strip.
+    for _ in range(blocks):  # pragma: no branch
+        _need(len(bytes), probe, 8)
+        var first = _i32(bytes, probe) - header.y_min
+        var count = _u32(bytes, probe + 4)
+        if first < 0 or first >= height:
+            raise Error("EXR: a block names a line outside the image")
+        if first % per_block != 0 or seen[first // per_block]:
+            raise Error("EXR: overlapping or misaligned scanline blocks")
+        seen[first // per_block] = True
+        var expected = _block_bytes(
+            width, min(per_block, height - first), channels
+        )
+        if count > expected:
+            raise Error("EXR: a block is larger than its scanlines")
+        _need(len(bytes), probe + 8, count)
+        probe += 8 + count
+    var pixels = List[Float32](length=width * height * 4, fill=fill)
     for _ in range(blocks):  # pragma: no branch
         _need(len(bytes), at, 8)
         var line = _i32(bytes, at) - header.y_min
         var size = _u32(bytes, at + 4)
         at += 8
-        if line < 0 or line >= height:
-            raise Error("EXR: a block names a line outside the image")
+        # The immutable input's identical framing pass already validated
+        # this scanline before any output storage was allocated.
         var lines = min(per_block, height - line)
-        var expected = lines * width * line_bytes
+        var expected = _block_bytes(width, lines, channels)
         _need(len(bytes), at, size)
         var raw: List[UInt8]
         if size >= expected:

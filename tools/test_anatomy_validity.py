@@ -133,12 +133,16 @@ class AnatomyValidityTests(unittest.TestCase):
         backward = av.annotate_diagnostics({'bones': [a | {'first': a['second'], 'second': a['first']}]})['bones'][0]
         self.assertEqual(forward['pair_id'], backward['pair_id'])
         self.assertFalse(forward['allowlist_applied'])
+        self.assertEqual(forward['frame_id'], av.PAIR_FRAME)
+        empty = av.annotate_diagnostics({'bones': [a | {'samples': 0, 'overlap_samples': 0, 'signed_field_witness_m': 0}]})['bones'][0]
+        self.assertIsNone(empty['signed_field_witness_m'])
         with self.assertRaisesRegex(ValueError, 'duplicate'):
             av.annotate_diagnostics({'bones': [a.copy(), a.copy()]})
         with self.assertRaises(ValueError):
             av.annotate_diagnostics({'bones': [{'record': 'unknown'}]})
         end = av.annotate_diagnostics({'spine': [{'record': 'endplane', 'body': 'cervical/2'}]})['spine'][0]
         self.assertEqual(end['endplane_id'], 'canonical/spine/endplane/cervical/2')
+        self.assertEqual(end['frame_id'], av.SPINE_FRAME)
         lower = av.annotate_diagnostics({'spine': [{'record': 'endplane', 'body': 'thoracolumbar/16', 'next_body_outside_field_m': 0.0}]})['spine'][0]
         self.assertFalse(lower['next_body_sampled'])
         self.assertIsNone(lower['next_body_outside_field_m'])
@@ -266,7 +270,7 @@ class AnatomyValidityTests(unittest.TestCase):
                             return [row(part, low, high, step/1000)]
                         return []
 
-                    with patch.object(av, 'ROOT', root), patch.object(av, 'probe_rows', side_effect=rows):
+                    with patch.object(av, 'ROOT', root), patch.object(av, 'probe_rows', side_effect=rows), patch.object(av, 'collect_pair_diagnostics', return_value=([], {})):
                         if mutation == 'none':
                             result = av.report(args)
                             self.assertEqual(result['build_provenance'], provenance)

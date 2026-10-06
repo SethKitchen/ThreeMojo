@@ -306,13 +306,13 @@ def calibrated_mass(
         animal: The individual, as `create_animal` made it.
         cal: Its species' calibration.
         cells: Samples per published reference length. The default is
-            the resolution `calibrate` measured at. Only there does the
-            canonical adult male weigh the published mass exactly.
+            the resolution that `calibrate` used for the canonical grid.
 
     Returns:
         Per-bone mass, center and inertia, in SI units, with the
-        densities scaled so the canonical adult male weighs the
-        published mass at the default resolution.
+        densities scaled so the canonical adult male at the default
+        resolution weighs the published mass. Other resolutions can
+        change the sampled volume and mass.
 
     Raises:
         Error: If the scale or the sample count is not positive, or the

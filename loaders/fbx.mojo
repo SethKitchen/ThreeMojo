@@ -57,7 +57,16 @@ stacks into clips.
 `LookAtProperty`, an orthographic camera, layered textures past their
 first layer, a second set of texture coordinates, and the ambient
 occlusion, displacement, reflection and specular maps.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import polygon_normal
 
 from animation.animation_clip import AnimationClip
 from animation.keyframe_track import (
@@ -545,13 +554,7 @@ def _triangulate(points: List[Vector3]) raises -> List[Int]:
             ear is left to clip.
     """
     var count = len(points)
-    var normal = Vector3(0, 0, 0)
-    for index in range(count):  # pragma: no branch
-        var a = points[index]
-        var b = points[(index + 1) % count]
-        normal.x += (a.y - b.y) * (a.z + b.z)
-        normal.y += (a.z - b.z) * (a.x + b.x)
-        normal.z += (a.x - b.x) * (a.y + b.y)
+    var normal = polygon_normal(points)
     if normal.length() == 0:
         raise Error("FBX: a polygon has no area")
     normal.normalize()
@@ -584,10 +587,12 @@ def _triangulate(points: List[Vector3]) raises -> List[Int]:
     return out^
 
 
-def _turn(a: Vector2, b: Vector2, c: Vector2) -> Float32:
+def _turn(a: Vector2, b: Vector2, c: Vector2) -> Float64:
     """Return twice the signed area of the triangle `a`, `b`, `c`:
     positive when it turns counterclockwise."""
-    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+    return (Float64(b.x) - Float64(a.x)) * (Float64(c.y) - Float64(a.y)) - (
+        Float64(b.y) - Float64(a.y)
+    ) * (Float64(c.x) - Float64(a.x))
 
 
 def _find_ear(flat: List[Vector2], ring: List[Int]) -> Int:

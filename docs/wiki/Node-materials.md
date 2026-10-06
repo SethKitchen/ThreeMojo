@@ -169,7 +169,7 @@ A `STANDARD` material ignores the thickness outputs, as three.js's `MeshStandard
 
 ### Volumetric light
 
-A `VOLUME` material is three.js's `VolumeNodeMaterial`. Its surface shows the light that a ray through the mesh gathers from the point and spot lights. Build it with `volume_node_material`:
+A `VOLUME` material ports `VolumeNodeMaterial` within the limits below. Its ray gathers point, spot, and rectangle lights. Build it with `volume_node_material`:
 
 ```mojo
 var graph = NodeGraph()
@@ -186,13 +186,76 @@ The material is drawn from its back faces, blended, with no depth test and no de
 
 1. The ray runs from the camera to the fragment when the camera is more than twice the mesh's bounding radius from it. Otherwise the ray runs from the fragment to the camera. The radius is the geometry's bounding sphere in world space, three.js's `modelRadius`.
 2. The ray takes `steps` equal steps. The first step is `OFFSET_NODE` of a step from the start, or at the start.
-3. At each step, each point light and each spot light adds its color, times its falloff, its beam and its map. Its shadow multiplies it twice, as three.js multiplies it. A directional light adds nothing, because it has no distance.
+3. At each step, each point light and each spot light adds its color, times its falloff, beam, and map. Its shadow multiplies it twice. A rectangle adds the r186 volume LTC form factor times radiance, raised to the power 1.5 per channel. The form factor uses camera-space corners and the emitting side only. A directional light adds nothing.
 4. `SCATTERING_NODE` multiplies that density. In this output, `position_world()` is the position of the step. three.js hands the same position to `scatteringNode` as `positionRay`.
 5. What the ray lets through is multiplied by `exp(-density * 0.01 * step)` at each step, which is Beer's law.
+
+An exactly zero-width or zero-height rectangle contributes no volume light.
+Its area is zero. The shared CPU and GPU helper returns zero before evaluating
+its edges, so rounding cannot leave a spurious contribution. This correction
+uses no near-zero cutoff. Nondegenerate rectangles retain the r186 formula.
 
 An IES profile or projector frame shapes the beam at each ray step, as it does on a surface. An IES light with no profile uses its cone. See [Lighting addons](Lighting-addons#ies-spot-light).
 
 The surface's color is one minus what the ray lets through, plus `EMISSIVE_NODE`. Its alpha is the material's. A volume refuses an emissive color and an emissive map, because three.js's material has neither. The functions are in `materials.volume_node_material`.
+
+#### Opaque scene depth
+
+Set `scene_depth=True` in `volume_node_material`, or call
+`material.set_volume_scene_depth(True)`, to gate scattering against opaque
+scene depth. The default is `False`, which keeps the existing ungated ray.
+Only a `VOLUME` material can enable this input. `DEPTH_NODE` keeps its generic
+fragment-depth contract on every material. It does not enable this gate.
+
+The renderer captures depth after opaque draws survive their depth, stencil,
+mask, and alpha tests. The capture excludes all volumes, all blended draws,
+and transmissive draws. It occurs before transmissive back faces. Later depth
+writes cannot change this snapshot, including writes by a volume whose
+`depth_write` or blend settings were changed.
+The capture uses the current scene. Depth left in a caller-owned target by
+an earlier render is not an extra occluder, even with `auto_clear=False`.
+
+The snapshot holds signed camera-axis distances in meters. Positive values
+are in front of the camera. Each fragment reads its exact raster pixel from
+the top-left origin. Depth has no bilinear filter or mip level. Supersampling
+captures at the larger raster size before color resolve. Resize, viewport,
+and scissor settings apply to the opaque capture too.
+
+Standard NDC depth, reversed depth, and logarithmic depth reconstruct the
+same camera-axis distance. Perspective and orthographic cameras are supported.
+A clear pixel uses the camera's far distance.
+
+Each original ray sample at or
+before the captured distance contributes. The gate preserves step size,
+offset, and direction. It does not move the ray start to the near plane.
+Camera clipping still removes geometry outside the view.
+
+The orthographic gate corrects a mixed-space comparison in r186. With near
+1 meter and far 9 meters, a sample at distance 2 is before an opaque surface
+at distance 3. r186 compares perspective sample depth 0.5625 with orthographic
+scene depth 0.25 and rejects that sample. This port compares axial distances
+and admits it.
+
+The same r186 expression also mixes depth spaces for reversed perspective
+cameras. With near 1 meter and far 9 meters, a sample at distance 3 has
+forward window depth 0.75. Reversed inversion reads that as distance 9/7,
+so r186 can admit it through an opaque surface at distance 2. This port
+rejects it. Independent projection and ordering tests cover both corrections.
+The source equations are in r186 [VolumetricLightingModel](https://github.com/mrdoob/three.js/blob/r186/src/nodes/functions/VolumetricLightingModel.js) and [ViewportDepthNode](https://github.com/mrdoob/three.js/blob/r186/src/nodes/display/ViewportDepthNode.js).
+
+Low-level rasterizer callers must pass a matching `TransmissionTarget` with
+`capture_volume_depth(opaque_target, to_screen, far)` applied before drawing
+volumes. `to_screen` maps camera space to raster pixels. Missing, nonfinite,
+or wrong-sized snapshots raise an error before drawing. A reused GPU target
+uploads the new snapshot on each draw.
+
+CPU and GPU use one ray gate and one rectangle-light calculation. The
+source-bound numerical fixtures target three.js r186. They check per-step
+light and depth decisions independently. They do not establish complete
+rendered r186 parity. This port retains one minus transmittance plus
+`EMISSIVE_NODE`; r186 separately accumulates outgoing ray light and supports
+ray emission. Those differences remain outside this feature.
+
 
 ## Outputs
 
@@ -237,6 +300,9 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | Method | Type | three.js | Value |
 |---|---|---|---|
 | `float(x)`, `vec2`, `vec3`, `vec4` | as named | `float()`, `vec2()` and the rest | A constant. |
+| `uint(UInt32)`, `uvec2`, `uvec3`, `uvec4` | as named | `uint()`, `uvec2()` and the rest | Exact unsigned 32-bit constants. |
+| `int32(Int32)` | `int` | `int()` | An exact signed 32-bit constant. |
+| `uniform_uint(name, value)` | unsigned scalar or vector | `uniform()` | Exact unsigned values. Update with `set_uniform_uint`; read with `read_unsigned`. |
 | `color(Color)` | `vec3` | `color()` | A constant color, decoded from sRGB to linear. |
 | `uniform(name, value)` | as the value | `uniform()` | A named value the caller can change between frames. The value is a `Float32`, a `Vector2`, a `Vector3`, a `Vector4`, a `Color`, a `Matrix3` or a `Matrix4`. |
 | `texture_uniform(name, map)` | `texture` | `texture(map)` | A named texture the caller can change with `set_texture`. |
@@ -267,6 +333,7 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `array_uniform(name, map)` | `textureArray` | GLSL's `sampler2DArray` | A named array texture from `Assets.data_array_textures`. The caller can change it with `set_array`. |
 | `texture_array(sampler, at)` | `vec4` | GLSL's `texture` of a `sampler2DArray` | An array texture read at a `vec3` of `u`, `v` and the layer. The layer is rounded to the nearest and held inside the stack. Two layers are never blended. |
 | `texture_level(map, uv, level)` | `vec4` | `texture(map, uv).level(n)` | As `texture`, at the mip level that a `float` gives. Level zero is the full-size image. A texture with one level reads it at every level. |
+| `texture_grad(map, uv, dx, dy)` | `vec4` | `textureGrad` | A 2D texture read with explicit `vec2` gradients, with straight alpha. `map` is a texture ID or texture uniform. |
 | `texture_load(map, at, level)` | `vec4` | `textureLoad(map, at, level)` | The texel of a texture uniform at a column and a row, counted as `uv` counts. A coordinate outside the image wraps, and a level outside the chain is held inside it. |
 | `texture_size(map, level)` | `vec2` | `textureSize(map, level)` | A texture uniform's width and height at a level, held inside the chain. |
 | `lit()` | `vec3` | `output` | The color that the material's own shading made. An output node only. |
@@ -289,12 +356,14 @@ A `float` next to a vector is repeated into every component, as in GLSL. A condi
 | `swizzle(a, "zyx")` | as long as the string | `a.zyx` |
 | `join([a, b])` | the sum of the widths | `vec3(a, b)` of nodes |
 | `integer(a)`, `unsigned(a)` | the operand | `int`, `uint` |
+| `to_uint(a)`, `to_int(a)` | exact integer scalar or vector | explicit integer constructors |
+| `uint_to_float(a)`, `int_to_float(a)` | float scalar or vector | explicit float constructors |
 | `bit_and`, `bit_or`, `bit_xor`, `shift_left`, `shift_right` | the wider operand | `bitAnd`, `bitOr`, `bitXor`, `shiftLeft`, `shiftRight` |
 | `bit_not(a)` | the operand | `bitNot` |
 
-A value here is a float, and TSL's `int` and `uint` are floats that hold whole numbers. `integer` truncates toward zero. `unsigned` also wraps a negative number up by 2 ** 32.
+The legacy `integer` and `unsigned` helpers return floats that hold whole numbers. `integer` truncates toward zero. `unsigned` also wraps a negative number up by 2 ** 32.
 
-A bit operation truncates each component to a 32-bit integer, operates on it, and holds the result as a float again. A shift reads the low five bits of its count, as a GPU does. NaN is zero, and a number past 32 bits is held at the end of the range. A float holds a whole number exactly up to 2 ** 24.
+A bit operation on legacy float values truncates each component to a 32-bit integer, operates on it, and holds the result as a float again. A shift reads the low five bits of its count, as a GPU does. NaN is zero, and a number past 32 bits is held at the end of the range. A float holds a whole number exactly up to 2 ** 24. Exact integer nodes use separate types and bit-preserving operations. See [The subset](#the-subset).
 
 `round` takes a half to the even whole number. `normalize` leaves a zero vector at zero, where GLSL leaves it undefined. A division by zero gives what IEEE 754 gives, as a GPU does. `mul` of a `mat3` or a `mat4` and a vector of its width multiplies the matrix and the vector, on either side.
 
@@ -436,54 +505,82 @@ TSL's `frontFacing` and GLSL's `gl_FrontFacing` differ for a `BACK_SIDE` materia
 
 ### The subset
 
-- Types: `void`, `bool`, `int`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`. Uniforms can also be `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`. `sampler3D` and `sampler2DArray` are GLSL ES 3.0 only.
-- Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Set a `mat2` uniform with a `Vector4` of its two columns.
+- Types: `void`, `bool`, `int`, `uint`, `float`, `vec2` to `vec4`, `ivec2` to `ivec4`, `uvec2` to `uvec4`, `bvec2` to `bvec4`, `mat2`, `mat3` and `mat4`. Uniforms can also be `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`. `uint`, `uvec2` to `uvec4`, `sampler3D` and `sampler2DArray` require GLSL ES 3.0 in raw shaders.
+- Uniforms: every type above but `void`. An `int`, a `bool` or a vector of them is a uniform of floats that you set. An `int` drops the fraction toward zero, and a `bool` is true where it is not zero. Use `set_uniform_uint` for unsigned uniforms. Set a `uint` with `UInt32`. Set `uvec2` and `uvec4` with `SIMD[DType.uint32, 2]` and `SIMD[DType.uint32, 4]`. Set `uvec3` with three `UInt32` arguments. The pinned Mojo compiler does not lower a three-lane SIMD value. These setters retain every bit and refuse a float uniform. Set a `mat2` uniform with a `Vector4` of its two columns.
 - Declarations: `uniform`, `attribute`, `varying`, `in`, `out`, `const` globals with constant values, `precision` statements, and `layout(...)` on an output.
 - Attributes: `position`, `normal`, `uv` and `color`, and custom attributes of a `float` or a vector. See [Custom attributes](#custom-attributes).
 - Functions: functions with `in`, `out` and `inout` parameters. A call inlines the body. A `return` can come before the end of its function. An `out` or `inout` argument must be a variable, and it gets the parameter's value when the call ends.
-- Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue`, assignments, `+=`, `-=`, `*=`, `/=`, `++` and `--`.
-- Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
-- `while (c)` and `do { ... } while (c);` when the compiler can prove they stop within 64 body executions. The body of a `do` is a block in braces. See [While and do](#while-and-do).
-- Expressions: the arithmetic, comparison and logical operators, `?:`, swizzles of `xyzw`, `rgba` and `stpq`, indexes, and constructors of scalars, vectors and matrices.
+- Statements: local variables, `if` and `else`, `switch`, blocks, `discard`, `break`, `continue` and assignments. Compound assignments include `+=`, `-=`, `*=`, `/=`, integer `%=` and unsigned `&=`, `|=`, `^=`, `<<=` and `>>=`. Numeric scalars and vectors take statement-level `++` and `--`.
+- Loops: `for (int i = a; i < b; i++)` with constant `a`, `b` and step. The index can also be a `uint` or a `float`. The condition is `<`, `<=`, `>`, `>=` or `!=`. The step is `++`, `--`, `+=` or `-=`. A loop runs at most 1024 times.
+- `while (c)` and `do { ... } while (c);` when the compiler can prove they stop within 256 body executions. The body of a `do` is a block in braces. See [While and do](#while-and-do).
+- Expressions: arithmetic, comparison and logical operators, and `?:`. Unsigned bit operators are `&`, `|`, `^`, `~`, `<<` and `>>`. Swizzles, indexes, and scalar, vector and matrix constructors are supported. Swizzles use `xyzw`, `rgba` or `stpq`.
 - Structs: `struct S { ... };` at the top of a shader, of the types above but samplers and of other structs. A struct can be a local variable, a `const`, a uniform, an array element, a parameter and a result. `S(...)` takes one value for each field. A uniform struct's fields are uniforms named `s.a`, as three.js names them.
 - Arrays: local, `const` and uniform arrays of one dimension, of at most 256 elements. An initializer is `T[n](...)` or `T[](...)`. `a.length()` is the size. A uniform array's elements are uniforms named `a[0]`, `a[1]` and on, as three.js names them.
 - Matrices: a matrix times a vector or a matrix of its size, a column `m[i]`, `transpose`, `determinant` and `inverse`. A `mat2` also takes `+`, `-`, `*` and `/` of each component with a `mat2` or a `float`.
 - Built-ins of one value: `radians`, `degrees`, the trigonometry, `exp`, `log`, `exp2`, `log2`, `sqrt`, `inversesqrt`, `abs`, `sign`, `floor`, `ceil`, `trunc`, `round`, `roundEven` and `fract`.
 - Built-ins of more values: `pow`, `mod`, `min`, `max`, `clamp`, `mix`, `step`, `smoothstep`, `length`, `distance`, `dot`, `cross` and `normalize`.
 - Built-ins of comparison: `lessThan`, `lessThanEqual`, `greaterThan`, `greaterThanEqual`, `equal` and `notEqual` give a `bvec`. `any`, `all` and `not` take a `bvec`. `mix` takes a `bool` or a `bvec` to choose by.
-- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `texelFetch`, `textureSize` and `textureCube`. `texture` of a `samplerCube` reads it in a direction, as `textureCube` does. `texture` of a `sampler3D` or a `sampler2DArray` reads it at a `vec3`.
+- Built-ins of light and surfaces: `faceforward`, `reflect`, `refract`, `dFdx`, `dFdy`, `fwidth`, `texture`, `texture2D`, `textureProj`, `texture2DProj`, `textureLod`, `textureGrad`, `texelFetch`, `textureSize` and `textureCube`. `texture` of a `samplerCube` reads it in a direction, as `textureCube` does. `texture` of a `sampler3D` or a `sampler2DArray` reads it at a `vec3`.
 - The preprocessor: `#version` in a raw shader, object-like `#define`, `#undef`, and `#if`, `#ifdef`, `#ifndef`, `#elif`, `#else` and `#endif`.
 - An `#if` condition: whole numbers, macros that are one whole number, `defined`, `!`, `&&`, `||`, the six comparisons and parentheses. A name that is not a macro is zero, as in the C preprocessor.
 
 A local `mat3` or `mat4` gets its value where you declare it, and keeps that value. A register holds four floats, so such a local is a name for the matrix that its initializer builds. A `mat2` is a `vec4` of its two columns, so it is a variable like a vector. `break` must be in a loop or a `switch` of the same function, and `continue` in a loop.
 
-An index can be a loop's index or another value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
+An index can be a signed or unsigned scalar, including a value that is not constant. A chain of selects then picks the element, the component or the column. An index outside the array reads the first element and writes no element. GLSL leaves both undefined. You can write an array's element through such an index, but not a vector's component.
 
-An `int` is a whole number that a float holds, and a `bool` is one or zero. An `int` division drops the fraction toward zero. A constructor of `ivec` drops each fraction, and a constructor of `bvec` is true where a number is not zero. GLSL ES has no conversion between `int` and `float`, and this compiler has none either. Write `float(i)`.
+Signed and unsigned integer graph values retain all 32 bits. Registers and program words carry their bit patterns, without floating-point arithmetic. Swizzles, joins, selections, arrays, structs, calls and unrolled loops preserve those bits. Unsigned arithmetic wraps modulo 2 ** 32. Integer division drops the fraction toward zero.
+
+`uint(int(x))` preserves every bit of an unsigned `x`. A conversion to `float` can round, as GLSL permits. There is no implicit conversion between integer and float types. Write `float(i)`.
+
+An integer literal can be decimal, octal or hexadecimal. The `u` or `U` suffix selects unsigned values through 4294967295. Unsuffixed literals in this subset stop at 2147483647. A known float-to-integer conversion must be finite and in range. A negative signed integer converts to unsigned modulo 2 ** 32. A constructor of `bvec` tests the integer value, including a value whose payload has the floating-point sign bit.
+
+Unsigned `min`, `max`, `clamp` and vector comparisons follow the GLSL signatures. A bit shift keeps the left operand's width. Its count can be signed or unsigned, scalar or the same vector width. Known shift counts outside 0 to 31 and known integer division by zero are refused.
+
+A runtime invalid count, integer division by zero or invalid float-to-integer conversion gives zero. GLSL leaves these cases undefined. The fixed result prevents unsafe host conversions and unbounded GPU work.
+
+The old node helpers `integer` and `unsigned` retain their float-backed TSL contract. Exact graph clients use `uint`, `uvec2` to `uvec4`, `int32`, `to_uint` and `to_int`. GLSL signed integers now use the exact path too. This prevents unsigned-to-signed round trips from losing bits. Signed arithmetic wraps modulo 2 ** 32 in the cases where GLSL leaves overflow undefined.
+
+### Explicit texture gradients
+
+`textureGrad(sampler2D, vec2, vec2, vec2)` reads a 2D texture with explicit gradients. The second argument is the sample coordinate. The third and fourth arguments give its change per screen pixel across and up. The result is a `vec4`. Raw shaders require GLSL ES 3.0. The port rejects other sampler overloads and vertex-stage calls.
+
+`NodeGraph.texture_grad` has the same sampling behavior. Coordinates and gradients are already placed, as they are for `texture_level`. A shader that transforms its coordinates must pass the gradients it wants. The sampler does not add the texture's offset, repeat, or rotation a second time. The gradients choose the mip level and anisotropic footprint independently of the triangle's original UVs.
+
+Both rasterizers use `anisotropic_footprint`. The texture keeps its wrap modes, filters, mip chain, `flip_y`, color-space conversion, and straight-alpha output. An anisotropic read averages premultiplied taps and takes at most `MAX_ANISOTROPY` taps, 16. Single-level computation and screen images retain their existing filters.
+
+The compiler rejects nonfinite source-independent gradient expressions. The shared renderer interpreter has no exception channel. A nonfinite runtime coordinate or gradient therefore returns transparent black before a texture read. Large finite tap coordinates use the existing wrap mode before conversion to texel indices. This prevents index overflow without changing the wrap phase.
+
+The shared footprint estimator computes its minor axis from the determinant divided by the major axis. This avoids subtracting nearly equal Gram eigenvalue terms. Compensated Float32 products retain thin footprints without device double precision. Equal axes remain equal, so a round footprint keeps one tap.
+
+A rotated 16:1 footprint exposed cancellation in the old estimator. Its mip level was about 0.00000550343 instead of zero. The correction passes the unchanged texture test and its 0.000001 tolerance. Independent 100-digit controls cover rotations, axis swaps, nearly parallel columns and extreme scales.
+
+The 28 real sampler cases in `tests/test_texture_grad.mojo` use independent Mesa GLES3 answers. They cover rectangular textures, gradient direction, mip selection, filters, wraps, coordinate transforms and constants. Other tests cover type, version and stage checks, nonfinite inputs, bounded anisotropy, alpha and color space. `tests/test_gpu.mojo` adds device parity checks. A compile-only result is not device-parity evidence.
+
+Logical `&&` and `||` gate calls on their right side. A conditional `?:` gates its selected arm. Skipped calls do not change `out` or `inout` arguments and cannot discard a fragment. Logical `^^` evaluates both sides. Both conditional arms are still parsed and type checked.
 
 ### While and do
 
-A `while` or a `do` loop must provably stop within `MAX_WHILE_COUNT` body executions, 64. The compiler refuses a shader when a loop exceeds this limit or its exit cannot be proved. It never returns a program with a silently truncated loop. This is a bounded subset, not full GLSL loop support.
+A `while` or a `do` loop must provably stop within `MAX_WHILE_COUNT` body executions, 256. The compiler refuses a shader when a loop exceeds this limit or its exit cannot be proved. It never returns a program with a silently truncated loop. This is a bounded subset, not full GLSL loop support.
 
-The bytecode has no jumps or runtime error channel. The compiler unrolls 64 body slots and one final condition-only slot. It checks a shared exhaustion flag after all enclosing loops and function calls are expanded. The flag is checked even when the shader does not use a loop's result.
+The bytecode has no jumps or runtime error channel. The compiler unrolls 256 body slots and one final condition-only slot. It checks a shared exhaustion flag after all enclosing loops and function calls are expanded. The flag is checked even when the shader does not use a loop's result.
 
 - A `while` asks its condition before each body and once after the last body, unless a `break` or `return` leaves it.
 - A `do` runs its body once before its first condition. A `continue` still reaches the condition. A `break` skips it.
-- A loop of exactly 64 bodies keeps its final condition's effects. A finite loop of 65 bodies is refused, as a nonterminating loop is.
-- The proof follows finite scalar constants, arithmetic, comparisons, logic and selects. It preserves the sign of zero. Uniforms, attributes, texture reads, unsupported operations, nonfinite values and subnormal values remain unknown. An unknown value can still be safe if both paths stop.
+- Loops of 63, 64, 65, 128 and 256 bodies keep their final condition's effects. A finite loop of 257 bodies is refused, as a nonterminating loop is.
+- The proof follows exact scalar integer constants and operations, finite scalar float constants, arithmetic, comparisons, logic and selects. It preserves the sign of zero. Uniforms, attributes, texture reads, unsupported operations, nonfinite values and subnormal values remain unknown. An unknown value can still be safe if both paths stop.
 - Runtime data in a loop's result can be supported. For example, `while (i < 5) { sum += gain; i++; }` can use a uniform `gain` when `i` starts at zero. The unbounded uniform condition `while (i < count)` is refused.
 - The proof is conservative. It can refuse a bounded runtime-dependent exit, such as `while (flag) { break; }`. Vector-based exits and unsupported scalar functions can also prevent a proof. A constant-count `for` is an alternative when its contract fits. Its existing 1024-iteration limit does not change.
-- Nested loops can exceed `MAX_GRAPH_NODES` before the proof finishes. The existing graph, instruction and register limits still apply.
+- Successful scalar proofs remove inactive selections and constant control work. Runtime values remain in the graph. Nested loops can exceed `MAX_GRAPH_NODES` before the proof finishes. The existing graph, instruction and register limits still apply.
 
 This changes the old contract, which stopped `while` and `do` after 64 bodies without an error. Existing callers that depended on truncation or on an unproved exit now get a compile error. The GLSL frontend uses the same validation before either renderer receives a program. It adds no runtime GPU error mechanism.
 
-The reference is three.js r180, which passes shader source to WebGL, and the [GLSL ES 3.00 specification](https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf). The independent GLSL3 fixtures in `tests/test_glsl_loops.mojo` use the recurrence `i = i + 1`, its triangular sum and condition-call counts. They cover 63 and 64 bodies, explicit refusals at 65, 96 and 128, and supported constant-count `for` controls at those larger bounds. These fixtures do not establish general expression side-effect parity or full GLSL support. Unsigned types and explicit texture gradients remain open in [issue #614](https://github.com/SethKitchen/ThreeMojo/issues/614).
+The reference is three.js r180, which passes shader source to WebGL, and the [GLSL ES 3.00 specification](https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf). The independent GLSL3 fixtures in `tests/test_glsl_loops.mojo` use the recurrence `i = i + 1`, its triangular sum and condition-call counts. They cover 63, 64, 65, 128 and 256 bodies, explicit resource refusals beyond 256, and constant-count `for` controls. Independent Mesa GLES3 fixtures also cover unsigned boundary values, runtime uniforms and explicit gradients. These fixtures do not establish general expression side-effect parity or full GLSL support. See [issue #614](https://github.com/SethKitchen/ThreeMojo/issues/614).
 
 ### What the GLSL compiler refuses
 
 - A `#include`, `#pragma`, `#extension`, `#error`, `#line`, and a `#define` with arguments. A `#version` in a `ShaderMaterial`, as three.js writes its own.
 - `onBeforeCompile` and shader chunks: see [Why no chunks](#why-no-chunks).
-- The types `uint` and `uvec`, the non-square matrices, and the samplers other than `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`.
+- The non-square matrix types, and the samplers other than `sampler2D`, `samplerCube`, `sampler3D` and `sampler2DArray`.
 - Arrays of arrays, arrays of `mat3` or `mat4`, arrays as varyings, attributes, parameters or fields, and an array read whole.
 - A struct declared in a function or with its variables, a struct as a varying, and a sampler in a struct.
 - A struct's field written through an index that is not constant.
@@ -491,12 +588,12 @@ The reference is three.js r180, which passes shader source to WebGL, and the [GL
 - A custom attribute of `int`, `bool` or a matrix, and custom attributes of more than 8 floats in all.
 - `position`, `normal`, `uv` or `color` declared in a `ShaderMaterial`: three.js declares them.
 - Recursion. A call inlines its function, so a function that calls itself has no end.
-- A `do` whose body is not a block in braces, or a `while` or `do` whose exit within 64 bodies cannot be proved.
-- A `switch` of a value that is not an `int`, and a `case` label that is not a constant.
+- A `do` whose body is not a block in braces, or a `while` or `do` whose exit within 256 bodies cannot be proved.
+- A `switch` of a value that is not an `int` or `uint`. A `case` label must be a constant of the selector's type.
 - A declaration directly in a `switch`, outside a block.
 - A `return` before the end of a function that returns a matrix, a struct or a transform, or of a vertex shader's `main`.
 - Prototypes, overloads, and functions named like GLSL's own.
-- The bit operators, `%` of floats, `%=`, and an assignment or `++` inside an expression.
+- Signed bit operators, `%` of floats, and an assignment or `++` inside an expression.
 - A for loop that does not declare its index, reads a bound that is not constant, or runs more than 1024 times.
 - A matrix times a matrix of another size, and an assignment to a local matrix.
 - A sampler in a local variable, and a sampler array's index that is not a constant.
@@ -506,7 +603,7 @@ The reference is three.js r180, which passes shader source to WebGL, and the [GL
 - A varying that reads `position` or `normal`, and a texture read in a vertex shader.
 - Every `gl_` variable but `gl_Position`, `gl_PointSize`, `gl_FragCoord`, `gl_FrontFacing`, `gl_PointCoord`, the color outputs and `gl_FragDepth`. `gl_FrontFacing` and `gl_PointCoord` in a vertex shader, and `gl_PointSize` in a fragment shader.
 - A `gl_PointSize` that reads `position` or `normal`. A point keeps its world and view position, not its local one.
-- The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `textureGrad` and `textureOffset`.
+- The built-ins outside the list above, for example `sinh`, `isnan`, `outerProduct`, `floatBitsToUint` and `textureOffset`.
 - A vector compared with `<`, and a scalar swizzled.
 
 ### Custom attributes
@@ -617,11 +714,15 @@ The library is three.js's: the math, the adjustments, the mix, the channels, the
 
 `object_to_json` writes a node material's program in the material's `nodes` field, and `read_object_json` reads it back into `assets.programs`. three.js's loaders read the other fields of the material and ignore this one.
 
-three.js writes each node of the graph with its type and its inputs. This port writes the compiled program instead: its floats, its uniforms and its custom attributes. It also writes where the program keeps the id of each texture and cube that it reads. Each texture and cube goes to the file's `textures` or `images` list, and the program names it by its uuid. So the loader gives the program the ids that the textures get in its own store. A texture uniform that names no texture is written as `null`.
+three.js writes each node of the graph with its type and its inputs. This port writes the compiled program instead: its words, its uniforms and its custom attributes. It also writes where the program keeps the id of each texture and cube that it reads. Each texture and cube goes to the file's `textures` or `images` list, and the program names it by its uuid. So the loader gives the program the ids that the textures get in its own store. A texture uniform that names no texture is written as `null`.
+
+Programs with exact integer data use `codeBits`, an array of unsigned 32-bit JSON integers. This preserves subnormal, infinity-shaped and NaN-shaped integer payloads. Float-only programs retain the `code` array. The reader accepts either form and rejects a file that supplies both. Integer constant instructions carry a checked type tag in their unused B word. This tag is separate from operand registers.
 
 The writer refuses a program that reads a 3D or an array texture, because object JSON has no form for those textures.
 
-The reader checks the compiled program before a renderer can use it. Each instruction, register, constant, matrix, uniform and custom attribute must fit its storage. Every texture read must have an offset in the serialized texture list. Uniform spans cannot overlap, and a sampler cannot share storage with a numeric uniform. Invalid code raises an error at load time.
+The reader checks the compiled program before a renderer can use it. Each instruction, register, constant, matrix, uniform and custom attribute must fit its storage. Every texture read must have an offset in the serialized texture list. Uniform spans cannot overlap, and a sampler cannot share storage with a numeric uniform. Only checked integer constant or uniform spans can hold nonfinite-shaped payload bits. Headers, instructions, samplers, matrices and float data must stay finite.
+
+Invalid code raises an error at load time.
 
 ### three.js's node JSON
 
@@ -815,12 +916,13 @@ classes with an explicit error.
 | TSL function bodies | Not stored in three.js node JSON; the loader rejects them. |
 | `ModelNode`, `MaterialNode`, `PropertyNode`, `StorageBufferNode` | Rejected. Use explicit graph inputs, textures, or attributes where available. |
 | Post-processing nodes | Use the corresponding composer passes. |
-| Volume `depthNode`, rectangle lights, ray `receivedShadowNode` | Not supported; see the limits below. |
+| Volume scene depth and rectangle lights | Native explicit depth capture and r186 volume LTC are supported. Serialized TSL depth expressions are not loaded. |
+| Volume ray `receivedShadowNode` | Not supported; see the limits below. |
 
 ## What is not ported
 
-- A `VOLUME` material's `depthNode`. three.js reads it as the depth of the scene, to stop a ray at the nearest opaque surface. That needs a pass's depth texture, and no node here reads one. Here `DEPTH_NODE` sets the fragment's depth, as on every other kind.
-- A rectangle of light in a volume, three.js's `LTC_Evaluate_Volume`. A `VOLUME` ray gathers the point and spot lights only.
+- Arbitrary TSL expressions for a volume's `depthNode`. Use the explicit [opaque scene depth](#opaque-scene-depth) input. `DEPTH_NODE` still sets fragment depth.
+- r186's separate outgoing-ray-light accumulation and `scatteringEmissiveNode`. The accepted outgoing transmittance model remains unchanged.
 - `receivedShadowNode` on a volume's ray. The shadows at each step are not shaped by the graph.
 - three.js's node JSON does not keep the name of a uniform, the update of a uniform or the type of an attribute. So `time` is a plain uniform named by its uuid. Set it with `set_uniform` before each frame.
 - The node classes of three.js that are TSL functions, and the classes that have no node here, such as `ModelNode`, `MaterialNode` and `PropertyNode`. A material that uses them cannot load.

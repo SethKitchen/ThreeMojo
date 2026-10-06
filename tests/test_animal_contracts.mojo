@@ -95,7 +95,7 @@ def test_calibration_binds_species_morph_and_canonical_mass_sampling() raises:
         .mass
     )
     assert_almost_equal(observed.value, cal.predicted_mass.value, rtol=1e-6)
-    var normalized = calibrated_mass(base, cal, 40.0).total().mass
+    var normalized = calibrated_mass(base, cal).total().mass
     assert_almost_equal(normalized.value, cal.published_mass.value, rtol=1e-6)
     with assert_raises(contains="twice"):
         _ = calibrated_animal(scaled, cal)

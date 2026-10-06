@@ -54,6 +54,7 @@ from materials.nodes import (
     has_output,
     run_nodes,
 )
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from postprocessing.shader_pass import SCREEN_VERTEX_SHADER
 from postprocessing.sampling import Untracked
@@ -67,6 +68,8 @@ from render.texture import (
     Texture,
     Wrap,
     float_texture,
+    texture_grad_finite,
+    gradient_sample_coordinate,
 )
 from std.math import floor
 
@@ -188,6 +191,33 @@ struct ComputeNodes(ImplicitlyCopyable, NodeSource):
             The texel's four floats, as they are.
         """
         return self.sample(slot, u, v)
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients from the variable's one nearest level.
+
+        Args:
+            slot: Which variable.
+            u: Across.
+            v: Up.
+            dx: Coordinate change per screen pixel across.
+            dy: Coordinate change per screen pixel up.
+
+        Returns:
+            The texel's four floats; transparent black for nonfinite inputs.
+        """
+        if not texture_grad_finite(u, v, dx, dy):
+            return FloatColor(0, 0, 0, 0)
+        return self.sample(
+            slot,
+            gradient_sample_coordinate(
+                u, Wrap(Int(self.wraps[unsafe_offset=slot * 2]))
+            ),
+            gradient_sample_coordinate(
+                v, Wrap(Int(self.wraps[unsafe_offset=slot * 2 + 1]))
+            ),
+        )
 
     def fetch(self, slot: Int, x: Int, y: Int, level: Int) -> FloatColor:
         """Return a variable's texel by its column and row, wrapped by the

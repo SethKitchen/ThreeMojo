@@ -41,6 +41,13 @@ rasterizers read it.
 each tile inset by `ceil( radius ) + 1` texels. Here each cascade has a
 map of its own, as wide as three.js's tile less its inset, so the texels
 are the same size.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
 from cameras.camera import Camera
@@ -195,8 +202,9 @@ def fit_sun[
             origin, or the camera's view or projection is refused.
     """
     shadow.validate()
-    var length = position.length()
-    if not isfinite(length) or length == 0:
+    if not (
+        isfinite(position.x) and isfinite(position.y) and isfinite(position.z)
+    ) or (position.x == 0 and position.y == 0 and position.z == 0):
         raise Error("A sun at the origin has no direction")
     var direction = -position
     direction.normalize()
@@ -264,18 +272,17 @@ def fit_sun[
             )
             center = center + corners.near[corner] + corners.far[corner]
         center = center * Float32(0.125)
-        var radius_sq = Float32(0)
+        var radius = Float32(0)
         var low = corners.near[0].z
         for corner in range(4):  # pragma: no branch
-            radius_sq = max(
-                radius_sq,
+            radius = max(
+                radius,
                 max(
-                    (corners.near[corner] - center).length_sq(),
-                    (corners.far[corner] - center).length_sq(),
+                    (corners.near[corner] - center).length(),
+                    (corners.far[corner] - center).length(),
                 ),
             )
             low = min(low, min(corners.near[corner].z, corners.far[corner].z))
-        var radius = sqrt(radius_sq)
         if resolution > 1:
             # Half a texel of padding, so snapping cannot clip a corner.
             radius /= 1 - 1 / resolution

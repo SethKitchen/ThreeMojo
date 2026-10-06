@@ -163,6 +163,58 @@ A KTX2 file can also hold eight-bit, half and float texels. `R8`, `R8G8` and `R8
 | 2, Zstandard | Read through `render/zstd.mojo`. |
 | 3, zlib | Read through `render/inflate.mojo`. three.js refuses it. |
 
+### Raw ASTC
+
+KTX2 reads all six raw ASTC formats in three.js r180. Each block uses
+sixteen bytes. The host decoder shares the integer-sequence and endpoint
+decoder with Basis HDR. Its block footprint controls partition coordinates,
+weight interpolation and edge cropping.
+
+| Vulkan format | Number | Block | Texture |
+|---|---|---|---|
+| ASTC 4x4 UNORM | 157 | 4x4 | Linear RGBA bytes |
+| ASTC 4x4 SRGB | 158 | 4x4 | sRGB RGBA bytes |
+| ASTC 6x6 UNORM | 165 | 6x6 | Linear RGBA bytes |
+| ASTC 6x6 SRGB | 166 | 6x6 | sRGB RGBA bytes |
+| ASTC 4x4 SFLOAT | 1000066000 | 4x4 | Linear RGBA floats |
+| ASTC 6x6 SFLOAT | 1000066004 | 6x6 | Linear RGBA floats |
+
+The descriptor must name the ASTC color model, `KHR_DF_MODEL_ASTC` (162).
+This is the matching block-compressed model required by the
+[KTX2 data format descriptor rules](https://registry.khronos.org/KTX/specs/2.0/ktxspec.v2.html).
+Files with another model now raise an error.
+
+The Vulkan format and descriptor transfer function must agree. sRGB
+stays encoded in the byte texture until sampling. UNORM endpoints expand
+by bit replication. sRGB endpoints expand by a shift and midpoint bias.
+Both LDR profiles use the top eight interpolated bits. The decoder does
+not convert LDR through half floats.
+
+SFLOAT uses the ASTC half-float
+conversion, then widens each half exactly to a float. LDR and HDR alpha
+are supported. The separate Basis HDR alpha restriction does not apply.
+
+The decoder reads every legal block mode for these footprints and all
+sixteen endpoint modes. It supports one to four partitions, dual planes,
+and bit, trit and quint sequences. HDR endpoints and HDR constant blocks in an
+LDR format are refused. Malformed blocks and nonfinite HDR constants
+raise an error instead of producing the hardware error color.
+
+The reference is Arm astcenc 5.3.0 at commit
+`30aabb3f42406df45a910d8496f9bee17eeba9bb`. The checked-in corpus compares
+2,152 decoded blocks with its UNORM8 and FP16 outputs. It covers all 145
+legal 4x4 block modes and all 370 legal 6x6 block modes. These comparisons
+require exact byte or half-bit equality, with zero tolerance.
+
+Hardware
+can select another permitted decode precision; identical GPU texels are
+not promised. Another 8,192 malformed blocks must be refused. See the
+[reproduction instructions](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/raw-astc.md).
+
+Mips, cube faces, array layers, edge dimensions and Zstandard use the
+same container bounds as the other KTX2 formats. Decoding allocates the
+final byte or float image directly, with only one block of temporary texels.
+
 ### Basis Universal
 
 A KTX2 file whose data format descriptor names the UASTC, UASTC HDR or ETC1S color model holds Basis Universal data. three.js transcodes the data to a GPU format with the Basis Universal WebAssembly transcoder. Here `texture` decodes UASTC and ETC1S to an RGBA byte texture, with the texels of that transcoder's `RGBA32` target. It decodes UASTC HDR to a float texture, with the texels of the `RGBA_HALF` target.
@@ -225,7 +277,7 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 - UASTC HDR with alpha. three.js has no transcoder target for it and throws, so `read` refuses it too.
 - The transcode from UASTC, UASTC HDR or ETC1S to a GPU block format. Each image decodes to the texels of the transcoder's `RGBA32` or `RGBA_HALF` target.
 - Zstandard dictionaries. A frame that names a dictionary is refused. three.js cannot read one either: its transcoder and its Zstandard decoder read no dictionary.
-- ASTC, PVRTC and ETC2 with punch-through alpha as Vulkan formats in KTX2, and ASTC and ETC2 with punch-through alpha in KTX 1. Each container refuses them by name. three.js uploads ASTC as it is, to a GPU that takes it.
+- ASTC footprints other than 4x4 and 6x6, PVRTC, and ETC2 with punch-through alpha as Vulkan formats in KTX2. ASTC and ETC2 with punch-through alpha remain excluded in KTX 1. three.js uploads ASTC to compatible GPU hardware.
 - PVRTC2, and PVRTC1 of a size that is not a power of two.
 - The premultiplied DXT2 and DXT4, and DDS texture arrays.
 - 1D, 3D and array textures in KTX 1, and 1D and 3D textures in KTX2.
@@ -305,8 +357,52 @@ A channel is `byte * 2^(exponent - 128) / 255`, worked in doubles and stored as 
 | `ZIPS_COMPRESSION` | 1 | zlib through `render/inflate.mojo`, then the same. |
 | `ZIP_COMPRESSION` | 16 | The same, sixteen lines at a time. |
 | `PIZ_COMPRESSION` | 32 | A bitmap and a lookup table, a Huffman code, and a Haar wavelet per channel. |
+| `PXR24_COMPRESSION` | 16 | Lossless half and UINT samples; reduced-precision float deltas. three.js r180. |
+| `B44_COMPRESSION` | 32 | Lossy 4-by-4 half blocks; lossless float and UINT channels. three.js r186. |
+| `B44A_COMPRESSION` | 32 | B44 with three-byte flat blocks. three.js r186. |
+| `DWAA_COMPRESSION` | 32 | Lossy DCT color; lossless alpha and unknown channels. three.js r180. |
+| `DWAB_COMPRESSION` | 256 | The same DWA decoder with larger scanline blocks. three.js r180. |
 
 A channel holds halves or floats. A half widens to the float it spells, subnormals and all. `R`, `G` and `B` make RGBA, with `A` as the alpha or one where there is none. `Y` alone makes gray, with an alpha of one. Other channels are read past. Rows come out from the top line of the data window.
+
+The new codecs follow [OpenEXR 3.1.5](https://github.com/AcademySoftwareFoundation/openexr/tree/v3.1.5/src/lib/OpenEXR).
+B44 and DWA preserve each channel's `pLinear` flag.
+DWA supports versions zero, one and two, static-Huffman or DEFLATE AC data, grayscale, and separate RGB layers.
+Mixed half, float and ignored UINT channels keep their own sample widths.
+Raw fallback blocks remain supported.
+
+The reader checks DWA counters against the channel layout before stream allocation.
+It rejects truncated rules, impossible channel groups, nonfinite DCT coefficients, invalid runs, and incorrect stream lengths.
+Scanline chunks cannot overlap or start between block boundaries.
+The image pixel limit is unchanged.
+Decoded streams cannot exceed four bytes times that pixel limit.
+DWA coefficient allocations use the same byte budget, including their integer element width.
+
+#### EXR reference checks
+
+`tests/test_exr_codecs.mojo` checks every sample of 65 fixtures against independent OpenEXR 3.1.5 output.
+The fixture generator uses Imath 3.1.5.
+The fixtures cover half, float, alpha, grayscale, mixed channels, block edges, flat blocks, both `pLinear` values, and DWA stream variants.
+`assets/exr_codecs/manifest.json` records every compressed and raw chunk, source error, and fixture hash.
+The fixture README gives the regeneration commands.
+
+PXR24, B44 and B44A must match decoded reference samples exactly.
+DWA allows `abs(actual - reference) <= 0.003 * max(1, abs(reference))`.
+This preselected fixture budget permits scalar/SIMD DCT and half-rounding differences.
+It is not a universal numerical error bound.
+
+The largest observed scaled difference is `0.002522`, or three representable half steps in one fixture.
+All other fixtures match the decoded reference exactly.
+The fixture README explains the metric and nonlinear rounding amplification.
+These checks do not promise lossy source-image fidelity.
+The manifest records compression loss separately.
+
+The comparison scripts also run the unmodified three.js r180 and r186 loaders.
+They reverse three.js's output rows and request `FloatType`.
+They record upstream errors and mismatches, rather than treating those results as reference values.
+Mixed sample widths and ignored UINT channels expose upstream decoder errors.
+DWA also exposes grayscale, `pLinear`, unknown-stream and legacy-version differences.
+The recorded results name each reproducible fixture.
 
 ### Six HDR files as a cube
 
@@ -366,7 +462,7 @@ A standard or physical surface reads a PMREM. `prefilter_environments(scene, ass
 - The PMREM on first use. three.js builds it inside the renderer. Here the renderer only reads the assets, so you call `prefilter_environments` before the frame. The scene JSON reader calls it for you.
 - Light above one in a background. The backdrop crosses to both backends as sRGB bytes, so a background clips at one before tone mapping. A reflection keeps the floats.
 - RGBE: XYZE pixels, the old Radiance run-length scheme, and every orientation but `-Y +X`. The first is refused, and three.js reads none of them correctly.
-- EXR: tiled, deep and multi-part files, PXR24, B44, B44A, DWAA and DWAB compression, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name. three.js reads all but the last two.
+- EXR: tiled, deep and multi-part files, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name.
 - `EXRLoader.setOutputFormat`. The output is always RGBA, three.js's default.
 
 ### Where the HDR readers differ from three.js

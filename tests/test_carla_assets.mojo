@@ -868,6 +868,128 @@ def test_preload_failure_does_not_publish_a_partial_batch_or_cache() raises:
         assert_equal(registry.decoded[4].pixels[0], UInt8(24))
 
 
+def test_preload_queue_preserves_existing_entries_on_failure_and_retry() raises:
+    var folder = temporary_path("threemojo_carla_queue_retry/")
+    makedirs(folder, exist_ok=True)
+    for workers in [1, 2, 8]:
+        for index in range(5):
+            _write_batch_image(folder, index)
+        var registry = _batch_registry(folder, 1)
+        registry.preload(workers)
+        var original = registry.decoded[0].pixels.copy()
+        var address = (
+            registry.decoded[0]
+            .pixels.unsafe_ptr()
+            .unsafe_origin_cast[MutAnyOrigin]()
+        )
+        # Add new bindings after one entry is already cached. Two distinct
+        # later failures must not publish even the new successful image.
+        var expanded = _batch_registry(folder, 5)
+        registry.manifest = expanded.manifest.copy()
+        Path(folder + "map2.png").write_text("invalid second image")
+        Path(folder + "map4.png").write_text("invalid fourth image")
+        with assert_raises():
+            registry.preload(workers)
+        assert_equal(len(registry.decoded), 1)
+        assert_equal(len(registry.decoded_keys), 1)
+        assert_equal(registry.decoded[0].pixels, original)
+        assert_equal(
+            registry.decoded[0]
+            .pixels.unsafe_ptr()
+            .unsafe_origin_cast[MutAnyOrigin](),
+            address,
+        )
+        _write_batch_image(folder, 2)
+        _write_batch_image(folder, 4)
+        registry.preload(workers)
+        assert_equal(len(registry.decoded), 5)
+        for index in range(5):
+            assert_equal(
+                registry.decoded_keys[index],
+                folder + "map" + String(index) + ".png|srgb",
+            )
+            assert_equal(registry.decoded[index].pixels[0], UInt8(20 + index))
+        registry.preload(workers)
+        assert_equal(len(registry.decoded), 5)
+
+
+def test_preload_queue_matches_serial_pixels_and_complete_mip_chains() raises:
+    var folder = temporary_path("threemojo_carla_queue_skew/")
+    makedirs(folder, exist_ok=True)
+    var sizes: List[Int] = [128, 2, 16, 4, 64]
+    for index in range(len(sizes)):
+        var image = Framebuffer(
+            sizes[index], sizes[index], Color(UInt8(20 + index), 40, 60)
+        )
+        Path(folder + "map" + String(index) + ".png").write_bytes(
+            encode_png(image)
+        )
+    var serial = _batch_registry(folder, 5)
+    serial.preload(1)
+    for workers in [2, 8]:
+        var parallel = _batch_registry(folder, 5)
+        parallel.preload(workers)
+        assert_equal(parallel.decoded_keys, serial.decoded_keys)
+        for index in range(5):
+            ref a = serial.decoded[index]
+            ref b = parallel.decoded[index]
+            assert_equal(a.width, b.width)
+            assert_equal(a.height, b.height)
+            assert_equal(a.pixels, b.pixels)
+            assert_equal(a.levels, b.levels)
+            assert_equal(a.offsets, b.offsets)
+            assert_true(a.color_space == b.color_space)
+            assert_true(a.alpha == b.alpha)
+            assert_true(a.min_filter == b.min_filter)
+            assert_true(a.wrap_s == b.wrap_s)
+            assert_true(a.wrap_t == b.wrap_t)
+
+
+def test_preload_preserves_serial_and_parallel_error_text() raises:
+    var folder = temporary_path("threemojo_carla_queue_errors/")
+    makedirs(folder, exist_ok=True)
+    Path(folder + "map0.png").write_text("invalid")
+    var registry = _batch_registry(folder, 1)
+    var raw = String("")
+    try:
+        _ = registry.texture_set(0)
+    except e:
+        raw = String(e)
+    assert_true(raw.byte_length() > 0)
+    for workers in [1, 2, 8]:
+        var message = String("")
+        try:
+            registry.preload(workers)
+        except e:
+            message = String(e)
+        assert_equal(
+            message, raw if workers == 1 else folder + "map0.png: " + raw
+        )
+        assert_equal(len(registry.decoded), 0)
+
+
+def test_preload_queue_matches_both_color_spaces_and_mips() raises:
+    var serial = AssetRegistry(
+        parse_manifest(_preload_manifest("gltf/checker.png")), CACHE
+    )
+    serial.preload(1)
+    for workers in [2, 8]:
+        var parallel = AssetRegistry(
+            parse_manifest(_preload_manifest("gltf/checker.png")), CACHE
+        )
+        parallel.preload(workers)
+        assert_equal(len(parallel.decoded), 2)
+        assert_equal(parallel.decoded_keys, serial.decoded_keys)
+        for index in range(2):
+            ref a = serial.decoded[index]
+            ref b = parallel.decoded[index]
+            assert_equal(a.pixels, b.pixels)
+            assert_equal(a.offsets, b.offsets)
+            assert_equal(a.levels, b.levels)
+            assert_true(a.color_space == b.color_space)
+            assert_true(a.alpha == b.alpha)
+
+
 # A town package of one triangle drawn seven times, as `build_towns.py`
 # names and tags its nodes: two levels of a building's tile, a road's
 # paint and a road that share a material, a traffic light whose glass is

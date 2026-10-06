@@ -48,9 +48,8 @@ def is_quadruped(rig: Rig) -> Bool:
         rig: The rig.
 
     Returns:
-        Whether it has both shoulders, both hips, the left wrist and the
-        left hock. `walk_pose` also turns `neck2`, and raises on a rig
-        without it.
+        Whether it has both shoulders, hips, wrists and hocks, and the
+        neck2 bone used by the walk pose.
     """
     var count = 0
     for name in [
@@ -59,10 +58,15 @@ def is_quadruped(rig: Rig) -> Bool:
         "hipL",
         "hipR",
         "wristL",
+        "wristR",
         "hockL",
+        "hockR",
     ]:  # pragma: no branch
         count += Int(rig.find_joint(name) >= 0)
-    return count == 6
+    var neck = False
+    for bone in rig.bones:
+        neck = neck or bone.name == "neck2"
+    return count == 8 and neck
 
 
 def foot_offset(phase: Float64, stride: Float64, lift: Float64) -> V3:

@@ -29,8 +29,21 @@ vertex.
 
 A vertex that no triangle uses costs minus a hundredth, and is taken
 first. Removing one takes a step, as in three.js.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import (
+    _ordinary_squared,
+    length3,
+    normalized4,
+    reciprocal_normalized3,
+)
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
@@ -111,15 +124,18 @@ def _dot(a: SIMD[DType.float64, 4], b: SIMD[DType.float64, 4]) -> Float64:
 def _unit3(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
     """Return a three-number vector scaled to unit length, or itself if it
     is zero long, as three.js's `Vector3.normalize` does."""
-    var length = sqrt(_dot(a, a))
-    return a * (1.0 / (length if length != 0 else 1.0))
+    var unit = reciprocal_normalized3(a[0], a[1], a[2])
+    return SIMD[DType.float64, 4](unit[0], unit[1], unit[2], a[3])
 
 
 def _unit4(a: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
     """Return a four-number vector scaled to unit length, or itself if it
     is zero long, as three.js's `Vector4.normalize` does."""
-    var length = sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3])
-    return a * (1.0 / (length if length != 0 else 1.0))
+    var squared = a[0] * a[0] + a[1] * a[1] + a[2] * a[2] + a[3] * a[3]
+    if _ordinary_squared(squared):
+        return a * (1.0 / sqrt(squared))
+    var unit = normalized4(a[0], a[1], a[2], a[3])
+    return SIMD[DType.float64, 4](unit[0], unit[1], unit[2], unit[3])
 
 
 def _find(list: List[Int], value: Int) -> Int:
@@ -216,7 +232,7 @@ struct _Reduction(Movable):
         """Return the cost of moving `u` onto `v`, three.js's
         `computeEdgeCollapseCost`."""
         var d = self.vertex_data[v].position - self.vertex_data[u].position
-        var edge_length = sqrt(_dot(d, d))
+        var edge_length = length3(d[0], d[1], d[2])
         var curvature = 0.0
         var side_faces = List[Int]()
         ref faces = self.vertex_data[u].faces

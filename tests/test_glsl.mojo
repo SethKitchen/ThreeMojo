@@ -249,7 +249,8 @@ def assert_lanes(got: Lanes, x: Float32, y: Float32, z: Float32) raises:
 def test_the_private_kinds_say_which_values_they_hold() raises:
     assert_true(_TokenKind(0).is_valid())
     assert_true(_TokenKind(4).is_valid())
-    assert_false(_TokenKind(5).is_valid())
+    assert_true(_TokenKind(5).is_valid())
+    assert_false(_TokenKind(6).is_valid())
     assert_false(_TokenKind(-1).is_valid())
     assert_true(_Type(0).is_valid())
     assert_true(_Type(6).is_valid())
@@ -303,8 +304,8 @@ def test_the_lexer_refuses_what_is_outside_the_subset() raises:
     )
     refused("void main() { 0x; }", "a hexadecimal number needs digits")
     refused("void main() { 1e+; }", "an exponent needs digits")
-    refused("void main() { 1u; }", "unsigned integers are outside the subset")
-    refused("void main() { 1U; }", "unsigned integers are outside the subset")
+    assert_equal(number("float(1u)"), 1)
+    assert_equal(number("float(1U)"), 1)
     refused("void main() { 1a; }", "a letter cannot follow a number")
     refused("void main() { 2f; }", "a letter cannot follow a number")
     refused("void main() { 2.0fx; }", "a letter cannot follow a number")
@@ -1378,23 +1379,32 @@ def test_the_types_must_meet_as_glsl_es_requires() raises:
         "a ?: chooses between one type, not a float and a int",
     )
     refused_statement(
-        "int x = 1 | 2;", "the bit operator | is outside the subset"
+        "int x = 1 | 2;",
+        "the bit operator | requires unsigned operands in this subset",
     )
     refused_statement(
-        "int x = 1 & 2;", "the bit operator & is outside the subset"
+        "int x = 1 & 2;",
+        "the bit operator & requires unsigned operands in this subset",
     )
     refused_statement(
-        "int x = 1 ^ 2;", "the bit operator ^ is outside the subset"
+        "int x = 1 ^ 2;",
+        "the bit operator ^ requires unsigned operands in this subset",
     )
     refused_statement(
-        "int x = 1 << 2;", "the bit operator << is outside the subset"
+        "int x = 1 << 2;",
+        "the bit operator << requires unsigned operands in this subset",
     )
     refused_statement(
-        "int x = 4 >> 1;", "the bit operator >> is outside the subset"
+        "int x = 4 >> 1;",
+        "the bit operator >> requires unsigned operands in this subset",
     )
-    refused_statement("int x = ~1;", "the bit operator ~ is outside the subset")
     refused_statement(
-        "int x = 1 < 2 | 3;", "the bit operator | is outside the subset"
+        "int x = ~1;",
+        "the bit operator ~ requires an unsigned operand in this subset",
+    )
+    refused_statement(
+        "int x = 1 < 2 | 3;",
+        "the bit operator | requires unsigned operands in this subset",
     )
     refused_statement("float x = ;", "expected a value before ';'")
     refused_statement("float x = (1.0;", "expected ) before ';'")
@@ -1500,9 +1510,7 @@ def test_a_constructor_converts_or_lays_components_end_to_end() raises:
         "mat3 m = mat3(1.0); m = mat3(2.0);",
         "cannot assign m: it is a local matrix",
     )
-    refused_statement(
-        "uvec2 v = uvec2(1);", "the type uvec2 is outside the subset"
-    )
+    assert_equal(number("float(v.x)", "", "uvec2 v = uvec2(1);"), 1)
     refused_statement("vec2 v = ivec2(1);", "cannot give a vec2 a ivec2")
     refused_statement(
         "vec3 v = vec3(viewMatrix);", "cannot make a vec3 of a mat4"
@@ -1725,10 +1733,11 @@ def test_the_statements_build_the_graph() raises:
     # a: (1 + 2 - 0.5) * 2 / 5 = 1; n: 6; c: 9 + 3; d: 10.
     assert_lanes(paint(fragment), 9, 1, 22)
     refused_statement(
-        "float a = 1.0; a %= 2.0;", "the operator %= is outside the subset"
+        "float a = 1.0; a %= 2.0;", "% takes two ints: write mod() for floats"
     )
     refused_statement(
-        "int a = 1; a &= 2;", "the operator &= is outside the subset"
+        "int a = 1; a &= 2;",
+        "the bit operator & requires unsigned operands in this subset",
     )
     refused_statement(
         "float a; float b; a = b = 1.0;",
@@ -1832,7 +1841,7 @@ def test_a_for_loop_with_a_constant_count_is_unrolled() raises:
     refused(counted, "a for loop runs at most 1024 times")
     refused_statement(
         "for (i = 0; i < 2; i++) {}",
-        "a for loop begins by declaring its int or float index",
+        "a for loop begins by declaring its int, uint or float index",
     )
     refused_statement(
         "for (bool i = true; i; i++) {}", "a for loop begins by declaring"
@@ -3323,9 +3332,7 @@ def test_the_corners_of_the_subset() raises:
         "float a[2] = float[2](1.0, 2.0); float x = a[-1];",
         "the index is outside the array",
     )
-    refused_statement(
-        "float x = float(uint(1));", "the type uint is outside the subset"
-    )
+    assert_equal(number("float(uint(1))"), 1)
     refused(
         "uniform sampler2D map;\nvoid main() { vec4 c = sampler2D(1.0);"
         + " gl_FragColor = c; }",

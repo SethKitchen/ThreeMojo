@@ -373,8 +373,9 @@ struct _Grid:
 
         A point on a face, an edge or a corner belongs to up to eight
         blocks. The block it lies in by floor division owns it when it is
-        active; otherwise the first active one below it does. Every block
-        that holds the point finds the same owner.
+        active; otherwise the active block with the lowest lattice block
+        index owns it. This rule is independent of activation order. Every
+        block that holds the point finds the same owner.
 
         Args:
             gx: The x index.
@@ -387,19 +388,27 @@ struct _Grid:
         """
         var f = self.lattice.block
         var side = f + 1
+        var best_slot = -1
+        var best_local = -1
+        var lowest = Int.MAX
         for n in range(8):  # pragma: no branch
             var i = min((gx - (n & 1)) // f, self.lattice.bx - 1)
             var j = min((gy - ((n >> 1) & 1)) // f, self.lattice.by - 1)
             var k = min((gz - (n >> 2)) // f, self.lattice.bz - 1)
             if min(i, min(j, k)) < 0:
                 continue
-            var slot = self.slot_of[self.lattice.block_index(i, j, k)]
-            if slot >= 0:
+            var b = self.lattice.block_index(i, j, k)
+            var slot = self.slot_of[b]
+            if slot >= 0 and b < lowest:
                 var local = (gx - i * f) + side * (
                     (gy - j * f) + side * (gz - k * f)
                 )
-                return (slot, local)
-        return (-1, -1)
+                best_slot = slot
+                best_local = local
+                if n == 0:
+                    return (slot, local)
+                lowest = b
+        return (best_slot, best_local)
 
     def sample(self, gx: Int, gy: Int, gz: Int) -> Float32:
         """Return one lattice sample, or `UNSAMPLED` outside every block.

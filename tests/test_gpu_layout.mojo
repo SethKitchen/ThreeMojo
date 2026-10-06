@@ -401,15 +401,18 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 127)
+    assert_equal(len(flat), 128)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     # A volume's ray rides last: its steps, then the mesh's radius.
     var marched = corners.copy()
     marched[0].steps = 25
     marched[0].model_radius = 1.5
+    marched[0].volume_scene_depth = True
     var volume = flatten(marched)
     assert_equal(volume[LANE_VOLUME], Float32(25))
     assert_equal(volume[LANE_VOLUME + 1], Float32(1.5))
+    assert_equal(volume[LANE_VOLUME + 2], Float32(1))
+    assert_equal(flat[LANE_VOLUME + 2], Float32(0))
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
@@ -1673,3 +1676,44 @@ def test_the_light_buffer_carries_the_spot_profiles_and_the_grid() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+def test_volume_scene_depth_is_packed_after_the_transmission_colors() raises:
+    from render.gpu import TRANSMISSION_DEPTH
+
+    var scene = a_scene_behind()
+    var empty = flatten_transmission(scene)
+    var at = TRANSMISSION_DEPTH * 4
+    assert_equal(
+        float_from_bytes(
+            empty[at], empty[at + 1], empty[at + 2], empty[at + 3]
+        ),
+        0,
+    )
+    scene.volume_depth = List[Float32](
+        length=scene.image.width * scene.image.height, fill=3
+    )
+    scene.volume_depth[0] = 1.25
+    scene.volume_depth[1] = 2.5
+    var packed = flatten_transmission(scene)
+    var start = Int(
+        float_from_bytes(
+            packed[at], packed[at + 1], packed[at + 2], packed[at + 3]
+        )
+    )
+    assert_equal(start, TRANSMISSION_HEADER + len(scene.image.data))
+    assert_equal(len(packed), (start + len(scene.volume_depth)) * 4)
+    at = start * 4
+    assert_equal(
+        float_from_bytes(
+            packed[at], packed[at + 1], packed[at + 2], packed[at + 3]
+        ),
+        Float32(1.25),
+    )
+    at += 4
+    assert_equal(
+        float_from_bytes(
+            packed[at], packed[at + 1], packed[at + 2], packed[at + 3]
+        ),
+        Float32(2.5),
+    )

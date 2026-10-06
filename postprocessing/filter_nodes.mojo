@@ -23,7 +23,16 @@ red. The pass runs it across and then down over red, green and blue alike.
 The pass reads that texture from the assets, as a texture pass reads its
 own. Both read the depth through `perspectiveDepthToViewZ`, as three.js's
 functions do, whatever the camera.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import length2
 
 from postprocessing.display_nodes import (
     exp_f,
@@ -314,7 +323,7 @@ def circle(
     """
     var du = u - 0.5
     var dv = v - 0.5
-    var dist = sqrt(du * du + dv * dv) * 2
+    var dist = length2(du, dv) * 2
     return _smoothstep_any(scale, scale - softness * scale, dist)
 
 

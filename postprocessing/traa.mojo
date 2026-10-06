@@ -29,8 +29,16 @@ pixel's last result, read where the velocity says the pixel was:
 **What differs from three.js.** A neighbor past the edge of the image is
 the edge pixel, as WebGPU's robust `textureLoad` clamps it. The first
 frame's last depth is zero, as a fresh WebGPU depth texture reads.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2
 from cameras.camera import Camera
 from core.assets import Assets
 from core.scene import Scene
@@ -470,8 +478,7 @@ def traa_pixel(
     var moved_y = (v_down - history_v) * Float32(h)
     var motion = min(
         max(
-            sqrt(moved_x * moved_x + moved_y * moved_y)
-            / frame.max_velocity_length,
+            length2(moved_x, moved_y) / frame.max_velocity_length,
             0,
         ),
         1,

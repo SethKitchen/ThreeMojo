@@ -71,6 +71,52 @@ ALSM finds the actors that came and went. It finds the heroes: the vehicles with
 
 The world has no call to turn off an actor's physics. `set_simulate_physics` makes the body kinematic and stops it. The traffic manager then moves the body with teleports.
 
+### Actor lifetime
+
+Temporary unregister and permanent destruction have different effects.
+
+`unregister_vehicles` removes runtime observations, including the cached
+physics-enabled flag. It keeps the actor's parameter settings. Registering
+the vehicle again makes a new physics decision. This also works when the
+caller changed its physics mode while it was unregistered.
+
+Removing an actor from runtime tracking also drops its collision lock and
+locks that name it as the lead. This applies to temporary unregister and
+the permanent destruction of an observed unregistered actor. Other locks
+keep their values. Both collision cycle caches are cleared together because
+a surviving boundary or pair distance can depend on a removed lock. A later
+update with no candidate cannot retain that removed lead's distance.
+
+Registering a live, observed vehicle preserves collision locks that name it
+as the lead. It also preserves both cycle caches until the normal cycle
+boundary. Leaving the unregistered list is not actor destruction.
+
+After `world.destroy_actor`, the next processed traffic-manager step removes
+the actor's parameter settings. It also removes other actors' collision-ignore
+references to that actor. This cleanup includes actors destroyed after
+unregister and actors destroyed before the manager first observed them.
+Settings for surviving actors stay unchanged. Settings for an actor id that
+the world has not issued yet stay pending.
+
+In asynchronous mode, a repeated step on the same frame still does nothing.
+Cleanup waits for the next processed step. A stopped manager does not observe
+destruction until it steps again.
+
+`stop` and `release` keep parameter settings. `reset(world)` clears all
+per-actor settings because an id can name a different actor in the new
+episode. Global settings stay configured. Callers that need the same
+per-actor settings after reset must set them again.
+
+For direct settings management, `Parameters.configured_actor_ids()` lists
+configured owners and collision-ignore targets. `remove_actor(id)` removes
+one actor's settings and incoming references. Do not use it for temporary
+unregister. `clear_actor_settings()` removes all per-actor settings and keeps
+global settings.
+
+This cleanup does not reclaim World actor records, physics bodies or render
+resources. Those remain part of
+[resource lifetime work](https://github.com/SethKitchen/ThreeMojo/issues/306).
+
 ### Localization
 
 The localization stage keeps a path for each vehicle: a list of map nodes, nearest first.
@@ -203,9 +249,11 @@ explain why proven corrections take priority over upstream defects.
 - Curve radii are stable under representable translations and scales above the retained near-line cutoff. This corrects the absolute-coordinate cancellation in CARLA `1360bb9`. The widened curve-speed product avoids intermediate overflow. These corrections can change braking and wide-turn decisions on translated maps.
 
 - Collision cache reads preserve the requested actor order. The geodesic boundary includes the final buffered waypoint. These correct two defects in the pinned CARLA source.
+- Removing an actor drops its own and incoming collision locks and clears both cycle caches. This includes observed unregistered leads. This correction can change a scenario that depended on a removed lead's distance; actor ids and recording formats are unchanged.
 
 - Graph walks stop at repeated waypoints. A vehicle's path does not add a place already in its buffer, including on later updates. Unreachable imported path points and route options stay pending. A walk trapped in a cycle has no safe point. Later updates retry incomplete junction walks. Fork selection skips branches without an exit and keeps the first branch if none has an exit.
-- Stopping or resetting clears actor tracking and transient junction, hero and physics caches. A new map cannot inherit cached waypoint indices from the old one. Parameter settings remain configured.
+- Stopping or resetting clears actor tracking and transient junction, hero and physics caches. A new map cannot inherit cached waypoint indices from the old one. Stopping keeps parameter settings. Resetting keeps global settings but clears per-actor settings, so a reused id cannot inherit an old actor's preferences.
+- Temporary unregister keeps user settings and removes the cached physics-enabled flag. Permanent destruction removes per-actor settings and incoming collision-ignore references on the next processed step. This lifetime policy can change a scenario that depended on stale settings after destruction or reset. Actor id allocation and recording formats are unchanged.
 - The remote traffic manager, its server and its client are not ported. They are a network transport.
 - Asynchronous mode has no worker thread. The caller calls `step`.
 - The world never makes an actor dormant. A caller can mark one with `ACTOR_DORMANT`.

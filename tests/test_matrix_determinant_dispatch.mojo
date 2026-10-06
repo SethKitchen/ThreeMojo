@@ -30,7 +30,7 @@ def test_order_two_dispatch_preserves_orientation() raises:
 
 
 def test_order_three_dispatch_preserves_a_dense_determinant() raises:
-    # Laplace expansion along row one: 3*(-29) - 1*(-13) + 4*(-4).
+    # Laplace expansion of the transpose: 3*(-29) - 1*(-13) + 4*(-4).
     var a: Array[Float32, 9] = [3, 1, 4, 1, 5, 9, 2, 6, 5]
     assert_equal(_determinant_f32[3](a), Float64(-90))
     var singular = Array[Float32, 9](fill=1)

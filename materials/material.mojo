@@ -1236,6 +1236,8 @@ struct Material(ImplicitlyCopyable):
     # `VolumeNodeMaterial.steps`. `DEFAULT_STEPS` on every kind; set with
     # `set_steps`.
     var steps: Int
+    # Opt in to an immutable opaque-scene depth input for VOLUME rays.
+    var volume_scene_depth: Bool
     # The material's own clipping planes, three.js's `clippingPlanes`, at
     # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
     # four floats apart so that a material stays a plain value. Read with
@@ -2243,6 +2245,7 @@ struct Material(ImplicitlyCopyable):
         self.normal_map_type = normal_map_type
         self.scattering = NO_SCATTERING
         self.steps = DEFAULT_STEPS
+        self.volume_scene_depth = False
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False
@@ -2725,6 +2728,19 @@ struct Material(ImplicitlyCopyable):
                 " builds SubsurfaceScatteringShader on the phong shader"
             )
         self.scattering = scattering
+
+    def set_volume_scene_depth(mut self, enabled: Bool) raises:
+        """Set whether this volume reads the captured opaque-scene depth.
+
+        Args:
+            enabled: True to gate each ray sample against scene depth.
+
+        Raises:
+            Error: If this material is not VOLUME.
+        """
+        if self.kind != VOLUME:
+            raise Error("Only a VOLUME material reads volume scene depth")
+        self.volume_scene_depth = enabled
 
     def set_steps(mut self, steps: Int) raises:
         """Set how many steps a `VOLUME` surface's ray takes, three.js's

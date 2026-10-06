@@ -181,6 +181,32 @@ The afterimage's trail stays in the composer on the host. Both backends then sha
 
 `tests/test_gpu.mojo` runs each pass on both backends after a render pass and compares the images. The images agree within one level per channel. The film, glitch and halftone passes read a sine hash, and they agree within two levels. A device `sin` can differ from the host's in the last place, and the hash magnifies the difference. Each test also checks `round_trips`, so a pass with a kernel cannot fall back to the host without a failure.
 
+## Device memory on Metal
+
+The rasterizer and its converted device helpers in `render/gpu.mojo` use `DevicePointer` to preserve the global address space across calls and struct fields. A `DevicePointer` is a mutable pointer in that address space. Other kernel signatures still use `MutPointer`; emitted call and callee types must agree at every boundary.
+
+Metal has no generic address space. When a generic device pointer crosses a function call or is held in a struct, Mojo can drop its address space. The call then does not match the function it calls. Apple's `air-lld` linker crashes on that call, and Mojo reports only "Metal Compiler failed to compile metallib". See [modular/modular#7238](https://github.com/modular/modular/issues/7238).
+
+Follow these rules in the converted rasterizer and device-helper code:
+
+- Declare the pointer parameters of a helper as `DevicePointer[T]`.
+- Declare the pointer fields of a device struct as `DevicePointer[T, Self.origin]`.
+- Pass a buffer to a kernel that takes a `DevicePointer` with `_device(buffer)`.
+- Cast to a generic pointer only at a CPU-shared helper that is `@always_inline`, such as `output_from`. Check that emitted loads retain device address spaces.
+- Read a `SIMD` value from device memory one lane at a time. A `SIMD` built from several loads in one constructor call reads zeros on Metal. See [modular/modular#7158](https://github.com/modular/modular/issues/7158).
+
+`make check-gpu-air` requires one nonempty AIR module for each discovered, plainly named kernel launch. Each generated record prints `function_name` and AIR from the same compiler result. `!air.kernel` metadata must select a complete, `metal.kernel`-marked definition with that exact symbol. Missing, duplicate or reused entry names fail the check.
+
+Every `enqueue_function` reference in the two GPU modules must name a local, non-parameterized top-level kernel. Imported kernels, specialized launches and other unsupported syntax fail before emission. Comments and strings do not count as launches.
+
+Source-name prefixes can be ambiguous because the pinned emitter truncates names and includes specialization text. The check uses the exact compiler-returned symbol. Other metadata forms fail closed.
+
+The checker compares direct-call argument and return types with definitions or declarations, including quoted symbols. It supports scalar, opaque-pointer and literal aggregate types. Signatures and calls must each occupy one line. Missing signatures fail the check. Indirect calls, `invoke`, `callbr`, varargs and named types also fail the check.
+
+This check covers supported call types. It does not validate every LLVM rule or execute GPU code. It needs MAX, but it needs no GPU and no Apple toolchain. CI runs it.
+
+The first compile of a changed `rasterize_kernel` takes about 15 minutes on an Apple M4 Max. Metal caches the result, and a later compile of the same kernel takes seconds.
+
 ## Teardown
 
 `GpuRenderer.__deinit__` and `GpuComposer.__deinit__` wait for the queue, release every buffer, and then release the context. That order prevents a hang under CUDA. See [The CUDA teardown hang](The-CUDA-teardown-hang).

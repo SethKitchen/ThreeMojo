@@ -30,8 +30,29 @@ each list is in use.
 **Where this differs.** An octree cell is an index into `cells`, not an
 object; a pruned cell stays in the list, unused. A face is three corners;
 three.js's fourth slot always held `TRI_INDEX`.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.vector3 import Vector3
+
+from math.triangle_normal import (
+    _triangle_cross_wide,
+    _ordinary_triangle_cross,
+    _finite_triangle,
+)
+
+from math.norm import (
+    _ordinary_squared,
+    length2,
+    length3,
+    reciprocal_normalized3,
+)
 from core.buffer_geometry import BufferGeometry, POSITION
 from geometries.sculptor_utils import (
     MAX_FLAG,
@@ -438,9 +459,24 @@ struct SculptorMesh(Movable):
             var bx = v3.x - v1.x
             var by = v3.y - v1.y
             var bz = v3.z - v1.z
-            self.face_normals[face * 3] = Float32(ay * bz - az * by)
-            self.face_normals[face * 3 + 1] = Float32(az * bx - ax * bz)
-            self.face_normals[face * 3 + 2] = Float32(ax * by - ay * bx)
+            var raw = Vector3(
+                Float32(ay * bz - az * by),
+                Float32(az * bx - ax * bz),
+                Float32(ax * by - ay * bx),
+            )
+            var first = Vector3(Float32(v1.x), Float32(v1.y), Float32(v1.z))
+            var second = Vector3(Float32(v2.x), Float32(v2.y), Float32(v2.z))
+            var third = Vector3(Float32(v3.x), Float32(v3.y), Float32(v3.z))
+            if not _ordinary_triangle_cross(
+                second - first, third - first, raw
+            ) and _finite_triangle(first, second, third):
+                var wide = _triangle_cross_wide(first, second, third)
+                raw = Vector3(
+                    Float32(wide[0]), Float32(wide[1]), Float32(wide[2])
+                )
+            self.face_normals[face * 3] = raw.x
+            self.face_normals[face * 3 + 1] = raw.y
+            self.face_normals[face * 3 + 2] = raw.z
             var xmin = min(min(v1.x, v2.x), v3.x)
             var ymin = min(min(v1.y, v2.y), v3.y)
             var zmin = min(min(v1.z, v2.z), v3.z)
@@ -458,31 +494,93 @@ struct SculptorMesh(Movable):
             self.face_centers[face * 3 + 1] = Float32((ymin + ymax) * 0.5)
             self.face_centers[face * 3 + 2] = Float32((zmin + zmax) * 0.5)
 
+    def _face_area(self, face: Int) -> Point3:
+        """Recover an unrepresentable stored area from original coordinates."""
+        var first = self.faces[face * 3] * 3
+        var second = self.faces[face * 3 + 1] * 3
+        var third = self.faces[face * 3 + 2] * 3
+        var a = Vector3(
+            self.vertices[first],
+            self.vertices[first + 1],
+            self.vertices[first + 2],
+        )
+        var b = Vector3(
+            self.vertices[second],
+            self.vertices[second + 1],
+            self.vertices[second + 2],
+        )
+        var c = Vector3(
+            self.vertices[third],
+            self.vertices[third + 1],
+            self.vertices[third + 2],
+        )
+        var cached = Vector3(
+            self.face_normals[face * 3],
+            self.face_normals[face * 3 + 1],
+            self.face_normals[face * 3 + 2],
+        )
+        if _ordinary_triangle_cross(
+            b - a, c - a, cached
+        ) or not _finite_triangle(a, b, c):
+            return Point3(
+                Float64(cached.x), Float64(cached.y), Float64(cached.z)
+            )
+        var wide = _triangle_cross_wide(a, b, c)
+        if (
+            Float32(wide[0]) == cached.x
+            and Float32(wide[1]) == cached.y
+            and Float32(wide[2]) == cached.z
+        ):
+            return Point3(wide[0], wide[1], wide[2])
+        return Point3(Float64(cached.x), Float64(cached.y), Float64(cached.z))
+
+    def _vertex_area(self, vertex: Int) -> Point3:
+        """Return the area-weighted vertex mean before Float32 storage."""
+        var nx = Float64(0)
+        var ny = Float64(0)
+        var nz = Float64(0)
+        for face in self.vert_ring_face[vertex]:
+            var area = self._face_area(face)
+            nx += area.x
+            ny += area.y
+            nz += area.z
+        var count = len(self.vert_ring_face[vertex])
+        var inverse = 1 / Float64(count) if count > 0 else Float64(0)
+        return Point3(nx * inverse, ny * inverse, nz * inverse)
+
+    def _normal_at(self, vertex: Int) -> Point3:
+        """Read a finite mean, reconstructing range-limited stored areas."""
+        var normal = point_of(self.normals, vertex)
+        var x = self.normals[vertex * 3]
+        var y = self.normals[vertex * 3 + 1]
+        var z = self.normals[vertex * 3 + 2]
+        if _ordinary_squared(x * x + y * y + z * z):
+            return normal
+        var wide = self._vertex_area(vertex)
+        if (
+            Float32(wide.x) == x
+            and Float32(wide.y) == y
+            and Float32(wide.z) == z
+        ):
+            return wide
+        return normal
+
     def _update_vertices_normal(mut self, vertices: List[Int]):
         """Set each vertex's normal to the mean of its faces' normals, and
         its drawn normal to that made unit, three.js's
         `_updateVerticesNormal`."""
         for vertex in vertices:
-            var nx = 0.0
-            var ny = 0.0
-            var nz = 0.0
-            for face in self.vert_ring_face[vertex]:  # pragma: no branch
-                nx += Float64(self.face_normals[face * 3])
-                ny += Float64(self.face_normals[face * 3 + 1])
-                nz += Float64(self.face_normals[face * 3 + 2])
-            var count = len(self.vert_ring_face[vertex])
-            var inverse_count = 1.0 / Float64(count) if count > 0 else 0.0
-            nx *= inverse_count
-            ny *= inverse_count
-            nz *= inverse_count
+            var area = self._vertex_area(vertex)
+            var nx = area.x
+            var ny = area.y
+            var nz = area.z
             self.normals[vertex * 3] = Float32(nx)
             self.normals[vertex * 3 + 1] = Float32(ny)
             self.normals[vertex * 3 + 2] = Float32(nz)
-            var length = sqrt(nx * nx + ny * ny + nz * nz)
-            var inverse_length = 1.0 / length if length > 0 else 0.0
-            self.render_normals[vertex * 3] = Float32(nx * inverse_length)
-            self.render_normals[vertex * 3 + 1] = Float32(ny * inverse_length)
-            self.render_normals[vertex * 3 + 2] = Float32(nz * inverse_length)
+            var unit = reciprocal_normalized3(nx, ny, nz)
+            self.render_normals[vertex * 3] = Float32(unit[0])
+            self.render_normals[vertex * 3 + 1] = Float32(unit[1])
+            self.render_normals[vertex * 3 + 2] = Float32(unit[2])
 
     # --- the octree ------------------------------------------------------
 
@@ -521,7 +619,7 @@ struct SculptorMesh(Movable):
         var dx = highs[0] - lows[0]
         var dy = highs[1] - lows[1]
         var dz = highs[2] - lows[2]
-        var thickness = sqrt(dx * dx + dy * dy + dz * dz) * 0.2
+        var thickness = length3(dx, dy, dz) * 0.2
         var spans = [dx, dy, dz]
         for axis in range(3):  # pragma: no branch
             if spans[axis] == 0:

@@ -40,7 +40,24 @@ from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 from render.target import RenderTarget
 from render.texture import BILINEAR, CLAMP, COVERAGE, Texture, float_texture
-from std.math import exp, floor, isinf, log, log2, max, min, sqrt
+from std.math import (
+    exp,
+    exp2,
+    floor,
+    isfinite,
+    isinf,
+    log,
+    log2,
+    max,
+    min,
+    sqrt,
+)
+from render.raster_state import (
+    LOGARITHMIC_DEPTH,
+    REVERSED_DEPTH,
+    log_depth_factor,
+)
+from units.si import Length, METER
 
 # How far apart dispersion spreads the three channels' indices, per unit of
 # `dispersion` and per unit of the index above one: three.js's `0.025` in
@@ -161,10 +178,15 @@ struct TransmissionTarget(Movable):
     # projection is: three.js's `projectionMatrix * viewMatrix` followed by
     # its `* 0.5 + 0.5`.
     var view: SIMD[DType.float32, VIEW_FLOATS]
+    # Immutable opaque-scene snapshot, signed axial meters, positive in
+    # front of the camera. Empty unless a volume requests scene depth.
+    # Unlike image, this never includes transmissive back faces.
+    var volume_depth: List[Float32]
 
     def __init__(out self):
         """Create an empty target, for a frame with nothing transmissive."""
         self.image = Texture()
+        self.volume_depth = List[Float32]()
         self.view = SIMD[DType.float32, VIEW_FLOATS](0)
 
     def __init__(out self, target: RenderTarget, view: Matrix4) raises:
@@ -182,6 +204,7 @@ struct TransmissionTarget(Movable):
             Error: If a pixel holds light that is not finite, which no
                 filter of the chain could average.
         """
+        self.volume_depth = List[Float32]()
         var data = List[Float32](capacity=target.width * target.height * 4)
         for slot in range(len(target.colors)):  # pragma: no branch
             var straight = target.straight_at(slot)
@@ -201,6 +224,108 @@ struct TransmissionTarget(Movable):
         self.view = SIMD[DType.float32, VIEW_FLOATS](0)
         for index in range(VIEW_FLOATS):  # pragma: no branch
             self.view[index] = view.elements[index]
+
+    def capture_volume_depth(
+        mut self, target: RenderTarget, to_screen: Matrix4, far: Length
+    ) raises:
+        """Copy opaque depth before any volume or transmissive back face.
+
+        The snapshot is independent of later target writes.
+
+        Args:
+            target: The completed opaque pass, at the raster resolution.
+            to_screen: The camera-space to raster-pixel projection.
+            far: The camera's far distance, used for clear pixels.
+
+        Raises:
+            Error: If the size, depth mode, projection or depth is invalid.
+        """
+        if (
+            target.width != self.image.width
+            or target.height != self.image.height
+        ):
+            raise Error("Volume scene depth must match the captured image")
+        if target.width <= 0 or target.height <= 0:
+            raise Error("Volume scene depth needs positive raster dimensions")
+        if len(target.depth) != target.width * target.height:
+            raise Error("Volume scene depth needs one depth per raster pixel")
+        if not target.depth_mode.is_valid():
+            raise Error("A depth mode that is none of the three")
+        if not isfinite(far.value):
+            raise Error("Volume scene depth needs a finite far distance")
+        for index in range(VIEW_FLOATS):  # pragma: no branch
+            if not isfinite(to_screen.elements[index]):
+                raise Error("Volume scene depth needs a finite projection")
+        if to_screen._determinant_wide() == 0:
+            raise Error("Volume scene depth needs an invertible projection")
+        var inverse = to_screen
+        inverse.invert()
+        var values = List[Float32](capacity=target.width * target.height)
+        for y in range(target.height):  # pragma: no branch
+            for x in range(target.width):  # pragma: no branch
+                var stored = target.depth[y * target.width + x]
+                var distance = far.value
+                if isfinite(stored):
+                    if target.depth_mode == LOGARITHMIC_DEPTH:
+                        distance = (
+                            exp2((stored + 1) / log_depth_factor(far.value)) - 1
+                        )
+                    else:
+                        var ndc = stored
+                        if target.depth_mode == REVERSED_DEPTH:
+                            ndc = 1 - 2 * stored
+                        distance = -inverse.transform_point(
+                            Vector3(Float32(x) + 0.5, Float32(y) + 0.5, ndc)
+                        ).z
+                elif not isinf(stored):
+                    raise Error("Volume scene depth cannot contain NaN")
+                if not isfinite(distance):
+                    raise Error(
+                        "Volume scene depth must reconstruct a finite distance"
+                    )
+                values.append(distance)
+        self.volume_depth = values^
+
+    def check_volume_depth(
+        self, requested: Bool, width: Int, height: Int
+    ) raises:
+        """Validate a requested depth snapshot before a rasterizer writes.
+
+        Args:
+            requested: Whether a drawn volume asks for scene depth.
+            width: The raster target width.
+            height: The raster target height.
+
+        Raises:
+            Error: If a requested snapshot is absent, malformed or stale.
+        """
+        if not requested:
+            return
+        if len(self.volume_depth) == 0:
+            raise Error("A volume needs scene depth at the raster target size")
+        if (
+            self.image.width != width
+            or self.image.height != height
+            or len(self.volume_depth) != width * height
+        ):
+            raise Error("A volume needs scene depth at the raster target size")
+        for index in range(len(self.volume_depth)):  # pragma: no branch
+            if not isfinite(self.volume_depth[index]):
+                raise Error("Volume scene depth must contain finite distances")
+
+    def volume_depth_at(self, x: Int, y: Int) -> Length:
+        """Return a checked snapshot's exact raster sample, without filtering.
+
+        The caller must validate the snapshot first.
+
+        Args:
+            x: Raster column from the left, checked by the rasterizer.
+            y: Raster row from the top, checked by the rasterizer.
+
+        Returns:
+            Signed camera-axis distance in meters, positive in front.
+        """
+        return Length(self.volume_depth[y * self.image.width + x], METER)
 
     def is_ready(self) -> Bool:
         """Return True if this target holds a scene to look through."""

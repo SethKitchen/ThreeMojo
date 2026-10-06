@@ -32,7 +32,16 @@ from three.js's by a corner, and its place by some centimeters. three.js's piece
 `BreakableObject`s, to add to a scene as the caller likes. The random
 numbers come from a `SeededRandom`. three.js's `Math.random` is also drawn
 by every new mesh and geometry for its uuid; here nothing else draws.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import reciprocal_normalized3
 
 from geometries.convex import convex
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
@@ -510,8 +519,8 @@ def _cross(a: _D, b: _D) -> _D:
 def _unit(a: _D) -> _D:
     """Return three.js's `normalize`: the vector over its length, or itself
     when it has none."""
-    var length = sqrt(_dot(a, a))
-    return a / (length if length != 0 else 1.0)
+    var unit = reciprocal_normalized3(a[0], a[1], a[2])
+    return _D(unit[0], unit[1], unit[2], a[3])
 
 
 def _from_coplanar(a: _D, b: _D, c: _D) -> _LocalPlane:

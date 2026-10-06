@@ -33,8 +33,16 @@ The file formats store a scale and a rotation instead of a covariance.
 Colors are stored through `clamped_byte`, which is how a
 `Uint8ClampedArray` stores a number: clamped to 0 through 255 and rounded
 half to even.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized4, _ordinary_squared
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.utils import FLOAT32_COMPONENT, UINT32_COMPONENT, UINT8_COMPONENT
@@ -199,12 +207,18 @@ def write_covariance(
     var y = Float64(0)
     var z = Float64(0)
     var w = Float64(1)
-    if length != 0:
+    if _ordinary_squared(qx * qx + qy * qy + qz * qz + qw * qw):
         var inverse = 1 / length
         x = qx * inverse
         y = qy * inverse
         z = qz * inverse
         w = qw * inverse
+    elif qx != 0 or qy != 0 or qz != 0 or qw != 0:
+        var unit = normalized4(qx, qy, qz, qw)
+        x = unit[0]
+        y = unit[1]
+        z = unit[2]
+        w = unit[3]
     var x2 = x + x
     var y2 = y + y
     var z2 = z + z

@@ -280,8 +280,7 @@ def fin_outline(
     var poly = List[Float64]()
     poly.append(b0u - nx * sink)
     poly.append(b0v - ny * sink)
-    # The base points above read the first and the last ray, so a fin
-    # that gets here has one.
+    # The guard above requires at least two complete rays.
     for i in range(n):  # pragma: no branch
         poly.append(rays[i * 4 + 2])
         poly.append(rays[i * 4 + 3])

@@ -12,7 +12,7 @@ from extensions.anatomy.evidence import (
     Evidence,
     evidence_label,
 )
-from extensions.anatomy.inertia import InertiaTally
+from extensions.anatomy.inertia import InertiaTally, SegmentInertia
 from extensions.anatomy.muscle import (
     MuscleArchitecture,
     MuscleEquilibrium,
@@ -91,7 +91,7 @@ def test_point_mass_and_empty_tally_contracts() raises:
     assert_equal(point.zz.value, 0.0)
     assert_equal(point.gyration(point.xx).value, 0.0)
     # Off the origin, a point mass's central moments are rounding noise.
-    # They are judged against the raw moments, so every one passes.
+    # Each component uses its own raw cancellation bound.
     for m in [Float64(0.3), Float64(2), Float64(75)]:
         for i in range(-3, 4):
             for j in range(-3, 4):
@@ -106,6 +106,25 @@ def test_point_mass_and_empty_tally_contracts() raises:
                 var reach = m * Float64(p.dot(p))
                 for value in [r.xx.value, r.yy.value, r.zz.value]:
                     assert_true(abs(Float64(value)) <= 1e-9 * reach)
+
+
+def test_center_offset_cannot_hide_invalid_central_tensor() raises:
+    # A COM-centered tensor must pass the same check at every origin.
+    # Izz > Ixx + Iyy is impossible at both centers.
+    for center in [Vector3(0, 0, 0), Vector3(1e12, 0, 0)]:
+        var invalid = SegmentInertia(
+            Mass(1),
+            center,
+            MomentOfInertia(1),
+            MomentOfInertia(1),
+            MomentOfInertia(3),
+            MomentOfInertia(0),
+            MomentOfInertia(0),
+            MomentOfInertia(0),
+            Length(1),
+        )
+        with assert_raises(contains="nonnegative"):
+            invalid.check()
 
 
 def test_segment_guard_validates_mutable_si_state_and_extreme_gyration() raises:

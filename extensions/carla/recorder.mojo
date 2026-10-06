@@ -42,6 +42,10 @@ recorder of each spawn, removal, attachment, door and weather change as
 it happens. The world here does not call out, so `record` compares the
 world with what it saw at the last frame. The result is the same frame.
 
+When a recorded collision sensor is destroyed, its private collision-pair
+registry is released with the deletion event. Already queued records keep
+their order and actor ids. Other sensors keep their own registries.
+
 **Differences from CARLA.**
 
 - The recording stays in memory until `stop`, which writes the whole file.
@@ -639,6 +643,8 @@ struct Recorder(Movable):
                 self.events_del.append(RecordedEventDel(id))
                 if id.value in self._doors:
                     _ = self._doors.pop(id.value)
+                if id.value in self._sensors:
+                    _ = self._sensors.pop(id.value)
             if i < len(self._alive):
                 self._alive[i] = alive
             else:

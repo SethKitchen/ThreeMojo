@@ -68,8 +68,16 @@ A line is not morphed and not skinned. three.js allows both, and neither
 has a caller here yet. Adding one is a matter of routing `core.deform` the
 way `Renderer.prepare` routes it, and the mode arithmetic below does not
 change.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized2
 from core.buffer_attribute import BufferAttribute
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
@@ -298,8 +306,11 @@ def _on_screen(mvp: Matrix4, point: Vector3) -> SIMD[DType.float32, 2]:
 
 
 def _unit(v: SIMD[DType.float32, 2]) -> SIMD[DType.float32, 2]:
-    """Return GLSL's `normalize`: no guard for a vector of no length."""
-    return v / sqrt(v[0] * v[0] + v[1] * v[1])
+    """Return a scale-safe direction; a zero projected edge returns NaNs."""
+    if v[0] == 0 and v[1] == 0:
+        return v / Float32(0)
+    var unit = normalized2(v[0], v[1])
+    return SIMD[DType.float32, 2](unit[0], unit[1])
 
 
 def _sign(x: Float32) -> Float32:

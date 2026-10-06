@@ -43,8 +43,25 @@ degrees, which lets every pair through.
 
 An indexed geometry is made non-indexed first, as MikkTSpace needs, and
 the result replaces it, as three.js's `geometry.copy` does.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import atan2
+from math.triangle_normal import _triangle_cross_wide, _finite_triangle
+from math.vector3 import Vector3
+
+
+from math.matrix_determinant import _sum_products as _exact_products
+
+from math.triangle_normal import _difference_product_wide
+
+from math.norm import length3, normalized3, _ordinary_squared
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
@@ -88,18 +105,20 @@ def _dot(a: Vec, b: Vec) -> Float32:
 
 def _length(a: Vec) -> Float32:
     """Return the length, the C's `Length`."""
-    return sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+    return length3(a[0], a[1], a[2])
 
 
 def _normalize(a: Vec) -> Vec:
     """Return the vector over its length, the C's `Normalize`."""
-    return a * (1 / _length(a))
+    if _ordinary_squared(_dot(a, a)):
+        return a * (1 / _length(a))
+    var unit = normalized3(a[0], a[1], a[2])
+    return _v(unit[0], unit[1], unit[2])
 
 
 def _not_zero(x: Float32) -> Bool:
-    """Return True if a number is more than the smallest float, the C's
-    `NotZero`."""
-    return abs(x) > FLT_MIN
+    """Return True for every nonzero value, including a subnormal."""
+    return abs(x) > 0
 
 
 def _vnot_zero(a: Vec) -> Bool:
@@ -217,6 +236,16 @@ def _make_index(face: Int, vert: Int) -> Int:
 def _grid_cell(low: Float32, high: Float32, value: Float32) -> Int:
     """Return the welding cell a value falls in, the C's `FindGridCell`."""
     var index = Float32(CELLS) * ((value - low) / (high - low))
+    if (
+        isfinite(low)
+        and isfinite(high)
+        and isfinite(value)
+        and not isfinite(index)
+    ):
+        index = Float32(
+            Float64(CELLS)
+            * ((Float64(value) - Float64(low)) / (Float64(high) - Float64(low)))
+        )
     if isnan(index):
         return 0
     var cell = Int(index)
@@ -418,23 +447,111 @@ def _init_tri_info(
         var signed_area = t21x * t31y - t21y * t31x
         var os = d1 * t31y - d2 * t21y
         var ot = d1 * (-t31x) + d2 * t21x
+        var os_bound = max(
+            abs(d1[0] * t31y) + abs(d2[0] * t21y),
+            max(
+                abs(d1[1] * t31y) + abs(d2[1] * t21y),
+                abs(d1[2] * t31y) + abs(d2[2] * t21y),
+            ),
+        )
+        var ot_bound = max(
+            abs(d1[0] * t31x) + abs(d2[0] * t21x),
+            max(
+                abs(d1[1] * t31x) + abs(d2[1] * t21x),
+                abs(d1[2] * t31x) + abs(d2[2] * t21x),
+            ),
+        )
+        var conditioned = (
+            os_bound <= 4 * max(abs(os[0]), max(abs(os[1]), abs(os[2])))
+            and ot_bound <= 4 * max(abs(ot[0]), max(abs(ot[1]), abs(ot[2])))
+            and abs(t21x * t31y) + abs(t21y * t31x) <= 4 * abs(signed_area)
+        )
+        if not (
+            conditioned
+            and _ordinary_squared(_dot(os, os))
+            and _ordinary_squared(_dot(ot, ot))
+            and isfinite(signed_area)
+            and signed_area != 0
+        ):
+            # Products and differences must be widened BEFORE normalization.
+            # Finite Float32 input products all fit Float64, even subnormals.
+            var area = _difference_product_wide(
+                Float64(t1[0]),
+                Float64(t2[0]),
+                Float64(t3[0]),
+                Float64(t1[1]),
+                Float64(t2[1]),
+                Float64(t3[1]),
+            )
+            var ws = SIMD[DType.float64, 4](0)
+            var wt = SIMD[DType.float64, 4](0)
+            for axis in range(3):  # pragma: no branch
+                ws[axis] = _difference_product_wide(
+                    Float64(v1[axis]),
+                    Float64(v2[axis]),
+                    Float64(v3[axis]),
+                    Float64(t1[1]),
+                    Float64(t2[1]),
+                    Float64(t3[1]),
+                )
+                wt[axis] = -_difference_product_wide(
+                    Float64(v1[axis]),
+                    Float64(v2[axis]),
+                    Float64(v3[axis]),
+                    Float64(t1[0]),
+                    Float64(t2[0]),
+                    Float64(t3[0]),
+                )
+            if area > 0:
+                infos[f].flag |= ORIENT_PRESERVING
+            # A finite nonzero area proves finite UV inputs. Finite ws
+            # components then prove finite positions. Every wt product is
+            # a product of two widened Float32 inputs, so it fits Float64.
+            if (
+                area != 0
+                and isfinite(area)
+                and isfinite(ws[0])
+                and isfinite(ws[1])
+                and isfinite(ws[2])
+            ):
+                var sign = Float32(1) if area > 0 else Float32(-1)
+                var ns = normalized3(ws[0], ws[1], ws[2])
+                var nt = normalized3(wt[0], wt[1], wt[2])
+                infos[f].os = _v(
+                    Float32(ns[0]) * sign,
+                    Float32(ns[1]) * sign,
+                    Float32(ns[2]) * sign,
+                )
+                infos[f].ot = _v(
+                    Float32(nt[0]) * sign,
+                    Float32(nt[1]) * sign,
+                    Float32(nt[2]) * sign,
+                )
+                infos[f].mag_s = Float32(
+                    length3(ws[0], ws[1], ws[2]) / abs(area)
+                )
+                infos[f].mag_t = Float32(
+                    length3(wt[0], wt[1], wt[2]) / abs(area)
+                )
+                if _vnot_zero(infos[f].os) and _vnot_zero(infos[f].ot):
+                    infos[f].flag &= ~GROUP_WITH_ANY
+            continue
         if signed_area > 0:
             infos[f].flag |= ORIENT_PRESERVING
-        if _not_zero(signed_area):
-            var area = abs(signed_area)
-            var len_os = _length(os)
-            var len_ot = _length(ot)
-            var sign = Float32(1)
-            if (infos[f].flag & ORIENT_PRESERVING) == 0:
-                sign = -1
-            if _not_zero(len_os):
-                infos[f].os = os * (sign / len_os)
-            if _not_zero(len_ot):
-                infos[f].ot = ot * (sign / len_ot)
-            infos[f].mag_s = len_os / area
-            infos[f].mag_t = len_ot / area
-            if _healthy(infos[f].mag_s, infos[f].mag_t):
-                infos[f].flag &= ~GROUP_WITH_ANY
+        # The fast-path gate proves a nonzero finite area and ordinary
+        # squared derivative lengths. Their square roots are positive.
+        var area = abs(signed_area)
+        var len_os = _length(os)
+        var len_ot = _length(ot)
+        var sign = Float32(1)
+        if (infos[f].flag & ORIENT_PRESERVING) == 0:
+            sign = -1
+        infos[f].os = os * (sign / len_os)
+        infos[f].ot = ot * (sign / len_ot)
+        infos[f].mag_s = len_os / area
+        infos[f].mag_t = len_ot / area
+        if _healthy(infos[f].mag_s, infos[f].mag_t):
+            infos[f].flag &= ~GROUP_WITH_ANY
     _build_neighbors(infos, tri_list, count)
 
 
@@ -697,6 +814,97 @@ def _projected(v: Vec, n: Vec) -> Vec:
     return _unit_if_not_zero(v - n * _dot(n, v))
 
 
+def _projected_edge(a: Vec, b: Vec, n: Vec) -> Vec:
+    """Project a finite edge without losing it before normalization."""
+    var edge = a - b
+    var projected = edge - n * _dot(n, edge)
+    var size = max(abs(projected[0]), max(abs(projected[1]), abs(projected[2])))
+    if (
+        _ordinary_squared(_dot(projected, projected))
+        and max(abs(edge[0]), max(abs(edge[1]), abs(edge[2]))) <= 4 * size
+    ):
+        return _unit_if_not_zero(projected)
+    if not (
+        isfinite(a[0])
+        and isfinite(a[1])
+        and isfinite(a[2])
+        and isfinite(b[0])
+        and isfinite(b[1])
+        and isfinite(b[2])
+        and isfinite(n[0])
+        and isfinite(n[1])
+        and isfinite(n[2])
+    ):
+        return _projected(edge, n)
+    var result = _projected_edge_wide(a, b, n)
+    var unit = normalized3(result[0], result[1], result[2])
+    return _v(Float32(unit[0]), Float32(unit[1]), Float32(unit[2]))
+
+
+def _projected_edge_wide(a: Vec, b: Vec, n: Vec) -> SIMD[DType.float64, 4]:
+    """Retain original-coordinate residuals in a projected edge."""
+    var result = SIMD[DType.float64, 4](0)
+    for axis in range(3):  # pragma: no branch
+        var ni = Float64(n[axis])
+        var left = [
+            Float64(a[axis]),
+            -Float64(b[axis]),
+            -ni * Float64(n[0]),
+            -ni * Float64(n[1]),
+            -ni * Float64(n[2]),
+            ni * Float64(n[0]),
+            ni * Float64(n[1]),
+            ni * Float64(n[2]),
+        ]
+        var right = [
+            Float64(1),
+            Float64(1),
+            Float64(a[0]),
+            Float64(a[1]),
+            Float64(a[2]),
+            Float64(b[0]),
+            Float64(b[1]),
+            Float64(b[2]),
+        ]
+        result[axis] = _exact_products[8](left, right)
+    return result
+
+
+def _corner_angle(
+    p0: Vec, p1: Vec, p2: Vec, n: Vec, cosine: Float32
+) -> Float64:
+    """Keep a thin corner's angle when a unit-vector dot rounds to one."""
+    var ordinary = acos(Float64(cosine))
+    var a = Vector3(p0[0], p0[1], p0[2])
+    var b = Vector3(p1[0], p1[1], p1[2])
+    var c = Vector3(p2[0], p2[1], p2[2])
+    if (
+        abs(cosine) != 1
+        or not _finite_triangle(a, b, c)
+        or not (isfinite(n[0]) and isfinite(n[1]) and isfinite(n[2]))
+    ):
+        return ordinary
+    var first = _projected_edge_wide(p0, p1, n)
+    var second = _projected_edge_wide(p2, p1, n)
+    var dot = _exact_products[3](
+        [first[0], first[1], first[2]], [second[0], second[1], second[2]]
+    )
+    # Cofactor(I - n nT) = (1 - n.n) I + n nT. Apply it to the
+    # original-coordinate cross, instead of crossing rounded unit edges.
+    var cross = _triangle_cross_wide(a, b, c)
+    var nx = Float64(n[0])
+    var ny = Float64(n[1])
+    var nz = Float64(n[2])
+    var remaining = _exact_products[4](
+        [Float64(1), -nx, -ny, -nz], [Float64(1), nx, ny, nz]
+    )
+    var along = _exact_products[3]([nx, ny, nz], [cross[0], cross[1], cross[2]])
+    var cx = _exact_products[2]([remaining, nx], [cross[0], along])
+    var cy = _exact_products[2]([remaining, ny], [cross[1], along])
+    var cz = _exact_products[2]([remaining, nz], [cross[2], along])
+    return atan2(length3(cx, cy, cz), dot)
+
+
 def _averaged(total: Float32, weight: Float32) -> Float32:
     """Return a weighted sum over its weight, or the sum if there is no
     weight."""
@@ -714,6 +922,9 @@ def _eval_space(
     weighted by its angle there, the C's `EvalTspace`."""
     var res = _Space(_v(0, 0, 0), 0, _v(0, 0, 0), 0, 0, False)
     var angle_sum = Float32(0)
+    var wide_os = SIMD[DType.float64, 4](0)
+    var wide_ot = SIMD[DType.float64, 4](0)
+    var wide_weights = False
     for face in range(len(members)):  # pragma: no branch
         var f = members[face]
         if (infos[f].flag & GROUP_WITH_ANY) != 0:
@@ -729,18 +940,32 @@ def _eval_space(
         var p0 = ctx.position(i0)
         var p1 = ctx.position(i1)
         var p2 = ctx.position(i2)
-        var v1 = _projected(p0 - p1, n)
-        var v2 = _projected(p2 - p1, n)
+        var v1 = _projected_edge(p0, p1, n)
+        var v2 = _projected_edge(p2, p1, n)
         var cosine = _dot(v1, v2)
         cosine = max(Float32(-1), min(Float32(1), cosine))
-        var angle = Float32(acos(Float64(cosine)))
+        var wide_angle = _corner_angle(p0, p1, p2, n, cosine)
+        var angle = Float32(wide_angle)
+        if wide_angle > 0 and angle < FLT_MIN:
+            wide_weights = True
+        else:
+            wide_angle = Float64(angle)
+        for axis in range(3):  # pragma: no branch
+            wide_os[axis] += Float64(os[axis]) * wide_angle
+            wide_ot[axis] += Float64(ot[axis]) * wide_angle
         res.os = res.os + os * angle
         res.ot = res.ot + ot * angle
         res.mag_s += angle * infos[f].mag_s
         res.mag_t += angle * infos[f].mag_t
         angle_sum += angle
-    res.os = _unit_if_not_zero(res.os)
-    res.ot = _unit_if_not_zero(res.ot)
+    if wide_weights:
+        var os = normalized3(wide_os[0], wide_os[1], wide_os[2])
+        var ot = normalized3(wide_ot[0], wide_ot[1], wide_ot[2])
+        res.os = _v(Float32(os[0]), Float32(os[1]), Float32(os[2]))
+        res.ot = _v(Float32(ot[0]), Float32(ot[1]), Float32(ot[2]))
+    else:
+        res.os = _unit_if_not_zero(res.os)
+        res.ot = _unit_if_not_zero(res.ot)
     res.mag_s = _averaged(res.mag_s, angle_sum)
     res.mag_t = _averaged(res.mag_t, angle_sum)
     return res^

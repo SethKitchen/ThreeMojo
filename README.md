@@ -59,12 +59,11 @@ The checklist covers three.js ports, project tools and extensions. A checked ite
 Some portable features remain partial, including [GLSL shaders](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset), [volume materials](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#what-is-not-ported) and [image formats](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#what-is-not-ported). [Out of scope](#out-of-scope) lists excluded APIs and addons. Expand a dropdown to see implemented entries; open entries remain visible.
 
 <!-- features -->
-### Remaining three.js parity
+### Implemented three.js features
 
-- [ ] [GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): unsigned types, explicit texture gradients and broader loops remain open. Unproved loop exits now fail explicitly [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
-- [ ] [OpenEXR compression coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): PXR24 and DWA from three.js r180; B44 and B44A from r186 [#615](https://github.com/SethKitchen/ThreeMojo/issues/615)
-- [ ] [Volume lighting and depth](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#what-is-not-ported): opaque-scene depth and rectangle lights from three.js r186 [#616](https://github.com/SethKitchen/ThreeMojo/issues/616)
-- [ ] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#ktx2-and-compressed-formats): 4x4 and 6x6 block formats from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
+- [x] [Bounded GLSL source coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#the-subset): exact 32-bit unsigned scalars and vectors, explicit 2D texture gradients, and checked finite loops [#614](https://github.com/SethKitchen/ThreeMojo/issues/614)
+- [x] [OpenEXR compression coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): PXR24 and DWA from three.js r180; B44 and B44A from r186 [#615](https://github.com/SethKitchen/ThreeMojo/issues/615)
+- [x] [Raw ASTC in KTX2](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#raw-astc): 4x4 and 6x6 UNORM, sRGB and SFLOAT from three.js r180 [#617](https://github.com/SethKitchen/ThreeMojo/issues/617)
 
 ### Navigation safety
 
@@ -80,7 +79,15 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 3</summary>
+<summary>Implemented: 7</summary>
+
+- [x] [Owned physics query snapshots](https://github.com/SethKitchen/ThreeMojo/wiki/Physics-query-snapshots): frozen geometry, materials and capture-scoped historical owners, with unchanged live-world raycasts [#633](https://github.com/SethKitchen/ThreeMojo/issues/633)
+
+- [x] [Conservative sphere/static-mesh CCD candidates](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#performance-and-verification): immutable snapshot validation, bounded triangle queries and independent brute-force parity [#636](https://github.com/SethKitchen/ThreeMojo/issues/636)
+
+- [x] [Sphere/static-mesh continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision): opt-in analytic sweeps, bounded support, multiple impacts and transactional failure [#292](https://github.com/SethKitchen/ThreeMojo/issues/292)
+
+- [x] [Static primitive index benchmark and design](https://github.com/SethKitchen/ThreeMojo/wiki/Physics#static-primitive-index-design): bounded snapshot experiments, allocation costs, exact contact/ray oracles and a deferred production ownership contract [#288](https://github.com/SethKitchen/ThreeMojo/issues/288)
 
 - [x] [Tick-force restoration decision](https://github.com/SethKitchen/ThreeMojo/wiki/Tick-force-restoration): measured mixed-body CPU and allocation costs, with body-mode and ghost lifetime regressions [#287](https://github.com/SethKitchen/ThreeMojo/issues/287)
 
@@ -92,14 +99,23 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Numerical range
 
-- [ ] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Math#scalar-lengths-and-directions): plane normalization, finite three-point normals, ray aiming, Box2 distances, Float64 curve directions, and nonzero tube strokes. Further geometry consumers remain in [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+<details>
+<summary>Implemented: 2</summary>
+
+- [x] [Exact adaptive convex hull predicates](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#convex-hull): original-coordinate orientation, exact tolerance comparisons and bounded extreme-range fallbacks [#538](https://github.com/SethKitchen/ThreeMojo/issues/538)
+
+- [x] [Scale-safe norm consumers](https://github.com/SethKitchen/ThreeMojo/wiki/Norm-consumers): finite directions, angles, geometry normals and tangents, loader axes, lighting, and texture footprints across scalar ranges [#348](https://github.com/SethKitchen/ThreeMojo/issues/348)
+
+</details>
 
 ### Numeric correctness
 
 <details>
-<summary>Implemented: 1</summary>
+<summary>Implemented: 2</summary>
 
 - [x] [Exact periodic remainders](https://github.com/SethKitchen/ThreeMojo/wiki/Math#periodic-scalar-helpers): finite binary reduction, strict Euclidean ranges, and range-safe positive pingpong periods [#603](https://github.com/SethKitchen/ThreeMojo/issues/603)
+
+- [x] [Ray-query throughput](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting#bounds-query-precision-and-cost): exact component validation and a complete performance matrix with accepted current costs [#550](https://github.com/SethKitchen/ThreeMojo/issues/550)
 
 </details>
 
@@ -107,10 +123,12 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
-- [ ] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion and synthetic reproduction; historical production source provenance remains open [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
-
 <details>
-<summary>Implemented: 8</summary>
+<summary>Implemented: 10</summary>
+
+- [x] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion, pinned upstream inputs and exact production reproduction [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
+
+- [x] [Bounded image decode scheduling](https://github.com/SethKitchen/ThreeMojo/wiki/Image-decode-queue): shared dynamic workers, ordered results, bounded active staging, and atomic cache publication [#505](https://github.com/SethKitchen/ThreeMojo/issues/505)
 
 - [x] [Portable asset and test roots](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-run-the-checks#run-one-test-suite): explicit asset roots, isolated direct-run fixtures, and subprocess ownership checks [#310](https://github.com/SethKitchen/ThreeMojo/issues/310)
 
@@ -218,7 +236,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 
 <details>
-<summary>Ported: 35</summary>
+<summary>Ported: 36</summary>
+
+- [x] [Volume lighting and depth](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#opaque-scene-depth): explicit opaque-scene depth and shared r186 rectangle lighting, with documented depth-space corrections [#616](https://github.com/SethKitchen/ThreeMojo/issues/616)
 
 - [x] [TSL function library](https://github.com/SethKitchen/ThreeMojo/wiki/TSL-functions): triplanar maps, sprite sheets, oscillators, noises, hashes, bit packing, raymarching and GGX helpers on the node graph [#252](https://github.com/SethKitchen/ThreeMojo/issues/252)
 - [x] [MeshSSSNodeMaterial and VolumeNodeMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials#lighting-models): light through a surface from behind, and light marched through a volume, on both rasterizers [#258](https://github.com/SethKitchen/ThreeMojo/issues/258)
@@ -457,7 +477,9 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 38</summary>
+<summary>Implemented: 43</summary>
+
+- [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look [#312](https://github.com/SethKitchen/ThreeMojo/issues/312)
 - [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue [#313](https://github.com/SethKitchen/ThreeMojo/issues/313)
@@ -481,8 +503,13 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Triangle budget results](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality#read-the-result): actual unique-geometry counts, typed failure reasons and strict transactional fitting [#324](https://github.com/SethKitchen/ThreeMojo/issues/324)
 - [x] [Mesh quality](https://github.com/SethKitchen/ThreeMojo/wiki/Mesh-quality): quality levels that fit a humanoid to a triangle budget, from 90,000 to one million, by edge collapse [#269](https://github.com/SethKitchen/ThreeMojo/issues/269)
 - [x] [Anatomy validity limits](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity): canonical lower-limb reports, provenance, sampling controls and unsupported-use gates [#289](https://github.com/SethKitchen/ThreeMojo/issues/289)
+
+- [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
+- [x] [Geometric CARLA lane orientation](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-orientation): heading and pitch from all five supported offset-plus-width centerline derivatives [#485](https://github.com/SethKitchen/ThreeMojo/issues/485)
+- [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): exact wide stored-center ordering and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)
+- [x] [Direction-independent junction bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-maps#junction-bounds): complete connecting-lane sections, record boundaries and bounded curved-interior approximation [#487](https://github.com/SethKitchen/ThreeMojo/issues/487)
 - [x] [Traffic-direction trigger offsets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-world#trigger-offset-direction): light, stop, yield and speed-limit boxes follow right-hand and left-hand lane travel [#486](https://github.com/SethKitchen/ThreeMojo/issues/486)
 - [x] [Animals](https://github.com/SethKitchen/ThreeMojo/wiki/Animals): 24 procedural-animals species sculpted as distance fields, posed by re-meshing, with painted coats, baked occlusion and a walk [#605](https://github.com/SethKitchen/ThreeMojo/issues/605)
 - [x] [Animal anatomy](https://github.com/SethKitchen/ThreeMojo/wiki/Animal-anatomy): template anatomy and sampled SI estimates, Hill-type muscles, standing-load estimates, and an in-place visual walk [#620](https://github.com/SethKitchen/ThreeMojo/issues/620)
@@ -501,6 +528,21 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 
 </details>
+
+### Buildings
+
+Procedural buildings for engineering analysis and for games share one canonical model. A checked box records implemented scope. It does not establish engineering validity. See [Why buildings have one canonical model](https://github.com/SethKitchen/ThreeMojo/wiki/Why-buildings-have-one-canonical-model).
+
+- [x] [Engineering units](https://github.com/SethKitchen/ThreeMojo/wiki/Units#heat-structure-and-flow): a temperature exponent, thermal and structural quantities, and `Float64` quantities [#641](https://github.com/SethKitchen/ThreeMojo/issues/641)
+- [x] [Numerics](https://github.com/SethKitchen/ThreeMojo/wiki/Numerics): sparse assembly, skyline and conjugate-gradient solvers, and lowest modes by subspace iteration with a Sturm check [#642](https://github.com/SethKitchen/ThreeMojo/issues/642)
+- [x] [Building topology](https://github.com/SethKitchen/ThreeMojo/wiki/Building-topology): a cell complex in which rooms share faces [#643](https://github.com/SethKitchen/ThreeMojo/issues/643)
+- [x] [Building model](https://github.com/SethKitchen/ThreeMojo/wiki/Building-model): storeys, spaces, elements, layered constructions and render views [#644](https://github.com/SethKitchen/ThreeMojo/issues/644)
+- [x] [IFC exchange](https://github.com/SethKitchen/ThreeMojo/wiki/IFC-exchange): STEP physical files and an IFC4 subset, read and written [#645](https://github.com/SethKitchen/ThreeMojo/issues/645)
+- [x] [Procedural towers](https://github.com/SethKitchen/ThreeMojo/wiki/Procedural-towers): a seeded tower as a building model [#646](https://github.com/SethKitchen/ThreeMojo/issues/646)
+- [x] [Floor plans and interiors](https://github.com/SethKitchen/ThreeMojo/wiki/Floor-plans-and-interiors): seeded rooms, doors, windows and furniture [#647](https://github.com/SethKitchen/ThreeMojo/issues/647)
+- [x] [Frame analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Frame-analysis): 3D frames, static and modal [#648](https://github.com/SethKitchen/ThreeMojo/issues/648)
+- [x] [Shell analysis](https://github.com/SethKitchen/ThreeMojo/wiki/Shell-analysis): flat-shell slabs and walls [#649](https://github.com/SethKitchen/ThreeMojo/issues/649)
+- [x] [Building energy](https://github.com/SethKitchen/ThreeMojo/wiki/Building-energy): zones, transient conduction and a heat balance [#650](https://github.com/SethKitchen/ThreeMojo/issues/650)
 
 ### Out of scope
 

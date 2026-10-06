@@ -26,8 +26,21 @@ through an outline does not cross it, and when the fill rule is not
 known. This refuses both. three.js returns `null` for a stroke with no
 triangles. Here the stroke has a `count` of zero, and
 `SvgStroke.to_geometry` refuses it.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import (
+    _ordinary_squared,
+    length2,
+    normalized2,
+    normalized_difference2,
+)
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
 from loaders.svg_path import (
@@ -39,7 +52,7 @@ from loaders.svg_path import (
     same_point,
 )
 from math.path import Shape
-from std.math import acos, cos, floor, isfinite, log10, pi, sin, sqrt
+from std.math import fma, acos, cos, floor, isfinite, log10, pi, sin, sqrt
 
 
 # three.js's `BIGNUMBER`.
@@ -399,7 +412,7 @@ def classify_point(
     var behind = ax * bx < 0 or ay * by < 0
     if behind:
         return (LOCATION_BEHIND, Float64(0))
-    if sqrt(ax * ax + ay * ay) < sqrt(bx * bx + by * by):
+    if length2(ax, ay) < length2(bx, by):
         return (LOCATION_BEYOND, Float64(0))
     var t: Float64
     if ax != 0:
@@ -748,29 +761,34 @@ def _f32(values: List[Float64]) -> List[Float32]:
 
 def _length(v: SvgVector) -> Float64:
     """Return a vector's length, three.js's `Vector2.length`."""
-    return sqrt(v[0] * v[0] + v[1] * v[1])
+    return length2(v[0], v[1])
 
 
 def _normalize(v: SvgVector) -> SvgVector:
     """Return a vector of length one, three.js's `normalize`: it divides by
     the length, or by one for a zero vector, as a multiply by the
     reciprocal."""
-    var length = _length(v)
-    if length == 0:
-        length = 1
-    return v * (1 / length)
+    # Retain JavaScript's separate product roundings at semicircle caps.
+    var squared = fma(v[0], v[0], Float64(0)) + fma(v[1], v[1], Float64(0))
+    if _ordinary_squared(squared) or squared != squared:
+        return v * (1 / sqrt(squared))
+    var unit = normalized2(v[0], v[1])
+    return SvgVector(unit[0], unit[1])
 
 
 def _dot(a: SvgVector, b: SvgVector) -> Float64:
     """Return the dot product."""
-    return a[0] * b[0] + a[1] * b[1]
+    return fma(a[0], b[0], Float64(0)) + fma(a[1], b[1], Float64(0))
 
 
 def _normal(p1: SvgVector, p2: SvgVector) -> SvgVector:
     """Return the left normal of the edge from `p1` to `p2`, three.js's
     `getNormal`."""
     var r = p2 - p1
-    return _normalize(SvgVector(-r[1], r[0]))
+    if isfinite(r[0]) and isfinite(r[1]):
+        return _normalize(SvgVector(-r[1], r[0]))
+    var direction = normalized_difference2(p1[0], p1[1], p2[0], p2[1])
+    return SvgVector(-direction[1], direction[0])
 
 
 def _rotate_around(

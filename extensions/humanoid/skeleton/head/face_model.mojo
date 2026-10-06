@@ -530,11 +530,19 @@ struct FaceModel(Movable):
         var n = self.vertex_count()
         if count >= 0:
             n = min(n, count)
-        var values = _floats(self.bytes, self.sections[_NEUTRAL], n * 3)
+        # Read the validated packed section in place. A temporary scalar
+        # list would copy every coordinate before constructing the points.
+        var values = self.bytes.unsafe_ptr().unsafe_bitcast[Float32]()
+        var first = self.sections[_NEUTRAL] // 4
         var points = List[Vector3](capacity=n)
         for v in range(n):  # pragma: no branch
+            var at = first + v * 3
             points.append(
-                Vector3(values[v * 3], values[v * 3 + 1], values[v * 3 + 2])
+                Vector3(
+                    values[unsafe_offset=at],
+                    values[unsafe_offset=at + 1],
+                    values[unsafe_offset=at + 2],
+                )
             )
         return points^
 
@@ -766,34 +774,53 @@ struct FaceModel(Movable):
         self._check(part)
         if len(points) != self.vertex_count():
             raise Error("A face part needs one point per model vertex")
-        var triangles = self.triangles()
-        var position_of = self.position_of()
-        var model_uvs = self.uvs()
-        var remap = List[Int](length=len(position_of), fill=-1)
+        # These arrays were validated when the model was read. Borrow their
+        # packed values rather than copying the whole head for each part.
+        var words = self.bytes.unsafe_ptr().unsafe_bitcast[UInt16]()
+        var floats = self.bytes.unsafe_ptr().unsafe_bitcast[Float32]()
+        var triangles_at = self.sections[_TRIANGLES] // 2
+        var owners_at = self.sections[_POSITION_OF] // 2
+        var uvs_at = self.sections[_UVS] // 4
+        var remap = List[Int](length=self.sizes[_POSITION_OF], fill=-1)
         var positions = List[Float32]()
         var uvs = List[Float32]()
         var owners = List[Int]()
         var indices = List[Int]()
         var parts: List[FacePart] = [part]
-        for t in range(0, len(triangles), 3):  # pragma: no branch
+        for t in range(0, self.sizes[_TRIANGLES], 3):  # pragma: no branch
             if not _in_parts(
                 parts,
-                position_of[triangles[t]],
-                position_of[triangles[t + 1]],
-                position_of[triangles[t + 2]],
+                Int(
+                    words[
+                        unsafe_offset=owners_at
+                        + Int(words[unsafe_offset=triangles_at + t])
+                    ]
+                ),
+                Int(
+                    words[
+                        unsafe_offset=owners_at
+                        + Int(words[unsafe_offset=triangles_at + t + 1])
+                    ]
+                ),
+                Int(
+                    words[
+                        unsafe_offset=owners_at
+                        + Int(words[unsafe_offset=triangles_at + t + 2])
+                    ]
+                ),
             ):
                 continue
             for c in range(3):  # pragma: no branch
-                var d = triangles[t + c]
+                var d = Int(words[unsafe_offset=triangles_at + t + c])
                 if remap[d] < 0:
                     remap[d] = len(owners)
-                    var p = position_of[d]
+                    var p = Int(words[unsafe_offset=owners_at + d])
                     owners.append(p)
                     positions.append(points[p].x)
                     positions.append(points[p].y)
                     positions.append(points[p].z)
-                    uvs.append(model_uvs[d * 2])
-                    uvs.append(model_uvs[d * 2 + 1])
+                    uvs.append(floats[unsafe_offset=uvs_at + d * 2])
+                    uvs.append(floats[unsafe_offset=uvs_at + d * 2 + 1])
                 indices.append(remap[d])
         if len(indices) == 0:
             raise Error("That face part has no triangles")

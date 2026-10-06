@@ -32,7 +32,16 @@ This port draws them from `math.utils.SeededRandom`, so a pass with the
 same seed gives the same frame.
 
 The passes run on the host, as every pass in `postprocessing` does.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import length2
 
 from core.layers import Layers
 from math.matrix4 import Matrix4
@@ -1296,7 +1305,7 @@ def _ssr_pixel(
     var d1 = _to_screen(view, end)
     var x_len = d1.x - d0x
     var y_len = d1.y - d0y
-    var total_len = sqrt(x_len * x_len + y_len * y_len)
+    var total_len = length2(x_len, y_len)
     var total_step = max(abs(x_len), abs(y_len))
     var x_span = x_len / total_step
     var y_span = y_len / total_step
@@ -1314,7 +1323,7 @@ def _ssr_pixel(
             return none
         var dx = px - d0x
         var dy = py - d0y
-        var s = sqrt(dx * dx + dy * dy) / total_len
+        var s = length2(dx, dy) / total_len
         var su = px / res_x
         var sv = py / res_y
         var found = view.depth_at(su, sv)

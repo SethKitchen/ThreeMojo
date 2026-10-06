@@ -29,12 +29,15 @@ index in that road's signal list.
 Differences from CARLA: a lane link that names no lane is dropped, where
 CARLA would store a null pointer and crash on it, and a controller that
 names a missing signal skips it, where CARLA would read past the end of a
-map. A signal reference that names no signal is refused.
+map. A signal reference that names no signal is refused. Junction bounds
+include both traffic directions and complete lane sections, with bounded
+chord approximation instead of CARLA's ten-step walk. See `junction_bounds`.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/road/MapBuilder.cpp`.
 """
 
 from extensions.carla.geo import GeoLocation, GeoProjection
+from extensions.carla.junction_bounds import _lane_section_box
 from extensions.carla.geometry import (
     ARC_LENGTH,
     LINE,
@@ -1522,9 +1525,11 @@ struct MapBuilder(Movable):
 def junction_box(map: Map, id: JuncId) raises -> Box3:
     """Return a junction's bounding box, `CreateJunctionBoundingBoxes`.
 
-    CARLA walks each lane through the junction in ten steps and boxes
-    every point it reaches, in CARLA's frame. A lane that runs against s
-    has a negative step, so CARLA boxes only its two ends.
+    Box each nonzero connecting lane selected by `LANE_ANY` over its
+    complete section in CARLA's frame, independent of travel direction. Split at record boundaries
+    and use at most 1 cm of smooth-curve chord padding. Separate numerical
+    allowances cover Float32 rounding, Float64 cubics, and spiral quadrature. Singular tangents and excessive subdivisions use a wider
+    conservative envelope. See the CARLA maps wiki's junction bounds.
 
     Args:
         map: The map.
@@ -1535,30 +1540,21 @@ def junction_box(map: Map, id: JuncId) raises -> Box3:
         minimum the largest float and every maximum the least.
 
     Raises:
-        Error: If the junction or a lane's records are missing.
+        Error: If the junction or required records are missing, a section or
+            sample interval is invalid, or coefficient/subdivision bounds
+            are not finite.
     """
-    var low = Vector3(_FLOAT_MAX, _FLOAT_MAX, _FLOAT_MAX)
-    var high = Vector3(-_FLOAT_MAX, -_FLOAT_MAX, -_FLOAT_MAX)
+    var box = Box3(
+        Vector3(_FLOAT_MAX, _FLOAT_MAX, _FLOAT_MAX),
+        Vector3(-_FLOAT_MAX, -_FLOAT_MAX, -_FLOAT_MAX),
+    )
     for pair in map.junction_waypoints(id, LANE_ANY):
         var start = pair[0]
-        var end = pair[1]
-        var interval = (end.s - start.s) / 10.0
-        low.min(map.compute_transform(end).location)
-        high.max(map.compute_transform(end).location)
-        low.min(map.compute_transform(start).location)
-        high.max(map.compute_transform(start).location)
-        var next_w = start
-        # Ten steps, always.
-        for _ in range(10):  # pragma: no branch
-            if interval < 2.220446049250313e-16:
-                break
-            var next = map.next(next_w, interval)
-            if len(next) > 0:
-                next_w = next[len(next) - 1]
-            var at = map.compute_transform(next_w).location
-            low.min(at)
-            high.max(at)
-    return Box3(low, high)
+        ref road = map.road(start.road_id)
+        var section = road.section_index(start.section_id)
+        var lane = road.sections[section].lane_index(start.lane_id)
+        box.union(_lane_section_box(road, section, lane))
+    return box
 
 
 def check_signals_on_roads(mut map: Map) raises:

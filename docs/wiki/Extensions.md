@@ -8,6 +8,8 @@ The water subject ports Clearwater. See [Water](Water).
 
 The animals subject ports procedural-animals: 24 species sculpted as distance fields, posed and painted. See [Animals](Animals). Its distance field sculpting and meshing live in `extensions/sdf/`, so other subjects can use them. Its anatomy, mass and muscles build on `extensions/anatomy/`, which the humanoid shares. See [Animal anatomy](Animal-anatomy).
 
+The building subject generates buildings for engineering analysis and for games from one canonical model. It has shared numerics, a cell complex, the building model, IFC exchange and procedural towers and interiors. Frame, shell and energy analysis read the same model. See [Why buildings have one canonical model](Why-buildings-have-one-canonical-model).
+
 The CARLA subject ports the CARLA driving simulator without its game engine and its network transport. It covers maps, physics, the world, sensors, traffic, agents, recording and rendering. See [CARLA](CARLA).
 
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles). See [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument), [Leg](Leg) and [Foot](Foot).

@@ -75,7 +75,16 @@ is kept when it comes within a millionth of the far distance of any plane,
 so that a mesh the culler and the clipper measure by different roundings
 of the same view is left for the clipper to decide. Keeping a mesh costs
 work; dropping one changes the image.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import normal_or_zero
 
 from renderers.render_list import (
     RenderItem,
@@ -399,12 +408,7 @@ def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     Wound counter-clockwise seen from the front, so the normal points at the
     viewer for a front-facing triangle.
     """
-    var first = b - a
-    first.cross(c - a)
-    # normalize leaves a zero vector alone, so a degenerate triangle gives a
-    # zero normal rather than a division by zero.
-    first.normalize()
-    return first^
+    return normal_or_zero(a, b, c)
 
 
 def _faces_away(
@@ -720,6 +724,7 @@ def _march_volume(
     steps: Int,
     geometry: BufferGeometry,
     world: Matrix4,
+    scene_depth: Bool = False,
 ) raises:
     """Give a `VOLUME` draw's corners their ray: the material's steps, and
     the mesh's bounding radius carried to world space, three.js's
@@ -731,6 +736,7 @@ def _march_volume(
         steps: The material's `steps`.
         geometry: The draw's geometry.
         world: The draw's world matrix.
+        scene_depth: Whether the volume uses captured opaque-scene depth.
 
     Raises:
         Error: If `steps` is below one, or the geometry has no positions.
@@ -744,6 +750,7 @@ def _march_volume(
             corners.corners[begin].surface, len(corners.surfaces)
         ):
             corners.surfaces[surface].steps = steps
+            corners.surfaces[surface].volume_scene_depth = scene_depth
             corners.surfaces[surface].model_radius = bound.radius
 
 
@@ -4249,9 +4256,22 @@ def _looks_behind(frame: Frame, triangle: Int) raises -> Bool:
     """Return True if a triangle of a prepared frame transmits, or its
     node program reads the scene behind it."""
     ref first = frame.surfaces[frame.corners[triangle * 3].surface]
-    return first.transmission > 0 or (
-        first.nodes != NO_NODES and frame.programs.get(first.nodes).reads_scene
+    return (
+        first.volume_scene_depth
+        or first.transmission > 0
+        or (
+            first.nodes != NO_NODES
+            and frame.programs.get(first.nodes).reads_scene
+        )
     )
+
+
+def _needs_volume_depth(frame: Frame) -> Bool:
+    """Return whether a prepared surface requests opaque volume depth."""
+    for surface in range(len(frame.surfaces)):
+        if frame.surfaces[surface].volume_scene_depth:
+            return True
+    return False
 
 
 def _transmits(frame: Frame) raises -> Bool:
@@ -4267,14 +4287,21 @@ def _transmits(frame: Frame) raises -> Bool:
     return False
 
 
-def _is_see_through(frame: Frame, draw: Draw) raises -> Bool:
+def _is_see_through(
+    frame: Frame, draw: Draw, exclude_volumes: Bool
+) raises -> Bool:
     """Return True if a draw of a prepared frame transmits or blends:
     three.js leaves both its `transmissive` and its `transparent` lists
     out of the transmission pass. A draw that reads the scene behind is
     left out as a transmissive one is."""
     if draw.kind == DRAW_TRIANGLES:
         return (
-            _looks_behind(frame, draw.first)
+            (
+                exclude_volumes
+                and frame.surfaces[frame.corners[draw.first * 3].surface].kind
+                == VOLUME
+            )
+            or _looks_behind(frame, draw.first)
             or frame.surfaces[
                 frame.corners[draw.first * 3].surface
             ].blend.mixes()
@@ -4291,10 +4318,11 @@ def _opaque_draws(frame: Frame) raises -> List[Draw]:
     three.js's `opaqueObjects`, every run that neither transmits nor
     blends, in the frame's order."""
     var kept = List[Draw]()
+    var exclude_volumes = _needs_volume_depth(frame)
     # Only a frame with a transmissive run is asked, so it has a draw and
     # the loop never runs zero times.
     for index in range(len(frame.draws)):  # pragma: no branch
-        if not _is_see_through(frame, frame.draws[index]):
+        if not _is_see_through(frame, frame.draws[index], exclude_volumes):
             kept.append(frame.draws[index])
     return kept^
 
@@ -6087,6 +6115,8 @@ struct Renderer(Movable):
             # whether it shows its normal or its depth instead of a color.
             # Per triangle, like the blend.
             var kind = material.kind
+            if material.volume_scene_depth and kind != VOLUME:
+                raise Error("Only a VOLUME material reads volume scene depth")
             # Checked here because here is the first place that can: a
             # material is built without the store in reach, so a positive id
             # naming nothing is only detectable once both are together. It is
@@ -6570,7 +6600,9 @@ struct Renderer(Movable):
                 draws[slot].blends,
                 draws[slot].order,
                 draws[slot].source(),
-                material.transmits() or _reads_scene(assets, material.nodes),
+                material.transmits()
+                or material.volume_scene_depth
+                or _reads_scene(assets, material.nodes),
             )
             if kind == VOLUME:
                 # A volume marches its own corners once they are all
@@ -6581,7 +6613,14 @@ struct Renderer(Movable):
                 pending_vertices = 0
                 var begin = len(corners)
                 job.emit(0, triangles, corners, gouraud_lights, assets)
-                _march_volume(corners, begin, material.steps, geometry, world)
+                _march_volume(
+                    corners,
+                    begin,
+                    material.steps,
+                    geometry,
+                    world,
+                    material.volume_scene_depth and not casters_only,
+                )
                 job.note(spans, begin, len(corners))
                 continue
             jobs.append(job^)
@@ -8181,6 +8220,17 @@ struct Renderer(Movable):
         var frame = self.prepare_frame(
             scene, assets, camera, target.has_velocities()
         )
+        # A filtered beauty draw still reads the whole opaque scene. Save
+        # its draw order before ONE_OIT_DRAW removes the opaque objects;
+        # the corners and surfaces remain the same prepared frame below.
+        # Frames without requested volume depth keep the existing path.
+        var volume_opaque: Optional[List[Draw]] = None
+        if (
+            self.draw_filter != ALL_DRAWS
+            and self.shading != SHADE_UV
+            and _needs_volume_depth(frame)
+        ):
+            volume_opaque = _opaque_draws(frame)
         # The draws a filter leaves out, and the snap; see
         # `renderers.draw_filter`.
         check_draw_filter(self.draw_filter, self.oit_draw)
@@ -8263,7 +8313,7 @@ struct Renderer(Movable):
         # before the frame as three.js draws its transmission pass, and
         # before the clear, since it too can be refused.
         var seen = self._transmission_pass(
-            frame, scene, assets, camera, lighting, fog, backdrop
+            frame, scene, assets, camera, lighting, fog, backdrop, volume_opaque
         )
         _ = self.curve_program(assets)
         if first:
@@ -8437,8 +8487,9 @@ struct Renderer(Movable):
 
         For a caller that draws the frame elsewhere, such as
         `render.gpu.GpuRenderer.draw`, which takes the target as it is.
-        Empty when nothing in the frame transmits or the shading mode is
-        not `SHADE_TEXTURE`.
+        Also holds immutable opaque depth when a volume requests it, in
+        every shading mode except `SHADE_UV`. Otherwise empty when no
+        surface reads the scene under `SHADE_TEXTURE`.
 
         Args:
             scene: The scene.
@@ -8475,6 +8526,7 @@ struct Renderer(Movable):
         lighting: Lighting,
         fog: FogView,
         backdrop: Optional[Framebuffer],
+        volume_opaque: Optional[List[Draw]] = None,
     ) raises -> TransmissionTarget:
         """Draw the opaque part of a prepared frame into a target of its
         own and return it with its chain: three.js's
@@ -8485,9 +8537,10 @@ struct Renderer(Movable):
         runs that neither transmit nor blend with no tone mapping, as
         three.js turns it off for the pass, and the chain. Then the back
         faces of every two-sided transmissive mesh, each looking through
-        what was drawn so far, and the chain again. A frame that does not
-        transmit, or a mode that opens no texture, draws nothing and
-        returns an empty target.
+        what was drawn so far, and the chain again. A requested volume
+        depth snapshot is copied before those back faces and preserved
+        afterward. A frame that needs neither scene colors nor volume
+        depth returns an empty target.
 
         Args:
             frame: The frame, prepared.
@@ -8497,6 +8550,9 @@ struct Renderer(Movable):
             lighting: The scene's lights, as `_lighting` resolves them.
             fog: The scene's fog, checked.
             backdrop: The scene's image background, or none.
+            volume_opaque: The unfiltered opaque draw order, when a
+                filtered frame contains a volume that reads scene depth.
+                None keeps the prepared frame's own draw selection.
 
         Returns:
             The target, empty when nothing needs it.
@@ -8504,7 +8560,12 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `rasterize_frame` raises.
         """
-        if self.shading != SHADE_TEXTURE or not _transmits(frame):
+        var volume_depth = self.shading != SHADE_UV and _needs_volume_depth(
+            frame
+        )
+        if not volume_depth and (
+            self.shading != SHADE_TEXTURE or not _transmits(frame)
+        ):
             return TransmissionTarget()
         var lightings = self._lightings(scene, assets, camera, lighting)
         var kept = Rect.whole(self.width, self.height)
@@ -8523,11 +8584,16 @@ struct Renderer(Movable):
         var painted = Bool(backdrop)
         if painted:
             _paint_backdrop(drawn, kept, backdrop.value())
+        var opaque_draws: List[Draw]
+        if Bool(volume_opaque):
+            opaque_draws = volume_opaque.value().copy()
+        else:
+            opaque_draws = _opaque_draws(frame)
         rasterize_frame(
             frame.corners,
             frame.surfaces,
             frame.segments,
-            _opaque_draws(frame),
+            opaque_draws,
             drawn,
             self.shading,
             assets.textures,
@@ -8544,6 +8610,12 @@ struct Renderer(Movable):
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
+        if volume_depth:
+            seen.capture_volume_depth(
+                drawn,
+                self._to_screen(camera),
+                Length(camera.far_distance(), METER),
+            )
         var backs = List[_Span]()
         var turned = self._prepared(
             scene, assets, camera, False, backs, transmissive_backs=True
@@ -8575,7 +8647,10 @@ struct Renderer(Movable):
             assets.data_array_textures,
             lightings,
         )
-        return TransmissionTarget(drawn, view)
+        var finished = TransmissionTarget(drawn, view)
+        finished.volume_depth = seen.volume_depth^
+        seen.volume_depth = List[Float32]()
+        return finished^
 
     def set_ltc_tables(mut self, var tables: LtcTables):
         """Hold the tables a rect area light is evaluated with.

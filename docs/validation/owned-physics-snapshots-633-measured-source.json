@@ -1,0 +1,22 @@
+{
+  "baseline": "84038a2e06b0945fb1586b712298ab9268741b81",
+  "measured_at_utc": "2026-10-05T02:45:28.280266+00:00",
+  "mojo": "1.1.0 (8189361e)",
+  "host": "Intel Xeon Platinum 8573C; Linux x86_64; shared host; serial lane, not CPU-isolated",
+  "files": {
+    "bench/physics_snapshot_bench.mojo": "6fc8360aaa92b7147c08723f181010da6775e27ee0cb4079342c9c8afdc7983e",
+    "bench/physics_snapshot_allocations.c": "3e1efc378d7f02b60c364aef66e0c87e15fb9bb5bc41c0830c07a05b056de799",
+    "bench/physics_snapshot_report.py": "0c6ee9fa4d0be7473fc1c8ee386a0cdf848ade43a5a5a664a168919bebbb6106",
+    "bench/physics_static_bench.mojo": "b741698a2866ff497256db691851b5b5e169468fc07688382896d993512dfc53",
+    "bench/physics_static_bvh.mojo": "78f66a5678fd2c02c80c18b3c87fcb530ea7c1c3aba3f17dce8427cded1a4cc7",
+    "bench/navigation_allocations.c": "81284b96df593c634cd4f1c73efcabe357b706910da5eed864778e48efa945a0",
+    "extensions/physics/query_snapshot.mojo": "f544f341a35d19013a719d42028d12dd92cb4c7368309573785e3a51ae86cf57",
+    "extensions/physics/primitive_index.mojo": "06bdb0ade12b5a6ba7819dd6e8c0671ddd1cef6572dac3a61072392489dbe4f5",
+    "extensions/physics/world.mojo": "9eae82cf83880dde68e6e9874ae424438b89edcf69751f363130ed177b73859b",
+    "extensions/physics/collide.mojo": "750fdafe18798f49466ce58b073efaa3f446123363937ecb83df921e253a3162",
+    "extensions/physics/shape.mojo": "b3631772df9573e8cfcaf85630880b30cc1028a80b1f37acfcfa7c8c4fff018a",
+    "math/ray.mojo": "9c1fa9176970d534ec6f718a09f916af26a8dc87299d80f862e6f60190657805",
+    "math/vector3.mojo": "4ce87f711940cd7920bd7ffb76d8e34f8a9fe6bf4dff1562b12d9cea3cb735bf",
+    "math/bounds.mojo": "1078b7303170bc239ea0aed1d844ebe4e386636198e7b993ab554d9653583c1c"
+  }
+}

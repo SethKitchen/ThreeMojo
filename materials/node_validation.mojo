@@ -60,6 +60,96 @@ def _sampler_spans(
                     )
 
 
+def _payload_span(
+    mut types: List[Int],
+    mut starts: List[Int],
+    first: Int,
+    count: Int,
+    type: Int = -1,
+) raises:
+    """Mark checked data words, keeping integer bits separate from floats.
+
+    Zero means unclassified, minus one means ordinary finite float data,
+    and a positive value is an exact integer ValueType. Integer aliases
+    must name the same complete value with the same type.
+    """
+    for offset in range(count):
+        var at = first + offset
+        var before = types[at]
+        if before != 0 and (before > 0 or type > 0):
+            if before != type or starts[at] != first:
+                raise Error(
+                    "Object JSON: integer payload spans overlap another type"
+                )
+        types[at] = type
+        starts[at] = first
+
+
+def _integer_arity(kind: nodes.NodeKind) -> Int:
+    """Return the input count for a validated exact integer opcode."""
+    if kind == nodes.NODE_UINT_CLAMP or kind == nodes.NODE_INT_CLAMP:
+        return 3
+    if (
+        kind == nodes.NODE_UINT_NEGATE
+        or kind == nodes.NODE_UINT_BIT_NOT
+        or kind == nodes.NODE_INT_NEGATE
+        or kind == nodes.NODE_INT_BIT_NOT
+        or (
+            kind.value >= nodes.NODE_TO_UINT.value
+            and kind.value <= nodes.NODE_UINT_LAST.value
+        )
+        or kind.value >= nodes.NODE_TO_INT.value
+    ):
+        return 1
+    return 2
+
+
+def _read_register(written: List[Bool], register: Int) raises:
+    """Require a new instruction's input to have an earlier producer."""
+    if not written[register]:
+        raise Error("Object JSON: an integer or gradient input has no producer")
+
+
+def _integer_instruction(
+    kind: nodes.NodeKind,
+    a: Int,
+    b: Int,
+    c: Int,
+    immediate: Int,
+    written: List[Bool],
+) raises:
+    """Check operand arity and the optional unary width of integer code."""
+    var arity = _integer_arity(kind)
+    _read_register(written, a)
+    if arity >= 2:
+        _read_register(written, b)
+    elif b != 0:
+        raise Error(
+            "Object JSON: an integer unary instruction has a second input"
+        )
+    if arity == 3:
+        _read_register(written, c)
+    elif c != 0:
+        raise Error("Object JSON: an integer instruction has an extra input")
+    var width = (
+        kind == nodes.NODE_UINT_NEGATE
+        or kind == nodes.NODE_UINT_BIT_NOT
+        or kind == nodes.NODE_INT_NEGATE
+        or kind == nodes.NODE_INT_BIT_NOT
+        or kind == nodes.NODE_INT_ABS
+        or kind == nodes.NODE_INT_SIGN
+    )
+    if width:
+        if immediate < 1 or immediate > 4:
+            raise Error(
+                "Object JSON: an integer instruction has an invalid immediate"
+            )
+    elif immediate != 0:
+        raise Error(
+            "Object JSON: an integer instruction has an invalid immediate"
+        )
+
+
 def validate_surface_program(program: nodes.NodeProgram) raises:
     """Check the storage read by a serialized surface node program.
 
@@ -72,14 +162,16 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     Raises:
         Error: If an output, register, constant, matrix, custom attribute,
             uniform or texture address is outside its storage, an opcode
-            cannot run on a surface, or texture metadata omits a read.
+            cannot run on a surface, texture metadata omits a read, integer
+            metadata aliases another type, or a new opcode has invalid
+            operands. Only declared integer data can hold nonfinite bits.
     """
     var size = len(program.code)
     if size < nodes.PROGRAM_HEADER:
         raise Error("Object JSON: a node program's code is too short")
-    # The header check above guarantees at least PROGRAM_HEADER words.
-    for value in program.code:  # pragma: no branch
-        if not isfinite(value):
+    # Control words stay finite even when the pool contains integer bits.
+    for index in range(nodes.PROGRAM_HEADER):  # pragma: no branch
+        if not isfinite(program.code[index]):
             raise Error("Object JSON: a node program needs finite code")
     var starts = List[Int]()
     var counts = List[Int]()
@@ -111,6 +203,8 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             pool = max(pool, start + count * nodes.INSTRUCTION_FLOATS)
         starts.append(start)
         counts.append(count)
+    var payload_types = List[Int](length=size, fill=0)
+    var payload_starts = List[Int](length=size, fill=-1)
     if len(program.uniform_names) != len(program.uniform_offsets) or len(
         program.uniform_names
     ) != len(program.uniform_types):
@@ -131,6 +225,13 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 raise Error("Object JSON: node uniform spans overlap")
             if program.uniform_names[prior] == program.uniform_names[index]:
                 raise Error("Object JSON: a node uniform name is repeated")
+        _payload_span(
+            payload_types,
+            payload_starts,
+            program.uniform_offsets[index],
+            nodes._pool_size(type),
+            type.value if type.is_integer() else -1,
+        )
     if len(program.attribute_names) != len(program.attribute_offsets) or len(
         program.attribute_names
     ) != len(program.attribute_widths):
@@ -154,6 +255,10 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     _addresses(program.cube_offsets, pool, size)
     _sampler_spans(program, program.texture_offsets, nodes.NODE_SAMPLER)
     _sampler_spans(program, program.cube_offsets, nodes.NODE_SAMPLER_CUBE)
+    for address in program.texture_offsets:
+        _payload_span(payload_types, payload_starts, address, 4)
+    for address in program.cube_offsets:
+        _payload_span(payload_types, payload_starts, address, 4)
     for texture in program.texture_offsets:
         for cube in program.cube_offsets:
             if texture < cube + 4 and cube < texture + 4:
@@ -163,10 +268,14 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
     var graph = nodes.NodeGraph()
     # The serialized header always has NODE_OUTPUT_COUNT output entries.
     for output in range(nodes.NODE_OUTPUT_COUNT):  # pragma: no branch
+        var written = List[Bool](length=nodes.MAX_REGISTERS, fill=False)
         for instruction in range(counts[output]):
             var at = starts[output] + instruction * nodes.INSTRUCTION_FLOATS
+            for slot in range(nodes.INSTRUCTION_FLOATS):  # pragma: no branch
+                if not isfinite(program.code[at + slot]):
+                    raise Error("Object JSON: a node program needs finite code")
             var kind = nodes.NodeKind(
-                _whole(program.code[at], nodes.NODE_COMPUTE_RESULT.value)
+                _whole(program.code[at], nodes.NODE_INT_LAST.value)
             )
             if (
                 kind == nodes.NODE_VARYING
@@ -201,6 +310,20 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
             var immediate = _whole(
                 program.code[at + nodes.INSTRUCTION_IMMEDIATE], (1 << 24) - 1
             )
+            var a = Int(program.code[at + nodes.INSTRUCTION_A])
+            var b = Int(program.code[at + nodes.INSTRUCTION_B])
+            var c = Int(program.code[at + nodes.INSTRUCTION_C])
+            var dest = Int(program.code[at + nodes.INSTRUCTION_DEST])
+            if kind.value >= nodes.NODE_UINT_FIRST.value:
+                _integer_instruction(kind, a, b, c, immediate, written)
+            elif kind == nodes.NODE_TEXTURE_GRAD:
+                if b != 0:
+                    raise Error(
+                        "Object JSON: a texture gradient has an extra input"
+                    )
+                _read_register(written, a)
+                _read_register(written, c)
+            written[dest] = True
             if kind == nodes.NODE_CONSTANT or kind == nodes.NODE_UNIFORM:
                 _span(immediate, 4, pool, size)
                 if kind == nodes.NODE_UNIFORM and not _contains(
@@ -208,6 +331,24 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 ):
                     raise Error(
                         "Object JSON: a uniform instruction lacks its offset"
+                    )
+                if a != 0 or c != 0:
+                    raise Error("Object JSON: a constant or uniform has inputs")
+                if kind == nodes.NODE_CONSTANT:
+                    if b > 8:
+                        raise Error(
+                            "Object JSON: invalid integer constant type tag"
+                        )
+                    _payload_span(
+                        payload_types,
+                        payload_starts,
+                        immediate,
+                        4,
+                        40 + b if b > 0 else -1,
+                    )
+                elif b != 0:
+                    raise Error(
+                        "Object JSON: a uniform has a constant type tag"
                     )
             elif (
                 kind == nodes.NODE_MATRIX_VECTOR
@@ -228,9 +369,13 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                     )
                 else:
                     _span(first, width * width, pool, size)
+                    _payload_span(
+                        payload_types, payload_starts, first, width * width
+                    )
             elif (
                 kind == nodes.NODE_TEXTURE
                 or kind == nodes.NODE_TEXTURE_LEVEL
+                or kind == nodes.NODE_TEXTURE_GRAD
                 or kind == nodes.NODE_TEXEL_FETCH
                 or kind == nodes.NODE_TEXTURE_SIZE
             ):
@@ -292,3 +437,8 @@ def validate_surface_program(program: nodes.NodeProgram) raises:
                 raise Error(
                     "Object JSON: a viewport texture must declare readsScene"
                 )
+    # Unused words and gaps remain finite too. An integer declaration can
+    # exempt only a checked four-word data span, never control or float data.
+    for index in range(size):  # pragma: no branch
+        if payload_types[index] <= 0 and not isfinite(program.code[index]):
+            raise Error("Object JSON: a node program needs finite code")

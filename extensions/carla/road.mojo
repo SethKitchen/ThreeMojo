@@ -21,6 +21,17 @@ index: `lane_transform` is `Lane::ComputeTransform`, `lane_corners` is
 `lane_is_straight` is `Lane::IsStraight`. A `LaneKey` names a lane from
 anywhere in the map: its road id, its section id and its lane id.
 
+The fixed-s `nearest_lane` query keeps its computed centers in Float64 and
+uses exact stored-point distance ordering. Its reported Float64 norm is a
+scale-safe approximation. It visits every lane center, including centers
+after a farther one. Other methods retain the precision rules below.
+
+Lane orientation corrects CARLA's lateral-slope-as-angle calculation. It
+differentiates the selected reference position and offset frame, accumulated
+widths and lane offset before Float32 storage. Pitch uses actual horizontal
+speed. Border-only lane geometry remains a separate unsupported contract.
+Center coordinates and the fixed-s query arithmetic are unchanged.
+
 CARLA writes a point in single precision. This port computes in double
 and rounds at the end, where CARLA hands back a `Location`; the two agree
 to within a float's rounding.
@@ -29,6 +40,11 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/Road.cpp`,
 `LaneSection.cpp`, `LaneSectionMap.h` and `Lane.cpp`.
 """
 
+from extensions.carla.curve_distance import (
+    _finite_point,
+    _wide_distance,
+    _wide_point_order,
+)
 from extensions.carla.geometry import DirectedPoint, LINE
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import (
@@ -48,7 +64,7 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from std.math import atan, sqrt
+from std.math import atan2, cos, isfinite, sin, sqrt
 from units.si import DEGREE, Angle, Length, METER, RADIAN
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
@@ -613,9 +629,11 @@ struct Road(Copyable, Movable):
     ) raises -> Tuple[Optional[LaneKey], Float64]:
         """Return the lane nearest a point at s, `Road::GetNearestLane`.
 
-        CARLA walks out from the reference line to the right, then to the
-        left, and stops on each side once a lane center is farther than
-        the best so far. It measures in OpenDRIVE's frame.
+        Visit all lane centers from inner to outer on the right, then
+        on the left, in OpenDRIVE's frame. Unlike CARLA, a farther center
+        does not end that side's search: rounded centers need not have
+        monotonic distances. Centers and widths stay in Float64. Exact
+        stored-point order decides ties; the later eligible lane wins.
 
         Args:
             s: A distance along the road, in meters.
@@ -623,18 +641,42 @@ struct Road(Copyable, Movable):
             lane_type: The lane types that may be the answer.
 
         Returns:
-            The nearest lane of those types, or None, and its distance.
+            The selected lane and its Float64 distance in meters. The
+            distance is a scale-safe approximation, not an exact norm.
+            If no lane matches, None and the largest finite Float64.
 
         Raises:
-            Error: If the mask is not valid, or a lane at s has no width
-                record there.
+            Error: If the mask or s is not valid, a query or visited center
+                is not finite, a needed record is missing, a visited width
+                is not finite, or the distance exceeds the Float64 range.
         """
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
+        if not isfinite(s):
+            raise Error("Fixed-s nearest lane needs a finite s")
+        var query: Array[Float64, 3] = [
+            Float64(location.x),
+            Float64(location.y),
+            Float64(location.z),
+        ]
+        _finite_point(query)
         var lanes = self.lanes_at(s)
-        var zero = self.directed_point(s)
+        # Keep the existing clamp and record rules without directed_point's
+        # Float32 lane-offset and elevation conversions.
+        var clamped = min(max(s, 0.0), self.length)
+        var zero = self._plan_point(clamped)
+        var offset = 0.0
+        var lane_offset = info_at(self.info.lane_offsets, clamped)
+        if Bool(lane_offset):
+            offset = lane_offset.value().polynomial.evaluate(clamped)
+        var sn = sin(zero.tangent)
+        var cs = cos(zero.tangent)
+        zero.x -= offset * sn
+        zero.y += offset * cs
+        zero.z = self.elevation_on(s).evaluate(s)
+        _finite_point([zero.x, zero.y, zero.z])
         var best: Optional[LaneKey] = None
-        var best_d = _DOUBLE_MAX
+        var best_center = Array[Float64, 3](fill=0.0)
         # Two sides, always.
         for side in range(2):  # pragma: no branch
             var current = zero
@@ -650,24 +692,36 @@ struct Road(Copyable, Movable):
                 var width = info_at(lane.info.widths, s)
                 if not Bool(width):
                     raise Error("A lane has no width record at s")
-                var half = Float32(width.value().polynomial.evaluate(s)) * 0.5
+                var w = width.value().polynomial.evaluate(s)
+                if not isfinite(w):
+                    raise Error("Fixed-s nearest lane needs a finite width")
+                var half = w * 0.5
                 if side == 1:
                     half = -half
-                current.apply_lateral_offset(Length(half, METER))
-                var d = Float64(
-                    Vector3(
-                        Float32(current.x),
-                        Float32(current.y),
-                        Float32(current.z),
-                    ).distance_to(location)
-                )
-                if d > best_d:
-                    break
+                # Length stores Float32, so update this internal center
+                # directly. Preserve the original two half-step walk.
+                current.x += half * sn
+                current.y -= half * cs
+                var center: Array[Float64, 3] = [
+                    current.x,
+                    current.y,
+                    current.z,
+                ]
+                _finite_point(center)
                 if lane.type.matches(lane_type):
-                    best = LaneKey(self.id, self.sections[pair[0]].id, lane.id)
-                    best_d = d
-                current.apply_lateral_offset(Length(half, METER))
-        return (best, best_d)
+                    if (
+                        not Bool(best)
+                        or _wide_point_order(center, best_center, query) <= 0
+                    ):
+                        best = LaneKey(
+                            self.id, self.sections[pair[0]].id, lane.id
+                        )
+                        best_center = center^
+                current.x += half * sn
+                current.y -= half * cs
+        if Bool(best):
+            return (best, _wide_distance(best_center, query))
+        return (best, _DOUBLE_MAX)
 
     # --- lanes ----------------------------------------------------------------
 
@@ -807,10 +861,12 @@ struct Road(Copyable, Movable):
     ) raises -> CarlaTransform:
         """Return a lane's center at s in CARLA's frame, facing along it.
 
-        This follows `Lane::ComputeTransform`, except that the pitch is
-        the negative arctangent of the elevation grade. That matches the
-        corrected rotation convention and makes rising roads face uphill.
+        The heading and pitch follow the center derivative before storage
+        rounding. This corrects CARLA's lateral-slope-as-angle defect.
         A lane against s turns its yaw by 180 degrees and reverses pitch.
+        Zero horizontal speed keeps the reference heading. A stationary
+        center has zero grade; a vertical tangent has a 90-degree pitch.
+        Roll stays zero. Border-only geometry is not evaluated here.
 
         Args:
             section: The section's index.
@@ -821,30 +877,75 @@ struct Road(Copyable, Movable):
             The transform a vehicle in that lane would have.
 
         Raises:
-            Error: If the indices name no lane, s is off the road, or a
-                record the transform needs is missing.
+            Error: If the indices name no lane, s is nonfinite or off the
+                road, a required record is missing, the offset frame is
+                undefined, or the center or derivative is not representable.
         """
         self._check_lane(section, lane)
-        if s > self.length or s < 0.0:
-            raise Error("s is off the road")
+        if not isfinite(s) or s > self.length or s < 0.0:
+            raise Error("s is off the road or nonfinite")
         var lane_id = self.sections[section].lanes[lane].id
         var t_offset = Float32(0)
-        var lane_tangent = Float32(0)
+        var offset = 0.0
+        var slope = 0.0
         if lane_id.value != 0:
             var total = self._total_width(section, s, lane_id)
             t_offset = Float32(total[0])
-            lane_tangent = Float32(total[1])
+            offset = total[0]
+            slope = total[1]
         var lane_offset = info_at(self.info.lane_offsets, s)
         if not Bool(lane_offset):
             raise Error("The road has no lane offset record at s")
-        lane_tangent -= Float32(lane_offset.value().polynomial.tangent(s))
+        offset -= lane_offset.value().polynomial.evaluate(s)
+        slope -= lane_offset.value().polynomial.tangent(s)
+        if not isfinite(offset) or not isfinite(slope):
+            raise Error("Lane offset or derivative is not representable")
+        var at = info_index(self.info.geometries, s)
+        if at < 0:
+            raise Error("The road has no geometry at that s")
+        ref record = self.info.geometries[at]
+        var derivative = record.geometry._derivative_at(s - record.s)
+        # Preserve the existing center-coordinate arithmetic, including its
+        # two separate Float32 lateral offsets and elevation storage boundary.
         var point = self.directed_point(s)
         point.apply_lateral_offset(Length(t_offset, METER))
-        point.tangent -= Float64(lane_tangent)
-        # Rotation's positive pitch points down. The elevation derivative is
-        # a grade, not an angle; use its arctangent before reversing traffic.
-        var pitch = -Float32(atan(point.pitch)) * _TO_DEGREES
+        var c = cos(point.tangent)
+        var sn = sin(point.tangent)
+        var dx = derivative[0] + offset * derivative[2] * c + slope * sn
+        var dy = derivative[1] + offset * derivative[2] * sn - slope * c
+        if not isfinite(dx) or not isfinite(dy) or not isfinite(point.pitch):
+            raise Error("Lane center derivative is not representable")
+        if (
+            not isfinite(Float32(point.x))
+            or not isfinite(Float32(point.y))
+            or not isfinite(Float32(point.z))
+        ):
+            raise Error("Lane center is not representable in its transform")
+        var magnitude = max(abs(dx), abs(dy))
         var yaw = Float32(-point.tangent) * _TO_DEGREES
+        if magnitude > 0.0:
+            # Correct direction in the reference frame to retain yaw winding.
+            yaw = (
+                Float32(
+                    -point.tangent
+                    + atan2(
+                        (dx / magnitude) * sn - (dy / magnitude) * c,
+                        (dx / magnitude) * c + (dy / magnitude) * sn,
+                    )
+                )
+                * _TO_DEGREES
+            )
+        # Scale all three components together: a finite tangent can have a
+        # horizontal norm larger than the largest representable scalar.
+        var scale = max(magnitude, abs(point.pitch))
+        var pitch = Float32(0)
+        if scale > 0.0:
+            var horizontal = sqrt((dx / scale) ** 2 + (dy / scale) ** 2)
+            pitch = (
+                -Float32(atan2(point.pitch / scale, horizontal)) * _TO_DEGREES
+            )
+        if not isfinite(yaw):
+            raise Error("Lane yaw winding is not representable")
         if not self.is_positive_direction(lane_id):
             yaw += 180.0
             pitch = 360.0 - pitch

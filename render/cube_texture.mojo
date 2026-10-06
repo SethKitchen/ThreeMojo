@@ -79,6 +79,13 @@ by the normal, `reflected`, or bent through the surface by the material's
 under `CubeRefractionMapping`. A material's `env_map_rotation` turns the
 lookup direction first, three.js's `envMapRotation`; `env_rotation` makes
 the matrix, and `Basis3.turn` applies it on both backends.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
 from math.arc_tangent import atan2_float32
@@ -745,16 +752,27 @@ def equirect_uv(direction: Vector3) -> Vector2:
     Returns:
         The coordinate, inside the unit square.
     """
-    var length = direction.length()
-    if length == 0:
+    var unit = direction
+    if (
+        isfinite(direction.x)
+        and isfinite(direction.y)
+        and isfinite(direction.z)
+    ):
+        unit.normalize()
+    else:
+        var magnitude = direction.length()
+        unit = Vector3(
+            direction.x / magnitude,
+            direction.y / magnitude,
+            direction.z / magnitude,
+        )
+    if unit.x == 0 and unit.y == 0 and unit.z == 0:
         return Vector2(0.5, 0.5)
     # Clamped as three.js clamps, with `min` and `max`: a unit vector's y
     # is within one bar a rounding, and `asin` of a hair past one is NaN.
-    var up = max(Float32(-1), min(Float32(1), direction.y / length))
+    var up = max(Float32(-1), min(Float32(1), unit.y))
     return Vector2(
-        atan2_float32(direction.z / length, direction.x / length)
-        / (2 * Float32(pi))
-        + 0.5,
+        atan2_float32(unit.z, unit.x) / (2 * Float32(pi)) + 0.5,
         asin(up) / Float32(pi) + 0.5,
     )
 

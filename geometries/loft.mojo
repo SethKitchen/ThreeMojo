@@ -37,7 +37,16 @@ The section is laid flat on that plane and cut into triangles by
 hard edge against the wall.
 
 The points are bare meters, as a `Vector3` position is.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import polygon_normal
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -142,16 +151,12 @@ def _cap(
     # The center, and the normal of the section's plane by Newell's
     # method.
     var centroid = Vector3(0, 0, 0)
-    var normal = Vector3(0, 0, 0)
+    var normal: Vector3
     for column in range(columns):  # pragma: no branch
         var p = points[column]
-        var q = points[(column + 1) % columns]
         centroid.add(p)
-        normal.x += (p.y - q.y) * (p.z + q.z)
-        normal.y += (p.z - q.z) * (p.x + q.x)
-        normal.z += (p.x - q.x) * (p.y + q.y)
     centroid = centroid / Float32(columns)
-    normal.normalize()
+    normal = polygon_normal(points)
     # Face away from the rest of the surface.
     var neighbor = 1 if which == 0 else rows - 2
     var inward = Vector3(0, 0, 0)

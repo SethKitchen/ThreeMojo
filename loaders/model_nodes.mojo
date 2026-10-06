@@ -12,8 +12,16 @@ a rotation and a scale with `Matrix4.decompose`, and a node here holds
 the same three, so `decompose_onto` is that split. `compose` is the other
 way, three.js's `Matrix4.compose`: what the node's matrix is once the
 split is put back together, which drops any shear the matrix had.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length3, normalized3, _ordinary_squared
 from core.object3d import Object3D
 from loaders.gltf import decode_image
 from math.matrix4 import Matrix4
@@ -29,11 +37,7 @@ from std.pathlib import Path
 def _column_length(matrix: Matrix4, start: Int) -> Float32:
     """Return the length of a column's first three entries."""
     ref e = matrix.elements
-    return sqrt(
-        e[start] * e[start]
-        + e[start + 1] * e[start + 1]
-        + e[start + 2] * e[start + 2]
-    )
+    return length3(e[start], e[start + 1], e[start + 2])
 
 
 def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
@@ -58,19 +62,15 @@ def decompose_onto(mut node: Object3D, matrix: Matrix4, what: String) raises:
     var sx = _column_length(matrix, 0)
     var sy = _column_length(matrix, 4)
     var sz = _column_length(matrix, 8)
-    if matrix.determinant() < 0:
-        sx = -sx
     if sx == 0 or sy == 0 or sz == 0:
         raise Error(what + ": a node matrix that flattens an axis")
-    ref e = matrix.elements
-    var rotation = Matrix4()
-    for row in range(3):  # pragma: no branch
-        rotation.elements[row] = e[row] / sx
-        rotation.elements[4 + row] = e[4 + row] / sy
-        rotation.elements[8 + row] = e[8 + row] / sz
-    node.set_position(e[12], e[13], e[14])
-    node.set_quaternion(Quaternion.from_matrix(rotation))
-    node.set_scale(sx, sy, sz)
+    var position = Vector3(0, 0, 0)
+    var rotation = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    matrix.decompose(position, rotation, scale)
+    node.set_position(position.x, position.y, position.z)
+    node.set_quaternion(rotation)
+    node.set_scale(scale.x, scale.y, scale.z)
 
 
 def compose(node: Object3D) -> Matrix4:

@@ -1,0 +1,7701 @@
+{
+  "schema_version": 1,
+  "upstream": "three.js r186",
+  "issue": 616,
+  "generation": "Independent Python Float64 scalar equations, not a WebGPU capture",
+  "sources": [
+    {
+      "path": "src/nodes/functions/BSDF/LTC.js",
+      "git_blob_sha": "6030b42b22794eb87711bfd5d1e65f974abf1eba",
+      "url": "https://github.com/mrdoob/three.js/blob/r186/src/nodes/functions/BSDF/LTC.js"
+    },
+    {
+      "path": "src/nodes/functions/VolumetricLightingModel.js",
+      "git_blob_sha": "d37d3a6c2362170e043b8624958afbe16ae87137",
+      "url": "https://github.com/mrdoob/three.js/blob/r186/src/nodes/functions/VolumetricLightingModel.js"
+    },
+    {
+      "path": "src/nodes/lighting/RectAreaLightNode.js",
+      "git_blob_sha": "d0b31a4575fe98021cd529f776c617dafaeac91d",
+      "url": "https://github.com/mrdoob/three.js/blob/r186/src/nodes/lighting/RectAreaLightNode.js"
+    },
+    {
+      "path": "src/nodes/display/ViewportDepthNode.js",
+      "git_blob_sha": "7e96a52c22bbc0bc356a241b38c2e409da0740fc",
+      "url": "https://github.com/mrdoob/three.js/blob/r186/src/nodes/display/ViewportDepthNode.js"
+    },
+    {
+      "path": "src/nodes/lighting/LightUtils.js",
+      "git_blob_sha": "f0498b00e6284876d4a264eaca1fe7ced97739d0",
+      "url": "https://github.com/mrdoob/three.js/blob/r186/src/nodes/lighting/LightUtils.js"
+    },
+    {
+      "path": "src/nodes/lighting/SpotLightNode.js",
+      "git_blob_sha": "783cdc430a91b265ef6fae1f6e2057b023368f5c",
+      "url": "https://github.com/mrdoob/three.js/blob/r186/src/nodes/lighting/SpotLightNode.js"
+    }
+  ],
+  "scope": {
+    "accepted": "r186 rectangle direct light and scattering-depth gate; native 1-transmittance output retained",
+    "out_of_scope": "r186 outgoingRayLight recurrence and scatteringEmissiveNode port",
+    "depth": "Opaque positive camera-axis distance; equality accepted; original ray samples unchanged",
+    "before_blocker": "Outside-camera samples before the volume and blocker can contribute, as in r186",
+    "normalization": "All reference normalizations are nonzero; native normalize(0) stays zero, while GPU normalize(0) is undefined",
+    "rounding": "Native Float32 may differ in final bits; sqrt(x)*x replaces power 1.5 and common view translation cancels before rotation",
+    "shadows": "These independent mixed scenes have no shadows, IES maps, or projectors; existing native regressions cover them"
+  },
+  "direct_cases": [
+    {
+      "name": "axis_front",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "light": {
+        "kind": "rectangle",
+        "position": [
+          0,
+          0,
+          1
+        ],
+        "half_width": [
+          1,
+          0,
+          0
+        ],
+        "half_height": [
+          0,
+          1,
+          0
+        ],
+        "radiance": [
+          4,
+          1,
+          0
+        ]
+      },
+      "form_factor": 0.5541262649761671,
+      "direct_light": [
+        3.299917562347724,
+        0.4124896952934655,
+        0.0
+      ]
+    },
+    {
+      "name": "off_axis",
+      "position": [
+        0.3,
+        -0.4,
+        -0.2
+      ],
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "light": {
+        "kind": "rectangle",
+        "position": [
+          0,
+          0,
+          1
+        ],
+        "half_width": [
+          1,
+          0,
+          0
+        ],
+        "half_height": [
+          0,
+          1,
+          0
+        ],
+        "radiance": [
+          4,
+          1,
+          0
+        ]
+      },
+      "form_factor": 0.42281059255452913,
+      "direct_light": [
+        2.199423067106491,
+        0.27492788338831137,
+        0.0
+      ]
+    },
+    {
+      "name": "yaw_90",
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          1,
+          0,
+          0
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "light": {
+        "kind": "rectangle",
+        "position": [
+          0,
+          0,
+          1
+        ],
+        "half_width": [
+          1,
+          0,
+          0
+        ],
+        "half_height": [
+          0,
+          1,
+          0
+        ],
+        "radiance": [
+          4,
+          1,
+          0
+        ]
+      },
+      "form_factor": 0.19757462727209377,
+      "direct_light": [
+        0.7025653775827242,
+        0.08782067219784052,
+        0.0
+      ]
+    },
+    {
+      "name": "back_side",
+      "position": [
+        0,
+        0,
+        2
+      ],
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "light": {
+        "kind": "rectangle",
+        "position": [
+          0,
+          0,
+          1
+        ],
+        "half_width": [
+          1,
+          0,
+          0
+        ],
+        "half_height": [
+          0,
+          1,
+          0
+        ],
+        "radiance": [
+          4,
+          1,
+          0
+        ]
+      },
+      "form_factor": 0.0,
+      "direct_light": [
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "on_emitter_plane",
+      "position": [
+        0,
+        0,
+        1
+      ],
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "light": {
+        "kind": "rectangle",
+        "position": [
+          0,
+          0,
+          1
+        ],
+        "half_width": [
+          1,
+          0,
+          0
+        ],
+        "half_height": [
+          0,
+          1,
+          0
+        ],
+        "radiance": [
+          4,
+          1,
+          0
+        ]
+      },
+      "form_factor": 0.9999999999999998,
+      "direct_light": [
+        7.999999999999997,
+        0.9999999999999997,
+        0.0
+      ]
+    }
+  ],
+  "scenes": [
+    {
+      "name": "outside_rectangle_none",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": null,
+      "blocker_relation": "none",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              }
+            ],
+            "ungated_light": [
+              7.961799356054545,
+              0.9952249195068181,
+              0.12440311493835227
+            ],
+            "scattering_density": [
+              5.971349517040909,
+              0.7464186896301136,
+              0.0933023362037642
+            ],
+            "transmittance_after": [
+              0.9280757995676618,
+              0.990713157953294,
+              0.9988344006367222
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.07464186896301137,
+              0.00933023362037642,
+              0.0011662792025470526
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.180859243182586,
+              0.27260740539782324,
+              0.034075925674727905
+            ],
+            "scattering_density": [
+              1.6356444323869395,
+              0.20445555404836743,
+              0.02555694425604593
+            ],
+            "transmittance_after": [
+              0.9092934365893739,
+              0.9881844305617695,
+              0.9985153621610128
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.09361689414296015,
+              0.011862193715530777,
+              0.0014853686412732246
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.5187323491356133,
+              0.06484154364195166,
+              0.008105192955243957
+            ],
+            "scattering_density": [
+              0.38904926185170996,
+              0.048631157731463745,
+              0.006078894716432968
+            ],
+            "transmittance_after": [
+              0.9048821722738386,
+              0.9875839061951017,
+              0.9984394916716123
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.09803889339685641,
+              0.012462900626911104,
+              0.0015612420132646962
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9048821722738386,
+          0.9875839061951017,
+          0.9984394916716123
+        ],
+        "native_accepted_output": [
+          0.0951178277261614,
+          0.012416093804898276,
+          0.001560508328387722
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.09803889339685641,
+          0.012462900626911104,
+          0.0015612420132646962
+        ]
+      }
+    },
+    {
+      "name": "outside_rectangle_before",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 2.0,
+      "blocker_relation": "before",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              }
+            ],
+            "ungated_light": [
+              7.961799356054545,
+              0.9952249195068181,
+              0.12440311493835227
+            ],
+            "scattering_density": [
+              5.971349517040909,
+              0.7464186896301136,
+              0.0933023362037642
+            ],
+            "transmittance_after": [
+              0.9280757995676618,
+              0.990713157953294,
+              0.9988344006367222
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.07464186896301137,
+              0.00933023362037642,
+              0.0011662792025470526
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.180859243182586,
+              0.27260740539782324,
+              0.034075925674727905
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.9280757995676618,
+              0.990713157953294,
+              0.9988344006367222
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.07464186896301137,
+              0.00933023362037642,
+              0.0011662792025470526
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.5187323491356133,
+              0.06484154364195166,
+              0.008105192955243957
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.9280757995676618,
+              0.990713157953294,
+              0.9988344006367222
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.07464186896301137,
+              0.00933023362037642,
+              0.0011662792025470526
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9280757995676618,
+          0.990713157953294,
+          0.9988344006367222
+        ],
+        "native_accepted_output": [
+          0.07192420043233816,
+          0.009286842046706045,
+          0.0011655993632777584
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.07464186896301137,
+          0.00933023362037642,
+          0.0011662792025470526
+        ]
+      }
+    },
+    {
+      "name": "outside_rectangle_inside",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 4.0,
+      "blocker_relation": "inside",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              }
+            ],
+            "ungated_light": [
+              7.961799356054545,
+              0.9952249195068181,
+              0.12440311493835227
+            ],
+            "scattering_density": [
+              5.971349517040909,
+              0.7464186896301136,
+              0.0933023362037642
+            ],
+            "transmittance_after": [
+              0.9280757995676618,
+              0.990713157953294,
+              0.9988344006367222
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.07464186896301137,
+              0.00933023362037642,
+              0.0011662792025470526
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.180859243182586,
+              0.27260740539782324,
+              0.034075925674727905
+            ],
+            "scattering_density": [
+              1.6356444323869395,
+              0.20445555404836743,
+              0.02555694425604593
+            ],
+            "transmittance_after": [
+              0.9092934365893739,
+              0.9881844305617695,
+              0.9985153621610128
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.09361689414296015,
+              0.011862193715530777,
+              0.0014853686412732246
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.5187323491356133,
+              0.06484154364195166,
+              0.008105192955243957
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.9092934365893739,
+              0.9881844305617695,
+              0.9985153621610128
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.09361689414296015,
+              0.011862193715530777,
+              0.0014853686412732246
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9092934365893739,
+          0.9881844305617695,
+          0.9985153621610128
+        ],
+        "native_accepted_output": [
+          0.0907065634106261,
+          0.011815569438230478,
+          0.001484637838987224
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.09361689414296015,
+          0.011862193715530777,
+          0.0014853686412732246
+        ]
+      }
+    },
+    {
+      "name": "outside_rectangle_behind",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 6.0,
+      "blocker_relation": "behind",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              }
+            ],
+            "ungated_light": [
+              7.961799356054545,
+              0.9952249195068181,
+              0.12440311493835227
+            ],
+            "scattering_density": [
+              5.971349517040909,
+              0.7464186896301136,
+              0.0933023362037642
+            ],
+            "transmittance_after": [
+              0.9280757995676618,
+              0.990713157953294,
+              0.9988344006367222
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.07464186896301137,
+              0.00933023362037642,
+              0.0011662792025470526
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.180859243182586,
+              0.27260740539782324,
+              0.034075925674727905
+            ],
+            "scattering_density": [
+              1.6356444323869395,
+              0.20445555404836743,
+              0.02555694425604593
+            ],
+            "transmittance_after": [
+              0.9092934365893739,
+              0.9881844305617695,
+              0.9985153621610128
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.09361689414296015,
+              0.011862193715530777,
+              0.0014853686412732246
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.5187323491356133,
+              0.06484154364195166,
+              0.008105192955243957
+            ],
+            "scattering_density": [
+              0.38904926185170996,
+              0.048631157731463745,
+              0.006078894716432968
+            ],
+            "transmittance_after": [
+              0.9048821722738386,
+              0.9875839061951017,
+              0.9984394916716123
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.09803889339685641,
+              0.012462900626911104,
+              0.0015612420132646962
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9048821722738386,
+          0.9875839061951017,
+          0.9984394916716123
+        ],
+        "native_accepted_output": [
+          0.0951178277261614,
+          0.012416093804898276,
+          0.001560508328387722
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.09803889339685641,
+          0.012462900626911104,
+          0.0015612420132646962
+        ]
+      }
+    },
+    {
+      "name": "outside_mixed_none",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": null,
+      "blocker_relation": "none",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.2654224987039917,
+                  0.39813374805598756,
+                  0.5308449974079834
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.2654224987039917,
+              0.39813374805598756,
+              0.5308449974079834
+            ],
+            "scattering_density": [
+              0.19906687402799378,
+              0.2986003110419907,
+              0.39813374805598756
+            ],
+            "transmittance_after": [
+              0.9975147574161992,
+              0.9962744532460771,
+              0.9950356912630987
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.002488335925349922,
+              0.0037325038880248835,
+              0.004976671850699844
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.8407224958949095,
+                  1.2610837438423643,
+                  1.681444991789819
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  15.801696669046468,
+                  6.320678667618587,
+                  3.1603393338092935
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              24.60421852099592,
+              8.57698733096777,
+              4.966187440537465
+            ],
+            "scattering_density": [
+              18.453163890746943,
+              6.432740498225828,
+              3.724640580403099
+            ],
+            "transmittance_after": [
+              0.7920324747313252,
+              0.9193009266517232,
+              0.9497707121921211
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.23257962720084746,
+              0.08384219167232282,
+              0.05130355078354968
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  5.752808988764046,
+                  8.629213483146069,
+                  11.505617977528091
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  1.513987787062484,
+                  0.6055951148249936,
+                  0.3027975574124968
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.5856264368128397,
+                "rgb": [
+                  0.05601973159119314,
+                  0.15844772835353174,
+                  1.267581826828254
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              9.503675750600308,
+              9.665863731722418,
+              13.11007328744357
+            ],
+            "scattering_density": [
+              7.127756812950231,
+              7.249397798791813,
+              9.832554965582677
+            ],
+            "transmittance_after": [
+              0.7245171509291327,
+              0.8396591589860538,
+              0.8399258908835107
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3031473130488979,
+              0.16714691809852628,
+              0.16803695993767012
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.3875338753387534,
+                  2.08130081300813,
+                  2.7750677506775068
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.5104593539800815,
+                  0.2041837415920326,
+                  0.1020918707960163
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.21173058172812761,
+                "rgb": [
+                  0.012178264411466189,
+                  0.03444533339372217,
+                  0.27556266714977734
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.4289038428659144,
+              2.384771431635836,
+              3.1608274815785444
+            ],
+            "scattering_density": [
+              1.821677882149436,
+              1.7885785737268771,
+              2.3706206111839085
+            ],
+            "transmittance_after": [
+              0.7082056097140066,
+              0.8210949991016249,
+              0.8154017243947915
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.319645273912467,
+              0.1859193728609761,
+              0.19292628029761333
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.7082056097140066,
+          0.8210949991016249,
+          0.8154017243947915
+        ],
+        "native_accepted_output": [
+          0.2917943902859934,
+          0.17890500089837513,
+          0.18459827560520847
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.319645273912467,
+          0.1859193728609761,
+          0.19292628029761333
+        ]
+      }
+    },
+    {
+      "name": "outside_mixed_before",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 2.0,
+      "blocker_relation": "before",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.2654224987039917,
+                  0.39813374805598756,
+                  0.5308449974079834
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.2654224987039917,
+              0.39813374805598756,
+              0.5308449974079834
+            ],
+            "scattering_density": [
+              0.19906687402799378,
+              0.2986003110419907,
+              0.39813374805598756
+            ],
+            "transmittance_after": [
+              0.9975147574161992,
+              0.9962744532460771,
+              0.9950356912630987
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.002488335925349922,
+              0.0037325038880248835,
+              0.004976671850699844
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.8407224958949095,
+                  1.2610837438423643,
+                  1.681444991789819
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  15.801696669046468,
+                  6.320678667618587,
+                  3.1603393338092935
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              24.60421852099592,
+              8.57698733096777,
+              4.966187440537465
+            ],
+            "scattering_density": [
+              18.453163890746943,
+              6.432740498225828,
+              3.724640580403099
+            ],
+            "transmittance_after": [
+              0.7920324747313252,
+              0.9193009266517232,
+              0.9497707121921211
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.23257962720084746,
+              0.08384219167232282,
+              0.05130355078354968
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  5.752808988764046,
+                  8.629213483146069,
+                  11.505617977528091
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  1.513987787062484,
+                  0.6055951148249936,
+                  0.3027975574124968
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.5856264368128397,
+                "rgb": [
+                  0.05601973159119314,
+                  0.15844772835353174,
+                  1.267581826828254
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              9.503675750600308,
+              9.665863731722418,
+              13.11007328744357
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.7920324747313252,
+              0.9193009266517232,
+              0.9497707121921211
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.23257962720084746,
+              0.08384219167232282,
+              0.05130355078354968
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.3875338753387534,
+                  2.08130081300813,
+                  2.7750677506775068
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.5104593539800815,
+                  0.2041837415920326,
+                  0.1020918707960163
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.21173058172812761,
+                "rgb": [
+                  0.012178264411466189,
+                  0.03444533339372217,
+                  0.27556266714977734
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.4289038428659144,
+              2.384771431635836,
+              3.1608274815785444
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.7920324747313252,
+              0.9193009266517232,
+              0.9497707121921211
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.23257962720084746,
+              0.08384219167232282,
+              0.05130355078354968
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.7920324747313252,
+          0.9193009266517232,
+          0.9497707121921211
+        ],
+        "native_accepted_output": [
+          0.2079675252686748,
+          0.08069907334827675,
+          0.05022928780787894
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.23257962720084746,
+          0.08384219167232282,
+          0.05130355078354968
+        ]
+      }
+    },
+    {
+      "name": "outside_mixed_inside",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 4.0,
+      "blocker_relation": "inside",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.2654224987039917,
+                  0.39813374805598756,
+                  0.5308449974079834
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.2654224987039917,
+              0.39813374805598756,
+              0.5308449974079834
+            ],
+            "scattering_density": [
+              0.19906687402799378,
+              0.2986003110419907,
+              0.39813374805598756
+            ],
+            "transmittance_after": [
+              0.9975147574161992,
+              0.9962744532460771,
+              0.9950356912630987
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.002488335925349922,
+              0.0037325038880248835,
+              0.004976671850699844
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.8407224958949095,
+                  1.2610837438423643,
+                  1.681444991789819
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  15.801696669046468,
+                  6.320678667618587,
+                  3.1603393338092935
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              24.60421852099592,
+              8.57698733096777,
+              4.966187440537465
+            ],
+            "scattering_density": [
+              18.453163890746943,
+              6.432740498225828,
+              3.724640580403099
+            ],
+            "transmittance_after": [
+              0.7920324747313252,
+              0.9193009266517232,
+              0.9497707121921211
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.23257962720084746,
+              0.08384219167232282,
+              0.05130355078354968
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  5.752808988764046,
+                  8.629213483146069,
+                  11.505617977528091
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  1.513987787062484,
+                  0.6055951148249936,
+                  0.3027975574124968
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.5856264368128397,
+                "rgb": [
+                  0.05601973159119314,
+                  0.15844772835353174,
+                  1.267581826828254
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              9.503675750600308,
+              9.665863731722418,
+              13.11007328744357
+            ],
+            "scattering_density": [
+              7.127756812950231,
+              7.249397798791813,
+              9.832554965582677
+            ],
+            "transmittance_after": [
+              0.7245171509291327,
+              0.8396591589860538,
+              0.8399258908835107
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3031473130488979,
+              0.16714691809852628,
+              0.16803695993767012
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.3875338753387534,
+                  2.08130081300813,
+                  2.7750677506775068
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.5104593539800815,
+                  0.2041837415920326,
+                  0.1020918707960163
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.21173058172812761,
+                "rgb": [
+                  0.012178264411466189,
+                  0.03444533339372217,
+                  0.27556266714977734
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.4289038428659144,
+              2.384771431635836,
+              3.1608274815785444
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.7245171509291327,
+              0.8396591589860538,
+              0.8399258908835107
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3031473130488979,
+              0.16714691809852628,
+              0.16803695993767012
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.7245171509291327,
+          0.8396591589860538,
+          0.8399258908835107
+        ],
+        "native_accepted_output": [
+          0.2754828490708673,
+          0.1603408410139462,
+          0.16007410911648934
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.3031473130488979,
+          0.16714691809852628,
+          0.16803695993767012
+        ]
+      }
+    },
+    {
+      "name": "outside_mixed_behind",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 6.0,
+      "blocker_relation": "behind",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.2654224987039917,
+                  0.39813374805598756,
+                  0.5308449974079834
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.2654224987039917,
+              0.39813374805598756,
+              0.5308449974079834
+            ],
+            "scattering_density": [
+              0.19906687402799378,
+              0.2986003110419907,
+              0.39813374805598756
+            ],
+            "transmittance_after": [
+              0.9975147574161992,
+              0.9962744532460771,
+              0.9950356912630987
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.002488335925349922,
+              0.0037325038880248835,
+              0.004976671850699844
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.8407224958949095,
+                  1.2610837438423643,
+                  1.681444991789819
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  15.801696669046468,
+                  6.320678667618587,
+                  3.1603393338092935
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.9968140741246146,
+                "rgb": [
+                  7.961799356054545,
+                  0.9952249195068181,
+                  0.12440311493835227
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              24.60421852099592,
+              8.57698733096777,
+              4.966187440537465
+            ],
+            "scattering_density": [
+              18.453163890746943,
+              6.432740498225828,
+              3.724640580403099
+            ],
+            "transmittance_after": [
+              0.7920324747313252,
+              0.9193009266517232,
+              0.9497707121921211
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.23257962720084746,
+              0.08384219167232282,
+              0.05130355078354968
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  5.752808988764046,
+                  8.629213483146069,
+                  11.505617977528091
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  1.513987787062484,
+                  0.6055951148249936,
+                  0.3027975574124968
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.4204281300965243,
+                "rgb": [
+                  2.180859243182586,
+                  0.27260740539782324,
+                  0.034075925674727905
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.5856264368128397,
+                "rgb": [
+                  0.05601973159119314,
+                  0.15844772835353174,
+                  1.267581826828254
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              9.503675750600308,
+              9.665863731722418,
+              13.11007328744357
+            ],
+            "scattering_density": [
+              7.127756812950231,
+              7.249397798791813,
+              9.832554965582677
+            ],
+            "transmittance_after": [
+              0.7245171509291327,
+              0.8396591589860538,
+              0.8399258908835107
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3031473130488979,
+              0.16714691809852628,
+              0.16803695993767012
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.3875338753387534,
+                  2.08130081300813,
+                  2.7750677506775068
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.5104593539800815,
+                  0.2041837415920326,
+                  0.1020918707960163
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.16139951679718598,
+                "rgb": [
+                  0.5187323491356133,
+                  0.06484154364195166,
+                  0.008105192955243957
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.21173058172812761,
+                "rgb": [
+                  0.012178264411466189,
+                  0.03444533339372217,
+                  0.27556266714977734
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.4289038428659144,
+              2.384771431635836,
+              3.1608274815785444
+            ],
+            "scattering_density": [
+              1.821677882149436,
+              1.7885785737268771,
+              2.3706206111839085
+            ],
+            "transmittance_after": [
+              0.7082056097140066,
+              0.8210949991016249,
+              0.8154017243947915
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.319645273912467,
+              0.1859193728609761,
+              0.19292628029761333
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.7082056097140066,
+          0.8210949991016249,
+          0.8154017243947915
+        ],
+        "native_accepted_output": [
+          0.2917943902859934,
+          0.17890500089837513,
+          0.18459827560520847
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.319645273912467,
+          0.1859193728609761,
+          0.19292628029761333
+        ]
+      }
+    },
+    {
+      "name": "inside_mixed_none",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          0.5
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "inside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.0,
+      "scattering_scale": 0.75,
+      "scene_depth_m": null,
+      "blocker_relation": "none",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": false,
+        "step_size_m": 0.375,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "camera_axis_depth_m": 1.5,
+            "linear_depth": 0.014014014014014012,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.463768115942029,
+                  0.6956521739130435,
+                  0.927536231884058
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.274658203125,
+                  0.10986328125,
+                  0.054931640625
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.09377994581681627,
+                "rgb": [
+                  0.22974970012849008,
+                  0.02871871251606126,
+                  0.0035898390645076575
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11760473347406321,
+                "rgb": [
+                  0.0050413542518597575,
+                  0.014259103111414675,
+                  0.1140728248913174
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.9732173734473788,
+              0.8484932707905194,
+              1.100130536464883
+            ],
+            "scattering_density": [
+              0.7299130300855341,
+              0.6363699530928896,
+              0.8250979023486622
+            ],
+            "transmittance_after": [
+              0.9972665687820216,
+              0.9976164578344652,
+              0.9969106647134748
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.002737173862820753,
+              0.002386387324098336,
+              0.0030941171338074837
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              -0.625
+            ],
+            "camera_axis_depth_m": 1.125,
+            "linear_depth": 0.010260260260260258,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.6772486772486772,
+                  1.0158730158730158,
+                  1.3544973544973544
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.34909403728944827,
+                  0.1396376149157793,
+                  0.06981880745788965
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11479844518662788,
+                "rgb": [
+                  0.31116733196037843,
+                  0.038895916495047304,
+                  0.004861989561880913
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14641073300346455,
+                "rgb": [
+                  0.007002762306201172,
+                  0.01980680285500958,
+                  0.15845442284007663
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.3445128088047051,
+              1.214213350138852,
+              1.5876325743572015
+            ],
+            "scattering_density": [
+              1.008384606603529,
+              0.9106600126041389,
+              1.1907244307679012
+            ],
+            "transmittance_after": [
+              0.9935025839504993,
+              0.9942154330368727,
+              0.9924691661555325
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.006508285217824509,
+              0.005793226817462173,
+              0.007545548645592239
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              -0.25
+            ],
+            "camera_axis_depth_m": 0.75,
+            "linear_depth": 0.0065065065065065065,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.0666666666666667,
+                  1.6,
+                  2.1333333333333333
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.4479366241264213,
+                  0.17917464965056853,
+                  0.08958732482528427
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14328525555178445,
+                "rgb": [
+                  0.4339025884109837,
+                  0.054237823551372966,
+                  0.006779727943921621
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18614534759168092,
+                "rgb": [
+                  0.010038950025386031,
+                  0.028394438555773303,
+                  0.22715550844618643
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.9585448292294578,
+              1.861806911757715,
+              2.4568558945487258
+            ],
+            "scattering_density": [
+              1.4689086219220933,
+              1.3963551838182862,
+              1.8426419209115443
+            ],
+            "transmittance_after": [
+              0.988045012096621,
+              0.9890229975325867,
+              0.9856349354578167
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.011980940821958766,
+              0.01099930278245988,
+              0.014403496531841444
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              0.125
+            ],
+            "camera_axis_depth_m": 0.375,
+            "linear_depth": 0.0027527527527527527,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.855072463768116,
+                  2.782608695652174,
+                  3.710144927536232
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.58490348262317,
+                  0.23396139304926802,
+                  0.11698069652463401
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18289632009255352,
+                "rgb": [
+                  0.6257450722388372,
+                  0.07821813402985466,
+                  0.009777266753731832
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.24233950158535086,
+                "rgb": [
+                  0.01491235825131074,
+                  0.04217851857193996,
+                  0.33742814857551967
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              3.080633376881434,
+              3.1369667413032363,
+              4.174331039390117
+            ],
+            "scattering_density": [
+              2.3104750326610755,
+              2.352725055977427,
+              3.130748279542588
+            ],
+            "transmittance_after": [
+              0.9795212913831896,
+              0.9803355055834895,
+              0.9741309420028661
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.020541864359318707,
+              0.019725404823853925,
+              0.025975689900806655
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9795212913831896,
+          0.9803355055834895,
+          0.9741309420028661
+        ],
+        "native_accepted_output": [
+          0.020478708616810448,
+          0.019664494416510525,
+          0.025869057997133904
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.020541864359318707,
+          0.019725404823853925,
+          0.025975689900806655
+        ]
+      }
+    },
+    {
+      "name": "inside_mixed_before_samples",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          0.5
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "inside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.0,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 0.2,
+      "blocker_relation": "before_samples",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": false,
+        "step_size_m": 0.375,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "camera_axis_depth_m": 1.5,
+            "linear_depth": 0.014014014014014012,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.463768115942029,
+                  0.6956521739130435,
+                  0.927536231884058
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.274658203125,
+                  0.10986328125,
+                  0.054931640625
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.09377994581681627,
+                "rgb": [
+                  0.22974970012849008,
+                  0.02871871251606126,
+                  0.0035898390645076575
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11760473347406321,
+                "rgb": [
+                  0.0050413542518597575,
+                  0.014259103111414675,
+                  0.1140728248913174
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.9732173734473788,
+              0.8484932707905194,
+              1.100130536464883
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              -0.625
+            ],
+            "camera_axis_depth_m": 1.125,
+            "linear_depth": 0.010260260260260258,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.6772486772486772,
+                  1.0158730158730158,
+                  1.3544973544973544
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.34909403728944827,
+                  0.1396376149157793,
+                  0.06981880745788965
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11479844518662788,
+                "rgb": [
+                  0.31116733196037843,
+                  0.038895916495047304,
+                  0.004861989561880913
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14641073300346455,
+                "rgb": [
+                  0.007002762306201172,
+                  0.01980680285500958,
+                  0.15845442284007663
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.3445128088047051,
+              1.214213350138852,
+              1.5876325743572015
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              -0.25
+            ],
+            "camera_axis_depth_m": 0.75,
+            "linear_depth": 0.0065065065065065065,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.0666666666666667,
+                  1.6,
+                  2.1333333333333333
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.4479366241264213,
+                  0.17917464965056853,
+                  0.08958732482528427
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14328525555178445,
+                "rgb": [
+                  0.4339025884109837,
+                  0.054237823551372966,
+                  0.006779727943921621
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18614534759168092,
+                "rgb": [
+                  0.010038950025386031,
+                  0.028394438555773303,
+                  0.22715550844618643
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.9585448292294578,
+              1.861806911757715,
+              2.4568558945487258
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              0.125
+            ],
+            "camera_axis_depth_m": 0.375,
+            "linear_depth": 0.0027527527527527527,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.855072463768116,
+                  2.782608695652174,
+                  3.710144927536232
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.58490348262317,
+                  0.23396139304926802,
+                  0.11698069652463401
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18289632009255352,
+                "rgb": [
+                  0.6257450722388372,
+                  0.07821813402985466,
+                  0.009777266753731832
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.24233950158535086,
+                "rgb": [
+                  0.01491235825131074,
+                  0.04217851857193996,
+                  0.33742814857551967
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              3.080633376881434,
+              3.1369667413032363,
+              4.174331039390117
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "native_transmittance": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "native_accepted_output": [
+          0,
+          0,
+          0
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "name": "inside_mixed_inside",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          0.5
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "inside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.0,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 0.5,
+      "blocker_relation": "inside",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": false,
+        "step_size_m": 0.375,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "camera_axis_depth_m": 1.5,
+            "linear_depth": 0.014014014014014012,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.463768115942029,
+                  0.6956521739130435,
+                  0.927536231884058
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.274658203125,
+                  0.10986328125,
+                  0.054931640625
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.09377994581681627,
+                "rgb": [
+                  0.22974970012849008,
+                  0.02871871251606126,
+                  0.0035898390645076575
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11760473347406321,
+                "rgb": [
+                  0.0050413542518597575,
+                  0.014259103111414675,
+                  0.1140728248913174
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.9732173734473788,
+              0.8484932707905194,
+              1.100130536464883
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              -0.625
+            ],
+            "camera_axis_depth_m": 1.125,
+            "linear_depth": 0.010260260260260258,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.6772486772486772,
+                  1.0158730158730158,
+                  1.3544973544973544
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.34909403728944827,
+                  0.1396376149157793,
+                  0.06981880745788965
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11479844518662788,
+                "rgb": [
+                  0.31116733196037843,
+                  0.038895916495047304,
+                  0.004861989561880913
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14641073300346455,
+                "rgb": [
+                  0.007002762306201172,
+                  0.01980680285500958,
+                  0.15845442284007663
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.3445128088047051,
+              1.214213350138852,
+              1.5876325743572015
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              -0.25
+            ],
+            "camera_axis_depth_m": 0.75,
+            "linear_depth": 0.0065065065065065065,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.0666666666666667,
+                  1.6,
+                  2.1333333333333333
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.4479366241264213,
+                  0.17917464965056853,
+                  0.08958732482528427
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14328525555178445,
+                "rgb": [
+                  0.4339025884109837,
+                  0.054237823551372966,
+                  0.006779727943921621
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18614534759168092,
+                "rgb": [
+                  0.010038950025386031,
+                  0.028394438555773303,
+                  0.22715550844618643
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.9585448292294578,
+              1.861806911757715,
+              2.4568558945487258
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              0.125
+            ],
+            "camera_axis_depth_m": 0.375,
+            "linear_depth": 0.0027527527527527527,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.855072463768116,
+                  2.782608695652174,
+                  3.710144927536232
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.58490348262317,
+                  0.23396139304926802,
+                  0.11698069652463401
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18289632009255352,
+                "rgb": [
+                  0.6257450722388372,
+                  0.07821813402985466,
+                  0.009777266753731832
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.24233950158535086,
+                "rgb": [
+                  0.01491235825131074,
+                  0.04217851857193996,
+                  0.33742814857551967
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              3.080633376881434,
+              3.1369667413032363,
+              4.174331039390117
+            ],
+            "scattering_density": [
+              2.3104750326610755,
+              2.352725055977427,
+              3.130748279542588
+            ],
+            "transmittance_after": [
+              0.991373145343506,
+              0.9912160870164083,
+              0.988328342430753
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.008664281372479033,
+              0.008822718959915352,
+              0.011740306048284703
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.991373145343506,
+          0.9912160870164083,
+          0.988328342430753
+        ],
+        "native_accepted_output": [
+          0.008626854656494043,
+          0.008783912983591713,
+          0.01167165756924704
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.008664281372479033,
+          0.008822718959915352,
+          0.011740306048284703
+        ]
+      }
+    },
+    {
+      "name": "inside_mixed_equality",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          0.5
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "inside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.0,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 0.75,
+      "blocker_relation": "equality",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": false,
+        "step_size_m": 0.375,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "camera_axis_depth_m": 1.5,
+            "linear_depth": 0.014014014014014012,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.463768115942029,
+                  0.6956521739130435,
+                  0.927536231884058
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.274658203125,
+                  0.10986328125,
+                  0.054931640625
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.09377994581681627,
+                "rgb": [
+                  0.22974970012849008,
+                  0.02871871251606126,
+                  0.0035898390645076575
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11760473347406321,
+                "rgb": [
+                  0.0050413542518597575,
+                  0.014259103111414675,
+                  0.1140728248913174
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.9732173734473788,
+              0.8484932707905194,
+              1.100130536464883
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              -0.625
+            ],
+            "camera_axis_depth_m": 1.125,
+            "linear_depth": 0.010260260260260258,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.6772486772486772,
+                  1.0158730158730158,
+                  1.3544973544973544
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.34909403728944827,
+                  0.1396376149157793,
+                  0.06981880745788965
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11479844518662788,
+                "rgb": [
+                  0.31116733196037843,
+                  0.038895916495047304,
+                  0.004861989561880913
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14641073300346455,
+                "rgb": [
+                  0.007002762306201172,
+                  0.01980680285500958,
+                  0.15845442284007663
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.3445128088047051,
+              1.214213350138852,
+              1.5876325743572015
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              -0.25
+            ],
+            "camera_axis_depth_m": 0.75,
+            "linear_depth": 0.0065065065065065065,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.0666666666666667,
+                  1.6,
+                  2.1333333333333333
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.4479366241264213,
+                  0.17917464965056853,
+                  0.08958732482528427
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14328525555178445,
+                "rgb": [
+                  0.4339025884109837,
+                  0.054237823551372966,
+                  0.006779727943921621
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18614534759168092,
+                "rgb": [
+                  0.010038950025386031,
+                  0.028394438555773303,
+                  0.22715550844618643
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.9585448292294578,
+              1.861806911757715,
+              2.4568558945487258
+            ],
+            "scattering_density": [
+              1.4689086219220933,
+              1.3963551838182862,
+              1.8426419209115443
+            ],
+            "transmittance_after": [
+              0.9945067361252579,
+              0.994777353748749,
+              0.9931139113125407
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.00550840733220785,
+              0.005236331939318573,
+              0.006909907203418291
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              0.125
+            ],
+            "camera_axis_depth_m": 0.375,
+            "linear_depth": 0.0027527527527527527,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.855072463768116,
+                  2.782608695652174,
+                  3.710144927536232
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.58490348262317,
+                  0.23396139304926802,
+                  0.11698069652463401
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18289632009255352,
+                "rgb": [
+                  0.6257450722388372,
+                  0.07821813402985466,
+                  0.009777266753731832
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.24233950158535086,
+                "rgb": [
+                  0.01491235825131074,
+                  0.04217851857193996,
+                  0.33742814857551967
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              3.080633376881434,
+              3.1369667413032363,
+              4.174331039390117
+            ],
+            "scattering_density": [
+              2.3104750326610755,
+              2.352725055977427,
+              3.130748279542588
+            ],
+            "transmittance_after": [
+              0.985927271057801,
+              0.9860393160353723,
+              0.9815226258124451
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.01412516847524316,
+              0.01401305541512575,
+              0.018569563180989422
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.985927271057801,
+          0.9860393160353723,
+          0.9815226258124451
+        ],
+        "native_accepted_output": [
+          0.01407272894219902,
+          0.013960683964627685,
+          0.018477374187554907
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.01412516847524316,
+          0.01401305541512575,
+          0.018569563180989422
+        ]
+      }
+    },
+    {
+      "name": "inside_mixed_behind",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          0.5
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "inside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.0,
+      "scattering_scale": 0.75,
+      "scene_depth_m": 2.5,
+      "blocker_relation": "behind",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": false,
+        "step_size_m": 0.375,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "camera_axis_depth_m": 1.5,
+            "linear_depth": 0.014014014014014012,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.463768115942029,
+                  0.6956521739130435,
+                  0.927536231884058
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.274658203125,
+                  0.10986328125,
+                  0.054931640625
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.09377994581681627,
+                "rgb": [
+                  0.22974970012849008,
+                  0.02871871251606126,
+                  0.0035898390645076575
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11760473347406321,
+                "rgb": [
+                  0.0050413542518597575,
+                  0.014259103111414675,
+                  0.1140728248913174
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.9732173734473788,
+              0.8484932707905194,
+              1.100130536464883
+            ],
+            "scattering_density": [
+              0.7299130300855341,
+              0.6363699530928896,
+              0.8250979023486622
+            ],
+            "transmittance_after": [
+              0.9972665687820216,
+              0.9976164578344652,
+              0.9969106647134748
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.002737173862820753,
+              0.002386387324098336,
+              0.0030941171338074837
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              -0.625
+            ],
+            "camera_axis_depth_m": 1.125,
+            "linear_depth": 0.010260260260260258,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.6772486772486772,
+                  1.0158730158730158,
+                  1.3544973544973544
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.34909403728944827,
+                  0.1396376149157793,
+                  0.06981880745788965
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.11479844518662788,
+                "rgb": [
+                  0.31116733196037843,
+                  0.038895916495047304,
+                  0.004861989561880913
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14641073300346455,
+                "rgb": [
+                  0.007002762306201172,
+                  0.01980680285500958,
+                  0.15845442284007663
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.3445128088047051,
+              1.214213350138852,
+              1.5876325743572015
+            ],
+            "scattering_density": [
+              1.008384606603529,
+              0.9106600126041389,
+              1.1907244307679012
+            ],
+            "transmittance_after": [
+              0.9935025839504993,
+              0.9942154330368727,
+              0.9924691661555325
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.006508285217824509,
+              0.005793226817462173,
+              0.007545548645592239
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              -0.25
+            ],
+            "camera_axis_depth_m": 0.75,
+            "linear_depth": 0.0065065065065065065,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.0666666666666667,
+                  1.6,
+                  2.1333333333333333
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.4479366241264213,
+                  0.17917464965056853,
+                  0.08958732482528427
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.14328525555178445,
+                "rgb": [
+                  0.4339025884109837,
+                  0.054237823551372966,
+                  0.006779727943921621
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18614534759168092,
+                "rgb": [
+                  0.010038950025386031,
+                  0.028394438555773303,
+                  0.22715550844618643
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.9585448292294578,
+              1.861806911757715,
+              2.4568558945487258
+            ],
+            "scattering_density": [
+              1.4689086219220933,
+              1.3963551838182862,
+              1.8426419209115443
+            ],
+            "transmittance_after": [
+              0.988045012096621,
+              0.9890229975325867,
+              0.9856349354578167
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.011980940821958766,
+              0.01099930278245988,
+              0.014403496531841444
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              0.125
+            ],
+            "camera_axis_depth_m": 0.375,
+            "linear_depth": 0.0027527527527527527,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.855072463768116,
+                  2.782608695652174,
+                  3.710144927536232
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.58490348262317,
+                  0.23396139304926802,
+                  0.11698069652463401
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.18289632009255352,
+                "rgb": [
+                  0.6257450722388372,
+                  0.07821813402985466,
+                  0.009777266753731832
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.24233950158535086,
+                "rgb": [
+                  0.01491235825131074,
+                  0.04217851857193996,
+                  0.33742814857551967
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              3.080633376881434,
+              3.1369667413032363,
+              4.174331039390117
+            ],
+            "scattering_density": [
+              2.3104750326610755,
+              2.352725055977427,
+              3.130748279542588
+            ],
+            "transmittance_after": [
+              0.9795212913831896,
+              0.9803355055834895,
+              0.9741309420028661
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.020541864359318707,
+              0.019725404823853925,
+              0.025975689900806655
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9795212913831896,
+          0.9803355055834895,
+          0.9741309420028661
+        ],
+        "native_accepted_output": [
+          0.020478708616810448,
+          0.019664494416510525,
+          0.025869057997133904
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.020541864359318707,
+          0.019725404823853925,
+          0.025975689900806655
+        ]
+      }
+    },
+    {
+      "name": "outside_rectangle_back_side",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": null,
+      "blocker_relation": "none",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            -2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              3.6875
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              2.4375
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              1.1875
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.0625
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "rectangle",
+                "form_factor": 0.0,
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          }
+        ],
+        "native_transmittance": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "native_accepted_output": [
+          0,
+          0,
+          0
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    {
+      "name": "outside_rotated_camera_mixed",
+      "camera": {
+        "eye": [
+          4,
+          0,
+          0
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          1,
+          0,
+          0
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        -1,
+        0,
+        0
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 4,
+      "offset": 0.25,
+      "scattering_scale": 0.75,
+      "scene_depth_m": null,
+      "blocker_relation": "none",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0.25,
+            0.5,
+            1
+          ],
+          "radiance": [
+            2,
+            3,
+            4
+          ],
+          "decay": 2,
+          "cutoff": 0
+        },
+        {
+          "kind": "spot",
+          "position": [
+            0,
+            0,
+            3
+          ],
+          "radiance": [
+            5,
+            2,
+            1
+          ],
+          "toward_light_axis": [
+            0,
+            0,
+            1
+          ],
+          "decay": 2,
+          "cutoff": 8,
+          "cone_cos": 0.5000000000000001,
+          "penumbra_cos": 0.7071067811865476
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0,
+            0,
+            2.5
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            4,
+            1,
+            0.25
+          ]
+        },
+        {
+          "kind": "rectangle",
+          "position": [
+            0.5,
+            -0.2,
+            2
+          ],
+          "half_width": [
+            1,
+            0,
+            0
+          ],
+          "half_height": [
+            0,
+            1,
+            0
+          ],
+          "radiance": [
+            0.25,
+            0.5,
+            2
+          ]
+        },
+        {
+          "kind": "directional",
+          "radiance": [
+            100,
+            100,
+            100
+          ]
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.25,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              3.6875,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 0.3125,
+            "linear_depth": 0.002127127127127127,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.1530642750373692,
+                  0.22959641255605379,
+                  0.3061285500747384
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.11777647399514396,
+                  0.047110589598057584,
+                  0.023555294799028792
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.030044467249899898,
+                "rgb": [
+                  0.041661677064985976,
+                  0.005207709633123247,
+                  0.0006509637041404059
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.04096863973222698,
+                "rgb": [
+                  0.0010365430157585828,
+                  0.0029317863817377933,
+                  0.023454291053902347
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.31353896911325774,
+              0.2848464981689724,
+              0.35378909963180993
+            ],
+            "scattering_density": [
+              0.2351542268349433,
+              0.21363487362672928,
+              0.2653418247238575
+            ],
+            "transmittance_after": [
+              0.9970648880527802,
+              0.9973331265218714,
+              0.9966887216056315
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0029394278354367915,
+              0.0026704359203341163,
+              0.0033167728090482186
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              2.4375,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 1.5625,
+            "linear_depth": 0.014639639639639638,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.3313915857605178,
+                  0.4970873786407767,
+                  0.6627831715210356
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.29915656758574494,
+                  0.11966262703429797,
+                  0.05983131351714899
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.050586813850254486,
+                "rgb": [
+                  0.09102191684055912,
+                  0.01137773960506989,
+                  0.0014222174506337362
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.07711460801365637,
+                "rgb": [
+                  0.0026767942826627445,
+                  0.007571117556448827,
+                  0.060568940451590614
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              0.7242468644694846,
+              0.6356988628365934,
+              0.7846056429404089
+            ],
+            "scattering_density": [
+              0.5431851483521135,
+              0.47677414712744504,
+              0.5884542322053067
+            ],
+            "transmittance_after": [
+              0.9903179337675541,
+              0.9914070197676169,
+              0.9893842978290601
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.009709313324607203,
+              0.008614219055326786,
+              0.01064809401429985
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              1.1875,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 2.8125,
+            "linear_depth": 0.02715215215215215,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  0.9394495412844037,
+                  1.4091743119266056,
+                  1.8788990825688074
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.4552209857757006,
+                  0.18208839431028023,
+                  0.09104419715514012
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.06039497194409063,
+                "rgb": [
+                  0.1187383918701314,
+                  0.014842298983766425,
+                  0.001855287372970803
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.08317938571018993,
+                "rgb": [
+                  0.0029987038420635067,
+                  0.008481615285973037,
+                  0.06785292228778429
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              1.5164076227722991,
+              1.6145866205066253,
+              2.0396514893847026
+            ],
+            "scattering_density": [
+              1.1373057170792245,
+              1.210939965379969,
+              1.529738617038527
+            ],
+            "transmittance_after": [
+              0.9763388566318039,
+              0.9765133452709568,
+              0.9706452878805102
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.023787991422106254,
+              0.023620898832762492,
+              0.02956683610780811
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              -0.0625,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 4.0625,
+            "linear_depth": 0.03966466466466466,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  1.4840579710144928,
+                  2.226086956521739,
+                  2.9681159420289855
+                ]
+              },
+              {
+                "kind": "spot",
+                "rgb": [
+                  0.5335498825716335,
+                  0.21341995302865338,
+                  0.10670997651432669
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.027149406926706473,
+                "rgb": [
+                  0.035787429659604006,
+                  0.004473428707450501,
+                  0.0005591785884313126
+                ]
+              },
+              {
+                "kind": "rectangle",
+                "form_factor": 0.07849357801157844,
+                "rgb": [
+                  0.0027489143113059162,
+                  0.007775103801700645,
+                  0.06220083041360516
+                ]
+              },
+              {
+                "kind": "directional",
+                "rgb": [
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              2.0561441975570363,
+              2.4517554420595435,
+              3.1375859275453486
+            ],
+            "scattering_density": [
+              1.5421081481677772,
+              1.8388165815446578,
+              2.3531894456590114
+            ],
+            "transmittance_after": [
+              0.9576988382618938,
+              0.9543239741903754,
+              0.9425097154952451
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0426082427494152,
+              0.04606626047506098,
+              0.05811823919429647
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9576988382618938,
+          0.9543239741903754,
+          0.9425097154952451
+        ],
+        "native_accepted_output": [
+          0.04230116173810616,
+          0.0456760258096246,
+          0.05749028450475491
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.0426082427494152,
+          0.04606626047506098,
+          0.05811823919429647
+        ]
+      }
+    },
+    {
+      "name": "depth_constant_outside_before",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 5,
+      "offset": 0.0,
+      "scattering_scale": 1.0,
+      "scene_depth_m": 1.5,
+      "blocker_relation": "before",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0,
+            5,
+            0
+          ],
+          "radiance": [
+            10,
+            10,
+            10
+          ],
+          "decay": 0,
+          "cutoff": 0
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.0,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              4.0
+            ],
+            "camera_axis_depth_m": 0.0,
+            "linear_depth": -0.001001001001001001,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.9048374180359595,
+              0.9048374180359595,
+              0.9048374180359595
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.1,
+              0.1,
+              0.1
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              3.0
+            ],
+            "camera_axis_depth_m": 1.0,
+            "linear_depth": 0.009009009009009009,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              2.0
+            ],
+            "camera_axis_depth_m": 2.0,
+            "linear_depth": 0.019019019019019017,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "camera_axis_depth_m": 3.0,
+            "linear_depth": 0.029029029029029027,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          },
+          {
+            "index": 4,
+            "position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 4.0,
+            "linear_depth": 0.039039039039039033,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.8187307530779817,
+          0.8187307530779817,
+          0.8187307530779817
+        ],
+        "native_accepted_output": [
+          0.1812692469220183,
+          0.1812692469220183,
+          0.1812692469220183
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.19048374180359595,
+          0.19048374180359595,
+          0.19048374180359595
+        ]
+      }
+    },
+    {
+      "name": "depth_constant_outside_inside",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 5,
+      "offset": 0.0,
+      "scattering_scale": 1.0,
+      "scene_depth_m": 3.5,
+      "blocker_relation": "inside",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0,
+            5,
+            0
+          ],
+          "radiance": [
+            10,
+            10,
+            10
+          ],
+          "decay": 0,
+          "cutoff": 0
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.0,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              4.0
+            ],
+            "camera_axis_depth_m": 0.0,
+            "linear_depth": -0.001001001001001001,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.9048374180359595,
+              0.9048374180359595,
+              0.9048374180359595
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.1,
+              0.1,
+              0.1
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              3.0
+            ],
+            "camera_axis_depth_m": 1.0,
+            "linear_depth": 0.009009009009009009,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              2.0
+            ],
+            "camera_axis_depth_m": 2.0,
+            "linear_depth": 0.019019019019019017,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.7408182206817177,
+              0.7408182206817177,
+              0.7408182206817177
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.27235681711139414,
+              0.27235681711139414,
+              0.27235681711139414
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "camera_axis_depth_m": 3.0,
+            "linear_depth": 0.029029029029029027,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.6703200460356391,
+              0.6703200460356391,
+              0.6703200460356391
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3464386391795659,
+              0.3464386391795659,
+              0.3464386391795659
+            ]
+          },
+          {
+            "index": 4,
+            "position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 4.0,
+            "linear_depth": 0.039039039039039033,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.6703200460356391,
+              0.6703200460356391,
+              0.6703200460356391
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3464386391795659,
+              0.3464386391795659,
+              0.3464386391795659
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.6703200460356391,
+          0.6703200460356391,
+          0.6703200460356391
+        ],
+        "native_accepted_output": [
+          0.3296799539643609,
+          0.3296799539643609,
+          0.3296799539643609
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.3464386391795659,
+          0.3464386391795659,
+          0.3464386391795659
+        ]
+      }
+    },
+    {
+      "name": "depth_constant_outside_behind",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 5,
+      "offset": 0.0,
+      "scattering_scale": 1.0,
+      "scene_depth_m": 6.0,
+      "blocker_relation": "behind",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0,
+            5,
+            0
+          ],
+          "radiance": [
+            10,
+            10,
+            10
+          ],
+          "decay": 0,
+          "cutoff": 0
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.0,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              4.0
+            ],
+            "camera_axis_depth_m": 0.0,
+            "linear_depth": -0.001001001001001001,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.9048374180359595,
+              0.9048374180359595,
+              0.9048374180359595
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.1,
+              0.1,
+              0.1
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              3.0
+            ],
+            "camera_axis_depth_m": 1.0,
+            "linear_depth": 0.009009009009009009,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              2.0
+            ],
+            "camera_axis_depth_m": 2.0,
+            "linear_depth": 0.019019019019019017,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.7408182206817177,
+              0.7408182206817177,
+              0.7408182206817177
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.27235681711139414,
+              0.27235681711139414,
+              0.27235681711139414
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "camera_axis_depth_m": 3.0,
+            "linear_depth": 0.029029029029029027,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.6703200460356391,
+              0.6703200460356391,
+              0.6703200460356391
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.3464386391795659,
+              0.3464386391795659,
+              0.3464386391795659
+            ]
+          },
+          {
+            "index": 4,
+            "position": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "camera_axis_depth_m": 4.0,
+            "linear_depth": 0.039039039039039033,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.6065306597126332,
+              0.6065306597126332,
+              0.6065306597126332
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.4134706437831298,
+              0.4134706437831298,
+              0.4134706437831298
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.6065306597126332,
+          0.6065306597126332,
+          0.6065306597126332
+        ],
+        "native_accepted_output": [
+          0.3934693402873668,
+          0.3934693402873668,
+          0.3934693402873668
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.4134706437831298,
+          0.4134706437831298,
+          0.4134706437831298
+        ]
+      }
+    },
+    {
+      "name": "depth_constant_inside",
+      "camera": {
+        "eye": [
+          0,
+          0,
+          0.5
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "inside",
+      "fragment": [
+        0,
+        0,
+        -1
+      ],
+      "model_radius": 1.7320508075688772,
+      "steps": 5,
+      "offset": 0.0,
+      "scattering_scale": 1.0,
+      "scene_depth_m": 0.5,
+      "blocker_relation": "inside",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0,
+            5,
+            0
+          ],
+          "radiance": [
+            10,
+            10,
+            10
+          ],
+          "decay": 0,
+          "cutoff": 0
+        }
+      ],
+      "expected": {
+        "front_to_back": false,
+        "step_size_m": 0.3,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              0.0,
+              0.0,
+              -1.0
+            ],
+            "camera_axis_depth_m": 1.5,
+            "linear_depth": 0.014014014014014012,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              0.0,
+              0.0,
+              -0.7
+            ],
+            "camera_axis_depth_m": 1.2,
+            "linear_depth": 0.01101101101101101,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              0.0,
+              0.0,
+              -0.4
+            ],
+            "camera_axis_depth_m": 0.9,
+            "linear_depth": 0.008008008008008008,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              0.0,
+              0.0,
+              -0.10000000000000009
+            ],
+            "camera_axis_depth_m": 0.6000000000000001,
+            "linear_depth": 0.005005005005005006,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              1.0,
+              1.0,
+              1.0
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.0,
+              0.0,
+              0.0
+            ]
+          },
+          {
+            "index": 4,
+            "position": [
+              0.0,
+              0.0,
+              0.19999999999999996
+            ],
+            "camera_axis_depth_m": 0.30000000000000004,
+            "linear_depth": 0.0020020020020020024,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.9704455335485082,
+              0.9704455335485082,
+              0.9704455335485082
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.03,
+              0.03,
+              0.03
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.9704455335485082,
+          0.9704455335485082,
+          0.9704455335485082
+        ],
+        "native_accepted_output": [
+          0.029554466451491845,
+          0.029554466451491845,
+          0.029554466451491845
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.03,
+          0.03,
+          0.03
+        ]
+      }
+    },
+    {
+      "name": "depth_constant_oblique",
+      "camera": {
+        "eye": [
+          3,
+          0,
+          4
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "back": [
+          0,
+          0,
+          1
+        ],
+        "near": 0.1,
+        "far": 100.0,
+        "projection": "perspective"
+      },
+      "camera_relation": "outside",
+      "fragment": [
+        0,
+        0,
+        0
+      ],
+      "model_radius": 1.0,
+      "steps": 5,
+      "offset": 0.0,
+      "scattering_scale": 1.0,
+      "scene_depth_m": 1.7,
+      "blocker_relation": "inside",
+      "volume_bounds": {
+        "min": [
+          -1,
+          -1,
+          -1
+        ],
+        "max": [
+          1,
+          1,
+          1
+        ]
+      },
+      "lights": [
+        {
+          "kind": "point",
+          "position": [
+            0,
+            5,
+            0
+          ],
+          "radiance": [
+            10,
+            10,
+            10
+          ],
+          "decay": 0,
+          "cutoff": 0
+        }
+      ],
+      "expected": {
+        "front_to_back": true,
+        "step_size_m": 1.0,
+        "samples": [
+          {
+            "index": 0,
+            "position": [
+              3.0,
+              0.0,
+              4.0
+            ],
+            "camera_axis_depth_m": 0.0,
+            "linear_depth": -0.001001001001001001,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.9048374180359595,
+              0.9048374180359595,
+              0.9048374180359595
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.1,
+              0.1,
+              0.1
+            ]
+          },
+          {
+            "index": 1,
+            "position": [
+              2.4,
+              0.0,
+              3.2
+            ],
+            "camera_axis_depth_m": 0.7999999999999998,
+            "linear_depth": 0.007007007007007005,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.8187307530779817,
+              0.8187307530779817,
+              0.8187307530779817
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.19048374180359595,
+              0.19048374180359595,
+              0.19048374180359595
+            ]
+          },
+          {
+            "index": 2,
+            "position": [
+              1.7999999999999998,
+              0.0,
+              2.4
+            ],
+            "camera_axis_depth_m": 1.6,
+            "linear_depth": 0.015015015015015015,
+            "depth_gate": true,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "transmittance_after": [
+              0.7408182206817177,
+              0.7408182206817177,
+              0.7408182206817177
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.27235681711139414,
+              0.27235681711139414,
+              0.27235681711139414
+            ]
+          },
+          {
+            "index": 3,
+            "position": [
+              1.1999999999999997,
+              0.0,
+              1.5999999999999996
+            ],
+            "camera_axis_depth_m": 2.4000000000000004,
+            "linear_depth": 0.023023023023023025,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.7408182206817177,
+              0.7408182206817177,
+              0.7408182206817177
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.27235681711139414,
+              0.27235681711139414,
+              0.27235681711139414
+            ]
+          },
+          {
+            "index": 4,
+            "position": [
+              0.5999999999999996,
+              0.0,
+              0.7999999999999998
+            ],
+            "camera_axis_depth_m": 3.2,
+            "linear_depth": 0.03103103103103103,
+            "depth_gate": false,
+            "direct_terms": [
+              {
+                "kind": "point",
+                "rgb": [
+                  10.0,
+                  10.0,
+                  10.0
+                ]
+              }
+            ],
+            "ungated_light": [
+              10.0,
+              10.0,
+              10.0
+            ],
+            "scattering_density": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "transmittance_after": [
+              0.7408182206817177,
+              0.7408182206817177,
+              0.7408182206817177
+            ],
+            "r186_outgoing_after_out_of_scope": [
+              0.27235681711139414,
+              0.27235681711139414,
+              0.27235681711139414
+            ]
+          }
+        ],
+        "native_transmittance": [
+          0.7408182206817177,
+          0.7408182206817177,
+          0.7408182206817177
+        ],
+        "native_accepted_output": [
+          0.25918177931828235,
+          0.25918177931828235,
+          0.25918177931828235
+        ],
+        "r186_outgoing_out_of_scope": [
+          0.27235681711139414,
+          0.27235681711139414,
+          0.27235681711139414
+        ]
+      }
+    }
+  ]
+}

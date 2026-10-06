@@ -67,10 +67,10 @@ class CpuLintContextTests(unittest.TestCase):
         log = self.root / 'invocations'
         return [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
 
-    def wrapper(self, operation, source):
+    def wrapper(self, operation, source, *arguments):
         # Run the maintained shell wrapper directly: xargs and make intentionally
         # map a failed child's status, so only this boundary exposes the exact rc.
-        preview = self.make('-n')
+        preview = self.make('-n', *arguments)
         self.assertEqual(preview.returncode, 0, preview.stderr)
         tokens = shlex.split(preview.stdout)
         scripts = [tokens[index + 2] for index, token in enumerate(tokens)
@@ -109,6 +109,42 @@ class CpuLintContextTests(unittest.TestCase):
         self.assertEqual(result.stdout, 'No warnings (CPU).\n')
         self.assertEqual(result.stderr, '')
         self.assertTrue((self.root / 'lint-cpu-stamp').exists())
+
+    def test_target_override_is_build_only_and_default_doc_flags_are_preserved(self):
+        target = ['--target-triple=x86_64-unknown-linux-gnu', '--target-cpu=x86-64-v3']
+        result = self.make('LINT_CPU_BUILD_FLAGS=' + ' '.join(target))
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertCountEqual(self.calls(), [
+            ['build', *FLAGS, *target, '--Werror', '-o', '/dev/null', path]
+            for path in ENTRIES[:-1]
+        ] + [
+            ['doc', *FLAGS, '--Werror', '-o', '/dev/null', path] for path in DOCS
+        ])
+        source = (ROOT / 'Makefile').read_text()
+        self.assertIn('--setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS))', source)
+
+    def test_progress_names_each_command_and_preserves_failure_status(self):
+        for operation, source in (('build', ENTRIES[0]), ('doc', DOCS[0])):
+            for status in (0, 7):
+                with self.subTest(operation=operation, status=status):
+                    self.configure(operation=operation, source=source, status=status)
+                    result = self.wrapper(operation, source, 'LINT_CPU_PROGRESS=1')
+                    self.assertEqual(result.returncode, status)
+                    lines = result.stdout.splitlines()
+                    self.assertEqual(len(lines), 2)
+                    prefix = f' lint-{operation}-start: '
+                    self.assertIn(prefix, lines[0])
+                    self.assertEqual(shlex.split(lines[0].split(prefix, 1)[1]),
+                                     ['python3', 'compiler.py', operation, *FLAGS,
+                                      '--Werror', '-o', '/dev/null', source])
+                    self.assertTrue(lines[1].endswith(
+                        f' lint-{operation}-end: source={source} exit={status}'))
+                    self.assertLessEqual(len(lines[0]), 4096)
+                    self.assertNotIn('must-not-be-printed', result.stdout + result.stderr)
+                    if status:
+                        self.assert_context(result, operation, source, status)
+                    else:
+                        self.assertEqual(result.stderr, '')
 
     def test_each_wrapper_preserves_exact_failure_status_and_diagnostics(self):
         for operation, source in (('build', ENTRIES[0]), ('doc', DOCS[0])):

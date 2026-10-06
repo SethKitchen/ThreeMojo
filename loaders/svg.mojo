@@ -49,8 +49,16 @@ not one; a `rect` with no `width` or `height`; a `polygon` or
 through another; and a transform with no parenthesis. A fill three.js
 cannot read, such as `url(#gradient)`, leaves the path white, as it does
 in three.js.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized2, _ordinary_squared
 from loaders.svg_path import (
     SvgMatrix,
     SvgShapePath,
@@ -67,7 +75,7 @@ from loaders.svg_path import (
 from loaders.js_number import js_parse_float
 from loaders.xml import XmlDocument, parse_xml
 from render.css_color import parse_style
-from std.math import acos, cos, isnan, pi, sin, sqrt, tan
+from std.math import fma, acos, cos, isnan, pi, sin, sqrt, tan
 from std.pathlib import Path
 
 # The namespace an `xlink:href` attribute is in.
@@ -592,10 +600,24 @@ def _reflection(a: Float64, b: Float64) -> Float64:
 def _svg_angle(ux: Float64, uy: Float64, vx: Float64, vy: Float64) -> Float64:
     """Return the signed angle from one vector to another, three.js's
     `svgAngle`."""
+    var first_squared = ux * ux + uy * uy
+    var second_squared = vx * vx + vy * vy
     var dot = ux * vx + uy * vy
-    var length = sqrt(ux * ux + uy * uy) * sqrt(vx * vx + vy * vy)
-    var ang = acos(max(Float64(-1), min(Float64(1), dot / length)))
-    if ux * vy - uy * vx < 0:
+    var length = sqrt(first_squared) * sqrt(second_squared)
+    var cosine = dot / length
+    # JavaScript rounds the two products before subtracting. In particular,
+    # antipodal vectors have a zero cross, not a signed FMA residual.
+    var cross = fma(ux, vy, Float64(0)) - fma(uy, vx, Float64(0))
+    if not (
+        _ordinary_squared(first_squared) and _ordinary_squared(second_squared)
+    ):
+        if (ux != 0 or uy != 0) and (vx != 0 or vy != 0):
+            var u = normalized2(ux, uy)
+            var v = normalized2(vx, vy)
+            cosine = u[0] * v[0] + u[1] * v[1]
+            cross = u[0] * v[1] - u[1] * v[0]
+    var ang = acos(max(Float64(-1), min(Float64(1), cosine)))
+    if cross < 0:
         ang = -ang
     return ang
 

@@ -1,0 +1,64 @@
+{
+  "issue": 633,
+  "baseline_commit": "84038a2e06b0945fb1586b712298ab9268741b81",
+  "baseline_tree": "51ffa3961465c89bb1669e284035ef357b101d22",
+  "date_utc": "2026-10-05",
+  "toolchain": "Mojo 1.1.0 (8189361e)",
+  "warnings_as_errors": true,
+  "telemetry_enabled": false,
+  "native_serial_lane": true,
+  "test_timeout_seconds": 5,
+  "suites": [
+    {
+      "suite": "tests/test_physics_query_snapshot.mojo",
+      "tests": 12,
+      "passed": 12,
+      "max_test_ms": 101.598,
+      "source_sha256": "1234cdcd613ffc434c782a107d4d491c36cd8bdd9c01e935dfa5d7ae74a99121",
+      "binary_sha256": "0802b58e1ca295f99e8495238a82c039a5a0db1da0ebffa6e922c856eff16b4d",
+      "log_sha256": "125c7619742b21c071cd85db6528bef8cb6a85202b4d4bb3df5c0de5a51efad2"
+    },
+    {
+      "suite": "tests/test_physics_query_snapshot_validation.mojo",
+      "tests": 13,
+      "passed": 13,
+      "max_test_ms": 0.223,
+      "source_sha256": "6a783f2b819ee7242f01d6218546a95416f6e2e6237064115cf77e419872ce48",
+      "binary_sha256": "b256905048057dd25e95a6ee709ea6acbc8edbb2430ca3352df7ad7daacb23fd",
+      "log_sha256": "1a224a17a1401317fa7ae52d5c67c22ebe28efec464717023b9cfe7419b5c073"
+    },
+    {
+      "suite": "tests/test_physics_static_bvh.mojo",
+      "tests": 14,
+      "passed": 14,
+      "max_test_ms": 7.437,
+      "source_sha256": "2f5f899bb60e23fbcce6075bf9210c829b78dbea06d589323aed18d943a4048f",
+      "binary_sha256": "294d305fb1ce8fcb9b1aaf36140060503c7d8289e574ba030b11c36a8608237c",
+      "log_sha256": "f77afd87ab1cd5a6ad4843f0eeead89e504be4fef8c646a1de36b90b673802e6"
+    }
+  ],
+  "total_focused_tests": 39,
+  "negative_fixtures": 2,
+  "strict_new_module_docstrings_passed": true,
+  "changed_documentation_checks_passed": true,
+  "changed_mojo_format_checks_passed": true,
+  "unselected_negative_expectations_preserved": true,
+  "world_module_unchanged": true,
+  "source_sha256": {
+    "extensions/physics/query_snapshot.mojo": "ef68f1adefedf2acbb09dcdcb57fa72396d753c1eee4ae2bb34d668da35c7e3a",
+    "extensions/physics/primitive_index.mojo": "06bdb0ade12b5a6ba7819dd6e8c0671ddd1cef6572dac3a61072392489dbe4f5",
+    "bench/physics_static_bvh.mojo": "78f66a5678fd2c02c80c18b3c87fcb530ea7c1c3aba3f17dce8427cded1a4cc7",
+    "tests/test_physics_query_snapshot.mojo": "1234cdcd613ffc434c782a107d4d491c36cd8bdd9c01e935dfa5d7ae74a99121",
+    "tests/test_physics_query_snapshot_validation.mojo": "6a783f2b819ee7242f01d6218546a95416f6e2e6237064115cf77e419872ce48",
+    "tests/compile_fail/physics_snapshot_owner.mojo": "6ae7a77affd617535292e8089e053cd97c64694d4071663d1b75842caf514429",
+    "tests/compile_fail/a_snapshot_owner_is_not_a_bare_int.mojo": "6fb85f86d04a433a3201d6eca52f3541b0839e937bb27dd122091f1eb6bd116d",
+    "tools/compile_fail_expectations.json": "2fad85d3d57ea49943614b5749e78012a52566153c835674e96c6e544987c8f0"
+  },
+  "independent_review": "No blocking ownership, selective-admission or ordering defect found",
+  "deferred": [
+    "Full changed-module coverage",
+    "Whole-repository aggregate checks",
+    "Other-platform validation",
+    "Final draft CI"
+  ]
+}

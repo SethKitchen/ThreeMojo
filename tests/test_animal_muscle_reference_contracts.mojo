@@ -15,6 +15,7 @@ from extensions.animals.anatomy.muscles import (
 from extensions.animals.registry import (
     CHEETAH,
     DOG,
+    RAT,
     SPECIES_COUNT,
     SpeciesId,
 )
@@ -68,14 +69,29 @@ def test_bird_plan_uses_all_42_hartman_rows() raises:
     assert_equal(birds[1].model_evidence(), DESIGN)
 
 
+def test_untraced_plan_denominators_remain_design() raises:
+    var plan = plan_muscles(MAMMAL)
+    var measured = species_specs(RAT)
+    for i in range(6):
+        assert_equal(plan[i].fiber_source.evidence, DESIGN)
+        assert_equal(plan[i].fiber_source.source, "Eng2008")
+        # The species override uses an absolute measured fiber length.
+        assert_equal(measured[i].fiber_source.evidence, FROM_TEXT)
+        assert_equal(measured[i].fiber_source.source, "Eng2008")
+
+
 def test_direct_fiber_length_keeps_valid_scaling() raises:
-    # A plan row is a share of its bone: it scales with the reach alone.
-    # Its denominator is untraced, so the share itself is DESIGN.
     var plan = _fiber_spec(False)
+    # A plan row scales with reach alone; its untraced denominator is DESIGN.
     assert_equal(plan.fiber_source.evidence, DESIGN)
     var reach = plan.fiber_length(0.05, 0.3)
     assert_almost_equal(plan.fiber_length(0.1, 0.3), 2.0 * reach)
     assert_almost_equal(plan.fiber_length(0.05, 300.0), reach)
+    # Test the scaling contract without using an untraced bone denominator.
+    assert_almost_equal(
+        plan.fiber_length(0.2, 1.0), 2.0 * plan.fiber_length(0.1, 1.0)
+    )
+    assert_equal(plan.fiber_length(0.2, 1.0), plan.fiber_length(0.2, 8.0))
     var measured = _fiber_spec(True)
     assert_almost_equal(measured.fiber_length(0.2, 31.8), 0.143)
     assert_almost_equal(measured.fiber_length(0.2, 8.0 * 31.8), 0.286)

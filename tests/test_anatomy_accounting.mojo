@@ -137,8 +137,8 @@ def _tensor(v: SegmentInertia) -> SIMD[DType.float64, 8]:
 
 
 def _refuses_unnamed_regions(estimate: SegmentEstimate) raises:
-    # In a helper, not in the loop below: Mojo 1.1.0 segfaults now and then
-    # compiling these raising calls inside that loop's body.
+    # Keep these raising calls separate from the loop below, matching the
+    # reviewed workaround for a Mojo 1.1.0 compiler failure.
     with assert_raises():
         _ = estimate.region_volume(LimbRegion(7))
     with assert_raises():
@@ -294,6 +294,77 @@ def test_independent_point_masses_rigid_transform_and_parallel_axis() raises:
         broken.mass = bad
         with assert_raises(contains="mass"):
             _ = broken.result(1)
+
+
+def _check_single_point(m: Float64, p: Vector3) raises:
+    var tally = InertiaTally()
+    tally.add_cell(m, p, Vector3(0, 0, 0))
+    var point = tally.result(0)
+    assert_equal(point.mass.value, Float32(m))
+    for axis in range(3):
+        assert_equal(point.center.get_component(axis), p.get_component(axis))
+    var tensor = _tensor(point)
+    for axis in range(6):
+        assert_equal(tensor[axis], 0.0)
+
+
+def test_translated_single_points_have_zero_central_inertia() raises:
+    for m in [Float64(0.1), Float64(0.3), Float64(2.7)]:
+        for x in [Float32(-3.7), Float32(-0.3), Float32(0.1), Float32(1.9)]:
+            for y in [Float32(-0.7), Float32(0.2), Float32(2.3)]:
+                # Keep raising tally calls in a helper, as in the cuboid
+                # control above, for the pinned compiler's loop lowering.
+                _check_single_point(m, Vector3(x, y, x - y))
+
+
+def _check_nearby_pair(a: Vector3, b: Vector3) raises:
+    var tally = InertiaTally()
+    tally.add_cell(0.3, a, Vector3(0, 0, 0))
+    tally.add_cell(0.7, b, Vector3(0, 0, 0))
+    var result = tally.result(0)
+    var d = b - a
+    # Independent two-point formula: m1*m2/M times d*d^T.
+    var expected = SIMD[DType.float64, 8](
+        0.21 * (Float64(d.y) * Float64(d.y) + Float64(d.z) * Float64(d.z)),
+        0.21 * (Float64(d.x) * Float64(d.x) + Float64(d.z) * Float64(d.z)),
+        0.21 * (Float64(d.x) * Float64(d.x) + Float64(d.y) * Float64(d.y)),
+        -0.21 * Float64(d.x) * Float64(d.y),
+        -0.21 * Float64(d.x) * Float64(d.z),
+        -0.21 * Float64(d.y) * Float64(d.z),
+        0,
+        0,
+    )
+    var actual = _tensor(result)
+    for i in range(6):
+        assert_almost_equal(actual[i], expected[i], rtol=1e-5, atol=1e-12)
+
+
+def test_nearby_points_keep_resolved_anisotropic_inertia() raises:
+    _check_nearby_pair(Vector3(10, 10, 10), Vector3(10.0001, 10.01, 11))
+    _check_nearby_pair(Vector3(10, 10, 10), Vector3(10.001, 10.01, 10.1))
+    _check_nearby_pair(Vector3(0.1, -0.3, 0.7), Vector3(0.1001, -0.299, 0.71))
+
+
+def test_cancellation_guard_cannot_hide_resolved_invalid_moments() raises:
+    # A large raw moment on z must not excuse a negative x moment.
+    var bad = InertiaTally()
+    bad.add_cell(0.3, Vector3(0, 0, 1000), Vector3(0, 0, 0))
+    bad.second[0] = -1e-11
+    with assert_raises(contains="nonnegative"):
+        _ = bad.result(0)
+    # At ordinary translated coordinates, a resolved negative variance
+    # and a resolved cross moment remain inadmissible.
+    bad = InertiaTally()
+    bad.add_cell(0.3, Vector3(0.1, -0.3, 0.7), Vector3(0, 0, 0))
+    # About twice the raw cancellation envelope, not a broad tolerance.
+    bad.second[0] -= 64.0 * 1.1102230246251565e-16 * abs(bad.second[0])
+    with assert_raises(contains="nonnegative"):
+        _ = bad.result(0)
+    bad = InertiaTally()
+    bad.add_cell(0.3, Vector3(0.1, -0.3, 0.7), Vector3(0, 0, 0))
+    bad.second[3] += 64.0 * 1.1102230246251565e-16 * abs(bad.second[3])
+    with assert_raises(contains="admissible"):
+        _ = bad.result(0)
 
 
 def main() raises:
