@@ -10,8 +10,10 @@ must establish the actual shipped result; this test does not assume bad bits.
 """
 
 from extensions.carla.curve_distance import (
-    _wide_plan_contains,
     _wide_point_order,
+)
+from extensions.carla.lane_distance import (
+    _wide_plan_contains,
 )
 from extensions.carla.map import Controller, Junction, Map, Signal
 from extensions.carla.opendrive import load_opendrive

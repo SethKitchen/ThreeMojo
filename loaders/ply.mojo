@@ -56,7 +56,16 @@ value that is not a number of its type, a coordinate that is not finite
 as a `Float32`, a vertex with some channels of a color, a normal or a
 texture coordinate and not all of them, and a face that names a vertex
 the file does not have are refused, naming what is wrong.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import _polygon_cross_wide, _triangle_cross_wide
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
@@ -701,29 +710,23 @@ def _check_convex(points: List[Vector3], face: Int) raises:
         Error: If the face has no area, or a corner turns the wrong way.
     """
     var count = len(points)
-    var normal = Vector3(0, 0, 0)
-    # A face checked here has four corners or more: both loops always run.
+    var normal = _polygon_cross_wide(points)
+    var area_squared = (normal * normal).reduce_add()
+    if area_squared == 0:
+        raise Error("PLY face " + String(face) + ": " + "a face has no area")
     for index in range(count):  # pragma: no branch
-        var a = points[index]
-        var b = points[(index + 1) % count]
-        normal.x += (a.y - b.y) * (a.z + b.z)
-        normal.y += (a.z - b.z) * (a.x + b.x)
-        normal.z += (a.x - b.x) * (a.y + b.y)
-    var area = normal.length()
-    if area == 0:
-        raise Error("PLY face " + String(face) + ": a face has no area")
-    for index in range(count):  # pragma: no branch
-        var a = points[index]
-        var b = points[(index + 1) % count]
-        var c = points[(index + 2) % count]
-        var turn = b - a
-        turn.cross(c - b)
-        if turn.dot(normal) < -1e-6 * area * area:
+        var turn = _triangle_cross_wide(
+            points[index],
+            points[(index + 1) % count],
+            points[(index + 2) % count],
+        )
+        if (turn * normal).reduce_add() < -1e-6 * area_squared:
             raise Error(
                 "PLY face "
                 + String(face)
-                + ": a face is not convex, and only a convex face cuts into"
-                " a fan of triangles"
+                + ": "
+                + "a face is not convex, and only a convex face cuts into a"
+                " fan of triangles"
             )
 
 

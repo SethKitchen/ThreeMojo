@@ -54,7 +54,7 @@ from extensions.humanoid.skeleton.pelvis.bones.dimensions import (
 from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     PelvisMuscleDimensions,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftTissue,
     cartilage_tissue,
     ligament_tissue,

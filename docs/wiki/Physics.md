@@ -75,7 +75,7 @@ Tests compare cubes, cuboids, spheres, capsules and tetrahedra with independent 
 
 A caller can use `RigidBody.add_force` and `apply_impulse` without a CARLA actor. `PhysicsWorld.step` consumes forces for one step. A controller must apply its force before each step. `CarlaPhysics.tick` retains external forces across its substeps and rebuilds vehicle forces per substep.
 
-Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints, continuous collision detection and moving-ground tire coupling remain separate work.
+Gravity, buoyancy, wind, muscles or game forces can use this boundary. This extraction adds no force-dispatch framework. Joint constraints remain separate work. The opt-in [sphere/static-mesh continuous mode](Continuous-collision) has an explicit support and precision boundary. Moving-ground tire coupling is described in [CARLA physics](CARLA-physics#moving-supports).
 
 ## Free rotational integration
 
@@ -123,4 +123,8 @@ The shared solver includes the rotational integration described above. CARLA use
 
 The [static primitive benchmark](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/static-primitive-index-288.md) compares the current sweep with a bounded snapshot BVH. It measures 100, 1,000 and 10,000 static primitives, mixed moving participants and dense ray batches. The report includes allocation costs, brute-force checks and rebuild/refit rules.
 
-The production sweep and ray path stay unchanged. A retained query index needs an explicit snapshot or mutation contract because callers can edit bodies between steps. Prototype timings do not describe a production speedup. The owned snapshot and integration work is tracked in [#633](https://github.com/SethKitchen/ThreeMojo/issues/633).
+The production sweep and existing world ray path stay unchanged. [Owned query snapshots](Physics-query-snapshots) provide an explicit frozen view for repeated rays. They own bounds, narrow geometry, materials, and historical owner identity. Their documented query policy preserves the current narrow-phase answers. The snapshot measurement report separates retained-query savings from capture costs and experimental index results.
+
+## Continuous collision
+
+The opt-in [sphere/static-mesh sweep](Continuous-collision) handles fast, centered dynamic spheres against one-sided static triangles. It supports multiple impacts and transactional failure. Other shapes and interacting moving bodies are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.

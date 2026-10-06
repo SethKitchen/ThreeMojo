@@ -24,9 +24,11 @@ from extensions.carla.curve_bounds import (
 )
 from extensions.carla.curve_distance import (
     _finite_point,
+    _wide_point_order,
+)
+from extensions.carla.lane_distance import (
     _normalized_square,
     _point_gap_scale,
-    _wide_point_order,
     _wide_plan_contains,
 )
 from extensions.carla.curve_interval import (

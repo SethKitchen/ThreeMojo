@@ -52,10 +52,9 @@ def main():
         fa, fb, fq = [list(map(exact, point)) for point in (a, b, query)]
         da = sum((a - q)**2 for a, q in zip(fa, fq))
         db = sum((b - q)**2 for b, q in zip(fb, fq))
-        plan = 4 * sum((a - q)**2 for a, q in zip(fa[:2], fq[:2]))
-        rows.append(dict(bits=a + b + query + [width], order=sign(da - db),
-                         width_sign=sign(plan - exact(width)**2), label=label,
-                         upper_radius_bits=upper_radius_bits(da)))
+        rows.append(dict(bits=a + b + query, order=sign(da - db), label=label,
+                         exceeds_range=da > exact(0x7FEFFFFFFFFFFFFF)**2,
+                         positive=da > 0, upper_radius_bits=upper_radius_bits(da)))
 
     exponents = [0, 1, 2, 20, 500, 970, 1022, 1023, 1024, 1074, 1500, 2000, 2045, 2046]
 
@@ -79,21 +78,20 @@ def main():
         add([x] * 3, [x ^ (1 << 63)] * 3, [1 << 63, 0, 0], x, f'carry_tie_{index}')
     if args.json:
         args.json.write_text(json.dumps(rows, indent=2) + '\n')
-    header = (root / 'tests/test_carla_curve_distance.mojo').read_text().split('from extensions')[0]
+    header = (root / 'tests/test_carla_road_fixed_s.mojo').read_text().split('from extensions')[0].replace('Independent fixed-s OpenDRIVE controls for issue #604.', 'Independent Fraction controls for stored-point distance arithmetic.')
     output = header + '''from extensions.carla.curve_distance import (
-    _wide_point_order, _exact_point_order, _wide_plan_contains,
-    _exact_plan_width, _wide_distance_upper,
+    _wide_point_order, _exact_point_order, _wide_distance,
 )
 from std.memory import bitcast
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal, assert_true, assert_raises
 
 
 def test_fraction_bit_corpus() raises:
-    var cases: List[Tuple[Array[UInt64, 10], Int, Int, UInt64]] = [
+    var cases: List[Tuple[Array[UInt64, 9], Int, Bool, Bool, UInt64]] = [
 '''
     for row in rows:
         literals = ', '.join(f'UInt64(0x{raw:016X})' for raw in row['bits'])
-        output += (f'        ([{literals}], {row["order"]}, {row["width_sign"]}, '
+        output += (f'        ([{literals}], {row["order"]}, {row["exceeds_range"]}, {row["positive"]}, '
                    f'UInt64(0x{row["upper_radius_bits"]:016X})),\n')
     output += '''    ]
     for i in range(len(cases)):
@@ -105,12 +103,23 @@ def test_fraction_bit_corpus() raises:
             a[axis] = bitcast[DType.float64](row[0][axis])
             b[axis] = bitcast[DType.float64](row[0][axis + 3])
             q[axis] = bitcast[DType.float64](row[0][axis + 6])
-        var width = bitcast[DType.float64](row[0][9])
         assert_equal(_wide_point_order(a, b, q), row[1])
         assert_equal(_exact_point_order(a, b, q), row[1])
-        assert_equal(_wide_plan_contains(a, q, width), row[2] < 0)
-        assert_equal(_exact_plan_width(a, q, width), row[2])
-        assert_true(_wide_distance_upper(a, q) >= bitcast[DType.float64](row[3]))
+        if row[2]:
+            with assert_raises(contains="Float64 range"):
+                _ = _wide_distance(a, q)
+        else:
+            var distance = _wide_distance(a, q)
+            assert_equal(distance > 0.0, row[3])
+            # Independent exact bisection gives a one-ULP norm bracket.
+            # Permit four more ULPs: this API promises an approximation.
+            var lower = UInt64(0)
+            if row[4] > UInt64(5):
+                lower = row[4] - UInt64(5)
+            var upper = min(row[4] + UInt64(4), UInt64(0x7FEFFFFFFFFFFFFF))
+            assert_true(distance >= bitcast[DType.float64](lower))
+            assert_true(distance <= bitcast[DType.float64](upper))
+
 
 
 def main() raises:

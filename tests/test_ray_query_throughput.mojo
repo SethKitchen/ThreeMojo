@@ -4,7 +4,12 @@
 """Analytic face and rounding controls for wide ray queries."""
 
 from math.bounds import Box3, Sphere
-from math.ray import Ray, _distance_sq_ratio, _radius_relation
+from math.ray import (
+    Ray,
+    _distance_sq_ratio,
+    _radius_relation,
+    _regular_ray_vectors,
+)
 from math.octree import Octree
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -886,6 +891,111 @@ def test_infinite_center_with_finite_nonzero_components_stays_a_miss() raises:
     var sphere = Sphere(Vector3(inf[DType.float32](), 0, 0), 1)
     assert_false(ray.intersects_sphere(sphere))
     assert_false(Bool(ray.intersect_sphere(sphere)))
+
+
+def _regular_matches_snapshot(origin: Vector3, direction: Vector3) raises:
+    var ray = Ray(origin, Vector3(1, 0, 0))
+    ray.direction = direction
+    var o = SIMD[DType.float32, 4](origin.x, origin.y, origin.z, 0)
+    var d = SIMD[DType.float32, 4](direction.x, direction.y, direction.z, 0)
+    assert_equal(_regular_ray_vectors(o, d), ray._query_products().regular)
+
+
+def test_box_regularity_keeps_every_stored_component_class() raises:
+    var values = [
+        UInt32(0),
+        UInt32(0x80000000),
+        UInt32(1),
+        UInt32(0x80000001),
+        UInt32(0x007FFFFF),
+        UInt32(0x807FFFFF),
+        UInt32(0x00800000),
+        UInt32(0x80800000),
+        UInt32(0x3F800000),
+        UInt32(0xBF800000),
+        UInt32(0x7F7FFFFF),
+        UInt32(0xFF7FFFFF),
+        UInt32(0x7F800000),
+        UInt32(0xFF800000),
+        UInt32(0x7FC00001),
+        UInt32(0xFFC00001),
+    ]
+    for origin_bits in values:
+        var o = bitcast[DType.float32](origin_bits)
+        for direction_bits in values:
+            var d = bitcast[DType.float32](direction_bits)
+            for axis in range(3):
+                _regular_matches_snapshot(
+                    permute(Vector3(o, 0, 0), axis),
+                    permute(Vector3(d, 0, -0.0), axis),
+                )
+                _regular_matches_snapshot(
+                    permute(Vector3(o, -o, o), axis),
+                    permute(Vector3(d, 1, -1), axis),
+                )
+    for axis in range(3):
+        var tiny = bitcast[DType.float32](UInt32(1))
+        var ray = Ray(Vector3(-2, 0, 0), Vector3(1, 0, 0))
+        ray.origin = permute(ray.origin, axis)
+        ray.direction = permute(Vector3(tiny, -0.0, 0), axis)
+        var box = Box3(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+        assert_true(ray.intersects_box(box))
+        var point = ray.intersect_box(box).value()
+        var want = permute(Vector3(-1, 0, 0), axis)
+        assert_equal(point.x, want.x)
+        assert_equal(point.y, want.y)
+        assert_equal(point.z, want.z)
+
+
+def test_box_regularity_keeps_minimum_subnormal_rejection_paths() raises:
+    for bits in [UInt32(1), UInt32(0x80000001)]:
+        var tiny = bitcast[DType.float32](bits)
+        var sign = Float32(1) if tiny > 0 else Float32(-1)
+        for axis in range(3):
+            var ray = Ray(Vector3(0, 0, 0), Vector3(1, 0, 0))
+            ray.direction = permute(Vector3(tiny, 0, 0), axis)
+            ray.origin = permute(Vector3(2 * sign, 0, 0), axis)
+            var box = Box3(Vector3(-1, -1, -1), Vector3(1, 1, 1))
+            var decision = ray._box_decision(box)
+            assert_true(decision[1])
+            assert_false(decision[0])
+            assert_false(ray.intersects_box(box))
+            assert_false(Bool(ray.intersect_box(box)))
+            ray.origin = permute(Vector3(-4 * sign, -4 * sign, 0), axis)
+            ray.direction = permute(Vector3(tiny, tiny, 0), axis)
+            box = Box3(
+                permute(Vector3(0, 10, -1), axis),
+                permute(Vector3(1, 11, 1), axis),
+            )
+            decision = ray._box_decision(box)
+            assert_true(decision[1])
+            assert_false(decision[0])
+            assert_false(ray.intersects_box(box))
+            assert_false(Bool(ray.intersect_box(box)))
+    for signs in range(8):
+        var zero = Vector3(
+            bitcast[DType.float32](UInt32((signs & 1) << 31)),
+            bitcast[DType.float32](UInt32(((signs >> 1) & 1) << 31)),
+            bitcast[DType.float32](UInt32(((signs >> 2) & 1) << 31)),
+        )
+        _regular_matches_snapshot(Vector3(0, 0, 0), zero)
+    _regular_matches_snapshot(
+        Vector3(inf[DType.float32](), -inf[DType.float32](), 0),
+        Vector3(1, 0, 0),
+    )
+
+
+def test_box_regularity_matches_wide_snapshot_for_seeded_storage_bits() raises:
+    var state = UInt32(550)
+    for _ in range(10000):
+        var values = SIMD[DType.float32, 8](0)
+        for lane in range(6):
+            state = state * UInt32(1664525) + UInt32(1013904223)
+            values[lane] = bitcast[DType.float32](state)
+        _regular_matches_snapshot(
+            Vector3(values[0], values[1], values[2]),
+            Vector3(values[3], values[4], values[5]),
+        )
 
 
 def main() raises:

@@ -5,7 +5,7 @@
 
 """Exact bit controls for the common power-of-two point-gap scale."""
 
-from extensions.carla.curve_distance import _point_gap_scale
+from extensions.carla.lane_distance import _point_gap_scale
 from std.math import inf
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true

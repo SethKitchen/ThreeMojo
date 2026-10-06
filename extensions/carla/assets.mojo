@@ -56,7 +56,7 @@ from extensions.carla.mesh_factory import (
 )
 from extensions.carla.render_textures import SurfaceMaps
 from loaders.gltf import decode_image, read_gltf
-from loaders.image_batch import TextureDecodeBatch
+from loaders.image_batch import TextureDecodeSource, decode_textures
 from loaders.json import (
     ARRAY,
     JsonDocument,
@@ -83,7 +83,6 @@ from render.texture import (
     float_texture_from,
     texture_from,
 )
-from render.tasks import TaskGroup
 from render.texture_store import NO_TEXTURE
 from std.math import isfinite
 from std.pathlib import Path
@@ -850,32 +849,46 @@ def _flat(value: UInt8, space: ColorSpace) raises -> Texture:
     return Texture(1, 1, pixels^, REPEAT, BILINEAR, space, False, IGNORED)
 
 
-async def _read_one(
-    paths: MutPointer[String, MutAnyOrigin],
-    spaces: MutPointer[ColorSpace, MutAnyOrigin],
-    textures: MutPointer[Texture, MutAnyOrigin],
-    errors: MutPointer[String, MutAnyOrigin],
-    index: Int,
-    first: Int,
-):
-    """Decode one cached image as `AssetRegistry._decode` does, as a task
-    of `AssetRegistry.preload`; an error is carried back as its text."""
-    try:
-        var image = decode_image(
-            Path(paths[unsafe_offset=first + index]).read_bytes()
-        )
-        textures[unsafe_offset=index] = texture_from(
-            image,
-            REPEAT,
-            BILINEAR,
-            spaces[unsafe_offset=first + index],
-            True,
-            IGNORED,
-        )
-    except e:
-        errors[unsafe_offset=index] = (
-            paths[unsafe_offset=first + index] + ": " + String(e)
-        )
+@fieldwise_init
+struct _CachedDecodeSource[
+    path_origin: Origin[mut=False], space_origin: Origin[mut=False]
+](TextureDecodeSource):
+    """Fixed path and color-space lists borrowed by the shared queue."""
+
+    var paths: Pointer[String, Self.path_origin]
+    var spaces: Pointer[ColorSpace, Self.space_origin]
+    var prefix_errors: Bool
+
+    def decode(self, index: Int) raises -> Texture:
+        """Read one image, retaining serial and parallel error text."""
+        try:
+            var image = decode_image(
+                Path(self.paths[unsafe_offset=index]).read_bytes()
+            )
+            return texture_from(
+                image,
+                REPEAT,
+                BILINEAR,
+                self.spaces[unsafe_offset=index],
+                True,
+                IGNORED,
+            )
+        except e:
+            if self.prefix_errors:
+                raise Error(self.paths[unsafe_offset=index] + ": " + String(e))
+            raise e
+
+
+def _decode_cached(
+    paths: List[String], spaces: List[ColorSpace], workers: Int
+) raises -> List[Texture]:
+    """Keep both input owners borrowed until all queue workers finish."""
+    var source = _CachedDecodeSource(
+        paths.unsafe_ptr(),
+        spaces.unsafe_ptr(),
+        workers > 1,
+    )
+    return decode_textures(source, len(paths), workers)
 
 
 def _texture_key(path: String, space: ColorSpace) -> String:
@@ -1045,10 +1058,13 @@ struct AssetRegistry(Movable):
 
         A 2048-texel photoscan takes a few tenths of a second to decode,
         and a town reads twenty of them, some twice: a curb and a wall can
-        wear one set. The batch results move into the cache without
+        wear one set. Completed results move into the cache without
         copying their pixels or mipmaps. After this, `texture_set` copies
         them so a caller can change its maps without changing the cache.
-        All batches must succeed before the cache receives any results.
+        All jobs must succeed before the cache receives any results.
+        A free worker reads the next image without a batch barrier.
+        Compressed input and decoder scratch are held for at most one
+        image per active worker. The first source-order error is raised.
 
         The registry keeps `workers`, and `place_model` and `place_town`
         decode their glTF's images as many at a time.
@@ -1088,52 +1104,11 @@ struct AssetRegistry(Movable):
                 if fresh:
                     paths.append(path)
                     spaces.append(space)
-        var count = len(paths)
-        var textures = List[Texture](capacity=count)
-        var first = 0
-        while first < count:
-            var decoded = TextureDecodeBatch(count - first, workers)
-            var batch = len(decoded.textures)
-            if workers <= 1:
-                var image = decode_image(Path(paths[first]).read_bytes())
-                decoded.textures[0] = texture_from(
-                    image, REPEAT, BILINEAR, spaces[first], True, IGNORED
-                )
-            else:
-                # All input and result storage outlives this join. The
-                # task count and result slots share one worker bound.
-                var group = TaskGroup()
-                for index in range(batch):  # pragma: no branch
-                    group.create_task(
-                        _read_one(
-                            paths.unsafe_ptr().unsafe_origin_cast[
-                                MutAnyOrigin
-                            ](),
-                            spaces.unsafe_ptr().unsafe_origin_cast[
-                                MutAnyOrigin
-                            ](),
-                            decoded.textures.unsafe_ptr().unsafe_origin_cast[
-                                MutAnyOrigin
-                            ](),
-                            decoded.errors.unsafe_ptr().unsafe_origin_cast[
-                                MutAnyOrigin
-                            ](),
-                            index,
-                            first,
-                        )
-                    )
-                group.wait()
-                decoded.check()
-            # Keep completed results in source order. Move their pixel
-            # and mip buffers instead of copying them a second time.
-            decoded.textures.reverse()
-            for _ in range(batch):  # pragma: no branch
-                textures.append(decoded.textures.pop())
-            first += batch
-        # Publish only after every batch succeeds. A failed preload does
-        # not add partial cache entries, and a retry reads the same keys.
+        var textures = _decode_cached(paths, spaces, workers)
+        # Publish only after every queue worker succeeds. A failed preload
+        # leaves all existing entries intact; retry sees the same new keys.
         textures.reverse()
-        for index in range(count):
+        for index in range(len(paths)):
             self.decoded_keys.append(_texture_key(paths[index], spaces[index]))
             self.decoded.append(textures.pop())
 

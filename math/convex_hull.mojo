@@ -20,10 +20,12 @@ they are rows in parallel lists, and a reference is a row number, with -1
 for JavaScript's `null`. A face that is removed keeps its row and is marked
 deleted, as in three.js, and `faces` lists the rows still on the hull.
 
-The arithmetic is `Float64`, as JavaScript's is. The tolerance that decides
-whether a face can see a point is three.js's, three times the `Float64`
-epsilon times the size of the point set, and it is only meaningful at that
-precision.
+Coordinates and the public tolerance use `Float64`, as JavaScript's do.
+Adaptive predicates decide orientation and compare exact signed distances
+with the tolerance. Exact fallbacks retain the original finite coordinates,
+including subnormal values. Ordinary distance ranks retain three.js order;
+ranks select among certified exterior candidates and cannot admit a point.
+The tolerance is three times Float64 epsilon times the coordinate size.
 
 three.js returns an empty hull for fewer than four points, and a flat or
 broken one for points that are all on a line or a plane. This port refuses
@@ -31,10 +33,22 @@ all three.
 """
 
 from math.vector3 import Vector3
+from math.exact_predicates import (
+    _collinear,
+    _difference_compare,
+    _normal_estimate,
+    _orient3d,
+    _plane_above,
+    _plane_distance_compare,
+    _same_plane_distance_compare,
+    _same_plane_absolute_distance_compare,
+    _segment_distance_compare,
+)
 from std.math import frexp, isfinite, ldexp, sqrt
 
 # JavaScript's `Number.EPSILON`: the gap between one and the next `Float64`.
 comptime DOUBLE_EPSILON = Float64(2.220446049250313e-16)
+"""The Float64 gap from one to its next representable value."""
 
 
 def _exponent(value: Float64) -> Int:
@@ -138,22 +152,29 @@ struct ConvexHull(Movable):
     as in three.js.
     """
 
-    # How far outside a face a point must be before the face can see it.
+    # Public containment padding and the initial simplex height threshold.
+    # Hull expansion itself keeps exact supporting planes for every source.
     var tolerance: Float64
-    # Internal coordinates are input coordinates times 2**(-exponent).
-    # Convert the public tolerance, including zero, to these same units.
+    """Containment padding in input units; later edits change queries only."""
+    # Ranking coordinates are input coordinates times 2**(-exponent).
     var _scale_exponent: Int
-    var _working_tolerance: Float64
     # The rows of the faces on the hull, in three.js's order.
     var faces: List[Int]
+    """Active triangular face rows in the hull traversal order."""
     # The points, one row each, with the list links three.js's `VertexNode`
     # has, and the face that can see the point.
     var _points: List[_Point]
+    # Predicates always read originals. A common scale may lose detail.
+    var _source_points: List[SIMD[DType.float64, 4]]
+    var _exact_ranking: Bool
     var _vertex_prev: List[Int]
     var _vertex_next: List[Int]
     var _vertex_face: List[Int]
     # The faces, one row each: three.js's `Face`.
     var _normal: List[_Point]
+    # Ordinary-range ranking retains three.js arithmetic. Rank is only a
+    # search heuristic; exact predicates decide admission and visibility.
+    var _ranking_normal: List[_Point]
     var _constant: List[Float64]
     var _outside: List[Int]
     var _visible: List[Bool]
@@ -181,8 +202,7 @@ struct ConvexHull(Movable):
         Raises:
             Error: If there are fewer than four points, any number is not
                 finite, or the points all lie on one point, one line or one
-                plane within the tolerance. Also raises if the coordinate
-                range cannot retain the input detail in Float64.
+                plane within the tolerance.
         """
         var doubles = List[SIMD[DType.float64, 4]]()
         for point in points:
@@ -203,20 +223,21 @@ struct ConvexHull(Movable):
         Raises:
             Error: If there are fewer than four points, any number is not
                 finite, or the points all lie on one point, one line or one
-                plane within the tolerance. Also raises if the coordinate
-                range cannot retain the input detail in Float64.
+                plane within the tolerance.
         """
         if len(points) < 4:
             raise Error("A convex hull needs at least four points")
         self.tolerance = -1
         self._scale_exponent = 0
-        self._working_tolerance = -1
         self.faces = List[Int]()
         self._points = List[_Point]()
+        self._source_points = List[SIMD[DType.float64, 4]]()
+        self._exact_ranking = False
         self._vertex_prev = List[Int]()
         self._vertex_next = List[Int]()
         self._vertex_face = List[Int]()
         self._normal = List[_Point]()
+        self._ranking_normal = List[_Point]()
         self._constant = List[Float64]()
         self._outside = List[Int]()
         self._visible = List[Bool]()
@@ -239,6 +260,7 @@ struct ConvexHull(Movable):
             if x_bad or y_bad or z_bad:
                 raise Error("A convex hull needs finite points")
             self._points.append(_Point(point[0], point[1], point[2]))
+            self._source_points.append(point)
             self._vertex_prev.append(-1)
             self._vertex_next.append(-1)
             self._vertex_face.append(-1)
@@ -319,56 +341,34 @@ struct ConvexHull(Movable):
 
         Returns:
             Whether no face sees the point from more than `tolerance`.
-            Returns False for a nonfinite spatial component. Distances and
-            tolerance use the original units. A zero tolerance stays zero.
+            Returns False for a nonfinite spatial component, or a negative
+            or nonfinite tolerance. Distances and tolerance use the original
+            units. A zero tolerance stays zero. Changing tolerance changes
+            later queries only; it does not rebuild the hull.
         """
         var x_bad = not isfinite(point[0])
         var y_bad = not isfinite(point[1])
         var z_bad = not isfinite(point[2])
         if x_bad or y_bad or z_bad:
             return False
-        var p = _Point(point[0], point[1], point[2])
-        # A query can be much farther away than the hull. Scale the query
-        # and each plane together so even that dot product cannot overflow.
-        var exponent = max(self._scale_exponent, _exponent(p.magnitude()) - 200)
-        if self._scale_exponent == 0 and exponent == 0:
-            # Preserve three.js arithmetic for ordinary coordinates.
-            for face in self.faces:
-                if self._distance(face, p) > self.tolerance:
-                    return False
-        else:
-            p = p.scaled(-exponent)
-            var tolerance = _scale(self.tolerance, -exponent)
-            for face in self.faces:
-                var anchor = self._points[
-                    self._edge_vertex[self._face_edge[face]]
-                ].scaled(self._scale_exponent - exponent)
-                if self._normal[face].dot(p - anchor) > tolerance:
-                    return False
+        if not isfinite(self.tolerance) or self.tolerance < 0:
+            return False
+        for face in self.faces:
+            if self._sees(face, point, self.tolerance):
+                return False
         return True
 
-    def _condition_points(mut self) raises:
-        """Keep ordinary coordinates unchanged and condition extreme ones."""
+    def _condition_points(mut self):
+        """Condition ranking coordinates without changing predicate inputs."""
         var magnitude = Float64(0)
         for point in self._points:  # pragma: no branch
             magnitude = max(magnitude, point.magnitude())
         var exponent = _exponent(magnitude)
-        # A normal squares cross products: four powers of the coordinate.
-        # This bound leaves room for differences, sums and that fourth power.
         if exponent < -200 or exponent > 200:
             self._scale_exponent = exponent
+            self._exact_ranking = True
             for i in range(len(self._points)):  # pragma: no branch
-                var original = self._points[i]
-                var scaled = original.scaled(-exponent)
-                var restored = scaled.scaled(exponent)
-                var x_lost = restored.x != original.x
-                var y_lost = restored.y != original.y
-                var z_lost = restored.z != original.z
-                if x_lost or y_lost or z_lost:
-                    raise Error(
-                        "Convex hull coordinate range loses Float64 detail"
-                    )
-                self._points[i] = scaled
+                self._points[i] = self._points[i].scaled(-exponent)
 
     # --- Faces and half edges ----------------------------------------------
 
@@ -376,8 +376,75 @@ struct ConvexHull(Movable):
         """Return how far `point` is outside a face's plane."""
         if self._scale_exponent != 0:
             var anchor = self._points[self._edge_vertex[self._face_edge[face]]]
-            return self._normal[face].dot(point - anchor)
-        return self._normal[face].dot(point) - self._constant[face]
+            return self._ranking_normal[face].dot(point - anchor)
+        return self._ranking_normal[face].dot(point) - self._constant[face]
+
+    def _corners(self, face: Int) -> Array[Int, 3]:
+        """Return original vertex indices for an oriented face."""
+        var edge = self._face_edge[face]
+        return [
+            self._edge_vertex[edge],
+            self._edge_vertex[self._edge_next[edge]],
+            self._edge_vertex[self._edge_prev[edge]],
+        ]
+
+    def _sees(
+        self, face: Int, point: SIMD[DType.float64, 4], tolerance: Float64
+    ) -> Bool:
+        """Certify signed distance greater than a threshold in input units."""
+        var corners = self._corners(face)
+        return _plane_above(
+            self._source_points[Int(corners[0])],
+            self._source_points[Int(corners[1])],
+            self._source_points[Int(corners[2])],
+            point,
+            tolerance,
+        )
+
+    def _farther_face(self, face: Int, best: Int, vertex: Int) -> Bool:
+        """Rank already certified exterior faces, retaining ordinary order."""
+        var distance = self._distance(face, self._points[vertex])
+        var previous = self._distance(best, self._points[vertex])
+        # Conditioned points and unit ranking normals bound both distances.
+        if not self._exact_ranking:
+            if distance > 0 and previous > 0:
+                return distance > previous
+        var a = self._corners(face)
+        var b = self._corners(best)
+        var point = self._source_points[vertex]
+        return (
+            _plane_distance_compare(
+                self._source_points[Int(a[0])],
+                self._source_points[Int(a[1])],
+                self._source_points[Int(a[2])],
+                point,
+                self._source_points[Int(b[0])],
+                self._source_points[Int(b[1])],
+                self._source_points[Int(b[2])],
+                point,
+            )
+            > 0
+        )
+
+    def _farther_vertex(self, face: Int, vertex: Int, best: Int) -> Bool:
+        """Rank certified exterior vertices on one face."""
+        var distance = self._distance(face, self._points[vertex])
+        var previous = self._distance(face, self._points[best])
+        # Conditioned points and unit ranking normals bound both distances.
+        if not self._exact_ranking:
+            if distance > 0 and previous > 0:
+                return distance > previous
+        var corners = self._corners(face)
+        return (
+            _same_plane_distance_compare(
+                self._source_points[Int(corners[0])],
+                self._source_points[Int(corners[1])],
+                self._source_points[Int(corners[2])],
+                self._source_points[vertex],
+                self._source_points[best],
+            )
+            > 0
+        )
 
     def _plane_distance(
         self, normal: _Point, anchor: _Point, point: _Point
@@ -432,22 +499,24 @@ struct ConvexHull(Movable):
         var pa = self._points[c]
         var pb = self._points[a]
         var pc = self._points[b]
-        var normal = _unit_or_zero((pc - pb).cross(pa - pb))
+        var legacy = _unit_or_zero((pc - pb).cross(pa - pb))
+        var exact = _normal_estimate(
+            self._source_points[a],
+            self._source_points[b],
+            self._source_points[c],
+        )
+        var normal = _unit_or_zero(_Point(exact[0], exact[1], exact[2]))
         if normal.magnitude() == 0:
-            raise Error("Convex hull face exceeds the Float64 numerical range")
+            raise Error(
+                "A convex hull face needs points that are not in a line"
+            )
+        # Bounded ranking coordinates keep this normalized cross finite.
+        if legacy.magnitude() == 0:
+            legacy = normal
         var midpoint = (pa + pb + pc) * (Float64(1) / 3)
         self._normal.append(normal)
-        self._constant.append(normal.dot(midpoint))
-        if self._scale_exponent != 0:
-            # A rounded normal must still put its own vertices on the face
-            # within the actual working tolerance, even when that is zero.
-            var error_a = abs(self._distance(face, pa))
-            var error_c = abs(self._distance(face, pc))
-            var tolerance = self._working_tolerance
-            if error_a > tolerance or error_c > tolerance:
-                raise Error(
-                    "Convex hull face exceeds the Float64 numerical range"
-                )
+        self._ranking_normal.append(legacy)
+        self._constant.append(legacy.dot(midpoint))
         return face
 
     # --- The two vertex lists ----------------------------------------------
@@ -548,18 +617,25 @@ struct ConvexHull(Movable):
         var vertex = self._unassigned_head
         while vertex != -1:
             var next = self._vertex_next[vertex]
-            var max_distance = self._working_tolerance
             var max_face = -1
-            # Every face in `_new_faces` was made in this step and none has
-            # been removed yet, so three.js's `mark === Visible` test always
-            # passes here and is left out.
+            # Construction uses strict exact support. Tolerance-based
+            # deletion can leave a visible adjacent face and fold the fan.
+            # Ranks only order points that are strictly outside.
             for face in self._new_faces:  # pragma: no branch
-                var distance = self._distance(face, self._points[vertex])
-                if distance > max_distance:
-                    max_distance = distance
-                    max_face = face
-                if max_distance > 1000 * self._working_tolerance:
-                    break
+                if self._sees(face, self._source_points[vertex], 0):
+                    if max_face == -1 or self._farther_face(
+                        face, max_face, vertex
+                    ):
+                        max_face = face
+                    # This early exit changes speed, not admission. Retain
+                    # three.js's ordinary search order without overflow.
+                    var threshold = 1000 * self.tolerance
+                    # Tolerance is at most 9*epsilon times a finite
+                    # coordinate. Multiplying it by 1000 remains finite.
+                    if self._sees(
+                        max_face, self._source_points[vertex], threshold
+                    ):
+                        break
             if max_face != -1:
                 self._add_vertex_to_face(vertex, max_face)
             vertex = next
@@ -569,21 +645,25 @@ struct ConvexHull(Movable):
         the tolerance from them."""
         var min_vertices = List[Int](length=3, fill=0)
         var max_vertices = List[Int](length=3, fill=0)
-        var low = [self._points[0].x, self._points[0].y, self._points[0].z]
+        var low = [
+            self._source_points[0][0],
+            self._source_points[0][1],
+            self._source_points[0][2],
+        ]
         var high = low.copy()
         for vertex in range(len(self._points)):  # pragma: no branch
-            var point = self._points[vertex]
+            var point = self._source_points[vertex]
             for axis in range(3):  # pragma: no branch
-                if point.component(axis) < low[axis]:
-                    low[axis] = point.component(axis)
+                if point[axis] < low[axis]:
+                    low[axis] = point[axis]
                     min_vertices[axis] = vertex
             for axis in range(3):  # pragma: no branch
-                if point.component(axis) > high[axis]:
-                    high[axis] = point.component(axis)
+                if point[axis] > high[axis]:
+                    high[axis] = point[axis]
                     max_vertices[axis] = vertex
-        var x = _scale(max(abs(low[0]), abs(high[0])), self._scale_exponent)
-        var y = _scale(max(abs(low[1]), abs(high[1])), self._scale_exponent)
-        var z = _scale(max(abs(low[2]), abs(high[2])), self._scale_exponent)
+        var x = max(abs(low[0]), abs(high[0]))
+        var y = max(abs(low[1]), abs(high[1]))
+        var z = max(abs(low[2]), abs(high[2]))
         var size = x + y + z
         if isfinite(size):
             # Retain three.js's operation order, including a rounded zero.
@@ -595,7 +675,6 @@ struct ConvexHull(Movable):
                 + 3 * DOUBLE_EPSILON * y
                 + 3 * DOUBLE_EPSILON * z
             )
-        self._working_tolerance = _scale(self.tolerance, -self._scale_exponent)
         return (min_vertices^, max_vertices^)
 
     def _compute_initial_hull(mut self) raises:
@@ -605,82 +684,145 @@ struct ConvexHull(Movable):
         ref low = extremes[0]
         ref high = extremes[1]
 
-        # 1. The two points farthest apart along one axis.
-        var max_distance = Float64(0)
+        # 1. The two points farthest apart along one axis. Compare affine
+        # differences without overflowing opposite finite endpoints.
         var index = 0
-        for axis in range(3):  # pragma: no branch
-            var distance = self._points[high[axis]].component(
-                axis
-            ) - self._points[low[axis]].component(axis)
-            if distance > max_distance:
-                max_distance = distance
+        for axis in range(1, 3):  # pragma: no branch
+            if (
+                _difference_compare(
+                    self._source_points[high[axis]][axis],
+                    self._source_points[low[axis]][axis],
+                    self._source_points[high[index]][index],
+                    self._source_points[low[index]][index],
+                )
+                > 0
+            ):
                 index = axis
-        if max_distance == 0:
-            raise Error("A convex hull needs points in more than one place")
         var v0 = low[index]
         var v1 = high[index]
+        if self._source_points[v0][index] == self._source_points[v1][index]:
+            raise Error("A convex hull needs points in more than one place")
 
-        # 2. The point farthest from the segment between them.
-        max_distance = 0
+        # 2. Rank noncollinear points by the ordinary segment heuristic.
+        # Exact segment ranking replaces unsafe or conditioned scores.
+        var max_distance = Float64(0)
         var v2 = -1
         var start = self._points[v0]
         var delta = self._points[v1] - start
         var delta_squared = delta.dot(delta)
-        if delta_squared == 0:
-            raise Error(
-                "Convex hull segment exceeds the Float64 numerical range"
-            )
         for vertex in range(len(self._points)):  # pragma: no branch
             if vertex != v0 and vertex != v1:
-                var point = self._points[vertex]
-                var t = delta.dot(point - start) / delta_squared
-                t = min(max(t, 0), 1)
-                var closest = delta * t + start
-                var gap = closest - point
-                var distance = gap.dot(gap)
-                if distance == 0 and gap.magnitude() != 0:
-                    raise Error(
-                        "Convex hull gap exceeds the Float64 numerical range"
-                    )
-                if distance > max_distance:
+                if _collinear(
+                    self._source_points[v0],
+                    self._source_points[v1],
+                    self._source_points[vertex],
+                ):
+                    continue
+                var distance = Float64(0)
+                # Conditioned coordinate differences have finite squares.
+                if delta_squared > 0:
+                    var point = self._points[vertex]
+                    var t = delta.dot(point - start) / delta_squared
+                    t = min(max(t, 0), 1)
+                    var gap = delta * t + start - point
+                    distance = gap.dot(gap)
+                var farther = v2 == -1
+                if v2 != -1:
+                    if (
+                        not self._exact_ranking
+                        and distance > 0
+                        and max_distance > 0
+                    ):
+                        farther = distance > max_distance
+                    else:
+                        farther = (
+                            _segment_distance_compare(
+                                self._source_points[v0],
+                                self._source_points[v1],
+                                self._source_points[vertex],
+                                self._source_points[v2],
+                            )
+                            > 0
+                        )
+                if farther:
                     max_distance = distance
                     v2 = vertex
         if v2 == -1:
             raise Error("A convex hull needs points that are not in a line")
 
-        # 3. The point farthest from the plane of those three.
+        # 3. Choose a point whose exact plane distance exceeds tolerance.
+        # A rounded ranking never admits a degenerate/too-flat tetrahedron.
         var p0 = self._points[v0]
         var p1 = self._points[v1]
         var p2 = self._points[v2]
-        var normal = (p2 - p1).cross(p0 - p1)
-        # three.js's `normalize`, which multiplies by one over the length.
-        normal = _unit_or_zero(normal)
-        if normal.magnitude() == 0:
-            raise Error("Convex hull plane exceeds the Float64 numerical range")
+        var normal = _unit_or_zero((p2 - p1).cross(p0 - p1))
         max_distance = -1
         var v3 = -1
+        var noncoplanar = False
         for vertex in range(len(self._points)):  # pragma: no branch
             if vertex != v0 and vertex != v1 and vertex != v2:
+                var sign = _orient3d(
+                    self._source_points[v0],
+                    self._source_points[v1],
+                    self._source_points[v2],
+                    self._source_points[vertex],
+                )
+                if sign == 0:
+                    continue
+                noncoplanar = True
+                var a = v0 if sign > 0 else v1
+                var b = v1 if sign > 0 else v0
+                if not _plane_above(
+                    self._source_points[a],
+                    self._source_points[b],
+                    self._source_points[v2],
+                    self._source_points[vertex],
+                    self.tolerance,
+                ):
+                    continue
                 var distance = abs(
                     self._plane_distance(normal, p0, self._points[vertex])
                 )
-                if distance > max_distance:
+                var farther = v3 == -1
+                if v3 != -1:
+                    if (
+                        not self._exact_ranking
+                        and distance > 0
+                        and max_distance > 0
+                    ):
+                        farther = distance > max_distance
+                    else:
+                        farther = (
+                            _same_plane_absolute_distance_compare(
+                                self._source_points[v0],
+                                self._source_points[v1],
+                                self._source_points[v2],
+                                self._source_points[vertex],
+                                self._source_points[v3],
+                            )
+                            > 0
+                        )
+                if farther:
                     max_distance = distance
                     v3 = vertex
-        if max_distance <= self._working_tolerance:
-            if self._working_tolerance == 0:
-                # At a zero threshold an unresolved orientation does not
-                # prove exact coplanarity. Refuse it as a numerical limit.
+        if v3 == -1:
+            if noncoplanar:
                 raise Error(
-                    "Convex hull plane exceeds the Float64 numerical range"
+                    "A convex hull needs points that are not in a plane within"
+                    " tolerance"
                 )
-            raise Error(
-                "A convex hull needs points that are not in a plane within"
-                " tolerance"
-            )
+            raise Error("A convex hull needs points that are not in a plane")
 
         var first = List[Int]()
-        if self._plane_distance(normal, p0, self._points[v3]) < 0:
+        if (
+            _orient3d(
+                self._source_points[v0],
+                self._source_points[v1],
+                self._source_points[v2],
+                self._source_points[v3],
+            )
+            < 0
+        ):
             # The plane cannot see the fourth point, so its normal points out
             # of the tetrahedron.
             first.append(self._create_face(v0, v1, v2))
@@ -714,15 +856,14 @@ struct ConvexHull(Movable):
 
         for vertex in range(len(self._points)):  # pragma: no branch
             if vertex != v0 and vertex != v1 and vertex != v2 and vertex != v3:
-                max_distance = self._working_tolerance
                 var max_face = -1
                 for j in range(4):  # pragma: no branch
-                    var distance = self._distance(
-                        self.faces[j], self._points[vertex]
-                    )
-                    if distance > max_distance:
-                        max_distance = distance
-                        max_face = self.faces[j]
+                    var face = self.faces[j]
+                    if self._sees(face, self._source_points[vertex], 0):
+                        if max_face == -1 or self._farther_face(
+                            face, max_face, vertex
+                        ):
+                            max_face = face
                 if max_face != -1:
                     self._add_vertex_to_face(vertex, max_face)
 
@@ -733,19 +874,18 @@ struct ConvexHull(Movable):
             return -1
         var eye_face = self._vertex_face[self._assigned_head]
         var eye_vertex = -1
-        var max_distance = Float64(0)
         var vertex = self._outside[eye_face]
         while vertex != -1 and self._vertex_face[vertex] == eye_face:
-            var distance = self._distance(eye_face, self._points[vertex])
-            if distance > max_distance:
-                max_distance = distance
+            if eye_vertex == -1 or self._farther_vertex(
+                eye_face, vertex, eye_vertex
+            ):
                 eye_vertex = vertex
             vertex = self._vertex_next[vertex]
         return eye_vertex
 
     def _compute_horizon(
         mut self,
-        eye_point: _Point,
+        eye_point: SIMD[DType.float64, 4],
         cross_edge: Int,
         face: Int,
         mut horizon: List[Int],
@@ -767,10 +907,7 @@ struct ConvexHull(Movable):
             var twin = self._edge_twin[edge]
             var opposite = self._edge_face[twin]
             if self._visible[opposite]:
-                if (
-                    self._distance(opposite, eye_point)
-                    > self._working_tolerance
-                ):
+                if self._sees(opposite, eye_point, 0):
                     self._compute_horizon(eye_point, twin, opposite, horizon)
                 else:
                     horizon.append(edge)
@@ -810,7 +947,7 @@ struct ConvexHull(Movable):
         self._unassigned_tail = -1
         var face = self._vertex_face[eye_vertex]
         self._remove_vertex_from_face(eye_vertex, face)
-        var eye_point = self._points[eye_vertex]
+        var eye_point = self._source_points[eye_vertex]
         self._compute_horizon(eye_point, -1, face, horizon)
         self._add_new_faces(eye_vertex, horizon)
         self._resolve_unassigned_points()

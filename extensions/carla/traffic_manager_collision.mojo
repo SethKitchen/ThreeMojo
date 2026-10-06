@@ -37,7 +37,10 @@ curving path, so it does not serve here.
 before it sorts them; here they come by id before the sort, and the sort
 keeps ties in that order. The pair cache stores distances in actor-id
 order and orients each read to the caller. The path strip includes its
-last buffered waypoint when it reaches the end.
+last buffered waypoint when it reaches the end. Removing an actor drops
+locks owned by it or naming it as the lead, and invalidates both cycle
+caches. This lifetime correction can change a scenario that used a stale
+lead after runtime removal.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/CollisionStage.cpp`.
 """
@@ -307,16 +310,25 @@ struct CollisionStage(Movable):
         )
 
     def remove_actor(mut self, actor: ActorId) raises:
-        """Drop a vehicle's lock, `RemoveActor`.
+        """Drop locks owned by or leading to an actor, `RemoveActor`.
+
+        Both cycle caches are cleared because surviving boundaries and
+        pair distances can depend on an erased lock's extension. Other
+        surviving locks keep their distances and lead ids.
 
         Args:
-            actor: The vehicle.
+            actor: The actor leaving this runtime state.
 
         Raises:
-            Error: Never; the lookup is checked.
+            Error: Never; the keys are collected before removal.
         """
-        if actor.value in self.collision_locks:
-            _ = self.collision_locks.pop(actor.value)
+        var removed = List[Int]()
+        for entry in self.collision_locks.items():
+            if entry.key == actor.value or entry.value.lead_vehicle_id == actor:
+                removed.append(entry.key)
+        for owner in removed:
+            _ = self.collision_locks.pop(owner)
+        self.clear_cycle_cache()
 
     def reset(mut self):
         """Drop every lock and cached comparison, `Reset`."""

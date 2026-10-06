@@ -202,6 +202,24 @@ def test_the_signatures_leave_out_the_color() raises:
     )
 
 
+def test_volume_scene_depth_has_a_distinct_material_signature() raises:
+    var assets = Assets()
+    var ordinary = Material(Color(255, 255, 255), kind=VOLUME)
+    var gated = Material(Color(255, 255, 255), kind=VOLUME)
+    assert_equal(
+        material_signature(assets, ordinary), material_signature(assets, gated)
+    )
+    gated.set_volume_scene_depth(True)
+    assert_true(
+        material_signature(assets, ordinary)
+        != material_signature(assets, gated)
+    )
+    gated.set_volume_scene_depth(False)
+    assert_equal(
+        material_signature(assets, ordinary), material_signature(assets, gated)
+    )
+
+
 def test_a_kept_node_stays() raises:
     var scene = Scene()
     var assets = Assets()

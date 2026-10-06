@@ -47,7 +47,18 @@ point the layer does not have, a surface value of the wrong shape, an
 attribute with no value, and a texture wrap mode that is not 0 to 3. The
 environment map is recorded in `LwoMaterial`, not bound: a `Material`'s
 environment is a cube texture.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import _difference_product_wide
+
+from math.norm import normalized3, _ordinary_squared
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -1061,6 +1072,7 @@ def _vertex_normals(
     past the index reads NaN and writes nowhere."""
     var count = len(positions) // 3
     var normals = List[Float32](length=count * 3, fill=0)
+    var wide_normals = List[Float64](length=count * 3, fill=0)
     var nan = Float64(0) / Float64(0)
     for i in range(0, len(index), 3):
         var corners = List[Int]()
@@ -1081,19 +1093,37 @@ def _vertex_normals(
                         0,
                     )
                 )
-        var cb = places[2] - places[1]
-        var ab = places[0] - places[1]
-        var n = Rgb(
-            cb[1] * ab[2] - cb[2] * ab[1],
-            cb[2] * ab[0] - cb[0] * ab[2],
-            cb[0] * ab[1] - cb[1] * ab[0],
-            0,
-        )
+        var n = Rgb(0)
+        for axis in range(3):  # pragma: no branch
+            var j = (axis + 1) % 3
+            var k = (axis + 2) % 3
+            n[axis] = _difference_product_wide(
+                places[0][j],
+                places[1][j],
+                places[2][j],
+                places[0][k],
+                places[1][k],
+                places[2][k],
+            )
         for v in corners:  # pragma: no branch
             if v < 0:
                 continue
             for c in range(3):  # pragma: no branch
                 normals[v * 3 + c] = Float32(Float64(normals[v * 3 + c]) + n[c])
+                wide_normals[v * 3 + c] += n[c]
+    for v in range(count):
+        var x = normals[v * 3]
+        var y = normals[v * 3 + 1]
+        var z = normals[v * 3 + 2]
+        if not _ordinary_squared(x * x + y * y + z * z):
+            var unit = normalized3(
+                wide_normals[v * 3],
+                wide_normals[v * 3 + 1],
+                wide_normals[v * 3 + 2],
+            )
+            normals[v * 3] = Float32(unit[0])
+            normals[v * 3 + 1] = Float32(unit[1])
+            normals[v * 3 + 2] = Float32(unit[2])
     _normalize(normals)
     return normals^
 

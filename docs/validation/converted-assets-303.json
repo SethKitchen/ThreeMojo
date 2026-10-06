@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "issue": 303,
+  "date": "2026-10-05",
+  "asset_baseline_commit": "e53600eb4b0551bbe9900ea0e8b7151e49553a2d",
+  "runtime": {
+    "python": "3.12.14",
+    "implementation": "CPython",
+    "system": "Linux",
+    "machine": "x86_64",
+    "python_dependencies": "standard library only"
+  },
+  "converters": {
+    "tools/hair_style.py": "984fe7d2c3d5231b0233dac8e31238ae39f5fb91d019de323bb5184f6e7a443f",
+    "tools/ict_face_model.py": "0796033cf514d1668c40c5fb673be4c7e1d4bc02266aa805a3ff5f6352f2e27b"
+  },
+  "production_outputs": [
+    {
+      "path": "assets/face/ict_face.bin",
+      "output_size_bytes": 9177816,
+      "sha256": "a1e9423fdbd88363e3ab9582e395720003d1459c8ed8ea5d55214b0148163271",
+      "unchanged_from_baseline": true
+    },
+    {
+      "path": "assets/hair/layered.bin",
+      "output_size_bytes": 1162820,
+      "sha256": "1b28e421245802d24d408884e0949388f40d25d5f3e43228d75453858ecc5230",
+      "unchanged_from_baseline": true
+    },
+    {
+      "path": "assets/hair/mohawk.bin",
+      "output_size_bytes": 89272,
+      "sha256": "a23fb2b8170e9b9b2968339b1c797f0cdb96d1d837a4412a5559cc827a817ff4",
+      "unchanged_from_baseline": true
+    }
+  ],
+  "source_sets": {
+    "ict": {
+      "revision": "da5f95a607f5e6b37755b38d3385d7f2853732e5",
+      "input_files": 118,
+      "input_bytes": 302234297,
+      "evidence_files": 2
+    },
+    "sintel": {
+      "revision": "4478dd129525ff7db92978178b55f760716cbd72",
+      "input_files": 1,
+      "input_bytes": 2918560,
+      "evidence_files": 1
+    },
+    "ratboy": {
+      "revision": "6957058e29dceb25a0c2a82849bb892f3d9fbce5",
+      "input_files": 1,
+      "input_bytes": 1158720,
+      "evidence_files": 2
+    }
+  },
+  "arithmetic_control": {
+    "unmodified_python312_layered_sha256": "0fa61cb6efde3c1f31209df697ddf4ab49611b6b3ac9cb7c6ac3d1dc12f934a5",
+    "changed_output_byte_offsets": [
+      195292,
+      257690,
+      293796,
+      860090
+    ],
+    "changed_int16_components": 4,
+    "difference_magnitude_quantization_steps": 1,
+    "explicit_order_layered_sha256": "1b28e421245802d24d408884e0949388f40d25d5f3e43228d75453858ecc5230"
+  },
+  "focused_checks": {
+    "python_tests": 26,
+    "native_tests": 22,
+    "mojo": "1.1.0 (8189361e)",
+    "compiler_flags": [
+      "-Werror",
+      "-I ."
+    ],
+    "per_native_test_limit_seconds": 5,
+    "largest_native_test_milliseconds": 2131.083,
+    "native_suites": [
+      "test_converted_assets",
+      "test_face_model",
+      "test_hair_styles"
+    ],
+    "full_batch_checks": "deferred to the final integration batch"
+  },
+  "limits": [
+    "This is a reproducible recipe, not evidence of the original historical command log.",
+    "Only recorded pinned inputs are checked; no claim of canonical-to-visual fidelity.",
+    "The small default check does not download or regenerate production inputs."
+  ],
+  "verification_source_hashes": {
+    "assets/converted-asset-manifest.json": "0fbfd7b5d9c28cd59be4b92fc043123ab646886e9c43a85dc2912b5eb27dc3ee",
+    "tools/check_converted_asset_manifest.py": "70c0ae3186ae2bbb1bd57d9a506c9ad9915fc0e6d146f0c8015782613b451941",
+    "tools/hair_style.py": "984fe7d2c3d5231b0233dac8e31238ae39f5fb91d019de323bb5184f6e7a443f",
+    "tools/ict_face_model.py": "0796033cf514d1668c40c5fb673be4c7e1d4bc02266aa805a3ff5f6352f2e27b",
+    "tools/test_converted_asset_manifest.py": "639fc7b772503f9d204b8d3e60e568fa203fd2c8aee2ce3ff18c565324f24289",
+    "tools/test_hair_style.py": "07c7ae79584362aefaab0fa19a845a2dbed46602ea9476691d2c67a3f5f2b233",
+    "tools/test_ict_face_model.py": "378adc6ea1adf6714a58ba95666a5f519fff772d19e1f7269a30a432d096f997",
+    "tools/run_suite.py": "818daa66412185669b56af82eba5c305e3c9163b262696fe2cba5c398274c28b",
+    "tests/test_converted_assets.mojo": "d107a239051f1f7de3a93ad629c7eddb59f4587a47605da72816d71611a5fd65",
+    "tests/test_face_model.mojo": "b89a3547b6facf16700ffb5d88f2916fe485b3330b3b60f3f00685c70590a6eb",
+    "tests/test_hair_styles.mojo": "8edd6a7eb955810a63568f3cde62ff561f6986203ae3c85ded172bc52c86c060",
+    "extensions/humanoid/skeleton/head/face_model.mojo": "f8c9f3654174baa9858eb982d22728e85b634a8eda4ad40e7ad9f92c518ac436",
+    "extensions/humanoid/skeleton/head/hair/styles.mojo": "f4e016f9733ed2cc2bfe0e15590bb52f4931105c83cb3140fa51a6c503430dca"
+  },
+  "native_results": {
+    "test_converted_assets": [
+      {
+        "name": "test_small_face_and_lazy_prefix",
+        "milliseconds": 0.209
+      },
+      {
+        "name": "test_every_face_float_section_and_scale",
+        "milliseconds": 0.437
+      },
+      {
+        "name": "test_every_face_index_domain",
+        "milliseconds": 0.412
+      },
+      {
+        "name": "test_face_counts_and_sections_are_bounded",
+        "milliseconds": 7.78
+      },
+      {
+        "name": "test_hair_limits_scales_and_exact_length",
+        "milliseconds": 0.637
+      }
+    ],
+    "test_face_model": [
+      {
+        "name": "test_a_face_part_is_a_run_of_vertices",
+        "milliseconds": 0.001
+      },
+      {
+        "name": "test_the_model_reads_its_file",
+        "milliseconds": 30.313
+      },
+      {
+        "name": "test_a_face_takes_an_identity_and_an_expression",
+        "milliseconds": 3.442
+      },
+      {
+        "name": "test_a_part_is_a_mesh",
+        "milliseconds": 3.688
+      },
+      {
+        "name": "test_a_bad_file_is_refused",
+        "milliseconds": 0.241
+      }
+    ],
+    "test_hair_styles": [
+      {
+        "name": "test_a_hair_style_is_named",
+        "milliseconds": 0.025
+      },
+      {
+        "name": "test_a_style_file_is_read",
+        "milliseconds": 34.095
+      },
+      {
+        "name": "test_a_bad_style_file_is_refused",
+        "milliseconds": 0.247
+      },
+      {
+        "name": "test_the_cranium_frame",
+        "milliseconds": 0.001
+      },
+      {
+        "name": "test_a_style_is_laid_on_the_head",
+        "milliseconds": 77.838
+      },
+      {
+        "name": "test_curled_hair_winds_round_its_line",
+        "milliseconds": 111.222
+      },
+      {
+        "name": "test_long_tied_and_bunned_hair_is_designed",
+        "milliseconds": 2131.083
+      },
+      {
+        "name": "test_hair_is_tied_on_both_sides",
+        "milliseconds": 862.36
+      },
+      {
+        "name": "test_a_braid_and_a_high_ponytail_hang_behind",
+        "milliseconds": 579.38
+      },
+      {
+        "name": "test_cut_styles_end_where_they_are_cut",
+        "milliseconds": 963.451
+      },
+      {
+        "name": "test_hair_falls_against_the_head_and_the_body",
+        "milliseconds": 655.127
+      },
+      {
+        "name": "test_a_mohawk_shaves_the_sides",
+        "milliseconds": 132.64
+      }
+    ]
+  },
+  "secondary_runtime": {
+    "python": "3.13.5",
+    "verified": "small offline check and both production hair outputs; full ICT production conversion not rerun on this runtime"
+  },
+  "commands": [
+    "python3 -m unittest discover -s tools -p test_converted_asset_manifest.py",
+    "python3 -m unittest discover -s tools -p test_ict_face_model.py",
+    "python3 -m unittest discover -s tools -p test_hair_style.py",
+    "python3 tools/check_converted_asset_manifest.py --source-cache \"$CACHE\"",
+    "mojo build -Werror -I . tests/NAME.mojo -o \"$BIN/NAME\"",
+    "python3 tools/run_suite.py --seconds 5 --suite tests/NAME.mojo -- \"$BIN/NAME\"",
+    "make docs-check MOJO=\"$MOJO\"",
+    "git diff --check"
+  ],
+  "review": {
+    "status": "passed after exact license-evidence paths, roles and URLs were enforced",
+    "pin_audit": "125 source/evidence entries matched cached bytes and saved immutable upstream trees",
+    "production_binaries_changed": false
+  }
+}

@@ -186,20 +186,20 @@ from extensions.humanoid.skeleton.pelvis.vessels.mass import (
     pelvis_vessel_mass_from_dimensions,
     pelvis_vessel_occupancy,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     CARTILAGE,
     LIGAMENT,
     MENISCUS,
-    SOFT_FILL,
     arterial_tissue,
     lymph_tissue,
     muscle_tissue,
     nerve_tissue,
 )
+from extensions.humanoid.skeleton.soft_tissue import SOFT_FILL
 from math.vector3 import Vector3
 from std.math import cos, nan, sin
 from std.testing import (

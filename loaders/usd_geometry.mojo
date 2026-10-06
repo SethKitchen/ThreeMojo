@@ -29,7 +29,29 @@ and a mesh with neither normals nor corners to compute them from. And
 where this port holds less: points or attributes that are not whole
 vertices, face counts whose triangle count is not whole, and a face of
 more than 2^24 corners.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.scaled_products import (
+    _grow_products,
+    _Scaled,
+    _sum_products as _scaled_products,
+    _common_scale,
+    _grow_sum,
+    _estimate,
+)
+from std.math import isfinite
+
+
+from math.triangle_normal import _difference_product_wide
+
+from math.norm import _ordinary_squared, normalized3
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -284,6 +306,54 @@ def _project(
         nx += (ay - by) * (az + bz)
         ny += (az - bz) * (ax + bx)
         nz += (ax - bx) * (ay + by)
+    var expansions = List[List[_Scaled[DType.float64]]](
+        length=3, fill=List[_Scaled[DType.float64]]()
+    )
+    var finite = True
+    for i in range(n):  # pragma: no branch
+        var a = face[i]
+        var b = face[(i + 1) % n]
+        var av = [
+            value_at(points, a * 3),
+            value_at(points, a * 3 + 1),
+            value_at(points, a * 3 + 2),
+        ]
+        var bv = [
+            value_at(points, b * 3),
+            value_at(points, b * 3 + 1),
+            value_at(points, b * 3 + 2),
+        ]
+        for axis in range(3):  # pragma: no branch
+            finite = finite and isfinite(av[axis]) and isfinite(bv[axis])
+        if finite:
+            for axis in range(3):  # pragma: no branch
+                var j = (axis + 1) % 3
+                var k = (axis + 2) % 3
+                _grow_products[DType.float64, 2](
+                    expansions[axis],
+                    [av[j], -av[k]],
+                    [bv[k], bv[j]],
+                    [Float64(1), Float64(1)],
+                )
+    if finite:
+        var scaled = _common_scale[DType.float64, 3](
+            [
+                _estimate(expansions[0]),
+                _estimate(expansions[1]),
+                _estimate(expansions[2]),
+            ]
+        )
+        var exact = normalized3(scaled[0], scaled[1], scaled[2])
+        var direct = normalized3(nx, ny, nz)
+        if (
+            not _ordinary_squared(nx * nx + ny * ny + nz * nz)
+            or abs(direct[0] - exact[0]) > 1e-14
+            or abs(direct[1] - exact[1]) > 1e-14
+            or abs(direct[2] - exact[2]) > 1e-14
+        ):
+            nx = scaled[0]
+            ny = scaled[1]
+            nz = scaled[2]
     var normal = _normalized(nx, ny, nz)
     var tx = Float64(1) if abs(normal[1]) > 0.9 else Float64(0)
     var ty = Float64(0) if abs(normal[1]) > 0.9 else Float64(1)
@@ -314,10 +384,8 @@ def _normalized(x: Float64, y: Float64, z: Float64) -> List[Float64]:
     Returns:
         The vector.
     """
-    var length = sqrt(x * x + y * y + z * z)
-    if not (length != 0 and length == length):
-        length = 1
-    return [x / length, y / length, z / length]
+    var unit = normalized3(x, y, z)
+    return [unit[0], unit[1], unit[2]]
 
 
 def _flat_2d(
@@ -642,6 +710,9 @@ def compute_vertex_normals(
     """
     var count = _whole_vertices(len(points))
     var normals = List[Float32](length=count * 3, fill=0)
+    var wide_normals = List[List[_Scaled[DType.float64]]](
+        length=count * 3, fill=List[_Scaled[DType.float64]]()
+    )
     var i = 0
     while i < len(indices):
         var corners: List[Float64] = [
@@ -653,29 +724,80 @@ def compute_vertex_normals(
         for corner in corners:  # pragma: no branch
             for k in range(3):  # pragma: no branch
                 p.append(value_at(points, corner * 3 + Float64(k)))
-        var e1x = p[3] - p[0]
-        var e1y = p[4] - p[1]
-        var e1z = p[5] - p[2]
-        var e2x = p[6] - p[0]
-        var e2y = p[7] - p[1]
-        var e2z = p[8] - p[2]
-        var n: List[Float64] = [
-            e1y * e2z - e1z * e2y,
-            e1z * e2x - e1x * e2z,
-            e1x * e2y - e1y * e2x,
-        ]
+        var n = List[Float64]()
+        for axis in range(3):  # pragma: no branch
+            var j = (axis + 1) % 3
+            var k = (axis + 2) % 3
+            n.append(
+                _difference_product_wide(
+                    p[j], p[3 + j], p[6 + j], p[k], p[3 + k], p[6 + k]
+                )
+            )
+        var finite = True
+        for value in p:  # pragma: no branch
+            finite = finite and isfinite(value)
         for corner in corners:  # pragma: no branch
             var inside = corner >= 0 and corner < Float64(count)
             if inside and corner == Float64(Int(corner)):
                 for k in range(3):  # pragma: no branch
                     var at = Int(corner) * 3 + k
                     normals[at] = Float32(Float64(normals[at]) + n[k])
+                    if finite:
+                        var j = (k + 1) % 3
+                        var l = (k + 2) % 3
+                        _grow_products[DType.float64, 6](
+                            wide_normals[at],
+                            [
+                                p[3 + j],
+                                -p[3 + j],
+                                -p[j],
+                                -p[6 + j],
+                                p[6 + j],
+                                p[j],
+                            ],
+                            [
+                                p[6 + l],
+                                p[l],
+                                p[6 + l],
+                                p[3 + l],
+                                p[l],
+                                p[3 + l],
+                            ],
+                            [
+                                Float64(1),
+                                Float64(1),
+                                Float64(1),
+                                Float64(1),
+                                Float64(1),
+                                Float64(1),
+                            ],
+                        )
+                    else:
+                        _grow_sum(
+                            wide_normals[at], _Scaled[DType.float64](n[k], 0)
+                        )
         i += 3
     var out = List[Float64](capacity=count * 3)
     for v in range(count):
         var x = Float64(normals[v * 3])
         var y = Float64(normals[v * 3 + 1])
         var z = Float64(normals[v * 3 + 2])
+        if not _ordinary_squared(
+            Float32(x) * Float32(x)
+            + Float32(y) * Float32(y)
+            + Float32(z) * Float32(z)
+        ):
+            var scaled = _common_scale[DType.float64, 3](
+                [
+                    _estimate(wide_normals[v * 3]),
+                    _estimate(wide_normals[v * 3 + 1]),
+                    _estimate(wide_normals[v * 3 + 2]),
+                ]
+            )
+            var unit = normalized3(scaled[0], scaled[1], scaled[2])
+            x = Float64(Float32(unit[0]))
+            y = Float64(Float32(unit[1]))
+            z = Float64(Float32(unit[2]))
         var length = sqrt(x * x + y * y + z * z)
         if length > 0:
             x = Float64(Float32(x / length))

@@ -4,8 +4,10 @@
 """Exact rounded-ARC proof, guard, budget, cover, and tie controls."""
 
 from extensions.carla.curve_distance import (
-    _normalized_square,
     _wide_point_order,
+)
+from extensions.carla.lane_distance import (
+    _normalized_square,
 )
 from extensions.carla.curve_interval import _next_down, _next_up
 from extensions.carla.curve_rounded_arc import (

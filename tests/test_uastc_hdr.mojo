@@ -189,7 +189,7 @@ def test_malformed_blocks_are_refused() raises:
     with assert_raises(contains="infinity or a NaN"):
         _ = uastc_hdr_block(void_extent(1, [0, 0, 0x7C00, 0]), 0, tables)
     # A 12x2 grid, which a 4x4 block cannot hold.
-    with assert_raises(contains="larger than 4x4"):
+    with assert_raises(contains="larger than the block"):
         _ = uastc_hdr_block(block([(4, 4), (0, 5)]), 0, tables)
     # A 2x2 grid of one-bit weights: four bits.
     with assert_raises(contains="weight bits"):

@@ -10,6 +10,7 @@ field. The report writer must replace that specific placeholder with null
 and identify the authored support plane. Raw rows are not validity reports.
 """
 
+from tools.anatomy_pairs import _pair_probe
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.sex import MALE, FEMALE
 from extensions.humanoid.side import RIGHT, LEFT
@@ -81,6 +82,9 @@ from tests.test_anatomy_dimension_guards import (
 from tests.test_anatomy_diagnostics import (
     test_pair_exact_boxes_and_no_hit_limit,
     test_bad_diagnostic_requests_and_field_values_fail,
+    test_thin_features_narrow_interfaces_and_edited_attachments,
+    test_internal_union_is_not_a_distinct_field_allowance,
+    test_pair_budget_precedes_even_nonfinite_field_evaluation,
 )
 
 
@@ -228,6 +232,9 @@ def main() raises:
     )
     var step = Length(Float32(Float64(String(args[3]))), MILLIMETER)
     check_mass_step(step, "validity probe")
+    if args[1] == "pairs":
+        _pair_probe(spec, side, String(args[2]), step)
+        return
     if args[1] == "controls":
         test_named_regions_and_marrow_override_overlapping_soft_tissue()
         test_grid_rejects_non_finite_and_unbounded_work_before_counts()
@@ -238,13 +245,18 @@ def main() raises:
         test_morph_guards_do_not_impose_an_unmeasured_biological_range()
         test_pair_exact_boxes_and_no_hit_limit()
         test_bad_diagnostic_requests_and_field_values_fail()
+        test_thin_features_narrow_interfaces_and_edited_attachments()
+        test_internal_union_is_not_a_distinct_field_allowance()
+        test_pair_budget_precedes_even_nonfinite_field_evaluation()
         print(
             '{"record":"controls","passed":true,"checks":["three-step analytic'
             ' cuboid","unaligned-cut composition","two-point-mass full'
             ' tensor","rigid rotation and translation","full parallel-axis'
             ' identity","marrow assignment","finite editable'
             ' dimensions","bounded sampling work","analytic overlap'
-            ' boxes"],"absolute_tolerances":{"cuboid_mass_kg":2e-8,"cuboid_center_m":2e-8,"cuboid_tensor_kg_m2":1e-10,"point_mass_tensor_kg_m2":1e-8,"rigid_center_m":2e-8,"overlap_volume_m3":1e-11}}'
+            ' boxes","thin-feature misses","narrow interfaces","edited'
+            ' attachments","construction'
+            ' unions"],"absolute_tolerances":{"cuboid_mass_kg":2e-8,"cuboid_center_m":2e-8,"cuboid_tensor_kg_m2":1e-10,"point_mass_tensor_kg_m2":1e-8,"rigid_center_m":2e-8,"overlap_volume_m3":1e-11,"thin_interface_volume_m3":1e-12}}'
         )
         return
     if args[1] == "segment":
@@ -614,7 +626,9 @@ def main() raises:
             step,
         )
         return
-    raise Error("A probe mode must be controls, segment, bones, knee or spine")
+    raise Error(
+        "A probe mode must be controls, segment, bones, knee, spine or pairs"
+    )
 
 
 def _disc_bounds(s: Sweep) -> Tuple[Vector3, Vector3]:

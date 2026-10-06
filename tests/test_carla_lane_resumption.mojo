@@ -6,8 +6,10 @@
 """Bounded resume controls for retained Float64 candidate domains."""
 
 from extensions.carla.curve_distance import (
-    _normalized_square,
     _wide_point_order,
+)
+from extensions.carla.lane_distance import (
+    _normalized_square,
 )
 from extensions.carla.curve_interval import _next_up
 from extensions.carla.lane_refinement import (

@@ -802,8 +802,9 @@ def rect_area_light(
     beyond the geometry of a rectangle seen from further away, and no
     shadow, as three.js's has none.
 
-    Only a `STANDARD` or `PHYSICAL` surface is lit by one, as only
-    three.js's physical materials are; every other kind leaves it out.
+    A `STANDARD` or `PHYSICAL` surface uses the surface LTC term. A
+    `VOLUME` material uses the r186 volume LTC term at each ray step.
+    Other material kinds leave the light out.
     The scene's renderer must hold the LTC tables, `lights.ltc`, or the
     lighting refuses to resolve it.
 

@@ -1581,5 +1581,75 @@ def test_points_and_lines_read_every_kind_of_texture() raises:
         assert_true(middle(renderer.render(lines, assets, a_camera())).r > 0)
 
 
+def test_explicit_gradient_nodes_read_on_triangles_points_and_lines() raises:
+    # The authored map is red at u=.25. The same explicit zero footprint
+    # must reach each host adapter, independent of primitive derivatives.
+    var textures = TextureStore()
+    var map = textures.add(a_texture())
+    var graph = NodeGraph()
+    graph.set_output(
+        COLOR_NODE,
+        graph.swizzle(
+            graph.texture_grad(
+                map, graph.vec2(0.25, 0.5), graph.vec2(0, 0), graph.vec2(0, 0)
+            ),
+            "rgb",
+        ),
+    )
+    var programs = one_program(graph^)
+    var triangle = draw(
+        big_triangle(NodeProgramId(0), BASIC), programs, SHADE_TEXTURE, textures
+    )
+    assert_color(triangle.color_at(2, 2), 1, 0, 0)
+    for point in [False, True]:
+        var assets = Assets()
+        var image = assets.textures.add(a_texture())
+        var nodes = NodeGraph()
+        nodes.set_output(
+            COLOR_NODE,
+            nodes.swizzle(
+                nodes.texture_grad(
+                    image,
+                    nodes.vec2(0.25, 0.5),
+                    nodes.vec2(0, 0),
+                    nodes.vec2(0, 0),
+                ),
+                "rgb",
+            ),
+        )
+        nodes.set_output(POSITION_NODE, nodes.vec3(0, 0, 0))
+        if point:
+            nodes.set_output(SIZE_NODE, nodes.float(6))
+        var program = assets.programs.add(nodes.compile())
+        var material = assets.materials.add(
+            Material(Color(255, 255, 255), kind=BASIC, nodes=program)
+        )
+        var geometry = BufferGeometry()
+        if point:
+            geometry.set_attribute(
+                String(POSITION), BufferAttribute([Float32(0), 0, 0], 3)
+            )
+        else:
+            geometry.set_attribute(
+                String(POSITION),
+                BufferAttribute([Float32(-1), 0, 0, 1, 0, 0], 3),
+            )
+        var shape = assets.geometries.add(geometry^)
+        var scene = Scene()
+        var root = scene.add(Object3D())
+        if point:
+            scene.add_points(Points(shape, material, root))
+        else:
+            scene.add_line(Line(shape, material, root))
+        scene.update()
+        var renderer = Renderer(SIZE, SIZE)
+        renderer.set_shading(SHADE_TEXTURE)
+        renderer.set_background(Color(0, 0, 0))
+        var seen = middle(renderer.render(scene, assets, a_camera()))
+        assert_equal(Int(seen.r), 255)
+        assert_equal(Int(seen.g), 0)
+        assert_equal(Int(seen.b), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

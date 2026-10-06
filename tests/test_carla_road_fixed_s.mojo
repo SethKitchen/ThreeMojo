@@ -323,5 +323,57 @@ def test_scale_safe_distance_and_exact_overflow_edge() raises:
         _ = road.nearest_lane(0, Vector3(0, 0, 0))
 
 
+def test_finite_rounded_norm_above_the_limit_is_refused() raises:
+    var limit = Float64(1.7976931348623157e308)
+    var eta = bitcast[DType.float64](UInt64(1))
+    var zero = Array[Float64, 3](fill=0.0)
+    for tail in [eta, 1.0, 1e290]:
+        # Exact squared norm is limit^2 + tail^2, strictly out of range.
+        # Ordinary scaled reconstruction rounds back to finite limit.
+        with assert_raises(contains="Float64 range"):
+            _ = _wide_distance([limit, tail, 0.0], zero)
+        var road = _road(x=limit, z=tail, width=0)
+        with assert_raises(contains="Float64 range"):
+            _ = road.nearest_lane(0, Vector3(0, 0, 0))
+    var below = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFE))
+    assert_equal(_wide_distance([below, eta, 0.0], zero), below)
+    assert_equal(_wide_distance([limit, 0.0, 0.0], zero), limit)
+
+
+def test_tiny_query_perturbation_is_not_an_exact_tie() raises:
+    var tiny = bitcast[DType.float32](UInt32(1))
+    var road = _road(x=1e200)
+    # Both returned norms round to 1e200. Exact stored-point comparison
+    # must still select the right lane for a negative query perturbation.
+    assert_equal(_winner(road, 0, Vector3(0, -tiny, 0), -1), 1e200)
+    assert_equal(_winner(road, 0, Vector3(0, tiny, 0), 1), 1e200)
+    assert_equal(_winner(road, 0, Vector3(0, 0, 0), 1), 1e200)
+
+
+def test_excluded_inner_lanes_still_move_outer_centers() raises:
+    var road = _road()
+    road.sections[0].lanes[0].type = LANE_SIDEWALK
+    _lane(road, 0, -2, 4)
+    for _ in range(3):
+        var result = road.nearest_lane(5, Vector3(5, -4, 0), LANE_DRIVING)
+        assert_equal(result[0].value().lane_id.value, -2)
+        assert_equal(result[1], 0.0)
+    road.sections[0].s = 2
+    var empty = road.nearest_lane(1, Vector3(1, 0, 0), LANE_DRIVING)
+    assert_false(Bool(empty[0]))
+    assert_equal(empty[1], 1.7976931348623157e308)
+
+
+def test_excluded_outer_widths_are_still_checked() raises:
+    var road = _road()
+    _ = road.sections[0].add_lane(LaneId(-2))
+    with assert_raises(contains="no width record"):
+        _ = road.nearest_lane(5, Vector3(5, -1, 0), LANE_TRAM)
+    road = _road()
+    _lane(road, 0, -2, inf[DType.float64]())
+    with assert_raises(contains="finite width"):
+        _ = road.nearest_lane(5, Vector3(5, -1, 0), LANE_TRAM)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

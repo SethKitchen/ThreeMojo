@@ -13,7 +13,7 @@ from extensions.humanoid.skeleton.bone import (
     bone_phong,
     bone_roughness,
 )
-from extensions.humanoid.skeleton.tissue import (
+from extensions.anatomy.tissue import (
     CORTICAL,
     TRABECULAR,
     BoneKind,

@@ -23,7 +23,16 @@ crosses the two differences. At the first row and column the step goes
 forward, because the function is not asked for a negative number. The
 arithmetic is `Float32` here and `Float64` in JavaScript, so a normal can
 be off by a few parts in a thousand where three.js is exact to twelve places.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -131,18 +140,21 @@ def parametric[
             data.append(p0.x)
             data.append(p0.y)
             data.append(p0.z)
-            var pu: Vector3
+            var pu_point: Vector3
+            var u_sign = Float32(1)
             if u - EPS >= 0:
-                pu = p0 - _check(surface.point(u - EPS, v))
+                pu_point = _check(surface.point(u - EPS, v))
+                u_sign = -1
             else:
-                pu = _check(surface.point(u + EPS, v)) - p0
-            var pv: Vector3
+                pu_point = _check(surface.point(u + EPS, v))
+            var pv_point: Vector3
+            var v_sign = Float32(1)
             if v - EPS >= 0:
-                pv = p0 - _check(surface.point(u, v - EPS))
+                pv_point = _check(surface.point(u, v - EPS))
+                v_sign = -1
             else:
-                pv = _check(surface.point(u, v + EPS)) - p0
-            pu.cross(pv)
-            pu.normalize()
+                pv_point = _check(surface.point(u, v + EPS))
+            var pu = normal_or_zero(p0, pu_point, pv_point) * (u_sign * v_sign)
             normals.append(pu.x)
             normals.append(pu.y)
             normals.append(pu.z)

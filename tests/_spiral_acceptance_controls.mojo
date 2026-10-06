@@ -19,7 +19,7 @@ from extensions.carla.lane_refinement import (
     _LaneCertificate, _ClosedInterval, _checked_center,
     _chord_certificate_capture,
 )
-from extensions.carla.curve_distance import _normalized_square
+from extensions.carla.lane_distance import _normalized_square
 from extensions.carla.map import Map, Controller, Junction, Signal
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road

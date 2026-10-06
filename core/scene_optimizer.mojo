@@ -294,6 +294,7 @@ def material_signature(assets: Assets, material: Material) raises -> String:
     parts.append(_color_key(material.blend_color))
     parts.append(String(bitcast[DType.uint32](material.blend_alpha)))
     parts.append(String(material.steps))
+    parts.append(String(material.volume_scene_depth))
     var out = String()
     for at in range(len(parts)):  # pragma: no branch
         if at > 0:

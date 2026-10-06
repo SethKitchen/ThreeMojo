@@ -37,8 +37,17 @@ obviously, plain `Int` — the compiler asks for a fixed-width type instead.
 
 Whether this is *faster* than the CPU is a separate question, and the answer
 is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized3
+from lights.lighting import light_vector
 from render.color_spaces import (
     ColorSpaceId,
     OUTPUT_FLOATS,
@@ -169,6 +178,7 @@ from lights.lighting import (
     occluded_light,
     physical_light,
     scattering_through,
+    rect_volume_light,
     shadowed_twice,
     physical_outgoing,
     physical_surface,
@@ -336,6 +346,8 @@ from render.texture import (
     UvPlacement,
     Wrap,
     anisotropic_footprint,
+    gradient_sample_coordinate,
+    texture_grad_finite,
     blend_texels,
     fetch_level,
     fetch_row,
@@ -505,9 +517,41 @@ from render.splatrule import (
 )
 from units.si import Angle, Length, METER, RADIAN
 from max.gpu import global_idx
-from std.math import ceildiv, cos, floor, inf, log2, sin, sqrt
+from max.gpu.memory import AddressSpace
+from std.math import ceildiv, cos, floor, inf, isfinite, log2, sin, sqrt
 from std.memory import bitcast, unsafe_memcpy
 from std.sys import has_accelerator
+
+# Device memory is typed in the global address space throughout this file.
+# Metal has no generic address space, and Mojo can drop a generic pointer's
+# `addrspace(1)` where it crosses a call or rides in a struct. The result is
+# a call whose argument types do not match the callee, which Apple's
+# air-lld linker crashes on (modular/modular#7238). An explicit address
+# space on every device pointer leaves nothing to infer.
+comptime DevicePointer[
+    T: AnyType, origin: Origin[mut=True] = MutAnyOrigin
+] = MutPointer[T, origin, address_space=AddressSpace.GLOBAL]
+"""A mutable pointer into device memory, in the global address space."""
+
+
+def _device[
+    dtype: DType
+](buffer: DeviceBuffer[dtype]) -> DevicePointer[Scalar[dtype]]:
+    """Return a device buffer's memory as a kernel argument.
+
+    Args:
+        buffer: The buffer.
+
+    Returns:
+        Its pointer, in the global address space.
+    """
+    return (
+        buffer.unsafe_ptr()
+        .unsafe_mut_cast[True]()
+        .unsafe_origin_cast[MutAnyOrigin]()
+        .unsafe_address_space_cast[AddressSpace.GLOBAL]()
+    )
+
 
 # 16x16 threads is a conventional starting point for a 2D grid: a multiple of
 # the warp size on every vendor, and small enough that a narrow image still
@@ -672,10 +716,10 @@ comptime LANE_SCATTER = LANE_GOURAUD_INDIRECT + 3
 # velocity attachment reads.
 comptime LANE_CURRENT = LANE_SCATTER + 8
 comptime LANE_PREVIOUS = LANE_CURRENT + 3
-# A `VOLUME` triangle's ray: its steps and the mesh's bounding radius in
-# world space; see `RasterVertex.steps`.
+# A `VOLUME` triangle's ray: its steps, bounding radius in world space,
+# and explicit scene-depth switch; see `RasterVertex.steps`.
 comptime LANE_VOLUME = LANE_PREVIOUS + 3
-comptime FLOATS_PER_VERTEX = LANE_VOLUME + 2
+comptime FLOATS_PER_VERTEX = LANE_VOLUME + 3
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -804,7 +848,9 @@ comptime STATE_PER_TRIANGLE = STATE_LIGHTS + 1
 comptime TRANSMISSION_WIDTH = VIEW_FLOATS
 comptime TRANSMISSION_HEIGHT = VIEW_FLOATS + 1
 comptime TRANSMISSION_LEVELS = VIEW_FLOATS + 2
-comptime TRANSMISSION_HEADER = VIEW_FLOATS + 3
+# Relative float offset of immutable volume depth, or zero when absent.
+comptime TRANSMISSION_DEPTH = VIEW_FLOATS + 3
+comptime TRANSMISSION_HEADER = VIEW_FLOATS + 4
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -1211,13 +1257,12 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.previous.z)
         flat.append(Float32(corner.steps))
         flat.append(corner.model_radius)
+        flat.append(Float32(1) if corner.volume_scene_depth else Float32(0))
     return flat^
 
 
 @always_inline
-def _blend_constant(
-    buffer: MutPointer[Float32, MutAnyOrigin], base: Int
-) -> Rgba:
+def _blend_constant(buffer: DevicePointer[Float32], base: Int) -> Rgba:
     """Return the blend constant a vertex's lanes hold, as
     `RasterState.blend_constant` returns it on the host.
 
@@ -1242,7 +1287,7 @@ def _append_basis(mut flat: List[Float32], basis: Basis3):
     flat.append(basis.e8)
 
 
-def _basis_at(corners: MutPointer[Float32, MutAnyOrigin], at: Int) -> Basis3:
+def _basis_at(corners: DevicePointer[Float32], at: Int) -> Basis3:
     """Return the 3x3 matrix whose nine numbers start at `at` in the
     vertex buffer, as `_append_basis` wrote them."""
     return Basis3(
@@ -1268,7 +1313,7 @@ def _append_float(mut bytes: List[UInt8], value: Float32):
     bytes.append(UInt8(bits >> 24))
 
 
-def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
+def flatten_transmission(target: TransmissionTarget) raises -> List[UInt8]:
     """Return a transmission target as the bytes that follow the backdrop.
 
     Args:
@@ -1276,8 +1321,12 @@ def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
 
     Returns:
         `TRANSMISSION_HEADER` floats -- the matrix, the width, the height
-        and the level count -- then the chain's floats, largest level
-        first, each four little-endian bytes.
+        and level count, plus the relative float offset of volume depth
+        or zero when absent. The color chain comes first, then immutable
+        camera-axis depth samples, each four little-endian bytes.
+
+    Raises:
+        Error: If the depth offset cannot be represented exactly.
     """
     var bytes = List[UInt8]()
     for index in range(VIEW_FLOATS):  # pragma: no branch
@@ -1285,8 +1334,16 @@ def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
     _append_float(bytes, Float32(target.image.width))
     _append_float(bytes, Float32(target.image.height))
     _append_float(bytes, Float32(target.image.levels))
+    var depth_offset = Float32(0)
+    if len(target.volume_depth) > 0:
+        depth_offset = _packed_offset(
+            TRANSMISSION_HEADER, len(target.image.data)
+        )
+    _append_float(bytes, depth_offset)
     for index in range(len(target.image.data)):
         _append_float(bytes, target.image.data[index])
+    for index in range(len(target.volume_depth)):
+        _append_float(bytes, target.volume_depth[index])
     return bytes^
 
 
@@ -1542,7 +1599,7 @@ def _shadow_start(starts: List[Int], slot: Int) -> Float32:
 
 
 def _shadow_at(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     block: Int,
     position: Vector3,
     normal: Vector3,
@@ -1562,7 +1619,7 @@ def _shadow_at(
 
 
 def _unweakened_shadow_at(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     block: Int,
     position: Vector3,
     normal: Vector3,
@@ -1626,7 +1683,7 @@ def _unweakened_shadow_at(
 
 
 def _cube_shadow_at(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     block: Int,
     position: Vector3,
     normal: Vector3,
@@ -1645,7 +1702,7 @@ def _cube_shadow_at(
 
 
 def _unweakened_cube_at(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     block: Int,
     position: Vector3,
     normal: Vector3,
@@ -1688,7 +1745,7 @@ def _unweakened_cube_at(
 
 
 def _point_through(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     at: Int,
     receives: Bool,
     position: Vector3,
@@ -1704,10 +1761,10 @@ def _point_through(
 
 
 def _spot_attenuation(
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     at: Int,
     angle_cos: Float32,
     position: Vector3,
@@ -1737,10 +1794,10 @@ def _spot_attenuation(
 
 
 def _spot_tint(
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     at: Int,
     position: Vector3,
     normal: Vector3,
@@ -1774,7 +1831,7 @@ def _spot_tint(
 
 
 def _through(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     at: Int,
     receives: Bool,
     position: Vector3,
@@ -1790,7 +1847,7 @@ def _through(
 
 
 def _square_through(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     block: Int,
     position: Vector3,
     normal: Vector3,
@@ -1835,7 +1892,7 @@ def _square_through(
 
 
 def _cube_through(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     block: Int,
     position: Vector3,
     normal: Vector3,
@@ -1886,7 +1943,7 @@ def _cube_through(
 def _shaped_through[
     R: ShadowShape
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     at: Int,
     receives: Bool,
     position: Vector3,
@@ -1906,7 +1963,7 @@ def _shaped_through[
 def _point_shaped[
     R: ShadowShape
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     at: Int,
     receives: Bool,
     position: Vector3,
@@ -1925,7 +1982,7 @@ def _point_shaped[
 def _direction_through[
     R: ShadowShape
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     at: Int,
     receives: Bool,
     position: Vector3,
@@ -1985,7 +2042,7 @@ def _direction_through[
 
 
 def _shared_lanes(
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     a: Int,
     b: Int,
     c: Int,
@@ -2010,7 +2067,7 @@ def _shared_lanes(
 
 
 def _shadow_mask(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -2075,10 +2132,14 @@ struct _DeviceCurve[origin: Origin[mut=True]](NodeSource):
     in the fog buffer, with no texture and no triangle, as
     `render.tonemap.ProgramCurve` is on the host."""
 
-    var fog: MutPointer[Float32, Self.origin]
+    var fog: DevicePointer[Float32, Self.origin]
     var start: Int
 
-    def __init__(out self, fog: MutPointer[Float32, Self.origin], start: Int):
+    def __init__(
+        out self,
+        fog: DevicePointer[Float32, Self.origin],
+        start: Int,
+    ):
         """Read the program that starts `start` floats into `fog`, or none
         when `start` is negative."""
         self.fog = fog
@@ -2288,7 +2349,7 @@ struct _FogTexels[origin: Origin[mut=True]](ImplicitlyCopyable, VolumeTexels):
     """A decoded 3D or array texture's texels where the fog buffer holds
     them, as `filter_volume` and `filter_array` read texels."""
 
-    var fog: MutPointer[Float32, Self.origin]
+    var fog: DevicePointer[Float32, Self.origin]
     var start: Int
     var width: Int
     var height: Int
@@ -2363,7 +2424,7 @@ def flatten_programs(
 
 
 def _ambient_at(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     nx: Float32,
     ny: Float32,
     nz: Float32,
@@ -2398,7 +2459,7 @@ def _ambient_at(
 
 
 def _grid_irradiance(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     start: Int,
     normal: Vector3,
     position: Vector3,
@@ -2457,10 +2518,10 @@ def _grid_irradiance(
 def _arriving[
     R: ShadowShape = Unshaped
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -2508,13 +2569,22 @@ def _arriving[
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
         # From the surface to the bulb: how far, and which way.
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
-        var lambert = (nx * dx + ny * dy + nz * dz) / distance
+        var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
         if lambert <= 0:
             continue
         var bare = lambert * falloff(
@@ -2568,10 +2638,19 @@ def _arriving[
     var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         # The cosine of the angle off the cone's axis, and from it how far
@@ -2580,13 +2659,13 @@ def _arriving[
             dx * lights[unsafe_offset=at + 3]
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
-        var lambert = (nx * dx + ny * dy + nz * dz) / distance
+        var lambert = (nx * dx + ny * dy + nz * dz) / direction_length
         if lambert <= 0:
             continue
         var bare = (
@@ -2623,7 +2702,7 @@ def _arriving[
 
 
 def _toon_tone(
-    texels: MutPointer[UInt8, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
     start: Int,
     tones: Int,
     dot_nl: Float32,
@@ -2657,14 +2736,14 @@ def _toon_tone(
 def _toon_arriving[
     R: ShadowShape = Unshaped
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     count: Int,
     points: Int,
     hemispheres: Int,
     spots: Int,
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     start: Int,
     tones: Int,
     nx: Float32,
@@ -2713,14 +2792,26 @@ def _toon_arriving[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var tone = _toon_tone(
-            texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
+            texels,
+            start,
+            tones,
+            (nx * dx + ny * dy + nz * dz) / direction_length,
         )
         var bare = tone * falloff(
             distance,
@@ -2772,24 +2863,36 @@ def _toon_arriving[
     var first_spot = first_sky + hemispheres * HEMISPHERE_FLOATS
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var dx = lights[unsafe_offset=at] - px
-        var dy = lights[unsafe_offset=at + 1] - py
-        var dz = lights[unsafe_offset=at + 2] - pz
-        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
+        )
+        var dx = ray[0].x
+        var dy = ray[0].y
+        var dz = ray[0].z
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             dx * lights[unsafe_offset=at + 3]
             + dy * lights[unsafe_offset=at + 4]
             + dz * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
         var tone = _toon_tone(
-            texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
+            texels,
+            start,
+            tones,
+            (nx * dx + ny * dy + nz * dz) / direction_length,
         )
         var bare = (
             tone
@@ -2827,10 +2930,10 @@ def _toon_arriving[
 def _highlight[
     R: ShadowShape = Unshaped
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -2894,15 +2997,20 @@ def _highlight[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
-        var lambert = normal.dot(toward) / distance
+        var lambert = normal.dot(toward) / direction_length
         if lambert <= 0:
             continue
         var bare = lambert * falloff(
@@ -2923,25 +3031,30 @@ def _highlight[
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             toward.x * lights[unsafe_offset=at + 3]
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
         if rim <= 0:
             continue
-        var lambert = normal.dot(toward) / distance
+        var lambert = normal.dot(toward) / direction_length
         if lambert <= 0:
             continue
         var bare = (
@@ -2977,10 +3090,10 @@ def _highlight[
 def _scattered[
     R: ShadowShape = Unshaped
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -3040,12 +3153,16 @@ def _scattered[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
         if distance == 0:
             continue
         var bare = falloff(
@@ -3068,19 +3185,24 @@ def _scattered[
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - px,
-            lights[unsafe_offset=at + 1] - py,
-            lights[unsafe_offset=at + 2] - pz,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(px, py, pz),
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             toward.x * lights[unsafe_offset=at + 3]
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, Vector3(px, py, pz)
         )
@@ -3114,10 +3236,10 @@ def _scattered[
 
 
 def _volume_light(
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -3127,8 +3249,8 @@ def _volume_light(
     receives: Bool,
 ) -> Vector3:
     """Return the light that one step of a volume's ray gathers: the device
-    counterpart of `Lighting.volume_light_at`, the point lights and then
-    the spot lights, each by `shadowed_twice`."""
+    counterpart of `Lighting.volume_light_at`: points and spots use
+    `shadowed_twice`, rectangles use the shared view-space volume LTC."""
     var total = Vector3(0, 0, 0)
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
@@ -3159,15 +3281,17 @@ def _volume_light(
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = (
+        var ray = light_vector(
             Vector3(
                 lights[unsafe_offset=at],
                 lights[unsafe_offset=at + 1],
                 lights[unsafe_offset=at + 2],
-            )
-            - place
+            ),
+            place,
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
@@ -3178,7 +3302,7 @@ def _volume_light(
                     lights[unsafe_offset=at + 5],
                 )
             )
-            / distance
+            / direction_length
         )
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, place
@@ -3204,6 +3328,42 @@ def _volume_light(
                 lights, at + 13, receives, place, normal, Unshaped()
             ),
         )
+    var first_rect = first_spot + spots * SPOT_FLOATS
+    for index in range(Int(lights[unsafe_offset=LIGHTS_RECT_COUNT])):
+        var at = first_rect + index * RECT_FLOATS
+        total = total + rect_volume_light(
+            place,
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            Vector3(
+                lights[unsafe_offset=at + 3],
+                lights[unsafe_offset=at + 4],
+                lights[unsafe_offset=at + 5],
+            ),
+            Vector3(
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+                lights[unsafe_offset=at + 8],
+            ),
+            Vector3(
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+                lights[unsafe_offset=at + 11],
+            ),
+            Vector3(
+                lights[unsafe_offset=LIGHTS_UP],
+                lights[unsafe_offset=LIGHTS_UP + 1],
+                lights[unsafe_offset=LIGHTS_UP + 2],
+            ),
+            Vector3(
+                lights[unsafe_offset=LIGHTS_BACK],
+                lights[unsafe_offset=LIGHTS_BACK + 1],
+                lights[unsafe_offset=LIGHTS_BACK + 2],
+            ),
+        )
     return total
 
 
@@ -3211,10 +3371,10 @@ struct _DeviceRay[origin: Origin[mut=True]](ImplicitlyCopyable, RayLights):
     """The kernel's `RayLights`: its light buffer, as `LitRay` is the
     host's over a `Lighting`."""
 
-    var lights: MutPointer[Float32, Self.origin]
-    var texels: MutPointer[UInt8, Self.origin]
-    var ramp: MutPointer[Float32, Self.origin]
-    var table: MutPointer[Int32, Self.origin]
+    var lights: DevicePointer[Float32, Self.origin]
+    var texels: DevicePointer[UInt8, Self.origin]
+    var ramp: DevicePointer[Float32, Self.origin]
+    var table: DevicePointer[Int32, Self.origin]
     var count: Int
     var points: Int
     var hemispheres: Int
@@ -3224,10 +3384,10 @@ struct _DeviceRay[origin: Origin[mut=True]](ImplicitlyCopyable, RayLights):
 
     def __init__(
         out self,
-        lights: MutPointer[Float32, Self.origin],
-        texels: MutPointer[UInt8, Self.origin],
-        ramp: MutPointer[Float32, Self.origin],
-        table: MutPointer[Int32, Self.origin],
+        lights: DevicePointer[Float32, Self.origin],
+        texels: DevicePointer[UInt8, Self.origin],
+        ramp: DevicePointer[Float32, Self.origin],
+        table: DevicePointer[Int32, Self.origin],
         count: Int,
         points: Int,
         hemispheres: Int,
@@ -3273,7 +3433,7 @@ struct _DeviceRay[origin: Origin[mut=True]](ImplicitlyCopyable, RayLights):
 
 
 def _world_at(
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
     ay: Int,
@@ -3329,7 +3489,7 @@ def _world_at(
 
 
 def _normal_at(
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
     ay: Int,
@@ -3388,9 +3548,9 @@ def _normal_at(
 
 
 def _sample_cube_level(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     first: Int,
     direction: Vector3,
     level: Float32,
@@ -3410,9 +3570,9 @@ def _sample_cube_level(
 
 
 def _sample_cube_rough(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     first: Int,
     direction: Vector3,
     roughness: Float32,
@@ -3450,7 +3610,7 @@ def _sample_cube_rough(
 
 
 def _indirect(
-    lights: MutPointer[Float32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -3507,10 +3667,10 @@ def _indirect(
 def _physical[
     R: ShadowShape = Unshaped
 ](
-    lights: MutPointer[Float32, MutAnyOrigin],
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    lights: DevicePointer[Float32],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -3585,18 +3745,25 @@ def _physical[
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
         var at = first_point + index * POINT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - position.x,
-            lights[unsafe_offset=at + 1] - position.y,
-            lights[unsafe_offset=at + 2] - position.z,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            position,
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
-        var lambert = max(Float32(0), normal.dot(toward) / distance)
+        var lambert = max(Float32(0), normal.dot(toward) / direction_length)
         var coat_lambert = Float32(0)
         if clearcoat > 0:
-            coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
+            coat_lambert = max(
+                Float32(0), coat_normal.dot(toward) / direction_length
+            )
         if lambert == 0 and coat_lambert == 0:
             continue
         var bare = falloff(
@@ -3629,28 +3796,35 @@ def _physical[
     )
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
-        var toward = Vector3(
-            lights[unsafe_offset=at] - position.x,
-            lights[unsafe_offset=at + 1] - position.y,
-            lights[unsafe_offset=at + 2] - position.z,
+        var ray = light_vector(
+            Vector3(
+                lights[unsafe_offset=at],
+                lights[unsafe_offset=at + 1],
+                lights[unsafe_offset=at + 2],
+            ),
+            position,
         )
-        var distance = toward.length()
+        var toward = ray[0]
+        var distance = ray[1]
+        var direction_length = ray[2]
         if distance == 0:
             continue
         var angle_cos = (
             toward.x * lights[unsafe_offset=at + 3]
             + toward.y * lights[unsafe_offset=at + 4]
             + toward.z * lights[unsafe_offset=at + 5]
-        ) / distance
+        ) / direction_length
         var rim = _spot_attenuation(
             lights, texels, ramp, table, at, angle_cos, position
         )
         if rim <= 0:
             continue
-        var lambert = max(Float32(0), normal.dot(toward) / distance)
+        var lambert = max(Float32(0), normal.dot(toward) / direction_length)
         var coat_lambert = Float32(0)
         if clearcoat > 0:
-            coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
+            coat_lambert = max(
+                Float32(0), coat_normal.dot(toward) / direction_length
+            )
         if lambert == 0 and coat_lambert == 0:
             continue
         var bare = rim * falloff(
@@ -3743,7 +3917,7 @@ def _physical[
 
 
 def _ltc_texel(
-    lights: MutPointer[Float32, MutAnyOrigin], at: Int
+    lights: DevicePointer[Float32], at: Int
 ) -> SIMD[DType.float32, 4]:
     """Return the four floats of an LTC table from `at` in the buffer.
 
@@ -3758,7 +3932,7 @@ def _ltc_texel(
 
 
 def _ltc_lookup(
-    lights: MutPointer[Float32, MutAnyOrigin], table: Int, uv: Vector2
+    lights: DevicePointer[Float32], table: Int, uv: Vector2
 ) -> SIMD[DType.float32, 4]:
     """Return a table's four numbers at a coordinate, bilinearly
     filtered: the device counterpart of `ltc_lookup`, the same texels
@@ -3822,9 +3996,7 @@ struct _Descriptor(ImplicitlyCopyable):
     var mapping: Mapping
 
 
-def _placement(
-    table: MutPointer[Int32, MutAnyOrigin], slot: Int
-) -> UvPlacement:
+def _placement(table: DevicePointer[Int32], slot: Int) -> UvPlacement:
     """Return where texture `slot` is sampled as a map, from its row of
     the table: the device counterpart of `Texture.placement`, the same
     seven numbers `flatten_textures` wrote."""
@@ -3840,7 +4012,7 @@ def _placement(
     )
 
 
-def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
+def _describe(table: DevicePointer[Int32], slot: Int) -> _Descriptor:
     """Return texture `slot`'s row of the table, in the order
     `flatten_textures` wrote it."""
     var entry = slot * TABLE_COLUMNS
@@ -3863,8 +4035,8 @@ def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
 
 
 def _fetch(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
     image: _Descriptor,
     x: Int,
     y: Int,
@@ -3925,7 +4097,7 @@ def _fetch(
     )
 
 
-def _float_at(texels: MutPointer[UInt8, MutAnyOrigin], at: Int) -> Float32:
+def _float_at(texels: DevicePointer[UInt8], at: Int) -> Float32:
     """Return the float whose four little-endian bytes start at `at`."""
     return float_from_bytes(
         texels[unsafe_offset=at],
@@ -4148,7 +4320,7 @@ def flatten_frame_lights(
 
 
 def _decoded(
-    ramp: MutPointer[Float32, MutAnyOrigin], r: Float32, g: Float32, b: Float32
+    ramp: DevicePointer[Float32], r: Float32, g: Float32, b: Float32
 ) -> FloatColor:
     """Return three channels of data as the light that encodes to their
     bytes: the device counterpart of `render.rasterizer.data_color`.
@@ -4168,7 +4340,7 @@ def _decoded(
 
 
 def _uv_at(
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
     ay: Int,
@@ -4229,8 +4401,8 @@ def _uv_at(
 
 
 def _sample_at(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
     image: _Descriptor,
     u: Float32,
     v: Float32,
@@ -4250,8 +4422,8 @@ def _sample_at(
 
 
 def _sample_filtered(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
     image: _Descriptor,
     u: Float32,
     v: Float32,
@@ -4288,8 +4460,8 @@ def _sample_filtered(
 
 
 def _sample_level(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
     image: _Descriptor,
     u: Float32,
     v: Float32,
@@ -4312,9 +4484,9 @@ def _sample_level(
 
 
 def _sample_cube(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     first: Int,
     direction: Vector3,
 ) -> FloatColor:
@@ -4340,11 +4512,11 @@ def _sample_cube(
 
 
 def _sample_slot(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     slot: Int,
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
     ay: Int,
@@ -4443,20 +4615,71 @@ def _sample_slot(
         image.height,
         image.anisotropy,
     )
+    return _sample_footprint(texels, ramp, image, u, v, footprint)
+
+
+def _sample_grad(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    image: _Descriptor,
+    u: Float32,
+    v: Float32,
+    dx: Vector2,
+    dy: Vector2,
+) -> FloatColor:
+    """Read explicit gradients with the host's footprint arithmetic."""
+    if not texture_grad_finite(u, v, dx, dy):
+        return FloatColor(0, 0, 0, 0)
+    var footprint = anisotropic_footprint(
+        dx, dy, image.width, image.height, image.anisotropy
+    )
+    return _sample_footprint(
+        texels, ramp, image, u, v, footprint, explicit=True
+    )
+
+
+def _sample_footprint(
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    image: _Descriptor,
+    u: Float32,
+    v: Float32,
+    footprint: Footprint,
+    explicit: Bool = False,
+) -> FloatColor:
+    """Read bounded taps as `Texture._sample_footprint` reads them."""
+    if explicit:
+        if (
+            not isfinite(footprint.level)
+            or not isfinite(footprint.step.x)
+            or not isfinite(footprint.step.y)
+        ):
+            return FloatColor(0, 0, 0, 0)
     if footprint.taps == 1:
+        if explicit:
+            return _sample_level(
+                texels,
+                ramp,
+                image,
+                gradient_sample_coordinate(u, image.wrap_s),
+                gradient_sample_coordinate(v, image.wrap_t),
+                footprint.level,
+            )
         return _sample_level(texels, ramp, image, u, v, footprint.level)
     # The taps along the long axis, averaged premultiplied, exactly as
     # `Texture.sample_footprint` averages them.
     var total = FloatColor(0.0, 0.0, 0.0, 0.0)
     for tap in range(footprint.taps):
         var along = Float32(tap) - Float32(footprint.taps - 1) / 2
+        var tap_u = u + footprint.step.x * along
+        var tap_v = v + footprint.step.y * along
+        if explicit:
+            if not isfinite(tap_u) or not isfinite(tap_v):
+                return FloatColor(0, 0, 0, 0)
+            tap_u = gradient_sample_coordinate(tap_u, image.wrap_s)
+            tap_v = gradient_sample_coordinate(tap_v, image.wrap_t)
         var sampled = _sample_level(
-            texels,
-            ramp,
-            image,
-            u + footprint.step.x * along,
-            v + footprint.step.y * along,
-            footprint.level,
+            texels, ramp, image, tap_u, tap_v, footprint.level
         ).premultiplied()
         total = FloatColor(
             total.r + sampled.r,
@@ -4471,7 +4694,7 @@ def _sample_slot(
 
 
 def _placed_steps(
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
     ay: Int,
@@ -4533,11 +4756,11 @@ def _placed_steps(
 
 
 def _sample_placed_slot(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     slot: Int,
-    corners: MutPointer[Float32, MutAnyOrigin],
+    corners: DevicePointer[Float32],
     base: Int,
     ax: Int,
     ay: Int,
@@ -4586,14 +4809,14 @@ struct _DeviceSource[origin: Origin[mut=True]](TransmissionSource):
     in the backdrop buffer, read by `_sample_at` as the host's texture is
     read by its own."""
 
-    var texels: MutPointer[UInt8, Self.origin]
-    var ramp: MutPointer[Float32, Self.origin]
+    var texels: DevicePointer[UInt8, Self.origin]
+    var ramp: DevicePointer[Float32, Self.origin]
     var image: _Descriptor
 
     def __init__(
         out self,
-        texels: MutPointer[UInt8, Self.origin],
-        ramp: MutPointer[Float32, Self.origin],
+        texels: DevicePointer[UInt8, Self.origin],
+        ramp: DevicePointer[Float32, Self.origin],
         image: _Descriptor,
     ):
         """Read the chain `image` describes out of `texels`."""
@@ -4630,12 +4853,12 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
     triangle's own footprint for the textures it reads, as `_sample_slot`
     reads the material's map for the pixel."""
 
-    var fog: MutPointer[Float32, Self.origin]
+    var fog: DevicePointer[Float32, Self.origin]
     var start: Int
-    var texels: MutPointer[UInt8, Self.origin]
-    var ramp: MutPointer[Float32, Self.origin]
-    var table: MutPointer[Int32, Self.origin]
-    var corners: MutPointer[Float32, Self.origin]
+    var texels: DevicePointer[UInt8, Self.origin]
+    var ramp: DevicePointer[Float32, Self.origin]
+    var table: DevicePointer[Int32, Self.origin]
+    var corners: DevicePointer[Float32, Self.origin]
     var base: Int
     var ax: Int
     var ay: Int
@@ -4655,16 +4878,16 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
     # The target's width, for `screen_uv`, and the buffer that holds the
     # opaque scene behind after the background, for `viewport_texture`.
     var width: Int
-    var backdrop: MutPointer[UInt8, Self.origin]
+    var backdrop: DevicePointer[UInt8, Self.origin]
 
     def __init__(
         out self,
-        fog: MutPointer[Float32, Self.origin],
+        fog: DevicePointer[Float32, Self.origin],
         start: Int,
-        texels: MutPointer[UInt8, Self.origin],
-        ramp: MutPointer[Float32, Self.origin],
-        table: MutPointer[Int32, Self.origin],
-        corners: MutPointer[Float32, Self.origin],
+        texels: DevicePointer[UInt8, Self.origin],
+        ramp: DevicePointer[Float32, Self.origin],
+        table: DevicePointer[Int32, Self.origin],
+        corners: DevicePointer[Float32, Self.origin],
         base: Int,
         ax: Int,
         ay: Int,
@@ -4680,7 +4903,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
         depth: Float32,
         facing: Int,
         width: Int,
-        backdrop: MutPointer[UInt8, Self.origin],
+        backdrop: DevicePointer[UInt8, Self.origin],
     ):
         """Read the program that starts `start` floats into `fog`, at the
         sample (`px`, `py`) of a target `width` by `height` pixels, at the
@@ -4750,6 +4973,20 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
             u,
             v,
             level,
+        )
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients with the host's bounded footprint."""
+        return _sample_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            dx,
+            dy,
         )
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
@@ -4907,7 +5144,7 @@ struct _DeviceNodes[origin: Origin[mut=True]](Copyable, NodeSource):
 
 
 def _transmission_image(
-    backdrop: MutPointer[UInt8, MutAnyOrigin], start: Int
+    backdrop: DevicePointer[UInt8], start: Int
 ) -> _Descriptor:
     """Return the transmission target's chain that starts `start` bytes
     into the backdrop buffer, as its header describes it."""
@@ -4930,8 +5167,8 @@ def _transmission_image(
 
 
 def _device_behind(
-    backdrop: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
+    backdrop: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
     width: Int,
     height: Int,
     u: Float32,
@@ -4951,7 +5188,9 @@ def _device_behind(
 
 
 def _fog_volume(
-    fog: MutPointer[Float32, _], slot: Int, at: Vector3
+    fog: DevicePointer[Float32, _],
+    slot: Int,
+    at: Vector3,
 ) -> FloatColor:
     """Return a 3D texture read where the fog buffer holds its block, as
     `Data3DTexture.sample` reads it."""
@@ -4973,7 +5212,9 @@ def _fog_volume(
 
 
 def _fog_array(
-    fog: MutPointer[Float32, _], slot: Int, at: Vector3
+    fog: DevicePointer[Float32, _],
+    slot: Int,
+    at: Vector3,
 ) -> FloatColor:
     """Return an array texture read where the fog buffer holds its block,
     as `DataArrayTexture.sample` reads it."""
@@ -4994,9 +5235,9 @@ def _fog_array(
 
 
 def _device_fetch(
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
+    table: DevicePointer[Int32],
     slot: Int,
     x: Int,
     y: Int,
@@ -5016,7 +5257,7 @@ def _device_fetch(
 
 
 def _device_size(
-    table: MutPointer[Int32, MutAnyOrigin], slot: Int, level: Int
+    table: DevicePointer[Int32], slot: Int, level: Int
 ) -> SIMD[DType.float32, 4]:
     """Return a texture level's size, as `Texture.fetch_size` gives it."""
     var image = _describe(table, slot)
@@ -5034,12 +5275,12 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
     buffer, and the segment's two ends, its first two corners, as
     `rasterizer._HostLineNodes` reads them."""
 
-    var fog: MutPointer[Float32, Self.origin]
+    var fog: DevicePointer[Float32, Self.origin]
     var start: Int
-    var texels: MutPointer[UInt8, Self.origin]
-    var ramp: MutPointer[Float32, Self.origin]
-    var table: MutPointer[Int32, Self.origin]
-    var segments: MutPointer[Float32, Self.origin]
+    var texels: DevicePointer[UInt8, Self.origin]
+    var ramp: DevicePointer[Float32, Self.origin]
+    var table: DevicePointer[Int32, Self.origin]
+    var segments: DevicePointer[Float32, Self.origin]
     var base: Int
     var x: Int
     var y: Int
@@ -5051,12 +5292,12 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
 
     def __init__(
         out self,
-        fog: MutPointer[Float32, Self.origin],
+        fog: DevicePointer[Float32, Self.origin],
         start: Int,
-        texels: MutPointer[UInt8, Self.origin],
-        ramp: MutPointer[Float32, Self.origin],
-        table: MutPointer[Int32, Self.origin],
-        segments: MutPointer[Float32, Self.origin],
+        texels: DevicePointer[UInt8, Self.origin],
+        ramp: DevicePointer[Float32, Self.origin],
+        table: DevicePointer[Int32, Self.origin],
+        segments: DevicePointer[Float32, Self.origin],
         base: Int,
         x: Int,
         y: Int,
@@ -5108,6 +5349,20 @@ struct _DeviceLineNodes[origin: Origin[mut=True]](NodeSource):
             u,
             v,
             level,
+        )
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients with the host's bounded footprint."""
+        return _sample_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            dx,
+            dy,
         )
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
@@ -5232,12 +5487,12 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
     and one point, which every corner is, as
     `rasterizer._HostPointNodes` reads it."""
 
-    var fog: MutPointer[Float32, Self.origin]
+    var fog: DevicePointer[Float32, Self.origin]
     var start: Int
-    var texels: MutPointer[UInt8, Self.origin]
-    var ramp: MutPointer[Float32, Self.origin]
-    var table: MutPointer[Int32, Self.origin]
-    var points: MutPointer[Float32, Self.origin]
+    var texels: DevicePointer[UInt8, Self.origin]
+    var ramp: DevicePointer[Float32, Self.origin]
+    var table: DevicePointer[Int32, Self.origin]
+    var points: DevicePointer[Float32, Self.origin]
     var base: Int
     var x: Int
     var y: Int
@@ -5249,12 +5504,12 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
 
     def __init__(
         out self,
-        fog: MutPointer[Float32, Self.origin],
+        fog: DevicePointer[Float32, Self.origin],
         start: Int,
-        texels: MutPointer[UInt8, Self.origin],
-        ramp: MutPointer[Float32, Self.origin],
-        table: MutPointer[Int32, Self.origin],
-        points: MutPointer[Float32, Self.origin],
+        texels: DevicePointer[UInt8, Self.origin],
+        ramp: DevicePointer[Float32, Self.origin],
+        table: DevicePointer[Int32, Self.origin],
+        points: DevicePointer[Float32, Self.origin],
         base: Int,
         x: Int,
         y: Int,
@@ -5312,6 +5567,20 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
             u,
             v,
             level,
+        )
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients with the host's bounded footprint."""
+        return _sample_grad(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            _describe(self.table.unsafe_origin_cast[MutAnyOrigin](), slot),
+            u,
+            v,
+            dx,
+            dy,
         )
 
     def sample_3d(self, slot: Int, at: Vector3) -> FloatColor:
@@ -5441,8 +5710,8 @@ struct _DevicePointNodes[origin: Origin[mut=True]](NodeSource):
 
 
 def _transmitted(
-    backdrop: MutPointer[UInt8, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
+    backdrop: DevicePointer[UInt8],
+    ramp: DevicePointer[Float32],
     start: Int,
     normal: Vector3,
     toward_eye: Vector3,
@@ -5496,37 +5765,37 @@ def _behind(
 
 
 def rasterize_kernel(
-    pixels: MutPointer[UInt8, MutAnyOrigin],
-    depth: MutPointer[Float32, MutAnyOrigin],
-    corners: MutPointer[Float32, MutAnyOrigin],
-    maps: MutPointer[Int32, MutAnyOrigin],
+    pixels: DevicePointer[UInt8],
+    depth: DevicePointer[Float32],
+    corners: DevicePointer[Float32],
+    maps: DevicePointer[Int32],
     width: Int32,
     height: Int32,
     background: UInt32,
     mode: Int32,
-    texels: MutPointer[UInt8, MutAnyOrigin],
-    table: MutPointer[Int32, MutAnyOrigin],
-    ramp: MutPointer[Float32, MutAnyOrigin],
-    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: DevicePointer[UInt8],
+    table: DevicePointer[Int32],
+    ramp: DevicePointer[Float32],
+    lights: DevicePointer[Float32],
     light_count: Int32,
     point_count: Int32,
     hemisphere_count: Int32,
     spot_count: Int32,
-    fog: MutPointer[Float32, MutAnyOrigin],
+    fog: DevicePointer[Float32],
     fog_kind: Int32,
     tone: Int32,
     exposure: Float32,
-    segments: MutPointer[Float32, MutAnyOrigin],
-    segment_maps: MutPointer[Int32, MutAnyOrigin],
-    points: MutPointer[Float32, MutAnyOrigin],
-    point_maps: MutPointer[Int32, MutAnyOrigin],
-    draws: MutPointer[Int32, MutAnyOrigin],
+    segments: DevicePointer[Float32],
+    segment_maps: DevicePointer[Int32],
+    points: DevicePointer[Float32],
+    point_maps: DevicePointer[Int32],
+    draws: DevicePointer[Int32],
     draw_count: Int32,
     scissor_x: Int32,
     scissor_y: Int32,
     scissor_width: Int32,
     scissor_height: Int32,
-    backdrop: MutPointer[UInt8, MutAnyOrigin],
+    backdrop: DevicePointer[UInt8],
 ):
     """Color one pixel from the nearest primitive that covers it.
 
@@ -6458,11 +6727,10 @@ def rasterize_kernel(
                 + corners[unsafe_offset=b_base + LANE_NZ] * share_b
                 + corners[unsafe_offset=c_base + LANE_NZ] * share_c
             )
-            var unit = sqrt(nx * nx + ny * ny + nz * nz)
-            if unit != 0:
-                nx /= unit
-                ny /= unit
-                nz /= unit
+            var unit = normalized3(nx, ny, nz)
+            nx = unit[0]
+            ny = unit[1]
+            nz = unit[2]
             # Where this fragment is in the world, for the lights that have
             # a position, and for the direction a reflection turns back.
             var wx = Float32(0)
@@ -8529,6 +8797,16 @@ def rasterize_kernel(
                     var offset = Float32(0)
                     if noded and has_output(nodes, OFFSET_NODE):
                         offset = run_nodes(nodes, OFFSET_NODE, given)[0]
+                    var scene_depth = inf[DType.float32]()
+                    if corners[unsafe_offset=base + LANE_VOLUME + 2] != 0:
+                        var start = Int(width) * Int(height) * 4
+                        var offset_depth = Int(
+                            _float_at(backdrop, start + TRANSMISSION_DEPTH * 4)
+                        )
+                        scene_depth = _float_at(
+                            backdrop,
+                            start + (offset_depth + y * Int(width) + x) * 4,
+                        )
                     var ray = volumetric_light(
                         _DeviceRay(
                             lights,
@@ -8553,6 +8831,8 @@ def rasterize_kernel(
                         corners[unsafe_offset=base + LANE_VOLUME + 1],
                         Int(corners[unsafe_offset=base + LANE_VOLUME]),
                         offset,
+                        Length(scene_depth, METER),
+                        view_back,
                     )
                     red = ray.x + glow_r
                     green = ray.y + glow_g
@@ -8793,7 +9073,9 @@ def rasterize_kernel(
     # it: it is stored so that sRGB's curve gives back its bytes.
     var shown = mapped.encode()
     if not data:
-        shown = output_from(fog, FOG_OUTPUT).encode(mapped)
+        shown = output_from(
+            fog.unsafe_address_space_cast[AddressSpace.GENERIC](), FOG_OUTPUT
+        ).encode(mapped)
     var word = pack(shown)
     if solid:
         nearest_depth = nearest
@@ -9363,26 +9645,6 @@ struct GpuRenderer(Movable):
             kept = scissor.value()
             if not kept.fits(self.width, self.height):
                 raise Error("A scissor must lie inside the target")
-            # A pixel outside the scissor is left as it was, and on a
-            # fresh target "as it was" is whatever the device buffer held.
-            # The first draw clears the whole target first, so the rest
-            # is the background -- resolved through this draw's own mode,
-            # curve and exposure, as the host resolves a whole fresh target
-            # through one curve. Cleared with the defaults, a white
-            # background under Reinhard came back white outside the
-            # scissor and gray inside it.
-            if not self.drawn:
-                self.draw(
-                    List[RasterVertex](),
-                    background,
-                    mode,
-                    tone_mapping=tone_mapping,
-                    exposure=exposure,
-                    depth_mode=depth_mode,
-                    programs=programs,
-                    custom_tone_mapping=custom_tone_mapping,
-                    output_color_space=output_color_space,
-                )
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -9429,12 +9691,23 @@ struct GpuRenderer(Movable):
         # Asked of the triangles a draw names, as `rasterize_frame` asks
         # it: the kernel reads the target wherever a triangle transmits.
         var ready = transmission.is_ready()
+        var needs_volume_depth = False
         for index in range(len(order)):
             ref run = order[index]
             if run.kind != DRAW_TRIANGLES:
                 continue
             for triangle in range(run.first, run.first + run.count):
                 check_transmission(corners[triangle * 3], mode, ready, programs)
+                if corners[triangle * 3].volume_scene_depth:
+                    needs_volume_depth = True
+        transmission.check_volume_depth(
+            needs_volume_depth and mode != SHADE_UV, self.width, self.height
+        )
+        # Packing can reject an inexact offset. Do it before any device
+        # write, including the initial clear for a scissored frame.
+        var scene_bytes = List[UInt8]()
+        if ready:
+            scene_bytes = flatten_transmission(transmission)
         # Every node program a triangle names, and every texture it reads,
         # asked here for the reason a texture id is: the kernel reads the
         # buffers at whatever offset the state hands it. The uv view runs
@@ -9771,6 +10044,27 @@ struct GpuRenderer(Movable):
                         " with alpha=IGNORED"
                     )
 
+        # A pixel outside the scissor is left as it was, and on a
+        # fresh target "as it was" is whatever the device buffer held.
+        # The first draw clears the whole target first, so the rest
+        # is the background -- resolved through this draw's own mode,
+        # curve and exposure, as the host resolves a whole fresh target
+        # through one curve. Cleared with the defaults, a white
+        # background under Reinhard came back white outside the
+        # scissor and gray inside it.
+        if narrowed and not self.drawn:
+            self.draw(
+                List[RasterVertex](),
+                background,
+                mode,
+                tone_mapping=tone_mapping,
+                exposure=exposure,
+                depth_mode=depth_mode,
+                programs=programs,
+                custom_tone_mapping=custom_tone_mapping,
+                output_color_space=output_color_space,
+            )
+
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
             # same count repeatedly, so this settles after the first one.
@@ -9895,9 +10189,7 @@ struct GpuRenderer(Movable):
         # the backdrop before the backdrop is written: a new buffer holds
         # nothing, so it is cleared below as a painted one would be.
         var behind = self.width * self.height * Framebuffer.CHANNELS
-        var scene_bytes = List[UInt8]()
         if ready:
-            scene_bytes = flatten_transmission(transmission)
             if len(scene_bytes) > self.transmission_room:
                 self.context.synchronize()
                 self.backdrop = self.context.enqueue_create_buffer[DType.uint8](
@@ -9940,37 +10232,37 @@ struct GpuRenderer(Movable):
             curve = NO_TONE_MAPPING
         self.cleared = background
         self.context.enqueue_function[rasterize_kernel](
-            self.pixels.unsafe_ptr(),
-            self.depth.unsafe_ptr(),
-            self.corners.unsafe_ptr(),
-            self.maps.unsafe_ptr(),
+            _device(self.pixels),
+            _device(self.depth),
+            _device(self.corners),
+            _device(self.maps),
             Int32(self.width),
             Int32(self.height),
             pack(background),
             Int32(mode.value),
-            self.texels.unsafe_ptr(),
-            self.table.unsafe_ptr(),
-            self.ramp.unsafe_ptr(),
-            self.lights.unsafe_ptr(),
+            _device(self.texels),
+            _device(self.table),
+            _device(self.ramp),
+            _device(self.lights),
             Int32(lighting.count()),
             Int32(lighting.point_count()),
             Int32(lighting.hemisphere_count()),
             Int32(lighting.spot_count()),
-            self.fog.unsafe_ptr(),
+            _device(self.fog),
             Int32(fog.kind.value),
             Int32(curve.value),
             exposure,
-            self.segments.unsafe_ptr(),
-            self.segment_maps.unsafe_ptr(),
-            self.points.unsafe_ptr(),
-            self.point_maps.unsafe_ptr(),
-            self.draw_list.unsafe_ptr(),
+            _device(self.segments),
+            _device(self.segment_maps),
+            _device(self.points),
+            _device(self.point_maps),
+            _device(self.draw_list),
             Int32(len(order)),
             Int32(kept.x),
             Int32(kept.y),
             Int32(kept.width),
             Int32(kept.height),
-            self.backdrop.unsafe_ptr(),
+            _device(self.backdrop),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -10508,7 +10800,7 @@ struct _DeviceSamples[origin: Origin[mut=True]](SampleSource):
     `rasterize_kernel` leaves them, read by `resolve_block` as the host's
     target is read."""
 
-    var planes: MutPointer[Float32, Self.origin]
+    var planes: DevicePointer[Float32, Self.origin]
     # How many samples a plane holds.
     var count: Int
     # Whether the depth is reversed, where an unclaimed depth reads as
@@ -10517,7 +10809,7 @@ struct _DeviceSamples[origin: Origin[mut=True]](SampleSource):
 
     def __init__(
         out self,
-        planes: MutPointer[Float32, Self.origin],
+        planes: DevicePointer[Float32, Self.origin],
         count: Int,
         reversed: Bool,
     ):
@@ -10594,7 +10886,9 @@ def resolve_kernel(
     var wide = Int(width) * grid
     var mode = DepthMode(Int(depth_mode))
     var samples = _DeviceSamples(
-        source, wide * Int(height) * grid, mode == REVERSED_DEPTH
+        source.unsafe_address_space_cast[AddressSpace.GLOBAL](),
+        wide * Int(height) * grid,
+        mode == REVERSED_DEPTH,
     )
     var resolved = resolve_block(samples, wide, grid, x, y, mode, normals != 0)
     var planes = Int(width) * Int(height)
@@ -12614,7 +12908,7 @@ struct GpuComputation(Movable):
 
 
 def _projected_splat_at(
-    data: MutPointer[Float32, MutAnyOrigin], lane: Int
+    data: DevicePointer[Float32], lane: Int
 ) -> ProjectedSplat:
     """Read the shared projected-splat layout on the device."""
     return ProjectedSplat(

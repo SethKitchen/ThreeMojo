@@ -21,11 +21,26 @@ Which pixels a triangle covers is decided by `render.fillrule`, in exact
 integer arithmetic, and that module explains why. It is shared with the GPU
 kernel so that both answer identically — the property `tests/test_gpu.mojo`
 asserts pixel for pixel.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.scaled_products import (
+    _Scaled,
+    _sum_products as _scaled_products,
+    _common_scale,
+)
+
+from math.norm import length2, normalized3, _ordinary_squared
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
+from units.si import Length, METER
 from materials.material import (
     BLEND,
     DEFAULT_IOR,
@@ -1151,6 +1166,7 @@ struct RasterVertex(ImplicitlyCopyable):
     # `materials.volume_node_material`.
     var steps: Int
     var model_radius: Float32
+    var volume_scene_depth: Bool
 
     def __init__(
         out self,
@@ -1331,6 +1347,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.previous = Vector3(0, 0, 0)
         self.lights = 0
         self.steps = DEFAULT_STEPS
+        self.volume_scene_depth = False
         self.model_radius = 0
 
 
@@ -1622,6 +1639,7 @@ struct Surface(ImplicitlyCopyable):
     # `materials.volume_node_material`.
     var steps: Int
     var model_radius: Float32
+    var volume_scene_depth: Bool
 
 
 def joined(corner: Corner, surface: Surface) -> RasterVertex:
@@ -1715,6 +1733,7 @@ def joined(corner: Corner, surface: Surface) -> RasterVertex:
     vertex.scatter_scale = surface.scatter_scale
     vertex.lights = surface.lights
     vertex.steps = surface.steps
+    vertex.volume_scene_depth = surface.volume_scene_depth
     vertex.model_radius = surface.model_radius
     return vertex^
 
@@ -1828,6 +1847,7 @@ def surface_of(vertex: RasterVertex) -> Surface:
         vertex.lights,
         vertex.steps,
         vertex.model_radius,
+        vertex.volume_scene_depth,
     )
 
 
@@ -1997,10 +2017,66 @@ def tangent_frame(
         q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
     )
     var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
-    var frame = Float32(0)
-    if extent != 0:
-        frame = 1 / sqrt(extent)
-    return TangentFrame(tangent * frame, bitangent * frame)
+    var position_scale = max(
+        max(abs(along_x.x), max(abs(along_x.y), abs(along_x.z))),
+        max(abs(along_y.x), max(abs(along_y.y), abs(along_y.z))),
+    )
+    var uv_scale = max(
+        max(abs(uv_along_x.x), abs(uv_along_x.y)),
+        max(abs(uv_along_y.x), abs(uv_along_y.y)),
+    )
+    var component = max(
+        max(abs(tangent.x), max(abs(tangent.y), abs(tangent.z))),
+        max(abs(bitangent.x), max(abs(bitangent.y), abs(bitangent.z))),
+    )
+    var product_bound = (
+        position_scale
+        * uv_scale
+        * max(abs(normal.x), max(abs(normal.y), abs(normal.z)))
+    )
+    if _ordinary_squared(extent) and product_bound <= 4 * component:
+        var frame = 1 / sqrt(extent)
+        return TangentFrame(tangent * frame, bitangent * frame)
+    var ax = [along_x.x, along_x.y, along_x.z]
+    var ay = [along_y.x, along_y.y, along_y.z]
+    var n = [normal.x, normal.y, normal.z]
+    var finite = (
+        isfinite(uv_along_x.x)
+        and isfinite(uv_along_x.y)
+        and isfinite(uv_along_y.x)
+        and isfinite(uv_along_y.y)
+    )
+    for axis in range(3):  # pragma: no branch
+        finite = (
+            finite
+            and isfinite(ax[axis])
+            and isfinite(ay[axis])
+            and isfinite(n[axis])
+        )
+    if not finite:
+        var frame = 1 / sqrt(extent) if extent != 0 else Float32(0)
+        return TangentFrame(tangent * frame, bitangent * frame)
+    var sums = Array[_Scaled[DType.float32], 6](
+        fill=_Scaled[DType.float32](0, 0)
+    )
+    for axis in range(3):  # pragma: no branch
+        var j = (axis + 1) % 3
+        var k = (axis + 2) % 3
+        var a = [ay[j], -ay[k], n[j], -n[k]]
+        var b = [n[k], n[j], ax[k], ax[j]]
+        sums[axis] = _scaled_products[DType.float32, 4](
+            a, b, [uv_along_x.x, uv_along_x.x, uv_along_y.x, uv_along_y.x]
+        )
+        sums[axis + 3] = _scaled_products[DType.float32, 4](
+            a, b, [uv_along_x.y, uv_along_x.y, uv_along_y.y, uv_along_y.y]
+        )
+    var scaled = _common_scale[DType.float32, 6](sums)
+    var t = Vector3(scaled[0], scaled[1], scaled[2])
+    var b = Vector3(scaled[3], scaled[4], scaled[5])
+    var magnitude = max(t.length(), b.length())
+    if magnitude == 0:
+        return TangentFrame(Vector3(0, 0, 0), Vector3(0, 0, 0))
+    return TangentFrame(t / magnitude, b / magnitude)
 
 
 def mapped_normal(
@@ -2320,8 +2396,17 @@ def mip_level(
     """
     var across = Float32(width)
     var down = Float32(height)
+    if not (
+        isfinite(along_x.x * across)
+        and isfinite(along_x.y * down)
+        and isfinite(along_y.x * across)
+        and isfinite(along_y.y * down)
+    ):
+        return anisotropic_footprint(along_x, along_y, width, height, 1).level
     var in_x = _length(along_x.x * across, along_x.y * down)
     var in_y = _length(along_y.x * across, along_y.y * down)
+    if not isfinite(in_x) or not isfinite(in_y):
+        return anisotropic_footprint(along_x, along_y, width, height, 1).level
     var longest = in_x
     if in_y > longest:
         longest = in_y
@@ -2332,7 +2417,7 @@ def mip_level(
 
 def _length(x: Float32, y: Float32) -> Float32:
     """Return the length of a two-component vector."""
-    return sqrt(x * x + y * y)
+    return length2(x, y)
 
 
 def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:
@@ -2661,6 +2746,12 @@ def check_triangle_state(
         raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
         raise Error("A triangle's material kind is none of the thirteen")
+    if a.volume_scene_depth and a.kind != VOLUME:
+        raise Error("Only a VOLUME triangle reads volume scene depth")
+    if b.volume_scene_depth != a.volume_scene_depth or (
+        c.volume_scene_depth != a.volume_scene_depth
+    ):
+        raise Error("A triangle's corners disagree about volume scene depth")
     if a.kind == VOLUME:
         check_steps(a.steps)
         if not (a.model_radius >= 0):
@@ -3897,6 +3988,11 @@ def rasterize_shaded(
     if not checked:
         check_triangle_maps(a, mode, textures, cubes, programs, volumes, arrays)
         check_transmission(a, mode, transmission.is_ready(), programs)
+        transmission.check_volume_depth(
+            a.volume_scene_depth and mode != SHADE_UV,
+            target.width,
+            target.height,
+        )
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -5472,6 +5568,12 @@ def rasterize_shaded(
                     a.model_radius,
                     a.steps,
                     offset,
+                    transmission.volume_depth_at(
+                        x, y
+                    ) if a.volume_scene_depth else Length(
+                        inf[DType.float32](), METER
+                    ),
+                    lighting.back,
                 )
                 shaded = FloatColor(
                     ray.x + glow.r, ray.y + glow.g, ray.z + glow.b, shaded.a
@@ -5685,6 +5787,12 @@ struct _HostNodes[origin: Origin[mut=False]](Copyable, NodeSource):
         texture's two filters, as `Texture.sample_level` reads it."""
         return self.textures[].textures[slot].sample_level(u, v, level)
 
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients through the texture's checked sampler."""
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
         return self.cubes[].textures[slot].sample(direction)
@@ -5851,6 +5959,12 @@ struct _HostPointNodes[origin: Origin[mut=False]](NodeSource):
         `Texture.sample_level`."""
         return self.textures[].textures[slot].sample_level(u, v, level)
 
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients through the texture's checked sampler."""
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
+
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
         return self.cubes[].textures[slot].sample(direction)
@@ -6012,6 +6126,12 @@ struct _HostLineNodes[origin: Origin[mut=False]](NodeSource):
         """Return a texture read at (u, v) and a mip level,
         `Texture.sample_level`."""
         return self.textures[].textures[slot].sample_level(u, v, level)
+
+    def sample_grad(
+        self, slot: Int, u: Float32, v: Float32, dx: Vector2, dy: Vector2
+    ) -> FloatColor:
+        """Read explicit gradients through the texture's checked sampler."""
+        return self.textures[].textures[slot]._sample_grad(u, v, dx, dy)
 
     def sample_cube(self, slot: Int, direction: Vector3) -> FloatColor:
         """Return a cube read in a direction, `CubeTexture.sample`."""
@@ -7536,6 +7656,16 @@ def _draw_frame(
     and their surface as it is drawn, so they live in the cache for the one
     triangle and the frame's list is a quarter of the size.
     """
+    var needs_depth = False
+    for index in range(len(draws)):
+        ref draw = draws[index]
+        if draw.kind == DRAW_TRIANGLES:
+            for triangle in range(draw.first, draw.first + draw.count):
+                if surfaces[corners[triangle * 3].surface].volume_scene_depth:
+                    needs_depth = True
+    transmission.check_volume_depth(
+        needs_depth and mode != SHADE_UV, target.width, target.height
+    )
     var bands = min(workers, target.height)
     if bands == 1:
         for index in range(len(draws)):

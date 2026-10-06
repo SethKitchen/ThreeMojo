@@ -1,0 +1,1226 @@
+{
+  "base_commit": "747f4987ef637ff5b6e6756847a90c23d193da93",
+  "base_tree": "5e1668ca3d824d8b0def8f200f2555ae099dc660",
+  "doc_lint": {
+    "documents": 4,
+    "log_sha256": "9894229f7fe84b79348de5a802a4c7c132a03c1282c73e846c1bf80227dcca10",
+    "status": "passed"
+  },
+  "earlier_complete_runs": {
+    "long": {
+      "metadata": {
+        "builds": {
+          "baseline-consumers": {
+            "binary_sha256": "3b96bbd374676c8f3788e60114592ea7b6878d94d01665764efa0ef8d3aa0342",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 140280,
+            "text_bytes": 103633,
+            "wall_seconds": 2.821698882999044
+          },
+          "baseline-queries": {
+            "binary_sha256": "1fe1bb4557ac574bc0836fd7e128f2cd6c925d1e5c0d44150c72e1326991f108",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 49271,
+            "wall_seconds": 1.4248048489971552
+          },
+          "candidate-consumers": {
+            "binary_sha256": "6f93d226698ea4ff921d0a8ed6883f48479fdc5be350a30fd97596cb8b72eb40",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 136184,
+            "text_bytes": 103489,
+            "wall_seconds": 3.746967537997989
+          },
+          "candidate-queries": {
+            "binary_sha256": "f61ad365f6b77ff7fa622fc93bd5372f2aed4b5e9580efafaea3b8138f8675b9",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 48834,
+            "wall_seconds": 1.4464707459992496
+          }
+        },
+        "cpu_affinity": "one fixed logical CPU",
+        "driver_sha256": {
+          "consumers": "f26a5eb0a0f66c738061e79069b0a37d2c9f043a37c5f2b19ac060983c1ae653",
+          "queries": "f86a884f4e4d8ffd254e080b2424aa654bbefcd1e9dd5508ee5ac163d42e35d5"
+        },
+        "flags": [
+          "build",
+          "--Werror",
+          "-I",
+          "SOURCE"
+        ],
+        "history": "Query/Gaussian drivers reconstructed from issue 550; physics geometry newly specified. Historical binaries are not used.",
+        "pairs": 8,
+        "platform": {
+          "architecture": "x86_64",
+          "os": "Linux"
+        },
+        "repeats": 36000,
+        "rows": 480,
+        "runner_sha256": "a224ed80110e9a24c506cda8ea0d77ee3d92a4ef515b8c5527814af58761e42a",
+        "samples_per_binary_per_pair": 5,
+        "schema": 1,
+        "source_inventory_sha256": {
+          "baseline": "a30c519ecc30ea7515a246620115c709b57e2d08b11ef4454086873d10cec8e2",
+          "candidate": "f0d36487ea8a995d593957c73209b1b1e55f48e9b2568c42a21896b611aefad7"
+        },
+        "status": "complete",
+        "toolchain": "Mojo 1.1.0 (8189361e)",
+        "verified_unchanged_sources_and_binaries": true,
+        "workloads": {
+          "gaussian": "4096000 splat-candidate visits in 1000 public raycast calls; every returned field consumed",
+          "physics_mesh": "2048 triangles, prepared Octree, 5600 rays; full PhysicsWorld.raycast with every returned field consumed",
+          "queries": "256 stored rays repeated without reducing work; every point coordinate consumed"
+        }
+      },
+      "private_provenance_sha256": "e3c9dee8037c2b51a5e3bdae58321f74ff862a9a69688bf8d1fb2238ec97e701",
+      "source_inventories_sha256": "80d051be0bd7bd2ab6c8465dfce47a9dc30e16a6ea4d2e0af972c05ba5b09cb5",
+      "summary": {
+        "box_bool": {
+          "baseline": {
+            "max_ms": 159.054009,
+            "median_ms": 59.8337005,
+            "min_ms": 54.883784,
+            "q1_ms": 58.0674205,
+            "q3_ms": 64.2677145,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 82.019934,
+            "median_ms": 51.589985,
+            "min_ms": 47.561632,
+            "q1_ms": 49.54508425,
+            "q3_ms": 53.061065750000004,
+            "samples": 40
+          },
+          "checksum": "3744000.0",
+          "median_ratio": 0.8622228705376496,
+          "paired_round_median_ratio": 0.8555674131274755,
+          "paired_round_ratios": [
+            0.766080477246929,
+            0.8224449986486018,
+            0.8992712161662733,
+            0.8152990198203832,
+            0.8659864005453543,
+            0.8451484257095969,
+            0.8745058711545097,
+            0.8673256188727224
+          ]
+        },
+        "box_point": {
+          "baseline": {
+            "max_ms": 155.120686,
+            "median_ms": 115.792051,
+            "min_ms": 110.469013,
+            "q1_ms": 113.40598175,
+            "q3_ms": 118.21207000000001,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 112.964547,
+            "median_ms": 96.26490150000001,
+            "min_ms": 92.249864,
+            "q1_ms": 94.3801965,
+            "q3_ms": 98.5760205,
+            "samples": 40
+          },
+          "checksum": "3481921.0314005613",
+          "median_ratio": 0.8313601898285747,
+          "paired_round_median_ratio": 0.8337654730957815,
+          "paired_round_ratios": [
+            0.8196683110597719,
+            0.8865601381076126,
+            0.8160575268817988,
+            0.8344917860923002,
+            0.8182126852665583,
+            0.850343758293887,
+            0.8349912017390865,
+            0.8330391600992628
+          ]
+        },
+        "gaussian": {
+          "baseline": {
+            "max_ms": 140.277161,
+            "median_ms": 111.55962299999999,
+            "min_ms": 106.944544,
+            "q1_ms": 109.48064199999999,
+            "q3_ms": 115.66466275,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 248.188189,
+            "median_ms": 109.7638265,
+            "min_ms": 104.387984,
+            "q1_ms": 107.96847274999999,
+            "q3_ms": 113.83666,
+            "samples": 40
+          },
+          "checksum": "4697511.6295543015",
+          "median_ratio": 0.9839028095317246,
+          "paired_round_median_ratio": 0.9802040255872599,
+          "paired_round_ratios": [
+            1.0224521202833883,
+            0.9748199705179184,
+            0.982985955352227,
+            0.93164157597929,
+            0.9684489011342209,
+            0.977422095822293,
+            1.0025878287717298,
+            0.9931827387011521
+          ]
+        },
+        "physics_mesh": {
+          "baseline": {
+            "max_ms": 25.152387,
+            "median_ms": 8.2547015,
+            "min_ms": 7.581029,
+            "q1_ms": 7.905054250000001,
+            "q3_ms": 8.88055275,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 18.438566,
+            "median_ms": 8.4098445,
+            "min_ms": 7.540817,
+            "q1_ms": 7.9630410000000005,
+            "q3_ms": 9.827388,
+            "samples": 40
+          },
+          "checksum": "1944328.0038719177",
+          "median_ratio": 1.0187945015334596,
+          "paired_round_median_ratio": 1.0307356812231658,
+          "paired_round_ratios": [
+            1.0298862686074057,
+            1.287891627031688,
+            0.845788879358752,
+            1.031585093838926,
+            0.9933128689618219,
+            1.0477144898736799,
+            1.0735708531484365,
+            1.0185744376868464
+          ]
+        },
+        "sphere_bool": {
+          "baseline": {
+            "max_ms": 68.907064,
+            "median_ms": 55.620635500000006,
+            "min_ms": 51.169584,
+            "q1_ms": 53.70540525,
+            "q3_ms": 58.69062925,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 63.203155,
+            "median_ms": 56.076194,
+            "min_ms": 51.971477,
+            "q1_ms": 54.0473545,
+            "q3_ms": 57.054419499999995,
+            "samples": 40
+          },
+          "checksum": "5328000.0",
+          "median_ratio": 1.0081904583776284,
+          "paired_round_median_ratio": 1.018207746094987,
+          "paired_round_ratios": [
+            1.0663991733030074,
+            0.9838486774981638,
+            1.0406295608701264,
+            1.0134083838434662,
+            0.9988050470541391,
+            1.015691651721887,
+            1.020723840468087,
+            1.0223061477935904
+          ]
+        },
+        "sphere_point": {
+          "baseline": {
+            "max_ms": 93.306722,
+            "median_ms": 68.71352,
+            "min_ms": 62.721967,
+            "q1_ms": 66.45709199999999,
+            "q3_ms": 71.2778835,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 81.193799,
+            "median_ms": 67.51701700000001,
+            "min_ms": 62.673594,
+            "q1_ms": 66.20699125,
+            "q3_ms": 69.90772275,
+            "samples": 40
+          },
+          "checksum": "3181338.959494328",
+          "median_ratio": 0.9825870803882556,
+          "paired_round_median_ratio": 0.9943991174471878,
+          "paired_round_ratios": [
+            1.0224863843929703,
+            1.0175245996642055,
+            0.9838291386997301,
+            0.9737818802968223,
+            0.9736115216825248,
+            0.9598288178108396,
+            1.0506775605672023,
+            1.0049690961946456
+          ]
+        }
+      },
+      "trials_sha256": "664c453f31ca59fa1a1df0c99b71b76daccadeaf148e94e492d98cc6f2313517"
+    },
+    "primary": {
+      "metadata": {
+        "builds": {
+          "baseline-consumers": {
+            "binary_sha256": "3b96bbd374676c8f3788e60114592ea7b6878d94d01665764efa0ef8d3aa0342",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 140280,
+            "text_bytes": 103633,
+            "wall_seconds": 2.855913170002168
+          },
+          "baseline-queries": {
+            "binary_sha256": "1fe1bb4557ac574bc0836fd7e128f2cd6c925d1e5c0d44150c72e1326991f108",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 49271,
+            "wall_seconds": 1.5928984560014214
+          },
+          "candidate-consumers": {
+            "binary_sha256": "6f93d226698ea4ff921d0a8ed6883f48479fdc5be350a30fd97596cb8b72eb40",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 136184,
+            "text_bytes": 103489,
+            "wall_seconds": 3.090859111998725
+          },
+          "candidate-queries": {
+            "binary_sha256": "f61ad365f6b77ff7fa622fc93bd5372f2aed4b5e9580efafaea3b8138f8675b9",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 48834,
+            "wall_seconds": 1.4281238369985658
+          }
+        },
+        "cpu_affinity": "one fixed logical CPU",
+        "driver_sha256": {
+          "consumers": "f26a5eb0a0f66c738061e79069b0a37d2c9f043a37c5f2b19ac060983c1ae653",
+          "queries": "f86a884f4e4d8ffd254e080b2424aa654bbefcd1e9dd5508ee5ac163d42e35d5"
+        },
+        "flags": [
+          "build",
+          "--Werror",
+          "-I",
+          "SOURCE"
+        ],
+        "history": "Query/Gaussian drivers reconstructed from issue 550; physics geometry newly specified. Historical binaries are not used.",
+        "pairs": 8,
+        "platform": {
+          "architecture": "x86_64",
+          "os": "Linux"
+        },
+        "repeats": 4000,
+        "rows": 480,
+        "runner_sha256": "a224ed80110e9a24c506cda8ea0d77ee3d92a4ef515b8c5527814af58761e42a",
+        "samples_per_binary_per_pair": 5,
+        "schema": 1,
+        "source_inventory_sha256": {
+          "baseline": "a30c519ecc30ea7515a246620115c709b57e2d08b11ef4454086873d10cec8e2",
+          "candidate": "f0d36487ea8a995d593957c73209b1b1e55f48e9b2568c42a21896b611aefad7"
+        },
+        "status": "complete",
+        "toolchain": "Mojo 1.1.0 (8189361e)",
+        "verified_unchanged_sources_and_binaries": true,
+        "workloads": {
+          "gaussian": "4096000 splat-candidate visits in 1000 public raycast calls; every returned field consumed",
+          "physics_mesh": "2048 triangles, prepared Octree, 5600 rays; full PhysicsWorld.raycast with every returned field consumed",
+          "queries": "256 stored rays repeated without reducing work; every point coordinate consumed"
+        }
+      },
+      "private_provenance_sha256": "640f23f5149518eb69a1cd96242e70a08dae4d1be97e112e4549ba4f76b2a863",
+      "source_inventories_sha256": "80d051be0bd7bd2ab6c8465dfce47a9dc30e16a6ea4d2e0af972c05ba5b09cb5",
+      "summary": {
+        "box_bool": {
+          "baseline": {
+            "max_ms": 8.95407,
+            "median_ms": 6.48474,
+            "min_ms": 5.93909,
+            "q1_ms": 6.301421749999999,
+            "q3_ms": 6.868841,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 9.384092,
+            "median_ms": 5.8475215,
+            "min_ms": 5.12979,
+            "q1_ms": 5.4378975,
+            "q3_ms": 6.69260175,
+            "samples": 40
+          },
+          "checksum": "416000.0",
+          "median_ratio": 0.9017356902512668,
+          "paired_round_median_ratio": 0.8897779635662957,
+          "paired_round_ratios": [
+            0.9735697801342234,
+            0.8728437704579473,
+            1.19013884068558,
+            0.9067121566746442,
+            0.8447978005274321,
+            0.8682901447614845,
+            0.9947879107880234,
+            0.8633140325626333
+          ]
+        },
+        "box_point": {
+          "baseline": {
+            "max_ms": 143.271735,
+            "median_ms": 12.6839205,
+            "min_ms": 11.942704,
+            "q1_ms": 12.37906675,
+            "q3_ms": 13.73298825,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 28.010685,
+            "median_ms": 10.565112500000001,
+            "min_ms": 9.861994,
+            "q1_ms": 10.273385999999999,
+            "q3_ms": 11.53954775,
+            "samples": 40
+          },
+          "checksum": "386880.11460006237",
+          "median_ratio": 0.8329532260944085,
+          "paired_round_median_ratio": 0.8473616133941246,
+          "paired_round_ratios": [
+            0.9509506094376565,
+            0.8666261846362721,
+            1.0358278185117453,
+            0.8258562128900975,
+            0.8905652363527233,
+            0.8280970421519771,
+            0.7946198145790212,
+            0.7732563828440597
+          ]
+        },
+        "gaussian": {
+          "baseline": {
+            "max_ms": 140.708414,
+            "median_ms": 115.04316650000001,
+            "min_ms": 109.820433,
+            "q1_ms": 111.79819675,
+            "q3_ms": 116.971089,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 150.143506,
+            "median_ms": 112.9191945,
+            "min_ms": 105.705189,
+            "q1_ms": 109.78005825,
+            "q3_ms": 117.72572625,
+            "samples": 40
+          },
+          "checksum": "4697511.6295543015",
+          "median_ratio": 0.9815376083202646,
+          "paired_round_median_ratio": 0.9825804189385834,
+          "paired_round_ratios": [
+            0.9849190482291124,
+            0.969124787416521,
+            0.9842689459272599,
+            0.9777183329430539,
+            0.9808918919499068,
+            1.0052016420568823,
+            0.9928457172728874,
+            0.9615831041840671
+          ]
+        },
+        "physics_mesh": {
+          "baseline": {
+            "max_ms": 12.375483,
+            "median_ms": 8.563813,
+            "min_ms": 7.437329,
+            "q1_ms": 8.26569975,
+            "q3_ms": 9.08838025,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 19.460177,
+            "median_ms": 8.595335500000001,
+            "min_ms": 7.501119,
+            "q1_ms": 8.231413,
+            "q3_ms": 9.387742,
+            "samples": 40
+          },
+          "checksum": "1944328.0038719177",
+          "median_ratio": 1.0036808954142273,
+          "paired_round_median_ratio": 0.9779062609778688,
+          "paired_round_ratios": [
+            0.9553426335805458,
+            0.935196249140395,
+            0.9960809438555127,
+            1.016014108747036,
+            0.959731578100225,
+            1.047382971660754,
+            0.9582422163114148,
+            1.1135244816916994
+          ]
+        },
+        "sphere_bool": {
+          "baseline": {
+            "max_ms": 8.101618,
+            "median_ms": 6.299521,
+            "min_ms": 5.63736,
+            "q1_ms": 6.0986287500000005,
+            "q3_ms": 6.556106,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 16.227867,
+            "median_ms": 6.1740955,
+            "min_ms": 5.719161,
+            "q1_ms": 5.96746125,
+            "q3_ms": 6.760944,
+            "samples": 40
+          },
+          "checksum": "592000.0",
+          "median_ratio": 0.9800896766595428,
+          "paired_round_median_ratio": 0.9763500646800605,
+          "paired_round_ratios": [
+            0.9876145003030327,
+            0.9148404013557411,
+            1.087392367087281,
+            0.963969036408459,
+            1.0071341369527251,
+            0.9650856290570883,
+            1.0306672205612868,
+            0.8977817168645549
+          ]
+        },
+        "sphere_point": {
+          "baseline": {
+            "max_ms": 9.675166,
+            "median_ms": 7.767348500000001,
+            "min_ms": 7.034704,
+            "q1_ms": 7.403097,
+            "q3_ms": 8.3599775,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 16.244409,
+            "median_ms": 7.926726,
+            "min_ms": 6.954938,
+            "q1_ms": 7.54488875,
+            "q3_ms": 8.4779965,
+            "samples": 40
+          },
+          "checksum": "353482.10660997377",
+          "median_ratio": 1.0205189068058425,
+          "paired_round_median_ratio": 1.0216736283314072,
+          "paired_round_ratios": [
+            0.949312218130637,
+            1.0413564659102326,
+            1.0141555057651517,
+            0.9219420887666822,
+            1.0291917508976627,
+            1.0559954264479556,
+            0.9619429202970625,
+            1.0592145339926213
+          ]
+        }
+      },
+      "trials_sha256": "d6509b96f5daaf5328522a91ff3e13d5e3f7cd89e185eb508bbe19de95fb96d3"
+    }
+  },
+  "earlier_complete_runs_reason": "Retained first complete matrices. Benchmark docstrings were then completed and final-source builds and full matrices repeated. No samples were selected or filtered.",
+  "focused_logs": {
+    "run-test_carla_physics_world.log": {
+      "sha256": "ccc5a4c499eaf6f157137ebf305701c27a4cad341a2e0237e44650a7c5aa6488",
+      "summary": "Summary [ 63.411 ] 23 tests run: 23 passed , 0 failed , 0 skipped"
+    },
+    "run-test_gaussian_bound_shape.log": {
+      "sha256": "144839e44285eb1e23993885659f0cff029bbc678f498f40db6261b2958c5678",
+      "summary": "Summary [ 0.033 ] 9 tests run: 9 passed , 0 failed , 0 skipped"
+    },
+    "run-test_gaussian_contracts.log": {
+      "sha256": "039d230793cd7ab8b503eaf80b029d84f1c6f74e540aee402290d67fe8451e81",
+      "summary": "Summary [ 0.037 ] 5 tests run: 5 passed , 0 failed , 0 skipped"
+    },
+    "run-test_gaussian_query_precision-off.log": {
+      "sha256": "6101d77dbd488e015af6d9ff1ff3c173af660e5a85ef778b0ebe02aa18111a63",
+      "summary": "Summary [ 0.103 ] 16 tests run: 16 passed , 0 failed , 0 skipped"
+    },
+    "run-test_gaussian_query_precision.log": {
+      "sha256": "63cb9fe21bd6b07714e176d04b0edb22e773a1b0b2cd53fdf5f1532a36c9f6be",
+      "summary": "Summary [ 0.091 ] 16 tests run: 16 passed , 0 failed , 0 skipped"
+    },
+    "run-test_gaussian_splat.log": {
+      "sha256": "db5e56898a1d327d3c38e27edc63f2e08beb5cf7e503983929740a73bdf66817",
+      "summary": "Summary [ 0.498 ] 32 tests run: 32 passed , 0 failed , 0 skipped"
+    },
+    "run-test_octree.log": {
+      "sha256": "f5a413893b181e0debcc30747a94e458fd7ce92e9c6e7b28d3ec667eb769f324",
+      "summary": "Summary [ 4.483 ] 21 tests run: 21 passed , 0 failed , 0 skipped"
+    },
+    "run-test_physics_static_bvh.log": {
+      "sha256": "b5ec02e27317c6677a756ffc6323e1407493c86eec65b1580da21d42539c0384",
+      "summary": "Summary [ 22.210 ] 14 tests run: 14 passed , 0 failed , 0 skipped"
+    },
+    "run-test_ray-off.log": {
+      "sha256": "07e63420c97bb0d6968203bcd5957e051037bfeb884cb7803f61148d3f5fa6ad",
+      "summary": "Summary [ 0.055 ] 35 tests run: 35 passed , 0 failed , 0 skipped"
+    },
+    "run-test_ray.log": {
+      "sha256": "85b0d0c5cdf9c8904daad31d516053b37ab15d3fe0e4d27926396ba48eec9a07",
+      "summary": "Summary [ 0.036 ] 35 tests run: 35 passed , 0 failed , 0 skipped"
+    },
+    "run-test_ray_query_throughput-off.log": {
+      "sha256": "7532598f69db7350429e08b5c576d471c3c4d550df640ba72e3e6f8deded8e92",
+      "summary": "Summary [ 1.228 ] 26 tests run: 26 passed , 0 failed , 0 skipped"
+    },
+    "run-test_ray_query_throughput.log": {
+      "sha256": "532472ae7a017f2c1f632bdf9c2ff4ad4683f090591cd298c0852609a20dd6f3",
+      "summary": "Summary [ 1.340 ] 26 tests run: 26 passed , 0 failed , 0 skipped"
+    },
+    "run-test_raycaster.log": {
+      "sha256": "cf0148902db942a9bb5f1254f3e1c505d1afdd12754856be89bbad588962fba7",
+      "summary": "Summary [ 1.309 ] 41 tests run: 41 passed , 0 failed , 0 skipped"
+    }
+  },
+  "focused_validation": {
+    "aggregate": "deferred by final-batch instruction",
+    "contraction_off_additional_executions": 77,
+    "coverage": "deferred by final-batch instruction",
+    "gpu_compiles": 4,
+    "per_test_seconds": 5,
+    "suites": 10,
+    "unique_tests": 222
+  },
+  "gpu_builds": {
+    "baseline-fast": {
+      "driver_sha256": "0cbc87122fcc1343156f7638c85d8405c83c56ca94849d4306bb6176dfbf54b2",
+      "host_binary_sha256": "73f43ddc4bd40d43248862fe0682be7501d38cf22d739cd3aee7aca4fa8133db",
+      "wall_seconds": 4.301
+    },
+    "baseline-off": {
+      "driver_sha256": "0cbc87122fcc1343156f7638c85d8405c83c56ca94849d4306bb6176dfbf54b2",
+      "host_binary_sha256": "9d483297aeeacc7eb4d17257deb1c83aa9847467359cd83719123f8196a06843",
+      "wall_seconds": 4.058
+    },
+    "candidate-fast": {
+      "driver_sha256": "0cbc87122fcc1343156f7638c85d8405c83c56ca94849d4306bb6176dfbf54b2",
+      "host_binary_sha256": "b389b81fe0ead79f33dd2cc61eb34b4dcaa760eb279b75cac747fe19c93dce1f",
+      "wall_seconds": 3.894
+    },
+    "candidate-off": {
+      "driver_sha256": "0cbc87122fcc1343156f7638c85d8405c83c56ca94849d4306bb6176dfbf54b2",
+      "host_binary_sha256": "2fddc1345e9df1dc2db434ae53669cad8a3920ec583783b5169e91b7be0caf3e",
+      "wall_seconds": 3.864
+    }
+  },
+  "gpu_compile": {
+    "gpu-baseline-fast": {
+      "bytes": 82165,
+      "entries": [
+        ".visible .entry ray_query_550_gpu_ray_queriestAtAtA6A6AoA6A_d1490559d8b96bed("
+      ],
+      "float32_ftz_instructions": 0,
+      "fma_instructions": 110,
+      "sha256": "b27c60a9529221d043f2f49421c418acb5a3f9a746a08531eb571fe5f18e8331",
+      "targets": [
+        ".target sm_80"
+      ]
+    },
+    "gpu-baseline-off": {
+      "bytes": 83685,
+      "entries": [
+        ".visible .entry ray_query_550_gpu_ray_queriestAtAtA6A6AoA6A_d1490559d8b96bed("
+      ],
+      "float32_ftz_instructions": 0,
+      "fma_instructions": 8,
+      "sha256": "5f9417dc024dc0a79092f8024372063653d785ba7e2a2ac709e6d69fcc3e859f",
+      "targets": [
+        ".target sm_80"
+      ]
+    },
+    "gpu-candidate-fast": {
+      "bytes": 80524,
+      "entries": [
+        ".visible .entry ray_query_550_gpu_ray_queriestAtAtA6A6AoA6A_d1490559d8b96bed("
+      ],
+      "float32_ftz_instructions": 0,
+      "fma_instructions": 113,
+      "sha256": "d0d2445235ded2042910d339c4cb105c602d954adfb2fc1a1e66ec5222cadbc3",
+      "targets": [
+        ".target sm_80"
+      ]
+    },
+    "gpu-candidate-off": {
+      "bytes": 82007,
+      "entries": [
+        ".visible .entry ray_query_550_gpu_ray_queriestAtAtA6A6AoA6A_d1490559d8b96bed("
+      ],
+      "float32_ftz_instructions": 0,
+      "fma_instructions": 8,
+      "sha256": "4546a90a73861f778db53833b8a487075030c618fa59867ec586b282d25cf2bd",
+      "targets": [
+        ".target sm_80"
+      ]
+    }
+  },
+  "historical_limit": "Fresh baseline/candidate comparisons do not establish the historical 3% pre-correction target or full speed recovery.",
+  "independent_final_review": {
+    "focused_logs": "verified",
+    "gpu_ptx_records": "verified",
+    "published_rows_recomputed": 1920,
+    "result": "no blocking correctness, evidence, or wording issue",
+    "source_and_binary_hashes": "verified"
+  },
+  "issue": "https://github.com/SethKitchen/ThreeMojo/issues/550",
+  "performance_disposition": {
+    "accepted_scope": "Documented current performance and full current-baseline matrix",
+    "aggregate_validation": "pending final batch",
+    "full_historical_speed_recovery_claimed": false,
+    "historical_three_percent_target_claimed": false,
+    "status": "accepted for implementation completion"
+  },
+  "production_change": "Exact stored-bit finite/nonzero classification in unprepared box queries; sphere, Gaussian, endpoint and slab arithmetic unchanged",
+  "profile_sha256": "4026af8f2da607a2926bc5e46b529f0c4581f759bc111072b69bc484cf3c7e8c",
+  "public_redaction": "Machine paths, CPU model, kernel, exact affinity and commands are retained privately. Public files retain pinned toolchain, generic command, measured values and source/binary hashes.",
+  "runs": {
+    "long": {
+      "metadata": {
+        "builds": {
+          "baseline-consumers": {
+            "binary_sha256": "0f4d095d5f8b99eaaf0f28144bd9755a1fbee774d591d6b65d8d5dd30e5e3d54",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 140280,
+            "text_bytes": 103633,
+            "wall_seconds": 3.156593518000591
+          },
+          "baseline-queries": {
+            "binary_sha256": "1fe1bb4557ac574bc0836fd7e128f2cd6c925d1e5c0d44150c72e1326991f108",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 49271,
+            "wall_seconds": 1.4053286730013497
+          },
+          "candidate-consumers": {
+            "binary_sha256": "297071f8e5ff542f31e6fe3c19de9139797f10fa4c5ce3b78608a6d9abec9c4b",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 136184,
+            "text_bytes": 103489,
+            "wall_seconds": 4.025307844000054
+          },
+          "candidate-queries": {
+            "binary_sha256": "f61ad365f6b77ff7fa622fc93bd5372f2aed4b5e9580efafaea3b8138f8675b9",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 48834,
+            "wall_seconds": 1.668158222000784
+          }
+        },
+        "cpu_affinity": "one fixed logical CPU",
+        "driver_sha256": {
+          "consumers": "e3e17be5a853499bf8f26c35966f1fcf2f799e2ef8a9228b524f6a919726efee",
+          "queries": "7c189e9c98b3d608ddf5ad0bad8cf1428d5dedf566c4424ba8c8270c9554ede1"
+        },
+        "flags": [
+          "build",
+          "--Werror",
+          "-I",
+          "SOURCE"
+        ],
+        "history": "Query/Gaussian drivers reconstructed from issue 550; physics geometry newly specified. Historical binaries are not used.",
+        "pairs": 8,
+        "platform": {
+          "architecture": "x86_64",
+          "os": "Linux"
+        },
+        "repeats": 36000,
+        "rows": 480,
+        "runner_sha256": "2c1f17f057b342574126dd56737c2a4218d3fc086e13c43f5a814d20170bceae",
+        "samples_per_binary_per_pair": 5,
+        "schema": 1,
+        "source_inventory_sha256": {
+          "baseline": "a30c519ecc30ea7515a246620115c709b57e2d08b11ef4454086873d10cec8e2",
+          "candidate": "5bb0d949b99644d77539ce0f049361bef2e1878d4eb9efcc69afb91324bc1141"
+        },
+        "status": "complete",
+        "toolchain": "Mojo 1.1.0 (8189361e)",
+        "verified_unchanged_sources_and_binaries": true,
+        "workloads": {
+          "gaussian": "4096000 splat-candidate visits in 1000 public raycast calls; every returned field consumed",
+          "physics_mesh": "2048 triangles, prepared Octree, 5600 rays; full PhysicsWorld.raycast with every returned field consumed",
+          "queries": "256 stored rays repeated without reducing work; every point coordinate consumed"
+        }
+      },
+      "private_provenance_sha256": "90d176b0f971e4d010869282e7b0f065ef96f218df71f7b026d9b2020195c064",
+      "source_inventories_sha256": "93649648193ced001c0f048b24d3043f43beaaf2ee7a5f94428b7d66589bee10",
+      "summary": {
+        "box_bool": {
+          "baseline": {
+            "max_ms": 84.569381,
+            "median_ms": 59.3626635,
+            "min_ms": 54.779693,
+            "q1_ms": 57.708836,
+            "q3_ms": 62.7536135,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 67.651969,
+            "median_ms": 51.6394825,
+            "min_ms": 48.244569,
+            "q1_ms": 50.47853225000001,
+            "q3_ms": 54.92492475,
+            "samples": 40
+          },
+          "checksum": "3744000.0",
+          "median_ratio": 0.8698983410675298,
+          "paired_round_median_ratio": 0.8764537910774999,
+          "paired_round_ratios": [
+            0.7806778981557925,
+            0.8635352000754019,
+            0.8671817372409051,
+            0.907365317804718,
+            0.8746773866034653,
+            0.8782301955515345,
+            0.8964183887469266,
+            0.9260942633037113
+          ]
+        },
+        "box_point": {
+          "baseline": {
+            "max_ms": 214.153171,
+            "median_ms": 112.991791,
+            "min_ms": 107.816356,
+            "q1_ms": 111.04066399999999,
+            "q3_ms": 122.20474875,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 119.850517,
+            "median_ms": 99.1864065,
+            "min_ms": 89.248193,
+            "q1_ms": 95.28216224999998,
+            "q3_ms": 108.67546825000001,
+            "samples": 40
+          },
+          "checksum": "3481921.0314005613",
+          "median_ratio": 0.8778195798312463,
+          "paired_round_median_ratio": 0.855363161634773,
+          "paired_round_ratios": [
+            0.8439599291640042,
+            0.9200731530706063,
+            0.8667663941055419,
+            0.8813072713124093,
+            0.8345359253114276,
+            0.8127542579397735,
+            0.9402869696177399,
+            0.8236729522376658
+          ]
+        },
+        "gaussian": {
+          "baseline": {
+            "max_ms": 238.192379,
+            "median_ms": 110.630623,
+            "min_ms": 104.891295,
+            "q1_ms": 108.433424,
+            "q3_ms": 123.95945825000001,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 152.837592,
+            "median_ms": 113.383773,
+            "min_ms": 102.284089,
+            "q1_ms": 107.08311125,
+            "q3_ms": 124.26295525,
+            "samples": 40
+          },
+          "checksum": "4697511.6295543015",
+          "median_ratio": 1.0248859667001966,
+          "paired_round_median_ratio": 1.0148190051518222,
+          "paired_round_ratios": [
+            0.8639220886112984,
+            1.032241099856692,
+            0.9973969104469524,
+            1.0407065757695522,
+            0.9821656053666687,
+            0.9048194337718856,
+            1.0911935646542013,
+            1.1234427727127516
+          ]
+        },
+        "physics_mesh": {
+          "baseline": {
+            "max_ms": 19.323523,
+            "median_ms": 8.3500445,
+            "min_ms": 7.498707,
+            "q1_ms": 7.958198749999999,
+            "q3_ms": 9.360068,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 18.190716,
+            "median_ms": 8.6050025,
+            "min_ms": 7.571731,
+            "q1_ms": 7.9859685,
+            "q3_ms": 10.6133415,
+            "samples": 40
+          },
+          "checksum": "1944328.0038719177",
+          "median_ratio": 1.0305337294909027,
+          "paired_round_median_ratio": 1.0097615556757862,
+          "paired_round_ratios": [
+            1.0949227235447268,
+            1.1053680597639701,
+            0.9490632180950762,
+            1.1031394766696216,
+            0.999915391591184,
+            0.9668536081842991,
+            0.8805013277529942,
+            1.0196077197603883
+          ]
+        },
+        "sphere_bool": {
+          "baseline": {
+            "max_ms": 247.486862,
+            "median_ms": 56.0088475,
+            "min_ms": 52.035676,
+            "q1_ms": 54.444185,
+            "q3_ms": 61.29073674999999,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 69.210671,
+            "median_ms": 56.067366,
+            "min_ms": 51.242719,
+            "q1_ms": 53.857499250000004,
+            "q3_ms": 60.62126625,
+            "samples": 40
+          },
+          "checksum": "5328000.0",
+          "median_ratio": 1.0010448081439276,
+          "paired_round_median_ratio": 0.9667908350167562,
+          "paired_round_ratios": [
+            0.9061079584807833,
+            0.9678666718203032,
+            0.9452377617509885,
+            1.0612542148760453,
+            0.9766985341976008,
+            0.9603143292487645,
+            1.0376928461248836,
+            0.9657149982132093
+          ]
+        },
+        "sphere_point": {
+          "baseline": {
+            "max_ms": 114.894637,
+            "median_ms": 67.25312149999999,
+            "min_ms": 62.674132,
+            "q1_ms": 64.81312375,
+            "q3_ms": 78.41325025,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 98.828732,
+            "median_ms": 67.2312435,
+            "min_ms": 61.156845,
+            "q1_ms": 65.2391215,
+            "q3_ms": 75.078555,
+            "samples": 40
+          },
+          "checksum": "3181338.959494328",
+          "median_ratio": 0.9996746916795529,
+          "paired_round_median_ratio": 0.9724368443766486,
+          "paired_round_ratios": [
+            0.815813311124105,
+            0.9820650544565077,
+            0.9565941099710973,
+            1.0351427326257685,
+            1.0245825005950515,
+            0.9531511791505075,
+            0.9985119435085924,
+            0.9628086342967894
+          ]
+        }
+      },
+      "trials_sha256": "234c3a706d107409040aa864d3912cd01748fd539e5e9ea14beaa64962c1dede"
+    },
+    "primary": {
+      "metadata": {
+        "builds": {
+          "baseline-consumers": {
+            "binary_sha256": "0f4d095d5f8b99eaaf0f28144bd9755a1fbee774d591d6b65d8d5dd30e5e3d54",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 140280,
+            "text_bytes": 103633,
+            "wall_seconds": 8.871986976002518
+          },
+          "baseline-queries": {
+            "binary_sha256": "1fe1bb4557ac574bc0836fd7e128f2cd6c925d1e5c0d44150c72e1326991f108",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 49271,
+            "wall_seconds": 4.971851763999439
+          },
+          "candidate-consumers": {
+            "binary_sha256": "297071f8e5ff542f31e6fe3c19de9139797f10fa4c5ce3b78608a6d9abec9c4b",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 136184,
+            "text_bytes": 103489,
+            "wall_seconds": 8.70482743699904
+          },
+          "candidate-queries": {
+            "binary_sha256": "f61ad365f6b77ff7fa622fc93bd5372f2aed4b5e9580efafaea3b8138f8675b9",
+            "bss_bytes": 8,
+            "data_bytes": 760,
+            "file_bytes": 73856,
+            "text_bytes": 48834,
+            "wall_seconds": 4.747262581000541
+          }
+        },
+        "cpu_affinity": "one fixed logical CPU",
+        "driver_sha256": {
+          "consumers": "e3e17be5a853499bf8f26c35966f1fcf2f799e2ef8a9228b524f6a919726efee",
+          "queries": "7c189e9c98b3d608ddf5ad0bad8cf1428d5dedf566c4424ba8c8270c9554ede1"
+        },
+        "flags": [
+          "build",
+          "--Werror",
+          "-I",
+          "SOURCE"
+        ],
+        "history": "Query/Gaussian drivers reconstructed from issue 550; physics geometry newly specified. Historical binaries are not used.",
+        "pairs": 8,
+        "platform": {
+          "architecture": "x86_64",
+          "os": "Linux"
+        },
+        "repeats": 4000,
+        "rows": 480,
+        "runner_sha256": "2c1f17f057b342574126dd56737c2a4218d3fc086e13c43f5a814d20170bceae",
+        "samples_per_binary_per_pair": 5,
+        "schema": 1,
+        "source_inventory_sha256": {
+          "baseline": "a30c519ecc30ea7515a246620115c709b57e2d08b11ef4454086873d10cec8e2",
+          "candidate": "5bb0d949b99644d77539ce0f049361bef2e1878d4eb9efcc69afb91324bc1141"
+        },
+        "status": "complete",
+        "toolchain": "Mojo 1.1.0 (8189361e)",
+        "verified_unchanged_sources_and_binaries": true,
+        "workloads": {
+          "gaussian": "4096000 splat-candidate visits in 1000 public raycast calls; every returned field consumed",
+          "physics_mesh": "2048 triangles, prepared Octree, 5600 rays; full PhysicsWorld.raycast with every returned field consumed",
+          "queries": "256 stored rays repeated without reducing work; every point coordinate consumed"
+        }
+      },
+      "private_provenance_sha256": "50a96c258e935ee5491aa0e8e8272c04cc61d5208f0982a74f88975577c88227",
+      "source_inventories_sha256": "93649648193ced001c0f048b24d3043f43beaaf2ee7a5f94428b7d66589bee10",
+      "summary": {
+        "box_bool": {
+          "baseline": {
+            "max_ms": 12.909652,
+            "median_ms": 6.4090115,
+            "min_ms": 5.967829,
+            "q1_ms": 6.0831937499999995,
+            "q3_ms": 6.895393250000001,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 6.556187,
+            "median_ms": 5.500693,
+            "min_ms": 5.127659,
+            "q1_ms": 5.3384055,
+            "q3_ms": 5.746296500000001,
+            "samples": 40
+          },
+          "checksum": "416000.0",
+          "median_ratio": 0.8582747901138889,
+          "paired_round_median_ratio": 0.8563600267491127,
+          "paired_round_ratios": [
+            0.8297115220292354,
+            0.9266805105005147,
+            0.8521000784986624,
+            0.8648490601255943,
+            0.9147475692076232,
+            0.8024230123009501,
+            0.8602450375493054,
+            0.85247501594892
+          ]
+        },
+        "box_point": {
+          "baseline": {
+            "max_ms": 18.751086,
+            "median_ms": 12.5670985,
+            "min_ms": 11.529172,
+            "q1_ms": 12.211724250000001,
+            "q3_ms": 13.3669445,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 13.177126,
+            "median_ms": 10.4854725,
+            "min_ms": 9.678578,
+            "q1_ms": 10.055189,
+            "q3_ms": 11.10711925,
+            "samples": 40
+          },
+          "checksum": "386880.11460006237",
+          "median_ratio": 0.8343590606853284,
+          "paired_round_median_ratio": 0.829237344405888,
+          "paired_round_ratios": [
+            0.8101696033895182,
+            0.8594334186141044,
+            0.8203736421517346,
+            0.8237875373850221,
+            0.8346871514267541,
+            0.7920520630816691,
+            0.8431333542456212,
+            0.846710250636821
+          ]
+        },
+        "gaussian": {
+          "baseline": {
+            "max_ms": 127.723773,
+            "median_ms": 111.04609049999999,
+            "min_ms": 105.120701,
+            "q1_ms": 108.650677,
+            "q3_ms": 112.251047,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 168.963703,
+            "median_ms": 108.353184,
+            "min_ms": 103.360324,
+            "q1_ms": 106.30944000000001,
+            "q3_ms": 111.38271549999999,
+            "samples": 40
+          },
+          "checksum": "4697511.6295543015",
+          "median_ratio": 0.9757496505471304,
+          "paired_round_median_ratio": 0.9723525552046628,
+          "paired_round_ratios": [
+            0.9891795780790384,
+            0.9581011328302635,
+            0.9534176951219152,
+            0.9825487172131081,
+            1.015222425881348,
+            0.9705869484054156,
+            0.9603352577890508,
+            0.9741181620039099
+          ]
+        },
+        "physics_mesh": {
+          "baseline": {
+            "max_ms": 11.760186,
+            "median_ms": 8.4884065,
+            "min_ms": 7.432728,
+            "q1_ms": 7.973851499999999,
+            "q3_ms": 8.9071245,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 14.892163,
+            "median_ms": 8.583048,
+            "min_ms": 7.437576,
+            "q1_ms": 7.891421,
+            "q3_ms": 8.91126225,
+            "samples": 40
+          },
+          "checksum": "1944328.0038719177",
+          "median_ratio": 1.0111495013816787,
+          "paired_round_median_ratio": 1.0193937381001663,
+          "paired_round_ratios": [
+            1.012777650380959,
+            0.940860627205499,
+            1.0370186674578505,
+            1.026009825819374,
+            1.009422094927682,
+            1.100993681323583,
+            1.1030244343035003,
+            0.9783523005200885
+          ]
+        },
+        "sphere_bool": {
+          "baseline": {
+            "max_ms": 7.820798,
+            "median_ms": 6.0450099999999996,
+            "min_ms": 5.603682,
+            "q1_ms": 5.708582249999999,
+            "q3_ms": 6.553483999999999,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 7.929537,
+            "median_ms": 5.992035,
+            "min_ms": 5.589584,
+            "q1_ms": 5.78310725,
+            "q3_ms": 6.334373500000001,
+            "samples": 40
+          },
+          "checksum": "592000.0",
+          "median_ratio": 0.9912365736367682,
+          "paired_round_median_ratio": 0.9996833636901099,
+          "paired_round_ratios": [
+            1.0520285915846548,
+            1.0614832009014645,
+            0.9807764025415678,
+            1.0268408331251255,
+            0.9453333282008396,
+            0.9373390385906545,
+            0.9844562810674302,
+            1.0149104463127896
+          ]
+        },
+        "sphere_point": {
+          "baseline": {
+            "max_ms": 10.267919,
+            "median_ms": 7.5292445,
+            "min_ms": 6.977116,
+            "q1_ms": 7.2529775,
+            "q3_ms": 7.7967505,
+            "samples": 40
+          },
+          "candidate": {
+            "max_ms": 9.790347,
+            "median_ms": 7.6264590000000005,
+            "min_ms": 6.825853,
+            "q1_ms": 7.1927027500000005,
+            "q3_ms": 8.085117749999998,
+            "samples": 40
+          },
+          "checksum": "353482.10660997377",
+          "median_ratio": 1.0129115876101513,
+          "paired_round_median_ratio": 1.0102735591278575,
+          "paired_round_ratios": [
+            0.9935016490021462,
+            1.0536696200790148,
+            0.9835033893414092,
+            1.027045469253569,
+            0.984660410704321,
+            1.0477947458358112,
+            0.93200276442514,
+            1.064871183558171
+          ]
+        }
+      },
+      "trials_sha256": "506bb666181bc5d646830252faa10b1ad70e95861c53a2d17baf515dbeca4501"
+    }
+  },
+  "schema": 1,
+  "scope": "Focused checks and complete matrix. Full changed-module coverage and repository aggregate gates are deferred to the final batch.",
+  "source_identity": {
+    "baseline_ray_sha256": "861e8903896409602991cedf55de068e767d3f0a5c881f1d20025ad2da9a2c8a",
+    "candidate_ray_sha256": "9c1fa9176970d534ec6f718a09f916af26a8dc87299d80f862e6f60190657805"
+  }
+}

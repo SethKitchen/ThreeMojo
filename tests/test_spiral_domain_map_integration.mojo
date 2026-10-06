@@ -9,7 +9,7 @@ search. No duration gate or original numerical/work budget is changed.
 """
 
 from extensions.carla.curve_bounds import _lane_jet_with_proof
-from extensions.carla.curve_distance import _normalized_square
+from extensions.carla.lane_distance import _normalized_square
 from extensions.carla.lane_refinement import (
     _certificate_within_gap, _checked_center, _lane_certificate_contains,
     _scaled_accuracy,

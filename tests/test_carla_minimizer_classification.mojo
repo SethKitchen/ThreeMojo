@@ -6,7 +6,7 @@
 """Minimizing-set classification bounds preserve strictness and work limits."""
 
 from extensions.carla.curve_bounds import _reference_work
-from extensions.carla.curve_distance import _point_gap_scale
+from extensions.carla.lane_distance import _point_gap_scale
 from extensions.carla.curve_interval import _Interval
 from extensions.carla.geometry import SPIRAL
 from extensions.carla.lane_refinement import (

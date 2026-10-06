@@ -23,7 +23,16 @@ vertex with every other. The rounding is three.js's own: a number is
 scaled, and truncated toward zero, which is what JavaScript's `~~` does.
 Two numbers a step apart can therefore land on either side of a rounding
 boundary and stay apart, in three.js and here.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
@@ -333,9 +342,7 @@ def to_creased_normals(
         var c = positions.vector3(face * 3 + 2)
         # three.js's order: from the second corner to the third, crossed
         # with from the second to the first.
-        var normal = c - b
-        normal.cross(a - b)
-        normal.normalize()
+        var normal = normal_or_zero(a, b, c)
         normals.append(normal)
         for corner in [a, b, c]:  # pragma: no branch
             var key = _crease_key(corner)

@@ -100,6 +100,26 @@ struct _LineProducts(ImplicitlyCopyable):
 
 
 @always_inline
+def _regular_ray_vectors(
+    origin: SIMD[DType.float32, 4], direction: SIMD[DType.float32, 4]
+) -> Bool:
+    """Check finite stored components and a nonzero direction without products.
+
+    The fourth lane is zero. Finite Float32 components cannot overflow a
+    Float64 sum of their magnitudes. Thus these bit tests are equivalent
+    to the wide regularity check in `_query_products`, including subnormals.
+    """
+    var origin_bits = bitcast[DType.uint32](origin) & UInt32(0x7FFFFFFF)
+    var direction_bits = bitcast[DType.uint32](direction) & UInt32(0x7FFFFFFF)
+    return Bool(
+        (
+            origin_bits.lt(UInt32(0x7F800000))
+            & direction_bits.lt(UInt32(0x7F800000))
+        ).reduce_and()
+    ) and Bool(direction_bits.ne(0).reduce_or())
+
+
+@always_inline
 def _line_products[
     prepared: Bool = False
 ](
@@ -968,7 +988,7 @@ struct Ray(ImplicitlyCopyable):
             return (False, True)
         if ((o.lt(lo) & d.le(0)) | (o.gt(hi) & d.ge(0))).reduce_or():
             var regular = (
-                products.regular if prepared else self._query_products().regular
+                products.regular if prepared else _regular_ray_vectors(o, d)
             )
             return (not regular, regular)
         if prepared:
@@ -1029,8 +1049,8 @@ struct Ray(ImplicitlyCopyable):
         var hit = _box_pairs[4](place, di, dj, low_i, high_i, low_j, high_j)
         if not need_regular and hit:
             return (True, True)
-        var regular = (
-            products.regular if prepared else self._query_products().regular
+        var regular = products.regular if prepared else _regular_ray_vectors(
+            o, d
         )
         return (hit or not regular, regular)
 

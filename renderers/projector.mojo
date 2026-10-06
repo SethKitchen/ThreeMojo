@@ -41,8 +41,30 @@ where three.js has one object a node. Instanced, batched and skinned meshes
 and levels of detail are not projected. A face or a line that names a
 vertex past its geometry is refused: three.js reads a vertex left over from
 an earlier object, or throws.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from std.math import isfinite
+
+from math.scaled_products import (
+    _Scaled,
+    _sum_products as _scaled_products,
+    _common_scale,
+)
+
+from math.norm import (
+    _ordinary_product,
+    length2,
+    length3,
+    normalized3,
+    _ordinary_squared,
+)
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.geometry_store import GeometryId
@@ -349,8 +371,8 @@ struct Matrix(ImplicitlyCopyable):
             var x = self.e[c * 4]
             var y = self.e[c * 4 + 1]
             var z = self.e[c * 4 + 2]
-            best = max(best, x * x + y * y + z * z)
-        return sqrt(best)
+            best = max(best, length3(x, y, z))
+        return best
 
 
 def apply_normal(m: List[Float64], v: Vec) -> Vec:
@@ -367,9 +389,51 @@ def apply_normal(m: List[Float64], v: Vec) -> Vec:
     var x = m[0] * v[0] + m[3] * v[1] + m[6] * v[2]
     var y = m[1] * v[0] + m[4] * v[1] + m[7] * v[2]
     var z = m[2] * v[0] + m[5] * v[1] + m[8] * v[2]
-    var length = sqrt(x * x + y * y + z * z)
-    var scale = 1 / (length if length != 0 and length == length else 1)
-    return Vec(x * scale, y * scale, z * scale, 0)
+    var squared = x * x + y * y + z * z
+    var bound = Float64(0)
+    var products_safe = True
+    var finite = isfinite(v[0]) and isfinite(v[1]) and isfinite(v[2])
+    for row in range(3):  # pragma: no branch
+        products_safe = (
+            products_safe
+            and _ordinary_product(m[row], v[0])
+            and _ordinary_product(m[row + 3], v[1])
+            and _ordinary_product(m[row + 6], v[2])
+        )
+        bound = max(
+            bound,
+            abs(m[row] * v[0])
+            + abs(m[row + 3] * v[1])
+            + abs(m[row + 6] * v[2]),
+        )
+        finite = (
+            finite
+            and isfinite(m[row])
+            and isfinite(m[row + 3])
+            and isfinite(m[row + 6])
+        )
+    if (
+        products_safe
+        and _ordinary_squared(squared)
+        and bound <= 4 * max(abs(x), max(abs(y), abs(z)))
+    ):
+        var scale = 1 / sqrt(squared)
+        return Vec(x * scale, y * scale, z * scale, 0)
+    if not finite:
+        var unit = normalized3(x, y, z)
+        return Vec(unit[0], unit[1], unit[2], 0)
+    var sums = Array[_Scaled[DType.float64], 3](
+        fill=_Scaled[DType.float64](0, 0)
+    )
+    for row in range(3):  # pragma: no branch
+        sums[row] = _scaled_products[DType.float64, 3](
+            [m[row], m[row + 3], m[row + 6]],
+            [v[0], v[1], v[2]],
+            [Float64(1), Float64(1), Float64(1)],
+        )
+    var scaled = _common_scale[DType.float64, 3](sums)
+    var unit = normalized3(scaled[0], scaled[1], scaled[2])
+    return Vec(unit[0], unit[1], unit[2], 0)
 
 
 def _painter_before(
@@ -622,7 +686,7 @@ def project_scene(
                         var dy = 0.5 - Float64(moved.y)
                         inside = frustum.sphere(
                             center,
-                            (0.7071067811865476 + sqrt(dx * dx + dy * dy))
+                            (0.7071067811865476 + length2(dx, dy))
                             * world.max_scale(),
                         )
                     else:

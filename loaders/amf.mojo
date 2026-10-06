@@ -35,8 +35,16 @@ has no `id` or a coordinate or a vertex index is missing. This port
 refuses these, and a value that is not a number, which three.js reads
 as `NaN`, and a vertex index past the last vertex. An empty value is
 zero, as JavaScript's `Number("")` is.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import normalized3, _ordinary_squared
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, BufferGeometry
@@ -471,6 +479,25 @@ def _index(value: Float64) raises -> Int:
     return whole
 
 
+def _scaled_normal(
+    x: Float64, y: Float64, z: Float64, scale: Float64
+) -> Tuple[Float64, Float64, Float64]:
+    """Apply the normal-matrix scale without erasing finite tiny directions."""
+    var sx = x / scale
+    var sy = y / scale
+    var sz = z / scale
+    var unit = normalized3(sx, sy, sz)
+    if (
+        not _ordinary_squared(sx * sx + sy * sy + sz * sz)
+        and isfinite(x)
+        and isfinite(y)
+        and isfinite(z)
+    ):
+        # AMF units use a positive scale, which cannot change direction.
+        unit = normalized3(x, y, z)
+    return unit
+
+
 def _place_mesh(
     mesh: _Mesh,
     material_ids: List[String],
@@ -493,20 +520,13 @@ def _place_mesh(
         positions.append(Float32(v * scale))
     var normals = List[Float32]()
     for k in range(0, len(mesh.normals), 3):
-        var x = mesh.normals[k]
-        var y = mesh.normals[k + 1]
-        var z = mesh.normals[k + 2]
-        # three.js's `scale` turns the normals by the normal matrix, a
-        # scale of one over `scale`, and makes them unit length.
-        x /= scale
-        y /= scale
-        z /= scale
-        var length = sqrt(x * x + y * y + z * z)
-        if length == 0:
-            length = 1
-        normals.append(Float32(x / length))
-        normals.append(Float32(y / length))
-        normals.append(Float32(z / length))
+        # three.js applies the normal matrix's reciprocal unit scale.
+        var unit = _scaled_normal(
+            mesh.normals[k], mesh.normals[k + 1], mesh.normals[k + 2], scale
+        )
+        normals.append(Float32(unit[0]))
+        normals.append(Float32(unit[1]))
+        normals.append(Float32(unit[2]))
     var count = len(mesh.vertices) // 3
     var mismatched = len(normals) > 0 and len(normals) != len(mesh.vertices)
     if mismatched:

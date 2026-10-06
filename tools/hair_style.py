@@ -33,7 +33,7 @@ Two styles come from the repositories this project draws on:
   frostbitten-hair-webgpu by Marcin Matuszczyk. The model is (c) the
   Blender Foundation, CC-BY 3.0, durian.blender.org.
 - `mohawk`: Ratboy's mohawk, from AMD TressFX 4.1, MIT license,
-  copyright 2017 Advanced Micro Devices. On Ratboy it runs from the
+  copyright 2020 Advanced Micro Devices. On Ratboy it runs from the
   brow down the back, so only its crest from the brow to the nape is
   kept, and that arc is stretched onto a human scalp's.
 
@@ -64,6 +64,18 @@ MOHAWK_REACH = 0.6
 # A human cranium's radii across, up and along, which a crest's circle
 # takes the proportions of.
 HUMAN = (8.1, 9.3, 10.6)
+
+
+def _ordered_sum(values):
+    """Add values from left to right with one rounding per addition.
+
+    Python 3.12 changed built-in sum's floating-point algorithm. The
+    production THRS recipe uses this explicit order on every Python version.
+    """
+    total = 0
+    for value in values:
+        total += value
+    return total
 
 
 def read_tfx(path):
@@ -160,8 +172,8 @@ def fit_cranium(points):
     """Return the center and radii of the ellipsoid, square to the axes
     and on the midline, that passes nearest `points`."""
     rows = [(x * x, y * y, z * z, y, z) for x, y, z in points]
-    matrix = [[sum(r[i] * r[j] for r in rows) for j in range(5)] for i in range(5)]
-    vector = [sum(r[i] for r in rows) for i in range(5)]
+    matrix = [[_ordered_sum(r[i] * r[j] for r in rows) for j in range(5)] for i in range(5)]
+    vector = [_ordered_sum(r[i] for r in rows) for i in range(5)]
     a, b, c, d, e = _solve(matrix, vector)
     cy = -d / (2 * b)
     cz = -e / (2 * c)
@@ -174,8 +186,8 @@ def fit_crest(points):
     y and z, that passes nearest `points`."""
     rows = [(y, z, 1.0) for _, y, z in points]
     rhs = [-(y * y + z * z) for _, y, z in points]
-    matrix = [[sum(r[i] * r[j] for r in rows) for j in range(3)] for i in range(3)]
-    vector = [sum(r[i] * v for r, v in zip(rows, rhs)) for i in range(3)]
+    matrix = [[_ordered_sum(r[i] * r[j] for r in rows) for j in range(3)] for i in range(3)]
+    vector = [_ordered_sum(r[i] * v for r, v in zip(rows, rhs)) for i in range(3)]
     d, e, f = _solve(matrix, vector)
     cy = -d / 2
     cz = -e / 2
@@ -196,7 +208,7 @@ def cranium_frame(q, radii):
 def encode(strands, center, radii):
     """Return each strand as its root on the unit sphere and its points'
     offsets in the cranium's frame, in its mean radii."""
-    mean = sum(radii) / 3
+    mean = _ordered_sum(radii) / 3
     result = []
     for strand in strands:
         root = strand[0]

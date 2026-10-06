@@ -86,30 +86,90 @@ sections. Do not use a successful prefix load as proof of a valid whole file.
 
 ## Asset evidence and reproduction
 
-`assets/converted-asset-manifest.json` records exact hashes for the current
-converter files and the three bundled production outputs. It records the
-recipes and license declarations in the existing converter source and
-`THIRD-PARTY-NOTICES.md`. These facts do not establish which converter revision
-or upstream input bytes produced those historical outputs.
+`assets/converted-asset-manifest.json` pins a recipe that reproduces all three
+bundled production assets byte for byte. It records each upstream filename,
+immutable commit, Git blob checksum, SHA-256 and byte count. It also records
+the converter source hashes, format versions, transformation parameters and
+license evidence. This proves an exact recipe. It does not establish the
+original historical command log. The
+[verification record](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/converted-assets-303.json)
+records output hashes, source counts and focused checks.
 
-The historical source revisions and checksums remain unverified. The manifest
-uses null for those pins and false for production regeneration verification.
-Issue [#303](https://github.com/SethKitchen/ThreeMojo/issues/303) remains open
-for that evidence. Do not describe the production conversion as reproducible
-until pinned upstream inputs regenerate the recorded output hashes.
+The production inputs are:
 
-The manifest also pins small original OBJ and TressFX test inputs under
-`assets/converted-fixtures/`. The TressFX bytes use hexadecimal text for review.
-The check decodes them locally, runs both converters in a temporary directory,
-and compares all three generated output hashes. It never downloads assets or
-replaces accepted output files.
+- ICT FaceKit Light at `da5f95a607f5e6b37755b38d3385d7f2853732e5`:
+  the neutral OBJ, 57 expression OBJs and identity OBJs 000 through 059
+- Frostbitten Hair WebGPU at `4478dd129525ff7db92978178b55f760716cbd72`:
+  `static/models/SintelHairOriginal-sintel_hair.16points.tfx`
+- AMD TressFX 4.1 at `6957058e29dceb25a0c2a82849bb892f3d9fbce5`:
+  `bin/Objects/HairAsset/Ratboy/Ratboy_mohawk.tfx`
 
-Run the local check from the repository:
+The manifest lists all 120 converter inputs individually. It also pins five
+upstream license or context files. Only the listed input files reach the
+converters. Extra files in a cache cannot add expressions to the face model.
+
+The ICT Light inputs use MIT. Sintel's model uses CC-BY-3.0; the repository's
+MIT software license does not replace the model license. Ratboy uses MIT.
+See `THIRD-PARTY-NOTICES.md` for attribution and source links.
+
+### Run the small offline check
 
 ```sh
 python3 tools/check_converted_asset_manifest.py
 ```
 
-To require complete production provenance, add `--require-source-pins`.
-This mode fails while any historical source pin is unverified. Synthetic
-reproduction does not remove that production evidence gap.
+This checks local hashes and the complete provenance metadata. It also
+regenerates three small original fixtures from `assets/converted-fixtures/`.
+The check never accesses the network. It does not read or regenerate the
+large production inputs. `--require-source-pins` remains an accepted option;
+complete source pins are now required in the default check too.
+
+### Reproduce all production outputs
+
+Choose a cache directory outside the repository. The first command downloads
+only missing pinned files. The input data uses about 306 MB of storage.
+The scratch copy needs at least that much additional space. Conversion can
+take several minutes. Ordinary tests do not perform this download or run.
+
+```sh
+python3 tools/check_converted_asset_manifest.py --source-cache /path/to/converted-sources --fetch-sources
+```
+
+To reuse an existing cache without network access, omit `--fetch-sources`:
+
+```sh
+python3 tools/check_converted_asset_manifest.py --source-cache /path/to/converted-sources
+```
+
+You can also populate the cache from your own upstream checkouts. Use
+`CACHE/SOURCE_ID/COMMIT/UPSTREAM_PATH` for each manifest entry. The source IDs
+are `ict`, `sintel` and `ratboy`. Copy the input, license and context files
+without changing their bytes. Git metadata is not required. The checker
+verifies both checksums and the byte count, then stages the same checked
+bytes in a private temporary directory.
+
+Missing files fail in offline mode. Wrong revisions, changed sources and
+truncated inputs fail before conversion. The download option does not repair
+or overwrite altered cache files. Restore those files from the pinned source
+before retrying. A source or output mismatch is an error. The checker never
+updates accepted assets or their expected hashes.
+
+### Arithmetic and verification limits
+
+The reference run used CPython 3.12.14 on Linux x86-64, with only the Python
+standard library. The output comparison is exact; another runtime must pass
+the same hashes before its result is accepted.
+
+THRS fitting adds floating-point values explicitly from left to right. This
+keeps one binary64 rounding per addition. Python 3.12 changed built-in `sum`
+to use more accurate floating-point addition. With the unmodified converter,
+that change moved four Sintel offset components by one quantization step.
+
+Explicit ordered addition reproduces the existing layered asset exactly.
+It does not patch or replace any asset bytes. The mohawk and the three
+synthetic output hashes also remain unchanged.
+
+Full ICTF loading and the THRS readers validate the generated format at the
+boundary described above. Provenance and format validation do not establish
+anatomical or canonical-to-visual fidelity. That work remains separate in
+issue [#297](https://github.com/SethKitchen/ThreeMojo/issues/297).

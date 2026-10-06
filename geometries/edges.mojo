@@ -44,7 +44,16 @@ entries rather than the whole list. Scanning the whole list is the obvious
 way to write this, and it is quadratic: a sphere of a thousand points and
 three thousand edges does millions of comparisons and takes visible time
 in the instrumented build.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.triangle_normal import normal_or_zero
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
@@ -169,11 +178,7 @@ def _face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     Its own rather than `renderers.renderer.face_normal`, because a
     geometry does not depend on a renderer.
     """
-    var edge = b - a
-    var other = c - a
-    edge.cross(other)
-    edge.normalize()
-    return edge
+    return normal_or_zero(a, b, c)
 
 
 def _degenerate(a: Int, b: Int, c: Int) -> Bool:

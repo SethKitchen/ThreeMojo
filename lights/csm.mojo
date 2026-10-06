@@ -32,6 +32,12 @@ argument of zero is kept, where three.js's `data.x || default` replaces
 it with the default. `update` also updates the scene's world matrices,
 as the renderer needs them fresh. The node material `CSMShadowNode` is
 not ported; `CSMHelper` is `helpers.csm`.
+
+## Numerical range correction
+
+Finite nonzero light directions normalize even when their length does not
+fit in Float32. Component finiteness and true zero are checked separately.
+See `docs/wiki/Norm-consumers.md` for the consumer audit.
 """
 
 from cameras.camera import Camera
@@ -351,8 +357,11 @@ struct CSM(Movable):
         if not mode.is_valid():
             raise Error("A CSM split mode that is none of the four")
         var direction = light_direction
-        var length = direction.length()
-        if not isfinite(length) or length == 0:
+        if not (
+            isfinite(direction.x)
+            and isfinite(direction.y)
+            and isfinite(direction.z)
+        ) or (direction.x == 0 and direction.y == 0 and direction.z == 0):
             raise Error("A CSM's light direction must be finite and not zero")
         direction.normalize()
         var reach = max_far.to(METER)

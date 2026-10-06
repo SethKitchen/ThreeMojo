@@ -3,56 +3,59 @@ Copyright (c) 2026 Seth Kitchen, PE
 SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
-# CARLA point-distance arithmetic
+# Stored-point distance ordering
 
 ## Scope
 
-This draft compares the stored Float64 lane centers without narrowing them.
-It supports finite coordinates and finite widths.
-It does not certify the global minimum of a curve.
-The global lane work remains held in [#594](https://github.com/SethKitchen/ThreeMojo/pull/594).
+`extensions.carla.curve_distance` compares finite stored Float64 points.
+The [fixed-s lane query](CARLA-fixed-s-nearest) uses this private arithmetic.
+It does not change Map queries, geometry evaluation, or trigonometry.
+It does not certify the minimum of a continuous curve.
 
-## Point order
+## Comparison
 
-A common positive scale prevents overflow and underflow in ordinary comparisons.
-Outward intervals enclose each subtraction, division, square, and sum.
-The fast path accepts an order only when the intervals separate.
-An ambiguous comparison uses bounded exact binary products.
+The first path bounds both squared distances after a common positive scale.
+Adjacent Float64 values bound each potentially inexact elementary operation.
+Zero and subnormal values receive adjacent representable bounds too.
+Disjoint bounds decide the order.
+Overlapping bounds use exact binary products.
+No epsilon or rounded squared norm converts a positive gap to a tie.
 
-The exact fallback compares the squared distances of the stored coordinates.
-It uses 132 base-2^32 digits for each signed sum.
-Finite Float64 inputs fit this fixed capacity, including the largest finite values.
-Equal distances keep the segment insertion order.
-A rounded zero square does not establish equality or coincidence.
+The exact path cancels the common query-square terms.
+For each coordinate, it sums a*a - b*b - 2*a*q + 2*b*q.
+It separates the positive and negative products into fixed-size integer accumulators.
+The sign of their exact difference decides the order.
 
-## On-road classification
+Each finite Float64 has at most 53 significand bits.
+Products use four 32-bit limbs, with UInt64 intermediates and explicit carries.
+The smallest binary product has unit 2^-2148.
+Each accumulator has 132 limbs, or 4,224 bits.
+This includes the finite product exponent range, the factor of two, and the sum carry.
+No floating-point product decides an ambiguous comparison.
 
-The map retains the selected wide center for the strict plan-width test.
-It compares four times the plan distance squared with the width squared.
-It does not form a half-width that can underflow.
-It does not recompute the center through the public Float32 transform.
-A nonpositive width contains no point.
+## Reported distance
 
-Nonfinite centers or widths raise an error.
-Public transform and query storage types do not change.
-The correction changes results when narrowing or a rounded square hid a real gap.
-It also changes false ties between unequal point distances.
+The output norm divides component gaps by their largest magnitude before squaring.
+It multiplies the square root by that scale at the end.
+A distinct stored point therefore cannot acquire a false zero from a squared-distance underflow.
+Only the chosen lane's output norm is required.
 
-## Remaining limits
-
-Exact sample order does not establish an exact curve minimum.
-The integrated general refiner uses [normalized distance bounds](CARLA-normalized-refinement)
-and [cross-candidate certificates](CARLA-cross-candidate-certificates).
-The exact axis specialization verifies inverse seeds and stored-point brackets.
-Other affine projections do not bypass the general proof.
-[Candidate admission](CARLA-index-admission) uses the separate corrected R-tree bound
-from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
-Border-only lanes and total work budgets remain separate open issues.
+Near the finite limit, an exact squared-norm comparison checks representability.
+A true norm above the largest finite Float64 raises an error.
+This includes a calculation that rounds down to the largest finite value.
+An in-range norm whose reconstruction overflows returns the largest finite value.
+The output is an approximation, not a correctly rounded or interval-valued norm API.
 
 ## Controls
 
-The retained regressions cover a wide origin and a false zero-square tie.
-Focused controls include strict boundaries, subnormal widths, and finite-limit points.
-A deterministic Python Fraction generator supplies 100 exact bit-pattern cases.
-The integer fallback and scaled fast path each match those independent signs.
-Full consumer coverage and performance remain publication gates.
+Integer geometry and a reproducible Fraction corpus check the comparison.
+The corpus includes 100 finite binary input triples across the Float64 exponent range.
+It includes true ties, subnormal perturbations, sign changes, and finite-limit carries.
+Exact bisection gives a norm bracket independent of the native implementation.
+The output controls permit four additional ULPs around that bracket.
+Nonfinite inputs and out-of-range norms must raise.
+
+Run `python3 tools/generate_carla_distance_controls.py` to regenerate the point corpus.
+Run `tools/capture_carla_fixed_s_controls.mojo` to capture geometry seeds with the pinned toolchain.
+Pass the capture file to `tools/generate_carla_fixed_s_controls.py` to regenerate the road corpus.
+Run `mojo format` on each generated Mojo file.

@@ -16,7 +16,7 @@ is a grid-sampled estimate under the chosen tissues. It is not a proven
 upper bound.
 """
 
-from extensions.humanoid.skeleton.tissue import BoneTissue
+from extensions.anatomy.tissue import BoneTissue
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
 from std.math import isfinite

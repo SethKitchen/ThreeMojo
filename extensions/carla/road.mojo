@@ -21,37 +21,46 @@ index: `lane_transform` is `Lane::ComputeTransform`, `lane_corners` is
 `lane_is_straight` is `Lane::IsStraight`. A `LaneKey` names a lane from
 anywhere in the map: its road id, its section id and its lane id.
 
-CARLA writes a point in single precision. This port computes lane centers
-in double and rounds at the public `Location` boundary. Map nearest
-queries retain the double center. The lane pose follows the derivative of
-that center, including changing widths and sampled-reference tangents.
-This intentionally corrects CARLA's use of a slope as an angle. Pitch
-also accounts for the lane center's horizontal speed. A section with a
-width-record kink does not use the two-row straight-lane mesh shortcut.
-These corrections can change poses, nearest waypoints and mesh counts.
+The fixed-s `nearest_lane` query keeps its computed centers in Float64 and
+uses exact stored-point distance ordering. Its reported Float64 norm is a
+scale-safe approximation. It visits every lane center, including centers
+after a farther one. Other methods retain the precision rules below.
 
-The fixed-s `Road.nearest_lane` helper also retains its OpenDRIVE-frame
-centers in double precision. It compares their stored coordinates exactly
-and returns a scale-safe Float64 distance. Map does not call this helper.
-This corrects false lane ties caused by single-precision narrowing.
-It visits every lane center because rounded outward steps need not have
-monotonic distances; CARLA's early stop can skip the nearest lane.
+Lane orientation corrects CARLA's lateral-slope-as-angle calculation. It
+differentiates the selected reference position and offset frame, accumulated
+widths and lane offset before Float32 storage. Pitch uses actual horizontal
+speed. Border-only lane geometry remains a separate unsupported contract.
+Center coordinates and the fixed-s query arithmetic are unchanged.
+
+Lane transforms and Map query witnesses use one lane-center expression in
+Float64, with a final Float32 public position. Its certified polynomial
+trigonometry, offset-arc expression, and displacement-first spiral can
+change stored coordinates from the earlier reference-based lane transform.
+The pose differentiates that same expression and retains explicit invalid
+frame and range refusal. Fixed-s queries and public reference geometry keep
+their existing arithmetic. Mesh corners retain their separate rounded-edge
+arithmetic; they are not an exact reconstruction of the wide query center.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/road/Road.cpp`,
 `LaneSection.cpp`, `LaneSectionMap.h` and `Lane.cpp`.
 """
 
-from extensions.carla.geometry import (
-    ARC,
-    DirectedPoint,
-    LINE,
-    PARAM_POLY3,
-    SPIRAL,
-)
 from extensions.carla.curve_distance import (
     _finite_point,
     _wide_distance,
     _wide_point_order,
+)
+from extensions.carla.geometry import ARC, DirectedPoint, LINE
+from extensions.carla.curve_trig import (
+    _curve_cos as _lane_cos,
+    _curve_sin as _lane_sin,
+    _sincos_derivative,
+)
+from extensions.carla.lane_geometry import (
+    _lane_arc_offset,
+    _lane_arc_offset_derivative,
+    _lane_geometry_derivative_at,
+    _lane_geometry_pos_at,
 )
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road_info import (
@@ -71,13 +80,7 @@ from extensions.carla.road_info import (
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from extensions.carla.curve_trig import (
-    _curve_atan2 as atan2,
-    _curve_cos as cos,
-    _curve_sin as sin,
-    _sincos_derivative,
-)
-from std.math import isfinite, sqrt
+from std.math import atan2, cos, isfinite, sin, sqrt
 from units.si import DEGREE, Angle, Length, METER, RADIAN
 
 # How far CARLA lifts a sidewalk's corners: six inches, in meters.
@@ -838,18 +841,22 @@ struct Road(Copyable, Movable):
         # lane 0 and its rate of change. Plus is to the right.
         ref lanes = self.sections[section].lanes
         var negative = lane_id.value < 0
+        var order = List[Int]()
+        if negative:
+            # The section holds the lane, so it has lanes.
+            for i in range(len(lanes) - 1, -1, -1):  # pragma: no branch
+                if lanes[i].id.value < 0:
+                    order.append(i)
+        else:
+            # The section holds the lane, so it has lanes.
+            for i in range(len(lanes)):  # pragma: no branch
+                if lanes[i].id.value >= 1:
+                    order.append(i)
         var dist = 0.0
         var tangent = 0.0
         var sign = 1.0 if negative else -1.0
-        # Visit the same inner-to-outer order without allocating a list.
-        # The section holds the lane, so this loop reaches it and breaks.
-        for position in range(len(lanes)):  # pragma: no branch
-            var i = len(lanes) - 1 - position if negative else position
-            if negative:
-                if lanes[i].id.value >= 0:
-                    continue
-            elif lanes[i].id.value < 1:
-                continue
+        # The order holds the lane itself, so the loop breaks.
+        for i in order:  # pragma: no branch
             var width = info_at(lanes[i].info.widths, s)
             if not Bool(width):
                 raise Error("A lane has no width record at s")
@@ -900,7 +907,7 @@ struct Road(Copyable, Movable):
     ) raises -> Tuple[Float64, Float64, Float64]:
         var at = info_index(self.info.geometries, s)
         ref record = self.info.geometries[at]
-        return record.geometry._derivative_at(s - record.s)
+        return _lane_geometry_derivative_at(record.geometry, s - record.s)
 
     def _lane_point(
         self, section: Int, lane: Int, s: Float64
@@ -916,18 +923,21 @@ struct Road(Copyable, Movable):
         offset -= lane_offset.value().polynomial.evaluate(s)
         return self._offset_lane_point(s, offset)
 
+    @no_inline
     def _offset_lane_point(
         self, s: Float64, offset: Float64
     ) raises -> DirectedPoint:
-        var point = self._plan_point(s)
         var at = info_index(self.info.geometries, s)
+        if at < 0:
+            raise Error("The road has no geometry at that s")
         ref record = self.info.geometries[at]
+        var point = _lane_geometry_pos_at(record.geometry, s - record.s)
         if record.geometry.kind == ARC:
             var d = min(max(s - record.s, 0.0), record.geometry.length)
-            point = record.geometry._arc_offset(d, offset)
+            point = _lane_arc_offset(record.geometry, d, offset)
         else:
-            point.x += offset * sin(point.tangent)
-            point.y -= offset * cos(point.tangent)
+            point.x += offset * _lane_sin(point.tangent)
+            point.y -= offset * _lane_cos(point.tangent)
         var elevation = self.elevation_on(s)
         point.z = elevation.evaluate(s)
         point.pitch = elevation.tangent(s)
@@ -1014,8 +1024,8 @@ struct Road(Copyable, Movable):
         var dx = point.x - Float64(location.x)
         var dy = point.y + Float64(location.y)
         var heading = record.geometry.heading
-        var c = cos(heading)
-        var sn = sin(heading)
+        var c = _lane_cos(heading)
+        var sn = _lane_sin(heading)
         var span = high - low
         var elevation = self.elevation_on(low)
         # Use world-coordinate coefficients of the actual scalar evaluator.
@@ -1081,12 +1091,13 @@ struct Road(Copyable, Movable):
             The transform a vehicle in that lane would have.
 
         Raises:
-            Error: If the indices name no lane, s is off the road, or a
-                record the transform needs is missing.
+            Error: If the indices name no lane, s is nonfinite or off the
+                road, a required record is missing, the offset frame is
+                undefined, or the center or derivative is not representable.
         """
         self._check_lane(section, lane)
-        if s > self.length or s < 0.0:
-            raise Error("s is off the road")
+        if not isfinite(s) or s > self.length or s < 0.0:
+            raise Error("s is off the road or nonfinite")
         var lane_id = self.sections[section].lanes[lane].id
         var offset = 0.0
         var slope = 0.0
@@ -1099,10 +1110,17 @@ struct Road(Copyable, Movable):
             raise Error("The road has no lane offset record at s")
         offset -= lane_offset.value().polynomial.evaluate(s)
         slope -= lane_offset.value().polynomial.tangent(s)
-        var point = self._offset_lane_point(s, offset)
+        if not isfinite(offset) or not isfinite(slope):
+            raise Error("Lane offset or derivative is not representable")
+        var geometry_at = info_index(self.info.geometries, s)
+        if geometry_at < 0:
+            raise Error("The road has no geometry at that s")
+        # Validate the selected frame before position evaluation can index a
+        # malformed sample table or convert an unrepresentable work count.
         var differential = self._plan_derivative(s)
-        var c = cos(point.tangent)
-        var sn = sin(point.tangent)
+        var point = self._lane_point(section, lane, s)
+        var c = _lane_cos(point.tangent)
+        var sn = _lane_sin(point.tangent)
         var normal = _sincos_derivative(point.tangent)
         var dx = (
             differential[0] + slope * sn + offset * differential[2] * normal[0]
@@ -1110,11 +1128,11 @@ struct Road(Copyable, Movable):
         var dy = (
             differential[1] - slope * c - offset * differential[2] * normal[1]
         )
-        var geometry_at = info_index(self.info.geometries, s)
         ref geometry = self.info.geometries[geometry_at].geometry
         if geometry.kind == ARC:
             var distance = s - self.info.geometries[geometry_at].s
-            var derivative = geometry._arc_offset_derivative(
+            var derivative = _lane_arc_offset_derivative(
+                geometry,
                 min(max(distance, 0.0), geometry.length),
                 offset,
                 slope,
@@ -1122,15 +1140,17 @@ struct Road(Copyable, Movable):
             )
             dx = derivative[0]
             dy = derivative[1]
+        if not isfinite(dx) or not isfinite(dy) or not isfinite(point.pitch):
+            raise Error("Lane center derivative is not representable")
+        if (
+            not isfinite(Float32(point.x))
+            or not isfinite(Float32(point.y))
+            or not isfinite(Float32(point.z))
+        ):
+            raise Error("Lane center is not representable in its transform")
         var magnitude = max(abs(dx), abs(dy))
-        var horizontal = 0.0
-        if magnitude > 0.0:
-            horizontal = magnitude * sqrt(
-                (dx / magnitude) * (dx / magnitude)
-                + (dy / magnitude) * (dy / magnitude)
-            )
         var yaw = Float32(-point.tangent) * _TO_DEGREES
-        if horizontal > 0.0:
+        if magnitude > 0.0:
             # Keep the reference heading's winding, while correcting its
             # direction by the actual derivative in the reference frame.
             yaw = (
@@ -1143,7 +1163,17 @@ struct Road(Copyable, Movable):
                 )
                 * _TO_DEGREES
             )
-        var pitch = -Float32(atan2(point.pitch, horizontal)) * _TO_DEGREES
+        # Preserve #485's scale-safe pitch for finite components whose
+        # unscaled horizontal norm would overflow or underflow.
+        var scale = max(magnitude, abs(point.pitch))
+        var pitch = Float32(0)
+        if scale > 0.0:
+            var horizontal = sqrt((dx / scale) ** 2 + (dy / scale) ** 2)
+            pitch = (
+                -Float32(atan2(point.pitch / scale, horizontal)) * _TO_DEGREES
+            )
+        if not isfinite(yaw):
+            raise Error("Lane yaw winding is not representable")
         if not self.is_positive_direction(lane_id):
             yaw += 180.0
             pitch = 360.0 - pitch

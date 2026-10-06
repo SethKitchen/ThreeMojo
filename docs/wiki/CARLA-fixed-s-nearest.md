@@ -17,7 +17,7 @@ The two APIs do not call each other.
 
 The fixed-s walk keeps width values, lane offsets, elevation, and centers in Float64.
 It does not pass an internal center through `Vector3` or an offset through `Length`.
-The shared [point-distance predicate](CARLA-point-distance) compares the stored centers exactly.
+The [point-distance predicate](CARLA-point-distance) compares the stored centers exactly.
 A rounded square or returned distance does not decide the selected lane.
 The guarantee concerns the computed Float64 centers, not an unrounded ideal road model.
 Center evaluation still uses Float64 arithmetic and its representable spacing.
@@ -66,11 +66,16 @@ Only the final selected lane needs a representable reported distance.
 A losing candidate with a huge norm does not fail the query solely because of that norm.
 No eligible lane returns `None` and the largest finite Float64, as before.
 
-A nonfinite scaled norm triggers an exact comparison with the largest finite Float64 squared.
-If the exact norm is in range, the method returns the largest finite Float64.
-This handles a rounded reconstruction that overflows just below the limit.
+The largest component gap above half the finite Float64 limit triggers an exact range check.
+A nonfinite reconstruction also triggers this check.
+The check compares the exact squared norm with the largest finite Float64 squared.
+If a nonfinite reconstruction has an exact norm in range, the method returns the largest finite Float64.
+A finite reconstruction keeps its approximate value when the exact norm is in range.
+This handles rounding on both sides of the finite limit.
+
 If the exact norm exceeds the limit, the method raises an error.
-Finite approximate outputs retain ordinary Float64 rounding, including rounding to the largest finite value.
+For example, a center at (DOUBLE_MAX, 1, 0) has an out-of-range exact norm.
+The method raises even when the scaled calculation rounds to DOUBLE_MAX.
 The reported norm is not a correctly rounded or interval-certified distance API.
 
 ## Controls
@@ -78,5 +83,52 @@ The reported norm is not a correctly rounded or interval-certified distance API.
 Focused controls cover translated origins, lane signs, true ties, filters, and section rules.
 They cover tiny widths, optional offsets, wide elevation, finite-limit centers, and checked failures.
 Independent Fraction calculations use the exact stored input values.
-The shared exact-product kernel has no new arithmetic implementation.
-An ordinary fixed-s benchmark compares lane identity, distance changes, and elapsed time.
+
+The controls include 100 Fraction point cases and 135 fixed-s cases across all five geometry kinds.
+The geometry cases use three non-axis headings and translated origins of both signs.
+A seed capture records only unchanged geometry points and ordinary sine and cosine values.
+Python computes the lane centers and exact distance order independently of `nearest_lane`.
+The existing Map and OpenDRIVE controls remain unchanged.
+
+## Benchmark
+
+`bench/carla_road_fixed_s_bench.mojo` compares two methods in one build.
+The baseline method comes from commit e53600eb4b0551bbe9900ea0e8b7151e49553a2d.
+Both methods call the same unchanged geometry helpers and ordinary trigonometry.
+This is a same-build method comparison, not a historical binary comparison.
+The benchmark warms both paths and alternates their order across eight samples.
+
+It checks 101 ordinary query identities for each lane count and heading.
+It times 1,000 queries per sample, with 1, 2, 4, 16, and 64 lanes per side.
+The headings are 0 and 0.37 radians.
+The output includes distance changes, timing, and a consumed checksum.
+
+The exact ordering and complete lane scan have a cost.
+A larger lane count must not restore the incorrect early-distance stop.
+The benchmark does not establish Map-query performance or global lane-search accuracy.
+
+### Measured result
+
+A Linux x86-64 run used Mojo 1.1.0 (8189361e) with `--Werror`.
+All 1,010 ordinary lane identities matched the baseline method.
+Returned distances can change because the old method rounded to Float32.
+The largest observed change was about 0.00000112 meter.
+
+| Lanes per side | Heading (radians) | Baseline microseconds/query | Corrected microseconds/query | Ratio |
+|---|---|---|---|---|
+| 1 | 0.0 | 0.300 | 0.659 | 2.20x |
+| 2 | 0.0 | 0.549 | 1.422 | 2.59x |
+| 4 | 0.0 | 0.786 | 2.869 | 3.65x |
+| 16 | 0.0 | 2.919 | 12.688 | 4.35x |
+| 64 | 0.0 | 28.898 | 69.713 | 2.41x |
+| 1 | 0.37 | 0.319 | 0.626 | 1.96x |
+| 2 | 0.37 | 0.491 | 1.411 | 2.87x |
+| 4 | 0.37 | 0.834 | 2.883 | 3.46x |
+| 16 | 0.37 | 2.835 | 13.084 | 4.61x |
+| 64 | 0.37 | 28.337 | 70.346 | 2.48x |
+
+Each time is the median 1,000-query batch time divided by 1,000.
+The road has twice the listed lane count, split equally between its two sides.
+Each ratio divides the corrected median time by the baseline median time.
+A ratio above 1 means that the corrected method is slower.
+These measurements are local observations, not a cross-machine speed guarantee.

@@ -26,12 +26,14 @@ from extensions.humanoid.skeleton.pelvis.vessels.dimensions import (
     is_pelvic_artery,
     pelvis_vessel_distance,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftMass,
-    SoftOccupancy,
     SoftTissue,
-    classify_soft,
     vessel_tissue,
+)
+from extensions.humanoid.skeleton.soft_tissue import (
+    SoftOccupancy,
+    classify_soft,
 )
 from math.vector3 import Vector3
 from units.si import CUBIC_METER, KILOGRAM, Mass, Volume

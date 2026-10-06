@@ -148,7 +148,16 @@ a cube texture's wrap; an
 has no field for; a texture's `format`, `type`,
 `premultiplyAlpha` and `unpackAlignment`; and a batch's sorting,
 reserved ranges and bounds.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import length3, normalized3, _ordinary_squared
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute, component_of_array
@@ -846,27 +855,20 @@ def decompose(mut node: Object3D, elements: List[Float32]) raises:
     var sx = _column_length(elements, 0)
     var sy = _column_length(elements, 4)
     var sz = _column_length(elements, 8)
-    if matrix.determinant() < 0:
-        sx = -sx
-    if sx * sy * sz == 0:
-        raise Error("Object JSON: a matrix that flattens an axis")
-    var rotation = Matrix4()
-    for row in range(3):  # pragma: no branch
-        rotation.elements[row] = elements[row] / sx
-        rotation.elements[4 + row] = elements[4 + row] / sy
-        rotation.elements[8 + row] = elements[8 + row] / sz
-    node.set_position(elements[12], elements[13], elements[14])
-    node.set_quaternion(Quaternion.from_matrix(rotation))
-    node.set_scale(sx, sy, sz)
+    if sx == 0 or sy == 0 or sz == 0:
+        raise Error("Object JSON" + ": a matrix that flattens an axis")
+    var position = Vector3(0, 0, 0)
+    var rotation = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    matrix.decompose(position, rotation, scale)
+    node.set_position(position.x, position.y, position.z)
+    node.set_quaternion(rotation)
+    node.set_scale(scale.x, scale.y, scale.z)
 
 
 def _column_length(elements: List[Float32], start: Int) -> Float32:
     """Return the length of a column's first three entries."""
-    return sqrt(
-        elements[start] * elements[start]
-        + elements[start + 1] * elements[start + 1]
-        + elements[start + 2] * elements[start + 2]
-    )
+    return length3(elements[start], elements[start + 1], elements[start + 2])
 
 
 def _flip_rows(mut pixels: List[UInt8], width: Int, height: Int):

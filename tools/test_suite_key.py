@@ -18,6 +18,7 @@ FILES = {
     "tools/run_suite.py": "",
     "tools/suite_key.py": "",
     "tools/test_environment.py": "",
+    "tools/compiler_telemetry.py": "",
     "pkg/__init__.mojo": "",
     "pkg/used.mojo": "from pkg.deep import f\n",
     "pkg/deep.mojo": "def f():\n    pass\n",
@@ -64,7 +65,7 @@ class SuiteKeyTests(unittest.TestCase):
     def test_reached_files_quoted_assets_tools_and_settings_change_the_key(self):
         before = self.key()
         for path in ("pkg/deep.mojo", "assets/box/a.bin", "Makefile",
-                     "tools/run_suite.py"):
+                     "tools/run_suite.py", "tools/compiler_telemetry.py"):
             self.write(path, "changed")
             after = self.key()
             self.assertNotEqual(before, after, path)

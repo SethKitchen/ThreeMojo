@@ -90,3 +90,13 @@ These were measured on four cores. Most of the build is the hair's shell, at `ha
 ```bash
 .venv/bin/mojo run -I . examples/game_humanoid.mojo
 ```
+
+## Audio-aligned facial animation
+
+Set `facial_animation=True` to keep the original facial skin and mouth under
+HEAD. This opt-in path adds a `GameFace` binding in `person.face`.
+It uses strict total-mesh budgets and preserves facial targets through LOD
+and glTF bake/load. Low budgets are refused before the scene changes.
+See [Audio-aligned game faces](Audio-aligned-game-faces) for the input,
+transport, correspondence, license and unsupported-combination contracts.
+The timing and speed measurements above describe the default static-face path.

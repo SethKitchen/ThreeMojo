@@ -48,10 +48,13 @@ class CiPolicyTests(unittest.TestCase):
         self.jobs = jobs_of(self.text)
 
     def test_linux_cpu_tools_include_the_portability_contract(self):
-        commands = re.findall(r'^        run: (make .+)$', self.jobs['lint'], re.MULTILINE)
-        self.assertEqual(len(commands), 1)
-        self.assertIn('test-portability', commands[0].split())
-        self.assertIn('test-coverage-tool', commands[0].split())
+        commands = re.findall(r'^          (make .+)$', self.jobs['lint'], re.MULTILINE)
+        self.assertEqual(commands, [
+            'make -B fmt-check test-tools test-coverage-tool test-portability AFFECTED="$AFFECTED"',
+            'make -B lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu '
+            '--target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1 AFFECTED="$AFFECTED"',
+            'make -B compile-fail docs-check AFFECTED="$AFFECTED"',
+        ])
 
     def test_macos_cpu_tools_include_the_portability_contract(self):
         job = self.jobs['cpu-macos']
@@ -73,6 +76,71 @@ class CiPolicyTests(unittest.TestCase):
         for name in ('lint', 'cpu', 'coverage-capture', 'coverage'):
             with self.subTest(job=name):
                 self.assertNotRegex(self.jobs[name], r'\bJOBS\s*=')
+
+    def test_linux_cpu_compilers_use_one_thread_without_changing_the_suites(self):
+        job = self.jobs['cpu']
+        self.assertRegex(job, r'(?m)^    timeout-minutes: 120$')
+        self.assertIn('shard: [1, 2, 3]', job)
+        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        self.assertEqual(commands, [
+            'make -B test-cpu SHARD=${{ matrix.shard }}/3 '
+            'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
+            '--target-cpu=x86-64-v3" AFFECTED="$AFFECTED"',
+        ])
+        self.assertNotRegex(job, r'\bJOBS\s*=')
+
+    def test_portable_cpu_target_does_not_leak_into_other_platforms_or_gates(self):
+        for name, job in self.jobs.items():
+            if name not in ('cpu', 'lint'):
+                self.assertNotIn('--target-cpu=x86-64-v3', job)
+                self.assertNotIn('--target-triple=x86_64-unknown-linux-gnu', job)
+        self.assertNotIn('MOJOFLAGS=', self.jobs['lint'])
+        self.assertEqual(self.jobs['lint'].count('LINT_CPU_BUILD_FLAGS='), 1)
+        self.assertEqual(self.jobs['cpu'].count('MOJOFLAGS='), 1)
+        self.assertNotIn('MOJOFLAGS:', self.text)
+        self.assertNotIn('continue-on-error:', self.jobs['lint'])
+        self.assertIn('timeout-minutes: 120', self.jobs['lint'])
+
+    def test_compiler_telemetry_is_opted_in_only_for_the_linux_cpu_step(self):
+        self.assertIn('THREEMOJO_COMPILER_TELEMETRY: "1"', self.jobs['cpu'])
+        self.assertRegex(self.jobs['cpu'],
+                         r'(?m)^      - name: test-cpu\n        env:\n'
+                         r'          THREEMOJO_COMPILER_TELEMETRY: "1"$')
+        for name, job in self.jobs.items():
+            if name != 'cpu':
+                self.assertNotIn('THREEMOJO_COMPILER_TELEMETRY', job)
+
+    def test_compiler_metadata_is_a_separate_linux_cpu_diagnostic(self):
+        job = self.jobs['cpu']
+        command = ('run: .venv/bin/python tools/compiler_metadata.py '
+                   '> compiler-metadata.json')
+        self.assertEqual(job.count(command), 1)
+        self.assertLess(job.index(command), job.index('- name: test-cpu'))
+        self.assertNotIn('continue-on-error:', job)
+        for name, other in self.jobs.items():
+            if name != 'cpu':
+                self.assertNotIn('compiler_metadata.py', other)
+        # The existing exact-command test also pins original flags/shards.
+        self.assertIn('run: make -B test-cpu SHARD=${{ matrix.shard }}/3 '
+                      'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
+                      '--target-cpu=x86-64-v3" AFFECTED="$AFFECTED"', job)
+
+    def test_compiler_metadata_artifact_is_bounded_scoped_and_uploaded_early(self):
+        job = self.jobs['cpu']
+        block = ('      - name: Preserve compiler metadata before CPU compilation\n'
+                 '        uses: actions/upload-artifact@v4\n'
+                 '        with:\n'
+                 '          name: compiler-metadata-${{ matrix.shard }}-attempt-${{ github.run_attempt }}\n'
+                 '          path: compiler-metadata.json\n'
+                 '          if-no-files-found: error\n'
+                 '          retention-days: 1\n')
+        self.assertEqual(job.count(block), 1)
+        self.assertLess(job.index('> compiler-metadata.json'), job.index(block))
+        self.assertLess(job.index(block), job.index('- name: test-cpu'))
+        self.assertEqual(job.count('uses: actions/upload-artifact@v4'), 1)
+        for name, other in self.jobs.items():
+            if name != 'cpu':
+                self.assertNotIn('compiler-metadata.json', other)
 
     def test_draft_pull_requests_skip_every_check_job(self):
         self.assertTrue(CHECK_JOBS <= self.jobs.keys())
@@ -126,6 +194,8 @@ class CiPolicyTests(unittest.TestCase):
         self.assertEqual(commands, [
             'make -B compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
             'make -B test-gpu-host',
+            # Metal kernel AIR, checked without a GPU (modular/modular#7238).
+            'make check-gpu-air',
         ])
         self.assertNotIn('continue-on-error:', job)
         self.assertNotRegex(job, r'(?m)^      -?\s*if:')
@@ -143,7 +213,9 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_coverage_keeps_all_shards_and_its_report_dependency(self):
         self.assertIn('needs: coverage-capture', self.jobs['coverage'])
-        self.assertIn('shard: [1, 2, 3, 4, 5, 6]', self.jobs['coverage-capture'])
+        self.assertIn('shard: [1, 2, 3, 4, 5, 6, 7, 8]', self.jobs['coverage-capture'])
+        # The group count in the command matches the matrix.
+        self.assertIn('SHARD=${{ matrix.shard }}/8 ', self.jobs['coverage-capture'])
         self.assertIn('make -B coverage-report AFFECTED="$AFFECTED"', self.jobs['coverage'])
 
 

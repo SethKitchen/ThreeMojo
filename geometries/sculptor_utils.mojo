@@ -18,8 +18,16 @@ always a unit direction and a position is always a finite `Float32`, so
 no product can overflow a double and the fallback is not ported. three.js
 lends every helper one shared scratch buffer; here each returns its own
 list.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length3
 from std.math import isnan, sqrt
 
 # The tag three.js writes in the fourth slot of a face. Kept for the
@@ -141,7 +149,7 @@ def _dot(a: Point3, b: Point3) -> Float64:
 
 def _hypot(p: Point3) -> Float64:
     """Return the length of `p`, three.js's `Math.hypot`."""
-    return sqrt(p.x * p.x + p.y * p.y + p.z * p.z)
+    return length3(p.x, p.y, p.z)
 
 
 def intersection_ray_triangle(

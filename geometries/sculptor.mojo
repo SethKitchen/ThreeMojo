@@ -41,8 +41,16 @@ ray comes from `unproject_point`, in `Float32`, where three.js unprojects
 in doubles. This port supports world axis lengths strictly greater than
 `MIN_WORLD_SCALE` (2^-26). The limit bounds world-to-local amplification;
 it is a conservative arithmetic contract, not a floating-point epsilon.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
+from math.norm import length2, length3, reciprocal_normalized3
 from cameras.camera import Camera, project_point, unproject_point
 from controls.input import PRIMARY, PointerButton
 from core.assets import Assets
@@ -301,9 +309,8 @@ def _transform_direction(e: List[Float64], p: Point3) -> Point3:
     var x = e[0] * p.x + e[4] * p.y + e[8] * p.z
     var y = e[1] * p.x + e[5] * p.y + e[9] * p.z
     var z = e[2] * p.x + e[6] * p.y + e[10] * p.z
-    var length = sqrt(x * x + y * y + z * z)
-    var inverse = 1 / (length if length != 0 else 1.0)
-    return Point3(x * inverse, y * inverse, z * inverse)
+    var unit = reciprocal_normalized3(x, y, z)
+    return Point3(unit[0], unit[1], unit[2])
 
 
 def _prefix[T: Copyable](values: List[T], count: Int) -> List[T]:
@@ -543,12 +550,13 @@ struct Sculptor(Movable):
         var dx = far.x - near.x
         var dy = far.y - near.y
         var dz = far.z - near.z
-        var length = sqrt(dx * dx + dy * dy + dz * dz)
-        # A pixel too far out unprojects to no number.
-        var usable = isfinite(length) and length > 0
-        if not usable:
+        # A finite direction remains usable even when its length cannot fit.
+        if not (isfinite(dx) and isfinite(dy) and isfinite(dz)) or (
+            dx == 0 and dy == 0 and dz == 0
+        ):
             return False
-        self._ray_direction = Point3(dx / length, dy / length, dz / length)
+        var unit = reciprocal_normalized3(dx, dy, dz)
+        self._ray_direction = Point3(unit[0], unit[1], unit[2])
         return True
 
     def _update_mesh_matrix(mut self, mut scene: Scene) raises -> Float64:
@@ -730,25 +738,22 @@ struct Sculptor(Movable):
         var n: Point3
         if weights[0] == 0 or weights[1] == 0 or weights[2] == 0:
             var at = 0 if weights[0] == 0 else (1 if weights[1] == 0 else 2)
-            n = point_of(self._sculpt_mesh.normals, corners[at])
+            n = self._sculpt_mesh._normal_at(corners[at])
         else:
             var w1 = 1 / weights[0]
             var w2 = 1 / weights[1]
             var w3 = 1 / weights[2]
             var inverse_sum = 1 / (w1 + w2 + w3)
-            var n1 = point_of(self._sculpt_mesh.normals, corners[0])
-            var n2 = point_of(self._sculpt_mesh.normals, corners[1])
-            var n3 = point_of(self._sculpt_mesh.normals, corners[2])
+            var n1 = self._sculpt_mesh._normal_at(corners[0])
+            var n2 = self._sculpt_mesh._normal_at(corners[1])
+            var n3 = self._sculpt_mesh._normal_at(corners[2])
             n = Point3(
                 (n1.x * w1 + n2.x * w2 + n3.x * w3) * inverse_sum,
                 (n1.y * w1 + n2.y * w2 + n3.y * w3) * inverse_sum,
                 (n1.z * w1 + n2.z * w2 + n3.z * w3) * inverse_sum,
             )
-        var length = sqrt(n.x * n.x + n.y * n.y + n.z * n.z)
-        self._hit_normal = (
-            Point3(n.x / length, n.y / length, n.z / length) if length
-            > 0 else n
-        )
+        var unit = reciprocal_normalized3(n.x, n.y, n.z)
+        self._hit_normal = Point3(unit[0], unit[1], unit[2])
 
     def _dynamic_topology(mut self, picked: List[Int]) -> List[Int]:
         """Split long edges and collapse short ones in the brush, three.js's
@@ -1241,7 +1246,7 @@ struct Sculptor(Movable):
         """
         var dx = client_x - self._last_pointer_x
         var dy = client_y - self._last_pointer_y
-        var distance = sqrt(dx * dx + dy * dy)
+        var distance = length2(dx, dy)
         var min_spacing = STAMP_SPACING_RATIO * self._size
         if distance <= min_spacing:
             return False
@@ -1325,7 +1330,7 @@ struct Sculptor(Movable):
         `_sculptStrokeDrag`."""
         var dx = client_x - self._last_pointer_x
         var dy = client_y - self._last_pointer_y
-        var distance = sqrt(dx * dx + dy * dy)
+        var distance = length2(dx, dy)
         if distance == 0:
             return
         var min_spacing = STAMP_SPACING_RATIO * self._size

@@ -50,6 +50,22 @@ With `additional_data`, a frame also holds the velocities of the vehicles and wa
 
 The recorder finds the events by comparing the world with the last frame. CARLA's simulator reports each event to its recorder. The frame is the same.
 
+### Destroyed collision sensors
+
+When a recorded collision sensor is destroyed, the next `record` call
+releases its private collision-pair registry. The deletion event keeps the
+sensor's recorded actor id. A repeated call does not emit another deletion.
+Other sensors keep their own per-frame duplicate checks.
+
+Collisions already queued in the recorder stay queued. The frame writes
+deletion and collision packets in the existing order. Releasing a sensor's
+registry does not change recording or replay ids.
+
+The recorder still keeps the recorded log and the world's actor history.
+This cleanup only releases obsolete collision-sensor bookkeeping. Full
+actor resource reclamation remains in
+[#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
+
 ## The file
 
 The file starts with a header: the version 1, the text `CARLA_RECORDER`, the date and the map's name. A frame follows for each tick. Every number is little-endian.

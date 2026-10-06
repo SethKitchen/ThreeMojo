@@ -3,7 +3,7 @@
 
 """Exact boundary and adjacent-Float32 decisions after an actual proof hit."""
 
-from extensions.carla.curve_distance import _wide_plan_contains
+from extensions.carla.lane_distance import _wide_plan_contains
 from extensions.carla.lane_refinement import _lane_certificate_contains
 from math.vector3 import Vector3
 from std.memory import bitcast

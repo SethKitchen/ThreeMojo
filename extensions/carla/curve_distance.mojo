@@ -10,9 +10,99 @@ comparisons use bounded exact binary products, not an epsilon or a rounded
 square. This is point-distance arithmetic, not a global curve certificate.
 """
 
-from extensions.carla.curve_interval import _Interval
-from std.math import inf, isfinite, sqrt
+from std.math import inf, isfinite, isnan, sqrt
 from std.memory import bitcast
+
+
+def _next_up(value: Float64) -> Float64:
+    # Observe the rounded bits before any following arithmetic. Unlike an
+    # epsilon multiplier, this also handles zero and subnormal results.
+    if isnan(value) or value == inf[DType.float64]():
+        return value
+    if value == 0.0:
+        return bitcast[DType.float64](UInt64(1))
+    var bits = bitcast[DType.uint64](value)
+    if value < 0.0:
+        return bitcast[DType.float64](bits - 1)
+    return bitcast[DType.float64](bits + 1)
+
+
+def _next_down(value: Float64) -> Float64:
+    return -_next_up(-value)
+
+
+@fieldwise_init
+struct _DistanceInterval(ImplicitlyCopyable):
+    var low: Float64
+    var high: Float64
+
+    @staticmethod
+    def point(value: Float64) -> Self:
+        if isnan(value):
+            return Self.whole()
+        return Self(value, value)
+
+    @staticmethod
+    def whole() -> Self:
+        return Self(-inf[DType.float64](), inf[DType.float64]())
+
+    @staticmethod
+    def rounded(low: Float64, high: Float64) -> Self:
+        if isnan(low) or isnan(high):
+            return Self.whole()
+        return Self(_next_down(low), _next_up(high))
+
+    def is_finite(self) -> Bool:
+        return isfinite(self.low) and isfinite(self.high)
+
+    def contains(self, value: Float64) -> Bool:
+        return self.low <= value and value <= self.high
+
+    def is_point(self, value: Float64) -> Bool:
+        return self.low == value and self.high == value
+
+    def __neg__(self) -> Self:
+        return Self(-self.high, -self.low)
+
+    def __add__(self, other: Self) -> Self:
+        if self.is_point(0.0) and other.is_point(0.0):
+            return Self(-0.0, 0.0)
+        if self.is_point(0.0):
+            return other
+        if other.is_point(0.0):
+            return self
+        return Self.rounded(self.low + other.low, self.high + other.high)
+
+    def __sub__(self, other: Self) -> Self:
+        return self + (-other)
+
+    def __truediv__(self, other: Self) -> Self:
+        if other.contains(0.0):
+            return Self.whole()
+        if other.is_point(1.0):
+            return self
+        if self.is_point(0.0) and other.is_finite():
+            return Self(-0.0, 0.0)
+        var a = self.low / other.low
+        var b = self.low / other.high
+        var c = self.high / other.low
+        var d = self.high / other.high
+        if isnan(a) or isnan(b) or isnan(c) or isnan(d):
+            return Self.whole()
+        return Self.rounded(
+            min(min(a, b), min(c, d)), max(max(a, b), max(c, d))
+        )
+
+    def square(self) -> Self:
+        if self.is_point(0.0):
+            return Self.point(0.0)
+        var a = self.low * self.low
+        var b = self.high * self.high
+        var low = max(0.0, _next_down(min(a, b)))
+        if self.contains(0.0):
+            low = 0.0
+        return Self(low, _next_up(max(a, b)))
+
 
 comptime _WORDS = 132
 comptime _MASK = UInt64(0xFFFFFFFF)
@@ -117,18 +207,20 @@ def _normalized_square[
     axes: Int
 ](
     point: Array[Float64, 3], query: Array[Float64, 3], scale: Float64
-) -> _Interval:
+) -> _DistanceInterval:
     comptime assert axes >= 1 and axes <= 3
-    var result = _Interval.point(0.0)
+    var result = _DistanceInterval.point(0.0)
     var axis = 0
     while axis < axes:
-        var gap = _Interval.point(0.0)
+        var gap = _DistanceInterval.point(0.0)
         if point[axis] != query[axis]:
-            gap = _Interval.point(point[axis]) - _Interval.point(query[axis])
-        var normalized = gap / _Interval.point(scale)
+            gap = _DistanceInterval.point(
+                point[axis]
+            ) - _DistanceInterval.point(query[axis])
+        var normalized = gap / _DistanceInterval.point(scale)
         result = result + normalized.square()
         axis += 1
-    return _Interval(max(0.0, result.low), max(0.0, result.high))
+    return _DistanceInterval(max(0.0, result.low), max(0.0, result.high))
 
 
 @no_inline
@@ -179,100 +271,6 @@ def _wide_point_order(
     return _exact_point_order(a, b, query)
 
 
-@no_inline
-def _exact_plan_width(
-    center: Array[Float64, 3], query: Array[Float64, 3], width: Float64
-) -> Int:
-    # Sign of 4*((cx-qx)^2+(cy-qy)^2)-width^2. Multiplication by four
-    # avoids forming a half-width that can underflow for positive widths.
-    var positive = Array[UInt64, _WORDS](fill=0)
-    var negative = Array[UInt64, _WORDS](fill=0)
-    var axis = 0
-    while axis < 2:
-        _signed_product(
-            positive, negative, center[axis], center[axis], 2, False
-        )
-        _signed_product(positive, negative, center[axis], query[axis], 3, True)
-        _signed_product(positive, negative, query[axis], query[axis], 2, False)
-        axis += 1
-    _signed_product(positive, negative, width, width, 0, True)
-    return _exact_sign(positive, negative)
-
-
-def _wide_plan_contains(
-    center: Array[Float64, 3], query: Array[Float64, 3], width: Float64
-) raises -> Bool:
-    """Apply the strict plan half-width test without narrowing or squaring loss.
-    """
-    _finite_point(center)
-    _finite_point(query)
-    if not isfinite(width):
-        raise Error("Lane distance comparison needs a finite width")
-    if width <= 0.0:
-        return False
-    var scale = width
-    var axis = 0
-    while axis < 2:
-        scale = max(scale, abs(center[axis] - query[axis]))
-        axis += 1
-    if isfinite(scale):
-        var distance = _normalized_square[2](center, query, scale)
-        var diameter = _Interval.point(width) / _Interval.point(scale)
-        var difference = _Interval.point(4.0) * distance - diameter.square()
-        if difference.high < 0.0:
-            return True
-        if difference.low >= 0.0:
-            return False
-    return _exact_plan_width(center, query, width) < 0
-
-
-def _wide_distance_upper(
-    point: Array[Float64, 3], query: Array[Float64, 3]
-) raises -> Float64:
-    """Bound a stored-point distance without an unscaled squared norm."""
-    _finite_point(point)
-    _finite_point(query)
-    var scale = Float64(0)
-    var axis = 0
-    while axis < 3:
-        scale = max(scale, abs(point[axis] - query[axis]))
-        axis += 1
-    if scale == 0.0:
-        return 0.0
-    if not isfinite(scale):
-        return inf[DType.float64]()
-    var norm = _normalized_square[3](point, query, scale).sqrt()
-    return (_Interval.point(scale) * norm).high
-
-
-def _point_gap_scale(
-    point: Array[Float64, 3], query: Array[Float64, 3]
-) raises -> Float64:
-    # Zero means componentwise coincidence. No square is evaluated here.
-    _finite_point(point)
-    _finite_point(query)
-    var gap = Float64(0)
-    var magnitude = Float64(0)
-    var axis = 0
-    while axis < 3:
-        gap = max(gap, abs(point[axis] - query[axis]))
-        magnitude = max(magnitude, max(abs(point[axis]), abs(query[axis])))
-        axis += 1
-    if not isfinite(gap):
-        gap = magnitude
-    if gap == 0.0:
-        return 0.0
-    # A power-of-two scale preserves squared-distance ULP units wherever the
-    # original square is normal. For subnormals it gives a tighter unit.
-    var bits = bitcast[DType.uint64](gap)
-    var exponent = bits & UInt64(0x7FF0000000000000)
-    if exponent != 0:
-        return bitcast[DType.float64](exponent)
-    while (bits & (bits - UInt64(1))) != 0:
-        bits = bits & (bits - UInt64(1))
-    return bitcast[DType.float64](bits)
-
-
 def _distance_overflow_result(
     point: Array[Float64, 3], query: Array[Float64, 3]
 ) raises -> Float64:
@@ -314,6 +312,11 @@ def _wide_distance(
         return 0.0
     if not isfinite(scale):
         return _distance_overflow_result(point, query)
+    # A finite reconstruction can round to the maximum even when the exact
+    # norm exceeds it. Below half the maximum, three components cannot do
+    # that; above it, check the exact norm before returning a finite value.
+    if scale > Float64(1.7976931348623157e308) * 0.5:
+        _ = _distance_overflow_result(point, query)
     var sum = Float64(0)
     axis = 0
     while axis < 3:

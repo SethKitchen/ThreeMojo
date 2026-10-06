@@ -4,6 +4,8 @@
 from extensions.carla.curve_bounds import _lane_jet
 from extensions.carla.curve_distance import (
     _wide_point_order,
+)
+from extensions.carla.lane_distance import (
     _wide_plan_contains,
 )
 from extensions.carla.geometry import SPIRAL, RoadGeometry, with_spiral

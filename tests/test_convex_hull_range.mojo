@@ -271,22 +271,33 @@ def test_conditioning_does_not_turn_degeneracy_into_a_hull() raises:
             )
 
 
-def test_unrepresentable_conditioning_has_a_distinct_range_error() raises:
+def test_lossy_conditioning_keeps_original_coordinates_for_predicates() raises:
     for axis in range(3):
         var p = point(0, 0, 0)
         p[axis] = Float64(5e-324)
         var points = tetra(Float64(1e308))
         points.append(p)
-        with assert_raises(contains="coordinate range loses Float64 detail"):
-            _ = ConvexHull(points)
-    # Scaling can also round away low bits without producing zero.
+        var hull = ConvexHull(points)
+        assert_equal(hull.face_count(), 4)
+        for source in points:
+            assert_true(hull.contains_point(source))
+        hull.tolerance = 0
+        for source in points:
+            assert_true(hull.contains_point(source))
+    # Scaling can also round low bits without producing zero. Originals
+    # still determine exact containment after the tolerance becomes zero.
     var rounded = tetra(Float64(1e308))
     rounded.append(point(0, 1e-10, 0))
-    with assert_raises(contains="coordinate range loses Float64 detail"):
-        _ = ConvexHull(rounded)
-    # A tiny, representable gap must not be called exactly collinear when
-    # its squared distance is below Float64's range.
-    with assert_raises(contains="gap exceeds the Float64 numerical range"):
+    var hull = ConvexHull(rounded)
+    hull.tolerance = 0
+    assert_true(hull.contains_point(rounded[4]))
+    assert_false(hull.contains_point(point(-Float64(5e-324), 0, 0)))
+
+
+def test_tiny_affine_gaps_are_distinct_from_true_degeneracy() raises:
+    # This tetrahedron has nonzero exact volume, but its height is far
+    # below the positive, original-unit construction tolerance.
+    with assert_raises(contains="in a plane within tolerance"):
         _ = ConvexHull(
             [
                 point(0, 0, 0),
@@ -295,7 +306,8 @@ def test_unrepresentable_conditioning_has_a_distinct_range_error() raises:
                 point(0, 0, 1e-200),
             ]
         )
-    with assert_raises(contains="segment exceeds the Float64 numerical range"):
+    # All four vertices lie exactly in x=1, despite their tiny separations.
+    with assert_raises(contains="in a plane"):
         _ = ConvexHull(
             [
                 point(1, 0, 0),
@@ -314,10 +326,10 @@ def test_small_normal_length_does_not_square_away_its_direction() raises:
     assert_equal(_unit_or_zero(_Point(0, 0, 0)).magnitude(), 0)
 
 
-def test_unresolved_planes_and_faces_report_numerical_range() raises:
+def test_exactly_collinear_decimal_points_and_faces_are_degenerate() raises:
     # Exactly collinear decimal points can leave a rounded projection gap.
-    # A zero cross product after that gap is not a usable normal.
-    with assert_raises(contains="plane exceeds the Float64 numerical range"):
+    # Exact affine predicates classify them as collinear.
+    with assert_raises(contains="in a line"):
         _ = ConvexHull(
             [
                 point(0, 0, 0),
@@ -327,11 +339,11 @@ def test_unresolved_planes_and_faces_report_numerical_range() raises:
             ]
         )
     var hull = ConvexHull(tetra(1))
-    with assert_raises(contains="face exceeds the Float64 numerical range"):
+    with assert_raises(contains="in a line"):
         _ = hull._create_face(0, 0, 1)
 
 
-def test_zero_tolerance_slanted_faces_have_a_distinct_range_limit() raises:
+def test_zero_tolerance_slanted_faces_use_exact_support() raises:
     var s = Float64(5e-324)
     var points: List[SIMD[DType.float64, 4]] = [
         point(0, 0, 0),
@@ -339,26 +351,25 @@ def test_zero_tolerance_slanted_faces_have_a_distinct_range_limit() raises:
         point(0, 3 * s, s),
         point(s, 0, 4 * s),
     ]
-    with assert_raises(contains="face exceeds the Float64 numerical range"):
-        _ = ConvexHull(points)
-    with assert_raises(contains="plane exceeds the Float64 numerical range"):
+    var hull = ConvexHull(points)
+    assert_equal(hull.tolerance, 0)
+    assert_equal(hull.face_count(), 4)
+    for p in points:
+        assert_true(hull.contains_point(p))
+    check_surface(
+        hull,
+        [
+            Vector3(0, 0, 0),
+            Vector3(2, 1, 0),
+            Vector3(0, 3, 1),
+            Vector3(1, 0, 4),
+        ],
+    )
+    assert_false(hull.contains_point(point(-s, 0, 0)))
+    with assert_raises(contains="in a plane"):
         _ = ConvexHull(
             [point(0, 0, 0), point(s, 0, 0), point(0, s, 0), point(s, s, 0)]
         )
-    # Exercise each corner of the face check and a positive threshold.
-    # The public constructor normally computes a larger positive tolerance.
-    var hull = ConvexHull(tetra(Float64(1e-300)))
-    hull._points = [
-        _Point(2, 1, 0),
-        _Point(0, 3, 1),
-        _Point(1, 0, 4),
-        _Point(0, 0, 0),
-    ]
-    hull._working_tolerance = 1e-20
-    with assert_raises(contains="face exceeds the Float64 numerical range"):
-        _ = hull._create_face(0, 1, 2)
-    with assert_raises(contains="face exceeds the Float64 numerical range"):
-        _ = hull._create_face(0, 2, 1)
 
 
 def test_mixed_range_queries_are_exterior_even_when_anchors_underflow() raises:

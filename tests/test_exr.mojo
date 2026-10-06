@@ -258,12 +258,17 @@ def test_a_compression_says_how_many_lines_a_block_holds() raises:
     assert_equal(lines_per_block(ZIPS_COMPRESSION), 1)
     assert_equal(lines_per_block(ZIP_COMPRESSION), 16)
     assert_equal(lines_per_block(PIZ_COMPRESSION), 32)
-    # PXR24, and a byte below the named ones: not read.
-    assert_false(ExrCompression(5).is_valid())
+    for code in range(5, 10):
+        assert_true(ExrCompression(code).is_valid())
+    assert_equal(lines_per_block(ExrCompression(5)), 16)
+    for code in range(6, 9):
+        assert_equal(lines_per_block(ExrCompression(code)), 32)
+    assert_equal(lines_per_block(ExrCompression(9)), 256)
+    assert_false(ExrCompression(10).is_valid())
     assert_false(ExrCompression(-1).is_valid())
-    with assert_raises(contains="PXR24"):
-        _ = lines_per_block(ExrCompression(5))
-    with assert_raises(contains="PXR24"):
+    with assert_raises(contains="compression code"):
+        _ = lines_per_block(ExrCompression(10))
+    with assert_raises(contains="compression code"):
         _ = lines_per_block(ExrCompression(-1))
 
 
@@ -1660,7 +1665,7 @@ def test_a_header_is_checked() raises:
 
 
 def test_a_header_refuses_what_it_cannot_read() raises:
-    refused(exr(rgb(), 5, box(0, 0, 0, 0), [0], [[0]]), "PXR24")
+    refused(exr(rgb(), 10, box(0, 0, 0, 0), [0], [[0]]), "compression code")
     refused(exr(rgb(), 0, box(1, 0, 0, 0), [0], [[0]]), "at least one pixel")
     refused(exr(rgb(), 0, box(0, 1, 0, 0), [0], [[0]]), "at least one pixel")
     refused(exr(rgb(), 0, box(0, 0, 65535, 65535), [0], [[0]]), "more pixels")

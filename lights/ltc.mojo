@@ -35,6 +35,16 @@ physical materials have, and so only `STANDARD` and `PHYSICAL` here.
 The form factor already integrates the cosine over the light's outline,
 so it carries no reciprocal pi where every other lit sum does: it is added
 after `Lighting.scale` is applied, not before.
+
+Volume rays use `ltc_evaluate_volume`, from three.js r186's
+`src/nodes/functions/BSDF/LTC.js`. This term has no surface frame or LTC
+lookup. It takes view-space corners, keeps the light's one-sided test,
+and clips the absolute edge-vector sum. A zero-length corner direction
+stays zero here, as in the existing surface path; shader normalization of
+zero has no portable result. Finite nondegenerate cases retain r186's
+formula, including its camera-dependent z term. An exactly zero-width or
+zero-height rectangle has zero area and returns zero before edge evaluation.
+This avoids backend-dependent cancellation residue without a near-zero cutoff.
 """
 
 from math.vector2 import Vector2
@@ -429,6 +439,60 @@ def ltc_evaluate(
     total = total + ltc_edge_vector_form_factor(c2, c3)
     total = total + ltc_edge_vector_form_factor(c3, c0)
     return ltc_clipped_sphere_form_factor(total)
+
+
+def ltc_evaluate_volume(
+    position: Vector3,
+    corner0: Vector3,
+    corner1: Vector3,
+    corner2: Vector3,
+    corner3: Vector3,
+) -> Float32:
+    """Return a rectangle's volume form factor from three.js r186.
+
+    `LTC_Evaluate_Volume` has no surface normal or fitted transform. It
+    projects the corners onto the unit sphere, sums the four edge vector
+    form factors, and clips their componentwise absolute value. The z
+    component of that value is in view space, so the camera's orientation
+    is part of the contract. The light still shines only toward local -z.
+
+    Args:
+        position: The ray step, in view space.
+        corner0: The first corner, in view space, counterclockwise when
+            seen from the side the light shines toward.
+        corner1: The second corner, in view space.
+        corner2: The third corner, in view space.
+        corner3: The fourth corner, in view space.
+
+    Returns:
+        The form factor, zero on the back side or for zero width or height.
+    """
+    var width = corner1 - corner0
+    var height = corner3 - corner0
+    # An exactly collapsed rectangle has zero area. Do not ask independently
+    # rounded opposite edge integrals to cancel on every CPU/GPU backend.
+    # Test components, not a squared area that can underflow for thin lights.
+    if width == Vector3(0, 0, 0) or height == Vector3(0, 0, 0):
+        return 0
+    var light_normal = width
+    light_normal.cross(height)
+    if light_normal.dot(position - corner0) < 0:
+        return 0
+    var c0 = corner0 - position
+    var c1 = corner1 - position
+    var c2 = corner2 - position
+    var c3 = corner3 - position
+    c0.normalize()
+    c1.normalize()
+    c2.normalize()
+    c3.normalize()
+    var total = ltc_edge_vector_form_factor(c0, c1)
+    total = total + ltc_edge_vector_form_factor(c1, c2)
+    total = total + ltc_edge_vector_form_factor(c2, c3)
+    total = total + ltc_edge_vector_form_factor(c3, c0)
+    return ltc_clipped_sphere_form_factor(
+        Vector3(abs(total.x), abs(total.y), abs(total.z))
+    )
 
 
 def rect_area_light(

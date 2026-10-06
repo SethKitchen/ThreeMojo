@@ -24,7 +24,9 @@ CARLA evaluates a spiral with the odrSpiral Fresnel code. This port
 integrates the same clothoid with Gauss-Legendre quadrature instead, which
 also holds when the start and end curvatures are equal. The poly3 and
 paramPoly3 records keep CARLA's sampled tables and its linear
-interpolation between samples.
+interpolation between samples. Lane orientation differentiates that
+position interpolation and its offset-frame heading separately. A sampled
+heading need not be the direction of the position chord.
 """
 
 from extensions.carla.math import (
@@ -34,19 +36,7 @@ from extensions.carla.math import (
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.vector3 import Vector3
-from extensions.carla.curve_trig import (
-    _curve_atan as atan,
-    _curve_atan2 as atan2,
-    _curve_cos as cos,
-    _curve_sin as sin,
-    _atan_derivative,
-    _atan2_derivative,
-    _curve_sincos,
-    _sincos_derivative,
-    _curve_sinc,
-    _sinc_derivative,
-)
-from std.math import ceil, isfinite, sqrt
+from std.math import atan, atan2, ceil, cos, isfinite, sin, sqrt
 from units.si import (
     DEGREE,
     PER_METER,
@@ -355,53 +345,14 @@ struct RoadGeometry(Copyable, Movable):
         return (start.x, start.y)
 
     def _arc(self, d: Float64) -> DirectedPoint:
-        return self._arc_offset(d, 0.0)
-
-    def _arc_offset(self, d: Float64, offset: Float64) -> DirectedPoint:
         var radius = 1.0 / self.curvature_start
-        var turn = d * self.curvature_start
-        var half = turn * 0.5
-        var phase = self.heading + half
-        var factor = (radius + offset) * self.curvature_start * d
-        if not isfinite(radius):
-            # A finite offset cannot cancel an unrepresentable radius.
-            # This form still resolves every finite tiny-curvature increment.
-            factor = (1.0 + offset * self.curvature_start) * d
-        var chord = factor * _curve_sinc(half)
-        return DirectedPoint(
-            self.x + offset * sin(self.heading) + chord * cos(phase),
-            self.y - offset * cos(self.heading) + chord * sin(phase),
-            0.0,
-            self.heading + turn,
-        )
-
-    def _arc_offset_derivative(
-        self, d: Float64, offset: Float64, slope: Float64, active: Bool = True
-    ) -> Tuple[Float64, Float64]:
-        var radius = 1.0 / self.curvature_start
-        var k = self.curvature_start
-        var speed = 1.0 if active else 0.0
-        var half = (d * k) * 0.5
-        var dhalf = (speed * k) * 0.5
-        var phase = self.heading + half
-        var factor = (radius + offset) * k * d
-        var dfactor = slope * k * d + (radius + offset) * k * speed
-        if not isfinite(radius):
-            factor = (1.0 + offset * k) * d
-            dfactor = slope * k * d + (1.0 + offset * k) * speed
-        var sinc = _curve_sinc(half)
-        var chord = factor * sinc
-        var dchord = dfactor * sinc + factor * _sinc_derivative(half) * dhalf
-        var trig = _curve_sincos(phase)
-        var derivative = _sincos_derivative(phase)
-        return (
-            slope * sin(self.heading)
-            + dchord * trig[1]
-            + chord * derivative[1] * dhalf,
-            -slope * cos(self.heading)
-            + dchord * trig[0]
-            + chord * derivative[0] * dhalf,
-        )
+        comptime half_pi = 1.5707963267948966
+        var x = self.x + radius * cos(self.heading + half_pi)
+        var y = self.y + radius * sin(self.heading + half_pi)
+        var tangent = self.heading + d * self.curvature_start
+        x -= radius * cos(tangent + half_pi)
+        y -= radius * sin(tangent + half_pi)
+        return DirectedPoint(x, y, 0.0, tangent)
 
     def _spiral(self, d: Float64) -> DirectedPoint:
         var k0 = self.curvature_start
@@ -411,10 +362,8 @@ struct RoadGeometry(Copyable, Movable):
         var step = d / Float64(pieces)
         var nodes = materialize[_GL_NODES]()
         var weights = materialize[_GL_WEIGHTS]()
-        # Accumulate displacement before adding the origin. Repeatedly
-        # rounding a large world origin would discard small quadrature terms.
-        var x = Float64(0.0)
-        var y = Float64(0.0)
+        var x = self.x
+        var y = self.y
         for piece in range(pieces):  # pragma: no branch
             var start = step * Float64(piece)
             for i in range(5):  # pragma: no branch
@@ -423,66 +372,78 @@ struct RoadGeometry(Copyable, Movable):
                 x += step * 0.5 * weights[i] * cos(theta)
                 y += step * 0.5 * weights[i] * sin(theta)
         return DirectedPoint(
-            self.x + x,
-            self.y + y,
-            0.0,
-            self.heading + d * (k0 + 0.5 * rate * d),
+            x, y, 0.0, self.heading + d * (k0 + 0.5 * rate * d)
         )
 
     def _derivative_at(
         self, distance: Float64
-    ) -> Tuple[Float64, Float64, Float64]:
+    ) raises -> Tuple[Float64, Float64, Float64]:
+        # Differentiate the evaluated position AND the offset frame. In a
+        # sampled record its interpolated heading is not its chord heading.
+        if not self.kind.is_valid():
+            raise Error("Road geometry kind is not valid")
+        if not isfinite(distance) or not isfinite(self.heading):
+            raise Error("Lane geometry needs finite distance and heading")
+        if not isfinite(self.length) or self.length <= 0.0:
+            raise Error("Lane geometry needs a finite positive length")
         if distance < 0.0 or distance > self.length:
             return (0.0, 0.0, 0.0)
         var d = distance
         if self.kind == LINE:
             return (cos(self.heading), sin(self.heading), 0.0)
+        if not isfinite(self.curvature_start) or not isfinite(
+            self.curvature_end
+        ):
+            raise Error("Lane geometry needs finite curvature")
         if self.kind == ARC:
-            var derivative = self._arc_offset_derivative(d, 0.0, 0.0)
-            return (derivative[0], derivative[1], self.curvature_start)
+            if self.curvature_start == 0.0:
+                raise Error("An arc needs nonzero curvature")
+            var theta = self.heading + d * self.curvature_start
+            return (cos(theta), sin(theta), self.curvature_start)
         if self.kind == SPIRAL:
             var k0 = self.curvature_start
             var rate = (self.curvature_end - k0) / self.length
             var reach = max(abs(k0), abs(k0 + rate * d))
-            var pieces = 1 + Int(ceil(d * (1.0 + reach)))
+            var work = ceil(d * (1.0 + reach))
+            if not isfinite(work) or work >= 9223372036854775807.0:
+                raise Error("Spiral derivative work is not representable")
+            var pieces = 1 + Int(work)
             var step = d / Float64(pieces)
             var dstep = 1.0 / Float64(pieces)
             var nodes = materialize[_GL_NODES]()
             var weights = materialize[_GL_WEIGHTS]()
             var dx = 0.0
             var dy = 0.0
-            var piece = 0
-            while piece < pieces:
+            # Hold the selected quadrature partition fixed. At a partition
+            # transition this is the derivative of the selected side.
+            for piece in range(pieces):  # pragma: no branch
                 var start = step * Float64(piece)
                 var dstart = dstep * Float64(piece)
-                var i = 0
-                while i < 5:
+                for i in range(5):  # pragma: no branch
                     var t = start + step * 0.5 * (1.0 + nodes[i])
                     var dt = dstart + dstep * 0.5 * (1.0 + nodes[i])
                     var theta = self.heading + t * (k0 + 0.5 * rate * t)
-                    var dtheta = dt * (k0 + 0.5 * rate * t) + t * (
-                        0.5 * rate * dt
-                    )
-                    var trig = _curve_sincos(theta)
-                    var derivative = _sincos_derivative(theta)
+                    var dtheta = dt * (k0 + rate * t)
                     var factor = step * 0.5 * weights[i]
                     var dfactor = dstep * 0.5 * weights[i]
-                    dx += dfactor * trig[1] + factor * derivative[1] * dtheta
-                    dy += dfactor * trig[0] + factor * derivative[0] * dtheta
-                    i += 1
-                piece += 1
-            return (dx, dy, k0 + d * rate)
-        var low = 0
-        var high = len(self.samples) - 1
-        while high - low > 1:
-            var middle = (low + high) // 2
-            if self.samples[middle].s < d:
-                low = middle
+                    dx += dfactor * cos(theta) - factor * sin(theta) * dtheta
+                    dy += dfactor * sin(theta) + factor * cos(theta) * dtheta
+            return (dx, dy, k0 + rate * d)
+        if len(self.samples) < 2:
+            raise Error("A sampled lane geometry needs two samples")
+        var lo = 0
+        var hi = len(self.samples) - 1
+        while hi - lo > 1:
+            var mid = (lo + hi) // 2
+            if self.samples[mid].s < d:
+                lo = mid
             else:
-                high = middle
-        var one = self.samples[low]
-        var two = self.samples[high]
+                hi = mid
+        var one = self.samples[lo]
+        var two = self.samples[hi]
         var span = two.s - one.s
+        if not isfinite(span) or span <= 0.0:
+            raise Error("A sampled lane interval needs finite positive length")
         var fraction = (two.s - d) / span
         var tu = fraction * one.tu + (1.0 - fraction) * two.tu
         var tv = fraction * one.tv + (1.0 - fraction) * two.tv
@@ -490,9 +451,17 @@ struct RoadGeometry(Copyable, Movable):
         var dv = (two.v - one.v) / span
         var dtu = (two.tu - one.tu) / span
         var dtv = (two.tv - one.tv) / span
-        var turn = _atan_derivative(tv) * dtv
+        var scale = max(1.0, abs(tv))
+        var u = 1.0 / scale
+        var v = tv / scale
+        var turn = (dtv / scale) * u / (u * u + v * v)
         if self.kind == PARAM_POLY3:
-            turn = _atan2_derivative(tv, tu, dtv, dtu)
+            scale = max(abs(tu), abs(tv))
+            if not isfinite(scale) or scale == 0.0:
+                raise Error("A sampled lane offset frame has no heading")
+            u = tu / scale
+            v = tv / scale
+            turn = (u * (dtv / scale) - v * (dtu / scale)) / (u * u + v * v)
         var c = cos(self.heading)
         var sn = sin(self.heading)
         return (du * c - dv * sn, du * sn + dv * c, turn)

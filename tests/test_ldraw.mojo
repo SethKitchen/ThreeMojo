@@ -17,6 +17,8 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.scene import Scene
 from loaders.ldraw import (
+    _face_normal,
+    _stored_face_normal,
     _from_code,
     LDrawModel,
     LDrawNode,
@@ -35,7 +37,7 @@ from loaders.ldraw_parse import (
     _style,
     js_parse_int,
 )
-from std.math import isnan
+from std.math import isnan, nan, sqrt
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -437,6 +439,46 @@ def test_parent_color_substitution_truth_table() raises:
             )
             var expected = info.local("2" if inherited else code)
             assert_equal(_from_code(code, "2", info, edge), expected)
+
+
+def test_nonfinite_stored_corners_keep_legacy_normal_components() raises:
+    # The existing kitchen fixture retains these invalid Float32 positions.
+    comptime Vec = SIMD[DType.float64, 4]
+    var bad = _stored_face_normal(
+        [
+            Vec(1e308, 0, 0, 0),
+            Vec(0, 1, 0, 0),
+            Vec(nan[DType.float64](), 0, 0, 0),
+        ]
+    )
+    assert_equal(bad[0], Float64(0))
+    assert_true(isnan(bad[1]) and isnan(bad[2]))
+    var too_large = _stored_face_normal(
+        [
+            Vec(-1e308, 0, 0, 0),
+            Vec(0, 1, 0, 0),
+            Vec(0, 0, 1, 0),
+        ]
+    )
+    for lane in range(3):
+        assert_equal(too_large[lane], Float64(0))
+    # The Float64 direction helper has no Float32 storage boundary.
+    var wide = _face_normal(
+        [Vec(-1e308, 0, 0, 0), Vec(0, 1, 0, 0), Vec(0, 0, 1, 0)]
+    )
+    assert_almost_equal(wide[1], -1 / sqrt(Float64(2)), atol=1e-12)
+    assert_almost_equal(wide[2], -1 / sqrt(Float64(2)), atol=1e-12)
+    # All positions fit Float32 here. Its independent area direction is
+    # (1, -1e30, -1e30), normalized before the Float32 normal is stored.
+    var finite = _stored_face_normal(
+        [
+            Vec(-1e30, 0, 0, 0),
+            Vec(0, 1, 0, 0),
+            Vec(0, 0, 1, 0),
+        ]
+    )
+    assert_almost_equal(finite[1], -1 / sqrt(Float64(2)), atol=1e-12)
+    assert_almost_equal(finite[2], -1 / sqrt(Float64(2)), atol=1e-12)
 
 
 def main() raises:

@@ -157,7 +157,16 @@ as three.js's plugin reads it.
 names one is refused, as three.js refuses it, and one that only uses an
 extension is read without it. A primitive of triangle strips or fans is
 refused, and so is a point or a line on a skinned or an instanced node.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
+
+from math.norm import length3, normalized3, _ordinary_squared
 
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
 from animation.animation_clip import AnimationClip
@@ -283,8 +292,7 @@ from render.texture import (
     Wrap,
     texture_from,
 )
-from render.tasks import TaskGroup
-from loaders.image_batch import TextureDecodeBatch
+from loaders.image_batch import TextureDecodeSource, decode_textures
 from render.texture_store import TextureId
 from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
@@ -721,27 +729,33 @@ struct GltfModel(Copyable, Movable):
         return found^
 
 
-async def _decode_one(
-    bytes: MutPointer[List[UInt8], MutAnyOrigin],
-    samplings: MutPointer[GltfSampler, MutAnyOrigin],
-    spaces: MutPointer[ColorSpace, MutAnyOrigin],
-    built: MutPointer[Texture, MutAnyOrigin],
-    errors: MutPointer[String, MutAnyOrigin],
-    index: Int,
-):
-    """Decode and mipmap one image as `_Loader.texture` does, as a task of
-    `_Loader.predecode`; an error is carried back as its text."""
-    try:
-        ref image = bytes[unsafe_offset=index]
-        var sampling = samplings[unsafe_offset=index]
-        var space = spaces[unsafe_offset=index]
+@fieldwise_init
+struct _GltfDecodeSource[
+    loader_origin: Origin[mut=False],
+    texture_origin: Origin[mut=False],
+    space_origin: Origin[mut=False],
+](TextureDecodeSource):
+    """Immutable image descriptors borrowed until all decode tasks join."""
+
+    var loader: Pointer[_Loader, Self.loader_origin]
+    var textures: Pointer[Int, Self.texture_origin]
+    var spaces: Pointer[ColorSpace, Self.space_origin]
+
+    def decode(self, index: Int) raises -> Texture:
+        """Read and decode one core map using the serial loader's settings."""
+        var texture = self.textures[unsafe_offset=index]
+        # Read errors already carry their original source context. Keep
+        # them separate from the decoder's glTF error prefix.
+        var image = self.loader[].image_bytes(
+            self.loader[].texture_images[texture]
+        )
+        var sampling = self.loader[].texture_samplers[texture]
+        var space = self.spaces[unsafe_offset=index]
         var alpha = IGNORED if space == LINEAR else COVERAGE
-        if is_ktx2(image):
-            built[unsafe_offset=index] = ktx2_texture(
-                image, sampling, space, alpha
-            )
-        else:
-            built[unsafe_offset=index] = texture_from(
+        try:
+            if is_ktx2(image):
+                return ktx2_texture(image, sampling, space, alpha)
+            return texture_from(
                 decode_image(image),
                 sampling.wrap_s,
                 sampling.mag_filter,
@@ -749,8 +763,8 @@ async def _decode_one(
                 sampling.min_filter.is_mipmap(),
                 alpha=alpha,
             )
-    except e:
-        errors[unsafe_offset=index] = "glTF: " + String(e)
+        except e:
+            raise Error("glTF: " + String(e))
 
 
 def read_gltf(
@@ -860,8 +874,11 @@ def load_gltf(
     metal and roughness maps as numbers) is decoded and mipmapped first,
     `workers` at a time, and the materials find them built. A texture an
     extension reads is decoded when it is read, as with one worker.
-    Each batch releases its input bytes and transfers its completed
-    textures before the next batch reads any image.
+    A free worker claims the next image without a batch barrier. Each
+    worker reads compressed bytes only for its current image. Results
+    move in first-use order after every job succeeds. A failed predecode
+    adds no textures; other glTF load steps are not transactional.
+    Read and decode failures use the first failing job in source order.
 
     Args:
         text: The JSON.
@@ -1736,67 +1753,32 @@ struct _Loader(Movable):
                 if fresh:
                     textures.append(index)
                     spaces.append(slot[2])
-        var count = len(textures)
-        var first = 0
-        while first < count:
-            # Own only one bounded batch of compressed bytes and decoded
-            # results. Wait and publish it before reading the next batch.
-            # first < count and the worker floor make every batch nonempty.
-            var decoded = TextureDecodeBatch(count - first, workers)
-            var batch = len(decoded.textures)
-            var bytes = List[List[UInt8]]()
-            var samplings = List[GltfSampler]()
-            var batch_spaces = List[ColorSpace]()
-            for k in range(batch):  # pragma: no branch
-                var index = first + k
-                bytes.append(
-                    self.image_bytes(self.texture_images[textures[index]])
-                )
-                samplings.append(self.texture_samplers[textures[index]])
-                batch_spaces.append(spaces[index])
-            # Every pointer is to a local that outlives `wait`: no list
-            # is resized or consumed while its tasks can still access it.
-            var group = TaskGroup()
-            for k in range(batch):  # pragma: no branch
-                group.create_task(
-                    _decode_one(
-                        bytes.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                        samplings.unsafe_ptr().unsafe_origin_cast[
-                            MutAnyOrigin
-                        ](),
-                        batch_spaces.unsafe_ptr().unsafe_origin_cast[
-                            MutAnyOrigin
-                        ](),
-                        decoded.textures.unsafe_ptr().unsafe_origin_cast[
-                            MutAnyOrigin
-                        ](),
-                        decoded.errors.unsafe_ptr().unsafe_origin_cast[
-                            MutAnyOrigin
-                        ](),
-                        k,
-                    )
-                )
-            group.wait()
-            # Reverse once so popping moves results in source order.
-            decoded.check()
-            decoded.textures.reverse()
-            for k in range(batch):  # pragma: no branch
-                # Move the completed texture, retaining its stable source
-                # order without copying its pixels and mipmaps again.
-                var texture = decoded.textures.pop()
-                texture.wrap_t = samplings[k].wrap_t
-                texture.min_filter = samplings[k].min_filter
-                texture.flip_y = False
-                var id = assets.textures.add(texture^)
-                var index = first + k
-                if spaces[index] == SRGB:
-                    self.model.color_textures[textures[index]] = id
-                else:
-                    self.model.data_textures[textures[index]] = id
-            # The images and color spaces the tasks read, kept to here.
-            _ = len(bytes)
-            _ = len(batch_spaces)
-            first += batch
+        var decoded = self.decode_jobs(textures, spaces, workers)
+        # The shared queue has joined and checked every job. Publish
+        # move-owned results in the same first-use order as the inputs.
+        decoded.reverse()
+        for index in range(len(textures)):
+            var texture = decoded.pop()
+            var sampling = self.texture_samplers[textures[index]]
+            texture.wrap_t = sampling.wrap_t
+            texture.min_filter = sampling.min_filter
+            texture.flip_y = False
+            var id = assets.textures.add(texture^)
+            if spaces[index] == SRGB:
+                self.model.color_textures[textures[index]] = id
+            else:
+                self.model.data_textures[textures[index]] = id
+
+    def decode_jobs(
+        self, textures: List[Int], spaces: List[ColorSpace], workers: Int
+    ) raises -> List[Texture]:
+        """Borrow immutable source owners for the complete queue call."""
+        var source = _GltfDecodeSource(
+            Pointer(to=self),
+            textures.unsafe_ptr(),
+            spaces.unsafe_ptr(),
+        )
+        return decode_textures(source, len(textures), workers)
 
     def image_of(self, texture: Int) raises -> Int:
         """Return the image a texture reads: its `KHR_texture_basisu`
@@ -3853,24 +3835,17 @@ def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:
     var sx = _column_length(matrix, 0)
     var sy = _column_length(matrix, 4)
     var sz = _column_length(matrix, 8)
-    if m.determinant() < 0:
-        sx = -sx
     if sx == 0 or sy == 0 or sz == 0:
-        raise Error("glTF: a node matrix that flattens an axis")
-    var rotation = Matrix4()
-    for row in range(3):  # pragma: no branch
-        rotation.elements[row] = matrix[row] / sx
-        rotation.elements[4 + row] = matrix[4 + row] / sy
-        rotation.elements[8 + row] = matrix[8 + row] / sz
-    node.set_position(matrix[12], matrix[13], matrix[14])
-    node.set_quaternion(Quaternion.from_matrix(rotation))
-    node.set_scale(sx, sy, sz)
+        raise Error("glTF" + ": a node matrix that flattens an axis")
+    var position = Vector3(0, 0, 0)
+    var rotation = Quaternion.identity()
+    var scale = Vector3(0, 0, 0)
+    m.decompose(position, rotation, scale)
+    node.set_position(position.x, position.y, position.z)
+    node.set_quaternion(rotation)
+    node.set_scale(scale.x, scale.y, scale.z)
 
 
 def _column_length(matrix: List[Float32], start: Int) -> Float32:
     """Return the length of a column's first three entries."""
-    return sqrt(
-        matrix[start] * matrix[start]
-        + matrix[start + 1] * matrix[start + 1]
-        + matrix[start + 2] * matrix[start + 2]
-    )
+    return length3(matrix[start], matrix[start + 1], matrix[start + 2])

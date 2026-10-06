@@ -24,15 +24,17 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_distance,
     muscle_part_label,
 )
+from extensions.anatomy.soft_tissue import (
+    SoftMass,
+    SoftTissue,
+    muscle_tissue,
+    tendon_tissue,
+)
 from extensions.humanoid.skeleton.soft_tissue import (
     SOFT_STEP,
-    SoftMass,
     SoftOccupancy,
-    SoftTissue,
     classify_soft,
-    muscle_tissue,
     sample_soft_mass,
-    tendon_tissue,
 )
 from math.vector3 import Vector3
 from units.si import Length

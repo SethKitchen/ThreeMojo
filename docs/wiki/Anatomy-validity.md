@@ -4,7 +4,7 @@ The canonical anatomy produces template estimates. No use case has an engineerin
 
 The bounded report covers static geometry, mass, center of mass and the full inertia tensor of one canonical lower limb. It records numerical controls, sampling sensitivity, overlap witnesses, input provenance and unsupported uses. Game and fantasy use remains permitted.
 
-The default geometry pass does not check muscle-to-muscle or muscle-to-bone pairs, foot ligaments, or vascular, nerve and lymphatic pairs. It does not check whole-body geometry, dynamic contact or visual/rig/bake correspondence. Bone pore-fluid and pore-marrow mass is missing. These limits remain explicit in every report.
+The default geometry pass checks all 8,911 distinct pairs among 134 named lower-limb fields. These include bones, knee tissues, muscles and tendons, foot ligaments, vessels, nerves and lymphatics. It does not check whole-body geometry, dynamic contact or visual/rig/bake correspondence. Separate dermis/fat interfaces and bone pore-fluid and pore-marrow mass remain unresolved. These limits remain explicit in every report.
 
 ## Generate a report
 
@@ -16,7 +16,13 @@ python3 tools/anatomy_validity.py --build --output anatomy-report.json
 
 The default spec is a 1.8288 m male, untoned, right-side template. The three maximum grid widths are 20, 10 and 5 mm. Each probe execution has a five-second limit. The probe has no GPU dependency.
 
-Use `--sex female`, `--side left`, `--athleticism toned` or `--stature-m 1.63` to select another canonical template. Use `--steps-mm 16 8 4` to select three other grid widths. Each width must be finite and between 2 and 20 mm. Supply three through ten distinct widths. A tiny width fails before integer conversion or iteration. Each grid permits at most two million cells.
+Use `--sex female`, `--side left`, `--athleticism toned` or `--stature-m 1.63` to select another canonical template. Use `--steps-mm 16 8 4` to select three other grid widths. Each width must be finite and between 2 and 20 mm. Supply three through ten distinct widths. A tiny width fails before integer conversion or iteration.
+
+Each grid permits at most two million cells. Pair batches also check their complete work request before sampling. A budget failure or timeout stops report generation. It never removes a costly pair from a successful report.
+
+Use `--pair-scope representative` for a smaller diagnostic run. It retains the complete 8,911-pair inventory. Each unselected pair has an explicit omission reason. Selection uses the largest intersecting box in each tissue-class and leg/foot combination.
+
+This rule is reproducible. It does not identify the worst anatomical overlap. The default `--pair-scope full` executes every catalog pair.
 
 Omit `--build` to reuse the probe. Its sidecar must match the source digest and binary digest. Rebuild after a source change. Reports record both digests, the exact compiler version and `--Werror`.
 
@@ -30,7 +36,7 @@ The report uses an initial source and inventory snapshot. It rechecks source, pr
 
 ## Read the report
 
-The JSON schema version is 1. Every quantity has a unit in its key or its stated frame. Pair IDs use a canonical group plus sorted component IDs. They remain stable when pair order changes. Reports retain source-file, report-logic, inventory and executable hashes.
+The JSON schema version is 2. Every quantity has a unit in its key or its stated frame. Pair IDs use a canonical group plus sorted component IDs. They remain stable when pair order changes. Reports retain source-file, report-logic, inventory and executable hashes.
 
 - `spec` identifies the input template. The report uses the template genome
 - `build_provenance` identifies the exact source and executable
@@ -38,12 +44,15 @@ The JSON schema version is 1. Every quantity has a unit in its key or its stated
 - `segments` contains the three-step estimates and differences for each cut
 - `composition` contains only the selected side's three disjoint cuts
 - `diagnostics` contains sampled overlaps and spine endplane checks
+- `pair_inventory` lists all components, all unordered pairs, class counts and execution status
 - `diagnostic_limits` names regions and uses not checked
 - `accounting` states assignment precedence and missing contributions
 - `provenance_inventory` distinguishes cited inputs from authored parameters
 - `gate` states the supported label and the missing validation evidence
 
-The leg frame origin is the tibiofemoral joint line. Plus x is body-right. Plus y is proximal. Plus z is anterior.
+The leg frame origin is the tibiofemoral joint line. Plus x is body-right. Plus y is proximal. Plus z is anterior. Spine diagnostics use the midpoint of the two hip joint centers as their origin. Each diagnostic record names its frame.
+
+The pair inventory also lists the 67 checked neighboring-spine pairs and 23 endplane checks outside the lower-limb catalog. No cross-frame pair is inferred.
 
 Inertia entries are `xx`, `yy`, `zz`, `xy`, `xz` and `yz`, about the center of mass. Off-diagonal entries are negative products of inertia. The six-entry representation is symmetric by construction.
 
@@ -51,7 +60,9 @@ Inertia entries are `xx`, `yy`, `zz`, `xy`, `xz` and `yz`, about the center of m
 
 The independent controls use a uniform rectangular solid and two unequal point masses. Their expected values come from closed-form integrals, not the anatomical template. The solid has an unaligned cut at each of three grid widths. Tests compare its mass, center and all six tensor entries before and after composition. Separate controls test a rigid rotation, a translation and all parallel-axis tensor entries.
 
-The uniform-solid absolute tolerances are 2e-8 kg for mass, 2e-8 m for center and 1e-10 kg m² for inertia. The point-mass tensor tolerance is 1e-8 kg m². The rigid-center tolerance is 2e-8 m. The overlap-box volume tolerance is 1e-11 m³. These are numerical test tolerances. They are not physical acceptance thresholds.
+The uniform-solid absolute tolerances are 2e-8 kg for mass, 2e-8 m for center and 1e-10 kg m² for inertia. The point-mass tensor tolerance is 1e-8 kg m². The rigid-center tolerance is 2e-8 m. The overlap-box volume tolerance is 1e-11 m³.
+
+Thin-layer and narrow-interface controls use 1e-12 m³. These are numerical test tolerances. They are not physical acceptance thresholds.
 
 The report checks all principal minors of a scaled symmetric tensor for positive semidefiniteness. It also checks all principal minors of the central second-moment matrix, `C = trace(I)/2 Identity - I`. This tests the principal-moment triangle inequalities in any frame. Coordinate-diagonal triangle checks alone are insufficient. The relative roundoff tolerance is 5e-6.
 
@@ -73,15 +84,29 @@ Do not add individual bone mass, soft-part mass, a second skin mass or `SweepFie
 
 ## Geometry diagnostics
 
-The default probe checks all 435 distinct pairs among 30 lower-limb bones. These are six leg/leg pairs, 104 leg/foot pairs and 325 foot/foot pairs. It checks 30 knee pairs: 20 leg-bone/tissue pairs and ten tissue/tissue pairs.
+The default probe retains all 435 distinct pairs among 30 lower-limb bones. These are six leg/leg pairs, 104 leg/foot pairs and 325 foot/foot pairs. It checks 30 knee pairs: 20 leg-bone/tissue pairs and ten tissue/tissue pairs.
 
 Spine checks include C2 through C7, T1 through L5, the C7/T1 transition and the neighboring discs. The spine pass returns 67 pair records and 23 endplane records. The L5 lower disc endpoint uses the authored sacral support plane. It does not assert a flat sacral-body surface.
 
 A positive gap between conservative bounding boxes is a clearance lower bound. A negative field witness identifies sampled common interior of the component envelopes. Bone fields are outer envelopes; a witness does not identify cortical, trabecular or marrow occupancy. Field values need not be exact distances. They are not penetration depth or physical clearance.
 
-No sampled hit does not prove no overlap. The report names omitted muscle, foot-ligament, vessel, nerve and lymphatic pair checks.
+No sampled hit does not prove no overlap. A field witness is null when no cell was sampled. An analytic thin-layer control demonstrates a missed interior with loose bounds. Tight bounds recover its known volume. A separate control checks a narrow interface and an edited attachment that creates positive overlap.
 
-The provenance inventory has an explicit intentional-overlap allowlist. It covers construction primitives inside one named field, contained anatomy inside the skin domain, and the leg/foot envelope union. It permits a shared body/disc endplane surface within 1e-6 m. It permits no positive-volume body/disc overlap. Distinct bones are not exempted by the construction-union rule.
+The catalog contains 30 bones, five knee tissues, 49 muscles or tendons, ten foot ligaments, 19 vessels, 13 nerves and eight lymphatic fields. Every distinct combination is executable. This includes same-class, cross-class and leg/foot pairs. The 465 existing bone and knee diagnostics retain their IDs. Another 8,446 pairs use the same `diagnose_pair` sampler through a canonical-field adapter.
+
+Component IDs contain the region, part family and declared typed part value. Aliases add no duplicate entry.
+
+These IDs are independent of the display label and catalog order. A change to a declared part value changes that component identity.
+
+Each report also records the source digest. New pair IDs sort these component IDs.
+
+Foot fields translate by the assembled ankle center. Local long bones use their assembly origins. Other leg fields already use the knee origin. No display-radius helper is used.
+
+The machine-readable inventory marks each pair as checked or intentionally omitted. Class totals include both statuses. A representative run never claims all catalog pairs were checked. Unsupported domains are separate entries and never count as completed checks. These domains include unresolved material interfaces, other body regions, nonneighbor spine pairs and dynamic or visual mappings.
+
+The provenance inventory has an explicit intentional-overlap allowlist. It covers construction primitives inside one named field, contained anatomy inside the skin domain, and the leg/foot envelope union. It permits a shared body/disc endplane surface within 1e-6 m. It permits no positive-volume body/disc overlap. Distinct named fields are not exempted by the construction-union rule.
+
+No positive-volume attachment allowance is currently justified for catalog pairs. A shared tendon path, vascular junction or apparent anatomical attachment remains a finding. Its permitted overlap volume is unknown. The skin-domain rule only prevents duplicate domain accounting; it does not validate containment or dermis clearance.
 
 Finite positive dimensions can still be geometrically incompatible. A reversed disc gap, endplane mismatch or unexpected overlap is evidence to inspect. It does not authorize automatic changes to measured or cited inputs. Use `diagnose_pair` with edited canonical fields for additional pairs. The caller must supply conservative bounds in one frame.
 
@@ -101,7 +126,7 @@ Canonical-to-visual, rig and bake mapping remains [issue #297](https://github.co
 
 [Issue #595](https://github.com/SethKitchen/ThreeMojo/issues/595) tracks classification and repair of current sampled-overlap findings. The default 5 mm template reports 21 bone-pair hits, 14 knee-pair hits and one full C2/C3 field hit. These 36 findings remain unallowlisted. All 23 body/disc endplane checks pass. A signed field witness is not a measured penetration depth. A sampled volume is not an exact overlap volume.
 
-[Issue #596](https://github.com/SethKitchen/ThreeMojo/issues/596) tracks the omitted tissue-pair classes. These follow-ups do not grant a clearance or certification claim to this report.
+[Issue #596](https://github.com/SethKitchen/ThreeMojo/issues/596) adds the complete selected-side pair inventory and missing tissue-class execution. The source-bound `docs/validation/anatomy-pair-example.json` uses the explicit representative scope. It is focused evidence for the implementation. The full integrated report and aggregate qualification remain separate checks. Neither pair coverage nor passing analytic controls grants a clearance or certification claim.
 
 ## References
 

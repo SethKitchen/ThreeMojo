@@ -11,7 +11,7 @@ from extensions.carla.curve_bounds import (
     _geometry_distance, _lane_jet, _lane_jet_with_proof, _reference_work,
     _spiral_counts,
 )
-from extensions.carla.curve_distance import _normalized_square
+from extensions.carla.lane_distance import _normalized_square
 from extensions.carla.curve_interval import _Interval, _Jet, _next_down, _next_up
 from extensions.carla.geometry import LINE
 from extensions.carla.lane_refinement import (

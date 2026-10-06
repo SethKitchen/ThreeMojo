@@ -12,6 +12,9 @@ MOJO := .venv/bin/mojo
 # -I . puts the repo root on the import path so `from math.vector3 import ...`
 # resolves. Without it Mojo reports "unable to locate module".
 MOJOFLAGS := -I .
+# CPU lint builds may select a target; mojo doc does not accept target flags.
+LINT_CPU_BUILD_FLAGS ?=
+LINT_CPU_PROGRESS ?= 0
 
 # Every mojo invocation prints a harmless "Failed to initialize Crashpad"
 # warning we want to strip. Piping to sed would discard mojo's exit status,
@@ -32,13 +35,17 @@ LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
-TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo))
+# Import-only diagnostic adapters and test fixtures have no CLI entry point.
+# Copy them through unchanged beside instrumented test suites.
+HELPER_LIBS  := tools/anatomy_pairs.mojo tests/carla_fixed_s_fixture.mojo \
+                tests/exact_predicates_oracle.mojo
+TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo)) $(HELPER_LIBS)
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
 # which is the point of them, so linting them would always fail.
-ENTRY_POINTS := $(shell find tests examples bench tools -name '*.mojo' \
+ENTRY_POINTS := $(filter-out $(HELPER_LIBS),$(shell find tests examples bench tools -name '*.mojo' \
                   -not -path 'tests/compile_fail/*' \
-                  -not -path 'bench/mojo10/*') $(TOOL_CLIS)
+                  -not -path 'bench/mojo10/*')) $(TOOL_CLIS)
 COMPILE_FAIL := $(wildcard tests/compile_fail/*.mojo)
 DOC_SOURCES  := $(LIB_SOURCES) $(TOOL_LIBS)
 TESTS        := $(wildcard tests/test_*.mojo)
@@ -128,9 +135,9 @@ $(info Affected since $(AFFECTED): $(words $(CPU_TESTS)) suites, \
   modules, $(words $(FORMATTED)) changed files.)
 endif
 # What the coverage build copies through uninstrumented: excluded libraries,
-# maintained benchmark helpers imported by tests, and in an AFFECTED run every
+# maintained benchmark and diagnostic helpers imported by tests, and in an AFFECTED run every
 # library the change does not reach. Explicitly measured helpers stay instrumented.
-COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) \
+COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES) $(HELPER_LIBS) \
                          $(filter bench/%,$(ENTRY_POINTS)))
 
 # --- caching ----------------------------------------------------------------
@@ -212,6 +219,7 @@ TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
+          --setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS)) \
           --setting=$(call quote,$(TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
@@ -250,12 +258,12 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
   && touch $(CACHE_DIR)/$(1)-$(HASH)
 endef
 
-.PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host \
+.PHONY: test-gpu-device help check check-cpu check-gpu ci test test-cpu test-gpu test-gpu-host check-gpu-air \
         docs-check wiki-publish test-tools test-coverage-tool test-portability \
         coverage-instrument coverage-capture coverage-report \
         lint lint-cpu lint-gpu compile-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
-        clean clean-images optimize-images draco-export-check
+        clean clean-images optimize-images draco-export-check audio-game-humanoid
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -264,6 +272,7 @@ help:
 	@echo "  make check-cpu  the standard-library-only half ($(words $(CPU_TESTS)) suites)"
 	@echo "  make check-gpu  the optional MAX backend ($(words $(GPU_TESTS)) suites)"
 	@echo "  make test-gpu-host  the MAX backend's layout suites, no GPU needed"
+	@echo "  make check-gpu-air  every Metal kernel call matches its callee, no GPU needed"
 	@echo "  make compile-gpu  build GPU entry points without running them"
 	@echo "  make ci         check, ignoring the cache"
 	@echo "  make test       run every tests/test_*.mojo suite"
@@ -299,7 +308,7 @@ check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-c
 # The complete GPU check needs MAX and an accelerator. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
 # for one that ran them. Use compile-gpu for a build-only check without a GPU.
-check-gpu: gpu-status test-gpu-host
+check-gpu: gpu-status test-gpu-host check-gpu-air
 	@.venv/bin/python tools/gpu_status.py --available; rc=$$?; \
 	  if [ $$rc -eq 0 ]; then $(MAKE) lint-gpu test-gpu-device; \
 	  elif [ $$rc -ne 1 ]; then exit $$rc; fi
@@ -339,9 +348,21 @@ $(TEST_CPU_STAMP):
 	@xargs -n 2 -P $(JOBS) \
 	      sh -c '[ "$$#" -eq 0 ] && exit 0; \
 	             name=$$(basename "$$1" .mojo); bin=$(BIN_DIR)/$$name; \
-	             out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
-	                    2>&1 && python3 tools/run_suite.py \
-	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"); \
+	             exec 3>&1; \
+	             progress() { printf "%s suite=%s %s\n" \
+	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
+	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
+	             out=$$(python3 tools/compiler_telemetry.py --suite "$$1" --log-fd 3 -- \
+	                    $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
+	                    2>&1; build_rc=$$?; \
+	                    progress "$$1" "build-end: exit=$$build_rc"; \
+	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \
+	                    progress "$$1" "run-start: python3 tools/run_suite.py --seconds $(TEST_TIMEOUT) --suite $$1 -- $$bin"; \
+	                    python3 tools/run_suite.py \
+	                      --seconds $(TEST_TIMEOUT) --suite "$$1" -- "$$bin"; \
+	                    run_rc=$$?; \
+	                    progress "$$1" "run-end: exit=$$run_rc"; \
+	                    exit $$run_rc); \
 	             rc=$$?; rm -f "$$bin"; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; \
 	             if [ $$rc -eq 0 ]; then \
@@ -412,9 +433,15 @@ lint-cpu: $(LINT_CPU_STAMP)
 $(LINT_CPU_STAMP):
 	@printf '%s\n' $(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS)) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) \
+	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
 	               --Werror -o /dev/null "$$source"; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-build-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               printf "%s lint-build-end: source=%s exit=%s\n" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$source" "$$rc"; \
+	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
 	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
@@ -426,7 +453,13 @@ $(LINT_CPU_STAMP):
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
 	               --Werror -o /dev/null "$$source"; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-doc-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               printf "%s lint-doc-end: source=%s exit=%s\n" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$source" "$$rc"; \
+	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
 	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
@@ -714,6 +747,14 @@ $(error Cannot read example prerequisites)
 endif
 include $(CACHE_DIR)/example-inputs.mk
 
+# This example writes a GLB, so it has a separate non-image target.
+audio-game-humanoid: $(OUT_DIR)/audio-character.glb
+
+$(OUT_DIR)/audio-character.glb: $(EXAMPLE_INPUTS_audio_game_humanoid)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/audio_game_humanoid.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
            $(OUT_DIR)/floor.png $(OUT_DIR)/photo.png \
@@ -751,6 +792,15 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/vxgi.png $(OUT_DIR)/lighting.png \
            $(OUT_DIR)/lofts.png $(OUT_DIR)/generators.png \
            $(OUT_DIR)/computenodes.png \
+           $(OUT_DIR)/building-model.png \
+           $(OUT_DIR)/building-topology.png \
+           $(OUT_DIR)/ifc-exchange.png \
+           $(OUT_DIR)/procedural-towers.png \
+           $(OUT_DIR)/floor-plans-and-interiors.png \
+           $(OUT_DIR)/frame-analysis.png \
+           $(OUT_DIR)/shell-analysis.png \
+           $(OUT_DIR)/building-energy.png \
+           $(OUT_DIR)/numerics.png \
            $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
            $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
            $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
@@ -762,6 +812,9 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/arm.png $(OUT_DIR)/hand.png \
            $(OUT_DIR)/head.png \
            $(OUT_DIR)/water.png \
+           $(OUT_DIR)/animals.png \
+           $(OUT_DIR)/walk.png \
+           $(OUT_DIR)/animal_anatomy.png \
            $(OUT_DIR)/carla_towns.png \
            $(OUT_DIR)/game_humanoid.png \
            $(OUT_DIR)/hairstyles.png \
@@ -1259,6 +1312,69 @@ $(OUT_DIR)/lofts.png: $(EXAMPLE_INPUTS_vase)
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 
+# A small building model, cut away above its ground floor.
+$(OUT_DIR)/building-model.png: $(EXAMPLE_INPUTS_building_model)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/building_model.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# The cells of a cell complex, pulled apart.
+$(OUT_DIR)/building-topology.png: $(EXAMPLE_INPUTS_room_cells)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/room_cells.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A tower read back from its IFC file.
+$(OUT_DIR)/ifc-exchange.png: $(EXAMPLE_INPUTS_exchange)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/exchange.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A seeded tower as a building model.
+$(OUT_DIR)/procedural-towers.png: $(EXAMPLE_INPUTS_towers)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/towers.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A furnished floor of homes, cut away.
+$(OUT_DIR)/floor-plans-and-interiors.png: $(EXAMPLE_INPUTS_interiors)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/interiors.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A tower frame swaying in its first mode.
+$(OUT_DIR)/frame-analysis.png: $(EXAMPLE_INPUTS_frame_modes)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/frame_modes.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A plate bending under a pressure.
+$(OUT_DIR)/shell-analysis.png: $(EXAMPLE_INPUTS_plate)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/plate.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Rooms through a summer day, by temperature.
+$(OUT_DIR)/building-energy.png: $(EXAMPLE_INPUTS_heat)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/heat.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# The lowest modes of a chain of springs.
+$(OUT_DIR)/numerics.png: $(EXAMPLE_INPUTS_spring_modes)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/spring_modes.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
 # A tree grown from a seed.
 $(OUT_DIR)/generators.png: $(EXAMPLE_INPUTS_sapling)
 	@mkdir -p $(OUT_DIR)
@@ -1398,6 +1514,27 @@ $(OUT_DIR)/water.png: $(EXAMPLE_INPUTS_water) assets/pebbles.jpg
 	[ $$rc -eq 0 ] || exit 1
 	@python3 tools/optimize_png.py $@
 
+# Every procedural animal, one to a tile, turning.
+$(OUT_DIR)/animals.png: $(EXAMPLE_INPUTS_animals)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animals.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# A wolf walks one stride, re-meshed in each pose.
+$(OUT_DIR)/walk.png: $(EXAMPLE_INPUTS_walk)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/walk.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
+# Game mode beside engineering mode, at real size and walking speed.
+$(OUT_DIR)/animal_anatomy.png: $(EXAMPLE_INPUTS_animal_anatomy)
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/animal_anatomy.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+	@python3 tools/optimize_png.py $@
+
 $(OUT_DIR)/carla_towns.png: $(EXAMPLE_INPUTS_carla_towns) assets/carla/ATTRIBUTION.md assets/carla/tools/carla_assets.py
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/carla_towns.mojo $@); \
@@ -1485,5 +1622,11 @@ test-coverage-tool:
 	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.
+# Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's
+# toolchain. A call whose types differ from its callee's crashes Apple's
+# linker with only "failed to compile metallib" (modular/modular#7238).
+check-gpu-air:
+	@python3 tools/check_air_calls.py --mojo $(MOJO)
+
 test-portability:
 	@python3 tools/check_portability.py --mojo $(MOJO)

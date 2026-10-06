@@ -35,6 +35,7 @@ from materials.nodes import (
     NodeProgramId,
 )
 from math.matrix4 import Matrix4
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from postprocessing.composer import (
@@ -1161,6 +1162,46 @@ def test_the_composer_saves_the_frame_and_a_shader_reads_it() raises:
     plain.add_pass(render_pass())
     plain.add_pass(shader_pass(id))
     _ = plain.render(renderer, scene, assets, camera)
+
+
+def test_screen_and_asset_gradients_use_their_checked_sampler() raises:
+    var colors: List[FloatColor] = [FloatColor(0.5, 0, 0, 0.5)]
+    var kept: List[FloatColor] = [FloatColor(0, 0, 1, 1)]
+    var code: List[Float32] = [0]
+    var pointer = (
+        code.unsafe_ptr()
+        .unsafe_mut_cast[False]()
+        .unsafe_origin_cast[Untracked]()
+    )
+    var screen = ScreenNodes(
+        pointer, LightView(colors, 1, 1), LightView(kept, 1, 1), 0, 0
+    )
+    var zero = Vector2(0, 0)
+    same_color(
+        screen.sample_grad(INPUT_SLOT, 0.5, 0.5, zero, zero),
+        FloatColor(1, 0, 0, 0.5),
+    )
+    same_color(
+        screen.sample_grad(SAVED_SLOT, 0.5, 0.5, zero, zero),
+        FloatColor(0, 0, 1, 1),
+    )
+    same_color(
+        screen.sample_grad(INPUT_SLOT, nan[DType.float32](), 0.5, zero, zero),
+        FloatColor(0, 0, 0, 0),
+    )
+    var store = TextureStore()
+    _ = store.add(checkerboard(1, 1, Color(0, 255, 0), Color(0, 255, 0)))
+    var host = HostScreenNodes(screen, Pointer(to=store))
+    same_color(
+        host.sample_grad(INPUT_SLOT, 0.5, 0.5, zero, zero),
+        FloatColor(1, 0, 0, 0.5),
+    )
+    same_color(
+        host.sample_grad(0, 0.5, 0.5, zero, zero), FloatColor(0, 1, 0, 1)
+    )
+    _ = code^
+    _ = colors^
+    _ = kept^
 
 
 def main() raises:

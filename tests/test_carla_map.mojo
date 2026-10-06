@@ -602,8 +602,8 @@ def test_straight_lanes() raises:
 
 def test_lane_transforms() raises:
     var map = load_opendrive_file(TOWN)
-    # Ordinary CARLA positions, with corrected lane-center derivative angles.
-    # See CARLA-lane-correction-controls.md for the independent derivatives.
+    # Ordinary positions retain their original tolerances. Lane angles use
+    # the independently differentiated stored lane graph in the oracle.
     var t = map.compute_transform(_w(1, 0, -1, 10.0))
     _near(t.location, 10.0, 1.75, 0.0)
     assert_almost_equal(t.rotation.yaw, 0.0, atol=1e-5)
@@ -619,15 +619,15 @@ def test_lane_transforms() raises:
     assert_almost_equal(t.rotation.yaw, 28.64788975654116, atol=1e-4)
     t = map.compute_transform(_w(5, 0, -1, 10.0))
     _near(t.location, 10.140229715463569, -99.17595478399882, 1.2, 1e-3)
-    assert_almost_equal(t.rotation.pitch, -1.1110515913233193, atol=1e-4)
+    assert_almost_equal(t.rotation.pitch, -1.1110515913233194, atol=1e-4)
     assert_almost_equal(t.rotation.yaw, -7.16197243913529, atol=1e-3)
     t = map.compute_transform(_w(5, 0, 1, 40.0))
     _near(t.location, 37.0165078846415, -116.97860369629684, 1.7, 1e-3)
-    assert_almost_equal(t.rotation.pitch, 361.26665243151570, atol=1e-4)
-    assert_almost_equal(t.rotation.yaw, 133.96511248044121, atol=1e-3)
+    assert_almost_equal(t.rotation.pitch, 361.2666524315157, atol=1e-4)
+    assert_almost_equal(t.rotation.yaw, 133.9651124804412, atol=1e-3)
     t = map.compute_transform(_w(5, 0, -2, 50.0))
     _near(t.location, 50.69409544732411, -117.7093508614975, 2.0, 1e-3)
-    assert_almost_equal(t.rotation.yaw, -46.95450998676703, atol=1e-3)
+    assert_almost_equal(t.rotation.yaw, -46.954509986767036, atol=1e-3)
     # A left-hand road's left lanes run with s.
     t = map.compute_transform(_w(6, 0, 1, 5.0))
     _near(t.location, 5.0, -201.75, 0.0)
@@ -1870,8 +1870,8 @@ def test_tiny_straight_section() raises:
 
 
 def test_junction_box_of_a_long_road() raises:
-    # On a road this long the tenth step of the box overshoots the lane's
-    # end by rounding and finds no waypoint; the box keeps the ninth.
+    # A long straight lane retains its complete endpoints. Junction bounds
+    # do not accumulate traversal steps or follow a successor on overshoot.
     var b = MapBuilder()
     _ = _flat_road(
         b, 20, 0, 0, 0, 733.3, 9, 0, 0, True, [(-1, LANE_DRIVING, 0, 0)]

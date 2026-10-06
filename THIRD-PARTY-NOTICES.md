@@ -48,6 +48,27 @@ THE SOFTWARE.
 
 ## OpenEXR and TinyEXR
 
+The PXR24, B44/B44A and DWA decoders in `render/exr.mojo` also derive from
+[OpenEXR 3.1.5](https://github.com/AcademySoftwareFoundation/openexr/tree/v3.1.5).
+The DWA inverse DCT and transfer functions preserve the reference arithmetic.
+The additional upstream copyright and BSD-3-Clause notice follow.
+
+```
+Copyright (c) DreamWorks Animation LLC and Contributors of the OpenEXR Project.
+Copyright (c) Contributors to the OpenEXR Project. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer in the documentation and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
+
 `render/exr.mojo` ports three.js's `EXRLoader`, whose PIZ decoder -- the
 Huffman coder, the wavelet and the lookup table -- derives from the original
 Industrial Light & Magic OpenEXR implementation and from TinyEXR. Their
@@ -114,6 +135,30 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ---
 
+## Arm ASTC Encoder
+
+<https://github.com/ARM-software/astc-encoder/tree/30aabb3f42406df45a910d8496f9bee17eeba9bb>
+
+The raw ASTC tests use Arm astcenc 5.3.0 as an independent reference.
+`tools/references/astc_reference.cpp` calls its public API. The generated
+hex fixtures under `assets/ktx2/raw_astc_*` store the reference texels.
+No Arm binary or source file is bundled. The raw decode rounding in
+`render/uastc_hdr.mojo` follows its UNORM8 and FP16 profiles.
+
+Arm astcenc is licensed under Apache-2.0, reproduced in the Basis Universal
+section below. The endpoint and interpolation source notices state:
+
+```
+Copyright 2011-2023 Arm Limited
+Copyright 2011-2024 Arm Limited
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+http://www.apache.org/licenses/LICENSE-2.0
+```
+
+---
+
 ## Basis Universal
 
 <https://github.com/BinomialLLC/basis_universal>
@@ -146,7 +191,8 @@ otherwise explicitly indicated.
 
 The test files under `assets/ktx2/` were written by the Basis Universal
 encoder that the ktx2-encoder package bundles, except
-`uastc_hdr_blocks.ktx2`, which holds random ASTC blocks.
+`uastc_hdr_blocks.ktx2`, which holds random ASTC blocks. The raw ASTC
+text fixtures use the separate Arm reference described above.
 
 ```
                                  Apache License
@@ -445,6 +491,48 @@ SOFTWARE.
 
 ---
 
+## procedural-animals
+
+<https://github.com/majidmanzarpour/threejs-procedural-animals>
+
+`extensions/animals/` ports procedural-animals' signed distance field
+sculpts, rigs, seeded variation, proportion warps, coat palettes and eye
+specifications. `extensions/sdf/` ports its distance-field primitives and
+smooth unions (`core/sdf/sdf.js`), its surface-nets mesher
+(`core/sdf/mesher.js`) and its sculpt helpers, such as `ellY` and `tube`.
+Both carry this notice. procedural-animals is Copyright (c) 2026 Majid Manzarpour
+and procedural-animals contributors and is distributed under the MIT
+License, reproduced in full below.
+
+Anyone may obtain procedural-animals directly from its authors under the MIT
+License. The noncommercial restriction in ThreeMojo's own license applies only
+to ThreeMojo's code and has no effect whatsoever on your rights in
+procedural-animals.
+
+```
+MIT License
+
+Copyright (c) 2026 Majid Manzarpour and procedural-animals contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## Clearwater
 
 <https://github.com/Aureliengmz/clearwater>
@@ -619,8 +707,10 @@ work. TressFX is distributed under the MIT License, reproduced below.
 `assets/hair/mohawk.bin` is the crest of Ratboy's mohawk, TressFX's sample
 hair `Ratboy_mohawk.tfx`, as `tools/hair_style.py` converts it: the strands from
 the brow to the nape, narrowed and laid on a human cranium. The sample is
-distributed under the same MIT License, copyright 2017 Advanced Micro Devices,
-Inc.
+distributed under the same MIT License. The pinned TressFX 4.1
+[license file](https://github.com/GPUOpen-Effects/TressFX/blob/6957058e29dceb25a0c2a82849bb892f3d9fbce5/license.txt)
+states copyright 2020 Advanced Micro Devices, Inc.
+The exact source and recipe are in `assets/converted-asset-manifest.json`.
 
 ```
 Copyright (c) 2020 Advanced Micro Devices, Inc. All rights reserved.
@@ -697,6 +787,12 @@ converts it: each strand kept as offsets from its root on a fitted cranium, so
 it can be laid on any head. The character Sintel is (c) copyright Blender
 Foundation | durian.blender.org, licensed under the Creative Commons
 Attribution 3.0 License, <https://creativecommons.org/licenses/by/3.0/>.
+The [Sintel Lite author page](https://blendswap.com/blend/2847) states this
+license. The pinned
+[exporter README](https://github.com/Scthe/frostbitten-hair-webgpu/blob/4478dd129525ff7db92978178b55f760716cbd72/README.md)
+identifies the model and its author. The manifest records the exact exported
+TFX bytes and the conversion recipe. The software repository's MIT license
+does not replace this model license.
 
 ---
 
@@ -712,6 +808,9 @@ the mesh. `extensions/humanoid/skeleton/head/face_model.mojo` reads
 it; the Mojo implementation is original work. Only the Light model is used,
 which ICT-FaceKit releases under the MIT License, reproduced below. ICT's Full
 face model, under a different license, is not used.
+The manifest pins all 118 consumed OBJ files and the upstream
+[license](https://github.com/USC-ICT/ICT-FaceKit/blob/da5f95a607f5e6b37755b38d3385d7f2853732e5/LICENSE)
+and README at the same immutable revision.
 
 ```
 MIT License

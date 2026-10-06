@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Basis Universal UASTC HDR 4x4 blocks decoded to RGBA floats, ported
+"""Raw ASTC 4x4 and 6x6, and Basis Universal UASTC HDR 4x4, ported
 from `unpack_block` and `decode_block` in Binomial's
 `basisu_astc_helpers.h` (Apache-2.0), Basis Universal 1.50.
 
@@ -35,15 +35,30 @@ endpoint interpolates in sixteen bits and becomes a half by truncation,
 as ASTC's decode to half floats requires. A result that is an infinity
 or a NaN becomes the largest finite half, as the transcoder writes it.
 
+**Raw ASTC also supports 6x6 and LDR.** `astc_block` shares the endpoint
+and integer-sequence decoder. The block footprint controls partition
+coordinates, weight infill and edge cropping. `astc_image` returns UNORM
+or sRGB RGBA bytes; `astc_hdr_image` returns linear HDR RGBA floats.
+sRGB endpoints expand with an eight-bit shift and midpoint bias. UNORM
+endpoints expand by replication. Both LDR paths select the interpolated
+value's top eight bits, without a half-float round trip. sRGB remains
+encoded until texture sampling. Raw HDR accepts LDR or HDR alpha.
+
+The raw paths match Arm astcenc 5.3.0's UNORM8 and FP16 outputs exactly
+on the reference corpus. Malformed blocks, nonfinite HDR constants and
+HDR endpoints in an LDR profile raise instead of producing an error color.
+This does not promise identical texels from every hardware decode mode.
+
 **A malformed block is refused.** The transcoder fails the whole image
 when one block does not unpack, and three.js throws. Here the decode
 raises.
 """
 
+from render.compressed_texture import check_decoded_size
 from render.exr import half_to_float
 from render.uastc import UASTC_BLOCK_BYTES, bise_ranges, unquantize_endpoint
 
-# The largest weight grid a 4x4 block can use, and the most endpoints.
+# The largest weight count allowed by ASTC, and the most endpoint values.
 comptime MAX_GRID_WEIGHTS = 64
 comptime MAX_ENDPOINT_VALUES = 18
 # The lowest endpoint range ASTC allows, and the highest weight range.
@@ -52,6 +67,38 @@ comptime LAST_WEIGHT_RANGE = 11
 # The half floats of one and of the largest finite number.
 comptime HALF_ONE = 0x3C00
 comptime HALF_MAX = 0x7BFF
+
+
+@fieldwise_init
+struct AstcProfile(Equatable, ImplicitlyCopyable, Writable):
+    """The raw ASTC output profile: linear bytes, sRGB bytes or HDR halves.
+
+    Args:
+        value: Zero for UNORM, one for sRGB, or two for HDR.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True for one of the three supported profiles.
+
+        Returns:
+            True for UNORM, sRGB or HDR; False for every other value.
+        """
+        return self.value >= 0 and self.value <= 2
+
+    def write_to(self, mut writer: Some[Writer]):
+        """Write the profile's number.
+
+        Args:
+            writer: Where to write it.
+        """
+        writer.write("AstcProfile(", self.value, ")")
+
+
+comptime ASTC_UNORM = AstcProfile(0)
+comptime ASTC_SRGB = AstcProfile(1)
+comptime ASTC_HDR = AstcProfile(2)
 
 
 @fieldwise_init
@@ -294,17 +341,20 @@ def _hash52(seed: UInt32) -> UInt32:
     return p
 
 
-def partition_of(seed: Int, x: Int, y: Int, partitions: Int) -> Int:
-    """Return which partition a texel of a 4x4 block is in.
+def partition_of(
+    seed: Int, x: Int, y: Int, partitions: Int, small_block: Bool = True
+) -> Int:
+    """Return which partition a texel of a 2D block is in.
 
-    ASTC's `compute_texel_partition` for a block of fewer than 31 texels,
-    which doubles the texel's coordinates.
+    ASTC's `compute_texel_partition` doubles coordinates for fewer than
+    31 texels. The default preserves the Basis HDR 4x4 path.
 
     Args:
         seed: The block's ten-bit partition index.
-        x: The texel's column, 0 to 3.
-        y: Its row, 0 to 3.
+        x: The texel's column.
+        y: Its row.
         partitions: How many partitions, 2 to 4.
+        small_block: Double coordinates when the block has fewer than 31 texels.
 
     Returns:
         The partition, 0 to `partitions - 1`.
@@ -321,8 +371,8 @@ def partition_of(seed: Int, x: Int, y: Int, partitions: Int) -> Int:
     var sh_b = 6 if partitions == 3 else 5
     var sh1 = sh_a if (full & 1) != 0 else sh_b
     var sh2 = sh_b if (full & 1) != 0 else sh_a
-    var px = x << 1
-    var py = y << 1
+    var px = x << 1 if small_block else x
+    var py = y << 1 if small_block else y
     var r = Int(number)
     var a = 0x3F & ((seeds[0] >> sh1) * px + (seeds[1] >> sh2) * py + (r >> 14))
     var b = 0x3F & ((seeds[2] >> sh1) * px + (seeds[3] >> sh2) * py + (r >> 10))
@@ -789,30 +839,33 @@ def decode_endpoints(
     return out^
 
 
-def _upsample(grid: List[Int], width: Int, height: Int) -> List[Int]:
-    """Return a weight grid interpolated up to the 4x4 texels.
+def _upsample(
+    grid: List[Int], width: Int, height: Int, block_size: Int = 4
+) -> List[Int]:
+    """Return a weight grid interpolated up to a square block's texels.
 
-    ASTC's bilinear infill, in sixteenths. A 4x4 grid is the texels'
-    weights as they are.
+    ASTC's bilinear infill, in sixteenths. A grid that matches both
+    dimensions gives the texels' weights as they are.
 
     Args:
         grid: The grid's weights out of 64, row-major.
-        width: The grid's width, 2 to 4.
-        height: Its height, 2 to 4.
+        width: The grid's width, two to the block width.
+        height: Its height, two to the block height.
+        block_size: Four or six, the block width and height.
 
     Returns:
-        Sixteen weights out of 64.
+        One weight out of 64 for each texel.
     """
-    if width * height == 16:
+    if width == block_size and height == block_size:
         return grid.copy()
     # Past the grid's end, weights the infill multiplies by zero.
     var padded = grid.copy()
     padded.resize(width * height + width + 2, 0)
-    # (1024 + 4 / 2) / (4 - 1), the transcoder's scale for a 4x4 block.
-    var scale = 342
+    # The specification's integer scale for this block footprint.
+    var scale = (1024 + block_size // 2) // (block_size - 1)
     var out = List[Int]()
-    for y in range(4):  # pragma: no branch
-        for x in range(4):  # pragma: no branch
+    for y in range(block_size):  # pragma: no branch
+        for x in range(block_size):  # pragma: no branch
             var gx = (scale * x * (width - 1) + 32) >> 6
             var gy = (scale * y * (height - 1) + 32) >> 6
             var fx = gx & 0xF
@@ -830,8 +883,10 @@ def _upsample(grid: List[Int], width: Int, height: Int) -> List[Int]:
     return out^
 
 
-def _void_extent(bits: _Bits) raises -> List[Int]:
-    """Return the four half floats of a void-extent block's one color.
+def _void_extent(
+    bits: _Bits, profile: AstcProfile = ASTC_HDR
+) raises -> List[Int]:
+    """Return four bytes or half-float bit patterns for a constant block.
 
     Raises:
         Error: If the block sets its reserved bits, names an empty extent,
@@ -848,6 +903,8 @@ def _void_extent(bits: _Bits) raises -> List[Int]:
     for channel in range(4):  # pragma: no branch
         halves.append(bits.get(64 + channel * 16, 16))
     if bits.get(9, 1) == 1:
+        if profile != ASTC_HDR:
+            raise Error("ASTC: an LDR profile cannot use HDR void extent")
         for channel in range(4):  # pragma: no branch
             if ((halves[channel] >> 10) & 0x1F) == 0x1F:
                 raise Error(
@@ -857,7 +914,10 @@ def _void_extent(bits: _Bits) raises -> List[Int]:
     var out = List[Int]()
     for channel in range(4):  # pragma: no branch
         var value = halves[channel]
-        out.append(HALF_ONE if value == 0xFFFF else unorm16_to_half(value))
+        if profile == ASTC_HDR:
+            out.append(HALF_ONE if value == 0xFFFF else unorm16_to_half(value))
+        else:
+            out.append(value >> 8)
     return out^
 
 
@@ -876,9 +936,9 @@ def _reserved(bits: _Bits) -> Bool:
     return bits.get(0, 2) == 0 and bits.get(6, 3) == 7 and bits.get(2, 4) != 15
 
 
-def _outside_block(width: Int, height: Int) -> Bool:
-    """Return True if a weight grid is larger than a 4x4 block."""
-    return width > 4 or height > 4
+def _outside_block(width: Int, height: Int, block_size: Int = 4) -> Bool:
+    """Return True if a weight grid is larger than its block footprint."""
+    return width > block_size or height > block_size
 
 
 def _bad_weight_count(count: Int, bits: Int) -> Bool:
@@ -887,36 +947,48 @@ def _bad_weight_count(count: Int, bits: Int) -> Bool:
     return count > MAX_GRID_WEIGHTS or bits < 24 or bits > 96
 
 
-def uastc_hdr_block(
-    data: List[UInt8], at: Int, tables: AstcTables
+def astc_block(
+    data: List[UInt8],
+    at: Int,
+    tables: AstcTables,
+    block_size: Int,
+    profile: AstcProfile,
 ) raises -> List[Int]:
-    """Return one ASTC 4x4 block as sixty-four half floats, row-major.
+    """Return one raw ASTC 4x4 or 6x6 block, row-major.
 
-    `astc_helpers::unpack_block` followed by `decode_block` in its
-    `cDecodeModeHDR16` mode, as the transcoder's `RGBA_HALF` target calls
-    them.
+    UNORM and sRGB return bytes with integer decode rounding. HDR returns
+    half-float bit patterns, including LDR endpoints in an HDR block.
 
     Args:
         data: The blocks.
         at: Where this block starts; sixteen bytes must follow.
         tables: The fixed tables.
+        block_size: Four or six, the width and height of the block.
+        profile: ASTC_UNORM, ASTC_SRGB or ASTC_HDR.
 
     Returns:
-        The sixteen texels' red, green, blue and alpha, each a half's bits.
+        The texels' red, green, blue and alpha, bytes or half-float bits.
 
     Raises:
         Error: If the block uses a reserved block mode or range, a weight
             grid larger than the block, too few or too many weight bits,
             dual planes with four partitions, more endpoint values than
-            fit, or a malformed void extent.
+            fit, or a malformed void extent. Also invalid sizes or profiles,
+            a truncated block, or an HDR endpoint in an LDR profile.
     """
+    if not profile.is_valid():
+        raise Error("ASTC: invalid profile")
+    if block_size != 4 and block_size != 6:
+        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+    if at < 0 or at > len(data) or len(data) - at < UASTC_BLOCK_BYTES:
+        raise Error("ASTC: a block is truncated")
     var bits = _Bits(data, at, False)
     if bits.get(0, 4) == 0 or _reserved(bits):
         raise Error("UASTC HDR: a block uses a reserved block mode")
-    var out = List[Int](capacity=64)
+    var out = List[Int](capacity=block_size * block_size * 4)
     if bits.get(0, 9) == 0x1FC:
-        var color = _void_extent(bits)
-        for _ in range(16):  # pragma: no branch
+        var color = _void_extent(bits, profile)
+        for _ in range(block_size * block_size):  # pragma: no branch
             out.extend(color.copy())
         return out^
     var row = (
@@ -935,8 +1007,8 @@ def uastc_hdr_block(
     )
     # The range bits are never below two here: the low bits that would
     # make them so are a reserved block mode, refused above.
-    if _outside_block(grid_width, grid_height):
-        raise Error("UASTC HDR: a block's weight grid is larger than 4x4")
+    if _outside_block(grid_width, grid_height, block_size):
+        raise Error("UASTC HDR: a block's weight grid is larger than the block")
     var weight_range = range_bits - 2 + precision * 6
     var planes = 2 if dual else 1
     var weight_count = planes * grid_width * grid_height
@@ -973,6 +1045,11 @@ def uastc_hdr_block(
                         + ((stream >> (index * 2)) & 3)
                     )
                 )
+    if profile != ASTC_HDR:
+        # Every block has one to four partitions, with one mode each.
+        for mode in modes:  # pragma: no branch
+            if not mode.is_ldr():
+                raise Error("ASTC: an LDR profile cannot use HDR endpoints")
     var selector = -1
     if dual:
         extra += 2
@@ -1004,8 +1081,8 @@ def uastc_hdr_block(
             tables.weights[weight_range][grid[index]]
         )
     var weights = [
-        _upsample(plane_grids[0], grid_width, grid_height),
-        _upsample(plane_grids[planes - 1], grid_width, grid_height),
+        _upsample(plane_grids[0], grid_width, grid_height, block_size),
+        _upsample(plane_grids[planes - 1], grid_width, grid_height, block_size),
     ]
     var ends = List[List[Int]]()
     var next = 0
@@ -1017,20 +1094,34 @@ def uastc_hdr_block(
             )
         next += len(values)
         ends.append(decode_endpoints(mode, values))
-    for texel in range(16):  # pragma: no branch
+    for texel in range(block_size * block_size):  # pragma: no branch
         var part = 0
         if partitions > 1:
-            part = partition_of(seed, texel & 3, texel >> 2, partitions)
+            part = partition_of(
+                seed,
+                texel % block_size,
+                texel // block_size,
+                partitions,
+                block_size * block_size < 31,
+            )
         var mode = modes[part]
         for channel in range(4):  # pragma: no branch
             var weight = weights[Int(channel == selector)][texel]
             var low = ends[part][channel]
             var high = ends[part][channel + 4]
             if mode.is_ldr() or (mode == HDR_RGB_LDR_ALPHA and channel == 3):
-                var k = (
-                    low * 257 * (64 - weight) + high * 257 * weight + 32
-                ) >> 6
-                out.append(HALF_ONE if k == 0xFFFF else unorm16_to_half(k))
+                # sRGB expands endpoints with a midpoint bias. UNORM and
+                # HDR replicate their eight bits. Keep this integer path:
+                # converting an HDR half back to a byte changes rounding.
+                var a = (low << 8) | 0x80 if profile == ASTC_SRGB else low * 257
+                var b = (
+                    high << 8
+                ) | 0x80 if profile == ASTC_SRGB else high * 257
+                var k = (a * (64 - weight) + b * weight + 32) >> 6
+                if profile == ASTC_HDR:
+                    out.append(HALF_ONE if k == 0xFFFF else unorm16_to_half(k))
+                else:
+                    out.append(k >> 8)
             else:
                 var q = (
                     (low << 4) * (64 - weight) + (high << 4) * weight + 32
@@ -1038,6 +1129,148 @@ def uastc_hdr_block(
                 var half = qlog16_to_half(q)
                 out.append(HALF_MAX if ((half >> 10) & 0x1F) == 0x1F else half)
     return out^
+
+
+def uastc_hdr_block(
+    data: List[UInt8], at: Int, tables: AstcTables
+) raises -> List[Int]:
+    """Return one Basis HDR 4x4 block as sixty-four half-float bit patterns.
+
+    Args:
+        data: The blocks.
+        at: The offset of sixteen bytes.
+        tables: The fixed tables.
+
+    Returns:
+        The same RGBA_HALF texels as the Basis Universal transcoder.
+
+    Raises:
+        Error: If the block is truncated or malformed; see `astc_block`.
+    """
+    return astc_block(data, at, tables, 4, ASTC_HDR)
+
+
+def _astc_image[
+    dtype: DType
+](
+    width: Int,
+    height: Int,
+    data: List[UInt8],
+    block_size: Int,
+    profile: AstcProfile,
+) raises -> List[SIMD[dtype, 1]]:
+    """Decode raw ASTC blocks, cropping the last block row and column.
+
+    Args:
+        width: The positive image width in texels.
+        height: The positive image height in texels.
+        data: Exactly one 16-byte block per block footprint.
+        block_size: Four or six, the width and height of each block.
+        profile: UNORM or sRGB for bytes, or HDR for Float32 output.
+
+    Returns:
+        Row-major RGBA bytes or half-float values widened to Float32.
+
+    Raises:
+        Error: If dimensions, profile, footprint or payload are invalid,
+            the decoded image exceeds its resource bound, or a block is malformed.
+    """
+    if not profile.is_valid():
+        raise Error("ASTC: invalid profile")
+    if block_size != 4 and block_size != 6:
+        raise Error("ASTC: only 4x4 and 6x6 blocks are supported")
+    if width <= 0 or height <= 0:
+        raise Error("ASTC: dimensions must be positive")
+    check_decoded_size(width, height, profile == ASTC_HDR)
+    var across = (width + block_size - 1) // block_size
+    var down = (height + block_size - 1) // block_size
+    if len(data) != across * down * UASTC_BLOCK_BYTES:
+        raise Error("ASTC: the data is not one block per footprint")
+    var tables = AstcTables()
+    var out = List[SIMD[dtype, 1]](length=width * height * 4, fill=0)
+    # Positive height and block size produce at least one block row.
+    for by in range(down):  # pragma: no branch
+        # Positive width and block size produce at least one block column.
+        for bx in range(across):  # pragma: no branch
+            var block = astc_block(
+                data,
+                (by * across + bx) * UASTC_BLOCK_BYTES,
+                tables,
+                block_size,
+                profile,
+            )
+            # A produced block row has at least one remaining scanline.
+            for y in range(
+                min(block_size, height - by * block_size)
+            ):  # pragma: no branch
+                # A produced block column has at least one remaining pixel.
+                for x in range(
+                    min(block_size, width - bx * block_size)
+                ):  # pragma: no branch
+                    var to = (
+                        (by * block_size + y) * width + bx * block_size + x
+                    ) * 4
+                    # The decoded pixel has exactly four channels.
+                    for channel in range(4):  # pragma: no branch
+                        var value = block[(y * block_size + x) * 4 + channel]
+                        comptime if dtype == DType.float32:
+                            out[to + channel] = half_to_float(
+                                UInt16(value)
+                            ).cast[dtype]()
+                        else:
+                            out[to + channel] = SIMD[dtype, 1](value)
+    return out^
+
+
+def astc_image(
+    width: Int,
+    height: Int,
+    data: List[UInt8],
+    block_size: Int,
+    profile: AstcProfile = ASTC_UNORM,
+) raises -> List[UInt8]:
+    """Decode a raw LDR ASTC image to RGBA bytes, cropping its edge blocks.
+
+    Args:
+        width: The positive image width in texels.
+        height: The positive image height in texels.
+        data: Exactly one 16-byte block per footprint.
+        block_size: Four or six, the width and height of each block.
+        profile: ASTC_UNORM or ASTC_SRGB; sRGB stays encoded.
+
+    Returns:
+        Row-major RGBA bytes, with integer UNORM8 decode rounding.
+
+    Raises:
+        Error: If the profile is HDR, or the image is invalid; see `_astc_image`.
+    """
+    if profile == ASTC_HDR:
+        raise Error("ASTC: a byte image requires an LDR profile")
+    return _astc_image[DType.uint8](width, height, data, block_size, profile)
+
+
+def astc_hdr_image(
+    width: Int,
+    height: Int,
+    data: List[UInt8],
+    block_size: Int,
+) raises -> List[Float32]:
+    """Decode raw HDR ASTC to RGBA floats, cropping its edge blocks.
+
+    Args:
+        width: The positive image width in texels.
+        height: The positive image height in texels.
+        data: Exactly one 16-byte block per footprint.
+        block_size: Four or six, the width and height of each block.
+
+    Returns:
+        Row-major RGBA half-float values widened exactly to Float32.
+        LDR and HDR alpha are supported independently of the Basis format.
+
+    Raises:
+        Error: If the image is invalid; see `_astc_image`.
+    """
+    return _astc_image[DType.float32](width, height, data, block_size, ASTC_HDR)
 
 
 def uastc_hdr_image(

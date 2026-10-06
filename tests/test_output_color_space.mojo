@@ -117,6 +117,27 @@ def test_the_default_output_is_srgb_and_skips_the_matrix() raises:
         assert_equal(back.elements[at], p3.elements[at])
 
 
+def test_packed_output_preserves_every_matrix_and_flag_at_an_offset() raises:
+    var light = FloatColor(0.18, 0.43, 0.72, 0.6)
+    for space in _spaces():
+        var encoding = output_encoding(space)
+        var flat = List[Float32](length=7, fill=-123)
+        flat.extend(encoding.flatten())
+        var back = output_from(
+            flat.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](), 7
+        )
+        assert_equal(back.srgb, encoding.srgb)
+        assert_equal(back.identity, encoding.identity)
+        for at in range(16):
+            assert_equal(back.elements[at], encoding.elements[at])
+        var actual = back.encode(light)
+        var expected = encoding.encode(light)
+        assert_equal(actual.r, expected.r)
+        assert_equal(actual.g, expected.g)
+        assert_equal(actual.b, expected.b)
+        assert_equal(actual.a, expected.a)
+
+
 def test_what_is_not_an_output_space_is_refused() raises:
     with assert_raises(contains="NO_COLOR_SPACE"):
         _ = output_encoding(NO_COLOR_SPACE)

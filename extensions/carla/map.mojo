@@ -74,8 +74,10 @@ from extensions.carla.lane_box_cover import (
 )
 from extensions.carla.curve_distance import (
     _finite_point,
-    _wide_distance_upper,
     _wide_point_order,
+)
+from extensions.carla.lane_distance import (
+    _wide_distance_upper,
 )
 from extensions.carla.lane_refinement import (
     _LaneCertificate,

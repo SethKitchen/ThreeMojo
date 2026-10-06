@@ -346,6 +346,35 @@ def body_skin_mesh(
         Error: If `spec` is refused, if `detail` is out of range, or if
             the field produces no surface.
     """
+    var parts = body_skin_parts(spec, detail, workers, parted)
+    return merge_geometries(parts)
+
+
+def body_skin_parts(
+    spec: HumanoidSpec,
+    detail: Int = 56,
+    workers: Int = 1,
+    parted: Float32 = 0,
+    shapes: List[String] = List[String](),
+) raises -> List[BufferGeometry]:
+    """Build the body and original scanned face as separate meshes.
+
+    The game facial path must decimate only element zero. Element one
+    retains its vertex and target correspondence, with neck-faded morphs.
+
+    Args:
+        spec: The person's canonical input recipe.
+        detail: Body sampling detail, eight through sixty-four.
+        workers: Body meshing thread count.
+        parted: Half-width of the leg gap in meters.
+        shapes: Named expression targets on the face alone.
+
+    Returns:
+        Body without hands or face, then the complete scanned face.
+
+    Raises:
+        Error: If the spec, detail, shape names or meshes are invalid.
+    """
     check_detail(detail, "body skin")
     var field = BodySkinField(spec)
     var parts = List[BufferGeometry]()
@@ -378,14 +407,16 @@ def body_skin_mesh(
             field.low,
             field.high,
             field.epsilon,
+            shapes,
         )
     )
     # Past each wrist the hand's own mesh draws the skin.
     _leave_hands_out(parts[0], field)
-    var skin = merge_geometries(parts)
-    share_height(skin, field.low.y, field.high.y - field.low.y)
-    tint_head_skin(skin, head_muscle_dimensions(spec), field.head)
-    return skin^
+    # The body branch and the head scan each appended a part.
+    for i in range(len(parts)):  # pragma: no branch
+        share_height(parts[i], field.low.y, field.high.y - field.low.y)
+        tint_head_skin(parts[i], head_muscle_dimensions(spec), field.head)
+    return parts^
 
 
 def _leave_hands_out(mut geometry: BufferGeometry, field: BodySkinField) raises:

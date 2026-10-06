@@ -57,6 +57,13 @@ types. Only an exporter asks for the integers.
 
 An interleaved attribute is always `Float32`, and so is an instanced one
 built from floats.
+
+## Numerical range correction
+
+Finite norm-dependent directions and lengths use scale-safe arithmetic.
+Extreme finite results can differ from direct three.js r180 arithmetic.
+See `docs/wiki/Norm-consumers.md` for the changed operations, retained
+limits, and explicit zero and nonfinite rules.
 """
 
 from core.interleaved_buffer import InterleavedBuffer
@@ -738,8 +745,8 @@ struct BufferAttribute(Copyable, Movable):
         if self.item_size < 3:
             raise Error("A normal matrix turns items of three numbers")
         for index in range(self.count()):
-            var turned = matrix.transform(self.vector3(index))
-            turned.normalize()
+            var turned = self.vector3(index)
+            turned.apply_normal_matrix(matrix)
             self._put3(index, turned)
 
     def transform_direction(mut self, matrix: Matrix4) raises:
@@ -756,8 +763,8 @@ struct BufferAttribute(Copyable, Movable):
         if self.item_size < 3:
             raise Error("A direction is an item of three numbers or more")
         for index in range(self.count()):
-            var turned = matrix.transform_direction(self.vector3(index))
-            turned.normalize()
+            var turned = self.vector3(index)
+            turned.transform_direction(matrix)
             self._put3(index, turned)
 
     def _check_span(self, offset: Int, length: Int) raises:

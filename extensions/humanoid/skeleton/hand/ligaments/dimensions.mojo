@@ -35,7 +35,7 @@ from extensions.humanoid.skeleton.hand.bones.dimensions import (
     finger_scale,
     named_fingers,
 )
-from extensions.humanoid.skeleton.soft_tissue import (
+from extensions.anatomy.soft_tissue import (
     SoftTissue,
     cartilage_tissue,
     ligament_tissue,
