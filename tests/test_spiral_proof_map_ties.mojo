@@ -4,22 +4,33 @@
 """Actual admitted-proof Map ties, deterministic repeats, and unequal minima."""
 
 from extensions.carla.curve_bounds import _reference_work
-from extensions.carla.curve_distance import _wide_point_order, _normalized_square
+from extensions.carla.curve_distance import _wide_point_order
+from extensions.carla.lane_distance import _normalized_square
 from extensions.carla.lane_refinement import (
-    _checked_center, _midpoint, _scaled_accuracy, _certificate_within_gap,
+    _checked_center,
+    _midpoint,
+    _scaled_accuracy,
+    _certificate_within_gap,
 )
 from extensions.carla.map import Map, _use_projected_spiral_seed
 from extensions.carla.road_info import RoadId, LaneId, LANE_DRIVING
-from extensions.carla.spiral_domain_proof import _SpiralDomainProof, _find_spiral_proof
+from extensions.carla.spiral_domain_proof import (
+    _SpiralDomainProof,
+    _find_spiral_proof,
+)
 from math.vector3 import Vector3
 from std.testing import TestSuite, assert_equal, assert_true, assert_false
 from tests._spiral_domain_controls import _bits
 from tests._spiral_acceptance_controls import (
-    _acceptance_map, _map_proof_segment, _assert_acceptance_hit,
+    _acceptance_map,
+    _map_proof_segment,
+    _assert_acceptance_hit,
 )
 
 
-def _assert_map_hit_inputs(map: Map, road_id: RoadId, query: Vector3) raises -> Int:
+def _assert_map_hit_inputs(
+    map: Map, road_id: RoadId, query: Vector3
+) raises -> Int:
     var index = _map_proof_segment(map, road_id)
     ref segment = map._segments[index]
     var low = min(segment.first.s, segment.second.s)
@@ -27,11 +38,21 @@ def _assert_map_hit_inputs(map: Map, road_id: RoadId, query: Vector3) raises -> 
     ref road = map.road(road_id)
     var proof = _find_spiral_proof(map._spiral_proofs, index).value()
     _assert_acceptance_hit(road, low, high, proof)
-    assert_false(_use_projected_spiral_seed(
-        road, 0, 0, low, high, segment.bounds, query,
-    ))
+    assert_false(
+        _use_projected_spiral_seed(
+            road,
+            0,
+            0,
+            low,
+            high,
+            segment.bounds,
+            query,
+        )
+    )
     var coordinates: Array[Float64, 3] = [
-        Float64(query.x), Float64(query.y), Float64(query.z),
+        Float64(query.x),
+        Float64(query.y),
+        Float64(query.z),
     ]
     var terms = 0
     for station in [_midpoint(low, high), low, high]:
@@ -61,7 +82,9 @@ def test_exact_duplicate_spiral_tie_keeps_segment_winner_after_proof_hits() rais
     assert_equal(_wide_point_order(one, two, coordinates), 0)
     # Both global minima are exactly zero because these are actual stored
     # centers. This is not equality inferred from overlapping tolerances.
-    var result = map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    var result = (
+        map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    )
     assert_equal(result[0].road_id, RoadId(1))
     assert_equal(result[0].lane_id, LaneId(-1))
     assert_true(result[1].exact_witness)
@@ -77,7 +100,9 @@ def test_exact_duplicate_spiral_tie_keeps_segment_winner_after_proof_hits() rais
     var generic = _acceptance_map()
     generic._spiral_proofs = List[_SpiralDomainProof]()
     assert_equal(len(generic._spiral_proofs), 0)
-    var baseline = generic._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    var baseline = (
+        generic._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    )
     assert_equal(baseline[0].road_id, result[0].road_id)
     assert_equal(baseline[0].lane_id, result[0].lane_id)
     assert_true(baseline[1].exact_witness)
@@ -97,8 +122,12 @@ def test_admitted_duplicate_tie_repeated_input_is_deterministic() raises:
     _ = _assert_map_hit_inputs(map, RoadId(2), query)
     var size = len(map._spiral_proofs)
     var units = map._spiral_proof_units
-    var first = map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
-    var again = map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    var first = (
+        map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    )
+    var again = (
+        map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    )
     assert_equal(first[0].road_id, RoadId(1))
     assert_equal(again[0].road_id, first[0].road_id)
     assert_equal(again[0].lane_id, first[0].lane_id)
@@ -145,14 +174,21 @@ def test_tolerance_close_unequal_minima_do_not_become_a_segment_tie() raises:
     assert_equal(two_score.high, 0.0)
     var segment = map.segment(first)
     var allowance = _scaled_accuracy(
-        map.road(RoadId(1)), 0, 0,
-        min(segment[2].s, segment[3].s), max(segment[2].s, segment[3].s),
-        0.5, one_score.low, 1.0,
+        map.road(RoadId(1)),
+        0,
+        0,
+        min(segment[2].s, segment[3].s),
+        max(segment[2].s, segment[3].s),
+        0.5,
+        one_score.low,
+        1.0,
     )
     assert_true(one_score.high > 0.0 and one_score.high < allowance)
     # Road 2 has an exact zero minimum. Road 1's exact constant Y residual
     # is epsilon, so its squared minimum is epsilon^2, not a true tie.
-    var result = map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    var result = (
+        map._closest_lane_certificate(query, LANE_DRIVING).value().copy()
+    )
     assert_equal(result[0].road_id, RoadId(2))
     assert_equal(result[0].lane_id, LaneId(-1))
     assert_true(result[1].terms >= 50)
@@ -166,7 +202,12 @@ def test_tolerance_close_unequal_minima_do_not_become_a_segment_tie() raises:
     _bits(result[0].s, result[1].s)
     var witness_terms = 0
     var canonical = _checked_center(
-        map.road(RoadId(2)), 0, 0, result[1].s, witness_terms, 2000000,
+        map.road(RoadId(2)),
+        0,
+        0,
+        result[1].s,
+        witness_terms,
+        2000000,
     )
     for axis in range(3):
         _bits(result[1].point[axis], canonical[axis])
@@ -178,16 +219,29 @@ def test_tolerance_close_unequal_minima_do_not_become_a_segment_tie() raises:
     var returned = _normalized_square[3](result[1].point, coordinates, 1.0)
     assert_true(returned.high < exact_gap)
     var score = _normalized_square[3](
-        result[1].point, coordinates, result[1].scale,
+        result[1].point,
+        coordinates,
+        result[1].scale,
     )
     var permitted = _scaled_accuracy(
-        map.road(RoadId(2)), 0, 0, low, high, result[1].s,
-        score.low, result[1].scale,
+        map.road(RoadId(2)),
+        0,
+        0,
+        low,
+        high,
+        result[1].s,
+        score.low,
+        result[1].scale,
     )
-    assert_true(_certificate_within_gap(
-        result[1].lower, result[1].scale, result[1].scale,
-        score.high, permitted,
-    ))
+    assert_true(
+        _certificate_within_gap(
+            result[1].lower,
+            result[1].scale,
+            result[1].scale,
+            score.high,
+            permitted,
+        )
+    )
 
 
 def main() raises:
