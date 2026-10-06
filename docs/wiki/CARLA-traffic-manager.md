@@ -260,3 +260,11 @@ explain why proven corrections take priority over upstream defects.
 - CARLA walks hash sets in hash order. Here a set of actors is sorted by id.
 - Where CARLA reads past the end of an empty list, the port raises an error or stops the walk. Each docstring says which.
 - A NaN pedal, which CARLA sends for a desired speed of zero, goes to the world as zero.
+
+### Speed-unit correction
+
+The landmark stage reads a speed signal through its explicit unit. It
+compares the configured desired speed and the landmark speed in m/s. This
+corrects the mixed-unit comparison in CARLA 1360bb9. For example, a desired
+5 m/s stays 5 m/s at the sign, instead of being compared as the number 18.
+See [OpenDRIVE speed limits](CARLA-speed-limits) for the checked conversions.
