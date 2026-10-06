@@ -191,7 +191,13 @@ from objects.line import (
     segment_count,
     segment_ends,
 )
-from objects.line_segments2 import cap_steps, dash_spans, drawn_segments
+from objects.line_segments2 import (
+    LineCoverage,
+    STRAND_LINE_COVERAGE,
+    cap_steps,
+    dash_spans,
+    drawn_segments,
+)
 from objects.lod import Lod
 from objects.sprite import SPRITE_RADIUS, Sprite
 from objects.skinned_mesh import (
@@ -215,6 +221,7 @@ from materials.material import (
     NO_DASH,
     NORMALS,
     OBJECT_SPACE_NORMAL_MAP,
+    OPAQUE,
     PHYSICAL,
     SHADOW,
     Blending,
@@ -1851,16 +1858,26 @@ def _draws(
         )
     # The wide lines, sorted among the meshes by their own depth, as the
     # sprites are. Culled by the bound of their points, as three.js's
-    # `LineSegments2` is: the width is not added to it. A light's view of
-    # the casters holds none, as it holds no sprite.
-    var wide_count = 0 if casters_only else len(scene.wide_lines)
-    for index in range(wide_count):
+    # `LineSegments2` is: the width is not added to it. Strand coverage
+    # opts into shadow casting; ordinary wide lines do not cast by default.
+    for index in range(len(scene.wide_lines)):
         ref line = scene.wide_lines[index]
+        if not line.coverage.is_valid():
+            raise Error("A wide line needs a named coverage rule")
+        if casters_only and not line.cast_shadow:
+            continue
         if not scene.shows(line.node, visible):
             continue
         var world = scene.world_matrix(line.node)
-        if line.frustum_culled and not _in_view(
-            assets, line.geometry, world, frustum, slack, bounds, known
+        # A feather can cross the image edge while its centerline does
+        # not. The ordinary three.js bound excludes width; strands must
+        # not use that bound as a proof that coverage is outside.
+        if (
+            line.frustum_culled
+            and line.coverage != STRAND_LINE_COVERAGE
+            and not _in_view(
+                assets, line.geometry, world, frustum, slack, bounds, known
+            )
         ):
             continue
         var depth = view.transform_point(
@@ -3686,6 +3703,130 @@ def _emit_cap(
         last = next
 
 
+def _strand_corner(
+    ribbon: _Ribbon,
+    end: ClipVertex,
+    side: Float32,
+    ahead: Float32,
+    alpha: Float32,
+) -> ClipVertex:
+    """Return a ribbon corner with the coverage folded into its alpha."""
+    var corner = ribbon.corner(end, side, ahead)
+    corner.color.a *= alpha
+    return corner
+
+
+def _strand_profile(
+    ribbon: _Ribbon, end: ClipVertex, scale: Int
+) -> SIMD[DType.float32, 4]:
+    """Return inner and outer radius ratios, and peak sample coverage.
+
+    The one-output-pixel box filter of a strip is a trapezoid. A
+    subpixel strip has a lower plateau and carries its width in the peak.
+    Its integral across the ribbon is the requested projected width.
+    """
+    var radius = max(ribbon.radius(end), Float32(1e-12))
+    var pixel = Float32(scale)
+    return SIMD[DType.float32, 4](
+        abs(radius - pixel * 0.5) / radius,
+        (radius + pixel * 0.5) / radius,
+        min(Float32(1), 2 * radius / pixel),
+        0,
+    )
+
+
+def _emit_strand_cap(
+    ribbon: _Ribbon,
+    paint: _Paint,
+    mut corners: _Slim,
+    end: ClipVertex,
+    outward: Float32,
+    scale: Int,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+) raises:
+    """Append a round cap with the same feather as the ribbon sides."""
+    var profile = _strand_profile(ribbon, end, scale)
+    var center = _strand_corner(ribbon, end, 0, 0, profile[2])
+    var steps = cap_steps(ribbon.radius(end) + Float32(scale) * 0.5)
+    var turn = Float32(pi) / Float32(steps)
+    var inner = _strand_corner(ribbon, end, profile[0], 0, profile[2])
+    var outer = _strand_corner(ribbon, end, profile[1], 0, 0)
+    for step in range(1, steps + 1):
+        var angle = turn * Float32(step)
+        var side = cos(angle)
+        var ahead = outward * sin(angle)
+        var next_inner = _strand_corner(
+            ribbon, end, side * profile[0], ahead * profile[0], profile[2]
+        )
+        var next_outer = _strand_corner(
+            ribbon, end, side * profile[1], ahead * profile[1], 0
+        )
+        _emit_clipped(
+            paint, corners, center, inner, next_inner, near, far, sides, any_of
+        )
+        _emit_clipped(
+            paint, corners, inner, outer, next_outer, near, far, sides, any_of
+        )
+        _emit_clipped(
+            paint,
+            corners,
+            inner,
+            next_outer,
+            next_inner,
+            near,
+            far,
+            sides,
+            any_of,
+        )
+        inner = next_inner
+        outer = next_outer
+
+
+def _emit_strand_segment(
+    ribbon: _Ribbon,
+    paint: _Paint,
+    mut corners: _Slim,
+    start: ClipVertex,
+    end: ClipVertex,
+    scale: Int,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+) raises:
+    """Append a filtered ribbon and caps, sampled by the shared alpha hash."""
+    var first = _strand_profile(ribbon, start, scale)
+    var second = _strand_profile(ribbon, end, scale)
+    var a_side = SIMD[DType.float32, 4](
+        -first[1], -first[0], first[0], first[1]
+    )
+    var b_side = SIMD[DType.float32, 4](
+        -second[1], -second[0], second[0], second[1]
+    )
+    var a_alpha = SIMD[DType.float32, 4](0, first[2], first[2], 0)
+    var b_alpha = SIMD[DType.float32, 4](0, second[2], second[2], 0)
+    for strip in range(3):
+        var a = _strand_corner(ribbon, start, a_side[strip], 0, a_alpha[strip])
+        var b = _strand_corner(
+            ribbon, start, a_side[strip + 1], 0, a_alpha[strip + 1]
+        )
+        var c = _strand_corner(
+            ribbon, end, b_side[strip + 1], 0, b_alpha[strip + 1]
+        )
+        var d = _strand_corner(ribbon, end, b_side[strip], 0, b_alpha[strip])
+        _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
+        _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
+    _emit_strand_cap(
+        ribbon, paint, corners, start, -1, scale, near, far, sides, any_of
+    )
+    _emit_strand_cap(
+        ribbon, paint, corners, end, 1, scale, near, far, sides, any_of
+    )
+
+
 def _emit_wide_line(
     mut corners: _Slim,
     assets: Assets,
@@ -3697,6 +3838,8 @@ def _emit_wide_line(
     sides: List[Plane],
     any_of: List[Plane],
     render_scale: Int,
+    coverage: LineCoverage,
+    casters_only: Bool,
 ) raises:
     """Build a wide line's triangles in camera space and append them.
 
@@ -3723,6 +3866,8 @@ def _emit_wide_line(
         any_of: The clipping planes of which a kept point needs one.
         render_scale: How many raster pixels stand for one output pixel,
             which a width in pixels is multiplied by.
+        coverage: The solid or feathered hashed coverage rule.
+        casters_only: Whether these samples populate a light depth map.
 
     Raises:
         Error: If the material is not `BASIC`, carries a map, an alpha
@@ -3733,6 +3878,25 @@ def _emit_wide_line(
             material's depth, color, stencil or offset state is refused.
     """
     var material = assets.materials.get(draw.material)
+    if not coverage.is_valid():
+        raise Error("A wide line needs a named coverage rule")
+    var strand = coverage == STRAND_LINE_COVERAGE
+    if strand and (
+        not isfinite(material.opacity)
+        or material.opacity < 0
+        or material.opacity > 1
+    ):
+        raise Error("Strand opacity must be finite and between zero and one")
+    if strand and (
+        material.blending != OPAQUE
+        or not material.depth_write
+        or not material.depth_test
+        or material.is_dashed()
+    ):
+        raise Error(
+            "Strand coverage needs solid depth-tested, depth-writing opaque"
+            " lines"
+        )
     _refuse_nodes(material, "A wide line")
     if material.kind != BASIC:
         raise Error(
@@ -3791,10 +3955,18 @@ def _emit_wide_line(
     var to_world = Matrix4(copy=view)
     to_world.invert()
     ref world = draw.world
+    var state = _draw_state(material, casters_only, False, False, True)
+    if strand:
+        state.alpha_hash = True
+        state.strand_hash = True
+        state.alpha_to_coverage = False
+    var blending = material.blending
+    if casters_only:
+        blending = OPAQUE
     var paint = _Paint(
         to_screen,
         NO_TEXTURE,
-        material.blending,
+        blending,
         BASIC,
         NO_TEXTURE,
         NO_TEXTURE,
@@ -3810,17 +3982,19 @@ def _emit_wide_line(
         MULTIPLY_OPERATION,
         _Physics(),
         False,
-        # three.js's `LineMaterial` premultiplies, and neither dithers nor
-        # hashes its alpha.
-        _draw_state(material, False, False, False, True),
-        _draw_offset(material, False),
+        # Ordinary LineMaterial keeps its three.js flags. Strand coverage
+        # hashes the feather and opacity in both the image and shadow map.
+        state,
+        _draw_offset(material, casters_only),
         _shown_of(material),
         TextureFrames(),
         0,
     )
     var no_planes = List[Plane]()
     var each = 6
-    if not dashed:
+    if strand:
+        each = 18 + 18 * cap_steps(half + Float32(render_scale) * 0.5)
+    elif not dashed:
         each += 6 * cap_steps(half)
     corners.reserve(len(corners) + segments * each)
     for segment in range(segments):
@@ -3856,6 +4030,20 @@ def _emit_wide_line(
             from_screen,
             to_world,
         )
+        if strand:
+            _emit_strand_segment(
+                ribbon,
+                paint,
+                corners,
+                start,
+                end,
+                render_scale,
+                near,
+                far,
+                sides,
+                any_of,
+            )
+            continue
         var spans = dash_spans(
             start.line_distance, end.line_distance, dash, gap
         )
@@ -5981,6 +6169,8 @@ struct Renderer(Movable):
                     wide_cut,
                     wide_any,
                     self.render_scale,
+                    scene.wide_lines[draws[slot].wide_line].coverage,
+                    casters_only,
                 )
                 _note_span(
                     spans,
