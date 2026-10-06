@@ -34,9 +34,10 @@ the supersampled frame is averaged, a pixel's coverage follows its alpha.
 from materials.nodes import AT_HERE, AT_RIGHT, AT_UP, NodeSource
 from materials.nodes import node_attributes
 from math.vector3 import Vector3
+from std.memory import bitcast
 from render.framebuffer import FloatColor
 from render.srgb import linear_to_srgb, srgb_to_linear
-from std.math import ceil, exp2, floor, log2, max, min, pi, sin
+from std.math import ceil, exp2, floor, isfinite, log2, max, min, pi, sin
 
 # three.js's `ALPHA_HASH_SCALE`.
 comptime ALPHA_HASH_SCALE = Float32(0.05)
@@ -173,7 +174,55 @@ def alpha_hash_threshold(
     return min(max(threshold, MIN_HASH_THRESHOLD), Float32(1))
 
 
-def hashed_threshold[S: NodeSource](source: S) -> Float32:
+def _strand_cell(value: Float32, scale: Float32) -> UInt32:
+    """Wrap a finite spatial cell into sixteen bits before integer hashing."""
+    var cell = floor(value * scale)
+    if not isfinite(cell):
+        # Avoid conversion outside the integer domain for extreme world
+        # coordinates. This branch is a deterministic finite fallback.
+        return bitcast[DType.uint32](value)
+    return UInt32(cell - floor(cell / Float32(65536)) * Float32(65536))
+
+
+def strand_hash_threshold(
+    position: Vector3, across: Vector3, down: Vector3
+) -> Float32:
+    """Return a fixed-seed integer threshold for stochastic strand coverage.
+
+    Spatial cells are about one quarter of a pixel, measured from the
+    world-position derivatives. The cell coordinates repeat every 65536
+    cells. Unsigned 32-bit multiplication and shifts are explicitly modulo
+    2**32 on both backends. No transcendental hash amplification is used.
+    Interpolation and cell boundaries can still differ between devices;
+    device image parity must be tested, not inferred from this function.
+
+    Args:
+        position: The fragment's world position.
+        across: Its world-position change one pixel to the right.
+        down: Its world-position change one pixel up.
+
+    Returns:
+        One of 65536 equally spaced thresholds strictly inside zero to one.
+        The fixed seed and spatial coordinates do not depend on frame order.
+    """
+    var derivative = max(across.length(), down.length())
+    var scale = Float32(4) / max(derivative, Float32(1e-20))
+    var x = _strand_cell(position.x, scale)
+    var y = _strand_cell(position.y, scale)
+    var z = _strand_cell(position.z, scale)
+    var h = (
+        x * UInt32(0x8DA6B343)
+        ^ y * UInt32(0xD8163841)
+        ^ z * UInt32(0xCB1AB31F)
+        ^ UInt32(0xA511E9B3)
+    )
+    h = (h ^ (h >> 16)) * UInt32(0x7FEB352D)
+    h = (h ^ (h >> 15)) * UInt32(0x846CA68B)
+    h = h ^ (h >> 16)
+    return (Float32(h & UInt32(0xFFFF)) + Float32(0.5)) / Float32(65536)
+
+
+def hashed_threshold[S: NodeSource](source: S, strand: Bool = False) -> Float32:
     """Return `alpha_hash_threshold` for the fragment a triangle's source
     is at.
 
@@ -184,6 +233,7 @@ def hashed_threshold[S: NodeSource](source: S) -> Float32:
 
     Args:
         source: The triangle, at the fragment.
+        strand: Use the opt-in integer strand hash. False keeps three.js.
 
     Returns:
         The threshold.
@@ -191,6 +241,8 @@ def hashed_threshold[S: NodeSource](source: S) -> Float32:
     var here = node_attributes(source, AT_HERE, False).position
     var right = node_attributes(source, AT_RIGHT, False).position
     var up = node_attributes(source, AT_UP, False).position
+    if strand:
+        return strand_hash_threshold(here, right - here, up - here)
     return alpha_hash_threshold(here, right - here, up - here)
 
 

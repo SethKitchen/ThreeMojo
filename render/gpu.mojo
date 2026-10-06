@@ -8086,7 +8086,9 @@ def rasterize_kernel(
                 # Below the hashed threshold, or not covering this sample,
                 # from the functions the host calls; see
                 # `render.fragment_flags`.
-                if hashed and alpha < hashed_threshold(nodes):
+                if hashed and alpha < hashed_threshold(
+                    nodes, state.strand_hash
+                ):
                     continue
                 if covered and not alpha_covers(alpha, x, y):
                     continue
