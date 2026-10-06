@@ -7,7 +7,8 @@
 It retains final results in source order and bounds active staging by
 worker count. The older batch helpers remain available for callers that
 need one bounded group of slots. Neither path moves pointer-owned storage
-before its tasks join.
+before its tasks join. A failure advances the atomic cursor to the end,
+so no later image can be claimed. Already-claimed images still finish.
 """
 
 from render.texture import Texture
@@ -83,31 +84,43 @@ trait TextureDecodeSource:
         ...
 
 
-def _claim_decode(next: MutPointer[Int64, MutAnyOrigin]) -> Int:
-    """Claim a unique index from storage retained until all workers join."""
-    return Int(Atomic[Int64].fetch_add(next, 1))
+def _claim_decode(next: MutPointer[UInt64, MutAnyOrigin]) -> UInt64:
+    """Claim one index from storage retained until all workers join."""
+    return Atomic[UInt64].fetch_add(next, 1)
+
+
+def _stop_decode(next: MutPointer[UInt64, MutAnyOrigin], count: Int):
+    """Move a nonnegative job cursor to the end without winding it back."""
+    _ = Atomic[UInt64].max(next, UInt64(count))
 
 
 async def _decode_worker[
     Source: TextureDecodeSource
 ](
     source: Pointer[Source, ImmutAnyOrigin],
-    next: MutPointer[Int64, MutAnyOrigin],
+    next: MutPointer[UInt64, MutAnyOrigin],
     count: Int,
     results: MutPointer[Optional[Texture], MutAnyOrigin],
     errors: MutPointer[Optional[String], MutAnyOrigin],
 ):
     """Read one image at a time and claim again without a batch barrier."""
     while True:
-        var index = _claim_decode(next)
-        if index >= count:
+        var claimed = _claim_decode(next)
+        # Check the unsigned terminal range before narrowing to Int. Each
+        # worker makes at most one terminal claim. A count and worker limit
+        # each bounded by Int.MAX cannot overflow this UInt64 cursor.
+        if claimed >= UInt64(count):
             return
+        var index = Int(claimed)
         try:
             # The provider's compressed bytes and decoder scratch die
             # before this worker claims another image. Only its completed
             # texture moves into the distinct source-indexed result slot.
             results[unsafe_offset=index] = source[].decode(index)
         except e:
+            # Stop before converting/storing the diagnostic. Atomic max keeps
+            # a concurrent terminal claim from winding the cursor backward.
+            _stop_decode(next, count)
             errors[unsafe_offset=index] = String(e)
 
 
@@ -119,7 +132,10 @@ def decode_textures[
     One worker reads one image at a time. A free worker claims the next
     image without waiting for slower workers. Inputs must stay fixed for
     this call. Completed textures are retained in source order, without
-    extra pixel or mip copies. All tasks join before an error is raised.
+    extra pixel or mip copies. A failed decode stops new claims. Every
+    already-claimed job finishes, and all tasks join before an error is raised.
+    Monotonic claims include every earlier job, so source-order errors are
+    retained even when a later job fails first.
 
     The active image count is bounded, not each image's byte size. Storage
     also includes the source, one result/error slot per image, and all
@@ -147,7 +163,7 @@ def decode_textures[
     var errors = List[Optional[String]](length=count, fill=None)
     for _ in range(count):
         results.append(None)
-    var next: Int64 = 0
+    var next: UInt64 = 0
     var group = TaskGroup()
     for _ in range(decode_batch_size(count, workers)):
         group.create_task(
