@@ -8,27 +8,52 @@ Malformed payloads below are explicit adversarial private-API controls.
 """
 
 from extensions.carla.curve_bounds import (
-    _geometry_distance, _lane_jet, _lane_jet_with_proof, _reference_work,
+    _geometry_distance,
+    _lane_jet,
+    _lane_jet_with_proof,
+    _reference_work,
     _spiral_counts,
 )
 from extensions.carla.lane_distance import _normalized_square
-from extensions.carla.curve_interval import _Interval, _Jet, _next_down, _next_up
+from extensions.carla.curve_interval import (
+    _Interval,
+    _Jet,
+    _next_down,
+    _next_up,
+)
 from extensions.carla.geometry import LINE
 from extensions.carla.lane_refinement import (
-    _ClosedInterval, _LaneCertificate, _refine_lane_certificate,
+    _ClosedInterval,
+    _LaneCertificate,
+    _refine_lane_certificate,
     _resume_lane_certificate,
 )
 from extensions.carla.road import Road
 from extensions.carla.road_info import RoadInfoGeometry
 from extensions.carla.spiral_domain_proof import (
-    _SpiralDomainProof, _SpiralRootCapture, _find_spiral_proof,
-    _spiral_proof_matches, _try_pack_spiral_proof,
+    _SpiralDomainProof,
+    _SpiralRootCapture,
+    _find_spiral_proof,
+    _spiral_proof_matches,
+    _try_pack_spiral_proof,
 )
 from math.vector3 import Vector3
 from std.math import inf
-from std.testing import TestSuite, assert_equal, assert_true, assert_false, assert_raises
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_true,
+    assert_false,
+    assert_raises,
+)
 from tests._spiral_domain_controls import (
-    _bits, _point_bits, _f64, _geometry, _road, _capture, _proof,
+    _bits,
+    _point_bits,
+    _f64,
+    _geometry,
+    _road,
+    _capture,
+    _proof,
 )
 
 
@@ -42,8 +67,16 @@ def test_optional_allowance_below_at_and_above_both_branch_costs() raises:
             var terms = 17
             var units = 9
             var found = _try_pack_spiral_proof(
-                road, interval.low, interval.high, 0, captured, 0, terms, units,
-                max_terms=17 + extra + delta, max_proof_units=9 + extra,
+                road,
+                interval.low,
+                interval.high,
+                0,
+                captured,
+                0,
+                terms,
+                units,
+                max_terms=17 + extra + delta,
+                max_proof_units=9 + extra,
             )
             assert_equal(Bool(found), delta >= 0)
             assert_equal(terms, 17 + extra if delta >= 0 else 17)
@@ -51,8 +84,16 @@ def test_optional_allowance_below_at_and_above_both_branch_costs() raises:
             terms = 17
             units = 9
             found = _try_pack_spiral_proof(
-                road, interval.low, interval.high, 0, captured, 0, terms, units,
-                max_terms=17 + extra, max_proof_units=9 + extra + delta,
+                road,
+                interval.low,
+                interval.high,
+                0,
+                captured,
+                0,
+                terms,
+                units,
+                max_terms=17 + extra,
+                max_proof_units=9 + extra + delta,
             )
             assert_equal(Bool(found), delta >= 0)
             assert_equal(terms, 17 + extra if delta >= 0 else 17)
@@ -68,7 +109,14 @@ def test_payload_cap_reserves_only_complete_eighty_byte_entries() raises:
             var terms = 17
             var units = 9
             var found = _try_pack_spiral_proof(
-                road, 1.5, 2.25, 0, captured, count, terms, units,
+                road,
+                1.5,
+                2.25,
+                0,
+                captured,
+                count,
+                terms,
+                units,
                 max_payload_bytes=cap,
             )
             var eligible = cap >= 80 and count < cap // 80
@@ -89,8 +137,14 @@ def test_invalid_allowance_states_leave_counters_unchanged() raises:
         var initial_terms = terms
         var initial_units = units
         var found = _try_pack_spiral_proof(
-            road, 2.125, 2.25, -1 if kind == 4 else 0,
-            captured, -1 if kind == 5 else 0, terms, units,
+            road,
+            2.125,
+            2.25,
+            -1 if kind == 4 else 0,
+            captured,
+            -1 if kind == 5 else 0,
+            terms,
+            units,
             max_terms=16 if kind == 2 else 2000000,
             max_proof_units=8 if kind == 3 else 1048576,
         )
@@ -130,9 +184,20 @@ def test_capture_station_record_and_error_metadata_must_be_complete() raises:
             captured.d.second = _Interval.whole()
         var terms = 17
         var units = 9
-        assert_false(Bool(_try_pack_spiral_proof(
-            road, 2.125, 2.25, 0, captured, 0, terms, units,
-        )))
+        assert_false(
+            Bool(
+                _try_pack_spiral_proof(
+                    road,
+                    2.125,
+                    2.25,
+                    0,
+                    captured,
+                    0,
+                    terms,
+                    units,
+                )
+            )
+        )
         # Counts are rejected before reservation. Other rejection paths have
         # already performed optional validation, and must keep that debit.
         assert_equal(terms, 17 if kind < 4 else 161)
@@ -143,9 +208,20 @@ def _root_miss(road: Road, low: Float64, high: Float64) raises:
     var captured = _capture(road, low, high)
     var terms = 0
     var units = 0
-    assert_false(Bool(_try_pack_spiral_proof(
-        road, low, high, 0, captured, 0, terms, units,
-    )))
+    assert_false(
+        Bool(
+            _try_pack_spiral_proof(
+                road,
+                low,
+                high,
+                0,
+                captured,
+                0,
+                terms,
+                units,
+            )
+        )
+    )
     _point_bits(
         _lane_jet_with_proof(road, 0, 0, low, high, low, high, None),
         _lane_jet(road, 0, 0, low, high),
@@ -154,15 +230,22 @@ def _root_miss(road: Road, low: Float64, high: Float64) raises:
 
 def test_clamp_joins_and_count65_keep_generic_fallback() raises:
     var road = _road(_geometry())
-    for interval in [_Interval(0.0, 0.0), _Interval(-0.0, 0.0),
-                     _Interval(0.0, 0.125), _Interval(19.875, 20.0),
-                     _Interval(20.0, 20.0), _Interval(20.0, 21.0)]:
+    for interval in [
+        _Interval(0.0, 0.0),
+        _Interval(-0.0, 0.0),
+        _Interval(0.0, 0.125),
+        _Interval(19.875, 20.0),
+        _Interval(20.0, 20.0),
+        _Interval(20.0, 21.0),
+    ]:
         _root_miss(road, interval.low, interval.high)
     var geometry = _geometry()
     geometry.length = 128.0
     geometry.curvature_end = 0.0
     var unsupported = _road(geometry^)
-    var d = _geometry_distance(unsupported.info.geometries[0].geometry, _Jet.variable(63.5, 63.5))
+    var d = _geometry_distance(
+        unsupported.info.geometries[0].geometry, _Jet.variable(63.5, 63.5)
+    )
     var counts = _spiral_counts(unsupported.info.geometries[0].geometry, d)
     assert_equal(counts[0], 65)
     assert_equal(counts[1], 65)
@@ -178,9 +261,20 @@ def test_original_mixed_quadrant_count22_root_is_charged_then_rejected() raises:
     assert_equal(captured.last_count, 22)
     var terms = 17
     var units = 9
-    assert_false(Bool(_try_pack_spiral_proof(
-        road, 19.0, 19.0, 0, captured, 0, terms, units,
-    )))
+    assert_false(
+        Bool(
+            _try_pack_spiral_proof(
+                road,
+                19.0,
+                19.0,
+                0,
+                captured,
+                0,
+                terms,
+                units,
+            )
+        )
+    )
     assert_equal(terms, 161)
     assert_equal(units, 153)
     _root_miss(road, 19.0, 19.0)
@@ -254,8 +348,14 @@ def test_query_rejects_missing_counts_bad_errors_and_stale_record_index() raises
             bad.rounded_d = _Interval(0.2, 0.1)
         else:
             bad.rounded_d = _Interval(0.0, 20.0)
-        _point_bits(_lane_jet_with_proof(road, 0, 0, 2.1875, 2.1875, 2.125, 2.25, bad), original)
-    _point_bits(_lane_jet_with_proof(road, 0, 0, 2.1875, 2.1875, 2.125, 2.25, None), original)
+        _point_bits(
+            _lane_jet_with_proof(road, 0, 0, 2.1875, 2.1875, 2.125, 2.25, bad),
+            original,
+        )
+    _point_bits(
+        _lane_jet_with_proof(road, 0, 0, 2.1875, 2.1875, 2.125, 2.25, None),
+        original,
+    )
 
 
 def test_query_station_and_actual_rounded_distance_containment_are_both_required() raises:
@@ -264,20 +364,52 @@ def test_query_station_and_actual_rounded_distance_containment_are_both_required
     ref geometry = road.info.geometries[0].geometry
     var d = _geometry_distance(geometry, _Jet.variable(2.1875, 2.1875))
     var counts = _spiral_counts(geometry, d)
-    assert_true(_spiral_proof_matches(proof, geometry, 0, 2.1875, 2.1875, 2.125, 2.25, d, counts))
-    assert_false(_spiral_proof_matches(proof, geometry, 0, 2.0, 2.1875, 2.125, 2.25, d, counts))
-    assert_false(_spiral_proof_matches(proof, geometry, 0, 2.1875, 2.5, 2.125, 2.25, d, counts))
-    assert_false(_spiral_proof_matches(proof, geometry, 0, 2.25, 2.125, 2.125, 2.25, d, counts))
+    assert_true(
+        _spiral_proof_matches(
+            proof, geometry, 0, 2.1875, 2.1875, 2.125, 2.25, d, counts
+        )
+    )
+    assert_false(
+        _spiral_proof_matches(
+            proof, geometry, 0, 2.0, 2.1875, 2.125, 2.25, d, counts
+        )
+    )
+    assert_false(
+        _spiral_proof_matches(
+            proof, geometry, 0, 2.1875, 2.5, 2.125, 2.25, d, counts
+        )
+    )
+    assert_false(
+        _spiral_proof_matches(
+            proof, geometry, 0, 2.25, 2.125, 2.125, 2.25, d, counts
+        )
+    )
     var outside = d
     outside.error = 1.0
-    assert_false(_spiral_proof_matches(proof, geometry, 0, 2.1875, 2.1875, 2.125, 2.25, outside, counts))
+    assert_false(
+        _spiral_proof_matches(
+            proof, geometry, 0, 2.1875, 2.1875, 2.125, 2.25, outside, counts
+        )
+    )
     outside = d
     outside.first = _Interval.whole()
-    assert_false(_spiral_proof_matches(proof, geometry, 0, 2.1875, 2.1875, 2.125, 2.25, outside, counts))
+    assert_false(
+        _spiral_proof_matches(
+            proof, geometry, 0, 2.1875, 2.1875, 2.125, 2.25, outside, counts
+        )
+    )
     for station in [2.0, 2.5]:
-        _point_bits(_lane_jet_with_proof(road, 0, 0, station, station, 2.125, 2.25, proof), _lane_jet(road, 0, 0, station, station))
+        _point_bits(
+            _lane_jet_with_proof(
+                road, 0, 0, station, station, 2.125, 2.25, proof
+            ),
+            _lane_jet(road, 0, 0, station, station),
+        )
     assert_equal(_reference_work(road, 0.0, 20.0), -1)
-    _point_bits(_lane_jet_with_proof(road, 0, 0, 0.0, 20.0, 2.125, 2.25, proof), _lane_jet(road, 0, 0, 0.0, 20.0))
+    _point_bits(
+        _lane_jet_with_proof(road, 0, 0, 0.0, 20.0, 2.125, 2.25, proof),
+        _lane_jet(road, 0, 0, 0.0, 20.0),
+    )
 
 
 def test_refine_scalar_witness_below_at_above_budget_is_unchanged() raises:
@@ -289,12 +421,54 @@ def test_refine_scalar_witness_below_at_above_budget_is_unchanged() raises:
     var location = Vector3(0, 0, 0)
     var score = road._lane_distance_squared(0, 0, station, location)
     with assert_raises(contains="quadrature work limit"):
-        _ = _refine_lane_certificate(road, 0, 0, station, station, location, station, score, max_terms=work - 1)
+        _ = _refine_lane_certificate(
+            road,
+            0,
+            0,
+            station,
+            station,
+            location,
+            station,
+            score,
+            max_terms=work - 1,
+        )
     with assert_raises(contains="quadrature work limit"):
-        _ = _refine_lane_certificate(road, 0, 0, station, station, location, station, score, max_terms=work - 1, spiral_proof=proof)
+        _ = _refine_lane_certificate(
+            road,
+            0,
+            0,
+            station,
+            station,
+            location,
+            station,
+            score,
+            max_terms=work - 1,
+            spiral_proof=proof,
+        )
     for cap in [work, work + 1]:
-        var generic = _refine_lane_certificate(road, 0, 0, station, station, location, station, score, max_terms=cap)
-        var cached = _refine_lane_certificate(road, 0, 0, station, station, location, station, score, max_terms=cap, spiral_proof=proof)
+        var generic = _refine_lane_certificate(
+            road,
+            0,
+            0,
+            station,
+            station,
+            location,
+            station,
+            score,
+            max_terms=cap,
+        )
+        var cached = _refine_lane_certificate(
+            road,
+            0,
+            0,
+            station,
+            station,
+            location,
+            station,
+            score,
+            max_terms=cap,
+            spiral_proof=proof,
+        )
         assert_true(cached.exact_witness)
         assert_equal(cached.nodes, generic.nodes)
         assert_equal(cached.terms, work)
@@ -314,17 +488,34 @@ def test_refine_early_domain_refusals_do_not_spend_the_proof_as_free_gl_work() r
     # another 20 even on a proof hit; its next local witness is not free.
     for cap in [0, 19, 20, 79, 80, 99, 100, 101]:
         with assert_raises(contains="quadrature work limit"):
-            _ = _refine_lane_certificate(road, 0, 0, 2.125, 2.25, location, seed, score, max_terms=cap)
+            _ = _refine_lane_certificate(
+                road, 0, 0, 2.125, 2.25, location, seed, score, max_terms=cap
+            )
         with assert_raises(contains="quadrature work limit"):
-            _ = _refine_lane_certificate(road, 0, 0, 2.125, 2.25, location, seed, score, max_terms=cap, spiral_proof=proof)
+            _ = _refine_lane_certificate(
+                road,
+                0,
+                0,
+                2.125,
+                2.25,
+                location,
+                seed,
+                score,
+                max_terms=cap,
+                spiral_proof=proof,
+            )
 
 
 def _resume_input(road: Road) raises -> _LaneCertificate:
     var point = road._lane_center(0, 0, 2.1875)
     var zero: Array[Float64, 3] = [0.0, 0.0, 0.0]
     var upper = _normalized_square[3](point, zero, 1.0).high
-    var cells: List[_ClosedInterval] = [_ClosedInterval(2.125, 2.25, 3, 0.0, 1.0)]
-    return _LaneCertificate(2.1875, point^, 1.0, 0.0, upper, False, cells^, 7, 11)
+    var cells: List[_ClosedInterval] = [
+        _ClosedInterval(2.125, 2.25, 3, 0.0, 1.0)
+    ]
+    return _LaneCertificate(
+        2.1875, point^, 1.0, 0.0, upper, False, cells^, 7, 11
+    )
 
 
 def test_resume_keeps_cumulative_work_and_early_refusal_boundaries() raises:
@@ -334,9 +525,32 @@ def test_resume_keeps_cumulative_work_and_early_refusal_boundaries() raises:
         var generic = _resume_input(road)
         var cached = _resume_input(road)
         with assert_raises(contains="quadrature work limit"):
-            _resume_lane_certificate(road, 0, 0, 2.125, 2.25, Vector3(0, 0, 0), generic, 0.0, 1.0, max_terms=cap)
+            _resume_lane_certificate(
+                road,
+                0,
+                0,
+                2.125,
+                2.25,
+                Vector3(0, 0, 0),
+                generic,
+                0.0,
+                1.0,
+                max_terms=cap,
+            )
         with assert_raises(contains="quadrature work limit"):
-            _resume_lane_certificate(road, 0, 0, 2.125, 2.25, Vector3(0, 0, 0), cached, 0.0, 1.0, max_terms=cap, spiral_proof=proof)
+            _resume_lane_certificate(
+                road,
+                0,
+                0,
+                2.125,
+                2.25,
+                Vector3(0, 0, 0),
+                cached,
+                0.0,
+                1.0,
+                max_terms=cap,
+                spiral_proof=proof,
+            )
         assert_equal(cached.terms, generic.terms)
         assert_equal(cached.nodes, generic.nodes)
         assert_true(cached.terms >= 11 and cached.terms <= cap)
