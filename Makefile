@@ -12,6 +12,9 @@ MOJO := .venv/bin/mojo
 # -I . puts the repo root on the import path so `from math.vector3 import ...`
 # resolves. Without it Mojo reports "unable to locate module".
 MOJOFLAGS := -I .
+# CPU lint builds may select a target; mojo doc does not accept target flags.
+LINT_CPU_BUILD_FLAGS ?=
+LINT_CPU_PROGRESS ?= 0
 
 # Every mojo invocation prints a harmless "Failed to initialize Crashpad"
 # warning we want to strip. Piping to sed would discard mojo's exit status,
@@ -216,6 +219,7 @@ TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
+          --setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS)) \
           --setting=$(call quote,$(TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
@@ -429,9 +433,15 @@ lint-cpu: $(LINT_CPU_STAMP)
 $(LINT_CPU_STAMP):
 	@printf '%s\n' $(filter-out $(CPU_TESTS),$(CPU_ENTRY_POINTS)) \
 	  | xargs -P $(JOBS) -I {} \
-	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) \
+	      sh -c 'source=$$1; set -- $(MOJO) build $(MOJOFLAGS) $(LINT_CPU_BUILD_FLAGS) \
 	               --Werror -o /dev/null "$$source"; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-build-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               printf "%s lint-build-end: source=%s exit=%s\n" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$source" "$$rc"; \
+	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
 	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \
@@ -443,7 +453,13 @@ $(LINT_CPU_STAMP):
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'source=$$1; set -- $(MOJO) doc $(MOJOFLAGS) \
 	               --Werror -o /dev/null "$$source"; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               python3 -c "import datetime, shlex, sys; line = datetime.datetime.now(datetime.timezone.utc).strftime(\"%Y-%m-%dT%H:%M:%SZ\") + \" lint-doc-start: \" + shlex.join(sys.argv[1:]); print(line if len(line) <= 4096 else line[:4084] + \" [truncated]\", flush=True)" "$$@"; \
+	             fi; \
 	             out=$$("$$@" 2>&1); rc=$$?; \
+	             if [ "$(LINT_CPU_PROGRESS)" = 1 ]; then \
+	               printf "%s lint-doc-end: source=%s exit=%s\n" "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$source" "$$rc"; \
+	             fi; \
 	             if [ $$rc -ne 0 ]; then \
 	               printf "lint-cpu failed: %s (exit %s)\n" "$$source" "$$rc" >&2; \
 	               python3 -c "import shlex, sys; print(\"command: \" + shlex.join(sys.argv[1:]), file=sys.stderr)" "$$@"; \

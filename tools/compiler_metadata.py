@@ -25,7 +25,9 @@ TIMEOUT = 10.0
 TOTAL_TIMEOUT = 30.0
 TARGET_FIELDS = {'target-triple', 'target-cpu', 'target-features',
                  'target-accelerator', 'target-abi'}
-BUILD_ARGS = ['-I', '.', '--num-threads', '1', '--Werror',
+BUILD_ARGS = ['-I', '.', '--num-threads', '1',
+              '--target-triple=x86_64-unknown-linux-gnu', '--target-cpu=x86-64-v3',
+              '--Werror',
               '-o', '.cache/bin/test_exact_predicates', 'tests/test_exact_predicates.mojo']
 
 

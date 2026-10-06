@@ -48,10 +48,13 @@ class CiPolicyTests(unittest.TestCase):
         self.jobs = jobs_of(self.text)
 
     def test_linux_cpu_tools_include_the_portability_contract(self):
-        commands = re.findall(r'^        run: (make .+)$', self.jobs['lint'], re.MULTILINE)
-        self.assertEqual(len(commands), 1)
-        self.assertIn('test-portability', commands[0].split())
-        self.assertIn('test-coverage-tool', commands[0].split())
+        commands = re.findall(r'^          (make .+)$', self.jobs['lint'], re.MULTILINE)
+        self.assertEqual(commands, [
+            'make -B fmt-check test-tools test-coverage-tool test-portability AFFECTED="$AFFECTED"',
+            'make -B lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu '
+            '--target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1 AFFECTED="$AFFECTED"',
+            'make -B compile-fail docs-check AFFECTED="$AFFECTED"',
+        ])
 
     def test_macos_cpu_tools_include_the_portability_contract(self):
         job = self.jobs['cpu-macos']
@@ -81,9 +84,22 @@ class CiPolicyTests(unittest.TestCase):
         commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
             'make -B test-cpu SHARD=${{ matrix.shard }}/3 '
-            'MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"',
+            'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
+            '--target-cpu=x86-64-v3" AFFECTED="$AFFECTED"',
         ])
         self.assertNotRegex(job, r'\bJOBS\s*=')
+
+    def test_portable_cpu_target_does_not_leak_into_other_platforms_or_gates(self):
+        for name, job in self.jobs.items():
+            if name not in ('cpu', 'lint'):
+                self.assertNotIn('--target-cpu=x86-64-v3', job)
+                self.assertNotIn('--target-triple=x86_64-unknown-linux-gnu', job)
+        self.assertNotIn('MOJOFLAGS=', self.jobs['lint'])
+        self.assertEqual(self.jobs['lint'].count('LINT_CPU_BUILD_FLAGS='), 1)
+        self.assertEqual(self.jobs['cpu'].count('MOJOFLAGS='), 1)
+        self.assertNotIn('MOJOFLAGS:', self.text)
+        self.assertNotIn('continue-on-error:', self.jobs['lint'])
+        self.assertIn('timeout-minutes: 120', self.jobs['lint'])
 
     def test_compiler_telemetry_is_opted_in_only_for_the_linux_cpu_step(self):
         self.assertIn('THREEMOJO_COMPILER_TELEMETRY: "1"', self.jobs['cpu'])
@@ -106,7 +122,8 @@ class CiPolicyTests(unittest.TestCase):
                 self.assertNotIn('compiler_metadata.py', other)
         # The existing exact-command test also pins original flags/shards.
         self.assertIn('run: make -B test-cpu SHARD=${{ matrix.shard }}/3 '
-                      'MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"', job)
+                      'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
+                      '--target-cpu=x86-64-v3" AFFECTED="$AFFECTED"', job)
 
     def test_compiler_metadata_artifact_is_bounded_scoped_and_uploaded_early(self):
         job = self.jobs['cpu']

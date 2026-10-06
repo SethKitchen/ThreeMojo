@@ -72,7 +72,10 @@ jobs:
       # build tools. No MAX, which is what proves the no-dependencies claim
       # still holds.
       - name: lint
-        run: make -B fmt-check test-tools test-coverage-tool test-portability lint-cpu compile-fail docs-check AFFECTED="$AFFECTED"
+        run: |
+          make -B fmt-check test-tools test-coverage-tool test-portability AFFECTED="$AFFECTED"
+          make -B lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu --target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1 AFFECTED="$AFFECTED"
+          make -B compile-fail docs-check AFFECTED="$AFFECTED"
 
       # Only the offline CARLA exporter fixture needs these two packages.
       # Keep its exact wheels in a separate environment from Mojo/MAX.
@@ -125,8 +128,8 @@ jobs:
       - name: test-cpu
         env:
           THREEMOJO_COMPILER_TELEMETRY: "1"
-        # Keep suite parallelism. Bound the threads inside each compiler.
-        run: make -B test-cpu SHARD=${{ matrix.shard }}/3 MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"
+        # Keep suite parallelism and compiler threads; use one portable CPU target.
+        run: make -B test-cpu SHARD=${{ matrix.shard }}/3 MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu --target-cpu=x86-64-v3" AFFECTED="$AFFECTED"
 
   # The same check on Apple Silicon. Months of work on Linux alone let three
   # suites break on a Mac without a sign: a pseudo-terminal there holds far
