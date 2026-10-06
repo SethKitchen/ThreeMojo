@@ -41,6 +41,7 @@ and `opendrive/parser/*.cpp`.
 
 from extensions.carla.geo import parse_geo_reference, stod, xml_as_double
 from extensions.carla.map import Map
+from extensions.carla.map_search import MapBuildBudget
 from extensions.carla.map_builder import MapBuilder, SignalReferenceHandle
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.speed_limits import read_speed_number
@@ -719,11 +720,14 @@ def _controllers(doc: _Doc, mut builder: MapBuilder) raises:
         )
 
 
-def load_opendrive(text: String) raises -> Map:
+def load_opendrive(
+    text: String, budget: MapBuildBudget = MapBuildBudget()
+) raises -> Map:
     """Read an OpenDRIVE text into a map, `OpenDriveParser::Load`.
 
     Args:
         text: The whole `.xodr` file.
+        budget: Finite map-building limits after XML parsing.
 
     Returns:
         The map. A document whose root is not `OpenDRIVE` gives an empty
@@ -734,6 +738,7 @@ def load_opendrive(text: String) raises -> Map:
             read where CARLA calls `std::stod`, or the file names a road,
             lane, junction or signal it does not define.
     """
+    budget.validate()
     var doc = _Doc(parse_xml(text))
     var builder = MapBuilder()
     var geo = parse_geo_reference(doc.xml)
@@ -747,14 +752,17 @@ def load_opendrive(text: String) raises -> Map:
     _signals(doc, builder)
     _objects(doc, builder)
     _controllers(doc, builder)
-    return builder.build()
+    return builder.build(budget)
 
 
-def load_opendrive_file(path: String) raises -> Map:
+def load_opendrive_file(
+    path: String, budget: MapBuildBudget = MapBuildBudget()
+) raises -> Map:
     """Read an `.xodr` file into a map.
 
     Args:
         path: Where the file is.
+        budget: Finite map-building limits after XML parsing.
 
     Returns:
         The map.
@@ -762,4 +770,5 @@ def load_opendrive_file(path: String) raises -> Map:
     Raises:
         Error: If the file cannot be read, or `load_opendrive` raises.
     """
-    return load_opendrive(Path(path).read_text())
+    budget.validate()
+    return load_opendrive(Path(path).read_text(), budget)
