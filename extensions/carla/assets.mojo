@@ -821,23 +821,23 @@ struct TextureSet(Movable):
         Raises:
             Error: Never; the store's add is passed on.
         """
-        var color = Texture(copy=self.maps.color)
+        var color = Texture(copy=self.maps.color, share_data=True)
         color.repeat = repeat
         material.map = assets.textures.add(color^)
         if self.has_roughness:
-            var rough = Texture(copy=self.maps.roughness)
+            var rough = Texture(copy=self.maps.roughness, share_data=True)
             rough.repeat = repeat
             material.roughness_map = assets.textures.add(rough^)
         if self.has_normal:
-            var normal = Texture(copy=self.maps.normal)
+            var normal = Texture(copy=self.maps.normal, share_data=True)
             normal.repeat = repeat
             material.normal_map = assets.textures.add(normal^)
         if self.has_ao:
-            var ao = Texture(copy=self.ao)
+            var ao = Texture(copy=self.ao, share_data=True)
             ao.repeat = repeat
             material.ao_map = assets.textures.add(ao^)
         if self.has_bump:
-            var bump = Texture(copy=self.bump)
+            var bump = Texture(copy=self.bump, share_data=True)
             bump.repeat = repeat
             material.bump_map = assets.textures.add(bump^)
         return material^
@@ -1048,7 +1048,7 @@ struct AssetRegistry(Movable):
         var key = _texture_key(self.path(path), space)
         for index in range(len(self.decoded_keys)):
             if self.decoded_keys[index] == key:
-                return Texture(copy=self.decoded[index])
+                return Texture(copy=self.decoded[index], share_data=True)
         var image = decode_image(Path(self.path(path)).read_bytes())
         return texture_from(image, REPEAT, BILINEAR, space, True, IGNORED)
 
@@ -1059,8 +1059,8 @@ struct AssetRegistry(Movable):
         A 2048-texel photoscan takes a few tenths of a second to decode,
         and a town reads twenty of them, some twice: a curb and a wall can
         wear one set. Completed results move into the cache without
-        copying their pixels or mipmaps. After this, `texture_set` copies
-        them so a caller can change its maps without changing the cache.
+        copying their pixels or mipmaps. After this, `texture_set` shares
+        immutable texels and mipmaps. A write takes an independent copy.
         All jobs must succeed before the cache receives any results.
         A free worker reads the next image without a batch barrier.
         Compressed input and decoder scratch are held for at most one
@@ -1111,6 +1111,15 @@ struct AssetRegistry(Movable):
         for index in range(len(paths)):
             self.decoded_keys.append(_texture_key(paths[index], spaces[index]))
             self.decoded.append(textures.pop())
+
+    def clear_texture_cache(mut self):
+        """Release decoded image cache ownership without invalidating users.
+
+        Existing texture sets and dressed materials retain their texel shares.
+        A later preload reads the source images again.
+        """
+        self.decoded = List[Texture]()
+        self.decoded_keys = List[String]()
 
     def texture_set(self, index: Int) raises -> TextureSet:
         """Read a cached texture set.
