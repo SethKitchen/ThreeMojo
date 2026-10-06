@@ -494,8 +494,6 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             dithering: Whether the color is dithered.
             tone_mapped: Whether the tone mapping curve reaches it.
             alpha_hash: Whether a hashed alpha threshold throws it away.
-            strand_hash: Whether that threshold uses the opt-in integer
-                strand hash instead of the ordinary three.js sine hash.
             alpha_to_coverage: Whether its alpha decides its coverage.
             premultiplied_alpha: Whether its color is premultiplied before
                 the blend.
@@ -503,6 +501,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             blend_green: Its green.
             blend_blue: Its blue.
             blend_alpha: The constant alpha, zero to one.
+            strand_hash: Whether that threshold uses the opt-in integer
+                strand hash instead of the ordinary three.js sine hash.
         """
         self.depth_test = depth_test
         self.depth_write = depth_write
