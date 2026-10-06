@@ -162,8 +162,8 @@ def _localize(mut shared: TrafficManagerShared, times: Int = 2) raises:
             stage.update(i, shared)
 
 
-def _at(seconds: Float64) -> Timestamp:
-    return Timestamp(Int(seconds * 20), seconds, 0.05, 0)
+def _at(seconds: Float64) raises -> Timestamp:
+    return Timestamp.from_seconds(Int(seconds * 20), seconds, 0.05, 0)
 
 
 # --- traffic lights and signs ---------------------------------------------------------
