@@ -21,6 +21,11 @@ from extensions.carla.geometry import (
     with_arc,
     with_spiral,
 )
+from extensions.carla.lane_geometry import (
+    _lane_geometry_pos_at,
+    _lane_arc_offset,
+    _lane_arc_offset_derivative,
+)
 from extensions.carla.lane_refinement import _chord_error, _refine_lane
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
@@ -74,17 +79,19 @@ def _road(
     return road^
 
 
-def test_tiny_curvature_uses_the_same_stable_reference_and_lane_recipe() raises:
+def test_tiny_curvature_uses_the_canonical_reference_and_lane_recipe() raises:
+    # Bounds certify the private stored-polynomial lane reference. The
+    # public reference API keeps main's separate circle-subtraction graph.
     for curvature in [-1e-18, 1e-18]:
         var geometry = with_arc(
             RoadGeometry(ARC, 0.0, 0.0, 0.0, 0.0, 1.0), curvature
         )
-        var point = geometry.pos_at(0.001)
+        var point = _lane_geometry_pos_at(geometry, 0.001)
         assert_almost_equal(point.x, 0.001, atol=1e-18)
         assert_almost_equal(
             point.y, 0.5 * curvature * 0.001 * 0.001, atol=1e-37
         )
-        var lane = geometry._arc_offset(0.001, 0.0)
+        var lane = _lane_arc_offset(geometry, 0.001, 0.0)
         assert_equal(lane.x, point.x)
         assert_equal(lane.y, point.y)
         var road = _road(geometry^, width=0.0)
@@ -100,10 +107,12 @@ def test_collapsed_reversed_and_vertical_arc_centers_keep_orientation() raises:
         )
         var radius = 1.0 / curvature
         for s in [0.0, 0.01, 20.0, 99.0]:
-            var point = geometry._arc_offset(s, -radius)
+            var point = _lane_arc_offset(geometry, s, -radius)
             assert_equal(point.x, 0.0)
             assert_equal(point.y, radius)
-            var derivative = geometry._arc_offset_derivative(s, -radius, 0.0)
+            var derivative = _lane_arc_offset_derivative(
+                geometry, s, -radius, 0.0
+            )
             assert_equal(derivative[0], 0.0)
             assert_equal(derivative[1], 0.0)
         var road = _road(geometry^, CubicPolynomial.constant(1.0 + radius), 2.0)
