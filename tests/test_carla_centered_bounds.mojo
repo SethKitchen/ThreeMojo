@@ -19,6 +19,7 @@ from extensions.carla.curve_interval import (
     _power_quotient_bound,
 )
 from extensions.carla.geometry import LINE, SPIRAL, RoadGeometry
+from extensions.carla.lane_geometry import _lane_geometry_pos_at
 from extensions.carla.opendrive import load_opendrive_file
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
@@ -169,7 +170,14 @@ def test_spiral_accumulates_displacement_before_the_wide_origin() raises:
     )
     # Zero curvature is independently a straight segment. Each original
     # world-origin accumulation discarded a sub-ULP quadrature contribution.
-    var point = geometry.pos_at(4.0)
+    # Public reference geometry retains main's origin-first accumulation.
+    # Its 25 positive terms are each below half the origin's 2m ULP, so every
+    # addition rounds back to the origin. The canonical lane graph instead
+    # accumulates displacement first; keep both contracts explicit.
+    var reference = geometry.pos_at(4.0)
+    assert_equal(reference.x, geometry.x)
+    assert_equal(reference.y, geometry.y)
+    var point = _lane_geometry_pos_at(geometry, 4.0)
     assert_equal(point.x - geometry.x, 4.0)
     assert_equal(point.y, geometry.y)
     var road = _road(geometry^)
