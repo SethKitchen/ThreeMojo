@@ -1,0 +1,173 @@
+{
+  "authored_commit": "68a87145a71fe92252a26614b06da2e8e9965497",
+  "main_commit": "3b134f2f2c8a56cdc62878d98bd6c5dae1cbeeea",
+  "composed_baseline_tree": "51c2ea2c159dd14fc2baeebf22fbfcf48915f615",
+  "checks": [
+    {
+      "authored_path": "extensions/carla/geometry.mojo",
+      "authored_method": "pos_at",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "method": "_lane_geometry_pos_at",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization",
+      "receiver_and_helper_renaming_only": true,
+      "sha256": "0fe7bf11c92f594a0cebfbe355855a3978153190f2f71e93fd2b5be6e1ab14ad"
+    },
+    {
+      "authored_path": "extensions/carla/geometry.mojo",
+      "authored_method": "_arc_offset",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "method": "_lane_arc_offset",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization",
+      "receiver_and_helper_renaming_only": true,
+      "sha256": "8970856fa6f0777e10c8f2764c8773e3d46a5b61e8380f0167ddc8cc9f305784"
+    },
+    {
+      "authored_path": "extensions/carla/geometry.mojo",
+      "authored_method": "_arc_offset_derivative",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "method": "_lane_arc_offset_derivative",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization",
+      "receiver_and_helper_renaming_only": true,
+      "sha256": "7e8b75d3b988681a5c7a971bcedbe7eff6246cff68c46c4d1fc05321e338a65e"
+    },
+    {
+      "authored_path": "extensions/carla/geometry.mojo",
+      "authored_method": "_spiral",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "method": "_lane_spiral",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization",
+      "receiver_and_helper_renaming_only": true,
+      "sha256": "5e44dfecc14c4cad39798466125a1c6dc0089529cbaaa93963d44b23e1125ed7"
+    },
+    {
+      "authored_path": "extensions/carla/geometry.mojo",
+      "authored_method": "_sampled",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "method": "_lane_sampled",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization",
+      "receiver_and_helper_renaming_only": true,
+      "sha256": "151d9e2d1ffb91cbbc5ab0e7c38be0db173638a2743d481c66bf37d0034078cd"
+    },
+    {
+      "path": "extensions/carla/geometry.mojo",
+      "method": "with_poly3",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "c6aaea1bb2b7c2595e5ff548c1c61c39113ae64f108f7ab6e9716443f3d7945b"
+    },
+    {
+      "path": "extensions/carla/geometry.mojo",
+      "method": "with_param_poly3",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "9404137f1fbeaf13eec4c20dde1d83c40d921669105ff7b5f50bd4799a39762e"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "_lane_center",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "365d31c629989f6ed6147a7d7bac5bcb026a35cefd1d52204eb7618ee37ed81a"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "_lane_point",
+      "correspondence": "Exact operation AST after declaration/type/comment/format normalization",
+      "sha256": "4f481acc29a56e04db1413efe0ea826f2ee0ff30418ed53e5691be758c809190"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "_lane_distance_squared",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "c12a3ee2918e10419c35c21a6280e06db4bc39a13c7484fcb364d6b62166bcf3"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "_total_width",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "080b8f6e42f31289d8f1272a06ef7e811626b2491829587403f85c5dde9695d9"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "lane_width",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "c857044eaa178a2b9df36556ea9a8f9ae992a5ccc0b1fcb79a67a43b85843d37"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "elevation_on",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "9949e05fc6dbae616d230f61313b11a668bf06b8be8538c8b8a2c924a16248f0"
+    },
+    {
+      "path": "extensions/carla/polynomial.mojo",
+      "method": "__init__",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "22f73cbb7601d9fd65d17d34b78fe4ac2e9dc71059b973fe7ec2ce522cbf0570"
+    },
+    {
+      "path": "extensions/carla/polynomial.mojo",
+      "method": "evaluate",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "428e87f664beb43a89d9ef4d1627bd640e4ad14fbb73fac2020b2bfcbbc991ab"
+    },
+    {
+      "path": "extensions/carla/polynomial.mojo",
+      "method": "tangent",
+      "correspondence": "Byte-identical selected method",
+      "sha256": "779ca418b613417fb936040c4137853fc91ec1f1d9103df056c30a40d3ddcbb7"
+    },
+    {
+      "path": "extensions/carla/road.mojo",
+      "method": "_offset_lane_point",
+      "correspondence": "Byte-identical selected method",
+      "lookup_change": "One cached immutable info_index replaces repeated same lookup; original missing-record guard is retained before access",
+      "arithmetic_change": "Exact authored scalar helper/trig aliases; no operation change",
+      "sha256": "f839fcc7026cc7a59979dadda69a0a67a5085de8d064bfa866c70e1b55d0adf0"
+    }
+  ],
+  "oracle_math_and_constants_unchanged": true,
+  "pin_checks_fail_closed_under_optimized_python": true,
+  "proof_scope": "Finite ordinary canonical lane scalar/ideal controls and translated construction fixture only. Main reference/fixed-s graph, new envelope/dispatch, native codegen, whole-map performance and universal accuracy are not certified by these scripts.",
+  "pose_scope": "poses.py differentiates the identical ideal stored center expression. Current public pose main guards and scale-safe final angles are separately qualified by fresh fixed-s/orientation native suites; this is not byte-identical pose arithmetic.",
+  "source_sha256": {
+    "extensions/carla/curve_trig.mojo": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+    "extensions/carla/geometry.mojo": "eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c",
+    "extensions/carla/road.mojo": "72b88c843a891d4f2fd81ad2f8c585013db6576c946af9578b5227569e1e5bca",
+    "assets/carla/town.xodr": "4130289eab48e8cc3c6cf928a054d6af15566e3cd1e5d6c95ecbe5d84377f797",
+    "tools/carla_lane_oracle/constants.json": "31f1096a37e774523f90f92bc1f1d75c0b288bb74bf226e4cce227625119404c",
+    "extensions/carla/lane_geometry.mojo": "6de54ea23ac296fdf65b8805a1e4b31fc8e5237c2e8a4539163bb162f6e6577a"
+  },
+  "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee",
+  "composed_map_correspondence": [
+    {
+      "method": "_subdivide_segment",
+      "proof_region": "Quarter-point error, midpoint, target, depth and nonprogress refusal prefix before index storage",
+      "correspondence": "Identical statement/operation AST after only removal of pre-work accounting calls, immutable road-reference substitution, and reviewed same-section wrapper dispatch",
+      "source_sha256": "85f470a8d40728f65525e20268ac239eacaa290c5c855df20037964376c590c5"
+    },
+    {
+      "method": "_create_segments",
+      "proof_region": "Complete station construction flow",
+      "correspondence": "Identical statement/operation AST after only removal of pre-work accounting calls, immutable road-reference substitution, and reviewed same-section wrapper dispatch",
+      "source_sha256": "9c90ae1de854d95e68b941fa48c73006a0c6723eeefb8b351a993fa073869e73"
+    }
+  ],
+  "build_wrapper_scope": {
+    "_build_next": "For the fixture the requested distance is positive and <= remaining. Same relative/remaining calculations and result.s += distance - EPSILON or -distance + EPSILON as _step(ahead=True). Leaving-section requests refuse instead of recursing, outside the proved fixture.",
+    "_build_transform": "Reserves before invoking the unchanged Road.lane_transform with the same looked-up indices/station.",
+    "_build_locate": "Metered lookup validates the same road/section/lane identifiers; no station arithmetic.",
+    "reservations": "Before-work counter/record/profile scans may add early refusal; they do not change road geometry or s. New helper and dependency bindings detect their changes."
+  },
+  "translated_source_checks": "Method presence, method hashes and both dependency files use explicit ValueError checks under normal and optimized Python. Mathematical assertions remain normal-Python-only; use documented normal replay.",
+  "formatter_binding": {
+    "receipt_sha256": "2e5c1de3f003196e8b4b81791a12902dc7cc7b5175b7422f1b95faa1f88cbaaf",
+    "changed_pinned_sources": [
+      {
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "b7966c5a30494145b8a0d5a0806e4fcabc41eeeed4b530ed9095752485f057e2",
+        "after_sha256": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+        "operation_tokens_equal": true,
+        "normalized_token_sha256": "91e4c775644a56146d5f21531b7e8c07e2b45068546e73f8d24167cb30416936"
+      }
+    ],
+    "operation_graphs_unchanged": true
+  }
+}
