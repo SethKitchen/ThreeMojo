@@ -11,7 +11,7 @@ from loaders.image_batch import (
 from render.texture import Texture
 from std.atomic import Atomic
 from std.runtime import parallelism_level
-from std.testing import TestSuite, assert_equal, assert_true
+from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from std.time import perf_counter_ns
 
 
@@ -109,15 +109,15 @@ struct _TrackedSource[
 
 
 def test_claims_continue_while_earlier_jobs_are_unfinished() raises:
-    var next: Int64 = 0
+    var next: UInt64 = 0
     var pointer = Pointer(to=next).unsafe_origin_cast[MutAnyOrigin]()
-    assert_equal(_claim_decode(pointer), 0)
-    assert_equal(_claim_decode(pointer), 1)
+    assert_equal(_claim_decode(pointer), UInt64(0))
+    assert_equal(_claim_decode(pointer), UInt64(1))
     # Job 1 can finish and claim 2 while job 0 remains unfinished. There
     # is no batch completion state for the claim operation to wait on.
-    assert_equal(_claim_decode(pointer), 2)
-    assert_equal(_claim_decode(pointer), 3)
-    assert_equal(next, 4)
+    assert_equal(_claim_decode(pointer), UInt64(2))
+    assert_equal(_claim_decode(pointer), UInt64(3))
+    assert_equal(next, UInt64(4))
 
 
 def test_workers_bound_active_staging_and_move_completed_mips() raises:
@@ -211,11 +211,22 @@ def test_first_error_is_deterministic_and_all_workers_finish() raises:
             assert_equal(counters[0], 0)
             assert_equal(counters[2], 0)
             if workers > 1:
-                assert_equal(counters[4], 5)
+                # Failure can stop unclaimed jobs, but every claimed index
+                # belongs to a contiguous prefix and finishes exactly once.
+                var claimed: Int64 = 0
+                var saw_unclaimed = False
                 for index in range(5):
-                    assert_equal(visits[index], 1)
+                    if visits[index] == 0:
+                        saw_unclaimed = True
+                    else:
+                        assert_false(saw_unclaimed)
+                        assert_equal(visits[index], Int64(1))
+                        claimed += 1
+                assert_true(claimed >= 2)
+                assert_true(claimed <= 5)
+                assert_equal(counters[4], claimed)
             else:
-                assert_equal(counters[4], 2)
+                assert_equal(counters[4], Int64(2))
             # Retrying with the same fixed inputs owns fresh queue state.
             source.fail = False
             source.slow = -1
