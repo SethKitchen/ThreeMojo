@@ -23,8 +23,11 @@ junction 0, and a `paramPoly3` with no `pRange` is normalized.
 
 **What CARLA reads and drops.** A lateral profile (superelevation,
 crossfall and shape) and a `userData` traffic group are read by CARLA and
-never reach the map, so this reader skips them. A road's `type` and a
-lane's `speed` keep only their number: CARLA drops the unit.
+never reach the map, so this reader skips them. Road and lane speed records
+keep their number and unit. Unlike CARLA 1360bb9, this port does not drop
+the unit or turn a road's no-limit/undefined keyword into numeric zero.
+Speed numbers are strict, finite and nonnegative. Other numeric fields
+keep the documented pugixml compatibility reader.
 
 **Objects.** A crosswalk object becomes a crosswalk record. An object
 named "Speed_..." or "speed_..." becomes a speed-limit signal of type 274,
@@ -40,6 +43,7 @@ from extensions.carla.geo import parse_geo_reference, stod, xml_as_double
 from extensions.carla.map import Map
 from extensions.carla.map_builder import MapBuilder, SignalReferenceHandle
 from extensions.carla.polynomial import CubicPolynomial
+from extensions.carla.speed_limits import read_speed_number
 from extensions.carla.road_info import (
     ConId,
     ControllerId,
@@ -238,11 +242,17 @@ def _roads(doc: _Doc, mut builder: MapBuilder) raises:
         )
         for kind in doc.children(node, "type"):
             var speed = doc.child(kind, "speed")
-            var max = 0.0
+            var max = String()
             var unit = String()
             if speed != NO_ELEMENT:
-                max = doc.double(speed, "max")
+                max = doc.text(speed, "max")
+                if max.byte_length() == 0:
+                    raise Error("OpenDRIVE road speed needs max")
                 unit = doc.text(speed, "unit")
+                if doc.has(speed, "unit") and unit.byte_length() == 0:
+                    raise Error(
+                        "OpenDRIVE speed unit cannot be empty when present"
+                    )
             builder.create_road_speed(
                 road, doc.double(kind, "s"), doc.text(kind, "type"), max, unit
             )
@@ -474,8 +484,14 @@ def _lane_records(
                 doc.double(sight, "right"),
             )
         for speed in doc.children(node, "speed"):
+            var unit = doc.text(speed, "unit")
+            if doc.has(speed, "unit") and unit.byte_length() == 0:
+                raise Error("OpenDRIVE speed unit cannot be empty when present")
             builder.create_lane_speed(
-                lane, doc.double(speed, "sOffset") + s, doc.double(speed, "max")
+                lane,
+                doc.double(speed, "sOffset") + s,
+                doc.text(speed, "max"),
+                unit,
             )
         for access in doc.children(node, "access"):
             builder.create_lane_access(
@@ -552,6 +568,10 @@ def _signals(doc: _Doc, mut builder: MapBuilder) raises:
         var signals = doc.child(road_node, "signals")
         for node in doc.children(signals, "signal"):
             var id = SignalId(doc.text(node, "id"))
+            var value_present = doc.has(node, "value")
+            var value = doc.double(node, "value")
+            if doc.text(node, "type") == "274" and value_present:
+                value = read_speed_number(doc.text(node, "value"))
             var reference = builder.add_signal(
                 builder.road_index(road_id),
                 id,
@@ -564,7 +584,7 @@ def _signals(doc: _Doc, mut builder: MapBuilder) raises:
                 doc.text(node, "country"),
                 doc.text(node, "type"),
                 doc.text(node, "subtype"),
-                doc.double(node, "value"),
+                value,
                 doc.text(node, "unit"),
                 doc.double(node, "height"),
                 doc.double(node, "width"),
@@ -572,6 +592,7 @@ def _signals(doc: _Doc, mut builder: MapBuilder) raises:
                 doc.double(node, "hOffset"),
                 doc.double(node, "pitch"),
                 doc.double(node, "roll"),
+                value_present,
             )
             _validities(doc, builder, reference, node)
             for dependency in doc.children(node, "dependency"):

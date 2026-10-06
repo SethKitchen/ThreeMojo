@@ -42,6 +42,10 @@ again 0.5 s after a failed check.
   CARLA's fixed margin can move the box outside such a section.
 - CARLA finds a sign's references road by road in hash order. This port
   goes by road id.
+- Anticipation distances use checked SI speeds, with lane limits before
+  road limits. CARLA 1360bb9 drops source speed units. A numeric zero
+  stops further anticipation; an absent or nonnumeric road limit keeps
+  the existing 40 m/s fallback. This correction can change trigger extents.
 """
 
 from extensions.carla.actor import ActorId, GREEN, RED, TrafficLightState
@@ -53,6 +57,7 @@ from extensions.carla.map import (
     Waypoint,
 )
 from extensions.carla.math import generate_range
+from extensions.carla.speed_limits import simulation_speed
 from extensions.carla.road_info import (
     LANE_DRIVING,
     LaneId,
@@ -69,7 +74,7 @@ from units.si import Length, METER, Velocity
 
 # The clamp margin CARLA keeps from a lane section's ends, in meters.
 comptime _EPSILON = 0.00001
-# CARLA's default speed, in the road's unit, where a road has no limit.
+# Existing fallback speed in m/s when no numeric road/lane limit is available.
 comptime _DEFAULT_SPEED = Float32(40)
 # How far ahead in time the check boxes reach before a crossing lane.
 comptime _ANTICIPATION_TIME = Float32(0.1)
@@ -290,12 +295,14 @@ def _check_boxes(
                 head += 1
                 out.append(_cube(map, item[1], size))
                 var speed = _DEFAULT_SPEED
-                var limit = info_at(
-                    map.road(item[1].road_id).info.speeds, item[1].s
-                )
+                var limit = map.speed_limit_at(item[1])
                 if Bool(limit):
-                    speed = Float32(limit.value().speed)
-                var remaining = item[0] - size / speed
+                    speed = simulation_speed(limit.value()).value
+                # A real zero limit permits no further travel. It is not
+                # the missing/unrestricted sentinel and must not divide by zero.
+                var remaining = Float32(0)
+                if speed > 0:
+                    remaining = item[0] - size / speed
                 if remaining > 0:
                     for before in map.previous(item[1], step):
                         queue.append((remaining, before))

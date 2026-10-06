@@ -5127,6 +5127,35 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/carla_speed_adapter_rejects_length.mojo": {
+    "expectation": {
+      "errors": [
+        {
+          "column": 34,
+          "line": 13,
+          "message": "invalid call to 'simulation_speed': value passed to 'speed' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(-1), Int(0), dtype=.float64]'"
+        }
+      ],
+      "notes": [
+        ".time of the first value is 'Int(0)' but the second value is 'Int(-1)'",
+        "function declared here"
+      ]
+    },
+    "fixture_sha256": "89e92029aed77accd766d14859988fcd940f13fb4cc67d3ea6609056a62409e7"
+  },
+  "tests/compile_fail/carla_speed_kind_rejects_raw_int.mojo": {
+    "expectation": {
+      "errors": [
+        {
+          "column": 19,
+          "line": 13,
+          "message": "cannot implicitly convert 'IntLiteral[0]' value to 'SpeedLimitKind'"
+        }
+      ],
+      "notes": []
+    },
+    "fixture_sha256": "40d1a8d92df45eb5b8bbbec34c3d074bb581817c93cd3c585a69bed053ece90f"
+  },
   "tests/compile_fail/carla_timestamp_rejects_float32_duration.mojo": {
     "expectation": {
       "errors": [

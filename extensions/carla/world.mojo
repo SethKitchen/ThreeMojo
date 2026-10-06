@@ -87,7 +87,7 @@ from extensions.carla.bounding_box import BoundingBox
 from extensions.carla.map import Landmark, Map, Waypoint, is_traffic_light
 from extensions.carla.mesh_factory import generate_mesh
 from extensions.carla.physics.body import BodyId
-from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
+from extensions.carla.speed_limits import simulation_speed
 from extensions.carla.physics.shape import PhysicsMaterial
 from extensions.carla.physics.simulation import CarlaPhysics
 from extensions.carla.physics.vehicle_control import (
@@ -596,11 +596,14 @@ struct World(Movable):
             var kind = sign_kind_of(s.type, s.subtype, s.name)
             if not Bool(kind):
                 continue
+            var limit = Velocity(0)
+            if kind.value() == SPEED_LIMIT_SIGN:
+                limit = simulation_speed(s.speed_limit())
             var sign = TrafficSign(
                 s.signal_id,
                 kind.value(),
                 light_transform(s.transform),
-                Velocity(Float32(s.value), KILOMETER_PER_HOUR),
+                limit,
             )
             if kind.value() == SPEED_LIMIT_SIGN:
                 sign.effect_boxes = speed_limit_boxes(self.map, s.signal_id)
