@@ -9,6 +9,7 @@ checked against the full-Jet source. Primitive changes require renewed review.
 """
 import argparse
 import ast
+import copy
 import hashlib
 import io
 import json
@@ -16,12 +17,17 @@ from pathlib import Path
 import re
 import tokenize
 
+try:
+    from source_contracts import verify_group, verify_qualifiers
+except ModuleNotFoundError:
+    from tools.carla_lane_oracle.source_contracts import verify_group, verify_qualifiers
+
 ROOT = Path(__file__).resolve().parents[2]
 PRIMITIVE_GRAPH_SHA256 = 'e2e0257a0f42a95bac586638fc5d532f4bc69b882127201bbf343006f2143484'
 REFERENCE_MODULE_GRAPHS = {
-    "curve_bounds.mojo": "85d3c1837f7412572610141a11c6b6f2fba5806a944c4f42c3500a7d51b86707",
+    "curve_bounds.mojo": "51f99d745612d217762d8f39bde1ded5b269d239f05cb765532de631cc64791f",
     "curve_trig.mojo": "4ca47db55caa96ba9ad6c6f43fa65d30a8fefe419f555d46a1a948a2fc606ecc",
-    "curve_interval.mojo": "2651d6ee92a6346f1e20073dc68535e785f605642e5f668355a53d2dd8660171"
+    "curve_interval.mojo": "32b7bce9ad0b996fa87a7bc63ff0c905065751d164f7d673342234716523fd8e"
 }
 SHARED_GRAPHS = {
     "curve_trig.mojo:_expression_polynomial": "031856283e36ac8dbaef6e455eb6a1502c0c465f70ba809ace51ec5782abb04a",
@@ -36,7 +42,7 @@ SHARED_GRAPHS = {
     "curve_bounds.mojo:_intersect_ideal_bounds": "0f6d271eb25f2e19f9cfd4c4f8f93691f4452cb50ac5303d7ff898398f8deda3",
     "curve_bounds.mojo:_lane_jet": "c1d76e057272bbb71d1066e4669a3b7d0e5e87c4497e9d96abf21edc007e2f85",
     "curve_bounds.mojo:_lane_jet_model": "470c29ee518a71ecc8c6bce3268d38da93d8c27770b9bdf6e6c82989a1032ab0",
-    "curve_bounds.mojo:_lane_jet_model_proof": "bfdbef5781b93ee6819f8eaeabf082ed392f49b753c07ddc2842b840a7934891",
+    "curve_bounds.mojo:_lane_jet_model_proof": "17eea195f5bcd6e90781bbc3370f16e5404b67620aad1807b24101ceaebd7218",
     "curve_bounds.mojo:_reference_jet_capture": "0ebd93d524b35c30cdd27fabc23dd40f1a53241477b0689c37b07b18bce5ad05"
 }
 NAMES = {
@@ -51,17 +57,52 @@ NAMES = {
     '_jet_polynomial': '_expression_polynomial',
     '_uncertain': '_uncertain_value',
     '_Jet': '_ValueJet',
+    '_sinc_jet': '_sinc_value',
+    '_sincos_jet': '_sincos_expression',
+    '_arc_offset_jet': '_arc_offset_value',
+    '_constant_sincos_jet': '_constant_sincos_value',
+    '_union_points': '_union_value_points',
 }
 COPIES = ('_atan_branch', '_atan_jet', '_atan2_jet', '_polynomial_jet',
           '_unknown_point', '_geometry_distance', '_sample_blend_jet', '_sample_jet')
-IMPORTS = '''from extensions.carla.curve_interval import _Interval, _ValueJet
-from extensions.carla.curve_bounds import _sample_index, _intersect_ideal_bounds
-from extensions.carla.curve_trig import (
-    _expression_polynomial, _uncertain_expression, _sincos_expression,
-    _PI, _HALF_PI, _QUARTER_PI, _ATAN_REDUCE, _ATAN_COEFFICIENTS,
-    _sign_bit, _curve_cos, _curve_sin, _curve_atan2,
+IMPORTS = '''from extensions.carla.curve_interval import (
+    _stored_difference,
+    _stored_half,
+    _stored_blend_error,
+    _Interval,
+    _ValueJet,
+    _without_derivatives,
 )
-from extensions.carla.geometry import RoadGeometry, PARAM_POLY3, POLY3
+from extensions.carla.curve_bounds import (
+    _sample_index,
+    _intersect_ideal_bounds,
+    _lane_jet,
+)
+from extensions.carla.curve_trig import (
+    _expression_polynomial,
+    _uncertain_expression,
+    _sincos_expression,
+    _PI,
+    _HALF_PI,
+    _QUARTER_PI,
+    _ATAN_REDUCE,
+    _ATAN_COEFFICIENTS,
+    _SIN_COEFFICIENTS,
+    _PHASE_LIMIT,
+    _sign_bit,
+    _curve_cos,
+    _curve_sin,
+    _curve_atan2,
+)
+from extensions.carla.geometry import (
+    RoadGeometry,
+    PARAM_POLY3,
+    POLY3,
+    LINE,
+    ARC,
+    SPIRAL,
+)
+from std.math import isfinite
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import info_index
@@ -206,6 +247,25 @@ def verify(root):
         require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
     require(primitive_graph(texts['curve_interval.mojo']) == PRIMITIVE_GRAPH_SHA256,
             'Jet primitive graph changed; renewed derivative-independence review required')
+    # Complete stored helper/interval closure and lexical qualifiers are
+    # independent of the unchanged primitive-class AST hash.
+    try:
+        verify_group(root, 'stored_arithmetic')
+        verify_group(root, 'canonical_accumulation')
+        try:
+            import sum2_contracts
+        except ModuleNotFoundError:
+            from tools.carla_lane_oracle import sum2_contracts
+        sum2_contracts.verify(root)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
+    interval_tree = syntax_tree(texts['curve_interval.mojo'])
+    for helper in ('_stored_difference', '_stored_half', '_stored_blend_error',
+                   '_without_derivatives'):
+        for node in ast.walk(unique_function(interval_tree, helper)):
+            require(not (isinstance(node, ast.Attribute) and
+                        node.attr in ('first', 'second', 'derivatives')),
+                    'derivative-field/flag read in stored helper: ' + helper)
     target_tree = syntax_tree(target)
     reference_trees = {'curve_bounds.mojo': syntax_tree(bounds), 'curve_trig.mojo': syntax_tree(trig)}
     for key, expected_hash in SHARED_GRAPHS.items():
@@ -216,6 +276,11 @@ def verify(root):
     for node in ast.walk(target_tree):
         require(not (isinstance(node, ast.Attribute) and node.attr in ('first', 'second', 'derivatives', 'sqrt')),
                 'derivative-field/flag read or sqrt in value-only graph')
+    try:
+        for filename, text in texts.items():
+            verify_qualifiers(root, filename, text)
+    except ValueError as error:
+        raise CheckError(str(error)) from error
     actual_imports = [dump(n) for n in target_tree.body if isinstance(n, ast.ImportFrom)]
     expected_imports = [dump(n) for n in ast.parse(IMPORTS).body]
     require(actual_imports == expected_imports, 'sampled graph imports changed')
@@ -233,34 +298,145 @@ def verify(root):
     expected['_uncertain_value'] = '''def _uncertain_value(value: _Interval) -> _ValueJet:
     return _uncertain_expression[False](value)
 '''
-    old = function(bounds, '_union_points')
-    expected['_union_value_points'] = '''def _union_value_points(
-    one: Tuple[_ValueJet, _ValueJet, _ValueJet],
-    two: Tuple[_ValueJet, _ValueJet, _ValueJet],
-) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-''' + translated(old[old.index('    return ('):])
-    old = function(bounds, '_reference_jet_capture')
-    tail = translated(old[old.index('    if len(geometry.samples) < 2:'):])
-    tail = re.sub(r'\b_union_points\b', '_union_value_points', tail)
-    expected['_reference_sampled_value'] = '''def _reference_sampled_value(
-    geometry: RoadGeometry, distance: _ValueJet, translation: Vector3
-) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-    if geometry.kind != POLY3 and geometry.kind != PARAM_POLY3:
-        return _unknown_value_point()
-    var d = _value_geometry_distance(geometry, distance)
-''' + tail
-    old = function(bounds, '_lane_jet_model_proof')
-    pre = translated(old[old.index('    var geometry_at ='):old.index('    var reused:')])
-    tail = translated(old[old.index('    return (\n        point[0] + offset * trig[0],'):])
+    # Project complete parsed declarations, never raw prefix/tail slices.
+    def reference(filename, name):
+        node = unique_function(syntax_tree(translated(function(texts[filename], name))), NAMES.get(name, name))
+        node.decorator_list = copy.deepcopy(unique_function(reference_trees[filename], name).decorator_list)
+        return copy.deepcopy(node)
+
+    def declaration(source):
+        return syntax_tree(source).body[0]
+
+    def shape(nodes):
+        """Each complete top-level statement has an explicit reviewed role."""
+        result = []
+        for node in nodes:
+            if isinstance(node, ast.Assign):
+                result.append('assign:' + ast.unparse(node.targets[0]))
+            elif isinstance(node, ast.AnnAssign):
+                result.append('annotate:' + ast.unparse(node.target))
+            elif isinstance(node, ast.If):
+                result.append('if:' + ast.unparse(node.test))
+            elif isinstance(node, ast.Return):
+                result.append('return')
+            else:
+                result.append(type(node).__name__)
+        return result
+
+    union = declaration('''def _union_value_points(
+        one: Tuple[_ValueJet, _ValueJet, _ValueJet],
+        two: Tuple[_ValueJet, _ValueJet, _ValueJet],
+    ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+        pass
+''')
+    old = reference('curve_bounds.mojo', '_union_points')
+    require(shape(old.body) == ['return'], 'union complete body shape changed')
+    union.body = old.body
+    expected['_union_value_points'] = union
+
+    sampled = declaration('''def _reference_sampled_value(
+        geometry: RoadGeometry, distance: _ValueJet, translation: Vector3
+    ) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+        if geometry.kind != POLY3 and geometry.kind != PARAM_POLY3:
+            return _unknown_value_point()
+''')
+    old = reference('curve_bounds.mojo', '_reference_jet_capture')
+    require(shape(old.body) == [
+        'assign:d', 'if:geometry.kind == LINE', 'if:geometry.kind == ARC',
+        'if:geometry.kind == SPIRAL', 'if:len(geometry.samples) < 2',
+        'assign:domain', 'assign:low', 'assign:high', 'if:high - low > 1',
+        'assign:first', 'if:low == high', 'return',
+    ], 'complete reference dispatcher layout changed')
+    # Remove precisely the three complete non-sampled branches. The new
+    # leading guard rejects those kinds; the independent broad wrapper
+    # provides the full-Jet SPIRAL bridge. All 12 statements are accounted for.
+    sampled.body += [old.body[0]] + old.body[4:]
+    expected['_reference_sampled_value'] = sampled
+
+    for name, filename in (('_sinc_jet', 'curve_trig.mojo'),
+                           ('_arc_offset_jet', 'curve_bounds.mojo')):
+        expected[NAMES[name]] = reference(filename, name)
+
+    constant = reference('curve_trig.mojo', '_constant_sincos_jet')
+    require(shape(constant.body) == ['assign:result',
+        'if:not isfinite(heading) or abs(heading) > _PHASE_LIMIT',
+        'assign:zero', 'return'], 'constant heading layout changed')
+    require(dump(constant.body[2]) == dump(ast.parse('zero = _Interval.point(0.0)').body[0]),
+            'constant heading derivative constructor changed')
+    constant.body[2] = ast.parse('unknown = _Interval.whole()').body[0]
+    returned = constant.body[3].value
+    require(isinstance(returned, ast.Tuple) and len(returned.elts) == 2,
+            'constant heading result shape changed')
+    for index, item in enumerate(returned.elts):
+        required = ast.parse('_ValueJet(result[' + str(index) +
+            '].rounded_value(), zero, zero, 0.0)', mode='eval').body
+        require(dump(item) == dump(required), 'constant heading field projection changed')
+        # Only derivative constructor fields change. Coefficient enclosure,
+        # exact-zero scalar error, result ordering and guards are retained.
+        item.args[1:3] = [ast.Name(id='unknown', ctx=ast.Load()),
+                          ast.Name(id='unknown', ctx=ast.Load())]
+    expected['_constant_sincos_value'] = constant
+
     expected['_sampled_lane_value_bound'] = '''def _sampled_lane_value_bound(
-    road: Road, section: Int, lane: Int, low: Float64, high: Float64,
-) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
-    var translation = Vector3(0, 0, 0)
-''' + pre + '''    var point = _reference_sampled_value(
-        record.geometry, s - _ValueJet.constant(record.s), translation
-    )
-    var trig = _sincos_expression(point[2])
-''' + tail
+        road: Road, section: Int, lane: Int, low: Float64, high: Float64
+    ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+        return _lane_value_bound_impl[False](road, section, lane, low, high)
+'''
+    expected['_lane_value_bound'] = '''def _lane_value_bound(
+        road: Road, section: Int, lane: Int, low: Float64, high: Float64
+    ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+        var at = info_index(road.info.geometries, low)
+        if at >= 0 and road.info.geometries[at].geometry.kind == SPIRAL:
+            var full = _lane_jet(road, section, lane, low, high)
+            return (_without_derivatives(full[0]), _without_derivatives(full[1]),
+                    _without_derivatives(full[2]))
+        return _lane_value_bound_impl[True](road, section, lane, low, high)
+'''
+    lane = declaration('''def _lane_value_bound_impl[all_geometry: Bool](
+        road: Road, section: Int, lane: Int, low: Float64, high: Float64,
+    ) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+        var translation = Vector3(0, 0, 0)
+''')
+    old = reference('curve_bounds.mojo', '_lane_jet_model_proof')
+    # This private value-only specialization has no cached proof argument.
+    # Remove only the exact new refusal branch whose proof condition is false
+    # for that route. The full cached-proof caller remains separately bound.
+    require(dump(old.body[0]) == dump(ast.parse("""if proof and not _sum2_supported_environment():
+    return _unknown_value_point()
+""").body[0]), 'cached-proof environment refusal changed or moved')
+    old.body.pop(0)
+    require(shape(old.body) == [
+        'assign:geometry_at', 'assign:elevation_at', 'assign:offset_at',
+        'if:geometry_at < 0 or elevation_at < 0 or offset_at < 0',
+        'if:info_index(road.info.geometries, high) != geometry_at or info_index(road.info.elevations, high) != elevation_at or info_index(road.info.lane_offsets, high) != offset_at',
+        'assign:s', 'assign:offset', 'assign:lanes', 'assign:lane_id',
+        'assign:negative', 'assign:sign', 'if:lane_id.value != 0',
+        'assign:offset', 'assign:record', 'if:capture',
+        'if:record.geometry.kind == ARC', 'if:record.geometry.kind == LINE',
+        'annotate:reused', 'if:not capture', 'annotate:point', 'if:reused',
+        'assign:trig', 'return',
+    ], 'complete lane dispatcher layout changed')
+    require(dump(old.body[14]) == dump(ast.parse('''if capture:
+        captured.record_at = geometry_at
+        captured.low = low
+        captured.high = high
+''').body[0]), 'capture bookkeeping projection changed')
+    # 0..13: all record checks/width traversal/elevation setup are retained.
+    # 14: the exact capture-only assignments above are deleted.
+    # 15..16: complete ARC/LINE branches move under all_geometry, in order.
+    # 17..20: complete proof/capture dispatch is replaced by a sampled call.
+    # This replacement is justified only by _reference_sampled_value's kind
+    # guard and the separately bound SPIRAL full-Jet wrapper, never by a
+    # claim that the proof branch is value-independent. Whole reference
+    # modules bind every removed proof statement and its dependencies.
+    # 21..22: original trig and final output are retained, without slicing.
+    lane.body += old.body[:14]
+    lane.body += [ast.If(test=ast.Name(id='all_geometry', ctx=ast.Load()),
+                        body=old.body[15:17], orelse=[])]
+    lane.body += ast.parse('''point = _reference_sampled_value(
+        record.geometry, _stored_difference(s, _ValueJet.constant(record.s)), translation)
+''').body + old.body[21:]
+    expected['_lane_value_bound_impl'] = lane
     functions = {n.name for n in target_tree.body if isinstance(n, ast.FunctionDef)}
     require(functions == set(expected), 'missing or extra sampled helper')
     for node in target_tree.body:
@@ -268,7 +444,8 @@ def verify(root):
                 (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str)),
                 'unexpected top-level execution in sampled graph')
     for name, source in expected.items():
-        wanted = unique_function(syntax_tree(source), name)
+        wanted = (unique_function(syntax_tree(source), name)
+                  if isinstance(source, str) else source)
         if name in {NAMES[n] for n in COPIES}:
             original = next(n for n in COPIES if NAMES[n] == name)
             filename = 'curve_trig.mojo' if original.startswith('_atan') else 'curve_bounds.mojo'
@@ -278,11 +455,11 @@ def verify(root):
         actual = unique_function(target_tree, name)
         require(dump(wanted) == dump(actual),
                 'sampled helper diverged: ' + name)
-    return {'status': 'PASS', 'copied_functions': 8, 'dispatch_functions': 4, 'shared_generic_and_bridge_functions': len(SHARED_GRAPHS),
+    return {'status': 'PASS', 'repo_root': str(root.resolve()), 'copied_functions': 8, 'dispatch_functions': 6, 'additional_source_pairs': 3, 'shared_generic_and_bridge_functions': len(SHARED_GRAPHS),
             'complete_reference_modules': len(REFERENCE_MODULE_GRAPHS),
             'primitive_graph_sha256': PRIMITIVE_GRAPH_SHA256,
             'source_sha256': {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in paths.items()},
-            'scope': 'Exact current value/error operation and branch correspondence plus previously reviewed primitive graph; native/codegen/budget/full-coverage/performance gates remain separate'}
+            'scope': 'Complete explicit sampled/ARC/LINE correspondence and SPIRAL bridge with stored-arithmetic closure; source binding is not mathematical/runtime qualification. Separate eligibility/translation/support source gate, native/codegen/budget/coverage/performance remain required'}
 
 
 def main():
