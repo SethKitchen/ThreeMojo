@@ -309,7 +309,7 @@ def fixture_hash(name: String, level: Int = 0) raises -> Tuple[Int, UInt64]:
     XXH64 hash of its texels."""
     var container = read(Path("assets/ktx2/" + name).read_bytes())
     var image = container.texture(level=level)
-    return (image.width, xxh64(image.pixels, 0, len(image.pixels)))
+    return (image.width, xxh64(image.pixels.values(), 0, len(image.pixels)))
 
 
 def test_uastc_files_decode_as_three_js_transcodes_them() raises:
@@ -346,7 +346,7 @@ def float_hash(name: String, level: Int = 0) raises -> Tuple[Int, UInt64]:
     var container = read(Path("assets/ktx2/" + name).read_bytes())
     var image = container.texture(level=level)
     assert_equal(image.texel_type, FLOAT_TYPE)
-    return (image.width, hash_floats(image.data))
+    return (image.width, hash_floats(image.data.values()))
 
 
 def hash_floats(floats: List[Float32]) -> UInt64:
@@ -363,7 +363,7 @@ def video_hash(name: String, level: Int, layer: Int) raises -> UInt64:
     """Return the XXH64 hash of one frame of an ETC1S video fixture."""
     var container = read(Path("assets/ktx2/" + name).read_bytes())
     var image = container.texture(layer=layer, level=level)
-    return xxh64(image.pixels, 0, len(image.pixels))
+    return xxh64(image.pixels.values(), 0, len(image.pixels))
 
 
 def test_uastc_hdr_files_decode_as_three_js_transcodes_them() raises:
@@ -380,7 +380,7 @@ def test_uastc_hdr_files_decode_as_three_js_transcodes_them() raises:
     var undefined = file.copy()
     put(undefined, 12, 0)
     var image = read(undefined).texture()
-    assert_equal(hash_floats(image.data), 0xDC5C50AB9267CD0D)
+    assert_equal(hash_floats(image.data.values()), 0xDC5C50AB9267CD0D)
     # Zstandard, and levels of 21x13 down to 1x1. The encoder scaled the
     # values and wrote the scale as `KTXmapRange`, which three.js ignores.
     var hashes: List[UInt64] = [
@@ -410,7 +410,7 @@ def test_etc1s_videos_decode_as_three_js_transcodes_them() raises:
     var still: UInt64 = 0
     try:
         var image = container.texture(layer=1)
-        still = xxh64(image.pixels, 0, len(image.pixels))
+        still = xxh64(image.pixels.values(), 0, len(image.pixels))
     except:
         pass
     assert_true(still != frames[1])
