@@ -121,6 +121,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Project tools
 
+- [ ] [Decode failure early stop](https://github.com/SethKitchen/ThreeMojo/wiki/Image-decode-queue#ordering-and-failure): monotonic stop, joined claimed work and ordered errors are implemented; final batch qualification remains open [#668](https://github.com/SethKitchen/ThreeMojo/issues/668)
+
 - [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 <details>
