@@ -37,7 +37,7 @@ This is not a three.js port. See Extensions.
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.vector3 import Vector3
-from std.math import exp, log, max, min, pi, sqrt
+from std.math import exp, isfinite, log, max, min, pi, sqrt
 
 # Lower bound for a product of projected direction magnitudes.
 comptime AZIMUTH_EPSILON = Float32(1e-4)
@@ -248,27 +248,16 @@ def scattered(
     return Vector3(sqrt(color.x), sqrt(color.y), sqrt(color.z)) * wrap
 
 
-def shade_groom(
+def _shade_groom_into(
     groom: HairGroom,
     look: HairLook,
     lights: List[HairLight],
     camera: Vector3,
     ambient: Vector3,
-) -> List[Float32]:
-    """Return every point's color, linear, three floats a point.
-
-    Args:
-        groom: The strands, in the frame the lights and the camera are
-            given in.
-        look: How the fibers scatter light.
-        lights: The distant lights.
-        camera: Where the camera is.
-        ambient: The light from all round, linear.
-
-    Returns:
-        Three floats per point of the groom, in its order.
-    """
-    var colors = List[Float32](capacity=len(groom.points) * 3)
+    mut colors: List[Float32],
+    optical_depths: List[Float32],
+):
+    """Fill checked color storage with the shared strand-shading arithmetic."""
     for strand in range(len(groom)):  # pragma: no branch
         var shade = groom.shades[strand]
         var base = look.color * shade
@@ -292,7 +281,10 @@ def shade_groom(
                 var facing = _saturate(
                     (n.dot(light.direction) + Float32(0.3)) * 2
                 )
-                var shadow = max(1 - look.shadows, facing * buried)
+                var transmission = buried
+                if len(optical_depths) > 0:
+                    transmission = exp(-optical_depths[index * len(lights) + l])
+                var shadow = max(1 - look.shadows, facing * transmission)
                 # Light that diffuses through a fiber crosses it twice,
                 # so its pigment tints it twice: pale hair stays golden
                 # and does not wash out to white.
@@ -304,10 +296,83 @@ def shade_groom(
                 )
                 var lit = diffuse * shadow + specular * shadow
                 sum = sum + _times(lit, light.radiance)
-            colors.append(sum.x)
-            colors.append(sum.y)
-            colors.append(sum.z)
+            colors[index * 3] = sum.x
+            colors[index * 3 + 1] = sum.y
+            colors[index * 3 + 2] = sum.z
+
+
+def shade_groom(
+    groom: HairGroom,
+    look: HairLook,
+    lights: List[HairLight],
+    camera: Vector3,
+    ambient: Vector3,
+) -> List[Float32]:
+    """Return every point's color, linear, three floats a point.
+
+    Args:
+        groom: The strands, in the frame of the lights and camera.
+        look: The fiber's color and scattering parameters.
+        lights: The distant lights.
+        camera: Where the camera is.
+        ambient: The light from all round, linear.
+
+    Returns:
+        Three floats per point, using the groom's scalp-depth proxy.
+    """
+    var colors = List[Float32](length=len(groom.points) * 3, fill=0)
+    _shade_groom_into(
+        groom, look, lights, camera, ambient, colors, List[Float32]()
+    )
     return colors^
+
+
+def shade_groom_into(
+    groom: HairGroom,
+    look: HairLook,
+    lights: List[HairLight],
+    camera: Vector3,
+    ambient: Vector3,
+    mut colors: List[Float32],
+    optical_depths: List[Float32],
+) raises:
+    """Shade a moving groom into existing color storage.
+
+    The optional optical depths replace the static scalp-depth proxy for
+    direct-light attenuation. The ambient term still uses groom.depths.
+    The scattering and normal-facing terms are the ordinary groom's.
+
+    Args:
+        groom: The strands, in the frame of the lights and camera.
+        look: The fiber's color and scattering parameters.
+        lights: The distant lights.
+        camera: Where the camera is.
+        ambient: The light from all round, linear.
+        colors: Existing storage with three floats per groom point.
+        optical_depths: Point-major, one nonnegative finite optical depth
+            per light, or empty to use the scalp-depth proxy.
+
+    Raises:
+        Error: If either array has the wrong size, a shading field is
+            missing, or an optical depth is negative or not finite.
+    """
+    var count = len(groom.points)
+    if len(colors) != count * 3:
+        raise Error("Hair color storage needs three floats per point")
+    if (
+        len(groom.normals) != count
+        or len(groom.depths) != count
+        or len(groom.shades) != len(groom)
+    ):
+        raise Error("Hair shading fields must match the groom")
+    if len(optical_depths) != 0 and len(optical_depths) != count * len(lights):
+        raise Error("Hair optical depths need one value per point and light")
+    for index in range(len(optical_depths)):
+        if not isfinite(optical_depths[index]) or optical_depths[index] < 0:
+            raise Error("Hair optical depth must be finite and nonnegative")
+    _shade_groom_into(
+        groom, look, lights, camera, ambient, colors, optical_depths
+    )
 
 
 def segment_colors(groom: HairGroom, colors: List[Float32]) -> List[Float32]:
