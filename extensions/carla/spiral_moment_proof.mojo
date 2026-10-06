@@ -31,7 +31,12 @@ from extensions.carla.curve_trig import (
     _INV_HALF_PI,
     _PHASE_LIMIT,
 )
-from extensions.carla.geometry import RoadGeometry, SPIRAL, _GL_NODES, _GL_WEIGHTS
+from extensions.carla.geometry import (
+    RoadGeometry,
+    SPIRAL,
+    _GL_NODES,
+    _GL_WEIGHTS,
+)
 from math.vector3 import Vector3
 from std.math import floor, inf, isfinite
 
@@ -122,7 +127,9 @@ def _ideal_coefficient(value: _Interval) -> _Jet:
     return _Jet(value, zero, zero, 0.0)
 
 
-def _ideal_moment_polynomial(coefficients: Array[_Interval, 11], z: _Jet) -> _Jet:
+def _ideal_moment_polynomial(
+    coefficients: Array[_Interval, 11], z: _Jet
+) -> _Jet:
     var result = _ideal_coefficient(coefficients[10])
     var j = 9
     while j >= 0:
@@ -193,7 +200,11 @@ def _try_spiral_moment_expansion(
     var domain = d.rounded_value()
     # Reject every clamped or possibly clamped join. The unchanged evaluator
     # remains responsible for endpoints, unknowns, and count/quadrant joins.
-    if not domain.is_finite() or domain.low <= 0.0 or domain.high >= geometry.length:
+    if (
+        not domain.is_finite()
+        or domain.low <= 0.0
+        or domain.high >= geometry.length
+    ):
         return None
     if not d.first.is_finite() or not d.second.is_finite():
         return None
