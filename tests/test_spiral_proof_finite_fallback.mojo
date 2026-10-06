@@ -10,14 +10,26 @@ reordered moment derivatives lose finiteness and must take generic fallback.
 """
 
 from extensions.carla.curve_bounds import (
-    _finite_spiral_moment_jet, _finite_spiral_moment_branch,
-    _geometry_distance, _spiral_counts, _reference_work, _spiral_jet,
-    _lane_jet, _lane_jet_with_proof, _union_points,
+    _finite_spiral_moment_jet,
+    _finite_spiral_moment_branch,
+    _geometry_distance,
+    _spiral_counts,
+    _reference_work,
+    _spiral_jet,
+    _lane_jet,
+    _lane_jet_with_proof,
+    _union_points,
 )
-from extensions.carla.curve_interval import _Interval, _Jet, _next_down, _next_up
+from extensions.carla.curve_interval import (
+    _Interval,
+    _Jet,
+    _next_down,
+    _next_up,
+)
 from extensions.carla.lane_refinement import _checked_center
 from extensions.carla.spiral_domain_proof import (
-    _spiral_proof_branch, _spiral_proof_matches,
+    _spiral_proof_branch,
+    _spiral_proof_matches,
 )
 from math.vector3 import Vector3
 from std.math import inf
@@ -25,7 +37,10 @@ from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true, assert_false
 from tests._spiral_domain_controls import _jet_bits, _point_bits, _interval_bits
 from tests._spiral_acceptance_controls import (
-    _acceptance_road, _capture_acceptance_proof, _assert_acceptance_hit, _narrow_high,
+    _acceptance_road,
+    _capture_acceptance_proof,
+    _assert_acceptance_hit,
+    _narrow_high,
 )
 from tests._spiral_domain_controls import _proof
 
@@ -59,10 +74,16 @@ def test_ordinary_single_count_still_uses_the_finite_moment_branch() raises:
     var road = _acceptance_road()
     var proof = _capture_acceptance_proof(road, 0.5, _narrow_high())
     _assert_acceptance_hit(road, 0.5, _narrow_high(), proof)
-    var d = _geometry_distance(road.info.geometries[0].geometry, _Jet.variable(0.5, _narrow_high()))
-    var branch = _spiral_proof_branch(proof, road.info.geometries[0].geometry, d, 2)
+    var d = _geometry_distance(
+        road.info.geometries[0].geometry, _Jet.variable(0.5, _narrow_high())
+    )
+    var branch = _spiral_proof_branch(
+        proof, road.info.geometries[0].geometry, d, 2
+    )
     assert_true(_finite_spiral_moment_branch(branch))
-    var actual = _lane_jet_with_proof(road, 0, 0, 0.5, _narrow_high(), 0.5, _narrow_high(), proof)
+    var actual = _lane_jet_with_proof(
+        road, 0, 0, 0.5, _narrow_high(), 0.5, _narrow_high(), proof
+    )
     assert_true(_finite_spiral_moment_branch(actual))
     _jet_bits(actual[0], branch[0])
 
@@ -76,7 +97,11 @@ def test_two_finite_count_branches_keep_the_intentional_whole_derivative_union()
     var counts = _spiral_counts(geometry, d)
     assert_equal(counts[0], 2)
     assert_equal(counts[1], 3)
-    assert_true(_spiral_proof_matches(proof, geometry, 0, 0.99, 1.01, 0.99, 1.01, d, counts))
+    assert_true(
+        _spiral_proof_matches(
+            proof, geometry, 0, 0.99, 1.01, 0.99, 1.01, d, counts
+        )
+    )
     var first = _spiral_proof_branch(proof, geometry, d, 2)
     var last = _spiral_proof_branch(proof, geometry, d, 3)
     assert_true(_finite_spiral_moment_branch(first))
@@ -90,8 +115,10 @@ def test_two_finite_count_branches_keep_the_intentional_whole_derivative_union()
     assert_false(cached[0].second.is_finite())
     var generic = _lane_jet(road, 0, 0, 0.99, 1.01)
     assert_true(
-        bitcast[DType.uint64](cached[0].value.low) != bitcast[DType.uint64](generic[0].value.low)
-        or bitcast[DType.uint64](cached[0].value.high) != bitcast[DType.uint64](generic[0].value.high)
+        bitcast[DType.uint64](cached[0].value.low)
+        != bitcast[DType.uint64](generic[0].value.low)
+        or bitcast[DType.uint64](cached[0].value.high)
+        != bitcast[DType.uint64](generic[0].value.high)
     )
     assert_equal(_reference_work(road, 0.99, 1.01), 25)
 
@@ -117,13 +144,18 @@ def test_nonfinite_first_or_second_rounded_branch_falls_back_before_union() rais
             proof.first_x_error = largest
         else:
             proof.last_x_error = largest
-        assert_true(_spiral_proof_matches(proof, geometry, 0, 0.99, 1.01, 0.99, 1.01, d, counts))
+        assert_true(
+            _spiral_proof_matches(
+                proof, geometry, 0, 0.99, 1.01, 0.99, 1.01, d, counts
+            )
+        )
         var first = _spiral_proof_branch(proof, geometry, d, 2)
         var last = _spiral_proof_branch(proof, geometry, d, 3)
         assert_equal(_finite_spiral_moment_branch(first), branch_index != 0)
         assert_equal(_finite_spiral_moment_branch(last), branch_index != 1)
         _point_bits(
-            _lane_jet_with_proof(road, 0, 0, 0.99, 1.01, 0.99, 1.01, proof), generic,
+            _lane_jet_with_proof(road, 0, 0, 0.99, 1.01, 0.99, 1.01, proof),
+            generic,
         )
         assert_equal(_reference_work(road, 0.99, 1.01), 25)
 
@@ -144,12 +176,18 @@ def test_extreme_rate_reference_candidate_rejects_overflowed_moment_derivatives(
     assert_equal(counts[0], 3)
     assert_equal(counts[1], 3)
     assert_equal(_reference_work(road, low, high), 15)
-    assert_true(_spiral_proof_matches(proof, geometry, 0, low, high, low, high, d, counts))
+    assert_true(
+        _spiral_proof_matches(
+            proof, geometry, 0, low, high, low, high, d, counts
+        )
+    )
     var original = _spiral_jet(geometry, d, 3, Vector3(0, 0, 0))
     assert_true(_finite_spiral_moment_branch(original))
     var generic = _lane_jet(road, 0, 0, low, high)
     assert_true(_finite_spiral_moment_branch(generic))
-    var rate = _Jet.constant((geometry.curvature_end - geometry.curvature_start) / geometry.length)
+    var rate = _Jet.constant(
+        (geometry.curvature_end - geometry.curvature_start) / geometry.length
+    )
     var u = _Jet.constant(0.5) * rate * d * d
     var z = u * u
     assert_true(u.second.is_finite())
@@ -160,7 +198,9 @@ def test_extreme_rate_reference_candidate_rejects_overflowed_moment_derivatives(
     assert_true(reordered[0].rounded_value().is_finite())
     assert_true(reordered[1].rounded_value().is_finite())
     assert_false(_finite_spiral_moment_branch(reordered))
-    _point_bits(_lane_jet_with_proof(road, 0, 0, low, high, low, high, proof), generic)
+    _point_bits(
+        _lane_jet_with_proof(road, 0, 0, low, high, low, high, proof), generic
+    )
     var terms = 0
     # This final scalar containment is provided by the unchanged generic
     # fallback and its original captured/propagated error model.
