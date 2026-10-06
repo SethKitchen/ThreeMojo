@@ -83,7 +83,7 @@ from extensions.carla.spiral_domain_proof import (
 from extensions.carla.lane_box_cover import (
     _LaneBoxCover,
     _lane_cover_can_improve,
-    _sampled_lane_box_cover,
+    _sampled_lane_box_cover_fast as _sampled_lane_box_cover,
 )
 from extensions.carla.curve_distance import (
     _finite_point,
