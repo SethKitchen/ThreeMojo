@@ -114,6 +114,7 @@ from extensions.carla.road_info import (
     sort_infos,
 )
 from math.vector3 import Vector3
+from std.memory import bitcast
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -601,9 +602,8 @@ def test_straight_lanes() raises:
 
 def test_lane_transforms() raises:
     var map = load_opendrive_file(TOWN)
-    # Positions retain CARLA parity. Corrected orientations come from
-    # tools/generate_carla_lane_orientation_controls.py, which reads only
-    # the authored town XML and independent geometry equations.
+    # Ordinary positions retain their original tolerances. Lane angles use
+    # the independently differentiated stored lane graph in the oracle.
     var t = map.compute_transform(_w(1, 0, -1, 10.0))
     _near(t.location, 10.0, 1.75, 0.0)
     assert_almost_equal(t.rotation.yaw, 0.0, atol=1e-5)
@@ -875,12 +875,111 @@ def test_lane_markings_and_change() raises:
 # --- nearest waypoints ------------------------------------------------------
 
 
+def _assert_town_segment_index(map: Map) raises:
+    # The public view is the actual nearest-waypoint index. Subdivision may
+    # change its count, but not lane order or parameter coverage. Every town
+    # lane is longer than the index's existing inward endpoint inset.
+    var index = 0
+    var lane_count = 0
+    for r in range(len(map.roads)):
+        ref road = map.roads[r]
+        for sec in range(len(road.sections)):
+            ref section = road.sections[sec]
+            var boundaries = List[Float64]()
+            for record in road.info.geometries:
+                boundaries.append(record.s)
+                for sample in record.geometry.samples:
+                    boundaries.append(record.s + sample.s)
+            for record in road.info.elevations:
+                boundaries.append(record.s)
+            for record in road.info.lane_offsets:
+                boundaries.append(record.s)
+            for lane in section.lanes:
+                for record in lane.info.widths:
+                    boundaries.append(record.s)
+            for ln in range(len(section.lanes)):
+                var lane = section.lanes[ln].id
+                if lane.value == 0:
+                    continue
+                lane_count += 1
+                var positive = road.is_rht == (lane.value < 0)
+                var start = section.s
+                var end = start + road.section_length(sec)
+                var begin = index
+                var previous = Float64(0.0)
+                while index < map.segment_count():
+                    var segment = map.segment(index)
+                    var first = segment[2]
+                    var second = segment[3]
+                    if (
+                        first.road_id != road.id
+                        or first.section_id != section.id
+                        or first.lane_id != lane
+                    ):
+                        break
+                    assert_equal(second.road_id, road.id)
+                    assert_equal(second.section_id, section.id)
+                    assert_equal(second.lane_id, lane)
+                    assert_true(
+                        second.s >= first.s if positive else second.s <= first.s
+                    )
+                    if index == begin:
+                        assert_almost_equal(
+                            first.s, start if positive else end, atol=1e-4
+                        )
+                    else:
+                        assert_true(
+                            first.s
+                            >= previous if positive else first.s
+                            <= previous
+                        )
+                        # A record split leaves at most one representable step;
+                        # no Float64 parameter is missing between its two sides.
+                        var low_bits = bitcast[DType.uint64](
+                            min(previous, first.s)
+                        )
+                        var high_bits = bitcast[DType.uint64](
+                            max(previous, first.s)
+                        )
+                        assert_true(high_bits - low_bits <= UInt64(1))
+                    var low = min(first.s, second.s)
+                    var high = max(first.s, second.s)
+                    assert_true(low >= start)
+                    assert_true(high <= end)
+                    for boundary in boundaries:
+                        assert_false(low < boundary and high >= boundary)
+                    # These are the cached full-evaluator boxes, not the
+                    # endpoint boxes. Sample containment is only a sanity
+                    # check; it does not prove the unsampled extrema bound.
+                    var box = map._segments[index].bounds
+                    assert_true(box[0].is_finite())
+                    assert_true(box[1].is_finite())
+                    assert_true(box[2].is_finite())
+                    for sample in range(5):
+                        var s = low + Float64(sample) * 0.25 * (high - low)
+                        if sample == 4:
+                            s = high
+                        var center = road._lane_center(sec, ln, s)
+                        assert_true(box[0].contains(center[0]))
+                        assert_true(box[1].contains(center[1]))
+                        assert_true(box[2].contains(center[2]))
+                    previous = second.s
+                    index += 1
+                assert_true(index > begin)
+                assert_almost_equal(
+                    previous, end if positive else start, atol=1e-4
+                )
+    assert_equal(lane_count, 26)
+    assert_equal(index, map.segment_count())
+
+
 def test_closest_waypoints() raises:
     var map = load_opendrive_file(TOWN)
-    # Independent XML/geometry reconstruction of the heading threshold:
-    # tools/generate_carla_lane_orientation_controls.py.
-    assert_equal(map.segment_count(), 230)
-    # Values from the Python copy of `GetClosestWaypointOnRoad`.
+    # Record and sampled-center splits refine the original heading partition.
+    assert_equal(map.segment_count(), 987)
+    _assert_town_segment_index(map)
+    # Ordinary CARLA queries. The ARC and shoulder minima use independent
+    # stored-expression and rounded-error bounds; see the correction controls.
     _same(
         map.closest_waypoint_on_road(Vector3(20, 1, 0)).value(), 1, 0, -1, 20.0
     )
@@ -889,7 +988,7 @@ def test_closest_waypoints() raises:
         11,
         0,
         -1,
-        15.603252062536761,
+        15.7079632679489652901,
     )
     _same(
         map.closest_waypoint_on_road(
@@ -935,7 +1034,7 @@ def test_closest_waypoints() raises:
         5,
         0,
         -2,
-        6.0,
+        4.5865313100931020167,
     )
     assert_false(map.closest_waypoint_on_road(Vector3(0, 0, 0), LANE_TRAM))
     with assert_raises():
@@ -952,6 +1051,8 @@ def test_closest_waypoints() raises:
         _ = map.segment(-1)
     with assert_raises():
         _ = map.segment(1000)
+    with assert_raises():
+        _ = map.segment(map.segment_count())
 
 
 def test_waypoint_xodr() raises:
@@ -2405,10 +2506,18 @@ def test_gentle_long_curve_is_split_by_distance() raises:
         geometry^, 0.000001
     )
     var map = builder.build()
-    # Total turn is only 0.00025 radians, below the 0.0314-radian angle threshold.
-    # Three pieces therefore come from the 100-meter distance cap and final tail.
-    assert_equal(map.segment_count(), 3)
-    assert_almost_equal(Float64(map.segment(2)[1].x), 250, atol=0.01)
+    # Total turn is below the 0.0314-radian angle threshold. The distance
+    # trigger gives 101 m, 101 m, and a 48 m tail. Each 101 m chord has a
+    # 1.275127 mm sagitta and splits in half; the tail is below 1 mm.
+    assert_equal(map.segment_count(), 5)
+    var stations: List[Float64] = [0.0, 50.5, 101.0, 151.5, 202.0, 249.999999]
+    for i in range(5):
+        var segment = map.segment(i)
+        _same(segment[2], 1, 0, -1, stations[i])
+        _same(segment[3], 1, 0, -1, stations[i + 1])
+        if i > 0:
+            assert_equal(map.segment(i - 1)[3].s, segment[2].s)
+    assert_almost_equal(Float64(map.segment(4)[1].x), 250, atol=0.01)
 
 
 def main() raises:
