@@ -23,7 +23,7 @@ def input_paths(root):
         for name in sorted(files):
             path = relative / name
             if (path.parts[0] == 'assets' or name == 'Makefile'
-                    or path.suffix in {'.mojo', '.py', '.json', '.toml', '.yaml', '.yml', '.mjs'}):
+                    or path.suffix in {'.mojo', '.py', '.json', '.toml', '.yaml', '.yml', '.mjs', '.c', '.h'}):
                 yield path
 
 
