@@ -524,6 +524,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Simulation-driven walker gait](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-rendering#walker-gait): alternating capsule limbs, smooth stops, capture-independent timing, and deterministic recorded playback [#290](https://github.com/SethKitchen/ThreeMojo/issues/290)
 
 - [x] [CARLA](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA): OpenDRIVE maps, physics, the world, every sensor, the traffic manager, agents, the recorder and town rendering [#263](https://github.com/SethKitchen/ThreeMojo/issues/263)
+- [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): wide stored-center comparisons and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)
 - [x] [Dimension-safe R-tree packing](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-geometry#find-the-nearest-segment): volume, area, and length costs keep planar and linear trees spatially packed [#583](https://github.com/SethKitchen/ThreeMojo/issues/583)
 - [x] [Translation-stable traffic curvature](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-traffic-manager#curve-radius-and-coordinate-precision): widened circle radii and speed caps retain the absolute near-line cutoff [#489](https://github.com/SethKitchen/ThreeMojo/issues/489)
 
