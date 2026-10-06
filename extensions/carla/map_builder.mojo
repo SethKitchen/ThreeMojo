@@ -36,6 +36,7 @@ chord approximation instead of CARLA's ten-step walk. See `junction_bounds`.
 Source: CARLA 1360bb9, `LibCarla/source/carla/road/MapBuilder.cpp`.
 """
 
+from extensions.carla.curve_sum2 import _require_sum2_environment
 from extensions.carla.geo import GeoLocation, GeoProjection
 from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
 from extensions.carla.map_validation import (
@@ -1609,8 +1610,10 @@ struct MapBuilder(Movable):
         Raises:
             Error: If a signal reference names no signal, a junction
                 connects a road the map lacks, or a record a step needs is
-                missing.
+                missing, or the floating-point mode is not round-to-nearest
+                with gradual underflow.
         """
+        _require_sum2_environment()
         self._build_work = _MapBuildWork(budget)
         _preflight_map_records(self.roads, self._build_work)
         _preflight_map_metadata(
