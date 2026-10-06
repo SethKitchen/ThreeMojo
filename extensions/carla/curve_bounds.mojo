@@ -11,8 +11,15 @@ branch has no finite derivative certificate. Search policy and work limits
 live in lane_refinement, not here.
 """
 
+from extensions.carla.curve_sum2 import (
+    _sum2_error_checked,
+    _sum2_supported_environment,
+)
 from extensions.carla.curve_interval import (
     _tight_sum_bound,
+    _stored_difference,
+    _stored_half,
+    _stored_blend_error,
     _tight_quotient_bound,
     _tight_square_bound,
     _Interval,
@@ -126,6 +133,14 @@ def _spiral_expression[
     _JetExpression[derivatives],
 ]:
     comptime Expression = _JetExpression[derivatives]
+    if not _sum2_supported_environment():
+        var unknown = Expression(
+            _Interval.whole(),
+            _Interval.whole(),
+            _Interval.whole(),
+            inf[DType.float64](),
+        )
+        return (unknown, unknown, unknown)
     var k0 = Expression.constant(geometry.curvature_start)
     var rate = Expression.constant(
         (geometry.curvature_end - geometry.curvature_start) / geometry.length
@@ -135,36 +150,50 @@ def _spiral_expression[
     var weights = materialize[_GL_WEIGHTS]()
     var x = Expression.constant(0.0)
     var y = Expression.constant(0.0)
+    var x_magnitude = _Interval.point(0.0)
+    var y_magnitude = _Interval.point(0.0)
+    var x_inherited = _Interval.point(0.0)
+    var y_inherited = _Interval.point(0.0)
     var piece = 0
     while piece < pieces:
         var start = step * Expression.constant(Float64(piece))
         var i = 0
         while i < 5:
-            var t = start + step * Expression.constant(
-                0.5
-            ) * Expression.constant(1.0 + nodes[i])
+            var t = start + _stored_half(step) * Expression.constant(
+                1.0 + nodes[i]
+            )
             var theta = Expression.constant(geometry.heading) + t * (
-                k0 + Expression.constant(0.5) * rate * t
+                k0 + _stored_half(rate) * t
             )
             var trig = _sincos_expression(theta)
-            x = (
-                x
-                + step
-                * Expression.constant(0.5)
-                * Expression.constant(weights[i])
-                * trig[1]
+            var term_x = (
+                _stored_half(step) * Expression.constant(weights[i]) * trig[1]
             )
-            y = (
-                y
-                + step
-                * Expression.constant(0.5)
-                * Expression.constant(weights[i])
-                * trig[0]
+            var term_y = (
+                _stored_half(step) * Expression.constant(weights[i]) * trig[0]
             )
+            # The exact-real value and derivatives still describe the same
+            # polynomial sum. Scalar error follows the materialized Sum2 graph.
+            x = x + term_x
+            y = y + term_y
+            x_magnitude = x_magnitude + _Interval.point(
+                term_x.rounded_value().magnitude()
+            )
+            y_magnitude = y_magnitude + _Interval.point(
+                term_y.rounded_value().magnitude()
+            )
+            x_inherited = x_inherited + _Interval.point(term_x.error)
+            y_inherited = y_inherited + _Interval.point(term_y.error)
             i += 1
         piece += 1
+    x.error = _sum2_error_checked(
+        x_magnitude.high, x_inherited.high, 5 * pieces
+    )
+    y.error = _sum2_error_checked(
+        y_magnitude.high, y_inherited.high, 5 * pieces
+    )
     var heading = Expression.constant(geometry.heading) + d * (
-        k0 + Expression.constant(0.5) * rate * d
+        k0 + _stored_half(rate) * d
     )
     return (
         (
@@ -217,6 +246,9 @@ def _sample_blend_jet(rate: _Jet, one: Float64, two: Float64) -> _Jet:
     result.value = _intersect_ideal_bounds(result.value, ideal.value)
     result.first = _intersect_ideal_bounds(result.first, ideal.first)
     result.second = _intersect_ideal_bounds(result.second, ideal.second)
+    var coupled_error = _stored_blend_error(rate, one, two)
+    if isfinite(coupled_error) and coupled_error >= 0.0:
+        result.error = min(result.error, coupled_error)
     return result
 
 
@@ -226,12 +258,16 @@ def _sample_jet(
     var one = geometry.samples[index]
     var two = geometry.samples[index + 1]
     # The same expression and endpoint convention as RoadGeometry._sampled.
-    var rate = (_Jet.constant(two.s) - d) / _Jet.constant(two.s - one.s)
+    var rate = _stored_difference(_Jet.constant(two.s), d) / _Jet.constant(
+        two.s - one.s
+    )
     var u = _sample_blend_jet(rate, one.u, two.u)
     var v = _sample_blend_jet(rate, one.v, two.v)
     var tu = _sample_blend_jet(rate, one.tu, two.tu)
     var tv = _sample_blend_jet(rate, one.tv, two.tv)
-    var heading = _atan_jet(tv)
+    var heading = _Jet.constant(0.0)
+    if geometry.kind != PARAM_POLY3:
+        heading = _atan_jet(tv)
     if geometry.kind == PARAM_POLY3:
         heading = _atan2_jet(tv, tu)
         var domain = d.rounded_value()
@@ -403,7 +439,8 @@ def _reference_work(road: Road, low: Float64, high: Float64) -> Int:
     if record.geometry.kind != SPIRAL:
         return 1
     var d = _geometry_distance(
-        record.geometry, _Jet.variable(low, high) - _Jet.constant(record.s)
+        record.geometry,
+        _stored_difference(_Jet.variable(low, high), _Jet.constant(record.s)),
     )
     var counts = _spiral_counts(record.geometry, d)
     if counts[0] < 1 or counts[1] - counts[0] > 1:
@@ -502,7 +539,9 @@ def _try_lane_envelope_capture(
         return None
     var d = _geometry_distance(
         geometry,
-        _Jet.variable(low, high) - _Jet.constant(road.info.geometries[at].s),
+        _stored_difference(
+            _Jet.variable(low, high), _Jet.constant(road.info.geometries[at].s)
+        ),
     )
     var counts = _spiral_counts(geometry, d)
     if (
@@ -582,6 +621,19 @@ def _finite_spiral_moment_branch(point: Tuple[_Jet, _Jet, _Jet]) -> Bool:
     )
 
 
+def _finite_spiral_ideal_branch(point: Tuple[_Jet, _Jet, _Jet]) -> Bool:
+    # A translated expansion has deliberately infinite scalar error. Only
+    # its real-expression value and derivatives can enter the Taylor bound.
+    for value in [point[0], point[1], point[2]]:
+        if not (
+            value.value.is_finite()
+            and value.first.is_finite()
+            and value.second.is_finite()
+        ):
+            return False
+    return True
+
+
 def _lane_jet_model_proof[
     capture: Bool
 ](
@@ -595,7 +647,12 @@ def _lane_jet_model_proof[
     root_low: Float64,
     root_high: Float64,
     mut captured: _SpiralRootCapture,
+    ideal_translation: Bool = False,
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
+    # A supplied cached proof was captured under a checked arithmetic mode.
+    # Recheck this invocation before record/profile selection can reuse it.
+    if proof and not _sum2_supported_environment():
+        return _unknown_point()
     var geometry_at = info_index(road.info.geometries, low)
     var elevation_at = info_index(road.info.elevations, low)
     var offset_at = info_index(road.info.lane_offsets, low)
@@ -635,12 +692,55 @@ def _lane_jet_model_proof[
             if lanes[i].id != lane_id:
                 offset = offset + sign * width
             else:
-                offset = offset + sign * width * _Jet.constant(0.5)
+                offset = offset + _stored_half(sign * width)
                 done = True
     offset = offset - _polynomial_jet(
         road.info.lane_offsets[offset_at].polynomial, s
     )
     ref record = road.info.geometries[geometry_at]
+    comptime if capture:
+        captured.record_at = geometry_at
+        captured.low = low
+        captured.high = high
+    # These branches consume no generic reference result. Keep the same
+    # expression graphs without constructing a discarded ARC reference or
+    # evaluating the LINE's constant tangent twice.
+    if record.geometry.kind == ARC:
+        var d = _geometry_distance(
+            record.geometry, _stored_difference(s, _Jet.constant(record.s))
+        )
+        var arc = _arc_offset_jet(record.geometry, d, offset, translation)
+        return (
+            arc[0],
+            arc[1],
+            _polynomial_jet(
+                road.info.elevations[elevation_at].polynomial,
+                s,
+                Float64(translation.z),
+            ),
+        )
+    if record.geometry.kind == LINE:
+        var d = _geometry_distance(
+            record.geometry, _stored_difference(s, _Jet.constant(record.s))
+        )
+        var trig = _constant_sincos_jet(record.geometry.heading)
+        var x = (
+            _Jet.constant(record.geometry.x)
+            - _Jet.constant(Float64(translation.x))
+        ) + d * trig[1]
+        var y = (
+            _Jet.constant(record.geometry.y)
+            + _Jet.constant(Float64(translation.y))
+        ) + d * trig[0]
+        return (
+            x + offset * trig[0],
+            y - offset * trig[1],
+            _polynomial_jet(
+                road.info.elevations[elevation_at].polynomial,
+                s,
+                Float64(translation.z),
+            ),
+        )
     var reused: Optional[Tuple[_Jet, _Jet, _Jet]] = None
     comptime if not capture:
         if proof:
@@ -649,12 +749,18 @@ def _lane_jet_model_proof[
             if (
                 record.geometry.kind == SPIRAL
                 and proof.value().record_at == geometry_at
-                and translation.x == 0.0
-                and translation.y == 0.0
-                and translation.z == 0.0
+                and (
+                    ideal_translation
+                    or (
+                        translation.x == 0.0
+                        and translation.y == 0.0
+                        and translation.z == 0.0
+                    )
+                )
             ):
                 var d = _geometry_distance(
-                    record.geometry, s - _Jet.constant(record.s)
+                    record.geometry,
+                    _stored_difference(s, _Jet.constant(record.s)),
                 )
                 var counts = _spiral_counts(record.geometry, d)
                 if _spiral_proof_matches(
@@ -669,16 +775,32 @@ def _lane_jet_model_proof[
                     counts,
                 ):
                     var first = _spiral_proof_branch(
-                        proof.value(), record.geometry, d, counts[0]
+                        proof.value(),
+                        record.geometry,
+                        d,
+                        counts[0],
+                        translation,
                     )
-                    if _finite_spiral_moment_branch(first):
+                    if _finite_spiral_ideal_branch(
+                        first
+                    ) if ideal_translation else _finite_spiral_moment_branch(
+                        first
+                    ):
                         if counts[0] == counts[1]:
                             reused = first
                         else:
                             var last = _spiral_proof_branch(
-                                proof.value(), record.geometry, d, counts[1]
+                                proof.value(),
+                                record.geometry,
+                                d,
+                                counts[1],
+                                translation,
                             )
-                            if _finite_spiral_moment_branch(last):
+                            if _finite_spiral_ideal_branch(
+                                last
+                            ) if ideal_translation else _finite_spiral_moment_branch(
+                                last
+                            ):
                                 reused = _union_points(first, last)
                     # A nonfinite reordered branch leaves reuse absent. The
                     # original reference below runs under the same already
@@ -688,31 +810,12 @@ def _lane_jet_model_proof[
         point = reused.value()
     else:
         point = _reference_jet_capture[capture](
-            record.geometry, s - _Jet.constant(record.s), translation, captured
+            record.geometry,
+            _stored_difference(s, _Jet.constant(record.s)),
+            translation,
+            captured,
         )
-    comptime if capture:
-        captured.record_at = geometry_at
-        captured.low = low
-        captured.high = high
-    if record.geometry.kind == ARC:
-        var d = _geometry_distance(record.geometry, s - _Jet.constant(record.s))
-        var arc = _arc_offset_jet(record.geometry, d, offset, translation)
-        return (
-            arc[0],
-            arc[1],
-            _polynomial_jet(
-                road.info.elevations[elevation_at].polynomial,
-                s,
-                Float64(translation.z),
-            ),
-        )
-    var trig: Tuple[_Jet, _Jet]
-    if record.geometry.kind == LINE:
-        # Structural provenance: the reference tangent is exactly the stored
-        # geometry heading, regardless of changing lane widths and offsets.
-        trig = _constant_sincos_jet(record.geometry.heading)
-    else:
-        trig = _sincos_jet(point[2])
+    var trig = _sincos_jet(point[2])
     return (
         point[0] + offset * trig[0],
         point[1] - offset * trig[1],
@@ -868,7 +971,9 @@ def _try_proof_expansion_jet(
         return None
     var d = _geometry_distance(
         geometry,
-        _Jet.variable(s, s) - _Jet.constant(road.info.geometries[at].s),
+        _stored_difference(
+            _Jet.variable(s, s), _Jet.constant(road.info.geometries[at].s)
+        ),
     )
     var counts = _spiral_counts(geometry, d)
     if counts[0] != counts[1]:
@@ -877,10 +982,21 @@ def _try_proof_expansion_jet(
         proof.value(), geometry, at, s, s, root_low, root_high, d, counts
     ):
         return None
-    var point = _lane_jet_with_proof(
-        road, section, lane, s, s, root_low, root_high, proof
+    var capture = _SpiralRootCapture()
+    var point = _lane_jet_model_proof[False](
+        road,
+        section,
+        lane,
+        s,
+        s,
+        location,
+        proof,
+        root_low,
+        root_high,
+        capture,
+        ideal_translation=True,
     )
-    var result = _scaled_point_distance_jet(point, location, scale)
+    var result = _scaled_point_distance_jet(point, Vector3(0, 0, 0), scale)
     # The full-domain scalar error remains mandatory in _global_lower.
     # This expansion cannot be used as a standalone rounded-value bound.
     result.error = inf[DType.float64]()
