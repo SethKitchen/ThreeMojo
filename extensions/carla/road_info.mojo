@@ -34,6 +34,16 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/element/RoadInfo*.h`,
 
 from extensions.carla.geometry import RoadGeometry
 from extensions.carla.polynomial import CubicPolynomial
+from extensions.carla.speed_limits import (
+    SpeedLimitKind,
+    NUMERIC_SPEED_LIMIT,
+    NO_SPEED_LIMIT,
+    UNDEFINED_SPEED_LIMIT,
+    UNSPECIFIED_SPEED_LIMIT,
+    opendrive_speed,
+    read_speed_number,
+)
+from units.si import Velocity64
 
 comptime _UINT32_MAX = 4294967295
 comptime _INT32_MIN = -2147483648
@@ -597,18 +607,97 @@ struct RoadInfoLaneRule(RoadInfo):
         return self.s
 
 
-@fieldwise_init
 struct RoadInfoSpeed(RoadInfo):
-    """A speed limit, `RoadInfoSpeed`.
+    """A source speed record with its original unit and explicit limit state.
 
-    CARLA stores the file's `max` as it is written and drops the unit. Its
-    type is "Town" unless a caller names one.
+    Numeric zero, no limit, undefined and a missing road speed remain
+    distinct. `limit` is the checked Velocity64 boundary. The type stays
+    "Town" unless a caller names one, retaining the tree-placement contract.
     """
 
     var s: Float64
-    # The file's `max`, in the file's unit.
+    # The file's number in its original unit; read kind before using it.
     var speed: Float64
     var type: String
+    var unit: String
+    var kind: SpeedLimitKind
+    # Original max text, including keywords. Empty means no road speed.
+    var max_text: String
+
+    def __init__(
+        out self, s: Float64, speed: Float64, type: String, unit: String = ""
+    ) raises:
+        """Create a checked numeric source record.
+
+        Args:
+            s: Where the record starts, in meters.
+            speed: The finite nonnegative source number.
+            type: The retained record type.
+            unit: The source speed unit; omitted means m/s for road/lane data.
+
+        Raises:
+            Error: If the number or source unit is invalid.
+        """
+        _ = opendrive_speed(speed, unit, True)
+        self.s = s
+        self.speed = speed
+        self.type = type
+        self.unit = unit
+        self.kind = NUMERIC_SPEED_LIMIT
+        self.max_text = String(speed)
+
+    @staticmethod
+    def from_opendrive(
+        s: Float64,
+        max_text: String,
+        type: String,
+        unit: String,
+        allow_road_states: Bool,
+    ) raises -> RoadInfoSpeed:
+        """Read a road or lane speed while preserving its source payload.
+
+        Args:
+            s: Where the record starts, in meters.
+            max_text: Original numeric text, or a road keyword.
+            type: The retained record type.
+            unit: Original unit text; omitted road/lane units mean m/s.
+            allow_road_states: Whether no limit, undefined or absent is valid.
+
+        Returns:
+            The checked numeric record, or an explicit nonnumeric road state.
+
+        Raises:
+            Error: If a lane uses a keyword, or a number or unit is invalid.
+        """
+        var out = RoadInfoSpeed(s, 0, type, unit)
+        out.max_text = max_text
+        if allow_road_states and max_text == "no limit":
+            out.kind = NO_SPEED_LIMIT
+        elif allow_road_states and max_text == "undefined":
+            out.kind = UNDEFINED_SPEED_LIMIT
+        elif allow_road_states and max_text == "":
+            out.kind = UNSPECIFIED_SPEED_LIMIT
+        else:
+            out.speed = read_speed_number(max_text)
+            _ = opendrive_speed(out.speed, unit, True)
+        return out^
+
+    def limit(self) raises -> Optional[Velocity64]:
+        """Read a numeric limit without conflating zero with road keywords.
+
+        Returns:
+            A typed numeric limit, including zero; None for other kinds.
+            `kind` distinguishes no limit, undefined and absent.
+
+        Raises:
+            Error: If the mutable kind, number or unit is invalid.
+        """
+        if not self.kind.is_valid():
+            raise Error("Road speed limit kind is not valid")
+        if self.kind != NUMERIC_SPEED_LIMIT:
+            _ = opendrive_speed(0, self.unit, True)
+            return None
+        return opendrive_speed(self.speed, self.unit, True)
 
     def distance(self) -> Float64:
         """Return where the record starts, in meters."""
