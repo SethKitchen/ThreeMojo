@@ -59,6 +59,19 @@ and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 """
 
 from extensions.carla.geo import GeoLocation, GeoProjection
+from extensions.carla.curve_bounds import _reference_work
+from extensions.carla.map_search import (
+    MapBuildBudget,
+    MapQueryBudget,
+    _MapBuildWork,
+    _MapQueryWork,
+)
+from extensions.carla.map_validation import (
+    _preflight_map_records,
+    _reserve_lane_boundaries,
+    _reserve_lane_scalars,
+    _reserve_straightness,
+)
 from extensions.carla.geometry import SPIRAL
 from extensions.carla.curve_interval import _Interval
 from extensions.carla.spiral_domain_proof import (
@@ -82,7 +95,8 @@ from extensions.carla.lane_distance import (
 from extensions.carla.lane_refinement import (
     _LaneCertificate,
     _indexed_curve_lower,
-    _chord_certificate_capture,
+    _chord_certificate_capture_fast_with_nodes as _chord_certificate_capture_with_nodes,
+    _ProofNodeWork,
     _lane_certificate_contains,
     _lane_box_can_improve,
     _lane_certificate_dominates,
@@ -1045,6 +1059,71 @@ def segment_distance_2d(
 # --- the map ------------------------------------------------------------------
 
 
+def _map_locate_with_work(
+    roads: List[Road],
+    index: Dict[Int, Int],
+    waypoint: Waypoint,
+    mut work: _MapBuildWork,
+) raises -> Tuple[Int, Int, Int]:
+    work.step()
+    if not waypoint.road_id.is_valid():
+        raise Error("Road id is not valid")
+    var found = index.get(waypoint.road_id.value)
+    if not found:
+        raise Error("The map has no road with that id")
+    var r = found.value()
+    work.step(len(roads[r].sections))
+    var section = roads[r].section_index(waypoint.section_id)
+    work.step(len(roads[r].sections[section].lanes))
+    var lane = roads[r].sections[section].lane_index(waypoint.lane_id)
+    if lane < 0:
+        raise Error("The section has no lane with that id")
+    return (r, section, lane)
+
+
+def _query_node_step_cost(lanes: Int) raises -> Int:
+    # Solver inventory through width11:3 edge centers,42 local-seed centers,
+    # one initial center, and3 Jets cost at most98*lanes profile visits.
+    # Reserve100*lanes,16 bounded node/cell bookkeeping units, and4 fixed
+    # single-lane binary width-lookup units. The latter cover natural, fast
+    # and fallback accuracy checks; they do not accumulate all lane widths.
+    # A later solver with more centers/Jets needs a new audited inventory.
+    if lanes < 0 or lanes > (9223372036854775807 - 20) // 100:
+        raise Error("Map query profile work is not representable")
+    return 100 * lanes + 20
+
+
+def _preflight_map_metadata(
+    junctions: List[Junction],
+    signals: List[Signal],
+    controllers: List[Controller],
+    mut work: _MapBuildWork,
+) raises:
+    work.record(len(junctions))
+    work.record(len(signals))
+    work.record(len(controllers))
+    for junction in junctions:
+        work.step()
+        work.record(len(junction.connections))
+        work.record(len(junction.controllers))
+        work.record(len(junction.conflict_roads))
+        work.record(len(junction.conflicts))
+        for conflict in junction.conflicts:
+            work.step()
+            work.record(len(conflict))
+        for connection in junction.connections:
+            work.step()
+            work.record(len(connection.lane_links))
+    for signal in signals:
+        work.step()
+        work.record(len(signal.dependencies))
+        work.record(len(signal.controllers))
+    for controller in controllers:
+        work.step()
+        work.record(len(controller.signals))
+        work.record(len(controller.junctions))
+
+
 struct Map(Movable):
     """An OpenDRIVE road network, CARLA's `road::Map` and `MapData`.
 
@@ -1070,6 +1149,7 @@ struct Map(Movable):
     var _tree: SegmentCloudRtree
     var _curve_deviation: Float64
     var _endpoint_scale: Float64
+    var _construction_work: _MapBuildWork
 
     def __init__(
         out self,
@@ -1077,6 +1157,8 @@ struct Map(Movable):
         var junctions: List[Junction],
         var signals: List[Signal],
         var controllers: List[Controller],
+        budget: MapBuildBudget = MapBuildBudget(),
+        _initial_work: Optional[_MapBuildWork] = None,
     ) raises:
         """Hold the data and cut the lanes into segments, `Map(MapData)`.
 
@@ -1085,6 +1167,8 @@ struct Map(Movable):
             junctions: The junctions, in order of id.
             signals: The signals, in order of id.
             controllers: The controllers, in order of id.
+            budget: Finite global spatial-construction limits.
+            _initial_work: Internal continuation of a builder's admitted work.
 
         Raises:
             Error: If a lane's records are missing where the segments need
@@ -1092,6 +1176,16 @@ struct Map(Movable):
                 or Float64 road-s resolution prevents a required split or
                 a positive nonterminal index step.
         """
+        budget.validate()
+        self._construction_work = _MapBuildWork(budget)
+        if _initial_work:
+            self._construction_work = _initial_work.value()
+        self._construction_work.validate()
+        if not _initial_work:
+            _preflight_map_records(roads, self._construction_work)
+            _preflight_map_metadata(
+                junctions, signals, controllers, self._construction_work
+            )
         self.roads = roads^
         self.junctions = junctions^
         self.signals = signals^
@@ -1100,6 +1194,7 @@ struct Map(Movable):
         self.geo_projection = GeoProjection()
         self._road_index = Dict[Int, Int]()
         for i in range(len(self.roads)):
+            self._construction_work.step()
             self._road_index[self.roads[i].id.value] = i
         self._segments = List[_Segment]()
         self._sampled_covers = List[_LaneBoxCover]()
@@ -1159,6 +1254,33 @@ struct Map(Movable):
     def _locate(self, waypoint: Waypoint) raises -> Tuple[Int, Int, Int]:
         var r = self.road_index(waypoint.road_id)
         var section = self.roads[r].section_index(waypoint.section_id)
+        var lane = self.roads[r].sections[section].lane_index(waypoint.lane_id)
+        if lane < 0:
+            raise Error("The section has no lane with that id")
+        return (r, section, lane)
+
+    def _locate_with_work(
+        self, waypoint: Waypoint, mut work: _MapBuildWork
+    ) raises -> Tuple[Int, Int, Int]:
+        return _map_locate_with_work(
+            self.roads, self._road_index, waypoint, work
+        )
+
+    def _build_locate(
+        mut self, waypoint: Waypoint
+    ) raises -> Tuple[Int, Int, Int]:
+        return _map_locate_with_work(
+            self.roads, self._road_index, waypoint, self._construction_work
+        )
+
+    def _query_locate(
+        self, waypoint: Waypoint, mut work: _MapQueryWork
+    ) raises -> Tuple[Int, Int, Int]:
+        work._step()
+        var r = self.road_index(waypoint.road_id)
+        work._step(len(self.roads[r].sections))
+        var section = self.roads[r].section_index(waypoint.section_id)
+        work._step(len(self.roads[r].sections[section].lanes))
         var lane = self.roads[r].sections[section].lane_index(waypoint.lane_id)
         if lane < 0:
             raise Error("The section has no lane with that id")
@@ -1481,7 +1603,10 @@ struct Map(Movable):
     # --- nearest waypoint -----------------------------------------------------
 
     def closest_waypoint_on_road(
-        self, location: Vector3, lane_type: LaneType = LANE_DRIVING
+        self,
+        location: Vector3,
+        lane_type: LaneType = LANE_DRIVING,
+        budget: MapQueryBudget = MapQueryBudget(),
     ) raises -> Optional[Waypoint]:
         """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
 
@@ -1495,6 +1620,7 @@ struct Map(Movable):
         Args:
             location: The point, in CARLA's frame.
             lane_type: The lane types to search.
+            budget: Finite cumulative candidate, refinement, and index limits.
 
         Returns:
             The waypoint, or None if the map has no lane of those types.
@@ -1504,15 +1630,18 @@ struct Map(Movable):
                 refinement exhausts its numerical or work limit, or candidate
                 minimum bounds overlap without a dominance proof.
         """
-        var found = self._closest_lane(location, lane_type)
+        var found = self._closest_lane(location, lane_type, budget)
         if not Bool(found):
             return None
         return found.value()[0]
 
     def _closest_lane(
-        self, location: Vector3, lane_type: LaneType
+        self,
+        location: Vector3,
+        lane_type: LaneType,
+        budget: MapQueryBudget = MapQueryBudget(),
     ) raises -> Optional[Tuple[Waypoint, Float64, Array[Float64, 3]]]:
-        var found = self._closest_lane_certificate(location, lane_type)
+        var found = self._closest_lane_certificate(location, lane_type, budget)
         if not Bool(found):
             return None
         ref selected = found.value()
@@ -1528,8 +1657,20 @@ struct Map(Movable):
         )
 
     def _closest_lane_certificate(
-        self, location: Vector3, lane_type: LaneType
+        self,
+        location: Vector3,
+        lane_type: LaneType,
+        budget: MapQueryBudget = MapQueryBudget(),
     ) raises -> Optional[Tuple[Waypoint, _LaneCertificate]]:
+        var work = _MapQueryWork(budget)
+        return self._closest_lane_certificate_with_work(
+            location, lane_type, work
+        )
+
+    def _closest_lane_certificate_with_work(
+        self, location: Vector3, lane_type: LaneType, mut work: _MapQueryWork
+    ) raises -> Optional[Tuple[Waypoint, _LaneCertificate]]:
+        work.validate()
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
         var query: Array[Float64, 3] = [
@@ -1542,64 +1683,52 @@ struct Map(Movable):
         var certificates = List[_LaneCertificate]()
         var waypoints = List[Waypoint]()
         var best = -1
-        var count = 4
-        var checked = 0
-        var candidates = self._tree.get_nearest_neighbours_with_filter(
-            location, _LaneTypeFilter(lane_type.value), count
-        )
+        var frontier = self._tree._nearest_begin(location, work)
         var best_radius = Float64(0.0)
-        var complete = False
-        while not complete:
-            for i in range(checked, len(candidates)):
-                var index = candidates[i].start_value
-                ref segment = self._segments[index]
-                if best >= 0:
-                    # The frozen #589 key bound and global full-curve
-                    # deviation apply to this key and every later key.
-                    var lower = _indexed_curve_lower(
-                        _segment_distance2(
-                            segment.start, segment.end, location
-                        ),
-                        self._curve_deviation,
-                    )
-                    if lower > best_radius:
-                        complete = True
-                        break
-                    if not _lane_box_can_improve(
-                        segment.bounds, location, certificates[best].point
+        while True:
+            var candidate = self._tree._nearest_next(
+                location, _LaneTypeFilter(lane_type.value), frontier, work
+            )
+            if not candidate:
+                break
+            var index = candidate.value().start_value
+            ref segment = self._segments[index]
+            if best >= 0:
+                var lower = _indexed_curve_lower(
+                    _segment_distance2(segment.start, segment.end, location),
+                    self._curve_deviation,
+                )
+                if lower > best_radius:
+                    break
+                if not _lane_box_can_improve(
+                    segment.bounds, location, certificates[best].point
+                ):
+                    continue
+                if segment.cover_index >= 0:
+                    if not _lane_cover_can_improve(
+                        self._sampled_covers[segment.cover_index],
+                        location,
+                        certificates[best].point,
                     ):
                         continue
-                    if segment.cover_index >= 0:
-                        if not _lane_cover_can_improve(
-                            self._sampled_covers[segment.cover_index],
-                            location,
-                            certificates[best].point,
-                        ):
-                            continue
-                var result = self._nearest_on_segment_certificate(
-                    index, location
-                )
-                var improves = best < 0
-                if best >= 0:
-                    var order = _wide_point_order(
-                        result[1].point, certificates[best].point, query
-                    )
-                    improves = order < 0 or (
-                        order == 0 and index < indices[best]
-                    )
-                if improves:
-                    best = len(indices)
-                    best_radius = _wide_distance_upper(result[1].point, query)
-                indices.append(index)
-                waypoints.append(result[0])
-                certificates.append(result[1].copy())
-            if complete or len(candidates) < count:
-                break
-            checked = len(candidates)
-            count *= 2
-            candidates = self._tree.get_nearest_neighbours_with_filter(
-                location, _LaneTypeFilter(lane_type.value), count
+            # Candidate storage is admitted before refinement or any append.
+            work.candidate()
+            var result = self._nearest_on_segment_certificate(
+                index, location, work
             )
+            var improves = best < 0
+            if best >= 0:
+                var order = _wide_point_order(
+                    result[1].point, certificates[best].point, query
+                )
+                improves = order < 0 or (order == 0 and index < indices[best])
+            if improves:
+                best = len(indices)
+                best_radius = _wide_distance_upper(result[1].point, query)
+            work._step(len(result[1].cells))
+            indices.append(index)
+            waypoints.append(result[0])
+            certificates.append(result[1].copy())
         if best < 0:
             return None
         # Admission's strict full-domain exclusions remain valid
@@ -1607,12 +1736,14 @@ struct Map(Movable):
         var requested_gaps = List[Float64]()
         var requested_scales = List[Float64]()
         for certificate in certificates:
+            work._step(2)
             requested_gaps.append(inf[DType.float64]())
             requested_scales.append(certificate.scale)
         while True:
             # A resumed candidate can change the best stored sample. Recheck
             # all index-sensitive dominance relations after every refinement.
             for i in range(len(indices)):
+                work._step()
                 var order = _wide_point_order(
                     certificates[i].point, certificates[best].point, query
                 )
@@ -1620,6 +1751,7 @@ struct Map(Movable):
                     best = i
             var target = -1
             for i in range(len(indices)):
+                work._step()
                 if i == best:
                     continue
                 if _lane_certificate_dominates(
@@ -1646,6 +1778,10 @@ struct Map(Movable):
                         target = best
                 break
             if target < 0:
+                # A valid wide center does not by itself guarantee that the
+                # selected public pose is finite and has a valid frame.
+                self._validate_query_pose(waypoints[best], work)
+                work._step(len(certificates[best].cells))
                 return (waypoints[best], certificates[best].copy())
             var request = _next_resume_gap(
                 certificates[target],
@@ -1660,6 +1796,7 @@ struct Map(Movable):
                 certificates[target],
                 request,
                 requested_scales[target],
+                work,
             )
             waypoints[target].s = certificates[target].s
 
@@ -1670,9 +1807,16 @@ struct Map(Movable):
         mut certificate: _LaneCertificate,
         requested_gap: Float64,
         request_scale: Float64,
+        mut work: _MapQueryWork,
     ) raises:
+        var previous_nodes = certificate.nodes
+        var previous_terms = certificate.terms
         ref segment = self._segments[index]
-        var at = self._locate(segment.first)
+        var at = self._query_locate(segment.first, work)
+        var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
+        work._step(lane_count)
+        work._step_product(4, len(certificate.cells))
+        var node_cost = _query_node_step_cost(lane_count)
         _resume_lane_certificate(
             self.roads[at[0]],
             at[1],
@@ -1683,13 +1827,22 @@ struct Map(Movable):
             certificate,
             requested_gap,
             request_scale,
+            max_nodes=work.node_cap(previous_nodes, node_cost),
+            max_terms=work.term_cap(previous_terms),
             spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
+        )
+        work.charge(
+            certificate.nodes - previous_nodes,
+            certificate.terms - previous_terms,
+            node_cost,
         )
 
     def _nearest_on_segment(
         self, index: Int, location: Vector3
     ) raises -> Tuple[Waypoint, Float64, Array[Float64, 3]]:
-        var result = self._nearest_on_segment_certificate(index, location)
+        var work = _MapQueryWork(MapQueryBudget())
+        work.candidate()
+        var result = self._nearest_on_segment_certificate(index, location, work)
         var query: Array[Float64, 3] = [
             Float64(location.x),
             Float64(location.y),
@@ -1702,11 +1855,14 @@ struct Map(Movable):
         )
 
     def _nearest_on_segment_certificate(
-        self, index: Int, location: Vector3
+        self, index: Int, location: Vector3, mut work: _MapQueryWork
     ) raises -> Tuple[Waypoint, _LaneCertificate]:
         ref segment = self._segments[index]
         var waypoint = segment.first
-        var at = self._locate(waypoint)
+        var at = self._query_locate(waypoint, work)
+        var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
+        work._step(lane_count)
+        var node_cost = _query_node_step_cost(lane_count)
         var low = min(segment.first.s, segment.second.s)
         var high = max(segment.first.s, segment.second.s)
         var seed = _midpoint(low, high)
@@ -1738,19 +1894,26 @@ struct Map(Movable):
             location,
             seed,
             0.0,
+            max_nodes=work.node_cap(step_cost=node_cost),
+            max_terms=work.term_cap(),
             spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
         )
+        work.charge(result.nodes, result.terms, node_cost)
         waypoint.s = result.s
         return (waypoint, result^)
 
     def waypoint(
-        self, location: Vector3, lane_type: LaneType = LANE_DRIVING
+        self,
+        location: Vector3,
+        lane_type: LaneType = LANE_DRIVING,
+        budget: MapQueryBudget = MapQueryBudget(),
     ) raises -> Optional[Waypoint]:
         """Return the waypoint under a point, `Map::GetWaypoint`.
 
         Args:
             location: The point, in CARLA's frame.
             lane_type: The lane types to search.
+            budget: Finite cumulative candidate, refinement, and index limits.
 
         Returns:
             The nearest waypoint if the point lies within half its lane's
@@ -1761,18 +1924,74 @@ struct Map(Movable):
                 the width record is absent, refinement exhausts a limit, or
                 lane selection or strict cell classification is unresolved.
         """
-        var found = self._closest_lane_certificate(location, lane_type)
+        var work = _MapQueryWork(budget)
+        var found = self._closest_lane_certificate_with_work(
+            location, lane_type, work
+        )
         if not Bool(found):
             return None
         ref selected = found.value()
         var w = selected[0]
-        var at = self._locate(w)
+        var at = self._query_locate(w, work)
+        work._step(len(selected[1].cells))
         var certificate = selected[1].copy()
-        if _lane_certificate_contains(
-            self.roads[at[0]], at[1], at[2], location, certificate
-        ):
+        var node_cost = _query_node_step_cost(
+            len(self.roads[at[0]].sections[at[1]].lanes)
+        )
+        var previous_nodes = certificate.nodes
+        var previous_terms = certificate.terms
+        var contained = _lane_certificate_contains(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            location,
+            certificate,
+            max_nodes=work.node_cap(previous_nodes, node_cost),
+            max_terms=work.term_cap(previous_terms),
+        )
+        work.charge(
+            certificate.nodes - previous_nodes,
+            certificate.terms - previous_terms,
+            node_cost,
+        )
+        if contained:
             return w
         return None
+
+    def _closest_lane_with_build_work(
+        self, location: Vector3, lane_type: LaneType, mut work: _MapBuildWork
+    ) raises -> Optional[Waypoint]:
+        work.validate()
+        var remaining = work.policy.max_steps - work.steps
+        var policy = MapQueryBudget()
+        policy.max_steps = remaining
+        policy.max_nodes = min(policy.max_nodes, remaining)
+        policy.max_terms = min(
+            policy.max_terms, work.policy.max_terms - work.terms
+        )
+        policy.max_index_pops = min(policy.max_index_pops, remaining)
+        var query_work = _MapQueryWork(policy, remaining)
+        var found = self._closest_lane_certificate_with_work(
+            location, lane_type, query_work
+        )
+        work.step(query_work.steps)
+        work.term(query_work.terms)
+        if found:
+            return found.value()[0]
+        return None
+
+    def _validate_query_pose(
+        self, waypoint: Waypoint, mut work: _MapQueryWork
+    ) raises:
+        var at = self._query_locate(waypoint, work)
+        work._step_product(4, len(self.roads[at[0]].sections[at[1]].lanes))
+        var terms = _reference_work(self.roads[at[0]], waypoint.s, waypoint.s)
+        if terms < 0:
+            raise Error("Selected lane pose has unresolved quadrature work")
+        # Two separately checked debits avoid overflow in twice-the-cost.
+        work.charge(1, terms)
+        work.charge(0, terms)
+        _ = self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
 
     def waypoint_xodr(
         self, road_id: RoadId, lane_id: LaneId, s: Length
@@ -2198,6 +2417,40 @@ struct Map(Movable):
                     out.append((start, end))
         return out^
 
+    def _junction_waypoints_with_work(
+        self, id: JuncId, lane_type: LaneType, mut work: _MapBuildWork
+    ) raises -> List[Tuple[Waypoint, Waypoint]]:
+        work.step(len(self.junctions))
+        if not lane_type.is_valid():
+            raise Error("Lane type is not valid")
+        var out = List[Tuple[Waypoint, Waypoint]]()
+        ref junction = self.junction(id)
+        for connection in junction.connections:
+            work.step()
+            work.step(len(self.roads))
+            var r = self.road_index(connection.connecting_road)
+            ref road = self.roads[r]
+            for sec in range(len(road.sections)):
+                work.step()
+                ref section = road.sections[sec]
+                for ln in range(len(section.lanes)):
+                    work.step()
+                    ref lane = section.lanes[ln]
+                    if lane.id.value == 0 or not lane.type.matches(lane_type):
+                        continue
+                    # Each edge helper can scan strict section successors twice.
+                    work.step_product(4, len(road.sections))
+                    var start = Waypoint(
+                        road.id,
+                        section.id,
+                        lane.id,
+                        self._start_of_lane(r, sec, ln),
+                    )
+                    var end = start
+                    end.s = self._end_of_lane(r, sec, ln)
+                    out.append((start, end))
+        return out^
+
     def compute_junction_conflicts(
         self, id: JuncId
     ) raises -> Tuple[List[RoadId], List[List[RoadId]]]:
@@ -2216,6 +2469,13 @@ struct Map(Movable):
         Raises:
             Error: If the junction is not in the map.
         """
+        var work = _MapBuildWork(MapBuildBudget())
+        return self._compute_junction_conflicts_with_work(id, work)
+
+    def _compute_junction_conflicts_with_work(
+        self, id: JuncId, mut work: _MapBuildWork
+    ) raises -> Tuple[List[RoadId], List[List[RoadId]]]:
+        work.step(len(self.junctions))
         ref junction = self.junction(id)
         comptime delta = Float32(0.0001)
         var center = junction.location()
@@ -2233,15 +2493,18 @@ struct Map(Movable):
             ),
         )
         var found = List[Int]()
-        for element in self._tree.get_intersections(box):
+        for element in self._tree._intersections_with_work(box, work):
+            work.step()
             found.append(element.start_value)
         var roads = List[RoadId]()
         var conflicts = List[List[RoadId]]()
         for i in range(len(found)):
+            work.step()
             ref one = self._segments[found[i]]
             if self.road(one.first.road_id).junction_id != id:
                 continue
             for j in range(i + 1, len(found)):
+                work.step()
                 ref two = self._segments[found[j]]
                 if self.road(two.first.road_id).junction_id != id:
                     continue
@@ -2252,11 +2515,11 @@ struct Map(Movable):
                     > 2.0
                 ):
                     continue
-                _add_conflict(
-                    roads, conflicts, one.first.road_id, two.first.road_id
+                _add_conflict_with_work(
+                    roads, conflicts, one.first.road_id, two.first.road_id, work
                 )
-                _add_conflict(
-                    roads, conflicts, two.first.road_id, one.first.road_id
+                _add_conflict_with_work(
+                    roads, conflicts, two.first.road_id, one.first.road_id, work
                 )
         return (roads^, conflicts^)
 
@@ -2828,6 +3091,58 @@ struct Map(Movable):
         ref s = self._segments[index]
         return (s.start, s.end, s.first, s.second)
 
+    def _build_next(
+        mut self, waypoint: Waypoint, distance: Float64
+    ) raises -> Waypoint:
+        # Index construction deliberately stays inside one section. Preserve
+        # _step's scalar arithmetic, but never enter unmetered graph recursion.
+        if not distance > 0.0:
+            raise Error("A step needs a positive distance")
+        if distance <= EPSILON:
+            return waypoint
+        var at = self._build_locate(waypoint)
+        self._construction_work.step(len(self.roads[at[0]].sections))
+        var length = self.roads[at[0]].section_length(at[1])
+        var start = self.roads[at[0]].sections[at[1]].s
+        var forward = self.roads[at[0]].is_positive_direction(waypoint.lane_id)
+        var relative = waypoint.s - start
+        var remaining = length - relative if forward else relative
+        if distance > remaining:
+            raise Error("Map construction step cannot remain in its section")
+        var result = waypoint
+        if forward:
+            result.s += distance - EPSILON
+        else:
+            result.s += -distance + EPSILON
+        if not result.s > 0.0:
+            raise Error("A step left the road")
+        return result
+
+    def _build_transform(mut self, waypoint: Waypoint) raises -> CarlaTransform:
+        var at = self._build_locate(waypoint)
+        _reserve_lane_scalars(
+            self.roads[at[0]], at[1], self._construction_work, 2
+        )
+        var terms = _reference_work(self.roads[at[0]], waypoint.s, waypoint.s)
+        if terms < 0:
+            raise Error("Map construction cannot resolve pose quadrature work")
+        self._construction_work.step()
+        self._construction_work.term(terms)
+        self._construction_work.term(terms)
+        return self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+
+    def _reserve_build_point(
+        mut self, road: Int, section: Int, s: Float64
+    ) raises:
+        _reserve_lane_scalars(
+            self.roads[road], section, self._construction_work
+        )
+        var terms = _reference_work(self.roads[road], s, s)
+        if terms < 0:
+            raise Error("Map construction cannot resolve point quadrature work")
+        self._construction_work.step()
+        self._construction_work.term(terms)
+
     def _add_segment(
         mut self,
         a: CarlaTransform,
@@ -2835,40 +3150,48 @@ struct Map(Movable):
         first: Waypoint,
         second: Waypoint,
     ) raises:
-        var at = self._locate(first)
+        var at = self._build_locate(first)
+        _reserve_lane_boundaries(
+            self.roads[at[0]], at[1], self._construction_work
+        )
         var boundaries = self.roads[at[0]]._lane_record_boundaries(at[1])
         var forward = first.s < second.s
-        var boundary = second.s
-        var found = False
-        var boundary_index = 0
-        while boundary_index < len(boundaries):
-            var s = boundaries[boundary_index]
-            boundary_index += 1
-            if forward:
-                if s > first.s and s <= boundary:
+        var current = first
+        var current_t = a
+        # Iterate boundaries instead of recursively nesting one stack frame
+        # per source record. The scan and each resulting cell share the ledger.
+        while True:
+            self._construction_work.step()
+            var boundary = second.s
+            var found = False
+            for s in boundaries:
+                self._construction_work.step()
+                if forward:
+                    if s > current.s and s <= boundary:
+                        boundary = s
+                        found = True
+                elif s <= current.s and s > boundary:
                     boundary = s
                     found = True
-            elif s <= first.s and s > boundary:
-                boundary = s
-                found = True
-        if found:
-            var before = first
-            var after = first
+            if not found:
+                self._subdivide_segment(current_t, b, current, second, 0)
+                return
+            var before = current
+            var after = current
             after.s = boundary
-            # Road s is nonnegative, and an internal boundary is positive.
             before.s = bitcast[DType.float64](
                 bitcast[DType.uint64](boundary) - 1
             )
-            var before_t = self.compute_transform(before)
-            var after_t = self.compute_transform(after)
+            var before_t = self._build_transform(before)
+            var after_t = self._build_transform(after)
             if forward:
-                self._subdivide_segment(a, before_t, first, before, 0)
-                self._add_segment(after_t, b, after, second)
+                self._subdivide_segment(current_t, before_t, current, before, 0)
+                current = after
+                current_t = after_t
             else:
-                self._subdivide_segment(a, after_t, first, after, 0)
-                self._add_segment(before_t, b, before, second)
-            return
-        self._subdivide_segment(a, b, first, second, 0)
+                self._subdivide_segment(current_t, after_t, current, after, 0)
+                current = before
+                current_t = before_t
 
     def _subdivide_segment(
         mut self,
@@ -2879,8 +3202,11 @@ struct Map(Movable):
         depth: Int,
     ) raises:
         # Quarter points also expose cubic inflections that a midpoint misses.
-        var at = self._locate(first)
+        self._construction_work.step()
+        var at = self._build_locate(first)
+        self._reserve_build_point(at[0], at[1], first.s)
         var one = self.roads[at[0]]._lane_point(at[1], at[2], first.s)
+        self._reserve_build_point(at[0], at[1], second.s)
         var two = self.roads[at[0]]._lane_point(at[1], at[2], second.s)
         var error = 0.0
         var quarter = 1
@@ -2889,6 +3215,7 @@ struct Map(Movable):
             quarter += 1
             var sample = first
             sample.s += fraction * (second.s - first.s)
+            self._reserve_build_point(at[0], at[1], sample.s)
             var point = self.roads[at[0]]._lane_point(at[1], at[2], sample.s)
             var dx = point.x - (one.x + fraction * (two.x - one.x))
             var dy = point.y - (one.y + fraction * (two.y - one.y))
@@ -2907,11 +3234,11 @@ struct Map(Movable):
                 )
             if depth >= 24:
                 raise Error("Lane center exceeds the spatial subdivision limit")
-            var middle = self.compute_transform(mid)
+            var middle = self._build_transform(mid)
             self._subdivide_segment(a, middle, first, mid, depth + 1)
             self._subdivide_segment(middle, b, mid, second, depth + 1)
             return
-        var lane_type = self.lane(first).type
+        var lane_type = self.roads[at[0]].sections[at[1]].lanes[at[2]].type
         # The index's numerical contract requires finite stored Float32
         # endpoints. Refuse an unrepresentable index input rather than let
         # infinity or NaN defeat node bounds. Wide center arithmetic remains.
@@ -2927,9 +3254,8 @@ struct Map(Movable):
         ]
         _finite_point(stored_start)
         _finite_point(stored_end)
-        self._tree.insert_element(
-            a.location, b.location, len(self._segments), lane_type.value
-        )
+        # Admit all storage for this segment before inserting any index entry.
+        self._construction_work.segment()
         var low = first.s
         var high = second.s
         var start = a.location
@@ -2939,10 +3265,35 @@ struct Map(Movable):
             high = first.s
             start = b.location
             end = a.location
-        var captured = _SpiralRootCapture()
-        var certificate = _chord_certificate_capture(
-            self.roads[at[0]], at[1], at[2], low, high, start, end, captured
+        self._construction_work.step()
+        # Root Jet, two endpoint centers and four optional cover Jets each
+        # scan lane profiles. Reserve their full fixed allowance up front.
+        var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
+        self._construction_work.step_product(10, lane_count)
+        # The successful10*lane_count check also makes1+6*lane_count safe.
+        var node_cost = 1 + 6 * lane_count
+        self._construction_work.proof_headroom()
+        var remaining_steps = (
+            self._construction_work.policy.max_steps
+            - self._construction_work.steps
         )
+        var proof_nodes = _ProofNodeWork(
+            min(16384, remaining_steps // node_cost),
+            fail_on_limit=remaining_steps // node_cost < 16384,
+        )
+        var captured = _SpiralRootCapture()
+        var certificate = _chord_certificate_capture_with_nodes(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            low,
+            high,
+            start,
+            end,
+            captured,
+            proof_nodes,
+        )
+        self._construction_work.step_product(proof_nodes.used, node_cost)
         var construction_terms = certificate[2]
         var cover = _sampled_lane_box_cover(
             self.roads[at[0]], at[1], at[2], low, high, construction_terms
@@ -2954,14 +3305,29 @@ struct Map(Movable):
         # Preserve the existing chord and sampled-cover construction work
         # before spending ANY optional phase-proof/packing allowance.
         var proof = _try_pack_spiral_proof(
-            self.roads[at[0]], low, high, len(self._segments), captured,
-            len(self._spiral_proofs), construction_terms, self._spiral_proof_units,
+            self.roads[at[0]],
+            low,
+            high,
+            len(self._segments),
+            captured,
+            len(self._spiral_proofs),
+            construction_terms,
+            self._spiral_proof_units,
         )
         if proof:
             self._spiral_proofs.append(proof.value())
+        self._construction_work.term(construction_terms)
+        self._tree.insert_element(
+            a.location, b.location, len(self._segments), lane_type.value
+        )
         self._segments.append(
             _Segment(
-                a.location, b.location, first, second, certificate[1], cover_index
+                a.location,
+                b.location,
+                first,
+                second,
+                certificate[1],
+                cover_index,
             )
         )
         self._curve_deviation = max(self._curve_deviation, certificate[0])
@@ -2983,11 +3349,17 @@ struct Map(Movable):
         comptime max_segment = 100.0
         var starts = List[Waypoint]()
         for r in range(len(self.roads)):
+            self._construction_work.step()
             for sec in range(len(self.roads[r].sections)):
+                self._construction_work.step()
                 ref section = self.roads[r].sections[sec]
                 for ln in range(len(section.lanes)):
+                    self._construction_work.step()
                     if section.lanes[ln].id.value == 0:
                         continue
+                    self._construction_work.step_product(
+                        2, len(self.roads[r].sections)
+                    )
                     starts.append(
                         Waypoint(
                             self.roads[r].id,
@@ -2997,14 +3369,20 @@ struct Map(Movable):
                         )
                     )
         for start in starts:
-            var at = self._locate(start)
-            ref road = self.roads[at[0]]
+            self._construction_work.step()
+            var at = self._build_locate(start)
             var current = start
-            var current_t = self.compute_transform(current)
-            var lane_start = road.sections[at[1]].s
-            var lane_end = lane_start + road.section_length(at[1])
-            var positive = road.is_positive_direction(start.lane_id)
-            var straight = road.lane_is_straight(at[1])
+            var current_t = self._build_transform(current)
+            var lane_start = self.roads[at[0]].sections[at[1]].s
+            self._construction_work.step(len(self.roads[at[0]].sections))
+            var lane_end = lane_start + self.roads[at[0]].section_length(at[1])
+            var positive = self.roads[at[0]].is_positive_direction(
+                start.lane_id
+            )
+            _reserve_straightness(
+                self.roads[at[0]], at[1], self._construction_work
+            )
+            var straight = self.roads[at[0]].lane_is_straight(at[1])
             if straight:
                 var remaining = (
                     lane_end - current.s if positive else current.s - lane_start
@@ -3013,13 +3391,14 @@ struct Map(Movable):
                     continue
                 # The step stops short of the section's end, so it gives
                 # one waypoint on the same lane.
-                var end = self.next(current, remaining)[0]
+                var end = self._build_next(current, remaining)
                 self._add_segment(
-                    current_t, self.compute_transform(end), current, end
+                    current_t, self._build_transform(end), current, end
                 )
                 continue
             var next_w = current
             while True:
+                self._construction_work.step()
                 var remaining = (
                     lane_end - next_w.s if positive else next_w.s - lane_start
                 ) - tiny
@@ -3027,7 +3406,7 @@ struct Map(Movable):
                 if delta < tiny:
                     self._add_segment(
                         current_t,
-                        self.compute_transform(next_w),
+                        self._build_transform(next_w),
                         current,
                         next_w,
                     )
@@ -3036,7 +3415,7 @@ struct Map(Movable):
                 # step of at most `remaining` stops short of the section's
                 # end, so it gives one waypoint in the same section.
                 var previous_s = next_w.s
-                next_w = self.next(next_w, delta)[0]
+                next_w = self._build_next(next_w, delta)
                 # This positive nonterminal step must advance in lane order.
                 # The terminal branch above can still insert a zero span.
                 if (
@@ -3048,7 +3427,7 @@ struct Map(Movable):
                         "Lane index sampling cannot advance "
                         "at Float64 road-s resolution"
                     )
-                var next_t = self.compute_transform(next_w)
+                var next_t = self._build_transform(next_w)
                 var angle = Float64(
                     vector_angle(
                         current_t.rotation.forward_vector(),
@@ -3094,5 +3473,28 @@ def _add_conflict(
                     return
             conflicts[i].append(other)
             return
+    roads.append(road)
+    conflicts.append([other])
+
+
+def _add_conflict_with_work(
+    mut roads: List[RoadId],
+    mut conflicts: List[List[RoadId]],
+    road: RoadId,
+    other: RoadId,
+    mut work: _MapBuildWork,
+) raises:
+    for i in range(len(roads)):
+        work.step()
+        if roads[i] == road:
+            # A road is added with one conflict, so the list is not empty.
+            for id in conflicts[i]:  # pragma: no branch
+                work.step()
+                if id == other:
+                    return
+            work.step()
+            conflicts[i].append(other)
+            return
+    work.step(2)
     roads.append(road)
     conflicts.append([other])
