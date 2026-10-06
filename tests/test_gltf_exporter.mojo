@@ -739,7 +739,7 @@ def test_textures_of_one_image_write_it_once() raises:
         back[1].materials.get(back[0].meshes[0].material).emissive_map
     )
     var color_pixels = back[1].textures.get(color_map).pixels.copy()
-    assert_true(color_pixels == back[1].textures.get(glow_map).pixels)
+    assert_true(color_pixels == back[1].textures.get(glow_map).pixels.values())
 
 
 def test_a_single_vertex_and_a_plain_normal_map_are_written() raises:

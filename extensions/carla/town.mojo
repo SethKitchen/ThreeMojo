@@ -1112,17 +1112,27 @@ struct Town(Movable):
         place(asphalt, ASPHALT_TILE)
         var concrete = concrete_maps(size, 2, self.settings.seed + 2)
         place(concrete, CONCRETE_TILE)
-        self.asphalt_roughness = Texture(copy=asphalt.roughness)
-        var asphalt_color = assets.textures.add(Texture(copy=asphalt.color))
+        self.asphalt_roughness = Texture(
+            copy=asphalt.roughness, share_data=True
+        )
+        var asphalt_color = assets.textures.add(
+            Texture(copy=asphalt.color, share_data=True)
+        )
         self.asphalt_roughness_id = assets.textures.add(
-            Texture(copy=asphalt.roughness)
+            Texture(copy=asphalt.roughness, share_data=True)
         )
-        var asphalt_normal = assets.textures.add(Texture(copy=asphalt.normal))
-        var concrete_color = assets.textures.add(Texture(copy=concrete.color))
+        var asphalt_normal = assets.textures.add(
+            Texture(copy=asphalt.normal, share_data=True)
+        )
+        var concrete_color = assets.textures.add(
+            Texture(copy=concrete.color, share_data=True)
+        )
         var concrete_rough = assets.textures.add(
-            Texture(copy=concrete.roughness)
+            Texture(copy=concrete.roughness, share_data=True)
         )
-        var concrete_normal = assets.textures.add(Texture(copy=concrete.normal))
+        var concrete_normal = assets.textures.add(
+            Texture(copy=concrete.normal, share_data=True)
+        )
         # A constant count, more than zero.
         for k in range(SURFACE_KINDS):  # pragma: no branch
             var kind = SurfaceKind(k)
@@ -1137,7 +1147,9 @@ struct Town(Movable):
                 material = set.dress(assets, material^, set.per_meter())
                 if kind == ROAD_SURFACE and set.has_roughness:
                     # The puddles are drawn over the scanned roughness.
-                    self.asphalt_roughness = Texture(copy=set.maps.roughness)
+                    self.asphalt_roughness = Texture(
+                        copy=set.maps.roughness, share_data=True
+                    )
                     self.asphalt_roughness.repeat = set.per_meter()
                     self.asphalt_roughness_id = material.roughness_map
             elif kind == ROAD_SURFACE:
@@ -1384,9 +1396,11 @@ struct Town(Movable):
                 grass.color.repeat = repeat
                 grass.normal.repeat = repeat
                 surface.roughness = 0.95
-                surface.map = assets.textures.add(Texture(copy=grass.color))
+                surface.map = assets.textures.add(
+                    Texture(copy=grass.color, share_data=True)
+                )
                 surface.normal_map = assets.textures.add(
-                    Texture(copy=grass.normal)
+                    Texture(copy=grass.normal, share_data=True)
                 )
                 self.materials.ground = assets.materials.add(surface)
             else:
@@ -1394,12 +1408,14 @@ struct Town(Movable):
                 paving.roughness.repeat = repeat
                 paving.normal.repeat = repeat
                 surface.color = Color(236, 230, 220)
-                surface.map = assets.textures.add(Texture(copy=paving.color))
+                surface.map = assets.textures.add(
+                    Texture(copy=paving.color, share_data=True)
+                )
                 surface.roughness_map = assets.textures.add(
-                    Texture(copy=paving.roughness)
+                    Texture(copy=paving.roughness, share_data=True)
                 )
                 surface.normal_map = assets.textures.add(
-                    Texture(copy=paving.normal)
+                    Texture(copy=paving.normal, share_data=True)
                 )
                 self.materials.paving = assets.materials.add(surface)
             var node = Object3D()
@@ -1438,13 +1454,17 @@ struct Town(Movable):
                 emissive=Color(255, 214, 160),
                 emissive_intensity=0,
             )
-            facade.map = assets.textures.add(Texture(copy=maps.color))
-            facade.roughness_map = assets.textures.add(
-                Texture(copy=maps.roughness)
+            facade.map = assets.textures.add(
+                Texture(copy=maps.color, share_data=True)
             )
-            facade.normal_map = assets.textures.add(Texture(copy=maps.normal))
+            facade.roughness_map = assets.textures.add(
+                Texture(copy=maps.roughness, share_data=True)
+            )
+            facade.normal_map = assets.textures.add(
+                Texture(copy=maps.normal, share_data=True)
+            )
             facade.emissive_map = assets.textures.add(
-                Texture(copy=maps.emissive)
+                Texture(copy=maps.emissive, share_data=True)
             )
             self.materials.facades.append(assets.materials.add(facade))
         self.materials.roof = assets.materials.add(
@@ -1554,8 +1574,12 @@ struct Town(Movable):
         var leaves = standard_material(
             Color(255, 255, 255), roughness=0.8, env_map=SCENE_ENVIRONMENT
         )
-        leaves.map = assets.textures.add(Texture(copy=foliage.color))
-        leaves.normal_map = assets.textures.add(Texture(copy=foliage.normal))
+        leaves.map = assets.textures.add(
+            Texture(copy=foliage.color, share_data=True)
+        )
+        leaves.normal_map = assets.textures.add(
+            Texture(copy=foliage.normal, share_data=True)
+        )
         self.materials.leaves = assets.materials.add(leaves)
         var node = scene.add(Object3D())
         # A few neighbors to a mesh, so a camera culls the trees it does

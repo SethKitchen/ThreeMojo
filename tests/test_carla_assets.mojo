@@ -880,7 +880,7 @@ def test_preload_queue_preserves_existing_entries_on_failure_and_retry() raises:
         var address = (
             registry.decoded[0]
             .pixels.unsafe_ptr()
-            .unsafe_origin_cast[MutAnyOrigin]()
+            .unsafe_origin_cast[ImmutAnyOrigin]()
         )
         # Add new bindings after one entry is already cached. Two distinct
         # later failures must not publish even the new successful image.
@@ -892,11 +892,11 @@ def test_preload_queue_preserves_existing_entries_on_failure_and_retry() raises:
             registry.preload(workers)
         assert_equal(len(registry.decoded), 1)
         assert_equal(len(registry.decoded_keys), 1)
-        assert_equal(registry.decoded[0].pixels, original)
+        assert_equal(registry.decoded[0].pixels.values(), original)
         assert_equal(
             registry.decoded[0]
             .pixels.unsafe_ptr()
-            .unsafe_origin_cast[MutAnyOrigin](),
+            .unsafe_origin_cast[ImmutAnyOrigin](),
             address,
         )
         _write_batch_image(folder, 2)

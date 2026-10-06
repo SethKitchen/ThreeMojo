@@ -35,7 +35,7 @@ struct _TrackedSource[
     var counters: MutPointer[Int64, Self.counter_origin]
     var visits: MutPointer[Int64, Self.visit_origin]
     var addresses: MutPointer[
-        Optional[MutPointer[UInt8, UntrackedOrigin[mut=True]]],
+        Optional[Pointer[UInt8, UntrackedOrigin[mut=False]]],
         Self.address_origin,
     ]
     var slow: Int
@@ -86,7 +86,7 @@ struct _TrackedSource[
         self.addresses[
             unsafe_offset=index
         ] = texture.pixels.unsafe_ptr().unsafe_origin_cast[
-            UntrackedOrigin[mut=True]
+            UntrackedOrigin[mut=False]
         ]()
         _ = len(compressed)
         _ = Atomic[Int64].fetch_add(
@@ -126,7 +126,7 @@ def test_workers_bound_active_staging_and_move_completed_mips() raises:
             var counters = List[Int64](length=8, fill=0)
             var visits = List[Int64](length=max(0, count), fill=0)
             var addresses = List[
-                Optional[MutPointer[UInt8, UntrackedOrigin[mut=True]]]
+                Optional[Pointer[UInt8, UntrackedOrigin[mut=False]]]
             ](length=max(0, count), fill=None)
             var source = _TrackedSource(
                 counters.unsafe_ptr(),
@@ -152,7 +152,7 @@ def test_workers_bound_active_staging_and_move_completed_mips() raises:
                 assert_equal(
                     textures[index]
                     .pixels.unsafe_ptr()
-                    .unsafe_origin_cast[UntrackedOrigin[mut=True]](),
+                    .unsafe_origin_cast[UntrackedOrigin[mut=False]](),
                     addresses[index].value(),
                 )
 
@@ -160,9 +160,9 @@ def test_workers_bound_active_staging_and_move_completed_mips() raises:
 def test_queue_progresses_past_a_slow_first_image() raises:
     var counters = List[Int64](length=8, fill=0)
     var visits = List[Int64](length=5, fill=0)
-    var addresses = List[
-        Optional[MutPointer[UInt8, UntrackedOrigin[mut=True]]]
-    ](length=5, fill=None)
+    var addresses = List[Optional[Pointer[UInt8, UntrackedOrigin[mut=False]]]](
+        length=5, fill=None
+    )
     var source = _TrackedSource(
         counters.unsafe_ptr(),
         visits.unsafe_ptr(),
@@ -187,7 +187,7 @@ def test_first_error_is_deterministic_and_all_workers_finish() raises:
             var counters = List[Int64](length=8, fill=0)
             var visits = List[Int64](length=5, fill=0)
             var addresses = List[
-                Optional[MutPointer[UInt8, UntrackedOrigin[mut=True]]]
+                Optional[Pointer[UInt8, UntrackedOrigin[mut=False]]]
             ](length=5, fill=None)
             var source = _TrackedSource(
                 counters.unsafe_ptr(),
