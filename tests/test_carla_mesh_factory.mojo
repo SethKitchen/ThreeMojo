@@ -364,13 +364,18 @@ def test_sections_roads_and_chunks() raises:
     ref road = map.road(RoadId(1))
     # Four lanes of four vertices, and lane 0's none.
     assert_equal(factory.generate_section(road, 0).vertex_count(), 16)
-    assert_equal(factory.generate_road(road).vertex_count(), 32)
+    # Section 1 has a width-record kink at s=40. Its four lanes use the
+    # 2 m policy: 16 rows of two vertices each, after section 0's 16.
+    assert_false(road.lane_is_straight(1))
+    assert_equal(factory.generate_section(road, 1).vertex_count(), 128)
+    assert_equal(factory.generate_road(road).vertex_count(), 144)
     assert_equal(len(factory.generate_with_max_len(road)), 2)
     assert_equal(len(factory.generate_walls_with_max_len(road)), 2)
     var all = factory.generate_all_with_max_len(road)
     assert_equal(len(all), 2)
     # Each chunk holds its section's lanes and walls.
     assert_equal(all[0].vertex_count(), 24)
+    assert_equal(all[1].vertex_count(), 192)
     # A junction road has no walls.
     var junction = factory.generate_all_with_max_len(map.road(RoadId(10)))
     assert_equal(junction[0].vertex_count(), 8)
@@ -485,16 +490,26 @@ def test_stitching() raises:
     ref road = map.road(RoadId(1))
     var a = factory.generate_whole_lane(road, 0, 1)
     var b = factory.generate_whole_lane(road, 1, 1)
+    # A has two rows; B has sixteen. Check all B rows against the town's
+    # independently specified piecewise width, including both sides of s=40.
+    assert_equal(a.vertex_count(), 4)
+    assert_equal(b.vertex_count(), 32)
+    assert_equal(b.triangle_count(), 30)
+    for row in range(16):
+        var s = 30.0 + 2.0 * Float64(row)
+        var width = 3.5 + 0.05 * max(0.0, s - 40.0)
+        _near(_at(b, 2 * row), s, width, 0.0)
+        _near(_at(b, 2 * row + 1), s, 0.0, 0.0)
     var joined = factory.generate_whole_lane(road, 0, 1)
     concat_geometry(joined, b, 2, [ROAD_SURFACE])
-    assert_equal(joined.vertex_count(), 8)
-    assert_equal(joined.triangle_count(), 6)
+    assert_equal(joined.vertex_count(), 36)
+    assert_equal(joined.triangle_count(), 34)
     var plain = factory.generate_whole_lane(road, 0, 1)
     append_geometry(plain, b)
-    assert_equal(plain.triangle_count(), 4)
+    assert_equal(plain.triangle_count(), 32)
     var empty = factory.generate_whole_lane(road, 0, 2)
     concat_geometry(joined, empty, 2, [ROAD_SURFACE])
-    assert_equal(joined.vertex_count(), 8)
+    assert_equal(joined.vertex_count(), 36)
     var five: List[SurfaceKind] = [
         CURB_SURFACE,
         CURB_SURFACE,
@@ -510,8 +525,8 @@ def test_stitching() raises:
     # A stitch one vertex wide adds no quads.
     var single = factory.generate_whole_lane(road, 0, 1)
     concat_geometry(single, b, 1, List[SurfaceKind]())
-    assert_equal(single.vertex_count(), 8)
-    assert_equal(single.triangle_count(), 4)
+    assert_equal(single.vertex_count(), 36)
+    assert_equal(single.triangle_count(), 32)
     # Geometries with CARLA's grid and no vertices join to nothing.
     var hollow = _hollow()
     append_geometry(hollow, _hollow())
