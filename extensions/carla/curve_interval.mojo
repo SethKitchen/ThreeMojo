@@ -290,7 +290,6 @@ def _tight_product_bound(one: _Interval, two: _Interval) -> _Interval:
     )
 
 
-
 def _tight_quotient_bound(one: _Interval, two: _Interval) -> _Interval:
     if two.contains(0.0):
         return _Interval.whole()
@@ -308,7 +307,6 @@ def _tight_quotient_bound(one: _Interval, two: _Interval) -> _Interval:
         .hull(_directed_endpoint_quotient(one.high, two.low))
         .hull(_directed_endpoint_quotient(one.high, two.high))
     )
-
 
 
 def _tight_square_bound(value: _Interval) -> _Interval:
