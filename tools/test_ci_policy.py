@@ -94,6 +94,37 @@ class CiPolicyTests(unittest.TestCase):
             if name != 'cpu':
                 self.assertNotIn('THREEMOJO_COMPILER_TELEMETRY', job)
 
+    def test_compiler_metadata_is_a_separate_linux_cpu_diagnostic(self):
+        job = self.jobs['cpu']
+        command = ('run: .venv/bin/python tools/compiler_metadata.py '
+                   '> compiler-metadata.json')
+        self.assertEqual(job.count(command), 1)
+        self.assertLess(job.index(command), job.index('- name: test-cpu'))
+        self.assertNotIn('continue-on-error:', job)
+        for name, other in self.jobs.items():
+            if name != 'cpu':
+                self.assertNotIn('compiler_metadata.py', other)
+        # The existing exact-command test also pins original flags/shards.
+        self.assertIn('run: make -B test-cpu SHARD=${{ matrix.shard }}/3 '
+                      'MOJOFLAGS="-I . --num-threads 1" AFFECTED="$AFFECTED"', job)
+
+    def test_compiler_metadata_artifact_is_bounded_scoped_and_uploaded_early(self):
+        job = self.jobs['cpu']
+        block = ('      - name: Preserve compiler metadata before CPU compilation\n'
+                 '        uses: actions/upload-artifact@v4\n'
+                 '        with:\n'
+                 '          name: compiler-metadata-${{ matrix.shard }}-attempt-${{ github.run_attempt }}\n'
+                 '          path: compiler-metadata.json\n'
+                 '          if-no-files-found: error\n'
+                 '          retention-days: 1\n')
+        self.assertEqual(job.count(block), 1)
+        self.assertLess(job.index('> compiler-metadata.json'), job.index(block))
+        self.assertLess(job.index(block), job.index('- name: test-cpu'))
+        self.assertEqual(job.count('uses: actions/upload-artifact@v4'), 1)
+        for name, other in self.jobs.items():
+            if name != 'cpu':
+                self.assertNotIn('compiler-metadata.json', other)
+
     def test_draft_pull_requests_skip_every_check_job(self):
         self.assertTrue(CHECK_JOBS <= self.jobs.keys())
         # A future check job must opt out of draft PRs too. Only the wiki

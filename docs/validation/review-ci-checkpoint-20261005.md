@@ -38,6 +38,16 @@ The report snapshot binds Mojo sources, report logic and provenance inventory. T
 
 The preceding 5d9 MAX/no-GPU job compiles the GPU entries, passes 47 host-side cases and checks all 37 actual Metal AIR modules. It performs no GPU device execution. These results remain bound to that prior head; fresh exact-head CI must qualify this update.
 
+## Compiler target discriminator
+
+The preceding `94cff7b` run passes all eight captures and the strict full-repository coverage aggregate: 873 modules, 153,783 lines, 73,572 branch/condition outcomes and 9,474 MC/DC checks, all hit=total. Its total is 236,829/236,829. The GPU-host gate passes compilation, 47 host-side cases and 37 actual AIR modules. Apple lint also passes formatting, 343 tool tests, 48 CARLA controls and all 442 negative fixtures. These are exact results for that preceding head, not transferred checks for this diagnostic update.
+
+That run's Linux lint and three CPU shards reach their unchanged two-hour job limits. The CPU logs contain twelve unfinished compilers with sustained runnable single-thread CPU use and increasing resident memory. Shared OOM counters do not record an event. This observation does not identify a compiler phase or root cause. Lint has no equivalent process samples; its quiet build/doc phase is incomplete, and the exact unfinished source names are unavailable.
+
+The Linux CPU jobs now collect the pinned compiler version, launcher/driver hashes and effective target fields before compilation. The metadata-only target query has finite output and time bounds and performs no source compilation. Unavailable diagnostics are explicit. A small per-shard, per-attempt artifact retains only that bounded JSON for one day, so it can be inspected before the CPU job completes. No environment dump or unrelated process data is collected.
+
+Compiler targets, flags, cache settings, suite concurrency, workloads, job limits and acceptance gates are unchanged. The Linux procfs-specific fixture is gated to that platform; portable timeout and output controls remain enabled. All 356 tool tests and 48 CARLA controls pass in both normal and telemetry-enabled configurations, including the exact artifact path/name/order policy controls. All 2,217 report inputs and report bytes remain identical. Fresh exact-head CI is required, and the diagnostic change is not a claimed stall fix.
+
 ## Main conflict resolution
 
 The SDF union retains coordinate lookup and the owner self-copy guard from main. It preserves deterministic lowest-block fallback ownership and both authored test additions. All 36 tests pass. Fresh coverage on that exact mesher source covers 569/569 obligations.
