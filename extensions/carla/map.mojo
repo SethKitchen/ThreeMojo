@@ -92,6 +92,7 @@ from extensions.carla.lane_refinement import (
     _refine_lane_certificate,
     _resume_lane_certificate,
 )
+from extensions.carla.speed_limits import opendrive_speed, NUMERIC_SPEED_LIMIT
 from extensions.carla.math import (
     distance_segment_to_point,
     make_unit_vector,
@@ -137,7 +138,7 @@ from math.vector3 import Vector3
 from std.hashlib import Hasher
 from std.math import ceil, floor, inf, isfinite, sin, sqrt
 from std.memory import bitcast
-from units.si import DEGREE, Angle, Length, METER
+from units.si import DEGREE, Angle, Length, METER, Velocity64
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
 comptime EPSILON = 10.0 * 2.220446049250313e-16
@@ -388,6 +389,7 @@ struct Signal(Copyable, Movable):
     var type: String
     var subtype: String
     var value: Float64
+    var value_present: Bool
     var unit: String
     # Meters.
     var height: Float64
@@ -426,6 +428,7 @@ struct Signal(Copyable, Movable):
         h_offset: Float64,
         pitch: Float64,
         roll: Float64,
+        value_present: Bool = True,
     ) raises:
         """Create a signal from a file's `signal`.
 
@@ -449,6 +452,7 @@ struct Signal(Copyable, Movable):
             h_offset: The turn from the road's heading, in radians.
             pitch: Its pitch, in radians.
             roll: Its roll, in radians.
+            value_present: Whether the file supplied a numeric value.
 
         Raises:
             Error: If an id is not valid.
@@ -467,6 +471,7 @@ struct Signal(Copyable, Movable):
         self.type = type
         self.subtype = subtype
         self.value = value
+        self.value_present = value_present
         self.unit = unit
         self.height = height
         self.width = width
@@ -485,6 +490,22 @@ struct Signal(Copyable, Movable):
         )
         self.controllers = List[ControllerId]()
         self.using_inertial_position = False
+
+    def speed_limit(self) raises -> Velocity64:
+        """Interpret a speed signal with its explicit source unit.
+
+        Returns:
+            The finite nonnegative speed, retaining Float64 precision.
+
+        Raises:
+            Error: If this is not a speed signal, the value is absent,
+                or its numeric value or explicit unit is invalid.
+        """
+        if self.type != SIGNAL_MAXIMUM_SPEED:
+            raise Error("Only a speed signal has a speed limit")
+        if not self.value_present:
+            raise Error("A speed signal needs a numeric value")
+        return opendrive_speed(self.value, self.unit)
 
     def is_dynamic(self) -> Bool:
         """Return True if the file says `dynamic="yes"`, `GetDynamic`."""
@@ -1291,6 +1312,42 @@ struct Map(Movable):
             Error: If the lane is not in the map.
         """
         return self.lane(waypoint).type
+
+    def speed_limit_at(self, waypoint: Waypoint) raises -> Optional[Velocity64]:
+        """Return the lane limit at a waypoint, falling back to its road.
+
+        Args:
+            waypoint: The checked road, section, lane and station.
+
+        Returns:
+            A finite typed speed, including a numeric zero. None means the
+            road state has no numeric limit; the source record keeps whether
+            it is unrestricted, undefined or absent. Signals take precedence
+            when the simulation applies them.
+
+        Raises:
+            Error: If the waypoint or a mutable speed record is invalid.
+        """
+        var location = self._locate(waypoint)
+        ref road = self.roads[location[0]]
+        if (
+            not isfinite(waypoint.s)
+            or waypoint.s < 0
+            or waypoint.s > road.length
+        ):
+            raise Error(
+                "Speed-limit station must be finite and within the road"
+            )
+        ref lane = road.sections[location[1]].lanes[location[2]]
+        var lane_speed = info_at(lane.info.speeds, waypoint.s)
+        if Bool(lane_speed):
+            if lane_speed.value().kind != NUMERIC_SPEED_LIMIT:
+                raise Error("A lane speed must be numeric")
+            return lane_speed.value().limit()
+        var road_speed = info_at(road.info.speeds, waypoint.s)
+        if Bool(road_speed):
+            return road_speed.value().limit()
+        return None
 
     def lane_width(self, waypoint: Waypoint) raises -> Length:
         """Return a waypoint's lane width, `Map::GetLaneWidth`.
