@@ -3,16 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Optional bounded errors for the original stored SPIRAL scalar graph.
+"""Optional bounded errors for the canonical stored-term SPIRAL Sum2 graph.
 
 One interval contains every original GL piece, node and weight. Its value-only
 expression follows the original step, phase, stored trigonometric polynomial
-and weighted-term operations. A finite sequential-sum bound encloses all
-allowed contraction choices. This is neither a new scalar evaluator nor a
-true-clothoid error estimate. Unsupported domains retain the original graph.
+and weighted-term operations. A uniform Sum2 bound encloses accumulation
+after the materialized products. It is not a true-clothoid error estimate.
+Unsupported domains fall back to the full Sum2 expression bound.
 """
 
 from extensions.carla.curve_interval import _Interval, _Jet, _ValueJet
+from extensions.carla.curve_sum2 import _sum2_error
 from extensions.carla.curve_trig import (
     _sincos_expression,
     _INV_HALF_PI,
@@ -25,7 +26,6 @@ from extensions.carla.geometry import (
     _GL_WEIGHTS,
 )
 from std.math import floor, inf, isfinite
-from std.memory import bitcast
 
 
 def _envelope_constant(low: Float64, high: Float64) -> _ValueJet:
@@ -35,14 +35,9 @@ def _envelope_constant(low: Float64, high: Float64) -> _ValueJet:
     )
 
 
-def _sequential_sum_error(
+def _sum2_envelope_error(
     term: _ValueJet, count: Int, origin: Float64
 ) -> Float64:
-    # Let |v_i| <= M and |a_i-v_i| <= E for each ideal and evaluated term.
-    # E also bounds the unrounded last product if it fuses with accumulation.
-    # Finite rounding satisfies |fl(z)-z| <= u|z|+eta. Thus the total error is
-    # nE + gamma_n*n*(M+E) + n*eta/(1-nu), where gamma_n=nu/(1-nu).
-    # The partial-sum majorant is checked before using this optional proof.
     if count < 1 or count > 320 or not isfinite(origin):
         return inf[DType.float64]()
     if (
@@ -52,29 +47,18 @@ def _sequential_sum_error(
     ):
         return inf[DType.float64]()
     var n = _Interval.point(Float64(count))
-    var u = _Interval.point(1.1102230246251565e-16)
-    var eta = _Interval.point(bitcast[DType.float64](UInt64(1)))
-    var nu = n * u
-    var denominator = _Interval.point(1.0) - nu
-    if denominator.low <= 0.0:
+    var absolute_sum = n * _Interval.point(term.rounded_value().magnitude())
+    var inherited = n * _Interval.point(term.error)
+    var error = _sum2_error(absolute_sum.high, inherited.high, count)
+    if not isfinite(error):
         return inf[DType.float64]()
-    var magnitude = _Interval.point(term.value.magnitude())
-    var inherited = _Interval.point(term.error)
-    var absolute_sum = n * (magnitude + inherited)
-    var subnormal = (n * eta) / denominator
-    var partial_bound = absolute_sum / denominator + subnormal
-    if not partial_bound.is_finite():
-        return inf[DType.float64]()
-    var error = n * inherited + (nu / denominator) * absolute_sum + subnormal
-    var ideal_magnitude = (n * magnitude).high
+    var ideal_magnitude = (n * _Interval.point(term.value.magnitude())).high
     var accumulated = _ValueJet(
         _Interval(-ideal_magnitude, ideal_magnitude),
         _Interval.whole(),
         _Interval.whole(),
-        error.high,
+        error,
     )
-    # Include the actual final world-origin addition and cancellation error.
-    # The ideal moment polynomial supplies its tighter value separately.
     var translated = _ValueJet.constant(origin) + accumulated
     if not translated.rounded_value().is_finite():
         return inf[DType.float64]()
@@ -165,8 +149,8 @@ def _try_spiral_roundoff_envelope(
     )
     var x = factor * trig[1]
     var y = factor * trig[0]
-    var x_error = _sequential_sum_error(x, 5 * pieces, geometry.x)
-    var y_error = _sequential_sum_error(y, 5 * pieces, geometry.y)
+    var x_error = _sum2_envelope_error(x, 5 * pieces, geometry.x)
+    var y_error = _sum2_envelope_error(y, 5 * pieces, geometry.y)
     if not isfinite(x_error) or not isfinite(y_error):
         return None
     return (x_error, y_error)
