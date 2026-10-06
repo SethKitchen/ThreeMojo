@@ -7,18 +7,37 @@ Each operation receives an interval for the exact stored-expression value
 and an absolute error for executed Float64 arithmetic. Every interval endpoint
 and error is rounded outward to a 2^-160 rational grid to bound denominator
 growth. This introduces outward slack only, with exact Fraction operations. Round-to-nearest
-unit roundoff is 2^-53. A 3*2^-1022 additive allowance per operation also
-covers subnormal result or input flushing, rather than assuming no underflow.
-The unfused graph is used. Its sum of product and addition error allowances
-also covers FMA contraction (whose local error is no larger than their sum).
+unit roundoff is 2^-53. A 2^-1075 additive allowance covers gradual
+underflow for elementary round-to-nearest operations. FTZ/DAZ is unsupported.
+The term graph conservatively allows contraction within a term. Every completed
+term must be materialized before the non-reassociated streaming Sum2 recurrence.
+Sum2 uses the independently derived E + (u + gamma_(n-1)^2) M theorem bound;
+its residual arithmetic must not be contracted, reassociated or flushed.
 """
 from fractions import Fraction as F
 import json
 from oracle import HERE,BITS,J,W,S,C,r,h,grade,mf,out,b64
-U=F(1,2**53); TINY=F(3,2**1022)
+U=F(1,2**53); TINY=F(1,2**1075)
 GRID=2**160
 def down(x):return F(x.numerator*GRID//x.denominator,GRID)
 def up(x):return -down(-x)
+
+def require(condition, message):
+    if not condition:
+        raise ValueError(message)
+
+
+from sum2_analysis import sum2_error
+
+
+def sum2_terms(terms):
+    """Enclose the unchanged ideal sum with the new scalar operation error."""
+    require(bool(terms), 'empty Sum2 term sequence')
+    low = sum((term.lo for term in terms), F(0))
+    high = sum((term.hi for term in terms), F(0))
+    inherited = sum((term.e for term in terms), F(0))
+    magnitude = sum((term.mag + term.e for term in terms), F(0))
+    return B(low, high, sum2_error(magnitude, inherited, len(terms)))
 
 class B:
     def __init__(self,lo,hi=None,error=F(0)):
@@ -43,13 +62,13 @@ class B:
         return B.rounded(min(values),max(values),propagated)
     __rmul__=__mul__
     def divide(a,b):
-        assert b.lo*b.hi>0
-        m=min(abs(b.lo),abs(b.hi));assert b.e<m
+        require(b.lo*b.hi>0, "division domain contains zero")
+        m=min(abs(b.lo),abs(b.hi));require(b.e<m, "division error reaches zero")
         values=[a.lo/b.lo,a.lo/b.hi,a.hi/b.lo,a.hi/b.hi]
         propagated=a.e/(m-b.e)+a.mag*b.e/(m*(m-b.e))
         return B.rounded(min(values),max(values),propagated)
     def divide_constant(a,n):
-        assert n>0
+        require(n>0, "nonpositive divisor")
         return B.rounded(a.lo/n,a.hi/n,a.e/n)
 
 def poly(c,x):
@@ -71,7 +90,7 @@ def check(n):
     # selection neighborhoods. Restrict actual road domain to s<=20.
     upper=min(F(20),F(max(0,n-1))+F(1,10**12))
     d=B(0,upper);step=d.divide_constant(n)
-    x=B(0);y=B(0)
+    x_terms=[];y_terms=[]
     max_phase=F(0); max_trig_error=F(0)
     for j in range(n):
         start=step*j
@@ -80,9 +99,11 @@ def check(n):
             theta=B(0)+t*(B(0)+(B(F(1,2))*B(r))*t)
             sn,cs=sc(theta)
             factor=(step*F(1,2))*weight
-            x=x+factor*cs;y=y+factor*sn
+            x_terms.append(factor*cs);y_terms.append(factor*sn)
             max_phase=max(max_phase,theta.e)
             max_trig_error=max(max_trig_error,sn.e,cs.e)
+    require(len(x_terms) == 5*n and len(y_terms) == 5*n, 'wrong Sum2 node count')
+    x=sum2_terms(x_terms);y=sum2_terms(y_terms)
     x=B(BITS['spiral_x'])+x;y=B(BITS['spiral_y'])+y
     theta=B(0)+d*(B(0)+(B(F(1,2))*B(r))*d)
     sn,cs=sc(theta)
@@ -106,8 +127,8 @@ def arc_check():
     y=B(0)-offset*hc+chord*ps
     dx=x-B(70);dy=-y-B(10)
     D=dx*dx+dy*dy
-    assert max(x.e,y.e)<F(1,10**12)
-    assert D.e<F(4,10**12)
+    require(max(x.e,y.e)<F(1,10**12), "arc coordinate error exceeds bound")
+    require(D.e<F(4,10**12), "arc distance error exceeds bound")
     return {'s_domain':'[0,31]','coordinate_errors':[out(x.e),out(y.e)],'D2_arithmetic_error':out(D.e),'certified_coordinate_bound':'1e-12','certified_D2_bound':'4e-12'}
 
 def arc_endpoint():
@@ -125,7 +146,7 @@ def arc_endpoint():
             for coordinate,query in [(x,70),(y,10)]:
                 lo=coordinate.lo-query-coordinate.e;hi=coordinate.hi-query+coordinate.e
                 lower+=min(lo*lo,hi*hi) if lo*hi>0 else 0
-            assert lower>100
+            require(lower>100, "arc endpoint exclusion failed")
             rows.append({'quadrant':quadrant,'sinc_division':use_division,'executed_D2_lower_bound':out(lower),'coordinate_error_bounds':[out(x.e),out(y.e)]})
     return rows
 
@@ -134,12 +155,12 @@ def main():
     for n in range(1,24):
         row,err,de=check(n);rows.append(row)
         errors=[max(a,b) for a,b in zip(errors,err)];dist=max(dist,de)
-    assert max(errors)<F(1,10**12)
+    require(max(errors)<F(1,10**12), "coordinate error exceeds bound")
     # Round a safe human-readable coordinate bound upward. This bound
     # applies to all counts; D² distance error below is independently
     # propagated through subtraction, squares, and additions above.
-    assert dist<F(5,10**11)
-    report={'arc_endpoint_exclusion':arc_endpoint(),'arc_interior':arc_check(),'outward_rounding_grid':'2^-160','unit_roundoff':str(U),'additive_underflow_allowance_per_operation':str(TINY),'max_coordinate_errors':[out(x) for x in errors],'max_D2_arithmetic_error':out(dist),'certified_coordinate_bound':'1e-12','certified_D2_bound':'5e-11','loose_original_coordinate_bound':'1e-11','loose_original_D2_bound':'8.9000000000002e-9','notes':['Count neighborhoods are widened by 1e-12 in s. A reach/count argument bounds any count-boundary displacement by less than this width.','The maximum coordinate bound applies to each executed point, not only sampled points. All value intervals and error computations are rational.','The exact real distance of the rounded point has no larger error than the included separately rounded D² computation.'], 'counts':rows}
+    require(dist<F(5,10**11), "distance error exceeds bound")
+    report={'arc_endpoint_exclusion':arc_endpoint(),'arc_interior':arc_check(),'outward_rounding_grid':'2^-160','unit_roundoff':str(U),'additive_underflow_allowance_per_operation':str(TINY),'underflow_mode':'gradual only; FTZ/DAZ unsupported','spiral_accumulation':'materialized Sum2; E + (u + gamma_(n-1)^2) M','max_coordinate_errors':[out(x) for x in errors],'max_D2_arithmetic_error':out(dist),'certified_coordinate_bound':'1e-12','certified_D2_bound':'5e-11','loose_original_coordinate_bound':'1e-11','loose_original_D2_bound':'8.9000000000002e-9','notes':['Count neighborhoods are widened by 1e-12 in s. A reach/count argument bounds any count-boundary displacement by less than this width.','The maximum coordinate bound applies to each executed point, not only sampled points. All value intervals and error computations are rational.','The exact real distance of the rounded point has no larger error than the included separately rounded D² computation.'], 'counts':rows}
     import mpmath as mp
     report['rounded_minimizer_radius']={'shoulder':out(mp.sqrt(mp.mpf('4')*mp.mpf('5e-11')/mp.mpf('1.81329999999999'))),'arc':out(mp.sqrt(mp.mpf('4')*mp.mpf('4e-12')/mp.mpf('.912499999999998'))),'meaning':'Every exact global minimizer of the executed rounded-point distance lies in this radius around the smooth stored-expression minimum. This is an enclosure, not a claim of a unique rounded minimizer. The representable-s comparison slack is below 1e-25 and is absorbed by the strict outward margins.'}
     (HERE/'rounding-results.json').write_text(json.dumps(report,indent=2)+'\n')
