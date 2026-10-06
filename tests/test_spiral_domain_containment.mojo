@@ -24,6 +24,7 @@ from extensions.carla.curve_interval import (
     _next_up,
 )
 from extensions.carla.geometry import RoadGeometry, SPIRAL
+from extensions.carla.lane_geometry import _lane_geometry_pos_at
 from extensions.carla.lane_refinement import (
     _chord_certificate,
     _chord_certificate_capture,
@@ -257,7 +258,7 @@ def test_count_join_keeps_both_errors_then_discards_union_derivatives() raises:
     var point = _lane_jet_with_proof(road, 0, 0, 0.99, 1.01, 0.99, 1.01, proof)
     for station in [0.99, _next_down(1.0), 1.0, _next_up(1.0), 1.01]:
         _canonical_contains(road, 0, point, station)
-        var scalar = selected.pos_at(station)
+        var scalar = _lane_geometry_pos_at(selected, station)
         assert_true(joined[0].rounded_value().contains(scalar.x))
         assert_true(joined[1].rounded_value().contains(scalar.y))
 
