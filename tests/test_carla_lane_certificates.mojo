@@ -6,7 +6,7 @@
 """Controls for enclosure admission, expansion branches, and exact budgets."""
 
 from extensions.carla.curve_bounds import _lane_jet, _scaled_point_distance_jet
-from extensions.carla.curve_distance import _normalized_square, _point_gap_scale
+from extensions.carla.lane_distance import _normalized_square, _point_gap_scale
 from extensions.carla.curve_interval import _Interval
 from extensions.carla.geometry import LINE, PARAM_POLY3, RoadGeometry, _Sample
 from extensions.carla.lane_refinement import (
