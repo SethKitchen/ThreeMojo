@@ -15,7 +15,10 @@ from tests._spiral_acceptance_controls import (
     _capture_acceptance_proof,
     _assert_acceptance_hit,
 )
-from tests.test_spiral_proof_successful_resume import _complete_resume
+from tests.test_spiral_proof_successful_resume import (
+    _complete_resume,
+    _acceptance_resume_terms,
+)
 
 
 def _strict_case(word: UInt32, inside: Bool) raises:
@@ -44,7 +47,8 @@ def _strict_case(word: UInt32, inside: Bool) raises:
         _lane_certificate_contains(road, 0, 0, location, generic), inside
     )
     assert_equal(cached.nodes, generic.nodes)
-    assert_equal(cached.terms, generic.terms)
+    assert_equal(cached.terms, _acceptance_resume_terms(True))
+    assert_equal(generic.terms, _acceptance_resume_terms(False))
 
 
 def test_admitted_proof_exact_boundary_is_excluded() raises:
