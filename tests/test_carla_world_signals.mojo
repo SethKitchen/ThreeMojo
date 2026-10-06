@@ -526,9 +526,10 @@ def test_sign_poses_and_boxes() raises:
     assert_equal(len(stop.effect_boxes), 1)
     _box(stop.effect_boxes[0], 56.75, 10, -90)
     # Road 10 crosses road 12. Its right lane: boxes every 3.15 m from its
-    # start, then back along road 1 while 0.1 s at 50 km/h lasts, each of
-    # those twice. Its left lane: from its start at x = 60 back to 50.55,
-    # then along road 2 while 0.1 s at the default 40 lasts, twice each.
+    # start, then one pair at x = 46.85 on road 1. Its 50 km/h limit is
+    # 13.888... m/s: the 1.575 m half-box costs 0.1134 s, so there is no
+    # second predecessor step within 0.1 s. Its left lane: from x = 60
+    # back to 50.55, then three pairs along road 2 at the 40 m/s fallback.
     # Road 14 comes from road 3 as road 12 does, and gets none.
     var xs: List[Float32] = [
         50,
@@ -537,12 +538,6 @@ def test_sign_poses_and_boxes() raises:
         59.45,
         46.85,
         46.85,
-        43.7,
-        43.7,
-        40.55,
-        40.55,
-        37.4,
-        37.4,
         60,
         56.85,
         53.7,
@@ -556,12 +551,12 @@ def test_sign_poses_and_boxes() raises:
     ]
     assert_equal(len(stop.check_boxes), len(xs))
     for i in range(len(xs)):
-        var y = Float32(1.75) if i < 12 else Float32(-1.75)
+        var y = Float32(1.75) if i < 6 else Float32(-1.75)
         _box(
             stop.check_boxes[i],
             xs[i],
             y,
-            Float32(0) if i < 12 else Float32(180),
+            Float32(0) if i < 6 else Float32(180),
         )
         _near(stop.check_boxes[i].extent, 1.575, 1.575, 1.575)
     ref yield_sign = world.signs[1]
@@ -579,6 +574,56 @@ def test_sign_poses_and_boxes() raises:
     assert_equal(len(world.signs[3].check_boxes), 0)
     assert_equal(len(world.signs[4].effect_boxes), 0)
     _near(world.get_transform(FAR_LIMIT).location, 207, -195, 2)
+
+
+def test_stop_anticipation_uses_physical_speed_units() raises:
+    # Independent time calculation: 0.9 * 3.5 / 2 = 1.575 m per debit.
+    # At 50 km/h one debit exceeds 0.1 s. At 50 m/s three fit and the
+    # fourth does not. The algorithm emits a box before its time debit.
+    var kmh_time = Float64(1.575) / (Float64(50) / Float64(3.6))
+    var si_time = Float64(1.575) / Float64(50)
+    assert_almost_equal(kmh_time, Float64(0.1134), atol=1e-12)
+    assert_true(kmh_time > Float64(0.1))
+    assert_almost_equal(si_time, Float64(0.0315), atol=1e-12)
+    assert_true(3 * si_time < Float64(0.1))
+    assert_true(4 * si_time > Float64(0.1))
+    var speeds: List[String] = [
+        'max="50" unit="km/h"',
+        'max="13.888888888888889" unit="m/s"',
+        'max="50" unit="m/s"',
+    ]
+    var steps: List[Int] = [1, 1, 4]
+    for variant in range(len(speeds)):
+        var map = load_opendrive(
+            _town().replace('max="50" unit="km/h"', speeds[variant])
+        )
+        var boxes = give_way_boxes(map, SignalId("3001"))
+        var right = 4 + 2 * steps[variant]
+        assert_equal(len(boxes.check), right + 10)
+        # Four boxes on each junction lane; each predecessor occurs twice.
+        for i in range(4):
+            _box(boxes.check[i], 50 + 3.15 * Float32(i), 1.75, 0)
+            _box(boxes.check[right + i], 60 - 3.15 * Float32(i), -1.75, 180)
+        for step in range(steps[variant]):
+            for duplicate in range(2):
+                _box(
+                    boxes.check[4 + 2 * step + duplicate],
+                    50 - 3.15 * Float32(step + 1),
+                    1.75,
+                    0,
+                )
+        # Road 2 has no numeric limit. The unchanged 40 m/s fallback
+        # permits three predecessor boxes on each of its two paths.
+        for step in range(3):
+            for duplicate in range(2):
+                _box(
+                    boxes.check[right + 4 + 2 * step + duplicate],
+                    60 + 3.15 * Float32(step + 1),
+                    -1.75,
+                    180,
+                )
+        for box in boxes.check:
+            _near(box.extent, 1.575, 1.575, 1.575)
 
 
 def test_groups_and_first_states() raises:
@@ -903,15 +948,30 @@ def test_leaving_one_light_keeps_another_lights_association() raises:
 
 def test_destroyed_vehicle_leaves_its_boxes() raises:
     var world = _world()
-    var car = _car(world, _pose(42, 1.75, 0.05, 0))
+    # At x = 50 the car overlaps four corrected stop check boxes: the
+    # pair at 46.85 and the junction boxes at 50 and 53.15. It also meets
+    # light 2001's junction box, preserving both destruction checks.
+    var car = _car(world, _pose(50, 1.75, 0.05, 0))
     var other = _car(world, _pose(88.775, 1.75, 0.05, 0))
     _ = world.tick()
     assert_equal(len(world.traffic_lights.lights[0].vehicles), 1)
+    # Light 2005's box at 47 also overlaps this position.
+    assert_equal(len(world.traffic_lights.lights[1].vehicles), 1)
+    assert_equal(len(world.signs[0].vehicles_to_check), 1)
+    assert_equal(world.signs[0].vehicles_to_check[0], car)
+    assert_equal(world.signs[0].check_counts[0], 4)
+    assert_equal(len(world.signs[0].timers), 0)
+    var survivor_body = world.actor(other).body
+    var survivor_location = world.get_location(other)
     assert_true(world.destroy_actor(car))
     assert_true(world.is_alive(other))
+    assert_equal(world.actor(other).body, survivor_body)
+    assert_true(world.get_location(other) == survivor_location)
     assert_equal(len(world.traffic_lights.lights[0].vehicles), 0)
-    # It was in two pairs of the stop sign's check boxes at 40.55 and 43.7.
+    assert_equal(len(world.traffic_lights.lights[1].vehicles), 0)
     assert_equal(len(world.signs[0].vehicles_to_check), 0)
+    assert_equal(len(world.signs[0].timers), 4)
+    assert_false(world.destroy_actor(car))
     assert_equal(len(world.signs[0].timers), 4)
 
 
