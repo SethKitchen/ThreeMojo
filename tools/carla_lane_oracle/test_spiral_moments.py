@@ -131,7 +131,9 @@ class TableTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)/'repo'
-        paths = {m.PINS, m.DATA}
+        paths = {m.PINS, m.DATA, m.source_contracts.PINS,
+                 Path(m.DEPENDENCIES['guard_pin_file'])}
+        paths.update(Path(path) for path in m.DEPENDENCIES['paths'])
         paths.update(Path(record['path']) for group in ('arrays', 'scalars', 'blocks')
                      for record in self.pins[group].values())
         for path in paths:
@@ -262,7 +264,7 @@ class TableTests(unittest.TestCase):
             m.verify_inputs(self.root)
 
     def test_changed_ideal_graph_rejected(self):
-        self.change('extensions/carla/curve_bounds.mojo', 'Expression.constant(1.0 + nodes[i])', 'Expression.constant(nodes[i])')
+        self.change('extensions/carla/curve_bounds.mojo', '1.0 + nodes[i]', 'nodes[i]')
         with self.assertRaisesRegex(m.CheckError, 'operation graph changed'):
             m.verify_inputs(self.root)
 
@@ -315,6 +317,371 @@ class TableTests(unittest.TestCase):
         output = Path(self.temp.name)/'report'
         self.assertEqual(self.run_main(['--report','--output',str(output)]), 0)
         self.assertEqual([p.name for p in output.iterdir()], ['spiral-moment-report.json'])
+
+
+    def reject_source_case(self, path, original, changed, diagnostic):
+        target = self.root/path
+        self.assertNotEqual(original, changed)
+        fixed = {pin: (self.root/pin).read_bytes()
+                 for pin in (m.PINS, m.source_contracts.PINS)}
+        target.write_text(changed)
+        try:
+            with self.assertRaisesRegex(m.CheckError, diagnostic):
+                m.verify_inputs(self.root)
+            # Exercise the actual fail-closed CLI path in normal and -O runs.
+            self.assertEqual(self.run_main(['--check']), 1)
+            self.assertEqual(fixed, {pin: (self.root/pin).read_bytes() for pin in fixed})
+        finally:
+            target.write_text(original)
+
+    def test_fixed_pin_stored_half_dependency_mutations(self):
+        path = 'extensions/carla/curve_interval.mojo'
+        original = (self.root/path).read_text()
+        marker = 'def _stored_half['
+        prefix, helper = original.split(marker)
+        cases = [
+            ('half factor', 'constant(0.5)', 'constant(0.25)'),
+            ('wrong operand', 'var result = value *', 'var result = _JetExpression[derivatives].constant(1.0) *'),
+            ('inherited error', '_Interval.point(value.error)', '_Interval.point(0.0)'),
+            ('lower exponent', 'UInt64(623)', 'UInt64(622)'),
+            ('upper exponent', 'UInt64(1423)', 'UInt64(1424)'),
+            ('lower inequality', 'actual.low >=', 'actual.low >'),
+            ('upper inequality', 'actual.high <=', 'actual.high <'),
+            ('finite ideal fallback', 'not value.value.is_finite()', 'False'),
+            ('unordered fallback', 'value.value.low > value.value.high', 'False'),
+            ('finite error fallback', 'not isfinite(value.error)', 'False'),
+            ('negative error fallback', 'value.error < 0.0', 'False'),
+            ('fallback return', 'return result', 'return value'),
+            ('changed ideal field', 'var actual =', 'result.value = value.value\n    var actual ='),
+        ]
+        for label, before, after in cases:
+            with self.subTest(label=label):
+                self.assertIn(before, helper)
+                self.reject_source_case(path, original,
+                    prefix + marker + helper.replace(before, after, 1), 'stored-half dependency closure')
+
+    def test_fixed_pin_complete_helper_closure_mutations(self):
+        path = 'extensions/carla/curve_interval.mojo'
+        original = (self.root/path).read_text()
+        cases = [
+            ('math import', 'import fma, inf', 'import sqrt as fma, inf'),
+            ('bitcast import', 'from std.memory import bitcast', 'from unexpected.memory import bitcast'),
+            ('primitive half constant', 'var zero = _Interval.point(0.0)', 'var zero = _Interval.point(1.0)'),
+            ('primitive product value', '_tight_product_bound(self.value, other.value)', '_tight_product_bound(self.value, self.value)'),
+            ('primitive product inherited error', '_Interval.point(other.error)', '_Interval.point(0.0)'),
+            ('rounded value error', 'return self.value + _Interval(-self.error, self.error)', 'return self.value'),
+            ('interval product operand', 'var a = self.low * other.low', 'var a = self.low * other.high'),
+            ('tight product endpoint', '_directed_endpoint_product(one.low, two.low)', '_directed_endpoint_product(one.high, two.low)'),
+            ('product residual', 'fma(one, two, -value)', 'fma(one, two, value)'),
+            ('roundoff threshold', 'if exponent <= 1:', 'if exponent < 1:'),
+            ('next representable', 'bits + 1)', 'bits + 2)'),
+            ('qualifier removal', 'comptime if not Self.derivatives:', 'if not Self.derivatives:'),
+            ('helper generic', 'def _stored_half[\n    derivatives: Bool', 'def _stored_half[\n    derivatives: Int'),
+            ('helper decorator', 'def _stored_half[', '@no_inline\ndef _stored_half['),
+            ('missing helper', 'def _stored_half[', 'def _stored_half_missing['),
+        ]
+        for label, before, after in cases:
+            with self.subTest(label=label):
+                self.assertIn(before, original)
+                self.reject_source_case(path, original, original.replace(before, after, 1),
+                                        'stored-half dependency closure')
+        self.reject_source_case(path, original, original + '\n' + original[original.index('def _stored_half['):],
+                                'stored-half dependency closure')
+
+    def test_fixed_pin_ideal_caller_mutations(self):
+        path = 'extensions/carla/curve_bounds.mojo'
+        original = (self.root/path).read_text()
+        begin, end = m.BLOCK_BOUNDARIES['ideal_spiral']
+        body = m.selected_block(original, begin, end)
+        cases = [
+            ('wrong step', '_stored_half(step)', '_stored_half(rate)'),
+            ('wrong rate', '_stored_half(rate)', '_stored_half(step)'),
+            ('missing half call', '_stored_half(step)', 'step'),
+            ('extra half call', '_stored_half(step)', '_stored_half(_stored_half(step))'),
+            ('helper keyword', '_stored_half(step)', '_stored_half(value=step)'),
+            ('node rounding moved', '1.0 + nodes[i]', 'nodes[i]'),
+            ('wrong subtraction', 'geometry.curvature_end - geometry.curvature_start', 'geometry.curvature_start - geometry.curvature_end'),
+            ('wrong result index', 'trig[1]', 'trig[0]'),
+            ('qualifier removal', 'comptime Expression', 'Expression'),
+        ]
+        # The live block contains comments/blank lines, so replace within its
+        # exact raw region, not by regenerating a production module.
+        start, stop = original.index(begin), original.index(end)
+        raw = original[start:stop]
+        for label, before, after in cases:
+            with self.subTest(label=label):
+                self.assertIn(before, raw)
+                changed = original[:start] + raw.replace(before, after, 1) + original[stop:]
+                self.reject_source_case(path, original, changed, 'operation graph changed: ideal_spiral')
+
+    def test_fixed_pin_scalar_and_routing_mutations(self):
+        cases = [
+            ('extensions/carla/lane_geometry.mojo', 'step * 0.5 * weights[i] * cos(theta)',
+             'weights[i] * (step * 0.5) * cos(theta)', 'operation graph changed: scalar_spiral'),
+            ('extensions/carla/lane_geometry.mojo', '_curve_cos as cos,',
+             '_curve_sin as cos,', 'operation graph changed: geometry_trig_aliases'),
+            ('extensions/carla/curve_bounds.mojo', '    _stored_half,',
+             '    _stored_difference as _stored_half,', 'source routing changed: ideal_caller'),
+            ('extensions/carla/curve_bounds.mojo', '    _sincos_expression,',
+             '    _sincos_jet as _sincos_expression,', 'source routing changed: ideal_caller'),
+            ('extensions/carla/curve_trig.mojo', 'import _Interval, _Jet, _JetExpression',
+             'import _Interval, _Jet, _Jet as _JetExpression', 'source routing changed: trig_dependencies'),
+            ('extensions/carla/curve_trig.mojo', 'import atan, atan2, cos, floor',
+             'import atan, atan2, sin as cos, floor', 'source routing changed: trig_dependencies'),
+            ('extensions/carla/curve_trig.mojo', '@no_inline\ndef _curve_sincos',
+             'def _curve_sincos', 'source-block start'),
+        ]
+        for path, before, after, diagnostic in cases:
+            with self.subTest(path=path, mutation=before):
+                original = (self.root/path).read_text()
+                self.assertIn(before, original)
+                self.reject_source_case(path, original, original.replace(before, after, 1), diagnostic)
+        path = 'extensions/carla/curve_bounds.mojo'
+        original = (self.root/path).read_text()
+        self.reject_source_case(path, original, original + '\ncomptime _stored_half = _stored_difference\n',
+                                'source routing changed: ideal_caller')
+        self.reject_source_case(path, original, original + '\nfrom unexpected import _stored_half\n',
+                                'source routing changed: ideal_caller')
+
+    def test_fixed_pin_sentinel_and_declaration_mutations(self):
+        path = 'extensions/carla/curve_bounds.mojo'
+        original = (self.root/path).read_text()
+        begin, end = m.BLOCK_BOUNDARIES['ideal_spiral']
+        cases = [
+            ('missing start', original.replace(begin, 'def _different_expression[', 1), 'source-block start'),
+            ('duplicate start', original + '\n# ' + begin + '\n', 'source-block start'),
+            ('duplicate end', original + '\n# ' + end + '\n', 'source-block end'),
+            ('end before start', end + '\n' + original.replace(end, 'def _other_index(', 1), 'moved source-block boundary'),
+            ('unbound decorator', original.replace(begin, '@no_inline\n' + begin, 1), 'unbound decorator'),
+            ('indented start', original.replace(begin, '    ' + begin, 1), 'not top-level'),
+        ]
+        for label, changed, diagnostic in cases:
+            with self.subTest(label=label):
+                self.reject_source_case(path, original, changed, diagnostic)
+
+    def test_strict_pin_keys_paths_and_sentinels(self):
+        original = (self.root/m.PINS).read_bytes()
+        cases = [
+            ('top-level extra', lambda p: p.update(unexpected=True), 'top-level pin set'),
+            ('block extra', lambda p: p['blocks']['ideal_spiral'].update(unexpected=True), 'operation pin keys'),
+            ('block path', lambda p: p['blocks']['ideal_spiral'].update(path='other.mojo'), 'operation pin path'),
+            ('block sentinel', lambda p: p['blocks']['ideal_spiral'].update(begin='def _spiral_jet('), 'source-block boundary pin'),
+            ('dependency path', lambda p: p['dependencies'].update(paths=['other.mojo']), 'dependency closure pin'),
+            ('dependency group', lambda p: p['dependencies'].update(group='eligibility'), 'dependency closure pin'),
+            ('missing routing', lambda p: p['routing'].pop('ideal_caller'), 'routing pin set'),
+            ('routing path', lambda p: p['routing']['ideal_caller'].update(path='other.mojo'), 'routing pin path'),
+            ('extra projection', lambda p: p['ideal_projection'].update(unexpected=True), 'ideal-projection pin set'),
+            ('projection count', lambda p: p['ideal_projection'].update(helper_projections=4), 'ideal-projection result pins'),
+            ('commutation count', lambda p: p['ideal_projection'].update(rate_half_commutations=3), 'ideal-projection result pins'),
+            ('historical source', lambda p: p['ideal_projection'].update(legacy_normalized_source='changed'), 'historical ideal source changed'),
+        ]
+        for label, mutate, diagnostic in cases:
+            with self.subTest(label=label):
+                pins = json.loads(original)
+                mutate(pins)
+                (self.root/m.PINS).write_text(json.dumps(pins))
+                with self.assertRaisesRegex(m.CheckError, diagnostic):
+                    m.verify_inputs(self.root)
+                self.assertEqual(self.run_main(['--check']), 1)
+                (self.root/m.PINS).write_bytes(original)
+
+    def test_runtime_dependency_pin_path_and_key_controls(self):
+        path = self.root/m.source_contracts.PINS
+        original = path.read_bytes()
+        for variant in ('missing', 'extra', 'path'):
+            with self.subTest(variant=variant):
+                pins = json.loads(original)
+                group = pins['groups']['stored_arithmetic']
+                key = m.DEPENDENCIES['paths'][0]
+                if variant == 'missing':
+                    group.pop(key)
+                elif variant == 'extra':
+                    group['other.mojo'] = group[key]
+                else:
+                    group['other.mojo'] = group.pop(key)
+                path.write_text(json.dumps(pins))
+                with self.assertRaisesRegex(m.CheckError, 'dependency closure.*path set'):
+                    m.verify_inputs(self.root)
+                self.assertEqual(self.run_main(['--check']), 1)
+                path.write_bytes(original)
+
+    def test_projection_claim_is_narrow_and_executed(self):
+        pins = self.pins['ideal_projection']
+        interval = (self.root/m.DEPENDENCIES['paths'][0]).read_text()
+        helper = interval[interval.index('def _stored_half['):]
+        legacy = pins['legacy_normalized_source']
+        current = self.pins['blocks']['ideal_spiral']['normalized_source']
+        result = m.ideal_projection.verify_projection(legacy, current, helper)
+        self.assertEqual(result['helper_projections'], 5)
+        self.assertEqual(result['rate_half_commutations'], 2)
+        self.assertEqual(result['projected_ast_sha256'],
+                         'f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06')
+        # Directly test the projection with the source guard bypassed locally:
+        # an exact-current graph pin alone must not masquerade as the proof.
+        for changed in (current.replace('_stored_half(step)', '_stored_half(rate)', 1),
+                        current.replace('_stored_half(rate)', '_stored_half(step)', 1),
+                        current.replace('_stored_half(step)', 'step', 1),
+                        current.replace('1.0 + nodes[i]', 'nodes[i]', 1)):
+            with self.assertRaises(ValueError):
+                m.ideal_projection.verify_projection(legacy, changed, helper)
+        with self.assertRaisesRegex(ValueError, 'initial expression'):
+            m.ideal_projection.verify_projection(legacy, current, helper.replace('constant(0.5)', 'constant(0.25)', 1))
+        with self.assertRaisesRegex(ValueError, 'non-error result'):
+            m.ideal_projection.verify_projection(legacy, current, helper.replace('var actual =', 'result.value = value.value\n    var actual =', 1))
+
+    def test_dependency_comments_and_equivalent_trig_words_allowed(self):
+        path = self.root/'extensions/carla/curve_interval.mojo'
+        path.write_text(path.read_text() + '\n# Benign dependency comment.\n')
+        self.change('extensions/carla/curve_trig.mojo', '    -0.5,', '    -0.5000000000000,')
+        m.verify_inputs(self.root)
+        self.assertEqual(self.run_main(['--check']), 0)
+
+
+
+    def test_complete_array_rhs_suffixes_rejected(self):
+        for name in ('_COS_COEFFICIENTS', '_GL_NODES'):
+            path, size = m.ARRAY_SPECS[name]
+            original = (self.root/path).read_text()
+            marker = f'comptime {name}: Array[Float64, {size}] = ['
+            start = original.index(marker)
+            stop = original.index(']', start + len(marker)) + 1
+            zeros = ','.join(['0.0'] * size)
+            for suffix in (f' if False else [{zeros}]', ' + [0.0]', '[0]',
+                           '; comptime unexpected = 0',
+                           ' \\\n    if False else [' + zeros + ']'):
+                with self.subTest(array=name, suffix=suffix):
+                    changed = original[:stop] + suffix + original[stop:]
+                    self.reject_source_case(path, original, changed,
+                                            'constant-array|constant literal')
+
+    def test_array_docstring_decoys_rejected(self):
+        for name in ('_COS_COEFFICIENTS', '_GL_NODES'):
+            path, size = m.ARRAY_SPECS[name]
+            original = (self.root/path).read_text()
+            marker = f'comptime {name}: Array[Float64, {size}] = ['
+            start = original.index(marker)
+            stop = original.index(']', start + len(marker)) + 1
+            declaration = original[start:stop]
+            zeros = ', '.join(['0.0'] * size)
+            replacement = f'comptime {name} : Array[Float64, {size}] = [{zeros}]'
+            changed = original[:start] + replacement + original[stop:]
+            closing = changed.index('"""', changed.index('"""') + 3)
+            changed = changed[:closing] + '\n' + declaration + '\n' + changed[closing:]
+            with self.subTest(array=name):
+                self.reject_source_case(path, original, changed, 'stored constant words changed')
+
+    def test_stored_geometry_shadow_import_and_redeclaration_rejected(self):
+        path = 'extensions/carla/geometry.mojo'
+        original = (self.root/path).read_text()
+        for suffix in ('\n_GL_NODES = [0.0, 0.0, 0.0, 0.0, 0.0]\n',
+                       '\nfrom unexpected import _GL_NODES\n',
+                       '\ndef _GL_NODES() -> Float64:\n    return 0.0\n'):
+            with self.subTest(suffix=suffix):
+                self.reject_source_case(path, original, original + suffix,
+                                        'source routing changed: stored_geometry')
+        self.reject_source_case(path, original,
+            original + '\ncomptime _GL_NODES : Array[Float64, 5] = [0.0,0.0,0.0,0.0,0.0]\n',
+            'ambiguous constant array')
+
+    def test_complete_array_literals_allow_comments_and_word_spellings(self):
+        for name in ('_COS_COEFFICIENTS', '_GL_NODES'):
+            path, size = m.ARRAY_SPECS[name]
+            target = self.root/path
+            original = target.read_text()
+            marker = f'comptime {name}: Array[Float64, {size}] = ['
+            start = original.index(marker)
+            stop = original.index(']', start + len(marker)) + 1
+            declaration = original[start:stop]
+            declaration = declaration.replace(f'{name}:', f'{name} :', 1)
+            declaration = declaration.replace('0.0,', '0.0000000,', 1)
+            declaration = declaration.replace('[\n', '[  # literal-only array\n', 1)
+            target.write_text(original[:start] + declaration + '  # trailing comment' + original[stop:])
+        m.verify_inputs(self.root)
+        self.assertEqual(self.run_main(['--check']), 0)
+
+
+
+    def test_scalar_docstring_decoys_and_suffixes_rejected(self):
+        path = 'extensions/carla/curve_trig.mojo'
+        original = (self.root/path).read_text()
+        for name in sorted(m.SCALAR_NAMES):
+            marker = f'comptime {name} = Float64('
+            start = original.index(marker)
+            stop = original.index(')', start + len(marker)) + 1
+            declaration = original[start:stop]
+            replacement = f'comptime {name}=Float64(0.0)'
+            changed = original[:start] + replacement + original[stop:]
+            closing = changed.index('"""', changed.index('"""') + 3)
+            changed = changed[:closing] + '\n' + declaration + '\n' + changed[closing:]
+            with self.subTest(scalar=name, variant='docstring decoy'):
+                self.reject_source_case(path, original, changed, 'stored scalar word changed')
+            for suffix in (' if False else Float64(0.0)', ' + Float64(0.0)',
+                           '; comptime unexpected = 0'):
+                with self.subTest(scalar=name, suffix=suffix):
+                    self.reject_source_case(path, original,
+                        original[:stop] + suffix + original[stop:], 'scalar declaration|scalar literal')
+
+    def test_scalar_logical_declaration_allows_same_word_spelling(self):
+        path = self.root/'extensions/carla/curve_trig.mojo'
+        text = path.read_text()
+        for name in sorted(m.SCALAR_NAMES):
+            marker = f'comptime {name} = Float64('
+            start = text.index(marker)
+            stop = text.index(')', start + len(marker)) + 1
+            declaration = text[start:stop]
+            literal = declaration[len(marker):-1]
+            # Every pinned scalar has an ordinary finite decimal spelling.
+            same_word = str(F(literal)) if '/' not in str(F(literal)) else literal
+            replacement = f'comptime {name}=Float64({same_word})  # same stored word'
+            text = text[:start] + replacement + text[stop:]
+        path.write_text(text)
+        m.verify_inputs(self.root)
+        self.assertEqual(self.run_main(['--check']), 0)
+
+    def test_function_sentinel_docstring_decoys_rejected(self):
+        for block in ('ideal_spiral', 'scalar_spiral'):
+            path = m.BLOCK_PATHS[block]
+            original = (self.root/path).read_text()
+            begin, end = m.BLOCK_BOUNDARIES[block]
+            start, stop = original.index(begin), original.index(end)
+            raw = original[start:stop]
+            changed = original.replace(begin, begin.replace('(', ' (', 1)
+                                       if '(' in begin else begin.replace('[', ' [', 1), 1)
+            changed = changed.replace(end, end.replace('(', ' (', 1), 1)
+            if block == 'ideal_spiral':
+                changed = changed.replace('_stored_half(step)', '_stored_half(rate)', 1)
+            else:
+                changed = changed.replace('step * 0.5', 'step * 0.25', 1)
+            closing = changed.index('"""', changed.index('"""') + 3)
+            changed = changed[:closing] + '\n' + raw + end + '\n' + changed[closing:]
+            with self.subTest(block=block):
+                self.reject_source_case(path, original, changed, 'not an actual top-level token')
+
+
+
+    def test_adjacent_number_tokens_and_empty_array_entries_rejected(self):
+        cases = [
+            ('extensions/carla/curve_trig.mojo', '    1.0,', '    1 .0,', 'constant literal'),
+            ('extensions/carla/curve_trig.mojo', '    1.0,', '    1 e0,', 'constant literal'),
+            ('extensions/carla/curve_trig.mojo', '    1.0,', '    1.0,,', 'constant literal'),
+            ('extensions/carla/curve_trig.mojo', 'Float64(1048576.0)', 'Float64(1048576 .0)', 'scalar literal'),
+            ('extensions/carla/curve_trig.mojo', 'Float64(1048576.0)', 'Float64(1048576 e0)', 'scalar literal'),
+        ]
+        for path, before, after, diagnostic in cases:
+            with self.subTest(mutation=after):
+                original = (self.root/path).read_text()
+                self.assertIn(before, original)
+                self.reject_source_case(path, original, original.replace(before, after, 1), diagnostic)
+
+    def test_helper_projection_rejects_all_unapproved_result_uses(self):
+        interval = (self.root/m.DEPENDENCIES['paths'][0]).read_text()
+        helper = interval[interval.index('def _stored_half['):]
+        for statement in ('result.value.low = 0.0', 'f(value=result)',
+                          'result.some_method()', 'var alias = result'):
+            with self.subTest(statement=statement):
+                changed = helper.replace('var actual =', statement + '\n    var actual =', 1)
+                with self.assertRaisesRegex(ValueError, 'unapproved ideal helper result use'):
+                    m.ideal_projection.verify_helper_projection(changed)
 
 
 if __name__ == '__main__':
