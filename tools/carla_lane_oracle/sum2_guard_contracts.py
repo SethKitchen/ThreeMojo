@@ -24,6 +24,7 @@ PINS = Path('tools/carla_lane_oracle/sum2-guard-pins.json')
 MANIFEST_SHA256 = '98933650efb2cad39d62a4fe1ddc18c35331cd79dac3fb8b021284148f6b6109'
 FORMAT_MANIFEST_SHA256 = '60448936958e8748ef0a419e6679ec6542e72615ac89a80a7bb24a79581a4e06'
 PUBLIC_DOC_MIGRATION_SHA256 = '4cc4cefa6199c1cfbcfd05a636254d1a061889b9a51951d8ceb723544aa6c3dd'
+CONTAINING_MODEL_REMOVAL_SHA256 = '3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8'
 FINAL_SOURCE_FREEZE_SHA256 = 'eb64ab48aa4e09ea5c064a8ad7c7801bb7c04fdf5a14c7f61494ba8186930aef'
 CALLERS = {
     'lane_geometry': ('_lane_spiral',),
@@ -214,6 +215,7 @@ def verify(root):
     pins = json.loads((root / PINS).read_text(), object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
                           'public_doc_migration_sha256', 'final_source_freeze_sha256',
+                          'containing_model_removal_sha256',
                           'scope', 'helper_source', 'callers', 'protected_inventory'},
             'wrong Sum2 guard pin keys')
     require(type(pins['schema']) is int and pins['schema'] == 2,
@@ -224,6 +226,8 @@ def verify(root):
             pins['public_doc_migration_sha256'] == PUBLIC_DOC_MIGRATION_SHA256 and
             pins['final_source_freeze_sha256'] == FINAL_SOURCE_FREEZE_SHA256,
             'unreviewed final Sum2 format/documentation lineage')
+    require(pins['containing_model_removal_sha256'] == CONTAINING_MODEL_REMOVAL_SHA256,
+            'unreviewed containing-model removal lineage')
     require(set(pins['callers']) == set(CALLERS), 'wrong Sum2 guard caller modules')
     helper = (root/'extensions/carla/curve_sum2.mojo').read_text()
     require(significant(helper) == significant(pins['helper_source']),
