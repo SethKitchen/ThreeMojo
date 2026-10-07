@@ -139,7 +139,7 @@ Passing source checks cannot substitute for those missing qualifications.
 ### Separate runtime dependency gates
 
 `source_contracts.py` and `runtime-source-pins.json` bind exact complete module
-tokens for five declared groups. The fixed group/path sets reject missing,
+tokens for six declared groups. The fixed group/path sets reject missing,
 extra or redirected dependencies. They have no hash-refresh command.
 
 - Stored arithmetic: full primitive/error/helper module, including qualifiers
@@ -348,7 +348,7 @@ unknown-result branch. The moment routing check removes that same parameter.
 
 The optional runtime dependency group covers all five new modules and their
 producer/caller dependencies. `optional_runtime_contracts.py` separately checks
-fresh guards, model ownership and scale, the same ideal/error/witness pairing,
+fresh guards, standalone model ownership and scale, the same ideal/error/witness pairing,
 stored dispatch predicates and indices, deferred splitting, original budget
 reservations and the complete grouped-count debit. The checked error edge is
 raw grouped envelope to private origin error to the checked Sum2 leaf. The raw
@@ -372,21 +372,47 @@ soundness, coverage, performance or final CI success. Native checks and final
 report generation use the final production and test inventory separately.
 
 
-The formatted immediate-followup successor binds the complete integer-only
-`_objective_followup_room` and its current-counter caller. Cached subdivision
-retains four nodes and center work plus eight parent reference reservations.
-Stored dispatch with one or two cuts admits `3*c+2` nodes and `16*c` terms,
-then charges the original one setup node and `8*c` probe terms. Grouped work
-requires two remaining nodes before its optional one-node attempt. These
-bounds reserve immediate children and mandatory rechecks. They do not promise
-completion of an arbitrary remaining search under every custom budget.
-Exact and one-short tests execute the reviewed integer helper and dispatch
-admission statements in Python; they do not replace native budget controls.
+The historical immediate-followup and cached-closure successors are retained
+in the migration records. The standalone model module retains complete source, fresh invocation guards
+on construction/restriction, owner/scale/error checks, and exact/one-short
+integer admission controls for `_objective_followup_room` and
+`_objective_recheck_room`. These model helpers are no longer called by the
+production solver.
 
+Stored dispatch with one or two cuts still admits `3*c+2` nodes and `16*c`
+terms, then charges the original one setup node and `8*c` probe terms. Grouped
+work still requires two remaining nodes before its optional one-node attempt.
+These bounds reserve immediate children and mandatory rechecks. They do not
+promise completion of every remaining search under arbitrary custom budgets.
 
-The final cached goal and accuracy closures require a remaining validation
-node through the complete integer-only `_objective_recheck_room` helper.
-Their predicate order is bound. Strict cached exclusion remains unconditional
-because it discards the cell. The final-format migration retains exact raw
-hashes and the reviewed AST, move, qualifier and borrowed-origin lineage.
-Native and full-CI results remain separate from these source contracts.
+### Containing-objective-model reuse removal (2026-10-07)
+
+The active solver no longer imports, retains, captures or restricts a
+containing objective model. A retained ancestor's wider error floor could
+make ordinary continuation exhaust default budgets. The original reference
+work debit now immediately precedes the current cell's full producer. The
+standalone objective-model module and its tests remain, as do the exact
+station/scale expansion memo, all node fees, work/depth caps and other solver
+operations. The map change is commentary only; its complete token pins stay
+unchanged.
+
+`containing-model-removal-migration.json` records the exact two-file freeze,
+formatter receipt, former pin hashes, three-node AST removal projection,
+four changed lane-refinement dependency bindings, and the single changed
+complete caller/routing/inventory entry. It retains all twelve removed
+caller-only mutations verbatim and the prior semantic block as historical
+evidence. Existing migration histories are preserved with successor links.
+
+Replacement semantic controls reject objective-model imports, aliases,
+re-exports and consumers anywhere in production, including new namespaces
+and package initializers. They require the original prepaid fresh cell
+producer, reject stale-domain substitution and early cached closure, and
+retain both complete exact station/scale expansion memo paths. Comments and
+docstrings cannot manufacture a consumer. The full model helper dependency
+and all 29 complete guard caller declarations remain bound. No checker can
+refresh pins automatically.
+
+These controls establish source integrity and the reviewed scheduling removal,
+not native behavior, coverage, performance or final CI qualification. Separate
+runtime diagnostics still have 19 default driving cohort failures; removing
+this optimization does not establish default-budget success for every query.
