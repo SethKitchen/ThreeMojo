@@ -3194,6 +3194,163 @@
       },
       "native_work_by_checker_worker": false,
       "scope": "No official root/coverage/native/performance result is inferred from source checks. Final bounded read-only CLI receipts are external outputs; no source rewrite is needed to record them."
+    },
+    {
+      "event": "reviewed natural-gap necessary-prerequisite dispatch migration",
+      "date": "2026-10-06",
+      "base_tree": "6e7f3eb5c6fec188428f115198fdd4b617befba6",
+      "runtime_patch_sha256": "73f43cccd46c501a52b41bfd860449af481ec595a473c68a9c2ebb757d206ee6",
+      "independent_review": {
+        "REVIEW.md": "8af74efac1ef4943d3b3c0f6199100e28cc7cedca2e96af40039ce4781a6df4b",
+        "receipt.json": "84e49984eeb65e4073c22bec3b9ea2806998d71202d1aa9b9ef68fbc3015e735",
+        "binding.json": "32ebaa3627c238af1e3faae5f5fdf336a24780f24ac8e3551deff1ed9f91e818"
+      },
+      "production_source": {
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before_sha256": "61e212c77e790343647d2f6a9bcabd849865c311cca3f94e19c0d47fbf8df10c",
+        "after_sha256": "6e46e22db565424c7cf6379c817588c7968772d0b848e93d3575951dbf957069",
+        "after_token_sha256": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48"
+      },
+      "reviewed_change": "Import _RoundedBox from the unchanged curve_rounded_arc module. Dispatch _rounded_axis_lane_minimum only after the original axis attempt declines and _RoundedBox.bounds(low, high).known is true. Preserve the complete _refine_lane_certificate contract, including its first invocation-local FP-state guard.",
+      "callee_relation": "The unchanged _rounded_line_axis_context rejects the identical false predicate before info_index/profile traversal. Its bounds/operand implementation is unchanged. The new check cannot skip an admitted optional proof. Singleton zero remains supported; non-singleton zero-touching boxes and nonzero endpoints outside the closed [2^-400, 2^400] magnitude guard cannot be admitted later.",
+      "validation_order": "The original _axis_lane_minimum still calls road._check_lane before any declining return. Finite/ordered bounds and valid seed checks remain before dispatch. The enclosing low >= 0 guard is unchanged.",
+      "constant_work_inventory": "Two fixed-size _rounded_operand calls, each with two fixed bit constructions, finite/zero/range tests, followed by fixed endpoint order/sign/zero comparisons and a three-field box construction. No profile traversal, Gauss term, search node or candidate exclusion goal is visited by this prerequisite.",
+      "accounting": "Unsupported boxes skip only a necessarily declined optional attempt. Supported boxes retain the original helper, node/term reservations and debit on later decline. No performed traversal is uncharged or refunded; no tolerance, cap, exact-distance comparison, tie rule, workload or original test body changes.",
+      "error_precedence_caveat": "For multiply-invalid private inputs, omitting the impossible optional attempt can change which existing error is raised first, such as a nonfinite query with an insufficient optional budget. No invalid query becomes successful; identical error precedence is not claimed.",
+      "preserved_original_failure": "The original official natural-gap red receipt remains historical evidence; this migration does not overwrite or reinterpret it as a passing run.",
+      "runtime_pin_changes": [
+        {
+          "group": "canonical_accumulation",
+          "path": "extensions/carla/lane_refinement.mojo",
+          "before": "d6f4020dda6c0bcca49f961eb756528ffc46b18a4699cf50ff5f109cdfcec0d1",
+          "after": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48"
+        },
+        {
+          "group": "translation",
+          "path": "extensions/carla/lane_refinement.mojo",
+          "before": "d6f4020dda6c0bcca49f961eb756528ffc46b18a4699cf50ff5f109cdfcec0d1",
+          "after": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48"
+        },
+        {
+          "group": "support",
+          "path": "extensions/carla/lane_refinement.mojo",
+          "before": "d6f4020dda6c0bcca49f961eb756528ffc46b18a4699cf50ff5f109cdfcec0d1",
+          "after": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48"
+        }
+      ],
+      "guard_pin_changes": [
+        "callers.lane_refinement.routing",
+        "callers.lane_refinement.functions._refine_lane_certificate"
+      ],
+      "prior_owned_sha256": {
+        "tools/carla_lane_oracle/runtime-source-pins.json": "2f83f0084e4c58da2738ba73d3f7fa17a0bcfb8e231bd0a7bcee130c26bc935c",
+        "tools/carla_lane_oracle/sum2-guard-pins.json": "ac395ad618f219ada7cdee5019b8c612805285f17c89637be90592c2f9f375d4",
+        "tools/carla_lane_oracle/test_sum2_environment.py": "fb79f6f35a0e322faccbb3492ef8d9b565368723944b09e4d53a6e2e7693930b",
+        "tools/carla_lane_oracle/sum2-correspondence-migration.json": "ba2129d946c777f8fee6c693bab1762c985613322c039bdfa9e3d4678e6cc1af"
+      },
+      "preservation": {
+        "canonical_active_placements_unchanged": 31,
+        "canonical_breakdown": {
+          "supported_source": 7,
+          "translated_methods": 21,
+          "translated_dependencies": 3
+        },
+        "other_complete_guarded_callers_unchanged": 15,
+        "complete_sum2_helper_unchanged": true,
+        "all_other_runtime_pins_and_qualifier_pins_unchanged": true,
+        "coefficient_fractions": 1408,
+        "endpoint_words": 2816,
+        "frozen_references_and_coefficients": {
+          "tools/carla_lane_oracle/spiral-moment-pins.json": "f93f01b65069e79bbcf0f056905187c99d0bf438939f5cac00b8b4aff1f4191b",
+          "extensions/carla/spiral_moment_table_data.mojo": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+          "tests/_spiral_full_jet_reference.mojo": "a076ca24b4f9f940b0e5e20213ed3a2a3fd370f92d0f1bc043f36f9ae5a7edd8",
+          "tests/_spiral_half_error_reference.mojo": "76b70a95dace9f5a74da9aedfcbc765a5deb060af3d708e638ef10c10a09ece5",
+          "tests/_spiral_sum2_reference.mojo": "29af6d7a5c9bb4d4f3044a982754b09a9f45c5d2f3a4f5bcfd0e28f62fbf35e7",
+          "tools/carla_lane_oracle/constants.json": "31f1096a37e774523f90f92bc1f1d75c0b288bb74bf226e4cce227625119404c"
+        },
+        "receipt_sha256": "c885a3c71f3bf36a3f230e84418b1a116b674d8fda4952d85fff8c55a2de351c"
+      },
+      "maintained_adversarial_controls": [
+        "omitted prerequisite",
+        "inverted prerequisite",
+        "disjoined prerequisite",
+        "wrong domain endpoint",
+        "wrong known field",
+        "redirected rounded-box import"
+      ],
+      "qualification": {
+        "environment_tests_per_mode": 53,
+        "modes": [
+          "normal",
+          "optimized (-O)"
+        ],
+        "source_clis_per_mode": [
+          "check_sampled_values --repo-root",
+          "spiral_moments --repo-root --check",
+          "check_runtime_support --repo-root"
+        ],
+        "logs": [
+          {
+            "check": "environment",
+            "mode": "normal",
+            "log": "environment-normal.log",
+            "sha256": "32d93d80256fe6396dfd32a6a567fd8d173c9c07d386cfc84558b5dc29ee1443",
+            "status": "PASS"
+          },
+          {
+            "check": "sampled",
+            "mode": "normal",
+            "log": "sampled-normal.log",
+            "sha256": "a877a165d06ecfc40f8b658ebc562db44693f2c7fc0211a6e4139834f9940944",
+            "status": "PASS"
+          },
+          {
+            "check": "moments",
+            "mode": "normal",
+            "log": "moments-normal.log",
+            "sha256": "2fb8501c7e491310c07e60af0c91e2d83d0155f408ddcbb4e7c61193b41f817c",
+            "status": "PASS"
+          },
+          {
+            "check": "support",
+            "mode": "normal",
+            "log": "support-normal.log",
+            "sha256": "a20b046ecf24ca19cc970b693e9d5bee63289a42e56012787c853ee17faebe10",
+            "status": "PASS"
+          },
+          {
+            "check": "environment",
+            "mode": "optimized",
+            "log": "environment-optimized.log",
+            "sha256": "6e395d39e52f74de36c562f1ddf5ad13a49ec30cbf5309868dc4b5c0e6f86963",
+            "status": "PASS"
+          },
+          {
+            "check": "sampled",
+            "mode": "optimized",
+            "log": "sampled-optimized.log",
+            "sha256": "a877a165d06ecfc40f8b658ebc562db44693f2c7fc0211a6e4139834f9940944",
+            "status": "PASS"
+          },
+          {
+            "check": "moments",
+            "mode": "optimized",
+            "log": "moments-optimized.log",
+            "sha256": "2fb8501c7e491310c07e60af0c91e2d83d0155f408ddcbb4e7c61193b41f817c",
+            "status": "PASS"
+          },
+          {
+            "check": "support",
+            "mode": "optimized",
+            "log": "support-optimized.log",
+            "sha256": "a20b046ecf24ca19cc970b693e9d5bee63289a42e56012787c853ee17faebe10",
+            "status": "PASS"
+          }
+        ],
+        "semantic_only_rejection": true,
+        "native_jobs": 0,
+        "scope": "Compiler-free focused checks only. The parent owns official complete replay, anatomy regeneration, coverage and final performance qualification. No native or aggregate success is inferred."
+      }
     }
   ]
 }
