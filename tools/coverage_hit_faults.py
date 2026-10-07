@@ -34,7 +34,8 @@ def main():
     # These are source preflight assertions, not execution of C semantics.
     require('if ((device || inode) && !enabled)\n        abort();' in text, "qualification check failed: 'if ((device || inode) && !enabled)\\n        abort();' in text")
     require(text.index('write_record(probe_sink, bytes, size);') < text.index('memcpy(slot->bytes, bytes, size);'), "qualification check failed: text.index('write_record(probe_sink, bytes, size);') < text.index('memcpy(slot->bytes, bytes, size);')")
-    require('pthread_atfork(NULL, NULL, child_after_fork)' in text, "qualification check failed: 'pthread_atfork(NULL, NULL, child_after_fork)' in text")
+    require('pthread_atfork(before_fork, after_parent_fork, child_after_fork)' in text,
+            'qualification check failed: all fork transition hooks must be registered')
     require('O_WRONLY | O_NONBLOCK | O_CLOEXEC' in text, "qualification check failed: 'O_WRONLY | O_NONBLOCK | O_CLOEXEC' in text")
     require(text.count('memcpy(slot->bytes, bytes, size);') == 1, "qualification check failed: text.count('memcpy(slot->bytes, bytes, size);') == 1")
     require('#include TRANSPORT_SOURCE' in harness_bytes.decode(), "qualification check failed: '#include TRANSPORT_SOURCE' in harness_bytes.decode()")
