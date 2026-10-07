@@ -214,6 +214,19 @@ endif
 COV_BUDGET := $(shell n=$(words $(COVERAGE_SUITES)); \
                 [ $$n -lt 60 ] && n=60; echo $$n)
 
+# Explicit coverage transport/execution profile. Raw retains the historical
+# JIT path plus the narrow native-fixture repair. Compiled profiles preserve
+# source argv0 and arguments, but use a temporary native executable.
+COV_PROFILE ?= raw
+ifeq ($(filter $(COV_PROFILE),raw aot aot-hits),)
+$(error COV_PROFILE must be raw, aot, or aot-hits)
+endif
+ifeq ($(COV_PROFILE),raw)
+COVERAGE_RUN = python3 tools/native_test_support.py run --root $(COV_DIR)
+else
+COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root $(COV_DIR)
+endif
+
 CACHE_DIR := .cache
 # Shell quoting also protects flags that contain spaces or shell punctuation.
 quote = '$(subst ','"'"',$(1))'
@@ -237,6 +250,7 @@ HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
           --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
           --setting=$(call quote,format:$(FORMATTED)) \
+          --setting=$(call quote,coverage-profile:$(COV_PROFILE)) \
           --setting=$(call quote,covered:$(COVERED)) \
           --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
 ifeq ($(strip $(HASH)),)
@@ -618,13 +632,13 @@ ifneq ($(strip $(COVERED)),)
 	@# Exact streams are compressed as they arrive. MC-DC record order stays
 	@# intact, without keeping tens of gigabytes of repeated probes on disk.
 	@printf '%s\n' $(COVERAGE_SUITES) \
-	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
+	  | python3 tools/coverage_io.py group --seconds $(COV_BUDGET) -- \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
 	             python3 tools/coverage_io.py capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
 	               --err "$(COV_DIR)/hits/$$name.txt.gz" -- \
-	               python3 tools/native_test_support.py run --root $(COV_DIR) \
+	               $(COVERAGE_RUN) \
 	                 --suite "$(COV_DIR)/tests/$$name.mojo" --cache $(CACHE_DIR)/native-coverage \
 	                 -- \
 	                 $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo"' _ {} \
@@ -1636,6 +1650,7 @@ test-coverage-tool:
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
 	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
 	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.
 # Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's
