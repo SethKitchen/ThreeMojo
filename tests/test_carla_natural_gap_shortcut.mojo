@@ -104,5 +104,78 @@ def test_natural_gap_cover_reopens_for_tighter_resume() raises:
     assert_equal(result.cells[0].high, 1.0)
 
 
+def test_supported_parameter_box_keeps_declined_optional_work() raises:
+    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var query = Vector3(0.25, 0, 100000000)
+    # A positive, safe parameter box enters the optional context. Both plan
+    # coordinates vary, so that proof declines and its charge must survive.
+    var result = _refine_lane_certificate(
+        road, 0, 0, 0.25, 1.0, query, 0.25, 0.0, max_nodes=3, max_terms=6
+    )
+    assert_equal(result.nodes, 3)
+    assert_equal(result.terms, 6)
+    assert_false(result.exact_witness)
+    assert_equal(len(result.cells), 1)
+    assert_equal(result.cells[0].low, 0.25)
+    assert_equal(result.cells[0].high, 1.0)
+    with assert_raises(contains="quadrature work limit"):
+        _ = _refine_lane_certificate(
+            road,
+            0,
+            0,
+            0.25,
+            1.0,
+            query,
+            0.25,
+            0.0,
+            max_nodes=3,
+            max_terms=5,
+        )
+    with assert_raises(contains="interval work limit"):
+        _ = _refine_lane_certificate(
+            road,
+            0,
+            0,
+            0.25,
+            1.0,
+            query,
+            0.25,
+            0.0,
+            max_nodes=2,
+            max_terms=6,
+        )
+
+
+def test_skipped_optional_parameter_box_keeps_lane_validation() raises:
+    var road = _road(RoadGeometry(LINE, 0.0, 0.0, 0.0, 0.3, 1.0))
+    var query = Vector3(0.25, 0, 100000000)
+    with assert_raises(contains="no section at that index"):
+        _ = _refine_lane_certificate(
+            road,
+            1,
+            0,
+            0.0,
+            1.0,
+            query,
+            0.25,
+            0.0,
+            max_nodes=2,
+            max_terms=5,
+        )
+    with assert_raises(contains="no lane at that index"):
+        _ = _refine_lane_certificate(
+            road,
+            0,
+            1,
+            0.0,
+            1.0,
+            query,
+            0.25,
+            0.0,
+            max_nodes=2,
+            max_terms=5,
+        )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
