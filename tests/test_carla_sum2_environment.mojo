@@ -24,6 +24,20 @@ from extensions.carla.spiral_moment_proof import (
     _try_build_spiral_moments,
     _try_spiral_moment_expansion as dynamic_expansion,
 )
+from tests._spiral_grouped_fp_controls import (
+    _assert_grouped_refuses_hostile_state,
+)
+from tests._spiral_grouped_lane_fp_controls import (
+    _assert_grouped_lane_refuses_hostile_state,
+)
+from tests._sample_dispatch_controls import (
+    _dispatch_road,
+    _assert_dispatch_refuses_hostile_state,
+)
+from tests._objective_model_fp_controls import (
+    _objective_fp_fixture,
+    _assert_objective_refuses_hostile_state,
+)
 from tests._lazy_taylor_controls import _diagonal_road
 from tests._spiral_acceptance_controls import _capture_acceptance_proof
 from extensions.carla.spiral_domain_proof import (
@@ -102,6 +116,8 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
             )
         )
     )
+    var sampled_dispatch_road = _dispatch_road()
+    var objective_fixture = _objective_fp_fixture()
     for repeat in range(2):
         for mode in range(1, modes):
             assert_true(_sum2_supported_environment())
@@ -116,6 +132,16 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
                 )
                 assert_equal(actual & mask, expected)
                 assert_true(not _sum2_supported_environment())
+                _assert_objective_refuses_hostile_state(
+                    objective_fixture[0],
+                    objective_fixture[1],
+                    objective_fixture[2],
+                )
+                _assert_dispatch_refuses_hostile_state(sampled_dispatch_road)
+                _assert_grouped_lane_refuses_hostile_state(proof_road, cached)
+                _assert_grouped_refuses_hostile_state(
+                    proof_geometry, d, cached.first_count
+                )
                 assert_true(not isfinite(_sum2_error(1.0, 0.0, 5)))
                 var bound = _spiral_jet(
                     geometry, _Jet.variable(1.0, 1.1), 3, Vector3(0, 0, 0)
