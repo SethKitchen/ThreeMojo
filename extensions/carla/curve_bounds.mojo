@@ -648,6 +648,7 @@ def _lane_jet_model_proof[
     root_high: Float64,
     mut captured: _SpiralRootCapture,
     ideal_translation: Bool = False,
+    require_reuse: Bool = False,
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
     # A supplied cached proof was captured under a checked arithmetic mode.
     # Recheck this invocation before record/profile selection can reuse it.
@@ -808,6 +809,9 @@ def _lane_jet_model_proof[
     var point: Tuple[_Jet, _Jet, _Jet]
     if reused:
         point = reused.value()
+    elif require_reuse:
+        # Optional callers separately reserve their one original fallback.
+        return _unknown_point()
     else:
         point = _reference_jet_capture[capture](
             record.geometry,
