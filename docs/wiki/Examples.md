@@ -87,6 +87,17 @@ mkdir -p out
 | `vase.mojo` | `lofts.png` | [Lofts and clipping groups](Lofts-and-clipping-groups) |
 | `sapling.mojo` | `generators.png` | [Procedural generators](Procedural-generators) |
 | `particles.mojo` | `computenodes.png` | [Compute nodes](Compute-nodes) |
+| `towers.mojo` | `procedural-towers.png` | [Procedural towers](Procedural-towers) |
+| `interiors.mojo` | `floor-plans-and-interiors.png` | [Floor plans and interiors](Floor-plans-and-interiors) |
+| `room_cells.mojo` | `building-topology.png` | [Building topology](Building-topology) |
+| `building_model.mojo` | `building-model.png` | [Building model](Building-model) |
+| `exchange.mojo` | `ifc-exchange.png` | [IFC exchange](IFC-exchange) |
+| `frame_modes.mojo` | `frame-analysis.png` | [Frame analysis](Frame-analysis) |
+| `plate.mojo` | `shell-analysis.png` | [Shell analysis](Shell-analysis) |
+| `heat.mojo` | `building-energy.png` | [Building energy](Building-energy) |
+| `spring_modes.mojo` | `numerics.png` | [Numerics](Numerics) |
+| `audio_game_humanoid.mojo` | `audio-character.glb` | [Audio-aligned game faces](Audio-aligned-game-faces) |
+| `carla_towns.mojo` | `carla_towns.png` | [CARLA rendering](CARLA-rendering) |
 | `femur.mojo` | `femur.png` | [Femur](Femur) |
 | `tibia.mojo` | `tibia.png` | [Tibia](Tibia) |
 | `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
@@ -135,13 +146,9 @@ Animated outputs are APNG files. A browser or VS Code plays them. A viewer that 
 
 ## Benchmarks
 
-| Program | Shows |
-|---|---|
-| `bench/raster_bench.mojo` | CPU against GPU rasterization across image sizes. |
-| `bench/scene_bench.mojo` | Each stage of the CPU renderer, one worker and every core. |
-| `tools/bench_examples.py` | Every example against three.js, and the Mojo 1.0 probe. |
-
-The recorded tables live on [Benchmarks](Benchmarks). The refresh command is in [How to measure examples](How-to-measure-examples).
+`tools/bench_examples.py` times the catalog against three.js and, when installed, Mojo 1.0.
+[Benchmarks](Benchmarks) names every other CPU bench and records who wins.
+The refresh command is in [How to measure examples](How-to-measure-examples).
 
 ## Tools
 

@@ -55,4 +55,6 @@ On macOS, `webgl-node` opens the context with no extra package.
 
 The pin is Mojo 1.1. A second venv at `.venv-mojo10/` compiles the same sources with Mojo 1.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 
-Paired columns sit next to each other. Color marks the faster side. See [Benchmarks](Benchmarks) for the recorded tables.
+The draw winner names the faster frame loop.
+A gap under 10% is a tie.
+See [Benchmarks](Benchmarks) for the recorded tables.

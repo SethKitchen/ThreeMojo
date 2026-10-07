@@ -88,3 +88,5 @@ The four-worker mixed-image cases improve in these measurements.
 Their peak RSS increases because more large jobs can overlap.
 High-worker and uniform cases include regressions and variation.
 The report retains every case and the reproducible input and result records.
+
+`bench/image_decode.mojo` times `read_gltf` and `AssetRegistry.preload`.

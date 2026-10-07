@@ -735,3 +735,4 @@ The rotation ends at 360 radians, as in three.js, which writes 360 and reads rad
 - [Materials](Materials) has the fields a material track drives.
 - [Rotations](Rotations) has `slerp`, which a rotation track turns along.
 - [Units](Units#clock) has the `Clock` that gives `update` its delta.
+- `bench/animation_loop_bench.mojo` times actions and the mixer.

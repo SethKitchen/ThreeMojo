@@ -86,8 +86,26 @@ class BenchmarkProvenanceTests(unittest.TestCase):
         self.assertEqual(bench.measurement_label(row), '2026-10-01')
         table = bench.example_table(slim['examples'], False)
         self.assertIn('| Measured |', table)
+        self.assertIn('| Draw winner |', table)
         self.assertIn('| 2026-10-01 |', table)
         self.assertIn('per-row measurement date is unknown', table)
+        self.assertNotIn('background-color', table)
+
+    def test_draw_winner_uses_frame_time_and_refused_compiles_stay_out(self):
+        row = example('cube')
+        row['threemojo']['run']['frames_seconds'] = 0.020
+        row['threejs_webgl'] = dict(METRIC) | {'frames_seconds': 0.050, 'backend': 'webgl'}
+        row['threejs_flat'] = dict(METRIC) | {'frames_seconds': 0.010}
+        table = bench.example_table([row], True)
+        self.assertIn('| Mojo |', table)
+        refused = example('spin')
+        refused['mojo10'] = {'compile': {'ok': False, 'seconds': 1.0}, 'run': {'ok': False}}
+        version = bench.mojo10_table({'compile': dict(METRIC), 'run': dict(METRIC)},
+                                     {'compile': dict(METRIC), 'run': dict(METRIC)},
+                                     [refused])
+        self.assertNotIn('`spin`', version)
+        self.assertIn('Refused catalog rows: 1', version)
+        self.assertNotIn('background-color', version)
 
     def run_main(self, incompatible):
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:
