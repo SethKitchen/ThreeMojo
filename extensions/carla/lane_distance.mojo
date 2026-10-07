@@ -17,7 +17,12 @@ from extensions.carla.curve_distance import (
     _normalized_square as _distance_normalized_square,
     _signed_product,
 )
-from extensions.carla.curve_interval import _Interval
+from extensions.carla.curve_interval import (
+    _Interval,
+    _tight_sum_bound,
+    _tight_quotient_bound,
+    _tight_square_bound,
+)
 from std.math import inf, isfinite
 from std.memory import bitcast
 
@@ -31,6 +36,26 @@ def _normalized_square[
     # new arithmetic and does not tighten or widen the kernel's enclosure.
     var bound = _distance_normalized_square[axes](point, query, scale)
     return _Interval(bound.low, bound.high)
+
+
+def _refinement_square[
+    axes: Int
+](
+    point: Array[Float64, 3], query: Array[Float64, 3], scale: Float64
+) -> _Interval:
+    # Keep the original lower endpoint for the unchanged 64-ULP allowance.
+    # Error-free residuals tighten ONLY the witness's upward distance bound.
+    var original = _normalized_square[axes](point, query, scale)
+    var tighter = _Interval.point(0.0)
+    for axis in range(axes):
+        var gap = _tight_sum_bound(
+            _Interval.point(point[axis]), -_Interval.point(query[axis])
+        )
+        var value = _tight_quotient_bound(gap, _Interval.point(scale))
+        tighter = _tight_sum_bound(tighter, _tight_square_bound(value))
+    if isfinite(tighter.high):
+        original.high = min(original.high, tighter.high)
+    return original
 
 
 @no_inline

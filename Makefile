@@ -218,11 +218,17 @@ CACHE_DIR := .cache
 # Shell quoting also protects flags that contain spaces or shell punctuation.
 quote = '$(subst ','"'"',$(1))'
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
+# Native test fixtures are test-only. Their compiler identity also invalidates
+# suite stamps; a missing compiler is a build failure, never a skipped suite.
+export CC
+NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
+                       --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
 HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
           --setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS)) \
           --setting=$(call quote,$(TOOLCHAIN)) \
+          --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
@@ -302,9 +308,8 @@ help:
 
 check: check-cpu check-gpu
 
-# The half that needs nothing but the Mojo toolchain. This is what to run when
-# MAX is not installed, and what proves the no-dependencies claim is still
-# true.
+# The standard-library production half does not need MAX. Native test-only
+# fixtures also use a host C compiler; they are never linked into production.
 check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-coverage-tool test-portability
 
 # The complete GPU check needs MAX and an accelerator. The status line
@@ -345,6 +350,7 @@ $(TEST_CPU_STAMP):
 	    --setting=$(call quote,$(MOJO)) \
 	    --setting=$(call quote,$(MOJOFLAGS)) \
 	    --setting=$(call quote,$(TOOLCHAIN)) \
+	    --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
 	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
 	@xargs -n 2 -P $(JOBS) \
@@ -355,7 +361,9 @@ $(TEST_CPU_STAMP):
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
 	             out=$$(python3 tools/compiler_telemetry.py --suite "$$1" --log-fd 3 -- \
-	                    $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
+	                    python3 tools/native_test_support.py run --root . \
+	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
+	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \
 	                    progress "$$1" "build-end: exit=$$build_rc"; \
 	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \
@@ -599,6 +607,7 @@ else
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
+	@python3 tools/native_test_support.py copy --root . --destination $(COV_DIR)
 	@mkdir -p $(COV_DIR)/hits
 endif
 
@@ -615,7 +624,10 @@ ifneq ($(strip $(COVERED)),)
 	             python3 tools/coverage_io.py capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
 	               --err "$(COV_DIR)/hits/$$name.txt.gz" -- \
-	               $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo"' _ {} \
+	               python3 tools/native_test_support.py run --root $(COV_DIR) \
+	                 --suite "$(COV_DIR)/tests/$$name.mojo" --cache $(CACHE_DIR)/native-coverage \
+	                 -- \
+	                 $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo"' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
 	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
@@ -1614,6 +1626,8 @@ clean-images:
 test-tools:
 	@python3 -m unittest discover -s tools -p 'test_*.py'
 	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
+	@python3 -m unittest discover -s tools/carla_lane_oracle -p 'test_*.py'
+	@python3 tools/carla_lane_oracle/spiral_moments.py --check
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.

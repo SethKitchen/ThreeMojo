@@ -5,8 +5,9 @@
 
 """Private stored-polynomial geometry for continuous lane certificates.
 
-Reference and fixed-s APIs retain the public geometry implementation. These
-helpers preserve the authored lane expression, with the current public-pose
+Separate reference APIs retain the public geometry implementation. Canonical
+SPIRAL positions use stored-term Sum2 accumulation. These helpers keep the
+authored lane expression, with the current public-pose
 refusals before unsafe indexing or integer conversion. They do not replace
 scalar witnesses with an ideal trigonometric or moment approximation.
 """
@@ -33,20 +34,24 @@ from extensions.carla.curve_trig import (
     _curve_sinc,
     _sinc_derivative,
 )
+from extensions.carla.curve_sum2 import _sum2_update, _require_sum2_environment
 from std.math import ceil, isfinite
 
 
 def _lane_geometry_pos_at(
     geometry: RoadGeometry, dist: Float64
-) -> DirectedPoint:
+) raises -> DirectedPoint:
     """Return the point `dist` meters into the record, in double.
 
     Args:
-        dist: Distance from the record's start, in meters. It is
-            clamped to the record.
+        geometry: The road geometry record.
+        dist: Distance from its start in meters, clamped to the record.
 
     Returns:
         The point and heading, with z zero.
+
+    Raises:
+        Error: If a SPIRAL uses an unsupported arithmetic mode.
     """
     var d = min(max(dist, 0.0), geometry.length)
     if geometry.kind == LINE:
@@ -117,7 +122,8 @@ def _lane_arc_offset_derivative(
     )
 
 
-def _lane_spiral(geometry: RoadGeometry, d: Float64) -> DirectedPoint:
+def _lane_spiral(geometry: RoadGeometry, d: Float64) raises -> DirectedPoint:
+    _require_sum2_environment()
     var k0 = geometry.curvature_start
     var rate = (
         geometry.curvature_end - geometry.curvature_start
@@ -131,16 +137,28 @@ def _lane_spiral(geometry: RoadGeometry, d: Float64) -> DirectedPoint:
     # rounding a large world origin would discard small quadrature terms.
     var x = Float64(0.0)
     var y = Float64(0.0)
+    var x_correction = Float64(0.0)
+    var y_correction = Float64(0.0)
     for piece in range(pieces):  # pragma: no branch
         var start = step * Float64(piece)
         for i in range(5):  # pragma: no branch
             var t = start + step * 0.5 * (1.0 + nodes[i])
             var theta = geometry.heading + t * (k0 + 0.5 * rate * t)
-            x += step * 0.5 * weights[i] * cos(theta)
-            y += step * 0.5 * weights[i] * sin(theta)
+            # Non-inlined Sum2 calls materialize the complete products.
+            # A named intermediate alone would not prevent contraction.
+            var next_x = _sum2_update(
+                x, x_correction, step * 0.5 * weights[i] * cos(theta)
+            )
+            var next_y = _sum2_update(
+                y, y_correction, step * 0.5 * weights[i] * sin(theta)
+            )
+            x = next_x[0]
+            x_correction = next_x[1]
+            y = next_y[0]
+            y_correction = next_y[1]
     return DirectedPoint(
-        geometry.x + x,
-        geometry.y + y,
+        geometry.x + (x + x_correction),
+        geometry.y + (y + y_correction),
         0.0,
         geometry.heading + d * (k0 + 0.5 * rate * d),
     )

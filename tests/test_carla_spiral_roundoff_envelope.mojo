@@ -13,12 +13,14 @@ from extensions.carla.spiral_domain_proof import (
 )
 from extensions.carla.spiral_roundoff_proof import (
     _try_spiral_roundoff_envelope,
-    _sequential_sum_error,
+    _sum2_envelope_error,
 )
 from std.math import inf, isfinite
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 from tests._spiral_domain_controls import _geometry
+from tests._spiral_full_jet_reference import _FullJet
+from tests._spiral_sum2_reference import _sum2_reference_envelope_error
 
 
 def _check_counts(begin: Int, end: Int) raises:
@@ -121,27 +123,54 @@ def test_sequential_sum_envelope_handles_subnormal_and_overflow_edges() raises:
     var value = _ValueJet(
         _Interval(-tiny, tiny), _Interval.whole(), _Interval.whole(), tiny
     )
-    var error = _sequential_sum_error(value, 320, 0.0)
+    var error = _sum2_envelope_error(value, 320, 0.0)
     assert_true(isfinite(error))
     assert_true(error >= 320.0 * tiny)
     var largest = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
     value = _ValueJet(
         _Interval(-largest, largest), _Interval.whole(), _Interval.whole(), 0.0
     )
-    assert_false(isfinite(_sequential_sum_error(value, 320, 0.0)))
+    assert_false(isfinite(_sum2_envelope_error(value, 320, 0.0)))
     for count in [0, 321]:
         assert_false(
-            isfinite(_sequential_sum_error(_ValueJet.constant(1.0), count, 0.0))
+            isfinite(_sum2_envelope_error(_ValueJet.constant(1.0), count, 0.0))
         )
     assert_false(
         isfinite(
-            _sequential_sum_error(
+            _sum2_envelope_error(
                 _ValueJet.constant(1.0), 5, inf[DType.float64]()
             )
         )
     )
     value.error = -1.0
-    assert_false(isfinite(_sequential_sum_error(value, 5, 0.0)))
+    assert_false(isfinite(_sum2_envelope_error(value, 5, 0.0)))
+
+
+def test_sum2_envelope_matches_independent_uniform_reference() raises:
+    var tiny = bitcast[DType.float64](UInt64(1))
+    for count in [0, 1, 2, 5, 320, 321]:
+        for magnitude in [Float64(0.0), tiny, 1e-14, 1.0, 1e100]:
+            for inherited in [Float64(0.0), tiny, 1e-14, 1.0]:
+                for origin in [Float64(0.0), 1e6, -1e6, 1e20, -1e20]:
+                    var term = _ValueJet(
+                        _Interval(-magnitude, magnitude),
+                        _Interval.whole(),
+                        _Interval.whole(),
+                        inherited,
+                    )
+                    var frozen = _FullJet(
+                        term.value, term.first, term.second, term.error
+                    )
+                    assert_equal(
+                        bitcast[DType.uint64](
+                            _sum2_envelope_error(term, count, origin)
+                        ),
+                        bitcast[DType.uint64](
+                            _sum2_reference_envelope_error(
+                                frozen, count, origin
+                            )
+                        ),
+                    )
 
 
 def main() raises:

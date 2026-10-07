@@ -11,7 +11,8 @@ work. Queries use the same stored polynomial with those errors and fresh
 heading. This module never evaluates a canonical scalar lane witness.
 """
 
-from extensions.carla.curve_interval import _Interval, _Jet
+from extensions.carla.curve_sum2 import _sum2_supported_environment
+from extensions.carla.curve_interval import _Interval, _Jet, _stored_half
 from extensions.carla.geometry import RoadGeometry, SPIRAL
 from extensions.carla.road import Road
 from extensions.carla.road_info import info_index
@@ -20,7 +21,8 @@ from extensions.carla.spiral_moment_table import (
     _SpiralMomentProof,
     _ideal_moment_polynomial,
 )
-from std.math import isfinite
+from math.vector3 import Vector3
+from std.math import inf, isfinite
 
 
 struct _SpiralRootCapture(ImplicitlyCopyable):
@@ -95,6 +97,8 @@ def _try_pack_spiral_proof(
     max_proof_units: Int = 1048576,
     max_payload_bytes: Int = 1048576,
 ) -> Optional[_SpiralDomainProof]:
+    if not _sum2_supported_environment():
+        return None
     # Logical payload cap, not an allocator-capacity or RSS claim. Check before
     # any append can grow the sparse List. Map appends only a complete result.
     if captured.first_count < 1 or captured.last_count > 64:
@@ -266,8 +270,15 @@ def _spiral_proof_matches(
 
 
 def _spiral_proof_branch(
-    proof: _SpiralDomainProof, geometry: RoadGeometry, d: _Jet, pieces: Int
+    proof: _SpiralDomainProof,
+    geometry: RoadGeometry,
+    d: _Jet,
+    pieces: Int,
+    translation: Vector3 = Vector3(0, 0, 0),
 ) -> Tuple[_Jet, _Jet, _Jet]:
+    # Caller owns a successful arithmetic-mode check in this invocation,
+    # before record/profile selection. Do not expose this private branch as
+    # a standalone unchecked cached-bound entry.
     # Called only after fresh record/count/clamp/station containment checks.
     # The immutable original-root q0 proof applies to the actual d graph.
     var handle = _SpiralMomentProof(pieces)
@@ -278,8 +289,8 @@ def _spiral_proof_branch(
     var z = u * u
     var x = d * _ideal_moment_polynomial(handle, False, z)
     var y = d * u * _ideal_moment_polynomial(handle, True, z)
-    x = (_Jet.constant(geometry.x) - _Jet.constant(0.0)) + x
-    y = (_Jet.constant(geometry.y) + _Jet.constant(0.0)) + y
+    x = (_Jet.constant(geometry.x) - _Jet.constant(Float64(translation.x))) + x
+    y = (_Jet.constant(geometry.y) + _Jet.constant(Float64(translation.y))) + y
     # Match the COMPLETE zero-translation ideal reference, including origin.
     # Table width is already in ideal intervals, never a scalar roundoff term.
     x.error = proof.first_x_error
@@ -287,8 +298,13 @@ def _spiral_proof_branch(
     if pieces == proof.last_count:
         x.error = proof.last_x_error
         y.error = proof.last_y_error
+    if translation.x != 0.0 or translation.y != 0.0 or translation.z != 0.0:
+        # Translation is valid only for ideal Taylor expansion. Never claim
+        # that root world-evaluator errors describe a translated scalar graph.
+        x.error = inf[DType.float64]()
+        y.error = inf[DType.float64]()
     # Keep the original fresh graph/error; the lane tail keeps its trig guard.
     var heading = _Jet.constant(geometry.heading) + d * (
-        _Jet.constant(geometry.curvature_start) + _Jet.constant(0.5) * rate * d
+        _Jet.constant(geometry.curvature_start) + _stored_half(rate) * d
     )
     return (x, y, heading)

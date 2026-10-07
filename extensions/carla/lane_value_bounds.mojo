@@ -3,15 +3,26 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Private derivative-elided value/error bounds for sampled lane covers.
+"""Private derivative-elided value/error bounds for lane source enclosures.
 
-This follows the full sampled Jet's value, scalar-error and branch graph.
+This follows the full lane Jet's value, scalar-error and branch graph.
 Unused derivative fields remain whole and must never be used as a proof.
 No scalar evaluator, stored literal, domain selection or work cap changes.
 """
 
-from extensions.carla.curve_interval import _Interval, _ValueJet
-from extensions.carla.curve_bounds import _sample_index, _intersect_ideal_bounds
+from extensions.carla.curve_interval import (
+    _stored_difference,
+    _stored_half,
+    _stored_blend_error,
+    _Interval,
+    _ValueJet,
+    _without_derivatives,
+)
+from extensions.carla.curve_bounds import (
+    _sample_index,
+    _intersect_ideal_bounds,
+    _lane_jet,
+)
 from extensions.carla.curve_trig import (
     _expression_polynomial,
     _uncertain_expression,
@@ -21,12 +32,22 @@ from extensions.carla.curve_trig import (
     _QUARTER_PI,
     _ATAN_REDUCE,
     _ATAN_COEFFICIENTS,
+    _SIN_COEFFICIENTS,
+    _PHASE_LIMIT,
     _sign_bit,
     _curve_cos,
     _curve_sin,
     _curve_atan2,
 )
-from extensions.carla.geometry import RoadGeometry, PARAM_POLY3, POLY3
+from extensions.carla.geometry import (
+    RoadGeometry,
+    PARAM_POLY3,
+    POLY3,
+    LINE,
+    ARC,
+    SPIRAL,
+)
+from std.math import isfinite
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Road
 from extensions.carla.road_info import info_index
@@ -188,6 +209,9 @@ def _sample_blend_value(
     # also retains the original finite enclosure if the local difference
     # overflows even though the weighted expression remains bounded.
     result.value = _intersect_ideal_bounds(result.value, ideal.value)
+    var coupled_error = _stored_blend_error(rate, one, two)
+    if isfinite(coupled_error) and coupled_error >= 0.0:
+        result.error = min(result.error, coupled_error)
     return result
 
 
@@ -197,14 +221,16 @@ def _sample_value(
     var one = geometry.samples[index]
     var two = geometry.samples[index + 1]
     # The same expression and endpoint convention as RoadGeometry._sampled.
-    var rate = (_ValueJet.constant(two.s) - d) / _ValueJet.constant(
-        two.s - one.s
-    )
+    var rate = _stored_difference(
+        _ValueJet.constant(two.s), d
+    ) / _ValueJet.constant(two.s - one.s)
     var u = _sample_blend_value(rate, one.u, two.u)
     var v = _sample_blend_value(rate, one.v, two.v)
     var tu = _sample_blend_value(rate, one.tu, two.tu)
     var tv = _sample_blend_value(rate, one.tv, two.tv)
-    var heading = _atan_value(tv)
+    var heading = _ValueJet.constant(0.0)
+    if geometry.kind != PARAM_POLY3:
+        heading = _atan_value(tv)
     if geometry.kind == PARAM_POLY3:
         heading = _atan2_value(tv, tu)
         var domain = d.rounded_value()
@@ -287,7 +313,92 @@ def _union_value_points(
     )
 
 
+def _sinc_value(value: _ValueJet) -> _ValueJet:
+    var domain = value.rounded_value().absolute()
+    if domain.high <= _QUARTER_PI:
+        return _expression_polynomial(
+            materialize[_SIN_COEFFICIENTS](), value * value
+        )
+    var trigonometric = _sincos_expression(value)[0] / value
+    if domain.low > _QUARTER_PI:
+        return trigonometric
+    var polynomial = _expression_polynomial(
+        materialize[_SIN_COEFFICIENTS](), value * value
+    )
+    return _uncertain_value(
+        polynomial.rounded_value().hull(trigonometric.rounded_value())
+    )
+
+
+def _constant_sincos_value(heading: Float64) -> Tuple[_ValueJet, _ValueJet]:
+    var result = _sincos_expression(_ValueJet.constant(heading))
+    if not isfinite(heading) or abs(heading) > _PHASE_LIMIT:
+        return result
+    var unknown = _Interval.whole()
+    return (
+        _ValueJet(result[0].rounded_value(), unknown, unknown, 0.0),
+        _ValueJet(result[1].rounded_value(), unknown, unknown, 0.0),
+    )
+
+
+def _arc_offset_value(
+    geometry: RoadGeometry,
+    d: _ValueJet,
+    offset: _ValueJet,
+    translation: Vector3,
+) -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+    var radius = 1.0 / geometry.curvature_start
+    var k = _ValueJet.constant(geometry.curvature_start)
+    var turn = d * k
+    var half = turn * _ValueJet.constant(0.5)
+    var phase = _ValueJet.constant(geometry.heading) + half
+    var factor = (_ValueJet.constant(radius) + offset) * k * d
+    if not isfinite(radius):
+        factor = (_ValueJet.constant(1.0) + offset * k) * d
+    var chord = factor * _sinc_value(half)
+    var trig = _sincos_expression(phase)
+    return (
+        (
+            _ValueJet.constant(geometry.x)
+            - _ValueJet.constant(Float64(translation.x))
+        )
+        + offset * _ValueJet.constant(_curve_sin(geometry.heading))
+        + chord * trig[1],
+        (
+            _ValueJet.constant(geometry.y)
+            + _ValueJet.constant(Float64(translation.y))
+        )
+        - offset * _ValueJet.constant(_curve_cos(geometry.heading))
+        + chord * trig[0],
+        _ValueJet.constant(geometry.heading) + turn,
+    )
+
+
 def _sampled_lane_value_bound(
+    road: Road, section: Int, lane: Int, low: Float64, high: Float64
+) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+    return _lane_value_bound_impl[False](road, section, lane, low, high)
+
+
+def _lane_value_bound(
+    road: Road, section: Int, lane: Int, low: Float64, high: Float64
+) raises -> Tuple[_ValueJet, _ValueJet, _ValueJet]:
+    # Source enclosures consume value/error fields only. SPIRAL retains its
+    # original full evaluator until an equivalent value-only graph exists.
+    var at = info_index(road.info.geometries, low)
+    if at >= 0 and road.info.geometries[at].geometry.kind == SPIRAL:
+        var full = _lane_jet(road, section, lane, low, high)
+        return (
+            _without_derivatives(full[0]),
+            _without_derivatives(full[1]),
+            _without_derivatives(full[2]),
+        )
+    return _lane_value_bound_impl[True](road, section, lane, low, high)
+
+
+def _lane_value_bound_impl[
+    all_geometry: Bool
+](
     road: Road,
     section: Int,
     lane: Int,
@@ -334,14 +445,55 @@ def _sampled_lane_value_bound(
             if lanes[i].id != lane_id:
                 offset = offset + sign * width
             else:
-                offset = offset + sign * width * _ValueJet.constant(0.5)
+                offset = offset + _stored_half(sign * width)
                 done = True
     offset = offset - _polynomial_value(
         road.info.lane_offsets[offset_at].polynomial, s
     )
     ref record = road.info.geometries[geometry_at]
+    comptime if all_geometry:
+        if record.geometry.kind == ARC:
+            var d = _value_geometry_distance(
+                record.geometry,
+                _stored_difference(s, _ValueJet.constant(record.s)),
+            )
+            var arc = _arc_offset_value(record.geometry, d, offset, translation)
+            return (
+                arc[0],
+                arc[1],
+                _polynomial_value(
+                    road.info.elevations[elevation_at].polynomial,
+                    s,
+                    Float64(translation.z),
+                ),
+            )
+        if record.geometry.kind == LINE:
+            var d = _value_geometry_distance(
+                record.geometry,
+                _stored_difference(s, _ValueJet.constant(record.s)),
+            )
+            var trig = _constant_sincos_value(record.geometry.heading)
+            var x = (
+                _ValueJet.constant(record.geometry.x)
+                - _ValueJet.constant(Float64(translation.x))
+            ) + d * trig[1]
+            var y = (
+                _ValueJet.constant(record.geometry.y)
+                + _ValueJet.constant(Float64(translation.y))
+            ) + d * trig[0]
+            return (
+                x + offset * trig[0],
+                y - offset * trig[1],
+                _polynomial_value(
+                    road.info.elevations[elevation_at].polynomial,
+                    s,
+                    Float64(translation.z),
+                ),
+            )
     var point = _reference_sampled_value(
-        record.geometry, s - _ValueJet.constant(record.s), translation
+        record.geometry,
+        _stored_difference(s, _ValueJet.constant(record.s)),
+        translation,
     )
     var trig = _sincos_expression(point[2])
     return (

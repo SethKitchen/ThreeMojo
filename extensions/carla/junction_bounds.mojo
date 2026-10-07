@@ -16,7 +16,8 @@ target. The returned bounds must fit in finite Float32 coordinates.
 
 from extensions.carla.geometry import ARC, LINE, POLY3, SPIRAL, RoadGeometry
 from extensions.carla.curve_bounds import _lane_jet, _reference_work
-from extensions.carla.curve_interval import _Interval, _next_up
+from extensions.carla.lane_value_bounds import _lane_value_bound
+from extensions.carla.curve_interval import _Interval, _Jet, _next_up
 from extensions.carla.lane_refinement import _midpoint
 from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
 from extensions.carla.map_validation import (
@@ -441,6 +442,101 @@ def _centered_elevation_enclosure(
     return _Interval(lower, upper)
 
 
+def _monotone_coordinate(value: _Jet) -> Bool:
+    # These are derivatives of the complete ideal expression, not of the
+    # rounded scalar staircase. A branch join has unknown derivatives.
+    return (
+        value.first.is_finite()
+        and (value.first.low >= 0.0 or value.first.high <= 0.0)
+        and isfinite(value.error)
+        and value.error >= 0.0
+    )
+
+
+def _monotone_coordinate_enclosure(
+    value: _Jet, first: _Interval, last: _Interval, original: _Interval
+) -> _Interval:
+    # For every fixed permitted expression, a sign-definite ideal derivative
+    # puts its real values between its ideal endpoints. Scalar evaluations
+    # need not be monotone. Add the ORIGINAL WHOLE-CELL scalar error, never
+    # the endpoint errors, to cover their potentially nonmonotone roundoff.
+    if not _monotone_coordinate(value):
+        return original
+    if not (first.is_finite() and last.is_finite()):
+        return original
+    var ideal = first.hull(last)
+    var stored = ideal + _Interval(-value.error, value.error)
+    var lower = max(original.low, stored.low)
+    var upper = min(original.high, stored.high)
+    if not stored.is_finite() or lower > upper:
+        return original
+    return _Interval(lower, upper)
+
+
+def _needs_monotone_enclosure(
+    value: _Jet, original: _Interval, lower: Float64, upper: Float64
+) -> Bool:
+    return _monotone_coordinate(value) and (
+        original.low < lower or original.high > upper
+    )
+
+
+def _monotone_junction_enclosure(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    terms: Int,
+    box: Box3,
+    x: _Interval,
+    y: _Interval,
+    z: _Interval,
+    mut work: _MapBuildWork,
+) raises -> Tuple[_Interval, _Interval, _Interval]:
+    # The ordinary value certificate was insufficient. Admit one full
+    # coordinate derivative traversal before evaluating that graph.
+    work.step()
+    work.term(terms)
+    _reserve_lane_scalars(road, section, work)
+    var point = _lane_jet(road, section, lane, low, high)
+    if not (
+        _needs_monotone_enclosure(
+            point[0], x, Float64(box.min.x), Float64(box.max.x)
+        )
+        or _needs_monotone_enclosure(
+            -point[1], y, Float64(box.min.y), Float64(box.max.y)
+        )
+        or _needs_monotone_enclosure(
+            point[2], z, Float64(box.min.z), Float64(box.max.z)
+        )
+    ):
+        return (x, y, z)
+    work.step(2)
+    var first_terms = _reference_work(road, low, low)
+    var last_terms = _reference_work(road, high, high)
+    if first_terms < 0 or last_terms < 0:
+        return (x, y, z)
+    # Reserve BOTH endpoint traversals and lane scans before either begins.
+    # A refused reservation still poisons the original global work ledger.
+    work.term(first_terms)
+    work.term(last_terms)
+    _reserve_lane_scalars(road, section, work, 2)
+    var first = _lane_value_bound(road, section, lane, low, low)
+    var last = _lane_value_bound(road, section, lane, high, high)
+    return (
+        _monotone_coordinate_enclosure(
+            point[0], first[0].value, last[0].value, x
+        ),
+        _monotone_coordinate_enclosure(
+            -point[1], -first[1].value, -last[1].value, y
+        ),
+        _monotone_coordinate_enclosure(
+            point[2], first[2].value, last[2].value, z
+        ),
+    )
+
+
 def _certify_junction_span(
     road: Road,
     section: Int,
@@ -466,7 +562,7 @@ def _certify_junction_span(
         if terms >= 0:
             work.term(terms)
             _reserve_lane_scalars(road, section, work)
-            var point = _lane_jet(road, section, lane, cell[0], cell[1])
+            var point = _lane_value_bound(road, section, lane, cell[0], cell[1])
             x = point[0].rounded_value()
             y = -point[1].rounded_value()
             z = point[2].rounded_value()
@@ -476,6 +572,23 @@ def _certify_junction_span(
                 z = _centered_elevation_enclosure(
                     road, cell[0], cell[1], z, point[2].error, work
                 )
+            finite = x.is_finite() and y.is_finite() and z.is_finite()
+            if (
+                finite
+                and x.low >= Float64(box.min.x)
+                and x.high <= Float64(box.max.x)
+                and y.low >= Float64(box.min.y)
+                and y.high <= Float64(box.max.y)
+                and z.low >= Float64(box.min.z)
+                and z.high <= Float64(box.max.z)
+            ):
+                continue
+            var monotone = _monotone_junction_enclosure(
+                road, section, lane, cell[0], cell[1], terms, box, x, y, z, work
+            )
+            x = monotone[0]
+            y = monotone[1]
+            z = monotone[2]
             finite = x.is_finite() and y.is_finite() and z.is_finite()
             if (
                 finite

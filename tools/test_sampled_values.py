@@ -22,11 +22,21 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
-        for name in ('curve_bounds.mojo', 'curve_trig.mojo',
-                     'curve_interval.mojo', 'lane_value_bounds.mojo'):
-            target = self.root/'extensions/carla'/name
+        pin = self.root/'tools/carla_lane_oracle/runtime-source-pins.json'
+        pin.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT/'tools/carla_lane_oracle/runtime-source-pins.json', pin)
+        moment_pin = self.root/'tools/carla_lane_oracle/spiral-moment-pins.json'
+        shutil.copyfile(ROOT/'tools/carla_lane_oracle/spiral-moment-pins.json', moment_pin)
+        guard_pin = self.root/'tools/carla_lane_oracle/sum2-guard-pins.json'
+        shutil.copyfile(ROOT/'tools/carla_lane_oracle/sum2-guard-pins.json', guard_pin)
+        from tools.carla_lane_oracle.source_contracts import GROUP_PATHS
+        paths = set(GROUP_PATHS['canonical_accumulation'])
+        paths.update('extensions/carla/' + name for name in
+                     ('curve_trig.mojo', 'geometry.mojo', 'lane_value_bounds.mojo'))
+        for name in paths:
+            target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT/'extensions/carla'/name, target)
+            shutil.copyfile(ROOT/name, target)
 
     def change(self, name, before, after):
         path = self.root/'extensions/carla'/name
@@ -46,7 +56,7 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
     def test_current_exact_correspondence(self):
         result = m.verify(self.root)
         self.assertEqual(result['copied_functions'], 8)
-        self.assertEqual(result['dispatch_functions'], 4)
+        self.assertEqual(result['dispatch_functions'], 6)
 
     def test_optimized_python_keeps_checks(self):
         result = subprocess.run([sys.executable, '-O', '-B', str(SCRIPT),
@@ -105,8 +115,8 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
 
     def test_wrong_shared_import_rejected(self):
         self.change('lane_value_bounds.mojo',
-                    'from extensions.carla.curve_interval import _Interval, _ValueJet',
-                    'from extensions.carla.curve_interval import _Interval, _Jet as _ValueJet')
+                    '    _ValueJet,',
+                    '    _Jet as _ValueJet,')
         self.rejected()
 
 

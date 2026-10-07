@@ -736,7 +736,8 @@ def load_opendrive(
     Raises:
         Error: If the text is not well-formed XML, a number cannot be
             read where CARLA calls `std::stod`, or the file names a road,
-            lane, junction or signal it does not define.
+            lane, junction or signal it does not define, or the floating-point
+            mode is not round-to-nearest with gradual underflow.
     """
     budget.validate()
     var doc = _Doc(parse_xml(text))

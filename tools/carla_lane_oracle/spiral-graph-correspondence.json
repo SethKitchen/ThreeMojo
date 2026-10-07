@@ -1,7 +1,7 @@
 {
   "authored_commit": "68a87145a71fe92252a26614b06da2e8e9965497",
   "composed_base_tree": "51c2ea2c159dd14fc2baeebf22fbfcf48915f615",
-  "scope": "Same stored scalar/ideal operation grouping and literals. Public reference geometry is distinct. This migration does not certify optional envelope, rounded graph, branch eligibility, codegen, queries or performance.",
+  "scope": "Historical graph migration retained below. New Sum2 scalar accumulator intentionally changes the rounded graph; exact ideal coefficients/derivatives and stored constants are preserved by the narrow executed projection.",
   "blocks": {
     "geometry_trig_aliases": {
       "previous_path": "extensions/carla/geometry.mojo",
@@ -113,5 +113,136 @@
     },
     "all_stored_constant_pins_unchanged": true,
     "canonical_table_sha256": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c"
+  },
+  "historical_scope": "Same stored scalar/ideal operation grouping and literals. Public reference geometry is distinct. This migration does not certify optional envelope, rounded graph, branch eligibility, codegen, queries or performance.",
+  "sum2_migration": {
+    "event": "initial Sum2 semantic/source checkpoint",
+    "source_sha256": {
+      "extensions/carla/curve_sum2.mojo": "41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e",
+      "extensions/carla/lane_geometry.mojo": "a068b960686ab94393f555212b3e369d3bfa48a708c450c41f79238c350e89e8",
+      "extensions/carla/curve_bounds.mojo": "e71d4de23db3a59d3087ab44a7457ddd65394d9fcbc6e022b93c36c5afacee03",
+      "extensions/carla/spiral_roundoff_proof.mojo": "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7"
+    },
+    "station_helper_sha256": "41995592963bae61a2b690b465bdad6c759b02ddbe98141ba5da30d0df5d5c8e",
+    "ideal_projection": {
+      "helper_projections": 5,
+      "rate_half_commutations": 2,
+      "projected_ast_sha256": "f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06",
+      "sum2_auxiliary_declarations": 4,
+      "sum2_term_definitions": 2,
+      "sum2_auxiliary_updates": 4,
+      "sum2_error_writes": 2
+    },
+    "native_codegen_qualified_by_tools": false,
+    "final_format_source_rebind": "pending",
+    "table_sha256": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c"
+  },
+  "sum2_guard_migration": {
+    "event": "reviewed invocation-local floating-point guard checkpoint",
+    "source_manifest_sha256": "98933650efb2cad39d62a4fe1ddc18c35331cd79dac3fb8b021284148f6b6109",
+    "source_sha256": {
+      "extensions/carla/curve_bounds.mojo": "9f2e4a34825f519f008c965a81d7c275bf57abc7f26fa18b1c622dd2e10ea75a",
+      "extensions/carla/curve_sum2.mojo": "5176cf340e9494b6b8dc4d73ba23e6bd6d699abf6bd225f00d0cbb602aae2137",
+      "extensions/carla/lane_geometry.mojo": "8e0917249d8c41233bcb801fac6455d614ed46a7fd8e7505c14259c2a5c81d91",
+      "extensions/carla/lane_refinement.mojo": "61e212c77e790343647d2f6a9bcabd849865c311cca3f94e19c0d47fbf8df10c",
+      "extensions/carla/map.mojo": "6479ebdb4e45c8db31acc71953d8484edb5b0a03eb2dcae32f1baac843d7c08a",
+      "extensions/carla/map_builder.mojo": "866262b6d1d90e2e169dfdf46b9e200dcfa1364b28b94271b52407d90fa973b2",
+      "extensions/carla/spiral_domain_proof.mojo": "da466aa7bec7e6c87fb1e29472e1f28169e7a369e7a1afbdc841f5994276b8e5",
+      "extensions/carla/spiral_moment_proof.mojo": "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec",
+      "extensions/carla/spiral_moment_table.mojo": "1c5a3a21216eaecb42b3947ccb5ec0479d8a120c714d79ebe25f11da5f1096c8",
+      "extensions/carla/spiral_roundoff_proof.mojo": "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7"
+    },
+    "lexical_barriers": {
+      "volatile_loads": 3,
+      "probe_sum2_calls": 4,
+      "retained_keywords": [
+        "unsafe_offset=0",
+        "volatile=True"
+      ],
+      "no_global_fp_mode_change": true,
+      "no_success_cache": true
+    },
+    "caller_contract": {
+      "status": "PASS",
+      "guarded_modules": 9,
+      "complete_caller_declarations": 16,
+      "volatile_loads": 3,
+      "probe_sum2_calls": 4,
+      "unsupported_paths": "raise, infinity, unknown Jet, or absent optional proof as bound by each caller",
+      "native_fp_state_execution_qualified": false
+    },
+    "ideal_projection": {
+      "helper_projections": 5,
+      "rate_half_commutations": 2,
+      "projected_ast_sha256": "f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06",
+      "sum2_auxiliary_declarations": 4,
+      "sum2_term_definitions": 2,
+      "sum2_auxiliary_updates": 4,
+      "sum2_error_writes": 2,
+      "sum2_environment_guards": 1
+    },
+    "translated_method_guard": [
+      {
+        "path": "extensions/carla/map.mojo",
+        "method": "_create_segments",
+        "before_sha256": "9c90ae1de854d95e68b941fa48c73006a0c6723eeefb8b351a993fa073869e73",
+        "after_sha256": "2420eb86594189a44e5e2caf7c3c34b5fd9a593ff8f20ed3f066960095062c26",
+        "removed_guard_delta": "Leading _require_sum2_environment() statement",
+        "remaining_bytes_identical": true
+      },
+      {
+        "path": "extensions/carla/lane_geometry.mojo",
+        "method": "_lane_geometry_pos_at",
+        "before_sha256": "bf69343d006e9940a997a773de3dce441e54430772d7e332405ec9af7c4bf166",
+        "after_sha256": "ecf4a945d12f3cb60be97234dab7aa97c90937a1ee42e72819b5d6657d5f248c",
+        "removed_guard_delta": "raises qualifier and its exact unsupported-mode docstring section; arithmetic unchanged",
+        "remaining_bytes_identical": true
+      }
+    ],
+    "arithmetic_leaf": "Exact initial _sum2_error AST after function rename to _sum2_error_checked. Its callers have current-invocation live checks or the checked wrapper.",
+    "qualification": "Source checkpoint, final formatting/rebind pending. Native probe/codegen and FP-state qualification remain separate; source checking never treats the predicate as always true."
+  },
+  "final_format_doc_migration": {
+    "event": "final formatted and public-documentation source rebind",
+    "status": "source rebind complete; final checker replay pending",
+    "format_manifest_sha256": "60448936958e8748ef0a419e6679ec6542e72615ac89a80a7bb24a79581a4e06",
+    "public_doc_migration_sha256": "4cc4cefa6199c1cfbcfd05a636254d1a061889b9a51951d8ceb723544aa6c3dd",
+    "final_source_freeze_sha256": "eb64ab48aa4e09ea5c064a8ad7c7801bb7c04fdf5a14c7f61494ba8186930aef",
+    "independent_review_sha256": "c89a4d7806650112cb5170a2d4c09fe8d472b058acbf071e86aec1d614ad7f3d",
+    "source_sha256": {
+      "extensions/carla/curve_bounds.mojo": "c45e1f2fbb40ec2af683a5eb28626d93fe2604f3997a5443048e0f633a0cc560",
+      "extensions/carla/curve_frozen_arc.mojo": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+      "extensions/carla/curve_interval.mojo": "ff6bf0d35b357047c609ea7cb6dbcbe535446cf4e315d9eac5f6c341ddbf1040",
+      "extensions/carla/curve_rounded_arc.mojo": "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+      "extensions/carla/curve_rounded_line.mojo": "af00f76f66323ce85b0f794cbe7162d63e6db864c49a052827f565c2332383ec",
+      "extensions/carla/curve_sum2.mojo": "2f732d49a891c9b603ccf05fb74779ea79422d74b4c33723ffe40f99e6c54a67",
+      "extensions/carla/curve_trig.mojo": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+      "extensions/carla/geometry.mojo": "eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c",
+      "extensions/carla/junction_bounds.mojo": "98fc27702e365e19c3b226d1a7b525bce5aa82b5b11fb6caff79ce39416024e2",
+      "extensions/carla/lane_distance.mojo": "9d0aacab9fccb0a34f8d5c3a5edca1a1fd7ebcded961fc579ec6a44f3880497d",
+      "extensions/carla/lane_geometry.mojo": "8e0917249d8c41233bcb801fac6455d614ed46a7fd8e7505c14259c2a5c81d91",
+      "extensions/carla/lane_refinement.mojo": "61e212c77e790343647d2f6a9bcabd849865c311cca3f94e19c0d47fbf8df10c",
+      "extensions/carla/map.mojo": "e70ec8a153dbd331e827cf7b9d9b536c0e17bf1f973faa9c43217e2bc5cc5c05",
+      "extensions/carla/map_builder.mojo": "4092bfc42e1ab091b272da89d1079675ce8fabddd77de573a91df6911aeede61",
+      "extensions/carla/opendrive.mojo": "4c7ac574196b83d025b84cf6c88261d5e3f3b9ce69923262fcf3cb935e9bf1e5",
+      "extensions/carla/polynomial.mojo": "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
+      "extensions/carla/road.mojo": "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
+      "extensions/carla/road_info.mojo": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb",
+      "extensions/carla/spiral_domain_proof.mojo": "da466aa7bec7e6c87fb1e29472e1f28169e7a369e7a1afbdc841f5994276b8e5",
+      "extensions/carla/spiral_moment_proof.mojo": "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec",
+      "extensions/carla/spiral_moment_table.mojo": "1c5a3a21216eaecb42b3947ccb5ec0479d8a120c714d79ebe25f11da5f1096c8",
+      "extensions/carla/spiral_moment_table_data.mojo": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+      "extensions/carla/spiral_roundoff_proof.mojo": "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7"
+    },
+    "translated_method_doc_changes": [
+      {
+        "path": "extensions/carla/map.mojo",
+        "method": "compute_transform",
+        "before_sha256": "e96348558f25911a789a1416d9d7f36c91a9221d2896bef726c5f80197fdf1f2",
+        "after_sha256": "bea1c8ad195c9964f380769276288c97d8ce9bf4aa7eacee69da63f1682713c9",
+        "review": "Actual-docstring-only token equality verified at the complete module level"
+      }
+    ],
+    "scope": "Format equivalence retains all keyword-subscript operands, move and qualifier positions. Actual docstrings alone changed in four public modules. No native execution or coverage/performance qualification is inferred from these source checks."
   }
 }

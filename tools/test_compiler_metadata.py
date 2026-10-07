@@ -121,26 +121,71 @@ class CompilerMetadataTests(unittest.TestCase):
     def test_timeout_cleans_owned_descendant_that_holds_the_output_pipe(self):
         with tempfile.TemporaryDirectory() as directory:
             receipt = Path(directory) / 'child.json'
+            temporary = receipt.with_suffix('.tmp')
+            partial_ready = Path(directory) / 'partial-ready'
+            release = Path(directory) / 'release'
             worker = ('import os,json,pathlib,time; '
                       'fields=pathlib.Path("/proc/self/stat").read_text().rpartition(")")[2].split(); '
-                      f'pathlib.Path({str(receipt)!r}).write_text(json.dumps([os.getpid(),fields[19]])); '
-                      'time.sleep(5)')
+                      f'temporary=pathlib.Path({str(temporary)!r}); temporary.write_text(""); '
+                      f'pathlib.Path({str(partial_ready)!r}).touch(); '
+                      f'release=pathlib.Path({str(release)!r}); '
+                      'exec("while not release.exists(): time.sleep(0.002)"); '
+                      'temporary.write_text(json.dumps([os.getpid(),fields[19]])); '
+                      f'temporary.replace({str(receipt)!r}); time.sleep(5)')
             code = ('import subprocess,sys,pathlib,time; '
                     f'subprocess.Popen([sys.executable,"-c",{worker!r}]); '
                     f'p=pathlib.Path({str(receipt)!r}); '
                     'exec("while not p.exists(): time.sleep(0.002)"); sys.exit(0)')
-            started = time.monotonic()
-            result = metadata.read_command([sys.executable, '-c', code], timeout=0.2)
-            self.assertEqual(result, (None, 'timeout'))
-            self.assertLess(time.monotonic()-started, 2)
-            pid, original_start = json.loads(receipt.read_text())
+            real_popen = metadata.subprocess.Popen
+            pid, original_start = None, None
+            def ready_popen(*args, **kwargs):
+                nonlocal pid, original_start
+                # Fixture startup is separate from the unchanged 0.2-second
+                # timeout under test. Force the formerly racy empty-file state
+                # before allowing an atomic, complete identity publication.
+                child = real_popen(*args, **kwargs)
+                deadline = time.monotonic() + 1
+                def wait_for(path):
+                    while not path.exists():
+                        if time.monotonic() >= deadline:
+                            raise RuntimeError('metadata descendant fixture did not become ready')
+                        time.sleep(0.002)
+                try:
+                    wait_for(partial_ready)
+                    self.assertEqual(temporary.read_bytes(), b'')
+                    self.assertFalse(receipt.exists())
+                    release.touch()
+                    wait_for(receipt)
+                    identity = json.loads(receipt.read_text())
+                    self.assertEqual(len(identity), 2)
+                    pid, original_start = identity
+                    return child
+                except BaseException:
+                    try:
+                        try:
+                            os.killpg(child.pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                        child.wait(timeout=1)
+                    finally:
+                        if child.stdout is not None:
+                            child.stdout.close()
+                    raise
             def still_running():
+                if pid is None:
+                    return False
                 try:
                     fields = Path(f'/proc/{pid}/stat').read_text().rpartition(')')[2].split()
                 except FileNotFoundError:
                     return False
                 return fields[19] == original_start and fields[0] != 'Z'
+            started = time.monotonic()
             try:
+                with patch.object(metadata.subprocess, 'Popen', side_effect=ready_popen):
+                    result = metadata.read_command([sys.executable, '-c', code], timeout=0.2)
+                self.assertEqual(result, (None, 'timeout'))
+                self.assertLess(time.monotonic()-started, 2)
+                pid, original_start = json.loads(receipt.read_text())
                 deadline = time.monotonic() + 1
                 while still_running() and time.monotonic() < deadline:
                     time.sleep(0.01)

@@ -30,6 +30,13 @@ for name, expected in SUPPORTED['source_sha256'].items():
     if hashlib.sha256(data).hexdigest()!=expected:
         raise ValueError(('Review oracle graph after source change', name))
 
+# Complete canonical accumulation closure includes the new helper and its
+# interval/error dependencies, in addition to the historical scalar pins.
+from source_contracts import verify_group
+import sum2_contracts
+verify_group(SOURCE, 'canonical_accumulation')
+sum2_contracts.verify(SOURCE)
+
 def b64(x): return F(float(x))
 def mf(x):
     if isinstance(x,F): return mp.mpf(x.numerator)/x.denominator

@@ -1,0 +1,168 @@
+{
+  "schema": 1,
+  "base_tree": "367d8e03ebc57d69dc7d027279c5ca0f695857b5",
+  "frozen_runtime_inventory": "83c3845e325714fbd1db5599735a847954d1492d85b832010e959839024b766c",
+  "previous_reference_module_graphs": {
+    "curve_bounds.mojo": "85d3c1837f7412572610141a11c6b6f2fba5806a944c4f42c3500a7d51b86707",
+    "curve_trig.mojo": "4ca47db55caa96ba9ad6c6f43fa65d30a8fefe419f555d46a1a948a2fc606ecc",
+    "curve_interval.mojo": "2651d6ee92a6346f1e20073dc68535e785f605642e5f668355a53d2dd8660171"
+  },
+  "previous_shared_graphs": {
+    "curve_trig.mojo:_expression_polynomial": "031856283e36ac8dbaef6e455eb6a1502c0c465f70ba809ace51ec5782abb04a",
+    "curve_trig.mojo:_jet_polynomial": "9a773f471ac8ac236f808d0f072ac5372315a3dd2683b16c41899a1b56cfd470",
+    "curve_trig.mojo:_sincos_expression": "89921637fc52fad38092e2c283d238287b3f33035dcc0a33a2b07fddc6042509",
+    "curve_trig.mojo:_sincos_branch_expression": "8ba6cc52dff85cbca95fa9c58142de28140c97d711911bd1f437b11ca2bc857f",
+    "curve_trig.mojo:_sincos_branch": "a99d1be1594ceeea7edf3709312217af35035b590dd621c57c3e6bdf97a26a8a",
+    "curve_trig.mojo:_sincos_jet": "f76f149a0ee85c2e5e3b1dc6b1d8a9cd68a053582fbe4c9d8e562b1848c91b3f",
+    "curve_trig.mojo:_uncertain_expression": "c883bc5e3e7046309b145f178f73848cecc20013551852a80f993f793c1ff00f",
+    "curve_trig.mojo:_uncertain": "e32b28fd29a051ebb13cb14f22cc61a12f137124cc9b9938adf113e606baa21e",
+    "curve_bounds.mojo:_sample_index": "91a5c643d73e15e2b5d3838fff658dc2986e0b28852a0c66ceacdd84e71ca01e",
+    "curve_bounds.mojo:_intersect_ideal_bounds": "0f6d271eb25f2e19f9cfd4c4f8f93691f4452cb50ac5303d7ff898398f8deda3",
+    "curve_bounds.mojo:_lane_jet": "c1d76e057272bbb71d1066e4669a3b7d0e5e87c4497e9d96abf21edc007e2f85",
+    "curve_bounds.mojo:_lane_jet_model": "470c29ee518a71ecc8c6bce3268d38da93d8c27770b9bdf6e6c82989a1032ab0",
+    "curve_bounds.mojo:_lane_jet_model_proof": "bfdbef5781b93ee6819f8eaeabf082ed392f49b753c07ddc2842b840a7934891",
+    "curve_bounds.mojo:_reference_jet_capture": "0ebd93d524b35c30cdd27fabc23dd40f1a53241477b0689c37b07b18bce5ad05"
+  },
+  "primitive_graph_unchanged": "e2e0257a0f42a95bac586638fc5d532f4bc69b882127201bbf343006f2143484",
+  "correspondence": "Eight existing copies retained; three additional explicit pairs; six complete wrappers/projections. No arbitrary source prefix extraction. Each of 23 lane and12 reference dispatcher statements is retained or specifically accounted for. Constant-heading projection only changes two derivative constructor fields per result. Reference/source dependency binding is conservative and not itself a correctness proof.",
+  "combined_runtime_inventory": "14cd7ccbf54734b0cf59dc0136eea5c6228ffb4f1a7053cac7910f2ea2775cb4",
+  "combined_overlay_scope": "Goal/lazy map and refinement changes; curve_bounds, curve_interval, lane_value_bounds and canonical scalar evaluator match frozen numerical source. Independent source support bindings cover composed map/refinement; no compensated evaluator.",
+  "heading_consumer_migration": {
+    "patch_sha256": "3a82badd69a4ab0b8ac72fed54041428c92eae0e23ec894db259efa283a0df83",
+    "scope": "Only three imports and three heading-half sites. Fresh scalar-heading operation correspondence restored; ideal u and original quadrant eligibility unchanged. Separate checkpoint, not final production qualification.",
+    "bindings": [
+      {
+        "group": "eligibility",
+        "path": "extensions/carla/spiral_domain_proof.mojo",
+        "before_token_sha256": "e9870de2b227b774c47bae6cd1a48d460ce8002aa1e869395331bbc015c36c3e",
+        "after_token_sha256": "522f84bc6910569ad01e5dd88d825dde31583df574bc58225092235d217bb52b",
+        "after_raw_sha256": "5f41689f3d3a7c18cbe700ea76161ac3d7c80c308cc9488f2b31332c77b0fde3"
+      },
+      {
+        "group": "eligibility",
+        "path": "extensions/carla/spiral_moment_proof.mojo",
+        "before_token_sha256": "71c5573473b325fec413433b49949a570c74ea5e17a17996e86c05b14eae80a2",
+        "after_token_sha256": "c7db94641ec3b383069826e0cce47021877316bc3d0cf82fd6e452ebe1726987",
+        "after_raw_sha256": "1a32e6aa3d97fa4f352e1eebfd0226699dee94766c3825417e1dbf48fc1d4e5c"
+      },
+      {
+        "group": "eligibility",
+        "path": "extensions/carla/spiral_moment_table.mojo",
+        "before_token_sha256": "becdd9f567943c8a70427a7263f42781ee601c67438fcf6f118907b56cad8142",
+        "after_token_sha256": "e7575afb2dca6ed195618741d7a38f63887302448dfe8abca4c2b19e50df4bfa",
+        "after_raw_sha256": "41e6b81f7d1a97d531563148dc3c11245c326c13a41bae9cfa2d304357393c79"
+      },
+      {
+        "group": "translation",
+        "path": "extensions/carla/spiral_domain_proof.mojo",
+        "before_token_sha256": "e9870de2b227b774c47bae6cd1a48d460ce8002aa1e869395331bbc015c36c3e",
+        "after_token_sha256": "522f84bc6910569ad01e5dd88d825dde31583df574bc58225092235d217bb52b",
+        "after_raw_sha256": "5f41689f3d3a7c18cbe700ea76161ac3d7c80c308cc9488f2b31332c77b0fde3"
+      },
+      {
+        "group": "support",
+        "path": "extensions/carla/spiral_domain_proof.mojo",
+        "before_token_sha256": "e9870de2b227b774c47bae6cd1a48d460ce8002aa1e869395331bbc015c36c3e",
+        "after_token_sha256": "522f84bc6910569ad01e5dd88d825dde31583df574bc58225092235d217bb52b",
+        "after_raw_sha256": "5f41689f3d3a7c18cbe700ea76161ac3d7c80c308cc9488f2b31332c77b0fde3"
+      },
+      {
+        "group": "support",
+        "path": "extensions/carla/spiral_moment_table.mojo",
+        "before_token_sha256": "becdd9f567943c8a70427a7263f42781ee601c67438fcf6f118907b56cad8142",
+        "after_token_sha256": "e7575afb2dca6ed195618741d7a38f63887302448dfe8abca4c2b19e50df4bfa",
+        "after_raw_sha256": "41e6b81f7d1a97d531563148dc3c11245c326c13a41bae9cfa2d304357393c79"
+      },
+      {
+        "group": "support",
+        "path": "extensions/carla/spiral_moment_proof.mojo",
+        "before_token_sha256": "71c5573473b325fec413433b49949a570c74ea5e17a17996e86c05b14eae80a2",
+        "after_token_sha256": "c7db94641ec3b383069826e0cce47021877316bc3d0cf82fd6e452ebe1726987",
+        "after_raw_sha256": "1a32e6aa3d97fa4f352e1eebfd0226699dee94766c3825417e1dbf48fc1d4e5c"
+      }
+    ],
+    "previous_runtime_source_pins_sha256": "5b22b9fecc44e9f81433a654ee26a5312a989da2fafc873b3901c30087740d47",
+    "reviewed_files": {
+      "extensions/carla/spiral_domain_proof.mojo": {
+        "before_sha256": "a2e5ae334f0ecc154304b1ceeac41278e2cefe145e203749bbb0ff9766b309b2",
+        "after_sha256": "5f41689f3d3a7c18cbe700ea76161ac3d7c80c308cc9488f2b31332c77b0fde3",
+        "allowed_edits": [
+          "import shared _stored_half",
+          "replace exactly one heading constant-half multiplication"
+        ]
+      },
+      "extensions/carla/spiral_moment_proof.mojo": {
+        "before_sha256": "73992b615538c6fe7182ed9c45388b7447fffa37a7784f44e43b3010c25afbae",
+        "after_sha256": "1a32e6aa3d97fa4f352e1eebfd0226699dee94766c3825417e1dbf48fc1d4e5c",
+        "allowed_edits": [
+          "import shared _stored_half",
+          "replace exactly one heading constant-half multiplication"
+        ]
+      },
+      "extensions/carla/spiral_moment_table.mojo": {
+        "before_sha256": "c699f88569024fc9fad9c499f9b2780702c160db64713c6be5baade4ca9644cf",
+        "after_sha256": "41e6b81f7d1a97d531563148dc3c11245c326c13a41bae9cfa2d304357393c79",
+        "allowed_edits": [
+          "import shared _stored_half",
+          "replace exactly one heading constant-half multiplication"
+        ]
+      }
+    }
+  },
+  "final_refinement_formatter_migration": {
+    "path": "extensions/carla/lane_refinement.mojo",
+    "groups": [
+      "translation",
+      "support"
+    ],
+    "previous_runtime_source_pins_sha256": "bc3a43cd38f9daee034fa26d738614a3a55bd83d4d864c682eb57b1ce4449721",
+    "patch_sha256": "3e8b84c4d3894a35b91258cdd0bfdda692ff1903bc80a4daa493728df32d366e",
+    "evidence": {
+      "before_raw_sha256": "15562dfa3936907b003e20d7160721f0abfad47cfefb1135972107bbad6082d7",
+      "after_raw_sha256": "7f67dd7e8cd974056d36baaaa80a24d0d7ef9b1b57ab62d23a05e8f5306ce52f",
+      "move_projected_ast_sha256": "754610b4ec7ffb45c40de96b2b76067534ce4de7d4723c30910e2c5c592e7b6b",
+      "before_token_sha256": "a089add4998d61b8ca93a1af8a5e6f3197ea5bebf1913240e834d96f5dfcf132",
+      "after_token_sha256": "679f7cfc96af03051e9f3889dd7a088d6316749ea294afaadc0c75b695e92403",
+      "qualifier_sha256": "94bffddcbf62cfaaaa0d380d337a2e140b1e46a3786030af51f19bb2babf1225",
+      "identical_move_projected_ast": true,
+      "identical_move_sigils_at_name_ordinals": [
+        196,
+        403,
+        414,
+        451,
+        460,
+        465,
+        523,
+        534,
+        541,
+        552,
+        560,
+        723,
+        736,
+        776,
+        787,
+        792,
+        852,
+        865,
+        872,
+        883,
+        891,
+        978,
+        998,
+        1027,
+        1036,
+        1039,
+        1589,
+        1728,
+        2562,
+        2568,
+        2586,
+        2596,
+        3241,
+        3242
+      ],
+      "identical_qualifier_positions": true
+    },
+    "scope": "Official formatter: wrapping, call trailing commas, adjacent string-literal concatenation. Complete AST equal after separately position-bound move sigils; qualifier positions equal. No source arithmetic, comparison, budget or error-graph change."
+  }
+}

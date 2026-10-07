@@ -539,3 +539,116 @@ def _without_derivatives(value: _Jet) -> _ValueJet:
     return _ValueJet(
         value.value, _Interval.whole(), _Interval.whole(), value.error
     )
+
+
+# Provenance-specific primitive: both scalar operands at these call sites
+# are stored Float64 values and the subtraction has no product to contract.
+def _stored_difference[
+    derivatives: Bool
+](
+    one: _JetExpression[derivatives], two: _JetExpression[derivatives]
+) -> _JetExpression[derivatives]:
+    var result = one - two
+    var left = one.rounded_value()
+    var right = two.rounded_value()
+    # Conservatively restrict the guard so halving/doubling endpoints is
+    # exact and finite. Sterbenz then makes each actual subtraction exact.
+    if (
+        left.low >= bitcast[DType.float64](UInt64(623) << UInt64(52))
+        and right.low >= bitcast[DType.float64](UInt64(623) << UInt64(52))
+        and left.high <= bitcast[DType.float64](UInt64(1423) << UInt64(52))
+        and right.high <= bitcast[DType.float64](UInt64(1423) << UInt64(52))
+        and left.low >= right.high * 0.5
+        and left.high <= right.low * 2.0
+    ):
+        result.error = _next_up(one.error + two.error)
+        if one.error == 0.0 and two.error == 0.0:
+            result.error = 0.0
+    return result
+
+
+def _stored_blend_error[
+    derivatives: Bool
+](rate: _JetExpression[derivatives], one: Float64, two: Float64) -> Float64:
+    # The SAME stored rate R enters both weights in the canonical graph.
+    # Write R=r+er, C=(1-R)+ec, P=R*a+ep, Q=C*b+eq, Z=P+Q+ez.
+    # Z-[r*a+(1-r)*b]=(a-b)*er+b*ec+ep+eq+ez. A fused final
+    # multiply-add removes ep or eq; retaining both remains conservative.
+    if (
+        not rate.value.is_finite()
+        or rate.value.low > rate.value.high
+        or not isfinite(rate.error)
+        or rate.error < 0.0
+        or not isfinite(one)
+        or not isfinite(two)
+    ):
+        return inf[DType.float64]()
+    var actual_rate = rate.rounded_value()
+    var minimum = bitcast[DType.float64](UInt64(623) << UInt64(52))
+    var maximum = bitcast[DType.float64](UInt64(1423) << UInt64(52))
+    # These endpoint guards bound magnitude, not every interior operand
+    # away from zero. A broad rate interval can contain subnormals. The
+    # existing IEEE gradual-underflow _roundoff bound includes eta there.
+    for value in [actual_rate.low, actual_rate.high, one, two]:
+        if value != 0.0 and (abs(value) < minimum or abs(value) > maximum):
+            return inf[DType.float64]()
+    var complement = _tight_sum_bound(_Interval.point(1.0), -actual_rate)
+    var complement_error = _roundoff(complement.magnitude())
+    if actual_rate.low >= 0.5 and actual_rate.high <= 2.0:
+        # Both operands are stored Floats and no multiplication feeds this
+        # subtraction. Sterbenz applies to every possible actual rate.
+        complement_error = 0.0
+    var actual_complement = complement + _Interval(
+        -complement_error, complement_error
+    )
+    var first = _tight_product_bound(actual_rate, _Interval.point(one))
+    var second = _tight_product_bound(actual_complement, _Interval.point(two))
+    var first_error = _roundoff(first.magnitude())
+    var second_error = _roundoff(second.magnitude())
+    # This triangle majorant includes the pre-round sums of BOTH fused paths
+    # as well as the separate products. Cancellation never underbounds it.
+    var sum_magnitude = (
+        _Interval.point(first.magnitude())
+        + _Interval.point(second.magnitude())
+        + _Interval.point(first_error)
+        + _Interval.point(second_error)
+    ).high
+    var final_error = _roundoff(sum_magnitude)
+    var difference = _tight_sum_bound(
+        _Interval.point(one), -_Interval.point(two)
+    ).magnitude()
+    return (
+        _Interval.point(difference) * _Interval.point(rate.error)
+        + _Interval.point(abs(two)) * _Interval.point(complement_error)
+        + _Interval.point(first_error)
+        + _Interval.point(second_error)
+        + _Interval.point(final_error)
+    ).high
+
+
+# Provenance-specific primitive. The scalar value supplied here is a stored
+# Float64 operand. Do not use this to remove a rounding boundary which an FMA
+# can bypass. Exact binary scaling can also fuse with an ensuing addition:
+# because the product itself is exact, fusion does not change that sum.
+def _stored_half[
+    derivatives: Bool
+](value: _JetExpression[derivatives],) -> _JetExpression[derivatives]:
+    var result = value * _JetExpression[derivatives].constant(0.5)
+    if (
+        not value.value.is_finite()
+        or value.value.low > value.value.high
+        or not isfinite(value.error)
+        or value.error < 0.0
+    ):
+        return result
+    var actual = value.rounded_value().absolute()
+    # Every possible nonzero operand is normal and safely away from both
+    # range limits. Dividing a stored binary64 value by two changes only its
+    # exponent and is exact here. Crossing zero keeps the ordinary fallback.
+    if actual.low >= bitcast[DType.float64](
+        UInt64(623) << UInt64(52)
+    ) and actual.high <= bitcast[DType.float64](UInt64(1423) << UInt64(52)):
+        result.error = (
+            _Interval.point(value.error) * _Interval.point(0.5)
+        ).high
+    return result

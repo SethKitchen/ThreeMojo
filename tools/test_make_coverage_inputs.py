@@ -3,6 +3,7 @@
 """Check the maintained coverage tree's import inputs without compiling Mojo."""
 
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -25,11 +26,14 @@ class CoverageInputTests(unittest.TestCase):
                        'bench/helper.mojo', 'bench/nested/driver.mojo',
                        'coverage/runtime.mojo', 'tests/test_driver.mojo',
                        'tests/_shared.mojo', 'tests/_nested.mojo',
-                       'examples/unrelated.mojo')
+                       'examples/unrelated.mojo',
+                       'tools/fixtures/carla_sum2_fp_state.c')
         for name in self.inputs:
             path = self.root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text('original ' + name + '\n')
+        shutil.copyfile(ROOT / 'tools/native_test_support.py',
+                        self.root / 'tools/native_test_support.py')
         (self.root / 'compiler.py').write_text(
             'import os, sys\n'
             'from pathlib import Path\n'

@@ -18,7 +18,9 @@ Coefficients enclose algebraic expressions in the stored GL/trig constants.
 No ideal-sine, fitted-curve, quadrature-exactness, or truncation claim is made.
 """
 
+from extensions.carla.curve_sum2 import _sum2_supported_environment
 from extensions.carla.curve_interval import (
+    _stored_half,
     _Interval,
     _Jet,
     _tight_sum_bound,
@@ -53,6 +55,8 @@ struct _SpiralMomentProof(Copyable, Movable):
 def _try_build_spiral_moments(
     pieces: Int, mut proof_terms: Int, max_proof_terms: Int
 ) -> Optional[_SpiralMomentProof]:
+    if not _sum2_supported_environment():
+        return None
     # This is a payload-availability ceiling, never a scalar/search count cap.
     # A caller must invoke generic evaluation whenever this returns None.
     if pieces < 1 or pieces > 64:
@@ -182,6 +186,8 @@ def _try_spiral_moment_expansion(
     counts: Tuple[Int, Int],
     translation: Vector3,
 ) -> Optional[Tuple[_Jet, _Jet, _Jet]]:
+    if not _sum2_supported_environment():
+        return None
     # `d` and `counts` MUST be the results of the existing clamping/count
     # helpers for this exact query-specific expansion station. Never pass
     # cached count selection or manually rounded endpoint estimates.
@@ -224,7 +230,7 @@ def _try_spiral_moment_expansion(
     # Preserve the original heading jet/error graph: lane-offset trigonometry
     # uses this error for branch selection. Do not replace it with `u`.
     var heading = _Jet.constant(geometry.heading) + d * (
-        _Jet.constant(geometry.curvature_start) + _Jet.constant(0.5) * rate * d
+        _Jet.constant(geometry.curvature_start) + _stored_half(rate) * d
     )
     # This makes accidental use as a standalone actual rounded-value bound
     # unknown. _lane_jet_model's coordinate addition and the final expansion
