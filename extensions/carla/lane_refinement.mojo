@@ -11,13 +11,6 @@ never reports an off-road result or a partially searched minimum.
 """
 
 from extensions.carla.curve_sum2 import _require_sum2_environment
-from extensions.carla.curve_objective_model import (
-    _ObjectiveModel,
-    _objective_followup_room,
-    _objective_recheck_room,
-    _try_objective_model,
-    _restrict_objective_model,
-)
 from extensions.carla.curve_minimizer_support import _minimizer_support
 from extensions.carla.spiral_grouped_lane import _try_grouped_lane_jet
 from extensions.carla.curve_sample_dispatch import _try_sample_dispatch_cuts
@@ -1371,7 +1364,6 @@ def _run_lane_search(
     var entry_scale = certificate.scale
     # Invocation-local only: owner, road snapshot, query and proof are fixed.
     # Exact station/scale words retain branch and normalization identity.
-    var cached_model: Optional[_ObjectiveModel] = None
     var sampled_checked = False
     var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None
     var cached_fast: Optional[Tuple[UInt64, UInt64, _Jet]] = None
@@ -1594,113 +1586,9 @@ def _run_lane_search(
                     "Lane refinement exhausted its quadrature work limit"
                 )
             certificate.terms += work
-            # The query node ledger reserves this bounded cache attempt before
-            # entry. The original reference reservation remains charged even
-            # if the containing-cell proof avoids its producer.
-            if external_witness and cached_model:
-                var reused_domain = _restrict_objective_model(
-                    cached_model.value(), lo, hi, scale
-                )
-                if reused_domain:
-                    var reused_delta = _Interval(lo, hi) - _Interval.point(
-                        cached_model.value().center_s
-                    )
-                    var reused_lower = _global_lower(
-                        reused_domain.value(),
-                        cached_model.value().center,
-                        reused_delta,
-                    )
-                    if reused_lower > best_upper:
-                        continue
-                    if _objective_recheck_room(
-                        certificate.nodes, max_nodes
-                    ) and _goal_excludes(reused_lower, scale, goal):
-                        closed.add(
-                            _ClosedInterval(
-                                lo, hi, task[2], reused_lower, scale
-                            )
-                        )
-                        continue
-                    var reused_tolerance = _search_accuracy(
-                        road,
-                        section,
-                        lane,
-                        low,
-                        high,
-                        best,
-                        best_bounds.low,
-                        scale,
-                        requested_gap,
-                    )
-                    if (
-                        _objective_recheck_room(certificate.nodes, max_nodes)
-                        and _next_up(best_upper - reused_lower)
-                        <= reused_tolerance
-                    ):
-                        closed.add(
-                            _ClosedInterval(
-                                lo, hi, task[2], reused_lower, scale
-                            )
-                        )
-                        continue
-                    # The corrected actual-dispatch split supplies a smooth
-                    # containing ancestor. Its complete error/curvature remain
-                    # valid over the whole subtree, not just tiny leaves.
-                    # Error above tolerance is only a scheduling heuristic.
-                    if (
-                        reused_domain.value().error > reused_tolerance
-                        and task[2] < max_depth
-                        and max_nodes - certificate.nodes >= 4
-                    ):
-                        var reused_center_s = _expansion_center(lo, hi, best)
-                        var reused_center_work = _reference_work(
-                            road, reused_center_s, reused_center_s
-                        )
-                        if _objective_followup_room(
-                            certificate.nodes,
-                            certificate.terms,
-                            max_nodes,
-                            max_terms,
-                            work,
-                            reused_center_work,
-                        ):
-                            # Keep the old expansion work reservation too.
-                            certificate.terms += reused_center_work
-                            var reused_center = _restrict_objective_model(
-                                cached_model.value(),
-                                reused_center_s,
-                                reused_center_s,
-                                scale,
-                            )
-                            if reused_center:
-                                var ideal_center = reused_center.value()
-                                ideal_center.error = inf[DType.float64]()
-                                var reused_support = _minimizer_support(
-                                    reused_domain.value(),
-                                    ideal_center,
-                                    reused_center_s,
-                                    best,
-                                    lo,
-                                    hi,
-                                )
-                                if (
-                                    reused_support.low > lo
-                                    or reused_support.high < hi
-                                ):
-                                    pending.append(
-                                        (
-                                            reused_support.low,
-                                            reused_support.high,
-                                            task[2] + 1,
-                                        )
-                                    )
-                                elif best >= middle:
-                                    pending.append((lo, middle, task[2] + 1))
-                                    pending.append((middle, hi, task[2] + 1))
-                                else:
-                                    pending.append((middle, hi, task[2] + 1))
-                                    pending.append((lo, middle, task[2] + 1))
-                                continue
+            # Evaluate the current cell's full producer. A retained ancestor
+            # model can keep a wider error floor and turn a short ordinary
+            # continuation into a default-budget failure on valid lane centers.
             var point_domain: Tuple[_Jet, _Jet, _Jet]
             if frozen:
                 point_domain = _frozen_arc_center(
@@ -1990,27 +1878,6 @@ def _run_lane_search(
                                 scale_word,
                                 center,
                             )
-                # Keep this query/source invocation's actual ideal expression
-                # separate from the frozen ARC surrogate. A failed packing
-                # attempt replaces no previous valid containing-cell model.
-                if external_witness and not frozen:
-                    # Preserve the containing ancestor for sibling reuse.
-                    # A new query scale or a cell outside that owner needs a
-                    # separately validated model; never extend the old owner.
-                    var needs_model = not Bool(cached_model)
-                    if cached_model:
-                        needs_model = (
-                            lo < cached_model.value().low
-                            or hi > cached_model.value().high
-                            or bitcast[DType.uint64](scale)
-                            != cached_model.value().scale_word
-                        )
-                    if needs_model:
-                        var packed_model = _try_objective_model(
-                            lo, hi, center_s, scale, domain, center
-                        )
-                        if packed_model:
-                            cached_model = packed_model.value()
                 var delta = _Interval(lo, hi) - _Interval.point(center_s)
                 var lower = max(natural, _global_lower(domain, center, delta))
                 var support = _Interval(lo, hi)
