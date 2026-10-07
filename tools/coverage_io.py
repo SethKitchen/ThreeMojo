@@ -22,9 +22,12 @@ LINE = b'COVLINE:'
 BRANCH = b'COVBRANCH:'
 EVALUATION = b'COVEVAL2:'
 MAX_RECORD_BYTES = 512
+RECORD_CACHE_CAPACITY = 4096
+CACHE_WINDOW_RECORDS = 1024
+CACHE_BYPASS_RECORDS = 16384
 
 
-class Reducer:
+class _EvidenceReducer:
     """Keep distinct hits and complete version 2 evaluation records.
 
     Completed vectors are assembled inside each function invocation, so the
@@ -85,6 +88,60 @@ class Reducer:
         if payload not in self.payloads:
             self.payloads.add(payload)
             self.write(LINE + payload + b'\n')
+
+
+
+class Reducer(_EvidenceReducer):
+    """Cache accepted raw records only while a bounded sample finds reuse."""
+
+    def __init__(self, write):
+        super().__init__(write)
+        self._accepted_records = set()
+        self._remaining = CACHE_WINDOW_RECORDS
+        self._hits = 0
+        self._bypassing = False
+
+    def feed(self, line):
+        if self._remaining == 0:
+            self._next_window()
+        self._remaining -= 1
+        if self._bypassing:
+            _EvidenceReducer.feed(self, line)
+            return
+        if isinstance(line, bytes) and line in self._accepted_records:
+            self._hits += 1
+            return
+        _EvidenceReducer.feed(self, line)
+        self._remember(line)
+
+    def _next_window(self):
+        # Retain caching only with at least 25% exact hits in the last window.
+        # A bounded bypass avoids repeated admission on cold/churning input.
+        # Then sample again, so a later hot phase can recover automatically.
+        if self._bypassing:
+            self._bypassing = False
+            self._remaining = CACHE_WINDOW_RECORDS
+        elif self._hits * 4 < CACHE_WINDOW_RECORDS:
+            self._accepted_records.clear()
+            self._bypassing = True
+            self._remaining = CACHE_BYPASS_RECORDS
+        else:
+            self._remaining = CACHE_WINDOW_RECORDS
+        self._hits = 0
+
+    def _remember(self, line):
+        # Called only after the original parser and every write succeeded.
+        # Bound both count and raw byte length, including any whitespace.
+        if not isinstance(line, bytes) or len(line) > MAX_RECORD_BYTES or not line.endswith(b'\n'):
+            return
+        record = line.strip()
+        if not (record.startswith((LINE, EVALUATION)) or
+                record.startswith(BRANCH) and b':' in record[len(BRANCH):]):
+            # COVBRANCH without a payload colon is diagnostic passthrough.
+            return
+        if len(self._accepted_records) >= RECORD_CACHE_CAPACITY:
+            self._accepted_records.clear()
+        self._accepted_records.add(line)
 
 
 def capture(command, out_path, err_path, *, progress_interval=60):
