@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Compiler-free fail-closed controls, discovered by make test-tools."""
 import importlib.util
+import json
 from pathlib import Path
 import shutil
 import subprocess
@@ -31,6 +32,8 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         shutil.copyfile(ROOT/'tools/carla_lane_oracle/sum2-guard-pins.json', guard_pin)
         from tools.carla_lane_oracle.source_contracts import GROUP_PATHS
         paths = set(GROUP_PATHS['canonical_accumulation'])
+        paths.update(json.loads(guard_pin.read_text())['protected_inventory'])
+        paths.update(GROUP_PATHS['optional_runtime'])
         paths.update('extensions/carla/' + name for name in
                      ('curve_trig.mojo', 'geometry.mojo', 'lane_value_bounds.mojo'))
         for name in paths:
