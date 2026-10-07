@@ -880,5 +880,10 @@
         "source_unchanged": true
       }
     ]
+  },
+  "containing_model_removal_successor": {
+    "record": "containing-model-removal-migration.json",
+    "sha256": "3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8",
+    "scope": "Active successor removes production containing-objective-model reuse only; all preceding migration records remain historical evidence."
   }
 }
