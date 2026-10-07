@@ -1092,7 +1092,9 @@ def _map_locate_with_work(
     return (r, section, lane)
 
 
-def _query_node_step_cost(lanes: Int, goal: Bool = False) raises -> Int:
+def _query_node_step_cost(
+    lanes: Int, goal: Bool = False, witness: Bool = False
+) raises -> Int:
     # A generic node has at most 3 edge centers, 42 seed centers, one
     # initial center and 4 Jets: at most 100*lanes profile visits.
     # Its 20 fixed units cover 16 node/cell operations, 2 selected-width
@@ -1110,6 +1112,21 @@ def _query_node_step_cost(lanes: Int, goal: Bool = False) raises -> Int:
     # A closed-cell recheck has only one such comparison, mutually exclusive
     # with that path. Reserve these units before any goal node can execute.
     var fixed = 26 if goal else 20
+    fixed += 16  # Stored-dispatch eligibility, cached cuts and split routing.
+    if witness:
+        # Fourteen bounded model operations cover eligibility/FP, child
+        # restriction, global lower/comparison, goal comparison, width lookup,
+        # acceptance, capture/retention, depth/work headroom, center lookup,
+        # second restriction/FP, support localization and frontier insertion.
+        # Original reference/expansion terms stay debited on continuation.
+        fixed += 14
+    if witness:
+        # Four exact challenger comparisons and one child-order check.
+        # Eighteen more units cover at most three exported frontier entries
+        # per visited node, at six bounded packing operations per entry.
+        # Entry frontier packing is reserved separately before continuation.
+        # One additional bounded support-localization operation.
+        fixed += 26
     if lanes < 0 or lanes > (9223372036854775807 - fixed) // 100:
         raise Error("Map query profile work is not representable")
     return 100 * lanes + fixed
@@ -1862,6 +1879,7 @@ struct Map(Movable):
                     certificates[best].scale,
                     indices[best] < indices[target],
                 ),
+                certificates[best].point.copy(),
             )
             accurate[target] = certificates[target].exact_witness
             waypoints[target].s = certificates[target].s
@@ -1875,6 +1893,7 @@ struct Map(Movable):
         request_scale: Float64,
         mut work: _MapQueryWork,
         goal: Optional[_LaneExclusionGoal] = None,
+        external_witness: Optional[Array[Float64, 3]] = None,
     ) raises:
         var previous_nodes = certificate.nodes
         var previous_terms = certificate.terms
@@ -1883,7 +1902,14 @@ struct Map(Movable):
         var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
         work._step(lane_count)
         work._step_product(4, len(certificate.cells))
-        var node_cost = _query_node_step_cost(lane_count, Bool(goal))
+        if external_witness:
+            # Reserve invocation validation and packing of the old frontier.
+            # New entries are covered by the witness-specific node debit.
+            work._step(6)
+            work._step_product(6, len(certificate.cells))
+        var node_cost = _query_node_step_cost(
+            lane_count, Bool(goal), Bool(external_witness)
+        )
         _continue_lane_certificate(
             self.roads[at[0]],
             at[1],
@@ -1898,6 +1924,7 @@ struct Map(Movable):
             max_terms=work.term_cap(previous_terms),
             spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
             goal=goal,
+            external_witness=external_witness,
         )
         work.charge(
             certificate.nodes - previous_nodes,
