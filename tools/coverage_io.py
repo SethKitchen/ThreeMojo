@@ -6,9 +6,11 @@ import argparse
 from collections import deque
 import gzip
 import errno
+import math
 import os
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -25,6 +27,130 @@ MAX_RECORD_BYTES = 512
 RECORD_CACHE_CAPACITY = 4096
 CACHE_WINDOW_RECORDS = 1024
 CACHE_BYPASS_RECORDS = 16384
+DEADLINE_ENV = 'THREEMOJO_COVERAGE_DEADLINE'
+
+
+def shared_deadline():
+    """Read the group's absolute clock deadline, never a fresh suite budget."""
+    value = os.environ.get(DEADLINE_ENV)
+    if value is None:
+        return None
+    deadline = float(value)
+    if not math.isfinite(deadline):
+        raise ValueError('coverage deadline must be finite')
+    return deadline
+
+
+def group(command, seconds):
+    """Give xargs and every capture one deadline, including queued suites."""
+    if not math.isfinite(seconds) or seconds <= 0:
+        raise ValueError('coverage budget must be positive and finite')
+    deadline = time.monotonic() + seconds
+    inherited = shared_deadline()
+    if inherited is not None:
+        deadline = min(deadline, inherited)
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return 124
+    environment = os.environ.copy()
+    environment[DEADLINE_ENV] = repr(deadline)
+    # The alarm stops xargs scheduling. Captures independently enforce this
+    # same deadline and clean up their owned groups even after xargs exits.
+    signal.signal(signal.SIGALRM, signal.SIG_DFL)
+    signal.setitimer(signal.ITIMER_REAL, remaining)
+    os.execvpe(command[0], command, environment)
+    raise AssertionError('exec unexpectedly returned')
+
+
+class _CaptureProcess:
+    """Own the adapter and all its build/run descendants until capture ends."""
+
+    def __init__(self, command, output, environment, deadline):
+        self.command, self.output = command, output
+        self.environment, self.deadline = environment, deadline
+        self.child = None
+        self.active = False
+        self.cancelled_status = None
+        self.lock = threading.RLock()
+        self.stopped = threading.Event()
+        self.watchdog = None
+        self.handlers = {}
+
+    def _kill(self):
+        if self.active:
+            try:
+                os.killpg(self.child.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+    def cancel(self, status):
+        with self.lock:
+            if self.cancelled_status is None:
+                self.cancelled_status = status
+            self._kill()
+
+    def _signal(self, number, _frame):
+        self.cancel(128 + number)
+
+    def _deadline(self):
+        if not self.stopped.wait(max(0, self.deadline - time.monotonic())):
+            self.cancel(124)
+
+    def __enter__(self):
+        try:
+            for number in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+                self.handlers[number] = signal.signal(number, self._signal)
+            with self.lock:
+                if self.deadline is not None and time.monotonic() >= self.deadline:
+                    self.cancelled_status = 124
+                if self.cancelled_status is None:
+                    self.child = subprocess.Popen(
+                        self.command, stdout=self.output, stderr=subprocess.PIPE,
+                        env=self.environment, start_new_session=True)
+                    self.active = True
+                    # A signal may have arrived before Popen assigned the child.
+                    if self.cancelled_status is not None:
+                        self._kill()
+            if self.child is not None and self.deadline is not None:
+                self.watchdog = threading.Thread(target=self._deadline, daemon=True)
+                self.watchdog.start()
+            return self
+        except BaseException:
+            self.__exit__(*sys.exc_info())
+            raise
+
+    def wait(self):
+        if self.child is None:
+            return self.cancelled_status
+        while True:
+            # Reaping and disabling group signals share a lock: the watchdog
+            # cannot target a PID after wait has made it available for reuse.
+            with self.lock:
+                try:
+                    status = self.child.wait(timeout=0)
+                except subprocess.TimeoutExpired:
+                    pass
+                else:
+                    self.active = False
+                    return self.cancelled_status if self.cancelled_status is not None else status
+            # Never hold or repeatedly reacquire the lock while waiting: the
+            # watchdog needs it even when a child closes stderr before exit.
+            self.stopped.wait(0.01)
+
+    def __exit__(self, *_error):
+        self.stopped.set()
+        if self.watchdog is not None and self.watchdog.ident is not None:
+            self.watchdog.join()
+        try:
+            with self.lock:
+                self._kill()
+                if self.child is not None:
+                    self.child.wait()
+                    self.active = False
+                    self.child.stderr.close()
+        finally:
+            for number, handler in self.handlers.items():
+                signal.signal(number, handler)
 
 
 class _EvidenceReducer:
@@ -149,6 +275,7 @@ def capture(command, out_path, err_path, *, progress_interval=60):
     each, compressed; see `Reducer`."""
     if progress_interval <= 0:
         raise ValueError('progress interval must be positive')
+    deadline = shared_deadline()
     suite = Path(out_path).stem
     started = time.monotonic()
     stopped = threading.Event()
@@ -170,10 +297,10 @@ def capture(command, out_path, err_path, *, progress_interval=60):
     monitor.start()
     try:
         with isolated_environment() as environment, open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
-            with subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE, env=environment) as process:
+            with _CaptureProcess(command, output, environment, deadline) as process:
                 try:
                     reducer = Reducer(errors.write)
-                    for line in process.stderr:
+                    for line in (() if process.child is None else process.child.stderr):
                         records += 1
                         if first_probe is None and line.lstrip().startswith((LINE, BRANCH, EVALUATION)):
                             first_probe = time.monotonic()
@@ -181,9 +308,9 @@ def capture(command, out_path, err_path, *, progress_interval=60):
                         reducer.feed(line)
                     status = process.wait()
                 except BaseException:
-                    process.kill()
-                    process.wait()
-                    raise
+                    if process.cancelled_status is None:
+                        raise
+                    status = process.cancelled_status
         progress(f'complete (exit {status})')
         if status:
             print(f'{command[-1]} failed under instrumentation:')
@@ -252,6 +379,9 @@ def report(command, captures):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='mode', required=True)
+    grouped = commands.add_parser('group')
+    grouped.add_argument('--seconds', type=float, required=True)
+    grouped.add_argument('command', nargs=argparse.REMAINDER)
     run = commands.add_parser('capture')
     run.add_argument('--out', type=Path, required=True)
     run.add_argument('--err', type=Path, required=True)
@@ -265,6 +395,8 @@ def main():
         command = command[1:]
     if not command:
         parser.error('a command must follow --')
+    if args.mode == 'group':
+        return group(command, args.seconds)
     if args.mode == 'capture':
         return capture(command, args.out, args.err)
     captures = sorted(args.capture_dir.glob('*.txt.gz'))
