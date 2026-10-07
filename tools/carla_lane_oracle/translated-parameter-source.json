@@ -22,8 +22,8 @@
     {
       "path": "extensions/carla/map.mojo",
       "name": "_create_segments",
-      "sha256": "9c90ae1de854d95e68b941fa48c73006a0c6723eeefb8b351a993fa073869e73",
-      "correspondence": "Writer-tree numerical AST correspondence in canonical-source-correspondence.json"
+      "sha256": "2420eb86594189a44e5e2caf7c3c34b5fd9a593ff8f20ed3f066960095062c26",
+      "correspondence": "Reviewed environment-guard delta only. All remaining method bytes are identical; mathematical construction control is conditional on guard success."
     },
     {
       "path": "extensions/carla/road.mojo",
@@ -64,8 +64,8 @@
     {
       "path": "extensions/carla/lane_geometry.mojo",
       "name": "_lane_geometry_pos_at",
-      "sha256": "0fe7bf11c92f594a0cebfbe355855a3978153190f2f71e93fd2b5be6e1ab14ad",
-      "correspondence": "Canonical scalar dispatcher correspondence above"
+      "sha256": "ecf4a945d12f3cb60be97234dab7aa97c90937a1ee42e72819b5d6657d5f248c",
+      "correspondence": "Reviewed environment-guard delta only. All remaining method bytes are identical; mathematical construction control is conditional on guard success."
     },
     {
       "path": "extensions/carla/polynomial.mojo",
@@ -112,8 +112,8 @@
     {
       "path": "extensions/carla/map.mojo",
       "name": "compute_transform",
-      "sha256": "1e0066fdddeb2131eb7a15457de8ce54347d910162f44c961eacd4a1c1b41a5c",
-      "correspondence": "New build dispatch bound explicitly; pre-work budget guards may refuse, successful same-section scalar operations retain the fixture graph"
+      "sha256": "bea1c8ad195c9964f380769276288c97d8ce9bf4aa7eacee69da63f1682713c9",
+      "correspondence": "Public Raises documentation only after the guarded source checkpoint. Complete module non-doc tokens are unchanged."
     },
     {
       "path": "extensions/carla/map.mojo",
@@ -130,7 +130,56 @@
   ],
   "dependency_sha256": {
     "extensions/carla/map_validation.mojo": "c8457abae67e989ae6de1131e3d30c8f101a0ae6fee9ec4f0afabc0f67be7bef",
-    "extensions/carla/map_search.mojo": "53c5a1369203b2f57c915f4cacfe2935360bd6f4a676934f1a5dc67df69956a3"
+    "extensions/carla/map_search.mojo": "53c5a1369203b2f57c915f4cacfe2935360bd6f4a676934f1a5dc67df69956a3",
+    "extensions/carla/curve_sum2.mojo": "2f732d49a891c9b603ccf05fb74779ea79422d74b4c33723ffe40f99e6c54a67"
   },
-  "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee"
+  "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee",
+  "compute_transform_doc_migration": {
+    "path": "extensions/carla/map.mojo",
+    "method": "compute_transform",
+    "pin_file": "tools/carla_lane_oracle/translated-parameter-source.json",
+    "before_method_sha256": "1e0066fdddeb2131eb7a15457de8ce54347d910162f44c961eacd4a1c1b41a5c",
+    "after_method_sha256": "e96348558f25911a789a1416d9d7f36c91a9221d2896bef726c5f80197fdf1f2",
+    "before_docstring": "\"\"\"Return where a waypoint is, `Map::ComputeTransform`.\n\n        Args:\n            waypoint: The waypoint.\n\n        Returns:\n            Its lane's center at s, facing the way the lane runs.\n\n        Raises:\n            Error: If the lane is not in the map or s is off the road.\n        \"\"\"",
+    "after_docstring": "\"\"\"Return where a waypoint is, `Map::ComputeTransform`.\n\n        Narrow the same canonical Float64 lane center used by nearest queries.\n        Station s is the road-reference parameter, not lane chord length.\n\n        Args:\n            waypoint: The waypoint.\n\n        Returns:\n            Its lane's center at s, facing the way the lane runs.\n\n        Raises:\n            Error: If the lane is not in the map or s is off the road.\n        \"\"\"",
+    "outside_docstring_bytes_identical": true,
+    "outside_docstring_sha256": "ca8b30ee8e21f16a16eb70f3155eebd885b1ce79536bf05dd95b54b6da6be40d",
+    "added_lines": 3,
+    "scope": "Exact raw-method doc-only migration. No executable/mathematical method change. Prior provenance retained."
+  },
+  "sum2_guard_migration": {
+    "source_manifest_sha256": "98933650efb2cad39d62a4fe1ddc18c35331cd79dac3fb8b021284148f6b6109",
+    "methods": [
+      {
+        "path": "extensions/carla/map.mojo",
+        "method": "_create_segments",
+        "before_sha256": "9c90ae1de854d95e68b941fa48c73006a0c6723eeefb8b351a993fa073869e73",
+        "after_sha256": "2420eb86594189a44e5e2caf7c3c34b5fd9a593ff8f20ed3f066960095062c26",
+        "removed_guard_delta": "Leading _require_sum2_environment() statement",
+        "remaining_bytes_identical": true
+      },
+      {
+        "path": "extensions/carla/lane_geometry.mojo",
+        "method": "_lane_geometry_pos_at",
+        "before_sha256": "bf69343d006e9940a997a773de3dce441e54430772d7e332405ec9af7c4bf166",
+        "after_sha256": "ecf4a945d12f3cb60be97234dab7aa97c90937a1ee42e72819b5d6657d5f248c",
+        "removed_guard_delta": "raises qualifier and its exact unsupported-mode docstring section; arithmetic unchanged",
+        "remaining_bytes_identical": true
+      }
+    ],
+    "scope": "Successful supported FP mode only; guard may refuse. No native FP-state execution is modeled here."
+  },
+  "final_format_doc_migration": {
+    "source_freeze_sha256": "eb64ab48aa4e09ea5c064a8ad7c7801bb7c04fdf5a14c7f61494ba8186930aef",
+    "public_doc_migration_sha256": "4cc4cefa6199c1cfbcfd05a636254d1a061889b9a51951d8ceb723544aa6c3dd",
+    "methods": [
+      {
+        "path": "extensions/carla/map.mojo",
+        "method": "compute_transform",
+        "before_sha256": "e96348558f25911a789a1416d9d7f36c91a9221d2896bef726c5f80197fdf1f2",
+        "after_sha256": "bea1c8ad195c9964f380769276288c97d8ce9bf4aa7eacee69da63f1682713c9",
+        "review": "Actual-docstring-only token equality verified at the complete module level"
+      }
+    ]
+  }
 }
