@@ -152,11 +152,11 @@ Replay that records those station words can change.
 Canonical values at a fixed station and segment-index tie rules remain unchanged.
 
 An expansion cache reuses only identical station and scale words within one invocation.
-A separate objective model can restrict a proved smooth cell to a contained child.
-The model keeps the owning cell's uniform scalar error and second-derivative bound.
-Its translated center enclosure supplies ideal value and slope only.
 The cache retains the same road snapshot, lane, query, and owning invocation.
-An unresolved record, clamp, sample, count, phase, or atan-recipe join must decline reuse.
+Each search cell obtains a fresh whole-cell bound from its producer.
+The solver does not reuse a containing cell's objective model.
+That reuse can retain a wider error floor and exhaust the default work budget.
+The work caps and existing node charges remain unchanged.
 
 Stored sample transitions can split a cell at an exact dispatch boundary.
 Both adjacent stored parameters must select the expected source samples.
