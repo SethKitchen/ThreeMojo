@@ -20,6 +20,7 @@ from unittest.mock import patch
 import check_sampled_values as sampled
 import check_runtime_support as runtime
 import heading_correspondence
+import sum2_guard_contracts
 import source_contracts as contracts
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -247,6 +248,7 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
             paths.add(str(contracts.PINS))
             paths.add('tools/carla_lane_oracle/spiral-moment-pins.json')
             paths.add('tools/carla_lane_oracle/sum2-guard-pins.json')
+            paths.update(json.loads((ROOT/sum2_guard_contracts.PINS).read_text())['protected_inventory'])
             for name in paths:
                 to = root/name; to.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(ROOT/name, to)
