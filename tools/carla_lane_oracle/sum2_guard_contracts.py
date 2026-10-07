@@ -7,6 +7,8 @@ lexical operations, retaining unsafe_offset, volatile, qualifiers and operand
 order. Actual token-bound function spans prevent comment/docstring decoys.
 This does not execute or qualify native volatile loads or floating-point state.
 """
+from functools import lru_cache
+import hashlib
 import json
 from pathlib import Path
 import textwrap
@@ -27,17 +29,74 @@ CALLERS = {
     'lane_geometry': ('_lane_spiral',),
     'curve_bounds': ('_spiral_expression', '_lane_jet_model_proof'),
     'lane_refinement': ('_lane_certificate_contains', '_refine_lane_certificate',
-                        '_continue_lane_certificate'),
+                        '_continue_lane_certificate', '_run_lane_search'),
     'map': ('_closest_lane_certificate', '_closest_lane_certificate_with_work', '_create_segments'),
     'map_builder': ('build',),
     'spiral_domain_proof': ('_try_pack_spiral_proof', '_spiral_proof_branch'),
     'spiral_moment_proof': ('_try_build_spiral_moments', '_try_spiral_moment_expansion'),
     'spiral_moment_table': ('_try_spiral_moment_expansion',),
     'spiral_roundoff_proof': ('_sum2_envelope_error',),
+    'curve_objective_model': ('_try_objective_model', '_restrict_objective_model',
+                              '_objective_followup_room', '_objective_recheck_room'),
+    'curve_minimizer_support': ('_minimizer_support',),
+    'curve_sample_dispatch': ('_sample_dispatch_predicate', '_sample_dispatch_cut',
+                              '_try_sample_dispatch_cuts'),
+    'spiral_grouped_lane': ('_try_grouped_lane_jet',),
+    'spiral_grouped_roundoff_proof': ('_grouped_origin_error',
+        '_try_spiral_grouped_roundoff_envelope',
+        '_try_spiral_grouped_roundoff_envelope_metered'),
 }
 OWNERS = {'map': ('Map',), 'map_builder': ('MapBuilder',)}
 PROTECTED = {'_sum2_update', '_require_sum2_environment', '_sum2_supported_environment',
-             '_sum2_error', '_sum2_error_checked', '_spiral_proof_branch'}
+             '_sum2_error', '_sum2_error_checked', '_spiral_proof_branch',
+             '_grouped_origin_error', '_try_spiral_grouped_roundoff_envelope',
+             '_try_objective_model', '_restrict_objective_model', '_objective_followup_room', '_objective_recheck_room',
+             '_minimizer_support',
+             '_sample_dispatch_predicate', '_sample_dispatch_cut',
+             '_try_sample_dispatch_cuts', '_try_grouped_lane_jet'}
+# Scan every production namespace, including new directories. Tests and tool
+# entrypoints are separate consumers, not runtime authority. Include __init__
+# files: a re-export or module alias must not evade the caller review.
+NONPRODUCTION = {'tests', 'examples', 'bench', 'tools', 'docs', 'assets', 'out',
+                 'coverage', 'cache', 'build', 'node_modules'}
+PROTECTED_MODULES = {'curve_sum2', 'spiral_domain_proof', 'curve_bounds',
+    'curve_objective_model', 'curve_minimizer_support', 'curve_sample_dispatch',
+    'spiral_grouped_lane', 'spiral_grouped_roundoff_proof'}
+
+
+@lru_cache(maxsize=256)
+def protected_source_digest(text):
+    # Fast negative filter only. Positive classification always uses tokens,
+    # so comments and docstrings cannot manufacture protected helper uses.
+    names = PROTECTED | PROTECTED_MODULES
+    if not any(name in text for name in names):
+        return None
+    identifiers = [token.string for token in source_contracts.tokens(text)
+                   if token.type == tokenize.NAME]
+    uses = [(index, name) for index, name in enumerate(identifiers) if name in names]
+    if not uses:
+        return None
+    # Preserve existing harmless grouping controls in unrelated caller bodies.
+    # Complete routing binds all imports, aliases and declaration owners;
+    # protected name ordinals bind every actual use (including in new bodies).
+    # Reviewed complete caller bodies and dependency groups bind operations.
+    record = {'routing': declaration_routing(text), 'protected_names': uses}
+    return hashlib.sha256(json.dumps(record, separators=(',', ':')).encode()).hexdigest()
+
+
+def protected_inventory(root):
+    result = {}
+    for path in sorted(root.rglob('*.mojo')):
+        relative = path.relative_to(root)
+        if relative.parts[0] in NONPRODUCTION or any(
+                part.startswith('.')
+                for part in relative.parts):
+            continue
+        digest = protected_source_digest(path.read_text())
+        if digest is not None:
+            result[relative.as_posix()] = digest
+    return result
+
 
 
 def require(condition, message):
@@ -155,7 +214,7 @@ def verify(root):
     pins = json.loads((root / PINS).read_text(), object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
                           'public_doc_migration_sha256', 'final_source_freeze_sha256',
-                          'scope', 'helper_source', 'callers'},
+                          'scope', 'helper_source', 'callers', 'protected_inventory'},
             'wrong Sum2 guard pin keys')
     require(type(pins['schema']) is int and pins['schema'] == 2,
             'unsupported Sum2 guard pin schema')
@@ -199,7 +258,10 @@ def verify(root):
             if token.type == tokenize.NAME and token.string in PROTECTED:
                 require(any(start <= index < end for start, end in spans + import_spans),
                         'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
+    require(protected_inventory(root) == pins['protected_inventory'],
+            'global protected-helper use/import inventory changed')
     return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,
             'volatile_loads': 3, 'probe_sum2_calls': 4,
             'unsupported_paths': 'raise, infinity, unknown Jet, or absent optional proof as bound by each caller',
-            'native_fp_state_execution_qualified': False}
+            'native_fp_state_execution_qualified': False,
+            'protected_production_modules': len(pins['protected_inventory'])}
