@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "event": "Restore CARLA's nearest-waypoint query as the default",
+  "scope": "Map keeps CARLA's heading and length partition in a second R-tree. closest_waypoint_on_road, waypoint and the load-time sign check use CARLA's algorithm on it. The certified search moves to certified_closest_waypoint_on_road and certified_waypoint. No certified solver, guard caller or pinned translated method changes.",
+  "unchanged_methods": [
+    "_closest_lane_certificate",
+    "_closest_lane_certificate_with_work",
+    "_create_segments",
+    "_subdivide_segment",
+    "_resume_on_segment_certificate",
+    "_nearest_on_segment_certificate"
+  ],
+  "raw_successors": {
+    "extensions/carla/map.mojo": [
+      {
+        "before": "312a70b060e78ada52ee6bb4878eeee02b7c593d60472dd152c1eaab89046acd",
+        "after": "450eba96bcc25414014b33436cb431c4d3409ed3621581411bff17b6e94b01d0"
+      }
+    ]
+  },
+  "token_successors": {
+    "extensions/carla/map.mojo": [
+      {
+        "before": "fce36e2c75ad06bbe65d756a54169d9e086c3e44c127faa74e86844996dbea68",
+        "after": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e"
+      }
+    ]
+  }
+}

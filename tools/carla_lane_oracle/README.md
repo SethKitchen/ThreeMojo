@@ -139,7 +139,7 @@ Passing source checks cannot substitute for those missing qualifications.
 ### Separate runtime dependency gates
 
 `source_contracts.py` and `runtime-source-pins.json` bind exact complete module
-tokens for five declared groups. The fixed group/path sets reject missing,
+tokens for six declared groups. The fixed group/path sets reject missing,
 extra or redirected dependencies. They have no hash-refresh command.
 
 - Stored arithmetic: full primitive/error/helper module, including qualifiers
@@ -336,3 +336,83 @@ qualifier positions. The four public documentation changes alter actual
 Raises docstrings only. Every other token, including operational strings,
 remains unchanged. Source bindings have been refreshed only after these
 checks. Native execution, coverage and performance evidence stays separate.
+
+### Optional runtime dependency migration
+
+`optional-runtime-migration.json` records the selected eight-file source
+manifest, previous pin hashes, proof-packet hashes and each changed dependency.
+The canonical Sum2 helper, table pins, primitive graph and historical reference
+and shared-function graph constants stay unchanged. The reference checker
+removes only the verified default-false `require_reuse` parameter and its exact
+unknown-result branch. The moment routing check removes that same parameter.
+
+The optional runtime dependency group covers all five new modules and their
+producer/caller dependencies. `optional_runtime_contracts.py` separately checks
+fresh guards, standalone model ownership and scale, the same ideal/error/witness pairing,
+stored dispatch predicates and indices, deferred splitting, original budget
+reservations and the complete grouped-count debit. The checked error edge is
+raw grouped envelope to private origin error to the checked Sum2 leaf. The raw
+entry checks the environment on each invocation. Grouped reconstruction must
+use `require_reuse=True` to prohibit an unreserved GL fallback.
+
+The guard checker binds 29 complete caller declarations in 14 modules. Its
+additional global production sweep records all actual protected helper and
+source-module uses. The sweep binds import/declaration routing and protected
+NAME-token ordinals. The complete caller and dependency contracts bind the
+function operations. New direct, aliased, wildcard and module imports need
+review, including imports in new namespaces and package initializers. The
+sweep excludes test, example, bench, tool, asset and coverage-tool namespaces.
+It is a static source-integrity gate, not a general dynamic-call analysis.
+
+Mutation fixtures select actual function spans and match executable tokens.
+They accept formatter wrapping and trailing call commas. Formatter changes to
+production bindings still require an explicit reviewed rebind and rerun.
+Source checks do not establish native floating-point behavior, mathematical
+soundness, coverage, performance or final CI success. Native checks and final
+report generation use the final production and test inventory separately.
+
+
+The historical immediate-followup and cached-closure successors are retained
+in the migration records. The standalone model module retains complete source, fresh invocation guards
+on construction/restriction, owner/scale/error checks, and exact/one-short
+integer admission controls for `_objective_followup_room` and
+`_objective_recheck_room`. These model helpers are no longer called by the
+production solver.
+
+Stored dispatch with one or two cuts still admits `3*c+2` nodes and `16*c`
+terms, then charges the original one setup node and `8*c` probe terms. Grouped
+work still requires two remaining nodes before its optional one-node attempt.
+These bounds reserve immediate children and mandatory rechecks. They do not
+promise completion of every remaining search under arbitrary custom budgets.
+
+### Containing-objective-model reuse removal (2026-10-07)
+
+The active solver no longer imports, retains, captures or restricts a
+containing objective model. A retained ancestor's wider error floor could
+make ordinary continuation exhaust default budgets. The original reference
+work debit now immediately precedes the current cell's full producer. The
+standalone objective-model module and its tests remain, as do the exact
+station/scale expansion memo, all node fees, work/depth caps and other solver
+operations. The map change is commentary only; its complete token pins stay
+unchanged.
+
+`containing-model-removal-migration.json` records the exact two-file freeze,
+formatter receipt, former pin hashes, three-node AST removal projection,
+four changed lane-refinement dependency bindings, and the single changed
+complete caller/routing/inventory entry. It retains all twelve removed
+caller-only mutations verbatim and the prior semantic block as historical
+evidence. Existing migration histories are preserved with successor links.
+
+Replacement semantic controls reject objective-model imports, aliases,
+re-exports and consumers anywhere in production, including new namespaces
+and package initializers. They require the original prepaid fresh cell
+producer, reject stale-domain substitution and early cached closure, and
+retain both complete exact station/scale expansion memo paths. Comments and
+docstrings cannot manufacture a consumer. The full model helper dependency
+and all 29 complete guard caller declarations remain bound. No checker can
+refresh pins automatically.
+
+These controls establish source integrity and the reviewed scheduling removal,
+not native behavior, coverage, performance or final CI qualification. Separate
+runtime diagnostics still have 19 default driving cohort failures; removing
+this optimization does not establish default-budget success for every query.

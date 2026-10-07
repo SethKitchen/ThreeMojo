@@ -87,7 +87,7 @@ class EnvironmentSourceTests(unittest.TestCase):
 
     def test_complete_guard_checkpoint_positive(self):
         result = self.positive['environment_guard']
-        self.assertEqual(result['complete_caller_declarations'], 16)
+        self.assertEqual(result['complete_caller_declarations'], 29)
         self.assertEqual(result['volatile_loads'], 3)
         self.assertEqual(result['probe_sum2_calls'], 4)
         self.assertFalse(result['native_fp_state_execution_qualified'])

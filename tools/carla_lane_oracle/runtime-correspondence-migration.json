@@ -164,5 +164,10 @@
       "identical_qualifier_positions": true
     },
     "scope": "Official formatter: wrapping, call trailing commas, adjacent string-literal concatenation. Complete AST equal after separately position-bound move sigils; qualifier positions equal. No source arithmetic, comparison, budget or error-graph change."
+  },
+  "containing_model_removal_successor": {
+    "record": "containing-model-removal-migration.json",
+    "sha256": "3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8",
+    "scope": "Active successor removes production containing-objective-model reuse only; all preceding migration records remain historical evidence."
   }
 }

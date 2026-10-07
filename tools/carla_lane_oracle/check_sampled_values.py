@@ -231,6 +231,40 @@ def primitive_graph(text):
     return hashlib.sha256(dump(found[0]).encode()).hexdigest()
 
 
+
+def reviewed_reference_tree(text):
+    """Retain the historical reference graph after one exact additive refusal.
+
+    Default False preserves every existing call. True may return unknown
+    before the unchanged GL fallback; it cannot perform unreserved work.
+    The production tokens and grouped True caller are bound separately.
+    """
+    tree = syntax_tree(text)
+    node = unique_function(tree, '_lane_jet_model_proof')
+    require(dump(node.args.args[-1]) == dump(ast.arg(
+        arg='require_reuse', annotation=ast.Name(id='Bool', ctx=ast.Load()))),
+        'try-only parameter changed')
+    require(dump(node.args.defaults[-1]) == dump(ast.Constant(value=False)),
+            'try-only default must preserve historical callers')
+    matches = [item for item in node.body if isinstance(item, ast.If)
+               and dump(item.test) == dump(ast.Name(id='reused', ctx=ast.Load()))]
+    require(len(matches) == 1 and len(matches[0].orelse) == 1
+            and isinstance(matches[0].orelse[0], ast.If),
+            'try-only refusal missing from reuse/fallback edge')
+    branch = matches[0].orelse[0]
+    expected = ast.parse('if require_reuse: return _unknown_point()').body[0]
+    require(dump(branch.test) == dump(expected.test)
+            and dump(branch.body) == dump(expected.body) and bool(branch.orelse),
+            'try-only refusal changed')
+    require(sum(isinstance(item, ast.Name) and item.id == 'require_reuse'
+                for item in ast.walk(node)) == 1,
+            'try-only flag has an unreviewed use')
+    matches[0].orelse = branch.orelse
+    node.args.args.pop()
+    node.args.defaults.pop()
+    return tree
+
+
 def verify(root):
     paths = {name: root/'extensions/carla'/name for name in
              ('curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo', 'lane_value_bounds.mojo')}
@@ -243,7 +277,9 @@ def verify(root):
     require(set(REFERENCE_MODULE_GRAPHS) == {'curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo'},
             'wrong reference-module closure')
     for filename, expected_hash in REFERENCE_MODULE_GRAPHS.items():
-        actual = hashlib.sha256(graph(texts[filename]).encode()).hexdigest()
+        reference_graph = (dump(reviewed_reference_tree(texts[filename]))
+                           if filename == 'curve_bounds.mojo' else graph(texts[filename]))
+        actual = hashlib.sha256(reference_graph.encode()).hexdigest()
         require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
     require(primitive_graph(texts['curve_interval.mojo']) == PRIMITIVE_GRAPH_SHA256,
             'Jet primitive graph changed; renewed derivative-independence review required')
@@ -267,7 +303,7 @@ def verify(root):
                         node.attr in ('first', 'second', 'derivatives')),
                     'derivative-field/flag read in stored helper: ' + helper)
     target_tree = syntax_tree(target)
-    reference_trees = {'curve_bounds.mojo': syntax_tree(bounds), 'curve_trig.mojo': syntax_tree(trig)}
+    reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds), 'curve_trig.mojo': syntax_tree(trig)}
     for key, expected_hash in SHARED_GRAPHS.items():
         filename, name = key.split(':', 1)
         node = unique_function(reference_trees[filename], name)

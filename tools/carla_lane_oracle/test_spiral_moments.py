@@ -134,6 +134,8 @@ class TableTests(unittest.TestCase):
         paths = {m.PINS, m.DATA, m.source_contracts.PINS,
                  Path(m.DEPENDENCIES['guard_pin_file'])}
         paths.update(Path(path) for path in m.DEPENDENCIES['paths'])
+        guard_pins = json.loads((m.ROOT/m.DEPENDENCIES['guard_pin_file']).read_text())
+        paths.update(Path(path) for path in guard_pins['protected_inventory'])
         paths.update(Path(record['path']) for group in ('arrays', 'scalars', 'blocks')
                      for record in self.pins[group].values())
         for path in paths:
