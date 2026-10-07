@@ -9,6 +9,7 @@ execution/coverage claim. The migration record retains the external proof
 lineage and the exact selected production bytes. Nothing refreshes pins here.
 """
 import ast
+from functools import lru_cache
 import tokenize
 
 try:
@@ -124,6 +125,101 @@ def fresh_guard(node):
             'fresh invocation guard missing or moved: ' + node.name)
 
 
+# Removal is a scheduling decision, not a rejection of the standalone model's
+# mathematics. Keep its proof and integer admission obligations below. A new
+# production consumer, including an alias/re-export in a new namespace, needs
+# a separate review; comments, docstrings and test-only callers are inert here.
+MODEL_NAMES = frozenset(('curve_objective_model', '_ObjectiveModel',
+    '_try_objective_model', '_restrict_objective_model',
+    '_objective_followup_room', '_objective_recheck_room'))
+REMOVED_SEARCH_NAMES = frozenset(('cached_model', 'reused_domain', 'reused_delta',
+    'reused_lower', 'reused_tolerance', 'reused_center_s', 'reused_center_work',
+    'reused_center', 'ideal_center', 'reused_support', 'needs_model', 'packed_model'))
+
+FRESH_PRODUCER = """
+if certificate.terms > max_terms - work:
+    raise Error("Lane refinement exhausted its quadrature work limit")
+certificate.terms += work
+var point_domain: Tuple[_Jet, _Jet, _Jet]
+if frozen:
+    point_domain = _frozen_arc_center(frozen.value(), lo, hi, Vector3(0, 0, 0))
+else:
+    point_domain = _lane_jet_with_proof(road, section, lane, lo, hi, low, high, spiral_proof)
+var natural = _scaled_point_distance_box(point_domain, location, scale).low
+"""
+
+FAST_MEMO = """
+if external_witness and cached_fast and cached_fast.value()[0] == station_word and cached_fast.value()[1] == scale_word:
+    fast_center = cached_fast.value()[2]
+else:
+    fast_center = _try_proof_expansion_jet(road, section, lane, center_s, location, scale, low, high, spiral_proof)
+    if external_witness and fast_center:
+        cached_fast = (station_word, scale_word, fast_center.value())
+"""
+EXPANSION_MEMO = """
+if external_witness and cached_expansion and cached_expansion.value()[0] == station_word and cached_expansion.value()[1] == scale_word:
+    center = cached_expansion.value()[2]
+else:
+    if frozen:
+        center = _frozen_arc_expansion(frozen.value(), center_s, location, scale)
+    else:
+        center = _expansion_distance_jet(road, section, lane, center_s, location, scale)
+    if external_witness:
+        cached_expansion = (station_word, scale_word, center)
+"""
+
+
+@lru_cache(maxsize=256)
+def executable_names(text):
+    return frozenset(token.string for token in source_contracts.tokens(text)
+                     if token.type == tokenize.NAME)
+
+
+def verify_no_containing_model_consumers(root):
+    helper = 'extensions/carla/curve_objective_model.mojo'
+    for path in sorted(root.rglob('*.mojo')):
+        relative = path.relative_to(root)
+        if relative.parts[0] in guard.NONPRODUCTION or any(
+                part.startswith('.') for part in relative.parts):
+            continue
+        text = path.read_text()
+        if not any(name in text for name in MODEL_NAMES | REMOVED_SEARCH_NAMES):
+            continue
+        names = executable_names(text)
+        if relative.as_posix() != helper:
+            require(not (names & MODEL_NAMES),
+                    'containing-objective model production consumer reintroduced: '
+                    + relative.as_posix())
+        if relative.as_posix() == 'extensions/carla/lane_refinement.mojo':
+            require(not (names & REMOVED_SEARCH_NAMES),
+                    'containing-objective model search state reintroduced')
+
+
+def verify_fresh_producer(run):
+    loops = [node for node in run.body if isinstance(node, ast.While)]
+    require(len(loops) == 1, 'one original search frontier loop')
+    statements = loops[0].body
+    work_test = sampled.dump(ast.parse('work >= 0', mode='eval').body)
+    choices = [i for i, node in enumerate(statements) if isinstance(node, ast.If)
+               and sampled.dump(node.test) == work_test]
+    require(len(choices) == 1 and choices[0] > 0,
+            'fresh cell producer must use original reference admission')
+    index = choices[0]
+    expected_work = sampled.syntax_tree('var work = _reference_work(road, lo, hi)').body[0]
+    require(sampled.dump(statements[index - 1]) == sampled.dump(expected_work),
+            'fresh cell producer must use current cell work')
+    expected = sampled.syntax_tree(FRESH_PRODUCER).body
+    require(sampled.dump(statements[index].body[:len(expected)]) == sampled.dump(expected),
+            'fresh current-cell producer must immediately follow original debit')
+    for name in ('cached_fast', 'cached_expansion'):
+        contains(run, 'var ' + name + ': Optional[Tuple[UInt64, UInt64, _Jet]] = None',
+                 'exact expansion memo lifetime is one search invocation')
+    for fragment, label in ((FAST_MEMO, 'proof'), (EXPANSION_MEMO, 'translated')):
+        sequence(run, 'var station_word = bitcast[DType.uint64](center_s)\n'
+                 + 'var scale_word = bitcast[DType.uint64](scale)\n' + fragment,
+                 'exact station/scale ' + label + ' expansion memo and fresh fallback')
+
+
 def verify_semantics(root):
     model = body(root, 'curve_objective_model', '_try_objective_model')
     restrict = body(root, 'curve_objective_model', '_restrict_objective_model')
@@ -226,43 +322,23 @@ def verify_semantics(root):
                 'dispatch debit must precede optional attempts')
 
     run = body(root, 'lane_refinement', '_run_lane_search')
-    contains(run, 'var cached_model: Optional[_ObjectiveModel] = None', 'model lifetime is one search invocation')
+    verify_no_containing_model_consumers(root)
+    verify_fresh_producer(run)
     contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
     contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
     contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
-    expression(run, '_try_objective_model(lo, hi, center_s, scale, domain, center)',
-               'paired ideal owner and translated center')
-    expression(run, 'external_witness and not frozen', 'exclude unpaired frozen ARC surrogate')
     expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',
                'support receives same ideal and actual witness')
-    contains(run, 'ideal_center.error = inf[DType.float64]()', 'restricted center retains infinite translated error')
-    contains(run, 'var reused_center_work = _reference_work(road, reused_center_s, reused_center_s)',
-             'reused center retains original work reservation')
+    # The standalone helper remains reviewed and tested even though the
+    # search solver no longer imports, captures, or restricts this model.
     room = body(root, 'curve_objective_model', '_objective_followup_room')
     expected_room = sampled.unique_function(sampled.syntax_tree(FOLLOWUP_ROOM), '_objective_followup_room')
     require(sampled.dump(room) == sampled.dump(expected_room),
             'complete overflow-safe integer followup admission')
-    call = '_objective_followup_room(certificate.nodes, certificate.terms, max_nodes, max_terms, work, reused_center_work)'
-    expression(run, call, 'cached caller must preserve current counters and complete work arguments')
-    expression(run, 'reused_domain.value().error > reused_tolerance and task[2] < max_depth and max_nodes - certificate.nodes >= 4',
-               'cached split retains depth and four followup nodes')
-    cache_guards = [item for item in ast.walk(run) if isinstance(item, ast.If)
-                    and sampled.dump(item.test) == sampled.dump(ast.parse(call, mode='eval').body)]
-    require(len(cache_guards) == 1 and sampled.dump(cache_guards[0].body[0]) ==
-            sampled.dump(ast.parse('certificate.terms += reused_center_work').body[0]),
-            'cache followup admission must precede center debit')
     recheck = body(root, 'curve_objective_model', '_objective_recheck_room')
     require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(
         sampled.syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
         'complete integer cached-closure recheck admission')
-    contains(run, 'if reused_lower > best_upper:\n    continue',
-             'strict cached exclusion stays unconditional')
-    contains(run, 'if _objective_recheck_room(certificate.nodes, max_nodes) and _goal_excludes(reused_lower, scale, goal):\n    closed.add(_ClosedInterval(lo, hi, task[2], reused_lower, scale))\n    continue',
-             'cached goal closure must reserve recheck before its predicate')
-    contains(run, 'if _objective_recheck_room(certificate.nodes, max_nodes) and _next_up(best_upper - reused_lower) <= reused_tolerance:\n    closed.add(_ClosedInterval(lo, hi, task[2], reused_lower, scale))\n    continue',
-             'cached accuracy closure must reserve recheck before its predicate')
-    expression(run, '_objective_recheck_room(certificate.nodes, max_nodes)',
-               'both cached closure routes need current node counters', count=2)
     sequence(run, GROUPED_ADMISSION,
              'grouped caller must retain recheck and prepaid original fallback')
     expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
@@ -282,7 +358,7 @@ def verify_semantics(root):
     fee = body(root, 'map', '_query_node_step_cost')
     contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')
     contains(fee, 'fixed += 16', 'stored dispatch logical fee')
-    contains(fee, 'if witness:\n    fixed += 14', 'model reuse logical fee')
+    contains(fee, 'if witness:\n    fixed += 14', 'retained containing-model logical fee')
     contains(fee, 'if witness:\n    fixed += 26', 'witness frontier logical fee')
     contains(fee, 'return 100 * lanes + fixed', 'original profile record work convention')
     # Only the exact additive default-false refusal is projected away. All
@@ -290,6 +366,8 @@ def verify_semantics(root):
     sampled.reviewed_reference_tree((root / 'extensions/carla/curve_bounds.mojo').read_text())
     return {'status': 'PASS', 'new_modules': list(NEW_MODULES),
             'checked_error_edge': 'guarded raw -> grouped origin -> checked Sum2 leaf',
+            'containing_model_consumers': 'absent from production; standalone helper retained',
+            'fresh_cell_producer': 'original debit immediately precedes current-cell producer',
             'qualification': 'source preconditions and dependency integrity only',
             'native_execution_qualified': False}
 
