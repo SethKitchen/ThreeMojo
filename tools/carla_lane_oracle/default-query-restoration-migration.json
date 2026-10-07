@@ -25,5 +25,14 @@
         "after": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e"
       }
     ]
+  },
+  "guard_successors": {
+    "extensions/carla/map.mojo": {
+      "protected_inventory": {
+        "before": "46df8c151473ad9a29b23cb11463cb37c85dbe41f513f5bbb2dc21fd5662998c",
+        "after": "c92f9a445703e266db500252b2a2e7489f8fc152f5818964561347b439e51a33"
+      },
+      "routing": "Regenerated with declaration_routing: the module docstring, the _CarlaSegment struct and the Map index fields. No guard caller body changes."
+    }
   }
 }

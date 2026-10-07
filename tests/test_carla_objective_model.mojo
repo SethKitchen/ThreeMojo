@@ -70,5 +70,4 @@ def test_uniform_taylor_children_keep_original_error_and_owner_guards() raises:
 
 
 def main() raises:
-    var suite = TestSuite.discover_tests[__functions_in_module()]()
-    suite.run()
+    TestSuite.discover_tests[__functions_in_module()]().run()
