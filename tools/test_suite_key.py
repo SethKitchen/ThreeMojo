@@ -19,6 +19,7 @@ FILES = {
     "tools/suite_key.py": "",
     "tools/test_environment.py": "",
     "tools/compiler_telemetry.py": "",
+    "tools/native_test_support.py": "",
     "pkg/__init__.mojo": "",
     "pkg/used.mojo": "from pkg.deep import f\n",
     "pkg/deep.mojo": "def f():\n    pass\n",
