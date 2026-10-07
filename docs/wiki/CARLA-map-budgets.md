@@ -27,7 +27,9 @@ There is no persistent validation cache that survives public record mutation. As
 
 ## Nearest-lane queries
 
-Pass `budget=` to `closest_waypoint_on_road` or `waypoint`.
+Pass `budget=` to `certified_closest_waypoint_on_road` or `certified_waypoint`.
+
+The default `closest_waypoint_on_road` and `waypoint` run CARLA's query on CARLA's own segment partition. They take no budget. They do one R-tree search and one lane step, and they do not raise on a valid lane mask.
 
 | Limit | Default | Meaning |
 | --- | ---: | --- |
@@ -42,7 +44,7 @@ Pass `budget=` to `closest_waypoint_on_road` or `waypoint`.
 
 The original 16384-node and 2000000-term **per-candidate** caps and all accuracy/depth limits still apply; raising a global policy never relaxes them.
 
-The same operation ledger covers initial refinement, every resume, the selected public pose, and strict lane membership. Pose validation charges both scalar traversals before evaluating the selected Road transform. It refuses an invalid selected pose rather than substituting another lane. A builder's sign queries additionally share one combined construction-step balance across candidate admission, heap pushes/pops and refinement nodes.
+The same operation ledger covers initial refinement, every resume, the selected public pose, and strict lane membership. Pose validation charges both scalar traversals before evaluating the selected Road transform. It refuses an invalid selected pose rather than substituting another lane. A builder's sign checks use CARLA's query, as `CheckSignalsOnRoads` does. Each check charges one construction step per CARLA index segment, which is the R-tree's worst case, plus one step for the lane step.
 
 Exhaustion raises `Error`. `None` still means no eligible lane, or a fully established strict outside result. No partial winner is returned. With sufficient budgets, the geometry algorithm and exact segment-index tie ordering are preserved.
 

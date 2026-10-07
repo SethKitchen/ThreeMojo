@@ -53,7 +53,7 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
     print("CPU_MODE_COUNT", modes)
     var map = load_opendrive_file("assets/carla/town.xodr")
     var query = Vector3(19.200000762939453, -99.26249694824219, 0)
-    var waypoint = map.closest_waypoint_on_road(query).value()
+    var waypoint = map.certified_closest_waypoint_on_road(query).value()
     var road = _sampled_road(1.0)
     var certificate = _refine_lane_certificate(
         road, 0, 0, 0.5, 0.5, Vector3(0, 0, 0), 0.5, 0.0
@@ -183,9 +183,9 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
                 with assert_raises(contains="Canonical lane arithmetic"):
                     _ = _lane_geometry_pos_at(geometry, 1.0)
                 with assert_raises(contains="Canonical lane arithmetic"):
-                    _ = map.waypoint(query)
+                    _ = map.certified_waypoint(query)
                 with assert_raises(contains="Canonical lane arithmetic"):
-                    _ = map.closest_waypoint_on_road(query)
+                    _ = map.certified_closest_waypoint_on_road(query)
                 with assert_raises(contains="Canonical lane arithmetic"):
                     _ = map.compute_transform(waypoint)
                 with assert_raises(contains="Canonical lane arithmetic"):
@@ -225,7 +225,7 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
             assert_equal(len(builder.roads), 1)
             assert_equal(len(map._segments), segments)
             print("ENTRY_MODE_PASS", repeat, mode)
-    var final = map.closest_waypoint_on_road(query).value()
+    var final = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(final.s, waypoint.s)
     print("RESTORED_QUERY", final.s)
 

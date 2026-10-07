@@ -52,11 +52,13 @@ def test_nonfinite_query_is_rejected_before_even_an_empty_index() raises:
     var map = Map(
         List[Road](), List[Junction](), List[Signal](), List[Controller]()
     )
-    assert_false(Bool(map.closest_waypoint_on_road(Vector3(0, 0, 0))))
+    assert_false(Bool(map.certified_closest_waypoint_on_road(Vector3(0, 0, 0))))
     with assert_raises(contains="finite coordinates"):
-        _ = map.closest_waypoint_on_road(Vector3(inf[DType.float32](), 0, 0))
+        _ = map.certified_closest_waypoint_on_road(
+            Vector3(inf[DType.float32](), 0, 0)
+        )
     with assert_raises(contains="finite coordinates"):
-        _ = map.closest_waypoint_on_road(
+        _ = map.certified_closest_waypoint_on_road(
             Vector3(0, bitcast[DType.float32](UInt32(0x7FC00001)), 0)
         )
 

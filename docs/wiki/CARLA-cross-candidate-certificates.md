@@ -7,8 +7,8 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 ## Draft scope
 
-The lane query holds selection until it has a minimum-distance certificate.
-It remains part of held [#594](https://github.com/SethKitchen/ThreeMojo/pull/594).
+`certified_closest_waypoint_on_road` and `certified_waypoint` hold selection until they have a minimum-distance certificate.
+The default `closest_waypoint_on_road` and `waypoint` run CARLA's query and do not use these certificates.
 It admits candidates with the separate index and full-curve bounds.
 A cached full rounded-center box can exclude a segment after an incumbent exists.
 The box lower bound must exceed that stored point's upper bound.

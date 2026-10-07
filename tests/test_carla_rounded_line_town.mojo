@@ -17,13 +17,13 @@ def test_town_rotated_boundary_and_cross_road_tie_are_resolved() raises:
         Float32(39.337494),
         Float32(48),
     ]:
-        assert_false(Bool(map.waypoint(Vector3(80, y, 0))))
+        assert_false(Bool(map.certified_waypoint(Vector3(80, y, 0))))
     var query = Vector3(32, 48, 0)
-    var nearest = map.closest_waypoint_on_road(query).value()
+    var nearest = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(nearest.road_id, RoadId(1))
     assert_equal(nearest.lane_id, LaneId(-1))
     assert_equal(nearest.s, 32.0)
-    assert_false(Bool(map.waypoint(query)))
+    assert_false(Bool(map.certified_waypoint(query)))
 
 
 def main() raises:

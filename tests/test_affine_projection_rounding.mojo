@@ -74,9 +74,9 @@ def test_affine_projection_preserves_reachable_center() raises:
     assert_equal(target_center[2], 0.0)
     assert_true(_wide_plan_contains(target_center, query, 0.0002))
 
-    var nearest = map.closest_waypoint_on_road(location).value()
+    var nearest = map.certified_closest_waypoint_on_road(location).value()
     var selected = map.roads[0]._lane_center(0, lane, nearest.s)
-    var under = map.waypoint(location)
+    var under = map.certified_waypoint(location)
     print("AFFINE_PROJECT_START_BITS", bitcast[DType.uint64](segment[2].s))
     print("AFFINE_PROJECT_END_BITS", bitcast[DType.uint64](segment[3].s))
     print("AFFINE_PROJECT_TARGET_BITS", bitcast[DType.uint64](target_s))

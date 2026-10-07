@@ -93,12 +93,12 @@ def _query(
 ) raises:
     # These positions come from the closed-form curve, not compute_transform.
     var point = Vector3(Float32(x), Float32(y), Float32(z))
-    var nearest = map.closest_waypoint_on_road(point)
+    var nearest = map.certified_closest_waypoint_on_road(point)
     assert_true(Bool(nearest))
     assert_equal(nearest.value().lane_id, LaneId(lane))
     assert_equal(nearest.value().section_id, SectionId(section))
     assert_almost_equal(nearest.value().s, s, atol=2e-4)
-    var under = map.waypoint(point)
+    var under = map.certified_waypoint(point)
     assert_true(Bool(under))
     assert_equal(under.value().lane_id, LaneId(lane))
 
@@ -118,10 +118,10 @@ def test_narrow_nonconvex_cubic_checks_every_stationary_basin() raises:
         "</lane></right></laneSection></lanes></road></OpenDRIVE>"
     )
     var point = Vector3(Float32(0.0009), Float32(0.0005525), 0)
-    var nearest = map.closest_waypoint_on_road(point).value()
+    var nearest = map.certified_closest_waypoint_on_road(point).value()
     assert_equal(nearest.lane_id, LaneId(-1))
     assert_almost_equal(nearest.s, 0.000900000002294056, atol=2e-4)
-    assert_true(Bool(map.waypoint(point)))
+    assert_true(Bool(map.certified_waypoint(point)))
     assert_true(
         map.roads[0]._lane_distance_squared(0, 0, nearest.s, point) < 1e-20
     )
@@ -267,10 +267,10 @@ def test_nonconvex_elevation_and_rotated_left_and_right_centers() raises:
                 Float32(-0.0009 * sin(0.7)),
                 Float32(0.0005525),
             )
-            var nearest = map.closest_waypoint_on_road(point).value()
+            var nearest = map.certified_closest_waypoint_on_road(point).value()
             assert_equal(nearest.lane_id, LaneId(id))
             assert_almost_equal(nearest.s, 0.0009, atol=2e-4)
-            assert_true(Bool(map.waypoint(point)))
+            assert_true(Bool(map.certified_waypoint(point)))
             assert_true(
                 map.compute_transform(nearest).location.distance_to(point)
                 < 1e-9
@@ -293,7 +293,7 @@ def test_line_polynomial_translation_and_far_query_scale() raises:
         roads[0].sections[0].lanes[i].distance = base
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var point = Vector3(0.6, 1.75, 0)
-    var nearest = map.closest_waypoint_on_road(point).value()
+    var nearest = map.certified_closest_waypoint_on_road(point).value()
     assert_true(abs(nearest.s - (base + Float64(point.x))) <= 0.00000012)
     var derivative = map.roads[0]._lane_distance_derivative(
         0, 0, base, base + 1.0, Vector3(1e20, 1e20, 1e20)

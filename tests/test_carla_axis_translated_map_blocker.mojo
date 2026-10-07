@@ -114,11 +114,16 @@ def test_aligned_translated_map_keeps_representable_queries() raises:
     var map = _flat_map(length=65536.0, record_s=base)
     assert_equal(map.segment_count(), 1)
     assert_equal(
-        map.closest_waypoint_on_road(Vector3(10000, 0.0001, 0)).value().s,
+        map.certified_closest_waypoint_on_road(Vector3(10000, 0.0001, 0))
+        .value()
+        .s,
         base + 16384.0,
     )
     assert_equal(
-        map.closest_waypoint_on_road(Vector3(8192, 0.0001, 0)).value().s, base
+        map.certified_closest_waypoint_on_road(Vector3(8192, 0.0001, 0))
+        .value()
+        .s,
+        base,
     )
 
 

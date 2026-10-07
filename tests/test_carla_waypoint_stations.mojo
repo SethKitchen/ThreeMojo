@@ -43,7 +43,7 @@ def _check(
     var query = Vector3(
         bitcast[DType.float32](x_word), bitcast[DType.float32](y_word), 0
     )
-    var found = map.waypoint(query)
+    var found = map.certified_waypoint(query)
     assert_true(Bool(found))
     var waypoint = found.value()
     assert_equal(waypoint.road_id, RoadId(road))

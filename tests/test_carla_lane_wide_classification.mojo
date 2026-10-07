@@ -29,7 +29,7 @@ def test_narrow_lane_at_wide_origin_is_not_a_rounded_on_road_hit() raises:
     roads[0].info.geometries[0].geometry.x = 1000000001.0
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var point = Vector3(Float32(1000000000.0), Float32(0.0001), 0)
-    var nearest = map.closest_waypoint_on_road(point)
+    var nearest = map.certified_closest_waypoint_on_road(point)
     assert_true(Bool(nearest))
     var w = nearest.value()
     assert_equal(w.lane_id, LaneId(-1))
@@ -39,7 +39,7 @@ def test_narrow_lane_at_wide_origin_is_not_a_rounded_on_road_hit() raises:
     # The public transform cannot represent the one-meter x gap here.
     assert_equal(map.compute_transform(w).location.x, point.x)
     # The wide center is a full meter away, far outside the 0.1 mm half-width.
-    assert_false(Bool(map.waypoint(point)))
+    assert_false(Bool(map.certified_waypoint(point)))
 
 
 def test_zero_squared_score_does_not_certify_coincident_center() raises:
@@ -78,7 +78,7 @@ def test_zero_squared_score_does_not_certify_coincident_center() raises:
     # actually coincident, so the earlier inserted right lane must not win.
     assert_equal(map.roads[0]._lane_distance_squared(0, right, 0.5, point), 0.0)
     assert_equal(map.roads[0]._lane_distance_squared(0, left, 0.5, point), 0.0)
-    var nearest = map.closest_waypoint_on_road(point).value()
+    var nearest = map.certified_closest_waypoint_on_road(point).value()
     print(
         "ZERO_SQUARE_CENTERS",
         right_center.y,
@@ -86,7 +86,7 @@ def test_zero_squared_score_does_not_certify_coincident_center() raises:
         nearest.lane_id.value,
     )
     assert_equal(nearest.lane_id, LaneId(1))
-    var under = map.waypoint(point)
+    var under = map.certified_waypoint(point)
     assert_true(Bool(under))
     assert_equal(under.value().lane_id, LaneId(1))
 

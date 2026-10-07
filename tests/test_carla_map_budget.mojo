@@ -62,9 +62,13 @@ def test_empty_map_accepts_all_zero_limits() raises:
     var budget = MapQueryBudget(0, 0, 0, 0, 0)
     assert_equal(map.segment_count(), 0)
     assert_false(
-        Bool(map.closest_waypoint_on_road(Vector3(0, 0, 0), budget=budget))
+        Bool(
+            map.certified_closest_waypoint_on_road(
+                Vector3(0, 0, 0), budget=budget
+            )
+        )
     )
-    assert_false(Bool(map.waypoint(Vector3(0, 0, 0), budget=budget)))
+    assert_false(Bool(map.certified_waypoint(Vector3(0, 0, 0), budget=budget)))
 
 
 def test_zero_and_one_segment_boundaries() raises:
@@ -129,7 +133,9 @@ def test_invalid_or_mutated_policies_are_rejected_on_entry() raises:
     var query = MapQueryBudget()
     query.max_queue_entries = -1
     with assert_raises(contains="nonnegative"):
-        _ = map.closest_waypoint_on_road(Vector3(0, 0, 0), budget=query)
+        _ = map.certified_closest_waypoint_on_road(
+            Vector3(0, 0, 0), budget=query
+        )
 
 
 def test_counter_guards_do_not_overflow_and_latch_exhaustion() raises:
@@ -170,12 +176,12 @@ def test_mutated_consumed_work_is_rejected_before_arithmetic() raises:
 def test_zero_candidate_budget_is_exhaustion_not_no_lane() raises:
     var map = _map()
     with assert_raises(contains="candidate budget"):
-        _ = map.closest_waypoint_on_road(
+        _ = map.certified_closest_waypoint_on_road(
             Vector3(2, 0, 0), budget=MapQueryBudget(0)
         )
     assert_false(
         Bool(
-            map.closest_waypoint_on_road(
+            map.certified_closest_waypoint_on_road(
                 Vector3(2, 0, 0), LANE_SHOULDER, MapQueryBudget(0)
             )
         )
@@ -201,28 +207,30 @@ def test_query_exact_resources_and_selected_pose_share_one_ledger() raises:
         work.index_pops,
         work.peak_queue_entries,
     )
-    var result = map.closest_waypoint_on_road(location, budget=exact).value()
+    var result = map.certified_closest_waypoint_on_road(
+        location, budget=exact
+    ).value()
     assert_equal(
         bitcast[DType.uint64](result.s), bitcast[DType.uint64](reference[0].s)
     )
     assert_equal(result.road_id, reference[0].road_id)
     exact.max_nodes -= 1
     with assert_raises(contains="node budget"):
-        _ = map.closest_waypoint_on_road(location, budget=exact)
+        _ = map.certified_closest_waypoint_on_road(location, budget=exact)
     exact.max_nodes += 1
     exact.max_terms -= 1
     with assert_raises(contains="term budget"):
-        _ = map.closest_waypoint_on_road(location, budget=exact)
+        _ = map.certified_closest_waypoint_on_road(location, budget=exact)
 
 
 def test_zero_global_refinement_limits_cannot_return_partial_winner() raises:
     var map = _map()
     with assert_raises(contains="interval work limit"):
-        _ = map.closest_waypoint_on_road(
+        _ = map.certified_closest_waypoint_on_road(
             Vector3(2, 0, 0), budget=MapQueryBudget(1, max_nodes=0)
         )
     with assert_raises(contains="quadrature work limit"):
-        _ = map.closest_waypoint_on_road(
+        _ = map.certified_closest_waypoint_on_road(
             Vector3(2, 0, 0), budget=MapQueryBudget(1, max_terms=0)
         )
 
@@ -230,16 +238,16 @@ def test_zero_global_refinement_limits_cannot_return_partial_winner() raises:
 def test_index_pops_and_queue_are_guarded_before_work() raises:
     var map = _map()
     with assert_raises(contains="index pop budget"):
-        _ = map.closest_waypoint_on_road(
+        _ = map.certified_closest_waypoint_on_road(
             Vector3(2, 0, 0), budget=MapQueryBudget(1, max_index_pops=0)
         )
     with assert_raises(contains="index queue budget"):
-        _ = map.closest_waypoint_on_road(
+        _ = map.certified_closest_waypoint_on_road(
             Vector3(2, 0, 0), budget=MapQueryBudget(1, max_queue_entries=0)
         )
     var many = _map(40)
     with assert_raises(contains="index queue budget"):
-        _ = many.closest_waypoint_on_road(
+        _ = many.certified_closest_waypoint_on_road(
             Vector3(2, 0, 0), budget=MapQueryBudget(40, max_queue_entries=1)
         )
 
@@ -257,14 +265,14 @@ def test_large_equal_candidate_set_is_cumulative_and_deterministic() raises:
     assert_equal(reference[0].road_id, RoadId(1))
     var policy = MapQueryBudget(39)
     with assert_raises(contains="candidate budget"):
-        _ = map.closest_waypoint_on_road(location, budget=policy)
+        _ = map.certified_closest_waypoint_on_road(location, budget=policy)
     policy.max_candidates = 40
     policy.max_nodes = work.nodes - 1
     with assert_raises():
-        _ = map.closest_waypoint_on_road(location, budget=policy)
+        _ = map.certified_closest_waypoint_on_road(location, budget=policy)
     policy.max_nodes = work.nodes
     policy.max_terms = work.terms
-    var sufficient = map.closest_waypoint_on_road(
+    var sufficient = map.certified_closest_waypoint_on_road(
         location, budget=policy
     ).value()
     assert_equal(sufficient.road_id, reference[0].road_id)
@@ -287,11 +295,11 @@ def test_strict_query_uses_same_limits_and_keeps_boundary_outside() raises:
         work.index_pops,
         work.peak_queue_entries,
     )
-    assert_true(Bool(map.waypoint(Vector3(2, 0, 0), budget=exact)))
-    assert_false(Bool(map.waypoint(Vector3(2, 1, 0))))
+    assert_true(Bool(map.certified_waypoint(Vector3(2, 0, 0), budget=exact)))
+    assert_false(Bool(map.certified_waypoint(Vector3(2, 1, 0))))
     exact.max_terms -= 1
     with assert_raises(contains="term budget"):
-        _ = map.waypoint(Vector3(2, 0, 0), budget=exact)
+        _ = map.certified_waypoint(Vector3(2, 0, 0), budget=exact)
 
 
 def test_many_short_width_records_are_bounded_before_boundary_allocation() raises:
@@ -448,8 +456,9 @@ def test_sign_relocation_has_no_independent_budget_reset() raises:
         )
     )
     map.signals[0].transform.location = Vector3(2, 0, 0)
+    # The CARLA query admits the sign; its lane pose then needs terms.
     var work = _MapBuildWork(MapBuildBudget(10, max_terms=0))
-    with assert_raises(contains="quadrature work limit"):
+    with assert_raises(contains="global term budget"):
         _check_signals_on_roads_with_work(map, work)
     assert_true(map.signals[0].transform.location == Vector3(2, 0, 0))
 
@@ -480,8 +489,8 @@ def test_nonexact_strict_classification_uses_the_query_remainder() raises:
     assert_false(result[1].exact_witness)
     var exhausted = MapQueryBudget(work.candidates, max_nodes=work.nodes)
     with assert_raises(contains="classification exhausted"):
-        _ = map.waypoint(location, budget=exhausted)
-    assert_true(Bool(map.waypoint(location)))
+        _ = map.certified_waypoint(location, budget=exhausted)
+    assert_true(Bool(map.certified_waypoint(location)))
 
 
 def test_resumption_uses_global_remainder_without_resetting_candidate_caps() raises:

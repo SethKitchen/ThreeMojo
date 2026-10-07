@@ -179,7 +179,7 @@ def test_sampled_town_query_resolves_without_larger_work_or_accuracy_limits() ra
         bitcast[DType.float32](UInt32(3268476412)),
         bitcast[DType.float32](UInt32(1069720068)),
     )
-    var result = map.closest_waypoint_on_road(query).value()
+    var result = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(result.road_id, RoadId(5))
     assert_equal(result.lane_id, LaneId(-1))
     assert_true(result.s > 25.70937704009046)

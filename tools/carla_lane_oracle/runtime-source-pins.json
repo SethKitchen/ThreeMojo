@@ -8,7 +8,7 @@
       "extensions/carla/curve_bounds.mojo": "c256d6a212735f9d3e9a522e557ed6716f51c80322979478fe17e67d688fb508",
       "extensions/carla/spiral_roundoff_proof.mojo": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641",
       "extensions/carla/lane_refinement.mojo": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
-      "extensions/carla/map.mojo": "5725f3b707981148acbeb96472d6cfd84f51dacec4ac49a7f466bc9c4d59c2a6",
+      "extensions/carla/map.mojo": "86bb887286f465f5227a4a284d6af59056abcb158093db1d815aedccbd977b92",
       "extensions/carla/map_builder.mojo": "627ce91ee8d9626d9a326dd950dc85da6ca273e1fdc045128d3f119186207765",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
       "extensions/carla/spiral_moment_proof.mojo": "87bef611ae73e97ed67ab4be3d2665244611c8aa6dadd98b19d5a407244363e6",
@@ -39,7 +39,7 @@
     },
     "support": {
       "extensions/carla/lane_refinement.mojo": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
-      "extensions/carla/map.mojo": "5725f3b707981148acbeb96472d6cfd84f51dacec4ac49a7f466bc9c4d59c2a6",
+      "extensions/carla/map.mojo": "86bb887286f465f5227a4a284d6af59056abcb158093db1d815aedccbd977b92",
       "extensions/carla/lane_distance.mojo": "bcbec3a9af9bbcfd2fa2710936c4d5a6fac7fc2fbac09813d0a5732c0f798918",
       "extensions/carla/junction_bounds.mojo": "83493444663f6125fb884d402e21f5976b3e27dd637cce9c39bb1ff00697751b",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",

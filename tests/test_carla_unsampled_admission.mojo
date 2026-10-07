@@ -76,10 +76,10 @@ def test_full_curve_admission_retains_a_narrow_lane_between_quarter_samples() ra
         )
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var query = Vector3(0.125, -0.005, 0.0)
-    var nearest = map.closest_waypoint_on_road(query).value()
+    var nearest = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(nearest.road_id, RoadId(1))
     assert_equal(nearest.lane_id, LaneId(-1))
-    assert_true(Bool(map.waypoint(query)))
+    assert_true(Bool(map.certified_waypoint(query)))
 
 
 def main() raises:

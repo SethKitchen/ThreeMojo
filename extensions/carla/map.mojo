@@ -13,8 +13,16 @@ where a waypoint is (`compute_transform`), what lies ahead of it (`next`,
 `signals_in_distance`), and which waypoint is nearest a point
 (`closest_waypoint_on_road`, `waypoint`).
 
-**The segment index.** The index starts with CARLA's heading and length
-partition. It splits again at record boundaries and until quarter-point
+**Two segment indices.** The map keeps CARLA's heading and length
+partition in its own R-tree. `closest_waypoint_on_road`, `waypoint` and
+the sign check at load use it with CARLA's algorithm: the nearest segment,
+then a step along the lane to the point's foot. These queries are fast and
+always answer. They also keep CARLA's approximations: the step treats
+distance along the segment chord as road s.
+
+**The certified index.** `certified_closest_waypoint_on_road` and
+`certified_waypoint` use a second index. It starts with CARLA's partition
+and splits again at record boundaries and until quarter-point
 chord errors are at most one millimeter. A required split without an
 interior Float64 road-s value raises a resolution error. A positive
 nonterminal index step must also advance in lane order. The line and its
@@ -28,7 +36,7 @@ error. Approximate witnesses require strict classification agreement across
 all possible minimizing cells. An exact witness uses its proved minimizer.
 Classification uses the Float64 center before public location narrowing.
 
-Nearest queries minimize three-dimensional distance to the stored canonical
+Certified queries minimize three-dimensional distance to the stored canonical
 Float64 lane center over the indexed station domains. Station s is the road
 reference parameter, not lane chord length. Public `compute_transform` narrows
 that same center. Road reference and fixed-s helpers describe separate geometry.
@@ -37,8 +45,10 @@ its incumbent; the API does not promise the first station on that plateau.
 
 The public `segment_count` and `segment` methods expose this accuracy-driven
 index. Its partition and count can change when the geometry requires more
-subdivision. Lane order and index tie rules remain deterministic. This
-corrects curved lane offsets and the treatment of lane distance as road s.
+subdivision. Lane order and index tie rules remain deterministic. The
+certified queries correct curved lane offsets and the treatment of lane
+distance as road s. They cost more and can raise where CARLA's query
+answers, so they are not the default.
 
 The R-tree, full-center bounds, and optional sampled-curve box covers belong
 to the same construction snapshot. Queries do not update these proofs.
@@ -914,6 +924,15 @@ struct _Segment(ImplicitlyCopyable):
 
 
 @fieldwise_init
+struct _CarlaSegment(ImplicitlyCopyable):
+    # One piece of CARLA's `Map::CreateRtree` partition, before refinement.
+    var start: Vector3
+    var end: Vector3
+    var first: Waypoint
+    var second: Waypoint
+
+
+@fieldwise_init
 struct _LaneTypeFilter(ImplicitlyCopyable, SegmentFilter):
     # The tree keeps each segment's lane type as its end value.
     var mask: Int
@@ -1169,6 +1188,10 @@ struct Map(Movable):
     var _spiral_proofs: List[_SpiralDomainProof]
     var _spiral_proof_units: Int
     var _tree: SegmentCloudRtree
+    # CARLA's own heading and length partition. The default nearest
+    # queries use it; the certified queries use the refined index above.
+    var _carla_segments: List[_CarlaSegment]
+    var _carla_tree: SegmentCloudRtree
     var _curve_deviation: Float64
     var _endpoint_scale: Float64
     var _construction_work: _MapBuildWork
@@ -1224,6 +1247,8 @@ struct Map(Movable):
         self._spiral_proofs = List[_SpiralDomainProof]()
         self._spiral_proof_units = 0
         self._tree = SegmentCloudRtree()
+        self._carla_segments = List[_CarlaSegment]()
+        self._carla_tree = SegmentCloudRtree()
         self._curve_deviation = 0.0
         self._endpoint_scale = 0.0
         self._create_segments()
@@ -1630,12 +1655,95 @@ struct Map(Movable):
     # --- nearest waypoint -----------------------------------------------------
 
     def closest_waypoint_on_road(
+        self, location: Vector3, lane_type: LaneType = LANE_DRIVING
+    ) raises -> Optional[Waypoint]:
+        """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
+
+        CARLA finds the nearest segment of a lane of the given types, then
+        steps from the segment's start by the distance along it to the
+        point's foot. The segments are CARLA's heading and length partition.
+        For the certified nearest center, use
+        `certified_closest_waypoint_on_road`.
+
+        Args:
+            location: The point, in CARLA's frame.
+            lane_type: The lane types to search.
+
+        Returns:
+            The waypoint, or None if the map has no lane of those types.
+
+        Raises:
+            Error: If the mask is not valid.
+        """
+        if not lane_type.is_valid():
+            raise Error("Lane type is not valid")
+        var found = self._carla_tree.get_nearest_neighbours_with_filter(
+            location, _LaneTypeFilter(lane_type.value)
+        )
+        if len(found) == 0:
+            return None
+        ref segment = self._carla_segments[found[0].start_value]
+        var along = distance_segment_to_point(
+            location, segment.start, segment.end
+        )
+        var start = segment.first
+        var end = segment.second
+        var delta = Float64(along[0].value)
+        var forward = self.is_positive_direction(start)
+        var final_s = start.s + delta if forward else start.s - delta
+        var past = final_s >= end.s if forward else final_s <= end.s
+        if past:
+            return end
+        if delta <= 0.0:
+            return start
+        # The foot lies inside the segment's lane, so one step stays in it.
+        return self.next(start, delta)[0]
+
+    def waypoint(
+        self, location: Vector3, lane_type: LaneType = LANE_DRIVING
+    ) raises -> Optional[Waypoint]:
+        """Return the waypoint under a point, `Map::GetWaypoint`.
+
+        This is CARLA's query: the nearest waypoint from
+        `closest_waypoint_on_road`, kept if the point is within half the
+        lane's width of it in plan. For the certified query, use
+        `certified_waypoint`.
+
+        Args:
+            location: The point, in CARLA's frame.
+            lane_type: The lane types to search.
+
+        Returns:
+            The nearest waypoint if the point lies within half its lane's
+            width of it in plan, or None.
+
+        Raises:
+            Error: If the mask is not valid, or the lane has no width
+                record at the waypoint.
+        """
+        var found = self.closest_waypoint_on_road(location, lane_type)
+        if not Bool(found):
+            return None
+        var w = found.value()
+        var at = self.compute_transform(w).location
+        var dx = at.x - location.x
+        var dy = at.y - location.y
+        var dist = Float64(sqrt(dx * dx + dy * dy))
+        if dist < self.lane_width_meters(w) * 0.5:
+            return w
+        return None
+
+    def certified_closest_waypoint_on_road(
         self,
         location: Vector3,
         lane_type: LaneType = LANE_DRIVING,
         budget: MapQueryBudget = MapQueryBudget(),
     ) raises -> Optional[Waypoint]:
-        """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
+        """Return the certified nearest waypoint to a point.
+
+        This query is not CARLA's. It is slower than
+        `closest_waypoint_on_road`, and it can raise where that query
+        answers.
 
         Minimize three-dimensional distance to the stored Float64 canonical
         lane center over the indexed domains. The returned s is road-reference
@@ -1975,13 +2083,16 @@ struct Map(Movable):
         waypoint.s = result.s
         return (waypoint, result^)
 
-    def waypoint(
+    def certified_waypoint(
         self,
         location: Vector3,
         lane_type: LaneType = LANE_DRIVING,
         budget: MapQueryBudget = MapQueryBudget(),
     ) raises -> Optional[Waypoint]:
-        """Return the waypoint under a point, `Map::GetWaypoint`.
+        """Return the certified waypoint under a point.
+
+        This query is not CARLA's. It is slower than `waypoint`, and it can
+        raise where that query answers.
 
         Select by canonical three-dimensional lane-center distance. Then
         require strict planar distance below half the width at the proved
@@ -2042,23 +2153,10 @@ struct Map(Movable):
         self, location: Vector3, lane_type: LaneType, mut work: _MapBuildWork
     ) raises -> Optional[Waypoint]:
         work.validate()
-        var remaining = work.policy.max_steps - work.steps
-        var policy = MapQueryBudget()
-        policy.max_steps = remaining
-        policy.max_nodes = min(policy.max_nodes, remaining)
-        policy.max_terms = min(
-            policy.max_terms, work.policy.max_terms - work.terms
-        )
-        policy.max_index_pops = min(policy.max_index_pops, remaining)
-        var query_work = _MapQueryWork(policy, remaining)
-        var found = self._closest_lane_certificate_with_work(
-            location, lane_type, query_work
-        )
-        work.step(query_work.steps)
-        work.term(query_work.terms)
-        if found:
-            return found.value()[0]
-        return None
+        # CARLA's sign check uses `GetClosestWaypointOnRoad`. Charge the
+        # R-tree's worst case, one visit per segment, and the lane step.
+        work.step(len(self._carla_segments) + 1)
+        return self.closest_waypoint_on_road(location, lane_type)
 
     def _validate_query_pose(
         self, waypoint: Waypoint, mut work: _MapQueryWork
@@ -3231,6 +3329,16 @@ struct Map(Movable):
         second: Waypoint,
     ) raises:
         var at = self._build_locate(first)
+        # CARLA's piece goes into its own index unchanged. Each piece adds
+        # at least one refined segment below, so the refined index's
+        # segment and step charges also bound this index.
+        var lane_type = self.roads[at[0]].sections[at[1]].lanes[at[2]].type
+        self._carla_tree.insert_element(
+            a.location, b.location, len(self._carla_segments), lane_type.value
+        )
+        self._carla_segments.append(
+            _CarlaSegment(a.location, b.location, first, second)
+        )
         _reserve_lane_boundaries(
             self.roads[at[0]], at[1], self._construction_work
         )

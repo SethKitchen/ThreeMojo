@@ -51,7 +51,7 @@ def test_complete_cover_excludes_far_competitor_and_keeps_neighbors() raises:
             index != 567,
         )
     # Admission does not create a witness or change the winning identity.
-    var found = map.closest_waypoint_on_road(query).value()
+    var found = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(found.road_id.value, 5)
     assert_equal(found.lane_id.value, 1)
     assert_equal(found.section_id, winner.section_id)
@@ -104,7 +104,7 @@ def test_complete_cover_excludes_far_competitor_and_keeps_neighbors() raises:
     var pose = map.compute_transform(found)
     for index in range(len(map._segments)):
         map._segments[index].cover_index = -1
-    var without_cover = map.closest_waypoint_on_road(query).value()
+    var without_cover = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(without_cover.road_id, found.road_id)
     assert_equal(without_cover.section_id, found.section_id)
     assert_equal(without_cover.lane_id, found.lane_id)
