@@ -1114,11 +1114,9 @@ def _query_node_step_cost(
     var fixed = 26 if goal else 20
     fixed += 16  # Stored-dispatch eligibility, cached cuts and split routing.
     if witness:
-        # Fourteen bounded model operations cover eligibility/FP, child
-        # restriction, global lower/comparison, goal comparison, width lookup,
-        # acceptance, capture/retention, depth/work headroom, center lookup,
-        # second restriction/FP, support localization and frontier insertion.
-        # Original reference/expansion terms stay debited on continuation.
+        # Retain the prior containing-model allowance so removing its reuse
+        # does not increase effective budgets or change established node fees.
+        # The fresh per-cell producer is already covered by the generic node.
         fixed += 14
     if witness:
         # Four exact challenger comparisons and one child-order check.
