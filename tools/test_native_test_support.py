@@ -3,7 +3,9 @@
 """Compiler-free native-fixture selection, cache and instrumented-root tests."""
 import hashlib
 import json
+import os
 from pathlib import Path
+import signal
 import subprocess
 import tempfile
 import unittest
@@ -55,9 +57,12 @@ class NativeTestSupportTests(unittest.TestCase):
 
     def test_plain_command_is_unchanged_without_a_c_compiler(self):
         suite = self.root / 'tests/test_plain.mojo'
-        command = ['mojo', 'build', '--Werror', str(suite)]
-        with patch.object(native, 'compiler_identity', side_effect=AssertionError('not needed')):
-            self.assertEqual(native.prepare_command(self.root, suite, self.root/'cache', '', command), command)
+        for mode in ('build', 'run'):
+            command = ['mojo', mode, '--Werror', str(suite)]
+            with self.subTest(mode=mode), patch.object(
+                    native, 'compiler_identity', side_effect=AssertionError('not needed')):
+                self.assertEqual(native.prepare_command(
+                    self.root, suite, self.root/'cache', '', command), command)
 
     def test_build_link_argument_precedes_source_and_preserves_flags(self):
         suite = self.root / SUITE
@@ -77,13 +82,131 @@ class NativeTestSupportTests(unittest.TestCase):
         self.assertEqual((destination/FIXTURE).read_bytes(), (self.root/FIXTURE).read_bytes())
         suite = destination / SUITE
         command = ['mojo', 'run', '-I', str(destination), str(suite)]
+        executable = self.root/'run directory'/'suite'
         with patch.object(native, 'compiler_identity', return_value=IDENTITY), \
                 patch.object(native, 'build_object', return_value=destination/'fixture.o') as build:
-            actual = native.prepare_command(destination, suite, self.root/'cache', 'fake-cc', command)
+            actual, execute = native.prepare_run_commands(
+                destination, suite, self.root/'cache', 'fake-cc', command, executable)
         self.assertEqual(build.call_args.args[0], destination)
-        self.assertEqual(actual[-1], str(suite))
-        self.assertEqual(actual[2:4], ['-I', str(destination)])
+        self.assertEqual(actual, ['mojo', 'build', '-I', str(destination),
+                                 '-o', str(executable), '-Xlinker',
+                                 str(destination/'fixture.o'), str(suite)])
+        self.assertEqual(execute, [str(executable)])
         self.assertNotIn(str(self.root/SUITE), actual)
+
+    def test_run_translation_preserves_options_and_program_arguments(self):
+        suite = self.root/SUITE
+        executable = self.root/'temporary output'/'suite'
+        options = ['-I', 'include with spaces', '-O', '0', '--num-threads', '1',
+                   '--fp-mode=contract=off', '--target-cpu=x86-64-v3', '--Werror']
+        arguments = ['two words', '--Wno-error', str(suite), '-o', 'program output']
+        command = ['mojo', 'run', *options, str(suite), *arguments]
+        obj = self.root/'fixture.o'
+        with patch.object(native, 'compiler_identity', return_value=IDENTITY), \
+                patch.object(native, 'build_object', return_value=obj):
+            build, execute = native.prepare_run_commands(
+                self.root, suite, self.root/'cache', 'fake-cc', command, executable)
+        self.assertEqual(build, ['mojo', 'build', *options, '-o', str(executable),
+                                 '-Xlinker', str(obj), str(suite)])
+        self.assertEqual(execute, [str(executable), *arguments])
+        self.assertNotIn('run', build)
+
+    def test_fixture_run_cannot_accidentally_use_object_linker_in_jit(self):
+        with self.assertRaisesRegex(ValueError, 'build command'):
+            native.prepare_command(self.root, self.root/SUITE, self.root/'cache',
+                                   'unused', ['mojo', 'run', str(self.root/SUITE)])
+
+    def test_run_translation_requires_run_mode_and_source(self):
+        for command in ([], ['mojo', 'build', str(self.root/SUITE)],
+                        ['mojo', 'run', 'other.mojo']):
+            with self.subTest(command=command), self.assertRaises(ValueError):
+                native.prepare_run_commands(self.root, self.root/SUITE,
+                                            self.root/'cache', 'unused', command,
+                                            self.root/'binary')
+
+    def fixture_run(self, build_status=0, run_status=0, cancel=False):
+        calls = []
+        temporary_root = self.root/'private temp'
+        temporary_root.mkdir(exist_ok=True)
+
+        def execute(command, **kwargs):
+            self.assertEqual(kwargs, {'check': False})
+            calls.append(command)
+            if command[1] == 'build':
+                output = Path(command[command.index('-o')+1])
+                output.write_bytes(b'new executable')
+                if cancel:
+                    raise native._Cancelled(signal.SIGTERM)
+                return subprocess.CompletedProcess(command, build_status)
+            self.assertEqual(Path(command[0]).read_bytes(), b'new executable')
+            return subprocess.CompletedProcess(command, run_status)
+
+        handlers = {sig: signal.getsignal(sig)
+                    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)}
+        with patch.dict(os.environ, {'TMPDIR': str(temporary_root)}), \
+                patch.object(native, 'compiler_identity', return_value=IDENTITY), \
+                patch.object(native, 'build_object', return_value=self.root/'fixture.o'), \
+                patch.object(native.subprocess, 'run', side_effect=execute):
+            status = native.run_fixture(self.root, self.root/SUITE, self.root/'cache',
+                                        'fake-cc', ['mojo', 'run', str(self.root/SUITE),
+                                                    'program argument'])
+        self.assertEqual(list(temporary_root.iterdir()), [])
+        self.assertEqual({sig: signal.getsignal(sig) for sig in handlers}, handlers)
+        return status, calls
+
+    def test_run_stages_inherit_streams_environment_and_cleanup(self):
+        status, calls = self.fixture_run()
+        self.assertEqual(status, 0)
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[1][1:], ['program argument'])
+
+    def test_failed_compilation_never_runs_partial_executable(self):
+        status, calls = self.fixture_run(build_status=7)
+        self.assertEqual(status, 7)
+        self.assertEqual(len(calls), 1)
+
+    def test_runtime_failure_and_signal_status_are_preserved(self):
+        for code, expected in ((9, 9), (-signal.SIGTERM, 128+signal.SIGTERM)):
+            with self.subTest(code=code):
+                status, calls = self.fixture_run(run_status=code)
+                self.assertEqual(status, expected)
+                self.assertEqual(len(calls), 2)
+
+    def test_cancelled_compilation_cleans_output_and_restores_handlers(self):
+        status, calls = self.fixture_run(cancel=True)
+        self.assertEqual(status, 128+signal.SIGTERM)
+        self.assertEqual(len(calls), 1)
+
+    def test_each_run_builds_a_fresh_executable_even_with_the_same_object_cache(self):
+        first, one = self.fixture_run()
+        second, two = self.fixture_run()
+        self.assertEqual((first, second), (0, 0))
+        self.assertNotEqual(one[1][0], two[1][0])
+        self.assertEqual(one[0][one[0].index('-Xlinker')+1],
+                         two[0][two[0].index('-Xlinker')+1])
+
+    def test_cli_plain_run_execs_original_command_without_native_work(self):
+        suite = self.root/'tests/test_plain.mojo'
+        command = ['mojo', 'run', '-I', 'original include', str(suite), 'argument']
+        with patch.object(native, 'compiler_identity', side_effect=AssertionError('not needed')), \
+                patch.object(native, 'run_fixture', side_effect=AssertionError('not needed')), \
+                patch.object(native.os, 'execvp', side_effect=SystemExit(17)) as execute:
+            with self.assertRaises(SystemExit) as result:
+                native.main(['run', '--root', str(self.root), '--suite', str(suite),
+                             '--cache', str(self.root/'cache'), '--', *command])
+        self.assertEqual(result.exception.code, 17)
+        execute.assert_called_once_with('mojo', command)
+
+    def test_cli_fixture_run_uses_supervised_translation(self):
+        suite = self.root/SUITE
+        command = ['mojo', 'run', '-I', str(self.root), str(suite)]
+        with patch.object(native, 'run_fixture', return_value=23) as run, \
+                patch.object(native.os, 'execvp', side_effect=AssertionError('must translate')):
+            result = native.main(['run', '--root', str(self.root), '--suite', str(suite),
+                                  '--cache', str(self.root/'cache'), '--cc', 'fake-cc',
+                                  '--', *command])
+        self.assertEqual(result, 23)
+        self.assertEqual(run.call_args.args[-1], command)
 
     def test_missing_fixture_copy_fails(self):
         (self.root/FIXTURE).unlink()

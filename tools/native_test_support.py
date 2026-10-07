@@ -15,6 +15,7 @@ from pathlib import Path
 import platform
 import shlex
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -102,8 +103,8 @@ def prepare_command(root, suite, cache, cc, command):
     fixtures = dependency_inputs(root, suite)
     if not fixtures:
         return list(command)
-    if len(command) < 2 or command[1] not in ('build', 'run'):
-        raise ValueError('native fixture linking requires a Mojo build or run command')
+    if len(command) < 2 or command[1] != 'build':
+        raise ValueError('native fixture object linking requires a Mojo build command')
     source = Path(suite).resolve()
     indices = [index for index, argument in enumerate(command[2:], 2)
                if not argument.startswith('-') and Path(argument).resolve() == source]
@@ -114,6 +115,71 @@ def prepare_command(root, suite, cache, cc, command):
     flags = [argument for path in objects for argument in ('-Xlinker', str(path))]
     index = indices[0]
     return [*command[:index], *flags, *command[index:]]
+
+
+def prepare_run_commands(root, suite, cache, cc, command, executable):
+    """Translate one fixture-dependent run without passing linker flags to JIT.
+
+    Mojo 1.1.0 run and build both default to optimization level 3. Preserve
+    explicit compiler options, the copied source and all following program
+    arguments. The executable is fresh for this invocation; only C objects
+    use the existing content-validated cache.
+    """
+    if len(command) < 3 or command[1] != 'run':
+        raise ValueError('native fixture execution requires a Mojo run command')
+    source = Path(suite).resolve()
+    indices = [index for index, argument in enumerate(command[2:], 2)
+               if not argument.startswith('-') and Path(argument).resolve() == source]
+    if not indices:
+        raise ValueError('native fixture run is missing its Mojo source')
+    # Everything after the first source belongs to the program, even if an
+    # argument repeats the source pathname or begins with a compiler flag.
+    index = indices[0]
+    build = [command[0], 'build', *command[2:index],
+             '-o', str(executable), command[index]]
+    build = prepare_command(root, suite, cache, cc, build)
+    return build, [str(executable), *command[index + 1:]]
+
+
+class _Cancelled(BaseException):
+    def __init__(self, signum):
+        self.signum = signum
+
+
+def run_fixture(root, suite, cache, cc, command, *, program_name=None):
+    """Build then execute inside the caller's one supervision/deadline scope.
+
+    Neither stage creates a new process group or receives a separate timeout.
+    Coverage owns the enclosing group and its private TMPDIR. Keeping both
+    stages in that group lets cancellation stop compiler descendants too.
+    """
+    previous = {}
+
+    def cancelled(signum, frame):
+        raise _Cancelled(signum)
+
+    try:
+        for signum in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+            previous[signum] = signal.signal(signum, cancelled)
+        with tempfile.TemporaryDirectory(prefix='threemojo-native-run-',
+                                         dir=os.environ.get('TMPDIR') or None) as folder:
+            build, execute = prepare_run_commands(
+                root, suite, cache, cc, command, Path(folder) / 'suite')
+            # Inherit cwd, environment and all streams. Compiler diagnostics
+            # and runtime probes pass through the same existing collector.
+            status = subprocess.run(build, check=False).returncode
+            if status == 0:
+                if program_name is None:
+                    status = subprocess.run(execute, check=False).returncode
+                else:
+                    status = subprocess.run([program_name, *execute[1:]],
+                                            executable=execute[0], check=False).returncode
+            return status if status >= 0 else 128 - status
+    except _Cancelled as error:
+        return 128 + error.signum
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
 
 
 def copy_fixtures(root, destination):
@@ -149,6 +215,9 @@ def main(argv=None):
             print(hashlib.sha256(json.dumps(compiler_identity(args.cc), sort_keys=True).encode()).hexdigest())
             return 0
         command = args.command[1:] if args.command[:1] == ['--'] else args.command
+        if (len(command) >= 2 and command[1] == 'run'
+                and dependency_inputs(args.root, args.suite)):
+            return run_fixture(args.root, args.suite, args.cache, args.cc, command)
         prepared = prepare_command(args.root, args.suite, args.cache, args.cc, command)
         # Preserve the original process identity/signal path for the compiler
         # telemetry and coverage collector after fixture preparation finishes.
