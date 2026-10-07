@@ -29,8 +29,15 @@ It also retains possible-minimizer cells and the consumed node and quadrature co
 
 The general refiner retains tolerance-closed cells.
 It retains the evaluated endpoints when no interior Float64 parameter exists.
-It removes a cell only when its lower bound exceeds the incumbent upper bound.
+A cell lower bound above the incumbent upper bound removes the cell.
 A scale change rebases lower bounds downward and upper bounds upward.
+
+A derivative proof can also restrict a cell to a conservative support interval.
+The proof requires an evaluated incumbent inside that same cell.
+Otherwise it must keep the original interval.
+Every removed station must be strictly worse than that incumbent.
+The interval retains every possible minimizing stored parameter and the incumbent.
+
 The target remains the exact real distance between stored evaluator points.
 The parameter domain remains the existing Float64 domain.
 
@@ -129,6 +136,45 @@ It rechecks the stored-point order and index-sensitive dominance after each resu
 A scale change rebases the previous request downward before further tightening.
 The loop uses the original per-candidate work caps and adds no extra budget.
 A work or numerical limit still raises instead of selecting an unproved lane.
+
+
+## Optional search proofs
+
+An external incumbent can end a resumed search when an evaluated point wins the exact comparison.
+The comparison retains the segment-index tie rule.
+This return exports every unresolved cell, its bound and depth, and all consumed work.
+It does not establish an exact minimum.
+Ordinary resumption must still prove the original accuracy target.
+The selected candidate must also prove dominance over every outside competitor.
+
+These search paths can return a different valid approximate station within the same source owner.
+Replay that records those station words can change.
+Canonical values at a fixed station and segment-index tie rules remain unchanged.
+
+An expansion cache reuses only identical station and scale words within one invocation.
+A separate objective model can restrict a proved smooth cell to a contained child.
+The model keeps the owning cell's uniform scalar error and second-derivative bound.
+Its translated center enclosure supplies ideal value and slope only.
+The cache retains the same road snapshot, lane, query, and owning invocation.
+An unresolved record, clamp, sample, count, phase, or atan-recipe join must decline reuse.
+
+Stored sample transitions can split a cell at an exact dispatch boundary.
+Both adjacent stored parameters must select the expected source samples.
+The boundary does not change segment ownership or the stored evaluator.
+The solver attempts this split only after the original node cannot close.
+If setup cannot be admitted, the original subdivision path remains available.
+An admitted attempt retains its charges and can exhaust a custom budget.
+
+An optional grouped SPIRAL proof rebuilds rounding-error bounds for each admitted fixed count, one or two.
+It preserves stored coefficient words, weight multiplicities, and the canonical Sum2 evaluator.
+One additional node covers the fixed proof and lane reconstruction.
+Each weighted X/Y term pair consumes its separate term charge before either count is evaluated.
+A declined attempt keeps its charges and the reserved original fallback.
+It cannot extend a work cap or replace a failed proof with an unchecked result.
+
+These operations count logical entries, bounded kernels, and weighted terms.
+Their counts do not claim a machine-instruction or elapsed-time bound.
+Fresh floating-point checks still refuse unsupported modes before cached arithmetic can be used.
 
 
 ## Stored evaluator graph
