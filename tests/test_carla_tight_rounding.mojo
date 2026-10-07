@@ -9,13 +9,19 @@ from extensions.carla.curve_bounds import (
     _sample_blend_jet,
     _intersect_ideal_bounds,
 )
-from extensions.carla.curve_interval import _Interval, _Jet, _roundoff
+from extensions.carla.curve_interval import (
+    _Interval,
+    _Jet,
+    _roundoff,
+    _stored_blend_error,
+)
 from extensions.carla.opendrive import load_opendrive_file
 from extensions.carla.road_info import RoadId, LaneId
 from math.vector3 import Vector3
-from std.math import inf
+from std.math import fma, inf
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true
+from tests.test_carla_stored_arithmetic import _product, _sum, _complement
 
 
 def test_half_spacing_at_binade_and_subnormal_boundaries() raises:
@@ -48,7 +54,7 @@ def test_half_spacing_at_binade_and_subnormal_boundaries() raises:
     )
 
 
-def test_blend_ideal_rewrite_keeps_the_original_scalar_error() raises:
+def test_blend_ideal_rewrite_keeps_the_reviewed_scalar_error() raises:
     var samples: List[Array[Float64, 3]] = [
         [0.25, 100.0, 101.0],
         [0.1, 10000000000000000.0, 10000000000000002.0],
@@ -57,6 +63,48 @@ def test_blend_ideal_rewrite_keeps_the_original_scalar_error() raises:
         [3.0, -1.0, 2.0],
         [0.5, 1e308, -1e308],
         [0.3, 1e-308, -1e-308],
+    ]
+    # Exact words derived by test_sample_blend_migration.py. The coupled
+    # candidate is wider for row 3 and two ULPs tighter only for row 4.
+    # Rows 5 and 6 retain the original unsupported-range fallback.
+    var coupled_error_words: List[UInt64] = [
+        UInt64(0x3D18500000000005),
+        UInt64(0x4000F0DE4DF82003),
+        UInt64(0x3CD0000000000003),
+        UInt64(0x3CE8000000000005),
+        UInt64(0x3CDC000000000005),
+        UInt64(0x7FF0000000000000),
+        UInt64(0x7FF0000000000000),
+    ]
+    var expected_error_words: List[UInt64] = [
+        UInt64(0x3D18500000000005),
+        UInt64(0x4000F0DE4DF82003),
+        UInt64(0x3CD0000000000003),
+        UInt64(0x3CE2000000000004),
+        UInt64(0x3CDC000000000005),
+        UInt64(0x7C98E679C2F5E457),
+        UInt64(0x000000000000000B),
+    ]
+    var required_error_words: List[UInt64] = [
+        UInt64(0x0000000000000000),
+        UInt64(0x3FC999999999999A),
+        UInt64(0x3C699999999999C0),
+        UInt64(0x0000000000000000),
+        UInt64(0x0000000000000000),
+        UInt64(0x0000000000000000),
+        UInt64(0x0000000000000001),
+    ]
+    # Separate, left-FMA, and right-FMA graphs share these words for the
+    # seven original rows. Other contraction-sensitive rows stay in the
+    # existing stored-arithmetic suite.
+    var graph_words: List[UInt64] = [
+        UInt64(0x4059300000000000),
+        UInt64(0x4341C37937E08001),
+        UInt64(0xC014666666666666),
+        UInt64(0x401C000000000000),
+        UInt64(0xC01C000000000000),
+        UInt64(0x0000000000000000),
+        UInt64(0x8002E055C9A3F6BA),
     ]
     for i in range(len(samples)):
         var r = samples[i][0]
@@ -67,9 +115,39 @@ def test_blend_ideal_rewrite_keeps_the_original_scalar_error() raises:
             _Jet.constant(1.0) - rate
         ) * _Jet.constant(two)
         var result = _sample_blend_jet(rate, one, two)
-        assert_equal(result.error, original.error)
+        var coupled = _stored_blend_error(rate, one, two)
+        assert_equal(bitcast[DType.uint64](coupled), coupled_error_words[i])
+        assert_equal(
+            bitcast[DType.uint64](result.error), expected_error_words[i]
+        )
+        if i == 4:
+            assert_equal(
+                bitcast[DType.uint64](original.error),
+                UInt64(0x3CDC000000000007),
+            )
+        else:
+            # Includes exact original equality on both unsupported rows,
+            # and row 3 where the coupled candidate must not widen error.
+            assert_equal(result.error, original.error)
+        assert_equal(
+            result.error,
+            min(original.error, bitcast[DType.float64](coupled_error_words[i])),
+        )
+        assert_true(
+            result.error >= bitcast[DType.float64](required_error_words[i])
+        )
         var executed = r * one + (1.0 - r) * two
         assert_true(result.rounded_value().contains(executed))
+        var complement = _complement(r)
+        var first = _product(r, one)
+        var second = _product(complement, two)
+        for actual in [
+            _sum(first, second),
+            fma(r, one, second),
+            fma(complement, two, first),
+        ]:
+            assert_equal(bitcast[DType.uint64](actual), graph_words[i])
+            assert_true(result.rounded_value().contains(actual))
     var simple = _sample_blend_jet(_Jet.variable(0.25, 0.25), 100.0, 101.0)
     assert_true(simple.value.contains(100.75))
     assert_true(simple.first.contains(-1.0))
