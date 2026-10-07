@@ -7,7 +7,7 @@
       "extensions/carla/curve_interval.mojo": "e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11",
       "extensions/carla/curve_bounds.mojo": "c256d6a212735f9d3e9a522e557ed6716f51c80322979478fe17e67d688fb508",
       "extensions/carla/spiral_roundoff_proof.mojo": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641",
-      "extensions/carla/lane_refinement.mojo": "d6f4020dda6c0bcca49f961eb756528ffc46b18a4699cf50ff5f109cdfcec0d1",
+      "extensions/carla/lane_refinement.mojo": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
       "extensions/carla/map.mojo": "5725f3b707981148acbeb96472d6cfd84f51dacec4ac49a7f466bc9c4d59c2a6",
       "extensions/carla/map_builder.mojo": "627ce91ee8d9626d9a326dd950dc85da6ca273e1fdc045128d3f119186207765",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
@@ -35,10 +35,10 @@
       "extensions/carla/curve_bounds.mojo": "c256d6a212735f9d3e9a522e557ed6716f51c80322979478fe17e67d688fb508",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
       "extensions/carla/curve_frozen_arc.mojo": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
-      "extensions/carla/lane_refinement.mojo": "d6f4020dda6c0bcca49f961eb756528ffc46b18a4699cf50ff5f109cdfcec0d1"
+      "extensions/carla/lane_refinement.mojo": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48"
     },
     "support": {
-      "extensions/carla/lane_refinement.mojo": "d6f4020dda6c0bcca49f961eb756528ffc46b18a4699cf50ff5f109cdfcec0d1",
+      "extensions/carla/lane_refinement.mojo": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
       "extensions/carla/map.mojo": "5725f3b707981148acbeb96472d6cfd84f51dacec4ac49a7f466bc9c4d59c2a6",
       "extensions/carla/lane_distance.mojo": "bcbec3a9af9bbcfd2fa2710936c4d5a6fac7fc2fbac09813d0a5732c0f798918",
       "extensions/carla/junction_bounds.mojo": "83493444663f6125fb884d402e21f5976b3e27dd637cce9c39bb1ff00697751b",
