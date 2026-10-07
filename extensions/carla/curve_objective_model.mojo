@@ -16,8 +16,10 @@ from std.memory import bitcast
 
 @fieldwise_init
 struct _ObjectiveModel(ImplicitlyCopyable):
-    # Fixed query, immutable road/lane/profile snapshot and ideal producer
-    # are owned by _run_lane_search. The payload never escapes that call.
+    # The calling proof consumer must keep one fixed query, an immutable
+    # road/lane/profile snapshot and the same smooth ideal expression.
+    # These preconditions must hold throughout the model's lifetime.
+    # The current lane-search solver does not use this standalone helper.
     var low: Float64
     var high: Float64
     var center_s: Float64
