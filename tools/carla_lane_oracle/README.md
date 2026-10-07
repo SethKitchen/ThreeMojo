@@ -336,3 +336,57 @@ qualifier positions. The four public documentation changes alter actual
 Raises docstrings only. Every other token, including operational strings,
 remains unchanged. Source bindings have been refreshed only after these
 checks. Native execution, coverage and performance evidence stays separate.
+
+### Optional runtime dependency migration
+
+`optional-runtime-migration.json` records the selected eight-file source
+manifest, previous pin hashes, proof-packet hashes and each changed dependency.
+The canonical Sum2 helper, table pins, primitive graph and historical reference
+and shared-function graph constants stay unchanged. The reference checker
+removes only the verified default-false `require_reuse` parameter and its exact
+unknown-result branch. The moment routing check removes that same parameter.
+
+The optional runtime dependency group covers all five new modules and their
+producer/caller dependencies. `optional_runtime_contracts.py` separately checks
+fresh guards, model ownership and scale, the same ideal/error/witness pairing,
+stored dispatch predicates and indices, deferred splitting, original budget
+reservations and the complete grouped-count debit. The checked error edge is
+raw grouped envelope to private origin error to the checked Sum2 leaf. The raw
+entry checks the environment on each invocation. Grouped reconstruction must
+use `require_reuse=True` to prohibit an unreserved GL fallback.
+
+The guard checker binds 29 complete caller declarations in 14 modules. Its
+additional global production sweep records all actual protected helper and
+source-module uses. The sweep binds import/declaration routing and protected
+NAME-token ordinals. The complete caller and dependency contracts bind the
+function operations. New direct, aliased, wildcard and module imports need
+review, including imports in new namespaces and package initializers. The
+sweep excludes test, example, bench, tool, asset and coverage-tool namespaces.
+It is a static source-integrity gate, not a general dynamic-call analysis.
+
+Mutation fixtures select actual function spans and match executable tokens.
+They accept formatter wrapping and trailing call commas. Formatter changes to
+production bindings still require an explicit reviewed rebind and rerun.
+Source checks do not establish native floating-point behavior, mathematical
+soundness, coverage, performance or final CI success. Native checks and final
+report generation use the final production and test inventory separately.
+
+
+The formatted immediate-followup successor binds the complete integer-only
+`_objective_followup_room` and its current-counter caller. Cached subdivision
+retains four nodes and center work plus eight parent reference reservations.
+Stored dispatch with one or two cuts admits `3*c+2` nodes and `16*c` terms,
+then charges the original one setup node and `8*c` probe terms. Grouped work
+requires two remaining nodes before its optional one-node attempt. These
+bounds reserve immediate children and mandatory rechecks. They do not promise
+completion of an arbitrary remaining search under every custom budget.
+Exact and one-short tests execute the reviewed integer helper and dispatch
+admission statements in Python; they do not replace native budget controls.
+
+
+The final cached goal and accuracy closures require a remaining validation
+node through the complete integer-only `_objective_recheck_room` helper.
+Their predicate order is bound. Strict cached exclusion remains unconditional
+because it discards the cell. The final-format migration retains exact raw
+hashes and the reviewed AST, move, qualifier and borrowed-origin lineage.
+Native and full-CI results remain separate from these source contracts.
