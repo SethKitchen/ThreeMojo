@@ -753,7 +753,7 @@ def example_table(rows: list[dict], webgl_ok: bool, legacy_date: str | None = No
     if webgl_ok:
         lines.append("WebGL is the three.js draw used for the language comparison.")
     else:
-        lines.append("WebGL did not load, so the draw winner uses cpu-flat.")
+        lines.append("WebGL did not run, so the draw winner uses cpu-flat.")
     return "\n".join(lines)
 
 
@@ -832,12 +832,16 @@ def score_report(payload: dict, platform_key: str) -> str:
     language_key = "threejs_webgl" if webgl_ok else "threejs_flat"
     language_name = "WebGL" if webgl_ok else "cpu-flat"
     language = _tally(_frame_pairs(rows, language_key))
+    if not webgl_ok:
+        lines.append("WebGL did not run on this host.")
+        lines.append("cpu-flat is a flat color fill, so the comparison is the CPU fill.")
+        lines.append("")
     if language["count"] == 0:
         lines.append("This file has no ThreeMojo draw times.")
         lines.append("The draw winner stays blank until the next measurement.")
     else:
         lines.append(
-            f"{language_name} is the language comparison on this host."
+            f"{language_name} is the draw comparison on this host."
         )
         if language["mojo"]:
             lines.append(
@@ -855,6 +859,8 @@ def score_report(payload: dict, platform_key: str) -> str:
             lines.append(
                 f"The median {language_name} draw takes {fmt_ratio(language['ratio'])} times the ThreeMojo draw."
             )
+        if not webgl_ok:
+            lines.append("The flat fill does less work than the ThreeMojo frame.")
     lines.append("")
     flat = _tally(_frame_pairs(rows, "threejs_flat"))
     if flat["count"] and language_key != "threejs_flat":
@@ -1141,7 +1147,7 @@ def write_wiki(payload: dict, platform_key: str) -> None:
             + (
                 "`cpu-flat` and `webgl`"
                 if payload.get("threejs_webgl")
-                else "`cpu-flat` (`webgl` did not load)"
+                else "`cpu-flat` (`webgl` did not run)"
             ),
         ]
         + baseline_lines(payload)
@@ -1186,6 +1192,11 @@ def parse_args() -> argparse.Namespace:
         "--skip-threejs",
         action="store_true",
         help="Skip the three.js runner",
+    )
+    parser.add_argument(
+        "--skip-webgl",
+        action="store_true",
+        help="Time cpu-flat only. Use this when the host has no GPU.",
     )
     parser.add_argument(
         "--skip-mojo10",
@@ -1364,7 +1375,7 @@ def main() -> int:
         web = skipped
         if not args.skip_threejs:
             flat = bench_threejs(name, "cpu-flat")
-            web = bench_threejs(name, "webgl")
+            web = skipped if args.skip_webgl else bench_threejs(name, "webgl")
             if web.get("ok"):
                 payload["threejs_webgl"] = True
             print(

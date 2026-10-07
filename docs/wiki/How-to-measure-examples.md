@@ -52,6 +52,7 @@ ThreeMojo writes the image file. three.js draws the same width, height and frame
 The runner always times a `cpu-flat` fill. It also times WebGL 2 when `webgl-node` can open a context. On Linux, that context needs `libGLESv2` on the library path. On Ubuntu the package is `libgles2`. Without root, `make bench-examples` downloads the dispatcher into `bench/threejs/lib`. See [Benchmarks](Benchmarks#what-the-columns-measure).
 
 On macOS, `webgl-node` opens the context with no extra package.
+Pass `--skip-webgl` on a host with no GPU.
 
 The pin is Mojo 1.1. A second venv at `.venv-mojo10/` compiles the same sources with Mojo 1.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 
