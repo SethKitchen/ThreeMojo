@@ -11,6 +11,16 @@ never reports an off-road result or a partially searched minimum.
 """
 
 from extensions.carla.curve_sum2 import _require_sum2_environment
+from extensions.carla.curve_objective_model import (
+    _ObjectiveModel,
+    _objective_followup_room,
+    _objective_recheck_room,
+    _try_objective_model,
+    _restrict_objective_model,
+)
+from extensions.carla.curve_minimizer_support import _minimizer_support
+from extensions.carla.spiral_grouped_lane import _try_grouped_lane_jet
+from extensions.carla.curve_sample_dispatch import _try_sample_dispatch_cuts
 from extensions.carla.curve_bounds import (
     _lane_jet,
     _lane_jet_capture,
@@ -578,10 +588,13 @@ def _finish_lane_certificate(
     terminal: List[_ClosedInterval],
     nodes: Int,
     terms: Int,
+    allow_exact: Bool = True,
 ) raises -> _LaneCertificate:
     var scale = _point_gap_scale(point, query)
     if scale == 0.0:
-        return _exact_lane_certificate(best, point, query, nodes, terms)
+        if allow_exact:
+            return _exact_lane_certificate(best, point, query, nodes, terms)
+        scale = 1.0
     var score = _normalized_square[3](point, query, scale)
     var lower = score.high
     var all_resolved = True
@@ -617,10 +630,52 @@ def _finish_lane_certificate(
         scale,
         lower,
         score.high,
-        all_resolved,
+        allow_exact and all_resolved,
         cells^,
         nodes,
         terms,
+    )
+
+
+def _beats_external_witness(
+    point: Array[Float64, 3],
+    query: Array[Float64, 3],
+    goal: Optional[_LaneExclusionGoal],
+    external: Optional[Array[Float64, 3]],
+) raises -> Bool:
+    if not goal or not external:
+        return False
+    var order = _wide_point_order(point, external.value(), query)
+    return order < 0 or (order == 0 and not goal.value().allow_equal)
+
+
+def _pause_lane_search(
+    best: Float64,
+    point: Array[Float64, 3],
+    query: Array[Float64, 3],
+    var closed: _ClosedIntervals,
+    terminal: List[_ClosedInterval],
+    pending: List[Tuple[Float64, Float64, Int]],
+    current: Tuple[Float64, Float64, Int],
+    entry_lower: Float64,
+    entry_scale: Float64,
+    nodes: Int,
+    terms: Int,
+) raises -> _LaneCertificate:
+    # The entry lower bounds every point in the original owner domain.
+    # Retain all pending work and the ENTIRE popped task, including an
+    # interrupted discrete leaf. Original depths and work are not reset.
+    for task in pending:
+        closed.add(
+            _ClosedInterval(task[0], task[1], task[2], entry_lower, entry_scale)
+        )
+    closed.add(
+        _ClosedInterval(
+            current[0], current[1], current[2], entry_lower, entry_scale
+        )
+    )
+    return _finish_lane_certificate(
+        best, point, query, closed, terminal, nodes, terms, allow_exact=False
     )
 
 
@@ -1191,6 +1246,7 @@ def _continue_lane_certificate(
     max_depth: Int = 96,
     spiral_proof: Optional[_SpiralDomainProof] = None,
     goal: Optional[_LaneExclusionGoal] = None,
+    external_witness: Optional[Array[Float64, 3]] = None,
 ) raises:
     _require_sum2_environment()
     # Internal precondition: same road snapshot, lane, query, and original
@@ -1223,6 +1279,10 @@ def _continue_lane_certificate(
     ]
     _finite_point(query)
     _finite_point(certificate.point)
+    if external_witness:
+        if not goal:
+            raise Error("An external lane witness needs a matching goal")
+        _finite_point(external_witness.value())
     if certificate.nodes < 0 or certificate.terms < 0:
         raise Error("Lane resumption needs nonnegative consumed work")
     if certificate.exact_witness:
@@ -1281,6 +1341,7 @@ def _continue_lane_certificate(
         max_depth,
         spiral_proof,
         goal,
+        external_witness,
     )
 
 
@@ -1301,10 +1362,20 @@ def _run_lane_search(
     max_depth: Int,
     spiral_proof: Optional[_SpiralDomainProof] = None,
     goal: Optional[_LaneExclusionGoal] = None,
+    external_witness: Optional[Array[Float64, 3]] = None,
 ) raises:
     # Fresh and resumed refinement share one solver. Counters and improved
     # incumbents are published immediately, including on an exception.
     # Until success, the older cell cover remains conservative and reusable.
+    var entry_lower = certificate.lower
+    var entry_scale = certificate.scale
+    # Invocation-local only: owner, road snapshot, query and proof are fixed.
+    # Exact station/scale words retain branch and normalization identity.
+    var cached_model: Optional[_ObjectiveModel] = None
+    var sampled_checked = False
+    var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None
+    var cached_fast: Optional[Tuple[UInt64, UInt64, _Jet]] = None
+    var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = None
     var best = certificate.s
     var best_point = certificate.point.copy()
     var query: Array[Float64, 3] = [
@@ -1411,6 +1482,23 @@ def _run_lane_search(
                             certificate.point = best_point.copy()
                             closed.reset()
                             terminal.clear()
+                            if _beats_external_witness(
+                                best_point, query, goal, external_witness
+                            ):
+                                certificate = _pause_lane_search(
+                                    best,
+                                    best_point,
+                                    query,
+                                    closed^,
+                                    terminal,
+                                    pending,
+                                    task,
+                                    entry_lower,
+                                    entry_scale,
+                                    certificate.nodes,
+                                    certificate.terms,
+                                )
+                                return
                         if order <= 0:
                             var point_scale = _point_gap_scale(point, query)
                             if point_scale == 0.0:
@@ -1458,6 +1546,23 @@ def _run_lane_search(
                 # incumbent, which this witness strictly improves. All those
                 # points are now strict exclusions from the minimizing set.
                 terminal.clear()
+                if _beats_external_witness(
+                    best_point, query, goal, external_witness
+                ):
+                    certificate = _pause_lane_search(
+                        best,
+                        best_point,
+                        query,
+                        closed^,
+                        terminal,
+                        pending,
+                        task,
+                        entry_lower,
+                        entry_scale,
+                        certificate.nodes,
+                        certificate.terms,
+                    )
+                    return
             if (middle <= lo or middle >= hi) and order <= 0:
                 var point_scale = _point_gap_scale(point, query)
                 if point_scale == 0.0:
@@ -1489,6 +1594,113 @@ def _run_lane_search(
                     "Lane refinement exhausted its quadrature work limit"
                 )
             certificate.terms += work
+            # The query node ledger reserves this bounded cache attempt before
+            # entry. The original reference reservation remains charged even
+            # if the containing-cell proof avoids its producer.
+            if external_witness and cached_model:
+                var reused_domain = _restrict_objective_model(
+                    cached_model.value(), lo, hi, scale
+                )
+                if reused_domain:
+                    var reused_delta = _Interval(lo, hi) - _Interval.point(
+                        cached_model.value().center_s
+                    )
+                    var reused_lower = _global_lower(
+                        reused_domain.value(),
+                        cached_model.value().center,
+                        reused_delta,
+                    )
+                    if reused_lower > best_upper:
+                        continue
+                    if _objective_recheck_room(
+                        certificate.nodes, max_nodes
+                    ) and _goal_excludes(reused_lower, scale, goal):
+                        closed.add(
+                            _ClosedInterval(
+                                lo, hi, task[2], reused_lower, scale
+                            )
+                        )
+                        continue
+                    var reused_tolerance = _search_accuracy(
+                        road,
+                        section,
+                        lane,
+                        low,
+                        high,
+                        best,
+                        best_bounds.low,
+                        scale,
+                        requested_gap,
+                    )
+                    if (
+                        _objective_recheck_room(certificate.nodes, max_nodes)
+                        and _next_up(best_upper - reused_lower)
+                        <= reused_tolerance
+                    ):
+                        closed.add(
+                            _ClosedInterval(
+                                lo, hi, task[2], reused_lower, scale
+                            )
+                        )
+                        continue
+                    # The corrected actual-dispatch split supplies a smooth
+                    # containing ancestor. Its complete error/curvature remain
+                    # valid over the whole subtree, not just tiny leaves.
+                    # Error above tolerance is only a scheduling heuristic.
+                    if (
+                        reused_domain.value().error > reused_tolerance
+                        and task[2] < max_depth
+                        and max_nodes - certificate.nodes >= 4
+                    ):
+                        var reused_center_s = _expansion_center(lo, hi, best)
+                        var reused_center_work = _reference_work(
+                            road, reused_center_s, reused_center_s
+                        )
+                        if _objective_followup_room(
+                            certificate.nodes,
+                            certificate.terms,
+                            max_nodes,
+                            max_terms,
+                            work,
+                            reused_center_work,
+                        ):
+                            # Keep the old expansion work reservation too.
+                            certificate.terms += reused_center_work
+                            var reused_center = _restrict_objective_model(
+                                cached_model.value(),
+                                reused_center_s,
+                                reused_center_s,
+                                scale,
+                            )
+                            if reused_center:
+                                var ideal_center = reused_center.value()
+                                ideal_center.error = inf[DType.float64]()
+                                var reused_support = _minimizer_support(
+                                    reused_domain.value(),
+                                    ideal_center,
+                                    reused_center_s,
+                                    best,
+                                    lo,
+                                    hi,
+                                )
+                                if (
+                                    reused_support.low > lo
+                                    or reused_support.high < hi
+                                ):
+                                    pending.append(
+                                        (
+                                            reused_support.low,
+                                            reused_support.high,
+                                            task[2] + 1,
+                                        )
+                                    )
+                                elif best >= middle:
+                                    pending.append((lo, middle, task[2] + 1))
+                                    pending.append((middle, hi, task[2] + 1))
+                                else:
+                                    pending.append((middle, hi, task[2] + 1))
+                                    pending.append((lo, middle, task[2] + 1))
+                                continue
             var point_domain: Tuple[_Jet, _Jet, _Jet]
             if frozen:
                 point_domain = _frozen_arc_center(
@@ -1551,6 +1763,23 @@ def _run_lane_search(
                 best_point = local[1].copy()
                 certificate.s = best
                 certificate.point = best_point.copy()
+                if _beats_external_witness(
+                    best_point, query, goal, external_witness
+                ):
+                    certificate = _pause_lane_search(
+                        best,
+                        best_point,
+                        query,
+                        closed^,
+                        terminal,
+                        pending,
+                        task,
+                        entry_lower,
+                        entry_scale,
+                        certificate.nodes,
+                        certificate.terms,
+                    )
+                    return
                 scale = _point_gap_scale(best_point, query)
                 if scale == 0.0:
                     certificate = _exact_lane_certificate(
@@ -1605,17 +1834,33 @@ def _run_lane_search(
                     and domain.second.is_finite()
                     and center_work <= max_terms - certificate.terms
                 ):
-                    fast_center = _try_proof_expansion_jet(
-                        road,
-                        section,
-                        lane,
-                        center_s,
-                        location,
-                        scale,
-                        low,
-                        high,
-                        spiral_proof,
-                    )
+                    var station_word = bitcast[DType.uint64](center_s)
+                    var scale_word = bitcast[DType.uint64](scale)
+                    if (
+                        external_witness
+                        and cached_fast
+                        and cached_fast.value()[0] == station_word
+                        and cached_fast.value()[1] == scale_word
+                    ):
+                        fast_center = cached_fast.value()[2]
+                    else:
+                        fast_center = _try_proof_expansion_jet(
+                            road,
+                            section,
+                            lane,
+                            center_s,
+                            location,
+                            scale,
+                            low,
+                            high,
+                            spiral_proof,
+                        )
+                        if external_witness and fast_center:
+                            cached_fast = (
+                                station_word,
+                                scale_word,
+                                fast_center.value(),
+                            )
                     if fast_center:
                         var fast_delta = _Interval(lo, hi) - _Interval.point(
                             center_s
@@ -1650,7 +1895,27 @@ def _run_lane_search(
                             " limit"
                         )
                     certificate.terms += work
-                    point_domain = _lane_jet(road, section, lane, lo, hi)
+                    # Original F is prepaid; the optional model owns its node
+                    # and whole-union C. A decline retains all actual debits.
+                    var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None
+                    # Keep the original closed-cell recheck available after
+                    # this optional producer. The original F is already paid.
+                    if max_nodes - certificate.nodes >= 2:
+                        grouped = _try_grouped_lane_jet(
+                            road,
+                            section,
+                            lane,
+                            lo,
+                            hi,
+                            certificate.nodes,
+                            certificate.terms,
+                            max_nodes,
+                            max_terms,
+                        )
+                    if grouped:
+                        point_domain = grouped.value()
+                    else:
+                        point_domain = _lane_jet(road, section, lane, lo, hi)
                     natural = max(
                         natural,
                         _scaled_point_distance_box(
@@ -1701,30 +1966,125 @@ def _run_lane_search(
                     domain.second.is_finite()
                     or not domain.rounded_value().is_finite()
                 ):
-                    if frozen:
-                        center = _frozen_arc_expansion(
-                            frozen.value(), center_s, location, scale
-                        )
+                    var station_word = bitcast[DType.uint64](center_s)
+                    var scale_word = bitcast[DType.uint64](scale)
+                    if (
+                        external_witness
+                        and cached_expansion
+                        and cached_expansion.value()[0] == station_word
+                        and cached_expansion.value()[1] == scale_word
+                    ):
+                        center = cached_expansion.value()[2]
                     else:
-                        center = _expansion_distance_jet(
-                            road, section, lane, center_s, location, scale
+                        if frozen:
+                            center = _frozen_arc_expansion(
+                                frozen.value(), center_s, location, scale
+                            )
+                        else:
+                            center = _expansion_distance_jet(
+                                road, section, lane, center_s, location, scale
+                            )
+                        if external_witness:
+                            cached_expansion = (
+                                station_word,
+                                scale_word,
+                                center,
+                            )
+                # Keep this query/source invocation's actual ideal expression
+                # separate from the frozen ARC surrogate. A failed packing
+                # attempt replaces no previous valid containing-cell model.
+                if external_witness and not frozen:
+                    # Preserve the containing ancestor for sibling reuse.
+                    # A new query scale or a cell outside that owner needs a
+                    # separately validated model; never extend the old owner.
+                    var needs_model = not Bool(cached_model)
+                    if cached_model:
+                        needs_model = (
+                            lo < cached_model.value().low
+                            or hi > cached_model.value().high
+                            or bitcast[DType.uint64](scale)
+                            != cached_model.value().scale_word
                         )
+                    if needs_model:
+                        var packed_model = _try_objective_model(
+                            lo, hi, center_s, scale, domain, center
+                        )
+                        if packed_model:
+                            cached_model = packed_model.value()
                 var delta = _Interval(lo, hi) - _Interval.point(center_s)
                 var lower = max(natural, _global_lower(domain, center, delta))
+                var support = _Interval(lo, hi)
+                if external_witness:
+                    support = _minimizer_support(
+                        domain, center, center_s, best, lo, hi
+                    )
                 if lower > best_upper:
                     continue
                 if (
                     _goal_excludes(lower, scale, goal)
                     or _next_up(best_upper - lower) <= tolerance
                 ):
-                    closed.add(_ClosedInterval(lo, hi, task[2], lower, scale))
+                    closed.add(
+                        _ClosedInterval(
+                            support.low, support.high, task[2], lower, scale
+                        )
+                    )
+                    continue
+                if support.low > lo or support.high < hi:
+                    if task[2] >= max_depth:
+                        raise Error(
+                            "Lane refinement exhausted its numerical accuracy"
+                            " limit"
+                        )
+                    pending.append((support.low, support.high, task[2] + 1))
                     continue
         if task[2] >= max_depth:
             raise Error(
                 "Lane refinement exhausted its numerical accuracy limit"
             )
-        pending.append((middle, hi, task[2] + 1))
-        pending.append((lo, middle, task[2] + 1))
+        # The unchanged node has now exhausted its witness/closure choices.
+        # Keep each source owner unchanged while isolating the exact stored
+        # sample-dispatch transition. Adjacent words leave no station gap.
+        # Declined setup or unavailable depth retains the original path.
+        if not sampled_checked and task[2] < max_depth:
+            sampled_checked = True
+            sampled_cuts = _try_sample_dispatch_cuts(
+                road,
+                low,
+                high,
+                certificate.nodes,
+                certificate.terms,
+                max_nodes,
+                max_terms,
+            )
+        if sampled_cuts and task[2] < max_depth:
+            var split_at = 0.0
+            if lo < sampled_cuts.value()[0] and sampled_cuts.value()[0] <= hi:
+                split_at = sampled_cuts.value()[0]
+            elif (
+                sampled_cuts.value()[2] == 2
+                and lo < sampled_cuts.value()[1]
+                and sampled_cuts.value()[1] <= hi
+            ):
+                split_at = sampled_cuts.value()[1]
+            if split_at > 0.0:
+                var before = bitcast[DType.float64](
+                    bitcast[DType.uint64](split_at) - UInt64(1)
+                )
+                if before >= lo:
+                    if external_witness and best >= split_at:
+                        pending.append((lo, before, task[2] + 1))
+                        pending.append((split_at, hi, task[2] + 1))
+                    else:
+                        pending.append((split_at, hi, task[2] + 1))
+                        pending.append((lo, before, task[2] + 1))
+                    continue
+        if external_witness and best >= middle:
+            pending.append((lo, middle, task[2] + 1))
+            pending.append((middle, hi, task[2] + 1))
+        else:
+            pending.append((middle, hi, task[2] + 1))
+            pending.append((lo, middle, task[2] + 1))
     # Return only after every pending/reopened cell is covered. Goal-closed
     # cells remain valid minimum bounds, but do not imply ordinary accuracy.
     certificate = _finish_lane_certificate(
