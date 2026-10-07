@@ -8,6 +8,72 @@ make coverage
 
 The run time depends on the selected suites and the amount of probe output.
 
+
+## Choose the capture profile
+
+`COV_PROFILE=raw` remains the local default. It uses Mojo `run`, except that
+suites needing a native C fixture use a fresh build and execution so their
+linker objects are effective. `COV_PROFILE=aot` builds every selected suite.
+`COV_PROFILE=aot-hits` adds an exact hit cache to compiled Linux captures.
+Hosted Linux coverage explicitly selects `aot-hits`; other jobs keep their
+existing execution modes. The measured modules, suites, coverage obligations
+and 9,000-second hosted group budget are unchanged.
+
+```bash
+make coverage-instrument
+make coverage-capture COV_PROFILE=aot-hits COV_BUDGET=9000
+make coverage-report
+```
+
+Compiled profiles preserve the source argument as `argv[0]`, trailing
+arguments, working directory, environment and ordinary diagnostic streams.
+The actual executable is a temporary binary, so executable-path inspection
+and self-execution differ from the JIT. The wrapper supports the official
+Mojo command shape. Use `raw` for programs requiring other run-only behavior.
+A build failure stops that suite; compilation and execution share the original
+capture deadline and process cleanup scope.
+
+The Linux private profile reserves a blocking writer to the supervisor's
+capture pipe. Runtime probes continue to that pipe if the program redirects
+stderr; ordinary diagnostics follow stderr.
+
+Each full static hit ID, including
+condition index and true/false suffix, is cached only after a complete write.
+The fixed 4,096-entry cache stores exact bytes. Collisions, eviction and
+contention can add duplicate writes.
+
+Every complete `COVEVAL2` record is still
+written, including repeated vectors, and truth conversion and operand-buffer
+updates still execute each time. A cached hit records an already delivered
+fact and does not repeat an I/O operation or its possible error.
+
+The private descriptor belongs exclusively to the helper. Programs must not
+close or reuse arbitrary descriptors or bypass libc fork hooks with direct
+fork/clone syscalls. Libc fork children close the inherited private writer and
+use uncached stderr; exec closes the private writer. Each new supervised
+process gets its own cache. Requested private initialization fails closed if
+pipe identity, descriptor setup or fork-hook registration fails. This ownership
+contract does not make arbitrary concurrent descriptor replacement safe.
+
+Compiler-time probes retain their original raw write path. Start release
+qualification with a new, empty compiler-cache directory. In every profile,
+a warm compiler cache can reuse compile-time results without repeating their
+side effects. Matched cold and warm controls test this distinction explicitly;
+old captures must not be reused as evidence for a new source or cache scope.
+
+`make test-tools` includes compiler-free command, object-linking and fault-driver
+controls. `make test-coverage-tool` keeps all existing raw protocol checks and
+adds native cold/warm phase, argv, complete-vector and Linux transport-fault
+controls. The new native tests retain the five-second per-test limit.
+
+The local pilot used published production source and full 908-module
+instrumentation with an explicit x86-64-v3 target. Its 1,776.6-second capture
+completed all 33 original `test_carla_render_scene` tests. The composed
+FP-state fixture retained byte-identical cold evidence. A repeated-hit
+microbenchmark improved, while a vector-dense control was about 20% slower.
+These results support the profile's qualification; they are not a matched
+hosted speedup or proof that every complete coverage group meets its budget.
+
 ## Read the report
 
 ```
