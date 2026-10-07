@@ -29,7 +29,8 @@ class CpuCacheRecipeTests(unittest.TestCase):
             (root / 'cache/suites-to-run').write_text(pairs)
             for name in ('test_a', 'test_b'):
                 (root / f'tests/{name}.mojo').write_text('def test_stub():\n    pass\n')
-            for name in ('run_suite.py', 'test_environment.py', 'compiler_telemetry.py'):
+            for name in ('run_suite.py', 'test_environment.py', 'compiler_telemetry.py',
+                         'native_test_support.py', 'affected.py', 'suite_key.py'):
                 shutil.copyfile(ROOT / 'tools' / name, root / 'tools' / name)
             output = ('Running 1 tests for stub.mojo\n'
                       'PASS [ 1.0 ] test_stub\n'
