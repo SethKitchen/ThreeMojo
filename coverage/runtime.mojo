@@ -18,7 +18,8 @@ terminate the suite instead of certifying missing data.
 
 from std.ffi import external_call
 from std.memory import stack_allocation
-from std.sys._libc_errno import ErrNo, get_errno
+from std.sys._libc_errno import ErrNo, get_errno, set_errno
+from std.sys import is_defined
 
 comptime LINE_PREFIX = "COVLINE:"
 comptime BRANCH_PREFIX = "COVBRANCH:"
@@ -61,6 +62,14 @@ def _emit_hit(id: StaticString, suffix: StaticString):
     for value in suffix.as_bytes():
         bytes[unsafe_offset=index] = value
         index += 1
+    comptime if is_defined["THREEMOJO_COVERAGE_HIT_CACHE"]():
+        if not __is_run_in_comptime_interpreter:
+            var saved_errno = get_errno()
+            var result_errno = external_call[
+                "threemojo_coverage_emit_hit", Int32
+            ](bytes.unsafe_bitcast[NoneType](), size, saved_errno.value)
+            set_errno(ErrNo(result_errno))
+            return
     while True:
         var written = external_call["write", Int](
             2, bytes.unsafe_bitcast[NoneType](), size
@@ -70,6 +79,26 @@ def _emit_hit(id: StaticString, suffix: StaticString):
         # EINTR reports that no bytes were written. Keep the full record atomic.
         if written != -1 or get_errno() != ErrNo.EINTR:
             external_call["abort", NoneType]()
+
+
+@inline(.never)
+def _emit_evaluation(record: String):
+    """Route every complete vector through the optional private probe sink."""
+    if record.byte_length() > MAX_RECORD_BYTES:
+        external_call["abort", NoneType]()
+    comptime if is_defined["THREEMOJO_COVERAGE_HIT_CACHE"]():
+        if not __is_run_in_comptime_interpreter:
+            var saved_errno = get_errno()
+            var result_errno = external_call[
+                "threemojo_coverage_emit_evaluation", Int32
+            ](
+                record.unsafe_ptr().unsafe_bitcast[NoneType](),
+                record.byte_length(),
+                saved_errno.value,
+            )
+            set_errno(ErrNo(result_errno))
+            return
+    _emit(record)
 
 
 @inline(.never)
@@ -293,5 +322,5 @@ def finish(value: Bool, values: List[Int], id: StaticString) -> Bool:
     )
     for state in values:
         record += "-" if state < 0 else ("T" if state > 0 else "F")
-    _emit(record + ";\n")
+    _emit_evaluation(record + ";\n")
     return value
