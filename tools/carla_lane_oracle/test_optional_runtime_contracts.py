@@ -9,6 +9,7 @@ FP state, mathematical soundness, budgets and coverage have separate controls.
 """
 import ast
 import copy
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -58,12 +59,8 @@ CASES = [
     ('grouped_debit_omission', 'spiral_grouped_lane', '_try_grouped_lane_jet', 'terms += extra', 'terms += 0', 'atomic whole-count debit'),
     ('grouped_hidden_fallback', 'spiral_grouped_lane', '_try_grouped_lane_jet', 'require_reuse=True', 'require_reuse=False', 'hidden GL'),
     ('metered_fallback_reservation', 'spiral_grouped_roundoff_proof', '_try_spiral_grouped_roundoff_envelope_metered', 'work + fallback_work > max_terms - terms', 'work > max_terms - terms', 'independent fallback'),
-    ('model_lifetime', 'lane_refinement', '_run_lane_search', 'var cached_model: Optional[_ObjectiveModel] = None', 'var cached_model: Optional[_ObjectiveModel] = saved_model', 'one search invocation'),
-    ('model_center_provenance', 'lane_refinement', '_run_lane_search', 'lo, hi, center_s, scale, domain, center', 'lo, hi, center_s, scale, center, center', 'paired ideal owner'),
-    ('model_surrogate_provenance', 'lane_refinement', '_run_lane_search', 'if external_witness and not frozen:', 'if external_witness:', 'unpaired frozen'),
     ('actual_witness_source', 'lane_refinement', '_run_lane_search', 'var best = certificate.s', 'var best = low', 'actual certificate witness'),
     ('actual_witness_point', 'lane_refinement', '_run_lane_search', 'var best_point = certificate.point.copy()', 'var best_point = query_point.copy()', 'actual witness point'),
-    ('center_error_sentinel', 'lane_refinement', '_run_lane_search', 'ideal_center.error = inf[DType.float64]()', 'ideal_center.error = 0.0', 'infinite translated error'),
     ('cached_term_reservation', 'curve_objective_model', '_objective_followup_room', '(remaining - center_work) // 8', 'remaining // 8', 'overflow-safe integer followup'),
     ('dispatch_child_predecessor', 'lane_refinement', '_run_lane_search', 'bitcast[DType.uint64](split_at) - UInt64(1)', 'bitcast[DType.uint64](split_at) - UInt64(2)', 'every stored owner station'),
     ('logical_dispatch_fee', 'map', '_query_node_step_cost', 'fixed += 16', 'fixed += 15', 'dispatch logical fee'),
@@ -79,9 +76,6 @@ CASES.extend([
     ('followup_one_short_term', 'curve_objective_model', '_objective_followup_room', '// 8', '// 7', 'overflow-safe integer followup'),
     ('followup_center_admission', 'curve_objective_model', '_objective_followup_room', 'center_work <= remaining', 'True', 'overflow-safe integer followup'),
     ('followup_overflow_form', 'curve_objective_model', '_objective_followup_room', 'reference_work <= (remaining - center_work) // 8', '8 * reference_work + center_work <= remaining', 'overflow-safe integer followup'),
-    ('followup_wrong_counter', 'lane_refinement', '_run_lane_search', 'certificate.nodes, certificate.terms,\n                                max_nodes, max_terms, work, reused_center_work', '0, certificate.terms,\n                                max_nodes, max_terms, work, reused_center_work', 'current counters and complete work'),
-    ('followup_wrong_reference', 'lane_refinement', '_run_lane_search', 'max_nodes, max_terms, work, reused_center_work', 'max_nodes, max_terms, center_work, reused_center_work', 'current counters and complete work'),
-    ('followup_cached_nodes', 'lane_refinement', '_run_lane_search', 'and max_nodes - certificate.nodes >= 4', 'and max_nodes - certificate.nodes >= 3', 'depth and four followup nodes'),
     ('grouped_recheck_headroom', 'lane_refinement', '_run_lane_search', 'if max_nodes - certificate.nodes >= 2:', 'if max_nodes - certificate.nodes >= 1:', 'grouped caller must retain recheck'),
     ('grouped_stale_optional_result', 'lane_refinement', '_run_lane_search', 'var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None', 'var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = previous_grouped', 'grouped caller must retain recheck'),
     ('dispatch_descendant_nodes', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', '3 * count + 2', '3 * count + 1', 'descendants and rechecks'),
@@ -91,21 +85,55 @@ CASES.extend([
 CASES.extend([
     ('recheck_one_short', 'curve_objective_model', '_objective_recheck_room', 'nodes < max_nodes', 'nodes <= max_nodes', 'cached-closure recheck admission'),
     ('recheck_negative_counter', 'curve_objective_model', '_objective_recheck_room', 'nodes >= 0', 'nodes >= -1', 'cached-closure recheck admission'),
-    ('cached_goal_missing_recheck', 'lane_refinement', '_run_lane_search',
-     '_objective_recheck_room(certificate.nodes, max_nodes) and _goal_excludes(reused_lower, scale, goal)',
-     '_goal_excludes(reused_lower, scale, goal)', 'cached goal closure must reserve recheck'),
-    ('cached_goal_reordered_recheck', 'lane_refinement', '_run_lane_search',
-     '_objective_recheck_room(certificate.nodes, max_nodes) and _goal_excludes(reused_lower, scale, goal)',
-     '_goal_excludes(reused_lower, scale, goal) and _objective_recheck_room(certificate.nodes, max_nodes)', 'cached goal closure must reserve recheck'),
-    ('cached_accuracy_missing_recheck', 'lane_refinement', '_run_lane_search',
-     '_objective_recheck_room(certificate.nodes, max_nodes) and _next_up(best_upper - reused_lower) <= reused_tolerance',
-     '_next_up(best_upper - reused_lower) <= reused_tolerance', 'cached accuracy closure must reserve recheck'),
-    ('cached_accuracy_reordered_recheck', 'lane_refinement', '_run_lane_search',
-     '_objective_recheck_room(certificate.nodes, max_nodes) and _next_up(best_upper - reused_lower) <= reused_tolerance',
-     '_next_up(best_upper - reused_lower) <= reused_tolerance and _objective_recheck_room(certificate.nodes, max_nodes)', 'cached accuracy closure must reserve recheck'),
-    ('cached_strict_exclusion_changed', 'lane_refinement', '_run_lane_search',
-     'if reused_lower > best_upper:',
-     'if _objective_recheck_room(certificate.nodes, max_nodes) and reused_lower > best_upper:', 'strict cached exclusion stays unconditional'),
+])
+
+# The twelve removed caller mutations are retained verbatim in the removal
+# migration record. These adversarial replacements require the production
+# consumer to remain absent and the original fresh path/memo to remain intact.
+CASES.extend([
+    ('model_state_reintroduction', 'lane_refinement', '_run_lane_search',
+     'var sampled_checked = False', 'var cached_model = None\n    var sampled_checked = False',
+     'search state reintroduced'),
+    ('model_capture_reintroduction', 'lane_refinement', '_run_lane_search',
+     'var delta = _Interval(lo, hi) - _Interval.point(center_s)',
+     'var hidden = _try_objective_model(lo, hi, center_s, scale, domain, center)\n                var delta = _Interval(lo, hi) - _Interval.point(center_s)',
+     'production consumer reintroduced'),
+    ('model_restriction_reintroduction', 'lane_refinement', '_run_lane_search',
+     'var best = certificate.s', 'var hidden = _restrict_objective_model(previous, low, high, 1.0)\n    var best = certificate.s',
+     'production consumer reintroduced'),
+    ('fresh_producer_stale_domain', 'lane_refinement', '_run_lane_search',
+     'point_domain = _lane_jet_with_proof(road, section, lane, lo, hi, low, high, spiral_proof)',
+     'point_domain = previous_domain', 'fresh current-cell producer'),
+    ('fresh_producer_wrong_owner', 'lane_refinement', '_run_lane_search',
+     'point_domain = _lane_jet_with_proof(road, section, lane, lo, hi, low, high, spiral_proof)',
+     'point_domain = _lane_jet_with_proof(road, section, lane, low, high, low, high, spiral_proof)',
+     'fresh current-cell producer'),
+    ('fresh_producer_unpaid', 'lane_refinement', '_run_lane_search',
+     optional.FRESH_PRODUCER, textwrap.indent(optional.FRESH_PRODUCER.replace('certificate.terms += work', 'certificate.terms += 0').strip(), ' ' * 12),
+     'fresh current-cell producer'),
+    ('fresh_producer_early_cached_closure', 'lane_refinement', '_run_lane_search',
+     'var point_domain: Tuple[_Jet, _Jet, _Jet]',
+     'if previous_lower > best_upper:\n                continue\n            var point_domain: Tuple[_Jet, _Jet, _Jet]',
+     'fresh current-cell producer'),
+    ('fresh_producer_wrong_work', 'lane_refinement', '_run_lane_search',
+     'var work = _reference_work(road, lo, hi)', 'var work = _reference_work(road, low, high)',
+     'current cell work'),
+    ('fast_memo_wrong_station', 'lane_refinement', '_run_lane_search',
+     'cached_fast.value()[0] == station_word', 'cached_fast.value()[0] <= station_word',
+     'exact station/scale proof'),
+    ('fast_memo_wrong_scale', 'lane_refinement', '_run_lane_search',
+     'cached_fast.value()[1] == scale_word', 'True', 'exact station/scale proof'),
+    ('expansion_memo_wrong_station', 'lane_refinement', '_run_lane_search',
+     'cached_expansion.value()[0] == station_word', 'cached_expansion.value()[0] <= station_word',
+     'exact station/scale translated'),
+    ('expansion_memo_wrong_scale', 'lane_refinement', '_run_lane_search',
+     'cached_expansion.value()[1] == scale_word', 'True', 'exact station/scale translated'),
+    ('memo_cross_invocation', 'lane_refinement', '_run_lane_search',
+     'var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = None',
+     'var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = saved',
+     'memo lifetime is one search invocation'),
+    ('retained_model_fee', 'map', '_query_node_step_cost', 'fixed += 14', 'fixed += 0',
+     'retained containing-model logical fee'),
 ])
 
 for module, name in (
@@ -280,6 +308,86 @@ class OptionalRuntimeContracts(unittest.TestCase):
                         guards.verify(root)
             target.write_text('# _sum2_error_checked in an inert comment\n')
             self.assertEqual(guards.verify(root)['status'], 'PASS')
+
+    def test_absence_rejects_import_alias_reexport_and_indirect_consumers(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            target = root/'extensions/new_runtime_namespace/__init__.mojo'
+            target.parent.mkdir(parents=True)
+            cases = (
+                'from extensions.carla.curve_objective_model import _ObjectiveModel as Hidden\n',
+                'import extensions.carla.curve_objective_model as hidden\n',
+                'from extensions.carla.curve_objective_model import *\n',
+                'def hidden():\n    return _try_objective_model\n',
+                'def hidden():\n    return adapter._restrict_objective_model\n',
+                'def hidden():\n    return _objective_followup_room(0, 0, 4, 8, 1, 0)\n',
+                'def hidden():\n    return _objective_recheck_room(0, 1)\n',
+            )
+            for source in cases:
+                with self.subTest(source=source):
+                    target.write_text(source)
+                    with self.assertRaisesRegex(ValueError, 'production consumer reintroduced'):
+                        optional.verify_no_containing_model_consumers(root)
+            target.write_text('# curve_objective_model _ObjectiveModel\n'
+                              '"""_try_objective_model is historical evidence."""\n')
+            optional.verify_no_containing_model_consumers(root)
+            helper = root/'extensions/carla/curve_objective_model.mojo'
+            helper.parent.mkdir(parents=True)
+            helper.write_text((ROOT/'extensions/carla/curve_objective_model.mojo').read_text())
+            tests = root/'tests/model.mojo'
+            tests.parent.mkdir()
+            tests.write_text(cases[0])
+            optional.verify_no_containing_model_consumers(root)
+
+    def test_absence_checks_actual_solver_imports_and_inert_decoys(self):
+        path = ROOT/'extensions/carla/lane_refinement.mojo'
+        original = path.read_text()
+        read = Path.read_text
+        for prefix in ('from extensions.carla.curve_objective_model import _ObjectiveModel as Hidden\n',
+                       'import extensions.carla.curve_objective_model as hidden\n'):
+            with self.subTest(prefix=prefix), patch.object(Path, 'read_text',
+                    lambda p, *a, **k: prefix + original if p == path else read(p, *a, **k)):
+                with self.assertRaisesRegex(ValueError, 'production consumer reintroduced'):
+                    optional.verify_semantics(ROOT)
+                with self.assertRaisesRegex(ValueError, 'runtime source dependency changed'):
+                    sources.verify_group(ROOT, 'optional_runtime')
+                with self.assertRaisesRegex(ValueError, 'routing changed'):
+                    guards.verify(ROOT)
+        prefix = '# cached_model _restrict_objective_model\n'
+        with patch.object(Path, 'read_text',
+                lambda p, *a, **k: prefix + original if p == path else read(p, *a, **k)):
+            self.assertEqual(optional.verify(ROOT)['status'], 'PASS')
+            self.assertEqual(guards.verify(ROOT)['status'], 'PASS')
+
+    def test_removal_manifest_is_bound_and_retains_historical_controls(self):
+        path = ROOT/'tools/carla_lane_oracle/containing-model-removal-migration.json'
+        self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(),
+                         guards.CONTAINING_MODEL_REMOVAL_SHA256)
+        manifest = json.loads(path.read_text())
+        self.assertEqual(manifest['base_tree'], 'e161dd9b8f46e2ec006b57fd2167d67a1b217ad5')
+        self.assertEqual(len(manifest['historical_removed_caller_controls']), 12)
+        self.assertEqual({row['group'] for row in manifest['dependency_changes']},
+                         {'canonical_accumulation', 'optional_runtime', 'translation', 'support'})
+        self.assertEqual({row['path'] for row in manifest['dependency_changes']},
+                         {'extensions/carla/lane_refinement.mojo'})
+        for path, hashes in manifest['runtime_freeze']['manifest']['files'].items():
+            self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), hashes['after'])
+        self.assertTrue(manifest['solver_removal_projection']['map_complete_tokens_equal'])
+        self.assertEqual(manifest['solver_removal_projection']['projected_ast_sha256'],
+                         manifest['solver_removal_projection']['successor_ast_sha256'])
+        retained = {case[0] for case in CASES if case[1] == 'curve_objective_model'}
+        self.assertTrue({'owner_low', 'owner_high', 'scale_word', 'cached_term_reservation',
+                         'followup_one_short_node', 'followup_one_short_term',
+                         'recheck_one_short', 'recheck_negative_counter'}.issubset(retained))
+
+    def test_unreviewed_removal_lineage_rejects(self):
+        changed = json.loads(self.pins[guards.PINS])
+        changed['containing_model_removal_sha256'] = '0' * 64
+        read = Path.read_text
+        with patch.object(Path, 'read_text', lambda p, *a, **k:
+                          json.dumps(changed) if p == ROOT/guards.PINS else read(p, *a, **k)):
+            with self.assertRaisesRegex(ValueError, 'unreviewed containing-model removal lineage'):
+                guards.verify(ROOT)
 
     def test_missing_global_inventory_binding_rejects(self):
         changed = json.loads(self.pins[guards.PINS])
