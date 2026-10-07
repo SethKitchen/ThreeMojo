@@ -47,7 +47,11 @@ from extensions.carla.spiral_domain_proof import (
 )
 from extensions.carla.geometry import ARC, LINE
 from extensions.carla.lane_value_bounds import _lane_value_bound
-from extensions.carla.curve_rounded_arc import _RoundedArc, _rounded_arc_context
+from extensions.carla.curve_rounded_arc import (
+    _RoundedArc,
+    _RoundedBox,
+    _rounded_arc_context,
+)
 from extensions.carla.curve_frozen_arc import (
     _frozen_arc_context,
     _frozen_arc_center,
@@ -909,7 +913,12 @@ def _refine_lane_certificate(
             max_terms,
             max_depth,
         )
-        if not axis:
+        # The optional rounded proof cannot admit a parameter box that
+        # is non-singleton and touches zero, or leaves its guarded range.
+        # Check that necessary
+        # condition before reserving a profile traversal that must decline.
+        # The original axis path above has already validated the lane.
+        if not axis and _RoundedBox.bounds(low, high).known:
             axis = _rounded_axis_lane_minimum(
                 road,
                 section,
