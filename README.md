@@ -126,7 +126,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 <details>
-<summary>Implemented: 10</summary>
+<summary>Implemented: 11</summary>
+
+- [x] [Wiki link check](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation#check-the-rules): `make docs-check` refuses wiki links to pages or headings that do not exist [#687](https://github.com/SethKitchen/ThreeMojo/issues/687)
 
 - [x] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion, pinned upstream inputs and exact production reproduction [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
 
