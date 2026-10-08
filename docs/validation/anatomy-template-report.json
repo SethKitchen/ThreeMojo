@@ -12,7 +12,7 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "06e0948de2715be73408525c4ce149a2df449bac0162f04d07071a06ff8d6282",
+    "source_sha256": "54967aa38b8d19c983eca8f8bc8573691520fca87c5f0a3228d0c3c8a6216224",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
@@ -63,7 +63,7 @@
     "extensions/humanoid/skeleton/torso/sweep.mojo": "30b8d75082c062a4a45925f2d884da28cb08410c7f43bb03a99b5e77bd096410",
     "extensions/humanoid/spec.mojo": "994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224"
   },
-  "report_logic_sha256": "74091ed0e8d9c70267f4107972e277e65790131c439df5fbfd8861483572f5d9",
+  "report_logic_sha256": "e4c6cdfb841921935960dc72cfdbb01132e3cc49c0d7f6022865b3e153837676",
   "inventory_sha256": "1b483e96bbd0914a3fbda83cfd0fb7964847c3e353e01e4022acd2b114b16f8c",
   "follow_ups": [
     "https://github.com/SethKitchen/ThreeMojo/issues/595",
