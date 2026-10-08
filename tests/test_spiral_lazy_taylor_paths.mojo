@@ -112,8 +112,11 @@ def test_cached_fresh_absent_and_mismatched_proof_paths_preserve_accuracy() rais
             spiral_proof=optional,
         )
         assert_false(result.exact_witness)
-        assert_equal(result.nodes, 2)
-        assert_equal(result.terms, _terms(kind == 1))
+        # Only the enlarged proof reaches the optional grouped refresh.
+        # Its fixed count is two panels: one producer node and six paired
+        # weighted terms, retained in addition to the original F reservation.
+        assert_equal(result.nodes, 3 if kind == 1 else 2)
+        assert_equal(result.terms, _terms(kind == 1) + (6 if kind == 1 else 0))
         _bits(result.s, generic.s)
         for axis in range(3):
             _bits(result.point[axis], generic.point[axis])
@@ -313,7 +316,7 @@ def test_global_step_remainder_enforces_exact_non_tiny_resume_node_cost() raises
     var location = Vector3(0.4, 1, 0.6)
     var proof = _enlarge(_capture_acceptance_proof(road, 0.4, 0.7))
     var node_cost = _query_node_step_cost(1)
-    assert_equal(node_cost, 120)
+    assert_equal(node_cost, 136)
     var certificate = _whole_certificate(road, location)
     var work = _MapQueryWork(MapQueryBudget(1, max_steps=3 * node_cost))
     work.charge(0, certificate.terms, node_cost)

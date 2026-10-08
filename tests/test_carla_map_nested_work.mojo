@@ -161,7 +161,9 @@ def test_query_step_policy_preserves_five_positional_arguments() raises:
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     policy.max_steps = -1
     with assert_raises(contains="nonnegative"):
-        _ = map.closest_waypoint_on_road(Vector3(0, 0, 0), budget=policy)
+        _ = map.certified_closest_waypoint_on_road(
+            Vector3(0, 0, 0), budget=policy
+        )
 
 
 def test_query_step_boundary_charges_lookup_profiles_and_bookkeeping() raises:
@@ -178,7 +180,7 @@ def test_query_step_boundary_charges_lookup_profiles_and_bookkeeping() raises:
     )
     assert_true(work.steps > work.nodes + work.index_pops)
     var policy = MapQueryBudget(1, max_steps=work.steps)
-    var exact = map.closest_waypoint_on_road(
+    var exact = map.certified_closest_waypoint_on_road(
         Vector3(2, 0, 0), budget=policy
     ).value()
     assert_equal(
@@ -186,10 +188,14 @@ def test_query_step_boundary_charges_lookup_profiles_and_bookkeeping() raises:
     )
     policy.max_steps -= 1
     with assert_raises(contains="step budget"):
-        _ = map.closest_waypoint_on_road(Vector3(2, 0, 0), budget=policy)
+        _ = map.certified_closest_waypoint_on_road(
+            Vector3(2, 0, 0), budget=policy
+        )
     policy.max_steps = 0
     with assert_raises(contains="step budget"):
-        _ = map.closest_waypoint_on_road(Vector3(2, 0, 0), budget=policy)
+        _ = map.certified_closest_waypoint_on_road(
+            Vector3(2, 0, 0), budget=policy
+        )
 
 
 def test_query_step_reservations_refuse_overflow_before_increment() raises:

@@ -28,6 +28,27 @@ struct _RoundedLineAxis(ImplicitlyCopyable):
     var slope: Float64
 
 
+@always_inline
+def _select_rounded_line_axis(
+    x: _RoundedBox, y: _RoundedBox, cosine: Float64, sine: Float64
+) -> Optional[_RoundedLineAxis]:
+    """Select an axis from checked conservative boxes and fixed directions.
+
+    Private preconditions: x and y are known whole-domain enclosures; both
+    direction components are finite supported operands. The caller proves
+    monotonicity in the indicated direction. The boxes need not be tight.
+    A zero component is allowed, including two zero components. No heading
+    or trigonometric identity is part of this standalone selection contract.
+    The y direction uses the lane evaluator's negative-sine convention.
+    """
+    # Keep horizontal priority when both checked axes are eligible.
+    if y.low == y.high and cosine != 0.0:
+        return _RoundedLineAxis(0, cosine)
+    if x.low == x.high and sine != 0.0:
+        return _RoundedLineAxis(1, -sine)
+    return None
+
+
 def _rounded_line_axis_context(
     road: Road, section: Int, lane: Int, low: Float64, high: Float64
 ) raises -> Optional[_RoundedLineAxis]:
@@ -43,10 +64,8 @@ def _rounded_line_axis_context(
         or high > road.length
     ):
         return None
-    if (
-        info_index(road.info.geometries, low) != 0
-        or info_index(road.info.geometries, high) != 0
-    ):
+    # One record active at low also covers high: the domain is ordered.
+    if info_index(road.info.geometries, low) != 0:
         return None
     var offset_at = info_index(road.info.lane_offsets, low)
     var elevation_at = info_index(road.info.elevations, low)
@@ -94,7 +113,8 @@ def _rounded_line_axis_context(
             if lanes[i].id == id:
                 break
     offset = offset - lane_offset
-    if not offset.known or offset.low != offset.high:
+    # Known point operands preserve a singleton through rounded add/multiply.
+    if not offset.known:
         return None
     var start = _RoundedBox.point(record.s)
     var d = _RoundedBox.bounds(low, high) - start
@@ -104,8 +124,7 @@ def _rounded_line_axis_context(
     d = _RoundedBox.bounds(
         min(max(d.low, 0.0), length), min(max(d.high, 0.0), length)
     )
-    if not d.known:
-        return None
+    # A monotone clamp preserves supported endpoints and their common lobe.
     # These are the canonical no-inline scalar trig graph's stored outputs.
     # Never substitute ideal sine/cosine or snap a near-axis heading.
     var cosine = _RoundedBox.point(_curve_cos(record.geometry.heading))
@@ -114,14 +133,11 @@ def _rounded_line_axis_context(
     var y = _rounded_madd(d, sine, _RoundedBox.point(record.geometry.y))
     x = _rounded_madd(offset, sine, x)
     y = -_rounded_madd(-offset, cosine, y)
-    if not (x.known and y.known and elevation.low == elevation.high):
+    # The checked constant elevation is a singleton by construction.
+    if not (x.known and y.known):
         return None
     # Subtraction, clamp, constant multiply, rounded addition/FMA, and final
     # sign reversal compose monotonically. Each permitted contraction graph
     # has the indicated direction. The other two stored coordinates must be
     # singleton boxes under every permitted graph over this original domain.
-    if y.low == y.high and cosine.low != 0.0:
-        return _RoundedLineAxis(0, cosine.low)
-    if x.low == x.high and sine.low != 0.0:
-        return _RoundedLineAxis(1, -sine.low)
-    return None
+    return _select_rounded_line_axis(x, y, cosine.low, sine.low)

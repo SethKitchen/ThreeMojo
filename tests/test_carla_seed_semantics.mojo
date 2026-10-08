@@ -107,16 +107,16 @@ def test_duplicate_spirals_keep_segment_tie_order_and_deterministic_station() ra
     roads.append(_spiral_road(id=2, width=4.0))
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
     var query = Vector3(1, 0, 0)
-    var first = map.closest_waypoint_on_road(query).value()
+    var first = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(first.road_id, RoadId(1))
     for _ in range(3):
-        var again = map.closest_waypoint_on_road(query).value()
+        var again = map.certified_closest_waypoint_on_road(query).value()
         assert_equal(again.road_id, first.road_id)
         assert_equal(again.lane_id, first.lane_id)
         assert_equal(
             bitcast[DType.uint64](again.s), bitcast[DType.uint64](first.s)
         )
-        assert_true(Bool(map.waypoint(query)))
+        assert_true(Bool(map.certified_waypoint(query)))
 
 
 def test_initial_seed_does_not_bypass_zero_work_refusals() raises:

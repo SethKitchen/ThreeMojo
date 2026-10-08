@@ -83,10 +83,10 @@ def test_narrow_cubic_peak_is_admitted_between_quarter_samples() raises:
     assert_true(abs(witness[1] - chord_y) > 0.001009)
     assert_true(abs(witness[1] - Float64(height)) < 0.0000000001)
     var query = Vector3(x, height, 0)
-    var nearest = map.closest_waypoint_on_road(query).value()
+    var nearest = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(nearest.road_id, RoadId(1))
     assert_equal(nearest.lane_id, LaneId(-1))
-    assert_true(Bool(map.waypoint(query)))
+    assert_true(Bool(map.certified_waypoint(query)))
 
 
 def main() raises:

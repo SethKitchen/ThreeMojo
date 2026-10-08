@@ -152,11 +152,8 @@ struct HairStrands(Movable):
         """Check topology and the retained geometry's buffer ownership."""
         if len(self.groom.starts) != len(self._topology):
             raise Error("Hair strand topology cannot change during an update")
-        for index in range(len(self._topology)):
-            if self.groom.starts[index] != self._topology[index]:
-                raise Error(
-                    "Hair strand topology cannot change during an update"
-                )
+        if self.groom.starts != self._topology:
+            raise Error("Hair strand topology cannot change during an update")
         # Check ownership before writing through retained shared buffers.
         # A replacement geometry, or an equal slot in another store, must
         # never be silently updated as though it belonged to this groom.

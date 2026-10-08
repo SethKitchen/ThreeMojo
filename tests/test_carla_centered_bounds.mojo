@@ -189,7 +189,9 @@ def test_spiral_accumulates_displacement_before_the_wide_origin() raises:
 
 def test_ordinary_arc_query_matches_the_independent_circle_minimum() raises:
     var map = load_opendrive_file("assets/carla/town.xodr")
-    var nearest = map.closest_waypoint_on_road(Vector3(70, 10, 0)).value()
+    var nearest = map.certified_closest_waypoint_on_road(
+        Vector3(70, 10, 0)
+    ).value()
     assert_equal(nearest.road_id, RoadId(11))
     assert_equal(nearest.lane_id, LaneId(-1))
     # Radius20, right offset1.75 and query relative to circle center(60,20)

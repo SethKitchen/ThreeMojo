@@ -3351,6 +3351,13 @@
         "native_jobs": 0,
         "scope": "Compiler-free focused checks only. The parent owns official complete replay, anatomy regeneration, coverage and final performance qualification. No native or aggregate success is inferred."
       }
+    },
+    {
+      "event": "containing-objective-model production consumer removal",
+      "date": "2026-10-07",
+      "record": "containing-model-removal-migration.json",
+      "sha256": "3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8",
+      "scope": "Only lane_refinement caller body, import routing, protected inventory and four complete dependency pins change. Sum2 helper and every other complete caller remain unchanged. Prior events remain historical evidence."
     }
   ]
 }

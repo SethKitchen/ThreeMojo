@@ -29,8 +29,8 @@ def _required_non_line(geometry: String) raises:
         )
     )
     var point = Vector3(Float32(0.0009), Float32(0.0005525), 0)
-    var nearest = map.closest_waypoint_on_road(point).value()
-    var under = map.waypoint(point)
+    var nearest = map.certified_closest_waypoint_on_road(point).value()
+    var under = map.certified_waypoint(point)
     var witness = nearest
     witness.s = 0.0009
     # A directly evaluated curve point is inside the original half-width.

@@ -347,17 +347,21 @@ def test_sparse_map_ownership_retains_public_order_ties_and_strict_width() raise
     var before = map._sampled_covers[0]
     # Identical sampled lanes must keep the first segment on an exact tie.
     assert_equal(
-        map.closest_waypoint_on_road(Vector3(0, -2, 0)).value().road_id,
+        map.certified_closest_waypoint_on_road(Vector3(0, -2, 0))
+        .value()
+        .road_id,
         RoadId(1),
     )
-    assert_true(Bool(map.waypoint(Vector3(0, -2, 0))))
+    assert_true(Bool(map.certified_waypoint(Vector3(0, -2, 0))))
     # The third road is an exact axis LINE with half-width 1. The sampled
     # competitors must not change its established strict boundary result.
     assert_equal(
-        map.closest_waypoint_on_road(Vector3(0.5, -10, 0)).value().road_id,
+        map.certified_closest_waypoint_on_road(Vector3(0.5, -10, 0))
+        .value()
+        .road_id,
         RoadId(3),
     )
-    assert_false(Bool(map.waypoint(Vector3(0.5, -9, 0))))
+    assert_false(Bool(map.certified_waypoint(Vector3(0.5, -9, 0))))
     assert_equal(map.segment_count(), count)
     assert_equal(len(map._sampled_covers), allocated)
     var after = map._sampled_covers[0]

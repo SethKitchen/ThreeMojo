@@ -120,8 +120,8 @@ def test_arc_snapshot_requires_structural_constant_records() raises:
 def test_review_arc_offroad_query_and_nearest_station() raises:
     var map = load_opendrive_file("assets/carla/town.xodr")
     var query = Vector3(80.0, bitcast[DType.float32](UInt32(0x415599A0)), 0.0)
-    assert_false(Bool(map.waypoint(query)))
-    var nearest = map.closest_waypoint_on_road(query).value()
+    assert_false(Bool(map.certified_waypoint(query)))
+    var nearest = map.certified_closest_waypoint_on_road(query).value()
     assert_equal(nearest.road_id, RoadId(11))
     assert_equal(nearest.lane_id, LaneId(-1))
     # Independent circle: atan2(q.x-60, 20-q.y) / stored(0.05).

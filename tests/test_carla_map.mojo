@@ -975,11 +975,12 @@ def _assert_town_segment_index(map: Map) raises:
 
 def test_closest_waypoints() raises:
     var map = load_opendrive_file(TOWN)
-    # Record and sampled-center splits refine the original heading partition.
-    assert_equal(map.segment_count(), 987)
-    _assert_town_segment_index(map)
-    # Ordinary CARLA queries. The ARC and shoulder minima use independent
-    # stored-expression and rounded-error bounds; see the correction controls.
+    # Independent XML/geometry reconstruction of the heading threshold:
+    # tools/generate_carla_lane_orientation_controls.py gives 230 pieces.
+    # Road 1's section 1 widens after its s = 40 width record, so its
+    # sidewalk is not straight and splits once more there.
+    assert_equal(len(map._carla_segments), 231)
+    # Values from the Python copy of `GetClosestWaypointOnRoad`.
     _same(
         map.closest_waypoint_on_road(Vector3(20, 1, 0)).value(), 1, 0, -1, 20.0
     )
@@ -988,7 +989,7 @@ def test_closest_waypoints() raises:
         11,
         0,
         -1,
-        15.7079632679489652901,
+        15.603252062536761,
     )
     _same(
         map.closest_waypoint_on_road(
@@ -1034,7 +1035,7 @@ def test_closest_waypoints() raises:
         5,
         0,
         -2,
-        4.5865313100931020167,
+        6.0,
     )
     assert_false(map.closest_waypoint_on_road(Vector3(0, 0, 0), LANE_TRAM))
     with assert_raises():
@@ -1042,6 +1043,120 @@ def test_closest_waypoints() raises:
     _same(map.waypoint(Vector3(20, 1, 0)).value(), 1, 0, -1, 20.0)
     assert_false(map.waypoint(Vector3(20, 4, 0)))
     assert_false(map.waypoint(Vector3(0, 0, 0), LANE_TRAM))
+    # CARLA's first segment is road 1's sidewalk, whose center is not lifted.
+    ref seg = map._carla_segments[0]
+    _near(seg.start, 0.0, 4.5, 0.0)
+    _near(seg.end, 30.0, 4.5, 0.0)
+    _same(seg.first, 1, 0, -2, 0.0)
+
+
+def test_default_queries_answer_across_the_town() raises:
+    # CARLA's query has no work budget, so it must never raise on a valid
+    # mask. Check every lane point and a 41 by 41 grid over the town.
+    var map = load_opendrive_file(TOWN)
+    var low_x = Float32(1.0e30)
+    var high_x = Float32(-1.0e30)
+    var low_y = Float32(1.0e30)
+    var high_y = Float32(-1.0e30)
+    var points = 0
+    for w in map.generate_waypoints(2.0):
+        var at = map.compute_transform(w).location
+        low_x = min(low_x, at.x)
+        high_x = max(high_x, at.x)
+        low_y = min(low_y, at.y)
+        high_y = max(high_y, at.y)
+        assert_true(Bool(map.closest_waypoint_on_road(at)))
+        _ = map.waypoint(at)
+        points += 1
+    assert_true(points > 200)
+    for i in range(41):
+        for j in range(41):
+            var point = Vector3(
+                low_x - 10 + (high_x - low_x + 20) * Float32(i) / 40,
+                low_y - 10 + (high_y - low_y + 20) * Float32(j) / 40,
+                0,
+            )
+            assert_true(Bool(map.closest_waypoint_on_road(point)))
+            _ = map.waypoint(point)
+
+
+def test_certified_closest_waypoints() raises:
+    var map = load_opendrive_file(TOWN)
+    # Record and sampled-center splits refine the original heading partition.
+    assert_equal(map.segment_count(), 987)
+    _assert_town_segment_index(map)
+    # Certified queries. The ARC and shoulder minima use independent
+    # stored-expression and rounded-error bounds; see the correction controls.
+    _same(
+        map.certified_closest_waypoint_on_road(Vector3(20, 1, 0)).value(),
+        1,
+        0,
+        -1,
+        20.0,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(Vector3(70, 10, 0)).value(),
+        11,
+        0,
+        -1,
+        15.7079632679489652901,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(
+            Vector3(10, 4.5, 0), LANE_SIDEWALK
+        ).value(),
+        1,
+        0,
+        -2,
+        10.0,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(Vector3(-50, 1.75, 0)).value(),
+        1,
+        0,
+        -1,
+        0.0,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(Vector3(200, 1.75, 0)).value(),
+        2,
+        0,
+        -1,
+        39.999998999999995,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(Vector3(20, -1.75, 0)).value(),
+        1,
+        0,
+        1,
+        20.0,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(Vector3(-30, -1.75, 0)).value(),
+        1,
+        0,
+        1,
+        1.0e-6,
+    )
+    _same(
+        map.certified_closest_waypoint_on_road(
+            Vector3(10, 105, 0), LANE_SHOULDER
+        ).value(),
+        5,
+        0,
+        -2,
+        4.5865313100931020167,
+    )
+    assert_false(
+        map.certified_closest_waypoint_on_road(Vector3(0, 0, 0), LANE_TRAM)
+    )
+    with assert_raises():
+        _ = map.certified_closest_waypoint_on_road(
+            Vector3(0, 0, 0), LaneType(0)
+        )
+    _same(map.certified_waypoint(Vector3(20, 1, 0)).value(), 1, 0, -1, 20.0)
+    assert_false(map.certified_waypoint(Vector3(20, 4, 0)))
+    assert_false(map.certified_waypoint(Vector3(0, 0, 0), LANE_TRAM))
     # The first segment is road 1's sidewalk, whose center is not lifted.
     var seg = map.segment(0)
     _near(seg[0], 0.0, 4.5, 0.0)

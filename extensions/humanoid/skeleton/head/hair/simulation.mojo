@@ -317,9 +317,8 @@ struct HairSimulation(Movable):
             or len(self.initial_tangents) != len(self.now)
         ):
             raise Error("The hair's rest shading fields do not match")
-        for index in range(len(self.starts)):
-            if groom.starts[index] != self.starts[index]:
-                raise Error("The groom is not the one the hair moves")
+        if groom.starts != self.starts:
+            raise Error("The groom is not the one the hair moves")
         for index in range(len(self.now)):
             var p = self.now[index]
             if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):

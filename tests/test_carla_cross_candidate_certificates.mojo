@@ -277,25 +277,29 @@ def test_map_exact_lane_ties_keep_first_segment_and_strict_boundary() raises:
     roads.append(_road(1, -1.0))
     roads.append(_road(2, 1.0))
     var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
-    var nearest = map.closest_waypoint_on_road(Vector3(0.5, 0, 0)).value()
+    var nearest = map.certified_closest_waypoint_on_road(
+        Vector3(0.5, 0, 0)
+    ).value()
     assert_equal(nearest.road_id, RoadId(1))
-    assert_false(Bool(map.waypoint(Vector3(0.5, 0, 0))))
-    nearest = map.closest_waypoint_on_road(Vector3(0.5, -0.5, 0)).value()
+    assert_false(Bool(map.certified_waypoint(Vector3(0.5, 0, 0))))
+    nearest = map.certified_closest_waypoint_on_road(
+        Vector3(0.5, -0.5, 0)
+    ).value()
     assert_equal(nearest.road_id, RoadId(2))
-    assert_true(Bool(map.waypoint(Vector3(0.5, -0.5, 0))))
+    assert_true(Bool(map.certified_waypoint(Vector3(0.5, -0.5, 0))))
 
 
 def test_empty_map_still_rejects_nonfinite_query_coordinates() raises:
     var map = Map(
         List[Road](), List[Junction](), List[Signal](), List[Controller]()
     )
-    assert_false(Bool(map.closest_waypoint_on_road(Vector3(0, 0, 0))))
+    assert_false(Bool(map.certified_closest_waypoint_on_road(Vector3(0, 0, 0))))
     var nan = bitcast[DType.float32](UInt32(0x7FC00001))
     for bad in [inf[DType.float32](), -inf[DType.float32](), nan]:
         with assert_raises(contains="finite coordinates"):
-            _ = map.closest_waypoint_on_road(Vector3(bad, 0, 0))
+            _ = map.certified_closest_waypoint_on_road(Vector3(bad, 0, 0))
         with assert_raises(contains="finite coordinates"):
-            _ = map.waypoint(Vector3(0, bad, 0))
+            _ = map.certified_waypoint(Vector3(0, bad, 0))
 
 
 def main() raises:

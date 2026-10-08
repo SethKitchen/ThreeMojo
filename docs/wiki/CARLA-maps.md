@@ -47,6 +47,7 @@ Two waypoints are equal when the road, the section and the lane match and `floor
 |---|---|
 | Where is a waypoint? | `compute_transform`, `lane_width`, `lane_type` |
 | Which waypoint is near a point? | `closest_waypoint_on_road`, `waypoint` |
+| Which waypoint is certifiably nearest a point? | `certified_closest_waypoint_on_road`, `certified_waypoint` |
 | Which waypoint is at a road, lane and s? | `waypoint_xodr` |
 | What is ahead or behind? | `next`, `previous`, `successors`, `predecessors` |
 | Where does the lane end? | `next_until_lane_end`, `previous_until_lane_start` |
@@ -60,6 +61,10 @@ Two waypoints are equal when the road, the section and the lane match and `floor
 | What is in a junction? | `junction`, `junction_waypoints`, `compute_junction_conflicts`, `is_junction`, `junction_id` |
 
 Right and left are as the lane's traffic sees them. A lane that runs against s faces the other way, so its yaw gains 180 degrees.
+
+`closest_waypoint_on_road` and `waypoint` are CARLA's queries. They search CARLA's own segment partition, so they are fast and match CARLA. They also keep CARLA's approximation: the step to the point's foot treats distance along the segment chord as road s.
+
+`certified_closest_waypoint_on_road` and `certified_waypoint` minimize the distance to the lane center with a proof. Use them when you need the exact nearest center. They are slower. They raise when their work budget cannot separate two candidates. See [cross-candidate certificates](CARLA-cross-candidate-certificates) and [map budgets](CARLA-map-budgets).
 
 `LaneType` is a bit mask. A query takes a mask, such as `LANE_DRIVING | LANE_SHOULDER`, and keeps the lanes whose type shares a bit with it.
 

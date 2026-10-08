@@ -1,0 +1,179 @@
+{
+  "schema": 1,
+  "base_commit": "b96ba07ecd0ccba732f5e5d81a4e3bb2fe62b2bc",
+  "scope": "Source-bound reviewed optional actual-witness seeding and construction sign-query accounting. Canonical/reference arithmetic, ownership, tolerances and caps remain unchanged. This record is not a full native or hosted qualification claim.",
+  "component_patches": {
+    "solver": "05b48d2e240a60709d25a878e8b9280b9e2a3075beed801982b34069154e35f5",
+    "sign": "6db45a5c10a2a48a2836f5386707e2a31aeda5abd4b20763f1e8cbfdd77513aa"
+  },
+  "independent_reviews": {
+    "exact_range": "5c83982042b557e6009e3f47f264c7440482fc115300f1bf89c8830330239f12",
+    "redundant_exact_guard": "3bb80628605e987718b02d7ff0c20a7e8e05fac6d849955993f245262b8b54e1",
+    "sign_accounting": "b1906e1fc891576e51fc88c189d3981cb601f1e4fd54e2e619b81e205e3867f9"
+  },
+  "raw_successors": {
+    "extensions/carla/map.mojo": [
+      {
+        "before": "450eba96bcc25414014b33436cb431c4d3409ed3621581411bff17b6e94b01d0",
+        "after": "52dd32213d64275be94ba714bc9b6a57c28f5ba1303525ef1a1aac20b4743c07"
+      }
+    ]
+  },
+  "token_successors": {
+    "extensions/carla/map.mojo": [
+      {
+        "before": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e",
+        "after": "0524759d2516ef9b269c2286cd0bbc01ed8b462718ac33ac276db510739de0c0"
+      }
+    ]
+  },
+  "unchanged_public_methods": {
+    "closest_waypoint_on_road": "9c15ecff9d95ba7fba9316c5478bb3dbc04cc1643a961381d476bd366535cc66",
+    "waypoint": "e2e89f0638333a375518a5d9cc2e9df4c8d08e4fbb10a61ef6fc5ec9933a2732",
+    "certified_closest_waypoint_on_road": "6a8480db39c69877f3b21f9d7ef979de00d87772ae3f0188f9132cca77193ff6",
+    "certified_waypoint": "8ce13d8dc2dd4f7deedca5fb281895deb5fc9158a66f372d43460e135f4b3600",
+    "compute_transform": "54a35ea69fe7e85fc59572fa93ed3c8d12f94832414e3ffd166d3a9ae0a825f8",
+    "_create_segments": "6f870bdf1966c26cb0a40d9e055e8268037d1fc739624d5c598098e13250e8eb",
+    "_nearest_on_segment_certificate": "4a4237bd6d863a1537509114da278889b12a0f56482c767c216dc04057ec0ebe",
+    "_resume_on_segment_certificate": "f3a540394d6deb39041f756631af348d34fb284b3e763ee4ba2e4b9a07436857"
+  },
+  "new_helper_source": {
+    "_seed_exact_interval": "def _seed_exact_interval(value: _Interval) -> Bool:\n    # Whole membership in one exact-range lobe matters: admissible zero\n    # endpoints alone do not exclude the tight/fallback gap around zero.\n    if not value.is_finite() or value.high < value.low:\n        return False\n    if value.is_point(0.0):\n        return True\n    return (\n        (value.low > 0.0 or value.high < 0.0)\n        and _endpoint_in_exact_range(value.low)\n        and _endpoint_in_exact_range(value.high)\n    )\n\n\n",
+    "_seed_reference_domain": "def _seed_reference_domain(\n    geometry: RoadGeometry, origin: Float64, low: Float64, high: Float64\n) raises -> Bool:\n    # The caller prepays this bounded eligibility graph. Stable tight\n    # arithmetic, hereditary Sterbenz and one unclamped d recipe imply\n    # each descendant reference-count enclosure is nested in its root.\n    _require_sum2_environment()\n    if not _seed_exact_interval(\n        _Interval(low, high)\n    ) or not _endpoint_in_exact_range(origin):\n        return False\n    var d = _stored_difference(_Jet.variable(low, high), _Jet.constant(origin))\n    if not _seed_exact_interval(d.value) or not (\n        0.0 <= d.error and d.error < 1.0\n    ):\n        return False\n    if not isfinite(geometry.length) or geometry.length <= 0.0:\n        return False\n    var rounded = d.rounded_value()\n    if (\n        not rounded.is_finite()\n        or rounded.low <= 0.0\n        or rounded.high >= geometry.length\n    ):\n        return False\n    var k0 = geometry.curvature_start\n    var rate = (geometry.curvature_end - k0) / geometry.length\n    if not _endpoint_in_exact_range(k0) or not _endpoint_in_exact_range(rate):\n        return False\n    var product = _Jet.constant(rate) * d\n    return _seed_exact_interval(product.value)\n\n\n",
+    "_winner_seed_room": "def _winner_seed_room(\n    work: _MapQueryWork,\n    winner: _LaneCertificate,\n    target_nodes: Int,\n    target_terms_used: Int,\n    target_cells: Int,\n    winner_cost: Int,\n    target_cost: Int,\n    winner_reference: Int,\n    target_reference: Int,\n    proof_nodes: Int,\n    followup_steps: Int,\n) raises -> Bool:\n    # An immediate continuation prefix, not a promise that the whole search\n    # will finish. Each retained cell may need one recheck node. Twelve further\n    # nodes cover either a regular task with its optional grouped refresh\n    # or up to eleven tiny-leaf nodes, plus a subsequent recheck.\n    work.validate()\n    var winner_cap = work.node_cap(winner.nodes, winner_cost)\n    var target_cap = work.node_cap(target_nodes, target_cost)\n    var winner_terms = work.term_cap(winner.terms) - winner.terms\n    var target_terms = work.term_cap(target_terms_used) - target_terms_used\n    if (\n        proof_nodes < 0\n        or proof_nodes > 5\n        or followup_steps < 0\n        or winner_reference <= 0\n        or target_reference <= 0\n        or len(winner.cells) > 16372\n        or target_cells < 0\n        or target_cells > 16372\n    ):\n        return False\n    var winner_followup = len(winner.cells) + 12\n    var target_followup = target_cells + 12\n    var seed_nodes = proof_nodes + 85\n    if (\n        winner_followup > winner_cap - winner.nodes\n        or seed_nodes > winner_cap - winner.nodes - winner_followup\n        or target_followup > target_cap - target_nodes\n    ):\n        return False\n    var nodes_left = work.policy.max_nodes - work.nodes\n    if seed_nodes + winner_followup + target_followup > nodes_left:\n        return False\n    var steps_left = (\n        min(work.max_total_steps, work.policy.max_steps) - work.steps\n    )\n    if followup_steps > steps_left:\n        return False\n    steps_left -= followup_steps\n    if seed_nodes + winner_followup > steps_left // winner_cost:\n        return False\n    steps_left -= (seed_nodes + winner_followup) * winner_cost\n    if target_followup > steps_left // target_cost:\n        return False\n    # One complete regular task: 3 edges, 42 local-seed centers, the\n    # initial domain, 2 center charges, a refreshed domain, and grouped\n    # work C <= F. A tiny task uses at most 33 centers. Thus 50 F covers\n    # either route. The original winner-root F also covers every optional\n    # point/band; these reserved terms are not debited unless executed.\n    var winner_units = proof_nodes + 255 + 50\n    if winner_reference > winner_terms // winner_units:\n        return False\n    if target_reference > target_terms // 50:\n        return False\n    var terms_left = work.policy.max_terms - work.terms\n    if winner_reference > terms_left // winner_units:\n        return False\n    terms_left -= winner_units * winner_reference\n    return target_reference <= terms_left // 50\n\n\n",
+    "_try_winner_seed": "def _try_winner_seed(\n    road: Road,\n    section: Int,\n    lane: Int,\n    low: Float64,\n    high: Float64,\n    target_road: Road,\n    target_section: Int,\n    target_low: Float64,\n    target_high: Float64,\n    location: Vector3,\n    mut certificate: _LaneCertificate,\n    target_nodes: Int,\n    target_terms_used: Int,\n    target_cells: Int,\n    followup_steps: Int,\n    mut work: _MapQueryWork,\n) raises -> Bool:\n    # Optional actual-witness proposals. This reconstructed implementation\n    # does not change any cell, lower bound, owner, tolerance or scalar graph.\n    # Fresh FP validation precedes every arithmetic operation and debit.\n    _require_sum2_environment()\n    work.validate()\n    if min(work.max_total_steps, work.policy.max_steps) - work.steps < 60:\n        return False\n    # Fixed admission kernels: bounds/word/scale checks, four geometry\n    # selections, two reference-count queries, two node prices, headroom,\n    # exact-update bookkeeping and the bounded support/interpolation setup.\n    # Fourteen additional bounded kernels per owner establish stable\n    # endpoint arithmetic and one unclamped distance recipe: fresh FP,\n    # station/origin membership, subtraction, value/error/length guards,\n    # rounded range/interior, rate and coefficient checks, product/membership.\n    work._step(60)\n    if (\n        certificate.exact_witness\n        or not isfinite(low)\n        or not isfinite(high)\n        or low <= 0.0\n        or high <= low\n        or not isfinite(certificate.s)\n        or certificate.s < low\n        or certificate.s > high\n        or not isfinite(certificate.scale)\n        or certificate.scale <= 0.0\n        or not isfinite(target_low)\n        or not isfinite(target_high)\n        or target_high < target_low\n    ):\n        return False\n    var owner = info_index(road.info.geometries, low)\n    var other = info_index(target_road.info.geometries, target_low)\n    if (\n        owner < 0\n        or info_index(road.info.geometries, high) != owner\n        or road.info.geometries[owner].geometry.kind != SPIRAL\n        or other < 0\n        or info_index(target_road.info.geometries, target_high) != other\n        or target_road.info.geometries[other].geometry.kind != SPIRAL\n    ):\n        return False\n    if not _seed_reference_domain(\n        road.info.geometries[owner].geometry,\n        road.info.geometries[owner].s,\n        low,\n        high,\n    ) or not _seed_reference_domain(\n        target_road.info.geometries[other].geometry,\n        target_road.info.geometries[other].s,\n        target_low,\n        target_high,\n    ):\n        return False\n    var reference = _reference_work(road, low, high)\n    var target_reference = _reference_work(target_road, target_low, target_high)\n    var node_cost = _query_node_step_cost(\n        len(road.sections[section].lanes), True, True\n    )\n    var target_cost = _query_node_step_cost(\n        len(target_road.sections[target_section].lanes), True, True\n    )\n    if not _winner_seed_room(\n        work,\n        certificate,\n        target_nodes,\n        target_terms_used,\n        target_cells,\n        node_cost,\n        target_cost,\n        reference,\n        target_reference,\n        2,\n        followup_steps,\n    ):\n        return False\n    var query: Array[Float64, 3] = [\n        Float64(location.x),\n        Float64(location.y),\n        Float64(location.z),\n    ]\n    _finite_point(query)\n    _finite_point(certificate.point)\n    var original_s = certificate.s\n    var band_low = low\n    var band_high = high\n    work.charge(1, reference, node_cost)\n    certificate.nodes += 1\n    certificate.terms += reference\n    var domain = _scaled_point_distance_jet(\n        _lane_jet(road, section, lane, band_low, band_high),\n        location,\n        certificate.scale,\n    )\n    work.charge(1, reference, node_cost)\n    certificate.nodes += 1\n    certificate.terms += reference\n    var center_reference = _reference_work(road, original_s, original_s)\n    if center_reference <= 0 or center_reference > reference:\n        return False\n    var center = _expansion_distance_jet(\n        road, section, lane, original_s, location, certificate.scale\n    )\n    if not center.first.is_finite():\n        return False\n    if not domain.first.is_finite() or not domain.second.is_finite():\n        if min(work.max_total_steps, work.policy.max_steps) - work.steps < 12:\n            return False\n        # Separate admission preserves the two-setup smooth-root path.\n        # Charge every retry before its midpoint/containment/progress work.\n        work._step(12)\n        if not _winner_seed_room(\n            work,\n            certificate,\n            target_nodes,\n            target_terms_used,\n            target_cells,\n            node_cost,\n            target_cost,\n            reference,\n            target_reference,\n            3,\n            followup_steps,\n        ):\n            return False\n        for _ in range(3):\n            if domain.first.is_finite() and domain.second.is_finite():\n                break\n            work.charge(1, reference, node_cost)\n            certificate.nodes += 1\n            certificate.terms += reference\n            var narrowed_low = band_low + 0.5 * (original_s - band_low)\n            var narrowed_high = original_s + 0.5 * (band_high - original_s)\n            if (\n                not isfinite(narrowed_low)\n                or not isfinite(narrowed_high)\n                or narrowed_low > original_s\n                or narrowed_high < original_s\n                or narrowed_low >= narrowed_high\n                or (narrowed_low == band_low and narrowed_high == band_high)\n            ):\n                return False\n            band_low = narrowed_low\n            band_high = narrowed_high\n            var retry_reference = _reference_work(road, band_low, band_high)\n            if retry_reference <= 0 or retry_reference > reference:\n                return False\n            domain = _scaled_point_distance_jet(\n                _lane_jet(road, section, lane, band_low, band_high),\n                location,\n                certificate.scale,\n            )\n    if not domain.first.is_finite() or not domain.second.is_finite():\n        return False\n    var support = _minimizer_support(\n        domain, center, original_s, original_s, band_low, band_high\n    )\n    if (\n        not support.is_finite()\n        or support.low <= 0.0\n        or support.high < support.low\n    ):\n        return False\n    # Eight complete dyadic levels give 255 proposals (possibly repeated\n    # endpoints when the stored-word span is tiny). Integer quotient and\n    # remainder interpolation cannot overflow for positive finite words.\n    var first = bitcast[DType.uint64](support.low)\n    var span = bitcast[DType.uint64](support.high) - first\n    var count = 0\n    var improved = False\n    for level in range(8):\n        var denominator = UInt64(1) << UInt64(level + 1)\n        var quotient = span // denominator\n        var remainder = span % denominator\n        for at in range(1 << level):\n            if count % 3 == 0:\n                work.charge(1, 0, node_cost)\n                certificate.nodes += 1\n            count += 1\n            var numerator = UInt64(2 * at + 1)\n            var word = (\n                first\n                + quotient * numerator\n                + (remainder * numerator) // denominator\n            )\n            var s = bitcast[DType.float64](word)\n            # Debit actual quadrature before entering the unchanged compiled\n            # scalar wrapper. Failed evaluations retain both ledgers.\n            var point_work = _reference_work(road, s, s)\n            if point_work <= 0 or point_work > reference:\n                return improved\n            work.charge(0, point_work, node_cost)\n            certificate.terms += point_work\n            var checked_terms = 0\n            var point = _checked_center(\n                road, section, lane, s, checked_terms, point_work\n            )\n            if _wide_point_order(point, certificate.point, query) < 0:\n                var score = _refinement_square[3](\n                    point, query, certificate.scale\n                )\n                if not score.is_finite():\n                    continue\n                certificate.s = s\n                certificate.point = point^\n                certificate.upper = score.high\n                improved = True\n    return improved\n\n\n"
+  },
+  "fresh_guard_helpers": [
+    "_seed_reference_domain",
+    "_try_winner_seed"
+  ],
+  "changed_existing_methods": {
+    "_closest_lane_certificate_with_work": {
+      "before": "5ac86e14431061cf1e21d6975f9fdda8851a4cb685d53dbaeed781d6b8082f63",
+      "after": "8e2b0a3706b82cfb336d8617ba588da68991a7a4d51786424a79ffb537e61cd5"
+    },
+    "_closest_lane_with_build_work": {
+      "before": "17584fa8504326b94ce97adb4da6c3591a3e6fa2f3f69f030ec9f30681f4d73f",
+      "after": "b5fe417e4526d028417060fb1efbfe9a993577fd352a28d5fc64f63befa2ce5a"
+    }
+  },
+  "new_sign_methods": {
+    "_successors_with_build_work": "9232c66868eae823a082f553da82b98cbdf131c5c3ad806a74a895c0bc3df9ed",
+    "_next_with_build_work": "8b9b37052023c482e31a3ea748d68eb59deae18d63fb6658e89ea3337996a89b"
+  },
+  "canonical_source_unchanged": {
+    "extensions/carla/road_info.mojo": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb",
+    "extensions/carla/assets.mojo": "0bb273644a6d6cffaad986236e8aaafe9355549b37a10289cd9b14555f4e1acc",
+    "extensions/carla/map_validation.mojo": "c8457abae67e989ae6de1131e3d30c8f101a0ae6fee9ec4f0afabc0f67be7bef",
+    "extensions/carla/render_textures.mojo": "d79c12e55dff9ad3ca829f7219365a8bbe1ac5ca6a6be799ce10cc56e0feb42b",
+    "extensions/carla/traffic_sign.mojo": "fc5a409d77d0ffdc4b8c8484a17dd93ec37e0b3cf9f1c44dc6c26e97a3514595",
+    "extensions/carla/traffic_manager_map.mojo": "6dd214eef706346be535c24d8506f9373456676bba9192fc213c7854e541e4be",
+    "extensions/carla/curve_bounds.mojo": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+    "extensions/carla/navigation_walkers.mojo": "a5ee02ffa46bd982d275b4df6b3fe7c115725d4f1262cb52833355afe69bb347",
+    "extensions/carla/traffic_light.mojo": "f776d47f613cbaa2d75b2c66f378572951b060e229ffe47859e514b82842e025",
+    "extensions/carla/rtree.mojo": "be63ea929c25e0a55600d19568e5f8a117e2f712850ea3da0d977c39b002d460",
+    "extensions/carla/radar.mojo": "ed8a31d4243149a2ac707ea8c510994712ba4efc1ee1602215da476b81369cf0",
+    "extensions/carla/actor.mojo": "e04cb0eb8217374702c572364292187c5842bf67001dc60cb2306deff6cccc16",
+    "extensions/carla/obstacle.mojo": "23a2566bde3d96ab42bba05a9e557dfc199c00cabd23a4aefa037a844b0ba7c9",
+    "extensions/carla/sensor_cache.mojo": "7c2bf7851edf1009e3c4fc3d21263ef3d5b0d469905c73a6992ca28aa2ff5777",
+    "extensions/carla/opendrive.mojo": "4c7ac574196b83d025b84cf6c88261d5e3f3b9ce69923262fcf3cb935e9bf1e5",
+    "extensions/carla/bounding_box.mojo": "c2c9a141541696e39ecc815923298acdb74db9a31aa8c78aed6769eaee5a802e",
+    "extensions/carla/traffic_manager_collision.mojo": "0af2bfde92c55900bb862886fd9d2ca3b6f6920f1acc412379dbdf1380da2952",
+    "extensions/carla/world_snapshot.mojo": "7cce47fbf6aa86c38cfb65f215ca827e9c226e7530f63d5fbac49a0dcf9b745b",
+    "extensions/carla/imu.mojo": "f15de82bc8d7089323ce5c81e6c15ed4bef956b27c7fe5245fe848d3c9c4c3dc",
+    "extensions/carla/mesh_factory.mojo": "38326e9369f608929b97ee9cffd32f7febc659e31afb024cf6d078178c0439ef",
+    "extensions/carla/props.mojo": "68438b88c940716d194efb56bf305fcc2efd6f222cee6627fb3eb831793dd149",
+    "extensions/carla/curve_rounded_arc.mojo": "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+    "extensions/carla/geometry.mojo": "eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c",
+    "extensions/carla/curve_trig.mojo": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+    "extensions/carla/traffic_manager_constants.mojo": "f7c1a3e535bd855f44529da2e9f0158582176450bb28c077b2578155f6263a68",
+    "extensions/carla/walker.mojo": "7b1cf1afcaead5add21653d92d10a1513ebe969742013b49ee4fa3062ebb1868",
+    "extensions/carla/render_weather.mojo": "5e2c6ed0db903e2c1dd484d73a100cfb816562655722c69e8461d1079d178460",
+    "extensions/carla/road.mojo": "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
+    "extensions/carla/recorder_physics.mojo": "51257ac15ee576dec7104a3d0e6b354108d733bff37f2a38c520747ce01edc0d",
+    "extensions/carla/navigation_mesh.mojo": "7062918ed17cae12cef32bf7801a0f7d56a99ca2993fea32214247ee2c86a841",
+    "extensions/carla/image_convert.mojo": "7973bcc799ed5ee05a73b7a278724b9b036fe7e48e049dcf6f0d1ad7d6a723e2",
+    "extensions/carla/traffic_manager_state.mojo": "e34c471b8077d5f0a0a9359a258ced7ad30ca9d17bf9d5ba8aa78dd9253b81aa",
+    "extensions/carla/recorder_packets.mojo": "9249aa5bc2793c9feff1f24d7e7ac95c86cee1b9bd0eb1de5638c01a6896ae8e",
+    "extensions/carla/spiral_grouped_roundoff_proof.mojo": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+    "extensions/carla/agents_local_planner.mojo": "9df0c612317fedb77367ecd9d19e90ef6c070503a14000e7590c3f27d4a190e3",
+    "extensions/carla/transform.mojo": "c74c11819f95870d45cf37e7aa013fd72bc9673a4088c3e657efaa6b22999e56",
+    "extensions/carla/traffic_manager_random.mojo": "d9a0c12572f3d72ab6ac4141df5bbfe5ddaa161513c2fd0acca245774505872e",
+    "extensions/carla/lane_refinement.mojo": "33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315",
+    "extensions/carla/spiral_domain_proof.mojo": "da466aa7bec7e6c87fb1e29472e1f28169e7a369e7a1afbdc841f5994276b8e5",
+    "extensions/carla/map_search.mojo": "53c5a1369203b2f57c915f4cacfe2935360bd6f4a676934f1a5dc67df69956a3",
+    "extensions/carla/lane_invasion.mojo": "3049273d70f2cf83335533d1a92783bb128fd69fe32530a9d04386b8efd3acec",
+    "extensions/carla/traffic_manager_localization.mojo": "0ee0e9cff88a49f0a52939adf87a82dd064c8655f77093dc4bfd36af9f644734",
+    "extensions/carla/spiral_roundoff_proof.mojo": "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7",
+    "extensions/carla/polynomial.mojo": "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
+    "extensions/carla/sensor_rays.mojo": "0ee5d9de0551215fb69e43f36db9fd6a43c9a5cb0220ab31f3bed0e49e4447b6",
+    "extensions/carla/weather.mojo": "c498f21bceaf217709f41c1fbf181b507ecd29a6a0d2b019530f1766f83b903c",
+    "extensions/carla/agents_controller.mojo": "d12b1518bd88d6deef07428c157fc714aa4c2c5736656b2d228063212faed9ad",
+    "extensions/carla/sensor_data.mojo": "d881a4a66cd7fa61cde9e441c9c52cbcc33be6f1f32900ea915d440bcecac620",
+    "extensions/carla/curve_distance.mojo": "46176387129dd37a5887f3aeec7c96bbb386e4980063cb96f09619832cb09a79",
+    "extensions/carla/map_builder.mojo": "4092bfc42e1ab091b272da89d1079675ce8fabddd77de573a91df6911aeede61",
+    "extensions/carla/lane_box_cover.mojo": "1ed9978fb4ef7eef3a45c7503dbf5cced03ab1917f6fbf721c785e5a63cce251",
+    "extensions/carla/agents_misc.mojo": "cc0f1a129133b7976c4820e1bb20404fc6af9f88a22717385a6f4c88ac0786fe",
+    "extensions/carla/search_queue.mojo": "7f1ba5d1b9fab6a079f1fd74fcbfce840ed01f91eb8d147b77b5e86fd8c4ed70",
+    "extensions/carla/spiral_moment_proof.mojo": "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec",
+    "extensions/carla/camera_render.mojo": "35bc60addf95d4e8bff48537f12fe29facbaf9288f845301bbce6c76870f3706",
+    "extensions/carla/__init__.mojo": "13bda95e7b80d111a65052af5508e95af88c7a17871fcf33f3eaf5dc75fd1a2d",
+    "extensions/carla/traffic_manager_pid.mojo": "dd68ddfd4e34c5caebc3f9d106554e316e391ff08480609380df9a1714dd3cc6",
+    "extensions/carla/sensor_manager.mojo": "caf4123e0abcbe6cb8ab8dc413b83fb4dced11b3459186b9b21f9e74e86d5d15",
+    "extensions/carla/lane_distance.mojo": "9d0aacab9fccb0a34f8d5c3a5edca1a1fd7ebcded961fc579ec6a44f3880497d",
+    "extensions/carla/curve_sum2.mojo": "2f732d49a891c9b603ccf05fb74779ea79422d74b4c33723ffe40f99e6c54a67",
+    "extensions/carla/navigation.mojo": "79c8cb6b37b9cf811e3ffd1817fa210b6a6f9d7ff2c1e133ba67fc7a35467638",
+    "extensions/carla/pointcloud.mojo": "3318f5b294c672cae636f4e5366d1ddfdf824b916660939a1d1c1312727a7e86",
+    "extensions/carla/render_actors.mojo": "ae1f86645cb6c7dac99a741619595be18a61c558c56262c27a50fa9b9bacef3b",
+    "extensions/carla/recorder.mojo": "8554db42ffa17cc50562ff257040796adbef0d57b947a7ba530a68d6902bf173",
+    "extensions/carla/lane_geometry.mojo": "8e0917249d8c41233bcb801fac6455d614ed46a7fd8e7505c14259c2a5c81d91",
+    "extensions/carla/sensor_attributes.mojo": "d2ca5f40251774a874c406ad27978926695552760b565f0f95626972e6f672ae",
+    "extensions/carla/lidar.mojo": "919e2efbb74445d59c45dd7ae32b4ba21f6558cf9115b2d0d15c6ce24d5c8783",
+    "extensions/carla/curve_frozen_arc.mojo": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+    "extensions/carla/v2x.mojo": "b96b383c8c46120978ccddb0bc7f068a2799d6c95b0cf4619a3caea40dd0cc36",
+    "extensions/carla/curve_minimizer_support.mojo": "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260",
+    "extensions/carla/mesh.mojo": "572a679f32614e3e5c01a0375d80e8b66be1d3eba123853bb5436804aaf6d180",
+    "extensions/carla/traffic_manager.mojo": "75abce8cce536efec92c0473971dbb395d06aa9e69edb868cfcee62d53379478",
+    "extensions/carla/agents.mojo": "066d6b805c042341cd023203bce6d2c5f6851121af870585604f860cd858b8b6",
+    "extensions/carla/replayer_helper.mojo": "259c31478efee2202f58f73b8813336f573e0022e62a2b1241a255841ba2904f",
+    "extensions/carla/spiral_moment_table_data.mojo": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+    "extensions/carla/replayer.mojo": "c97b08f6f6222e97f286e82b6f0d61633d79d3f607eee077aeea21fecbcc7900",
+    "extensions/carla/traffic_manager_shared.mojo": "f4595070de5a3c90df835668246cae1bab2ce8aaa5279538bcd1f8a3d860493a",
+    "extensions/carla/curve_rounded_line.mojo": "af00f76f66323ce85b0f794cbe7162d63e6db864c49a052827f565c2332383ec",
+    "extensions/carla/blueprint.mojo": "2a59a1c6c95d66cb00d064ab15a37964c2153835b49c878ac3e824ce91d50782",
+    "extensions/carla/lane_value_bounds.mojo": "08978a7aa665aca4b82d41e1ff8b99451c647c0f8e7d6ee010fc6a6143f7959c",
+    "extensions/carla/spiral_grouped_lane.mojo": "5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b",
+    "extensions/carla/recorder_format.mojo": "657b7fd29db6f3c7b928e7ed7856183887dc0daca30395fd1528611e9e16d9ad",
+    "extensions/carla/model_cache.mojo": "a5832785f758cd6fe99f32cfa04b90399ebfcd4c9ffdf1e286f79c613cb1cd91",
+    "extensions/carla/math.mojo": "e02aa0a1d41c17403120ebe1bd4672c2d5a41bb81aac66f1abb7e9a1cb42d147",
+    "extensions/carla/walker_gait.mojo": "025a3f6e0dfa72c452fd98605243c28626e65056d8fcdd3dfbb0e4478e0a422e",
+    "extensions/carla/curve_interval.mojo": "ff6bf0d35b357047c609ea7cb6dbcbe535446cf4e315d9eac5f6c341ddbf1040",
+    "extensions/carla/render_post.mojo": "8fe64d4c0ba39b549e714e640b2283d70d60a1bdf1816497bc295319b2f009c7",
+    "extensions/carla/sensor_noise.mojo": "51e7c7e5c0933e857af83a20daf5145b46781f8535d1aa8e10c301d5500981e5",
+    "extensions/carla/agents_route.mojo": "416a86c052dc86cf709bfd33bec5b15ef360c07f6f5cb53aa42a3e9968d33199",
+    "extensions/carla/town.mojo": "3cb00b215cf8be1e9b70f6e67afa1aa395d58ce9b9c52030743136d6d5465c1b",
+    "extensions/carla/render_light.mojo": "813f7294c4e0a22bea119b06764726131d9bbc52b881caf78cca9f73a9e535e7",
+    "extensions/carla/world.mojo": "db35b64842ddac2d5fdea6f4c502e72b19ad892a191ee4614bb33390c4c464eb",
+    "extensions/carla/geo.mojo": "2b09610f1933d26281a7e018a1474bcb4a59daa63e01ef24528f342cc834a8a5",
+    "extensions/carla/traffic_manager_planning.mojo": "b4d22df0f4cc6d6ac41eee7b9fd34812402fca5cdd39e84898d070b17fbed3ab",
+    "extensions/carla/curve_sample_dispatch.mojo": "2a74be6de0d0a35f2b17f60280747e42f91c083ebb922ded0ae0b13febe55631",
+    "extensions/carla/spiral_moment_table.mojo": "1c5a3a21216eaecb42b3947ccb5ec0479d8a120c714d79ebe25f11da5f1096c8",
+    "extensions/carla/curve_objective_model.mojo": "68d3da0dff6bda82461cd4bd521522ef2164d84b3722e8479185b306b7fec4e6",
+    "extensions/carla/traffic_manager_parameters.mojo": "4750289496b0e85de99b487a6e57d69ce0233893f86db276f75d5d6383d93536",
+    "extensions/carla/speed_limits.mojo": "5cb2e3393283dcfecd9fba2e795db7ddcfb2e32e123889cf1ea237feafc44fee",
+    "extensions/carla/sensor.mojo": "e20a4f8341d36615682dd1820a7a1587ebf32aeabac402b36d0646f277239f75",
+    "extensions/carla/junction_bounds.mojo": "98fc27702e365e19c3b226d1a7b525bce5aa82b5b11fb6caff79ce39416024e2",
+    "extensions/carla/gnss.mojo": "5f5a97dbb89416efb9be3e0851b304b2aa46b3002dc7ee51dd3f7df04848085b",
+    "extensions/carla/cameras.mojo": "59999d17b9e35d25e56d24a1e88f25738378426c0baf9e69332dfcfdbe26d6b5",
+    "extensions/carla/recorder_query.mojo": "59405964642aac562312566e229d456d587b64f0d567943e075abb43bd3d2a47",
+    "extensions/carla/capture.mojo": "5920e405b39596eac8a0244535bc4704f6b559d14f3f8e4dee017bb280f66759",
+    "extensions/carla/vehicle.mojo": "391de401f2751789ba538a38a372b9bda6ca87ea0eb57c90e7e88424d441f512",
+    "extensions/carla/semantic_lidar.mojo": "057c4be981b28dcd16a5a536706eea66bc6ecb547ac75d8aa8dae7e33aae6f55",
+    "extensions/carla/simplification.mojo": "ff0dde753b3aa2d23cdce3df1216abfd538aace05a644739fda09d874e048bd9",
+    "extensions/carla/navigation_search.mojo": "d607f97e65be2a915bb9da9417a3bd9aefd2a3c1387bdf7e3869fdb609314150",
+    "extensions/carla/collision.mojo": "95f84f007850ee0c78471cb5b2bd3f4a7711da374bb04e5223785635d627ad2a",
+    "extensions/carla/agents_behavior.mojo": "ec8c08f254c62b0ad86ba679bb73cd9cf1c1e4b6a02aa459e91ed39195f1108f",
+    "extensions/carla/render_sky.mojo": "4b99faa687940af925a5cedd09d33d7b44dd7e317f892a1be269ccd8deaedaa7"
+  },
+  "prior_default_restoration_sha256": "b7b619185f2b0139863d6a1a16a29cad3e91db70c1d6d036ec8f115ab3b329fa"
+}

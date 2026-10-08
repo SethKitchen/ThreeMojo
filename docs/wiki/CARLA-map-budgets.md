@@ -27,7 +27,9 @@ There is no persistent validation cache that survives public record mutation. As
 
 ## Nearest-lane queries
 
-Pass `budget=` to `closest_waypoint_on_road` or `waypoint`.
+Pass `budget=` to `certified_closest_waypoint_on_road` or `certified_waypoint`.
+
+The default `closest_waypoint_on_road` and `waypoint` run CARLA's query on CARLA's own segment partition. They take no budget. They perform one R-tree search followed by lane stepping. Input validation, lane stepping and canonical pose evaluation can still raise errors.
 
 | Limit | Default | Meaning |
 | --- | ---: | --- |
@@ -42,9 +44,23 @@ Pass `budget=` to `closest_waypoint_on_road` or `waypoint`.
 
 The original 16384-node and 2000000-term **per-candidate** caps and all accuracy/depth limits still apply; raising a global policy never relaxes them.
 
-The same operation ledger covers initial refinement, every resume, the selected public pose, and strict lane membership. Pose validation charges both scalar traversals before evaluating the selected Road transform. It refuses an invalid selected pose rather than substituting another lane. A builder's sign queries additionally share one combined construction-step balance across candidate admission, heap pushes/pops and refinement nodes.
+The same operation ledger covers initial refinement, every resume, the selected public pose, and strict lane membership. Pose validation charges both scalar traversals before evaluating the selected Road transform. It refuses an invalid selected pose rather than substituting another lane.
+
+A builder's sign checks use CARLA's segment query, as `CheckSignalsOnRoads` does. Each check admits its actual R-tree pushes and pops, selected road/section/lane lookups, and strict-successor section scan before performing them. The same-section step preserves the default query's arithmetic.
+
+A short rounded remainder uses an explicit continuation stack for the successor graph. It preserves successor order, immediate return-cycle exclusion and longer-list-first result concatenation. Every frame, key, metadata scan, comparison and result-copy allowance is admitted before that work; longer or zero-progress cycles exhaust the shared construction budget. These calls use the remaining construction-step balance, without imposing certified-query candidate or refinement limits. Spent heap work is retained and the construction ledger remains exhausted after a refused admission.
 
 Exhaustion raises `Error`. `None` still means no eligible lane, or a fully established strict outside result. No partial winner is returned. With sufficient budgets, the geometry algorithm and exact segment-index tie ordering are preserved.
+
+## Optional SPIRAL witness proposals
+
+An optional seed pass can run after an earlier competitor resumption, possibly under another provisional winner. Both the current winner and unresolved competitor need SPIRAL owners. Each complete owner interval must retain one checked exact-range distance recipe.
+
+The attempt prepays 60 fixed eligibility units. Its admission preserves room for saved-cell rechecks, 12 further nodes and 50 root-reference units on each side. These reserves cover the immediate continuation prefix. Later work can still exhaust custom budgets.
+
+A root attempt and at most three narrowed-domain attempts share the original owner reference-work bound. Every optional node and scalar evaluation is charged before execution. Eight dyadic levels propose 255 stored station words through the unchanged scalar evaluator.
+
+Only a strict exact stored-point improvement replaces the incumbent. The caller then rescans the retained candidates and revalidates ordinary winner accuracy before dominance and pose selection. Original owner labels, cells, lower bounds, index ties, tolerances and work/depth caps remain in force.
 
 ## Junction scalar-graph composition
 

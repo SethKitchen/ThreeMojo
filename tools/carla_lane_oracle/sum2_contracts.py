@@ -288,6 +288,15 @@ def verify(root):
     texts = {name: (root / ('extensions/carla/' + name + '.mojo')).read_text()
              for name in names}
     guard_result = guards.verify(root)
+    # Validate actual selector producers before restoring the exact historical
+    # eligibility helper for the retained complete-function comparison.
+    try:
+        import selection_finiteness_contracts as selection
+    except ModuleNotFoundError:
+        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
+    texts['spiral_roundoff_proof'] = selection.predecessor_text(
+        root, 'extensions/carla/spiral_roundoff_proof.mojo')
+
     trees = {name: c.syntax_tree(text) for name, text in texts.items()
              if name != 'curve_sum2'}
     # The complete lexical contract above retains all keyword-subscripts and

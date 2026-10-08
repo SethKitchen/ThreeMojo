@@ -19,26 +19,24 @@ import coverage_shard
 class CoverageSchedulingTests(unittest.TestCase):
     def test_profile_is_positive_finite_and_complete_for_recorded_suites(self):
         costs = coverage_shard.load_costs(coverage_shard.PROFILE)
-        self.assertEqual(len(costs), 702)
-        profile = json.loads(coverage_shard.PROFILE.read_text())
-        self.assertEqual(profile['completed_sample_count'], 701)
-        censored = profile['censored_samples']
-        self.assertEqual(set(censored), {'tests/test_carla_recorder_world.mojo'})
-        sample = censored['tests/test_carla_recorder_world.mojo']
-        self.assertEqual(sample['exit_code'], 124)
-        self.assertEqual(sample['group_budget_seconds'], 9000)
-        self.assertIn('lower-bound', sample['meaning'])
-        self.assertEqual(costs['tests/test_carla_recorder_world.mojo'], sample['observed_seconds'])
+        self.assertEqual(len(costs), 718)
+        self.assertEqual(costs['tests/test_hair_styles.mojo'], 1471.6)
+        self.assertEqual(costs['tests/test_carla_map.mojo'], 5354.3)
 
-    def test_current_recorded_suites_are_assigned_once_with_long_capture_first(self):
-        costs = coverage_shard.load_costs(coverage_shard.PROFILE)
-        groups = coverage_shard.schedule(list(costs), 8, costs, lambda suite: 1)
-        flattened = [suite for group in groups for suite in group]
-        self.assertEqual(len(flattened), 702)
-        self.assertEqual(set(flattened), set(costs))
-        self.assertEqual(len(flattened), len(set(flattened)))
-        self.assertEqual(groups, coverage_shard.schedule(list(reversed(costs)), 8, costs, lambda suite: 1))
-        self.assertEqual(groups[0][0], 'tests/test_carla_recorder_world.mojo')
+    def test_timeout_is_labeled_as_a_lower_bound_not_a_completed_cost(self):
+        profile = json.loads(coverage_shard.PROFILE.read_text())
+        self.assertEqual(profile['source_run_attempt'], 1)
+        self.assertEqual(profile['workers_per_shard'], 4)
+        self.assertEqual(profile['completed_measurements'], 717)
+        estimates = profile['scheduling_estimates']
+        self.assertEqual(set(estimates), {'tests/test_carla_recorder_world.mojo'})
+        estimate = estimates['tests/test_carla_recorder_world.mojo']
+        self.assertEqual(estimate['kind'], 'right_censored_timeout_lower_bound')
+        self.assertEqual(estimate['exit_code'], 124)
+        self.assertEqual(estimate['seconds'], 8281.5)
+        self.assertEqual(estimate['last_completed_capture']['seconds'], 6622.2)
+        self.assertEqual(profile['seconds']['tests/test_carla_recorder_world.mojo'],
+                         estimate['seconds'])
 
     def test_rejects_invalid_costs_and_duplicate_keys(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -64,6 +62,18 @@ class CoverageSchedulingTests(unittest.TestCase):
         self.assertEqual(groups, coverage_shard.schedule(list(reversed(suites)), 6, costs, lambda suite: 1000))
         for group in groups:
             self.assertEqual(group, sorted(group, key=lambda suite: (-costs[suite], suite)))
+
+    def test_eight_shards_start_the_known_expensive_suites_first(self):
+        costs = coverage_shard.load_costs(coverage_shard.PROFILE)
+        groups = coverage_shard.schedule(list(costs), 8, costs, lambda suite: 1)
+        self.assertEqual(len(groups), 8)
+        self.assertEqual(sorted(sum(groups, [])), sorted(costs))
+        self.assertEqual(len(set(sum(groups, []))), len(costs))
+        self.assertEqual(groups[0][0], 'tests/test_carla_recorder_world.mojo')
+        self.assertEqual(groups[1][0], 'tests/test_carla_map.mojo')
+        self.assertEqual(groups[2][0], 'tests/test_carla_world.mojo')
+        self.assertEqual(groups, coverage_shard.schedule(
+            list(reversed(costs)), 8, costs, lambda suite: 1))
 
     def test_unknown_suites_and_empty_groups_are_kept(self):
         costs = {'known': 20}

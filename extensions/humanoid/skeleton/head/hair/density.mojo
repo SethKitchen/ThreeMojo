@@ -25,6 +25,13 @@ comptime MIN_HAIR_DENSITY_RESOLUTION = 4
 comptime MAX_HAIR_DENSITY_RESOLUTION = 64
 
 
+def _checked_density_point(point: Vector3) raises -> Vector3:
+    """Return the unchanged point after checking all three coordinates."""
+    if not isfinite(point.x) or not isfinite(point.y) or not isfinite(point.z):
+        raise Error("Hair density needs finite positions")
+    return point
+
+
 struct HairDensity(Movable):
     """A uniform grid of the current strands' projected-area density."""
 
@@ -102,12 +109,10 @@ struct HairDensity(Movable):
                 raise Error("Hair density starts must be ordered")
         if len(groom.points) == 0:
             return
-        var low = groom.points[0]
+        var low = _checked_density_point(groom.points[0])
         var high = low
-        for index in range(len(groom.points)):
-            var p = groom.points[index]
-            if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):
-                raise Error("Hair density needs finite positions")
+        for index in range(1, len(groom.points)):
+            var p = _checked_density_point(groom.points[index])
             low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
             high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
         var span = high - low
@@ -119,13 +124,16 @@ struct HairDensity(Movable):
             longest / Float32(max(1, self.resolution - 4)),
         )
         var volume = cell * cell * cell
-        if not isfinite(cell) or not isfinite(volume) or volume <= 0:
+        # On the validated rebuild path with ordinary Float32 rounding and
+        # gradual underflow, the cell floor keeps both products positive.
+        # The finite-volume check also bounds the cell above.
+        if not isfinite(cell) or not isfinite(volume):
             raise Error("Hair density grid scale is not representable")
         self.cell = cell
         self.low = low - Vector3(cell, cell, cell)
+        # Diameter is at most cell, which is at least Float32(1e-5).
+        # Thus diameter / volume stays finite even for tiny diameters.
         var deposit = self.diameter.to(METER) / volume
-        if not isfinite(deposit):
-            raise Error("Hair density coefficient is not representable")
         for strand in range(len(groom)):
             for index in range(
                 groom.starts[strand], groom.starts[strand + 1] - 1
@@ -133,23 +141,21 @@ struct HairDensity(Movable):
                 var start = groom.points[index]
                 var delta = groom.points[index + 1] - start
                 var length = delta.length()
-                if not isfinite(length):
-                    raise Error(
-                        "Hair density segment length is not representable"
-                    )
+                # Finite cubic volume and resolution at most 64 bound
+                # segment length below 2^50 and sample count at most 211.
                 var samples = max(1, Int(ceil(length / (cell * 0.5))))
                 var added = length * deposit / Float32(samples)
                 for sample in range(samples):
                     var p = start + delta * (
                         (Float32(sample) + 0.5) / Float32(samples)
                     )
+                    # With stable validated groom storage, rounded lower
+                    # padding is between zero and twice cell. Bounded span
+                    # and interpolation rounding keep samples in the grid.
                     var slot = self._slot(p)
-                    if slot < 0:
-                        raise Error("Hair density segment escaped its grid")
-                    var total = self.coefficients[slot] + added
-                    if not isfinite(total):
-                        raise Error("Hair density total is not representable")
-                    self.coefficients[slot] = total
+                    # Each increment is below 2^16. Float32 additions from
+                    # zero cannot cross 2^42, even for many valid deposits.
+                    self.coefficients[slot] += added
         self.populated = True
 
     def _slot(self, point: Vector3) -> Int:

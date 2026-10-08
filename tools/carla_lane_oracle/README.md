@@ -139,7 +139,7 @@ Passing source checks cannot substitute for those missing qualifications.
 ### Separate runtime dependency gates
 
 `source_contracts.py` and `runtime-source-pins.json` bind exact complete module
-tokens for five declared groups. The fixed group/path sets reject missing,
+tokens for six declared groups. The fixed group/path sets reject missing,
 extra or redirected dependencies. They have no hash-refresh command.
 
 - Stored arithmetic: full primitive/error/helper module, including qualifiers
@@ -336,3 +336,156 @@ qualifier positions. The four public documentation changes alter actual
 Raises docstrings only. Every other token, including operational strings,
 remains unchanged. Source bindings have been refreshed only after these
 checks. Native execution, coverage and performance evidence stays separate.
+
+### Optional runtime dependency migration
+
+`optional-runtime-migration.json` records the selected eight-file source
+manifest, previous pin hashes, proof-packet hashes and each changed dependency.
+The canonical Sum2 helper, table pins, primitive graph and historical reference
+and shared-function graph constants stay unchanged. The reference checker
+removes only the verified default-false `require_reuse` parameter and its exact
+unknown-result branch. The moment routing check removes that same parameter.
+
+The optional runtime dependency group covers all five new modules and their
+producer/caller dependencies. `optional_runtime_contracts.py` separately checks
+fresh guards, standalone model ownership and scale, the same ideal/error/witness pairing,
+stored dispatch predicates and indices, deferred splitting, original budget
+reservations and the complete grouped-count debit. The checked error edge is
+raw grouped envelope to private origin error to the checked Sum2 leaf. The raw
+entry checks the environment on each invocation. Grouped reconstruction must
+use `require_reuse=True` to prohibit an unreserved GL fallback.
+
+The guard checker binds 33 complete caller declarations in 14 modules. Its
+additional global production sweep records all actual protected helper and
+source-module uses. The sweep binds import/declaration routing and protected
+NAME-token ordinals. The complete caller and dependency contracts bind the
+function operations. New direct, aliased, wildcard and module imports need
+review, including imports in new namespaces and package initializers. The
+sweep excludes test, example, bench, tool, asset and coverage-tool namespaces.
+It is a static source-integrity gate, not a general dynamic-call analysis.
+
+Mutation fixtures select actual function spans and match executable tokens.
+They accept formatter wrapping and trailing call commas. Formatter changes to
+production bindings still require an explicit reviewed rebind and rerun.
+Source checks do not establish native floating-point behavior, mathematical
+soundness, coverage, performance or final CI success. Native checks and final
+report generation use the final production and test inventory separately.
+
+
+The historical immediate-followup and cached-closure successors are retained
+in the migration records. The standalone model module retains complete source, fresh invocation guards
+on construction/restriction, owner/scale/error checks, and exact/one-short
+integer admission controls for `_objective_followup_room` and
+`_objective_recheck_room`. These model helpers are no longer called by the
+production solver.
+
+Stored dispatch with one or two cuts still admits `3*c+2` nodes and `16*c`
+terms, then charges the original one setup node and `8*c` probe terms. Grouped
+work still requires two remaining nodes before its optional one-node attempt.
+These bounds reserve immediate children and mandatory rechecks. They do not
+promise completion of every remaining search under arbitrary custom budgets.
+
+### Containing-objective-model reuse removal (2026-10-07)
+
+The active solver no longer imports, retains, captures or restricts a
+containing objective model. A retained ancestor's wider error floor could
+make ordinary continuation exhaust default budgets. The original reference
+work debit now immediately precedes the current cell's full producer. The
+standalone objective-model module and its tests remain, as do the exact
+station/scale expansion memo, all node fees, work/depth caps and other solver
+operations. The map change is commentary only; its complete token pins stay
+unchanged.
+
+`containing-model-removal-migration.json` records the exact two-file freeze,
+formatter receipt, former pin hashes, three-node AST removal projection,
+four changed lane-refinement dependency bindings, and the single changed
+complete caller/routing/inventory entry. It retains all twelve removed
+caller-only mutations verbatim and the prior semantic block as historical
+evidence. Existing migration histories are preserved with successor links.
+
+Replacement semantic controls reject objective-model imports, aliases,
+re-exports and consumers anywhere in production, including new namespaces
+and package initializers. They require the original prepaid fresh cell
+producer, reject stale-domain substitution and early cached closure, and
+retain both complete exact station/scale expansion memo paths. Comments and
+docstrings cannot manufacture a consumer. The full model helper dependency
+and all 29 complete guard caller declarations remain bound. No checker can
+refresh pins automatically.
+
+These controls establish source integrity and the reviewed scheduling removal,
+not native behavior, coverage, performance or final CI qualification. Separate
+runtime diagnostics still have 19 default driving cohort failures; removing
+this optimization does not establish default-budget success for every query.
+
+
+### Winner seed and construction sign-query successor
+
+`winner-sign-query-migration.json` follows the retained default-query restoration
+without rewriting its historical record. Three Map dependency placements move
+to the reviewed combined source. Four top-level helpers gain complete lexical
+bindings; two are fresh floating-point guard entry points. Existing Map methods
+retain their Map owner, with explicit empty-owner overrides only for those helpers.
+
+`winner_sign_contracts.py` checks unchanged canonical dependencies and default
+query bodies, prepaid eligibility, strict witness improvement and immediate
+continuation reserves. Its mutations cover missing fresh guards, underpriced
+work, changed ownership and stale migration data. These checks do not establish
+full query availability, performance acceptance or hosted CI success.
+
+### Reviewed control-flow cleanup successor
+
+`reviewed-cleanup-migration.json` preserves the winner/sign record above.
+It permits exactly three later source changes. The rounded LINE and ARC
+contexts omit five high-station lookups. Each omitted lookup follows a
+singleton check, an ordered finite domain, and a successful low lookup.
+LINE keeps the high lookups for its possible multi-record profiles.
+The ARC center also omits a quarter check implied by its accepted selector
+hull. The selector graph, stored constants, and all other guards remain bound.
+
+The junction outward conversion selects its comparison with an explicit
+Boolean branch. It retains the original conversion, finite checks, signed-zero
+handling, and adjacent-word step. A native test keeps the original function
+as a frozen reference and compares values and error results.
+
+`reviewed_cleanup_contracts.py` binds the complete three-file successor,
+its two unchanged proof dependencies, and the exact dependency-pin changes.
+The migration changes three runtime token placements. The protected-use
+inventory stays byte-identical, as do all guarded caller bodies and owners.
+The winner check retains 109 unchanged dependencies and admits exactly these
+three reviewed successors. Mutation controls check the retained premises
+without relying on the complete-file digest to reject a changed premise.
+Temporary fixtures must include `PROTECTED_INPUTS` from that checker.
+
+These checks establish source correspondence only. Component captures do not
+establish a complete composed coverage pass. Native tests, aggregate coverage,
+timing limits, and hosted checks remain separate requirements.
+
+### Immediate frozen ARC producer successor
+
+`frozen-arc-producer-migration.json` retains the three-file cleanup record
+unchanged. It removes only the immediate six-coefficient revalidation loop
+after `_rounded_arc_context` succeeds. The distance and interior-clamp guards
+remain. Other callers that receive independently constructed models gain no
+new assumption from this removal.
+
+`frozen_arc_producer_contracts.py` binds the complete producer and consumer,
+the rounded constant helper, all Box constructors and operators used by the
+producer, and the scalar primitive boundaries. It also binds the full field
+layout and constructor mapping. The existing Road, RoadInfo, polynomial, and
+trig source dependencies remain fixed. The producer's known singleton result
+therefore remains tied to the reviewed operation graph.
+
+The successor changes three additional runtime token placements for frozen ARC:
+eligibility, optional runtime, and translation. Restoring those values reproduces the
+accepted three-file cleanup pin file exactly. Restoring that record's three
+entries then reproduces the earlier numerical/sign pin file. All six
+placements are checked; historical JSON and the Sum2 guard pins stay unchanged.
+The winner check now retains 108 unchanged dependencies and four reviewed
+successors.
+
+The new mutations independently check full producer and Box declarations.
+They reject missing known checks, widened points, changed primitive boundaries,
+an injected FMA path, changed field order, changed constructor arguments, and
+lost downstream clamp checks. The native parity test keeps the complete
+original consumer as a frozen reference. Component native and coverage results
+remain separate from qualification of the complete composed source.

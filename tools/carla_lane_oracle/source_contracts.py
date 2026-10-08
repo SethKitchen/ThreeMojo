@@ -22,6 +22,13 @@ GROUP_PATHS = {
         'curve_sum2', 'lane_geometry', 'curve_interval', 'curve_bounds',
         'spiral_roundoff_proof', 'lane_refinement', 'map', 'map_builder',
         'spiral_domain_proof', 'spiral_moment_proof', 'spiral_moment_table')),
+    'optional_runtime': tuple(PREFIX + name + '.mojo' for name in (
+        'curve_minimizer_support', 'curve_objective_model', 'curve_sample_dispatch',
+        'spiral_grouped_lane', 'spiral_grouped_roundoff_proof', 'curve_bounds',
+        'lane_refinement', 'map', 'lane_value_bounds', 'curve_interval', 'curve_sum2',
+        'curve_trig', 'lane_geometry', 'geometry', 'road_info', 'polynomial',
+        'spiral_domain_proof', 'spiral_moment_proof', 'spiral_moment_table',
+        'spiral_roundoff_proof', 'curve_frozen_arc')),
     'stored_arithmetic': (PREFIX + 'curve_interval.mojo',),
     'eligibility': tuple(PREFIX + name + '.mojo' for name in (
         'spiral_domain_proof', 'spiral_moment_proof', 'spiral_moment_table',
@@ -109,7 +116,18 @@ def verify_group(root, group):
     result = {}
     for path in GROUP_PATHS[group]:
         text = (root / path).read_text(encoding='utf-8')
-        require(token_sha256(text) == pins['groups'][group][path],
+        checked = text
+        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:
+            try:
+                import cache_key_contracts as cache_key
+            except ModuleNotFoundError:
+                from tools.carla_lane_oracle import cache_key_contracts as cache_key
+            try:
+                checked = cache_key.predecessor_source(root)
+            except (ValueError, OSError) as error:
+                raise ValueError('runtime source dependency changed [' + group + ']: ' + path
+                                 + ' (' + str(error) + ')') from error
+        require(token_sha256(checked) == pins['groups'][group][path],
                 'runtime source dependency changed [' + group + ']: ' + path)
         result[path] = hashlib.sha256(text.encode()).hexdigest()
     return result

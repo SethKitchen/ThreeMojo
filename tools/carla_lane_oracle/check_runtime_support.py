@@ -12,6 +12,7 @@ from pathlib import Path
 from source_contracts import GROUP_PATHS, verify_group
 import heading_correspondence
 import sum2_contracts
+import optional_runtime_contracts
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -24,6 +25,7 @@ def verify(root):
         'cost, performance and coverage remain separate requirements',
         'repo_root': str(root.resolve()),
         'groups': groups, 'heading_correspondence': heading,
+        'optional_runtime': optional_runtime_contracts.verify(root),
         'sum2_correspondence': sum2_contracts.verify(root)}
 
 

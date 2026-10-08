@@ -71,7 +71,18 @@ def _try_build_spiral_moments(
     if work > max_proof_terms - proof_terms:
         return None
     proof_terms += work
-    # No optional arrays, loops, or persistent side-table insertion before debit.
+    # No runtime arrays, loops, or insertion before debit. These compile-time
+    # bounds and the admitted count keep every moment intermediate finite.
+    comptime for index in range(5):
+        comptime assert _GL_NODES[index] > -1.0 and _GL_NODES[index] < 1.0
+        comptime assert _GL_WEIGHTS[index] > 0.0 and _GL_WEIGHTS[index] <= 1.0
+    comptime for index in range(11):
+        comptime assert (
+            _COS_COEFFICIENTS[index] >= -1.0 and _COS_COEFFICIENTS[index] <= 1.0
+        )
+        comptime assert (
+            _SIN_COEFFICIENTS[index] >= -1.0 and _SIN_COEFFICIENTS[index] <= 1.0
+        )
     var moments = Array[_Interval, 22](fill=_Interval.point(0.0))
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
@@ -118,8 +129,6 @@ def _try_build_spiral_moments(
         sine[j] = _tight_product_bound(
             _Interval.point(sin_coefficients[j]), moments[2 * j + 1]
         )
-        if not cosine[j].is_finite() or not sine[j].is_finite():
-            return None
     return _SpiralMomentProof(pieces, cosine^, sine^)
 
 

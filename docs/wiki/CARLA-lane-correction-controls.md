@@ -77,7 +77,8 @@ from copying the search output.
 
 ## Public index partition
 
-`Map.segment_count()` and `Map.segment()` expose the nearest-waypoint index.
+`Map.segment_count()` and `Map.segment()` expose the certified nearest-waypoint index.
+The default nearest queries use CARLA's own partition, which the map keeps separately.
 They do not expose a separate meshing partition. The index uses deterministic
 lane order and can add subdivisions for accuracy.
 
