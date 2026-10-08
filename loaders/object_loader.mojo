@@ -1923,7 +1923,9 @@ struct _Loader(Movable):
         side and whether it is visible, from the keys three.js's
         `MaterialLoader` reads, at its defaults. `raster` checks the
         blend constant; the shadow side is checked here."""
-        if self.document.get(item, "shadowSide") != NO_NODE:
+        var shadow_side = self.document.get(item, "shadowSide")
+        # three.js writes null for the default: keep the absent-field fallback.
+        if shadow_side != NO_NODE and not self.document.is_null(shadow_side):
             material.shadow_side = Side(self.integer(item, "shadowSide", 0))
             _ = material.shadow_face()
         material.blend_color = self.color(item, "blendColor", 0)

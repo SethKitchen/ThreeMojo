@@ -156,5 +156,19 @@ def test_3dl_grid_storage_is_bounded_before_allocation() raises:
         _ = _checked_grid_cells(0)
 
 
+def test_3dl_entries_use_whole_string_number() raises:
+    for token in ["+.", "1..0", "1e2e3"]:
+        with assert_raises(contains="is not a number"):
+            _ = parse_lut_3dl("0 1\n" + token + " 2 3\n")
+    var table = parse_lut_3dl("0 1\n+.5e1 2. -0\n", FLOAT_TYPE)
+    assert_equal(table.max_bit_value, 8)
+    near(Float64(table.texture.image.data[0]), 5.0 / 8)
+    near(Float64(table.texture.image.data[1]), 2.0 / 8)
+    # The existing entry matcher ignores suffixes and radix spellings.
+    var ignored = parse_lut_3dl("0 1\n0f 2 3\n0x5 2 3\n4 2 0\n", FLOAT_TYPE)
+    assert_equal(ignored.max_bit_value, 4)
+    near(Float64(ignored.texture.image.data[0]), 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

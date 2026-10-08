@@ -60,6 +60,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
 from render.png import encode as encode_png
 from std.math import pi
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -1227,6 +1228,192 @@ def test_a_texture_node_reads_a_texture_uniform() raises:
         "a cube texture node's level is not read",
     )
     _refused(_node("t", "TextureNode"), "t", "a node's value must be a string")
+
+
+def test_r186_generated_texture_gather_is_refused() raises:
+    var root = String("assets/node_gather/")
+    var document = parse_json(Path(root + "node.json").read_text())
+    var loader = NodeLoader()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = loader.parse(document, document.root())
+    assert_equal(len(loader.textures), 0)
+    var material = Path(root + "material.json").read_text()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = read_node_material(material)
+    var material_assets = Assets()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = read_material_json(material, material_assets)
+    assert_equal(material_assets.programs.count(), 0)
+    var scene = Scene()
+    var scene_assets = Assets()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = read_object_json(
+            Path(root + "object.json").read_text(), scene, scene_assets
+        )
+    assert_equal(scene_assets.programs.count(), 0)
+
+
+def test_r186_raw_default_null_materials_reach_gather_refusal() raises:
+    # Preserve the official raw bytes. Default null must pass material flags
+    # and reach the same gather refusal as the explicit-side fixtures.
+    var root = String("assets/node_gather/default_null/")
+    var document = parse_json(Path(root + "node.json").read_text())
+    var loader = NodeLoader()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = loader.parse(document, document.root())
+    assert_equal(len(loader.textures), 0)
+    var material = Path(root + "material.json").read_text()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = read_node_material(material)
+    var material_assets = Assets()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = read_material_json(material, material_assets)
+    assert_equal(material_assets.programs.count(), 0)
+    var scene = Scene()
+    var scene_assets = Assets()
+    with assert_raises(contains="a texture node's gatherNode is not read"):
+        _ = read_object_json(
+            Path(root + "object.json").read_text(), scene, scene_assets
+        )
+    assert_equal(scene_assets.programs.count(), 0)
+
+
+def test_texture_gather_preserves_required_value_error_precedence() raises:
+    for kind in ["TextureNode", "CubeTextureNode"]:
+        _refused(
+            _node("t", kind, _in("gatherNode", "missing")),
+            "t",
+            "a node's value must be a string",
+        )
+
+
+def test_texture_gather_inputs_are_refused_before_their_children() raises:
+    # A valid child, a missing child and an unsupported child must all name
+    # gatherNode in the error, rather than silently become ordinary sampling.
+    for child in [
+        _const("g", "0", "int"),
+        "",
+        _node("g", "UnsupportedGatherChild"),
+    ]:
+        for kind in ["TextureNode", "CubeTextureNode"]:
+            var texture = _node(
+                "t", kind, _in("gatherNode", "g"), '"value":"tex"'
+            )
+            var nodes = texture
+            if child != "":
+                nodes += "," + child
+            _refused(nodes, "t", "a texture node's gatherNode is not read")
+            var document = parse_json(
+                String(texture[byte = 0 : texture.byte_length() - 1])
+                + ',"nodes":['
+                + child
+                + "]}"
+            )
+            var loader = NodeLoader()
+            with assert_raises(
+                contains="a texture node's gatherNode is not read"
+            ):
+                _ = loader.parse(document, document.root())
+            assert_equal(len(loader.textures), 0)
+
+
+def test_material_and_object_loaders_refuse_texture_gather() raises:
+    for child in [
+        _const("g", "0", "int"),
+        "",
+        _node("g", "UnsupportedGatherChild"),
+    ]:
+        var nodes = _node(
+            "t", "TextureNode", _in("gatherNode", "g"), '"value":"tex"'
+        )
+        if child != "":
+            nodes += "," + child
+        var material = (
+            '{"uuid":"m","type":"MeshBasicNodeMaterial",'
+            '"inputNodes":{"colorNode":"t"}'
+        )
+        var standalone = material + ',"nodes":[' + nodes + "]}"
+        with assert_raises(contains="a texture node's gatherNode is not read"):
+            _ = read_node_material(standalone)
+        var assets = Assets()
+        with assert_raises(contains="a texture node's gatherNode is not read"):
+            _ = read_material_json(standalone, assets)
+        assert_equal(assets.programs.count(), 0)
+        var scene = Scene()
+        var object_assets = Assets()
+        with assert_raises(contains="a texture node's gatherNode is not read"):
+            _ = read_object_json(
+                '{"metadata":{"version":4.7,"type":"Object"},"materials":['
+                + material
+                + '}],"nodes":['
+                + nodes
+                + '],"object":{"uuid":"s","type":"Scene"}}',
+                scene,
+                object_assets,
+            )
+        assert_equal(object_assets.programs.count(), 0)
+
+
+def test_unreachable_gather_inputs_remain_unbuilt() raises:
+    var nodes = (
+        _const("c", "[0.2,0.4,0.6]", "vec3")
+        + ","
+        + _node(
+            "t", "TextureNode", _in("gatherNode", "missing"), '"value":"tex"'
+        )
+        + ","
+        + _node("u", "TextureNode", _in("gatherNode", "g"), '"value":"tex"')
+        + ","
+        + _node("g", "UnsupportedGatherChild")
+    )
+    var document = parse_json("[" + nodes + "]")
+    var loader = NodeLoader()
+    loader.parse_nodes(document, document.root())
+    loader.graph.set_output(COLOR_NODE, loader.node(document, "c"))
+    assert_equal(len(loader.textures), 0)
+    var direct = loader.graph.compile()
+    _near(_output(direct, COLOR_NODE), 0.2, 0.4, 0.6)
+    var material = (
+        '{"uuid":"m","type":"MeshBasicNodeMaterial",'
+        '"inputNodes":{"colorNode":"c"}'
+    )
+    var standalone = material + ',"nodes":[' + nodes + "]}"
+    var read = read_node_material(standalone)
+    assert_equal(len(read.textures), 0)
+    var program = read.graph.compile()
+    _near(_output(program, COLOR_NODE), 0.2, 0.4, 0.6)
+    var assets = Assets()
+    var id = read_material_json(standalone, assets)
+    _near(
+        _output(
+            assets.programs.get(assets.materials.get(id).nodes), COLOR_NODE
+        ),
+        0.2,
+        0.4,
+        0.6,
+    )
+    var scene = Scene()
+    var object_assets = Assets()
+    _ = read_object_json(
+        '{"metadata":{"version":4.7,"type":"Object"},"materials":['
+        + material
+        + '}],"nodes":['
+        + nodes
+        + '],"object":{"uuid":"s","type":"Scene"}}',
+        scene,
+        object_assets,
+    )
+    _near(
+        _output(
+            object_assets.programs.get(
+                object_assets.materials.get(MaterialId(0)).nodes
+            ),
+            COLOR_NODE,
+        ),
+        0.2,
+        0.4,
+        0.6,
+    )
 
 
 # --- NodeMaterialLoader -------------------------------------------------------

@@ -1,0 +1,19 @@
+--- a/docs/validation/anatomy-template-report.json
++++ b/docs/validation/anatomy-template-report.json
+@@ -12,14 +12,14 @@
+     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
+   },
+   "build_provenance": {
+-    "source_sha256": "c48b63ffe47e231ea8c055dda028a1e87d3d1aa8003726cbfa0d7b4d2de89925",
++    "source_sha256": "20610b62a681a9870670656a8bb73a2e7f69eb64bca19663a25b24e14fdb0321",
+     "toolchain": "Mojo 1.1.0 (8189361e)",
+     "flags": [
+       "--Werror",
+       "--num-threads",
+       "1"
+     ],
+-    "binary_sha256": "00a491f03db4f02984b4148aa19a6fa6ddd54ae8f774b787e518832f288229e4"
++    "binary_sha256": "ad569c509a08d8a1183f7d8fcfc716df785041ba49c7d7d3236de22f87014879"
+   },
+   "source_file_sha256": {
+     "extensions/anatomy/soft_tissue.mojo": "3af2496ae83428e477d5e8ec2eb364a88a3a5435235faeb88f776dbfdaed3238",

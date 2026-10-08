@@ -823,5 +823,31 @@ def test_a_duplicate_object_id_keeps_the_last() raises:
     assert_equal(model.mesh_count, 1)
 
 
+def test_numeric_attributes_keep_parse_float_prefixes() raises:
+    var prefix = String("1 0 0 0 1 0 0 0 1 ")
+    for token in ["+.", "NaN", "inf"]:
+        with assert_raises(contains="not a number"):
+            _ = three_mf_transform(prefix + token + " 0 0")
+    for token in ["1e2e3", "1e2suffix", "+1.e2", "100."]:
+        var matrix = three_mf_transform(prefix + token + " 0 0")
+        assert_equal(matrix.elements[12], 100)
+    for token in ["1..0", "1e+", "1px"]:
+        var matrix = three_mf_transform(prefix + token + " 0 0")
+        assert_equal(matrix.elements[12], 1)
+    var zero = three_mf_transform(prefix + "0f 0 0")
+    assert_equal(zero.elements[12], 0)
+    for token in ["Infinity", "1e999", "1e39"]:
+        with assert_raises(contains="not finite"):
+            _ = three_mf_transform(prefix + token + " 0 0")
+    var xml = model_text(
+        mesh_object("1", "", '<triangle v1="0" v2="1" v3="2"/>'),
+        '<item objectid="1"/>',
+    )
+    refused(xml.replace('x="0"', 'x="+."'), "not a number")
+    for token in ["0f", "1..0", "1e2e3"]:
+        var model = load_model(xml.replace('x="0"', 'x="' + token + '"'))
+        assert_equal(model.mesh_count, 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

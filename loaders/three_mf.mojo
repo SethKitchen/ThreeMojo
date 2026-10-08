@@ -73,6 +73,7 @@ from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from loaders.gltf import decode_image
+from loaders.js_number import js_parse_float
 from loaders.model_nodes import decompose_onto
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
 from loaders.zip import ZipEntry, unzip
@@ -94,7 +95,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import isfinite
+from std.math import isfinite, isnan
 from std.pathlib import Path
 from units.si import CENTIMETER, FOOT, INCH, METER, MILLIMETER, Length
 
@@ -275,7 +276,7 @@ def _array_index(key: String) -> Int:
 
 
 def _finite(text: String, what: String) raises -> Float32:
-    """Return a number an attribute gives.
+    """Read an attribute with JavaScript's `parseFloat` prefix rules.
 
     Args:
         text: The text.
@@ -287,10 +288,8 @@ def _finite(text: String, what: String) raises -> Float32:
     Raises:
         Error: If it is not a number, or is not finite as a `Float32`.
     """
-    var value: Float64
-    try:
-        value = Float64(text)
-    except:
+    var value = js_parse_float(text)
+    if isnan(value):
         raise Error("3MF: " + what + " is not a number: `" + text + "`")
     var narrow = Float32(value)
     if not isfinite(narrow):

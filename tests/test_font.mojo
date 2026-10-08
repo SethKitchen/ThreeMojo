@@ -559,5 +559,23 @@ def test_a_font_built_by_hand_checks_its_parts() raises:
         _ = Font("Hand", 10, 0, 10, 1, empty^)
 
 
+def test_font_outline_numbers_use_whole_string_coercion() raises:
+    for token in ["+.", "1..0", "1e2e3", "0f", "NaN", "inf", "-0x5"]:
+        var outline = "m " + token + " 0 l 1 0 l 0 1 z"
+        with assert_raises(contains="is not a number"):
+            _ = parse_outline(outline)
+        with assert_raises(contains="is not a number"):
+            _ = fallback_font('{"x": {"ha": 5, "o": "' + outline + '"}}')
+    # FontLoader multiplies strings by scale: Number, not parseFloat.
+    for token in ["+.5e1", "5.", "0x5", "0o5", "0b101"]:
+        var font = fallback_font(
+            '{"x": {"ha": 5, "o": "m ' + token + ' 0 l 1 0 l 0 1 z"}}'
+        )
+        assert_point(font.glyph("x").steps[0].point(0), 5, 0)
+    for token in ["Infinity", "-Infinity", "1e999", "1e39"]:
+        with assert_raises(contains="is not finite"):
+            _ = parse_outline("m " + token + " 0 l 1 0")
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

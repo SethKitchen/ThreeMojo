@@ -45,7 +45,8 @@ view space, and its `positionNode` is the local position. This port's
 outputs are offsets, so the loader subtracts the normal and the position
 they replace. A `colorNode` that is a `vec4` or a `float` sets the alpha as
 well, as three.js's `vec4(colorNode)` does: the alpha multiplies the
-opacity node, or the material's `opacity`.
+opacity node, or the material's `opacity`. Texture gather inputs are
+refused by name when reached. They are not ordinary RGBA samples.
 """
 
 from loaders.json import (
@@ -1010,6 +1011,7 @@ struct NodeLoader(Movable):
             "compareNode",
             "depthNode",
             "gradNode",
+            "gatherNode",
             "offsetNode",
         ]:
             if self._has_input(document, item, name):

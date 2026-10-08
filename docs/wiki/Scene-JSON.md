@@ -28,6 +28,8 @@ var camera_again = model.cameras.perspective[0]
 | `material_to_json(id, assets) -> String` | One material with its textures and images, as three.js's `material.toJSON()` writes it. |
 | `read_material_json(text, assets, directory) -> MaterialId` | Read one material document and its textures into the assets. |
 
+A material `shadowSide` of `null` uses the same default as an absent key. This is the default written by three.js r186. The reader leaves `shadow_side` unset, so `shadow_face()` uses the material's `side`. Explicit shadow sides must be 0, 1 or 2. Other types and values are refused. This does not change shadow rendering or other material fields.
+
 The reader adds to the scene and the assets that you give it. The nodes that it adds come after the nodes that the scene has already.
 
 ## The document
