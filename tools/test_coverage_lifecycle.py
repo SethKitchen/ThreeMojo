@@ -51,6 +51,9 @@ PREPARED_DRIVER = '''import contextlib, os, pathlib, signal, subprocess, sys, ti
 from unittest.mock import patch
 import coverage_io
 root = pathlib.Path(sys.argv[1])
+parent = int(sys.argv[2]) if len(sys.argv) > 2 else os.getppid()
+if os.getppid() != parent:
+    raise RuntimeError('fixture parent exited before preparing capture')
 command = [sys.executable, str(root / 'worker.py'), str(root), 'child', 'valid']
 with contextlib.ExitStack() as scope:
     environment = scope.enter_context(coverage_io.isolated_environment())
@@ -62,6 +65,8 @@ with contextlib.ExitStack() as scope:
         owned.write_text(str(child.pid))
         owned.replace(root / 'owned-child.pid')
         while not (root / 'deadline').exists():
+            if os.getppid() != parent:
+                raise RuntimeError('fixture parent exited before releasing capture')
             time.sleep(0.01)
         os.environ[coverage_io.DEADLINE_ENV] = (root / 'deadline').read_text()
 
@@ -184,7 +189,6 @@ class CoverageLifecycleTests(unittest.TestCase):
             process.communicate(timeout=2)
         except subprocess.TimeoutExpired:
             process.kill()
-            process.communicate(timeout=2)
         # A failed assertion must not leave the deliberately hanging fixture.
         path = self.root / 'child.pid'
         if not path.exists():
@@ -194,6 +198,8 @@ class CoverageLifecycleTests(unittest.TestCase):
             if not self.stopped(pid):
                 with contextlib.suppress(ProcessLookupError):
                     os.killpg(pid, signal.SIGKILL)
+        # An orphaned capture may still hold these pipes until its tree stops.
+        process.communicate(timeout=2)
 
     def launch(self, mode='valid', seconds=4):
         environment = self.environment | {
@@ -293,27 +299,53 @@ class CoverageLifecycleTests(unittest.TestCase):
                 self.root / 'out', self.root / 'err.gz'), 143)
         self.assertEqual(signal.getsignal(signal.SIGTERM), old_handler)
 
-    def test_group_alarm_does_not_orphan_delayed_capture(self):
-        scheduler = '''import os, pathlib, subprocess, sys, time
+    def capture_after_group_alarm(self):
+        bootstrap = '''import os, pathlib, subprocess, sys, time
 root = pathlib.Path(sys.argv[1])
-(root / 'deadline').write_text(os.environ['THREEMOJO_COVERAGE_DEADLINE'])
+capture = subprocess.Popen([sys.executable, '-c', sys.argv[2], str(root),
+                            str(os.getpid())])
+while not (root / 'start-group').exists():
+    if capture.poll() is not None:
+        raise RuntimeError('prepared capture exited before group startup')
+    time.sleep(0.01)
+os.execv(sys.executable,
+         [sys.executable, sys.argv[4], 'group', '--seconds', '0.9', '--',
+          sys.executable, '-c', sys.argv[3], str(root)])
+'''
+        scheduler = '''import os, pathlib, sys, time
+root = pathlib.Path(sys.argv[1])
 time.sleep(0.25)
-subprocess.Popen([sys.executable, '-c', sys.argv[2], str(root), 'valid'])
+deadline = root / 'deadline.tmp'
+deadline.write_text(os.environ['THREEMOJO_COVERAGE_DEADLINE'])
+deadline.replace(root / 'deadline')
 time.sleep(30)
 '''
-        started = time.monotonic()
         process = subprocess.Popen(
-            [sys.executable, coverage_io.__file__, 'group', '--seconds', '0.9', '--',
-             sys.executable, '-c', scheduler, str(self.root), DRIVER],
-            env=self.environment, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            [sys.executable, '-c', bootstrap, str(self.root), PREPARED_DRIVER,
+             scheduler, coverage_io.__file__],
+            env=self.environment | {'TMPDIR': str(self.root)},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True)
         self.addCleanup(self.cleanup_process, process)
+        # Start the real group alarm only after the owned fixture is ready.
+        # Exec keeps the capture's parent PID, so that alarm still orphans it.
         self.ready()
+        started = time.monotonic()
+        (self.root / 'start-group').touch()
         output, error = process.communicate(timeout=4)
         self.assertEqual(process.returncode, -signal.SIGALRM, output + error)
         self.assertLess(time.monotonic() - started, 2.5)
         self.assertEqual((self.root / 'status').read_text(), '124')
         self.assert_tree_stopped()
+
+    def test_group_alarm_does_not_orphan_delayed_capture(self):
+        self.capture_after_group_alarm()
+
+    def test_group_alarm_allows_slow_fixture_startup(self):
+        (self.root / 'worker.py').write_text(WORKER.replace(
+            'role, mode = sys.argv[2:4]',
+            "role, mode = sys.argv[2:4]\nif role == 'grandchild': time.sleep(0.7)"))
+        self.capture_after_group_alarm()
 
     def test_make_uses_one_shared_group_budget(self):
         make = (Path(coverage_io.__file__).parent.parent / 'Makefile').read_text()

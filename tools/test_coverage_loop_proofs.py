@@ -8,6 +8,10 @@ import gzip
 import io
 import json
 import os
+import signal
+import shutil
+import subprocess
+import time
 from pathlib import Path
 import tempfile
 import sys
@@ -17,6 +21,7 @@ from unittest.mock import patch
 import cache_key
 import coverage_loop_proofs as loops
 import coverage_io
+import check_coverage_loop_proofs as native_check
 
 
 def source(expression, body='pass', ending='\n'):
@@ -349,6 +354,27 @@ class ProofBindingTests(unittest.TestCase):
         self.assertEqual(status, 7)
         self.assertFalse(loops.capture_receipt_path(capture).exists())
 
+    @unittest.skipUnless(os.name == 'posix', 'POSIX capture deadline')
+    def test_checker_deadline_removes_bound_stale_receipt_after_probe(self):
+        adapter = self.root/'tools/native_test_support.py'
+        adapter.write_text('import sys, time\nsys.stderr.write("COVLINE:module:2:T\\n")\n'
+                           'sys.stderr.flush()\ntime.sleep(60)\n')
+        self.regenerate()
+        self.envelope = loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
+        capture.write_bytes(b'old capture')
+        output.write_text('PASS\n')
+        self.bind(capture, output)
+        loops.verify_captures([capture], self.envelope)
+        with patch.dict(os.environ):
+            os.environ.pop(coverage_io.DEADLINE_ENV, None)
+            result = native_check.capture_with_compiler_budget(
+                self.command(), output, capture, loop_proof=self.receipt,
+                source_root=self.root, success=False, seconds=2)
+        self.assertEqual(result.returncode, 124)
+        self.assertEqual(gzip.decompress(capture.read_bytes()), b'COVLINE:module:2:T\n')
+        self.assertFalse(loops.capture_receipt_path(capture).exists())
+
     def test_failed_capture_preflight_also_invalidates_old_success_receipt(self):
         capture, output = self.hits / 'test_fixture.txt.gz', self.hits / 'test_fixture.out'
         capture.write_bytes(b'old capture')
@@ -611,6 +637,897 @@ class ProofBindingTests(unittest.TestCase):
         model_generation(self.root, self.build)
         with self.assertRaisesRegex(ValueError, 'generation origin checkpoint'):
             loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+
+
+class GuardedLoopTests(unittest.TestCase):
+    """Each exact theorem fails closed independently of unproved siblings."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(prefix='guarded-loop-proof-')
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.repo = Path(__file__).resolve().parents[1]
+        for relative in loops.GUARDED_LOOP_SOURCE_SHA256:
+            destination = self.root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            if relative == 'extensions/carla/opendrive.mojo':
+                # A before-source infrastructure checkout has no feature
+                # parser yet. Reconstruct only the immutable reviewed after
+                # fixture through the separate, source-bound parser contract.
+                directory = str(self.repo / 'tools/carla_lane_oracle')
+                with patch.object(sys, 'path', [directory, *sys.path]):
+                    import border_parser_contracts as border
+                content = border.successor_source(self.repo).encode()
+            elif relative == 'extensions/carla/map.mojo':
+                # Preserve historical premise mutants on either physical live
+                # state, using the fully verified inverse only for after.
+                from carla_lane_oracle import seed_count_contracts as seed_count
+                content = seed_count.historical_source(self.repo).encode('utf-8')
+            else:
+                content = (self.repo / relative).read_bytes()
+            self.assertEqual(loops.sha256(content),
+                             loops.GUARDED_LOOP_SOURCE_SHA256[relative])
+            destination.write_bytes(content)
+
+    def prove(self, rule):
+        return loops.guarded_loop_proof(self.root, rule)
+
+    def test_exact_rule_inventory_and_required_true(self):
+        rules = loops.GUARDED_LOOP_RULES
+        self.assertEqual(len(rules), 26)
+        self.assertEqual(sum(r[0] == 'extensions/carla/opendrive' for r in rules), 7)
+        self.assertEqual(len({r[5] for r in rules}), len(rules))
+        self.assertEqual(len({r[:2] for r in rules}), len(rules))
+        for rule in rules:
+            with self.subTest(proof_id=rule[5]):
+                proof = self.prove(rule)
+                self.assertIsNotNone(proof)
+                self.assertEqual(proof['required'], 'T')
+                self.assertEqual(proof['impossible'], 'F')
+                self.assertGreaterEqual(proof['cardinality'], 1)
+                if proof['kind'] in {'literal-range', 'literal-list'}:
+                    self.assertEqual(proof['cardinality'], rule[3])
+                else:
+                    self.assertEqual(proof['cardinality'], 1)
+                self.assertEqual(
+                    set(proof['dependency_sha256']), {rule[0] + '.mojo', *rule[6]})
+
+    def test_each_loop_header_mutation_revokes_its_proof(self):
+        for rule in loops.GUARDED_LOOP_RULES:
+            path = self.root / (rule[0] + '.mojo')
+            original = path.read_bytes()
+            lines = original.decode().splitlines(keepends=True)
+            with self.subTest(proof_id=rule[5]):
+                self.assertTrue(lines[rule[1]-1].lstrip().startswith('for '))
+                # This diagnostic only alters source bytes; no invented
+                # runtime hit or executable coverage fixture is produced.
+                lines[rule[1]-1] = lines[rule[1]-1].replace(' in ', ' in [] # ', 1)
+                path.write_text(''.join(lines))
+                self.assertIsNone(self.prove(rule))
+                path.write_bytes(original)
+                self.assertIsNotNone(self.prove(rule))
+
+    def test_every_dependency_change_and_absence_revokes(self):
+        for rule in loops.GUARDED_LOOP_RULES:
+            for name in (rule[0] + '.mojo', *rule[6]):
+                path = self.root / name
+                original = path.read_bytes()
+                with self.subTest(proof_id=rule[5], dependency=name):
+                    path.write_bytes(original + b'\n# unreviewed dependency change\n')
+                    self.assertIsNone(self.prove(rule))
+                    path.unlink()
+                    self.assertIsNone(self.prove(rule))
+                    path.write_bytes(original)
+                    self.assertIsNotNone(self.prove(rule))
+
+    def test_mutable_state_guards_remain_bound(self):
+        cases = (
+            ('density-partitioned-nonempty-groom',
+             '        if len(groom.points) == 0:\n', '        if False:\n'),
+            ('dominance-explicit-nonempty-cells',
+             '    if len(two.cells) == 0:\n', '    if False:\n'),
+            ('resumption-explicit-nonempty-cells',
+             '    if len(certificate.cells) == 0:\n', '    if False:\n'),
+            ('junction-retained-two-endpoint-breaks',
+             '    var breaks: List[Float64] = [a, b]\n',
+             '    var breaks = List[Float64]()\n'),
+            ('winner-eight-positive-dyadic-cardinalities',
+             '    for level in range(8):\n', '    for level in range(-1, 8):\n'),
+            ('winner-fixed-twelve-metadata-elements',
+             '                var metadata: Array[Int, 12] = [\n',
+             '                var metadata: Array[Int, 0] = [\n'),
+            ('border-positive-record-count-keeps-ids',
+             '    if bordered == 0:\n', '    if False:\n'),
+            ('border-outer-list-explicitly-nonempty',
+             '        if len(borders[i]) == 0:\n', '        if False:\n'),
+            ('border-inner-owned-nonempty-list',
+             '        var inner: List[_Cubic] = [_Cubic(0, s, 0.0, 0.0, 0.0, 0.0)]\n',
+             '        var inner = List[_Cubic]()\n'),
+            ('border-cuts-retain-initial-section-start',
+             '        var cuts: List[Float64] = [s]\n',
+             '        var cuts = List[Float64]()\n'),
+        )
+        by_name = {rule[5]: rule for rule in loops.GUARDED_LOOP_RULES}
+        for proof_id, before, after in cases:
+            rule = by_name[proof_id]
+            path = self.root / (rule[0] + '.mojo')
+            original = path.read_text()
+            with self.subTest(proof_id=proof_id):
+                self.assertIn(before, original)
+                path.write_text(original.replace(before, after, 1))
+                self.assertIsNone(self.prove(rule))
+                path.write_text(original)
+
+    def test_rebuild_validation_is_the_mutated_same_call_guard(self):
+        rule = next(r for r in loops.GUARDED_LOOP_RULES
+                    if r[5] == 'density-validated-positive-cube-count')
+        path = self.root / (rule[0] + '.mojo')
+        original = path.read_text()
+        start = original.index('    def rebuild(')
+        end = original.index('    def _slot(', start)
+        body = original[start:end]
+        self.assertEqual(body.count('        self.validate()\n'), 1)
+        changed = (original[:start]
+                   + body.replace('        self.validate()\n', '        pass\n', 1)
+                   + original[end:])
+        self.assertEqual(changed[:start], original[:start])
+        self.assertIn('        self.validate()\n', changed[:start])
+        path.write_text(changed)
+        self.assertIsNone(self.prove(rule))
+        path.write_text(original)
+        self.assertIsNotNone(self.prove(rule))
+
+    def test_selected_lane_validation_and_its_three_calls_are_bound(self):
+        names = ('rounded-line-validated-lane-list',
+                 'rounded-arc-validated-lane-list',
+                 'axis-search-validated-lane-list')
+        selected = [r for r in loops.GUARDED_LOOP_RULES if r[5] in names]
+        self.assertEqual(len(selected), 3)
+        road = self.root / 'extensions/carla/road.mojo'
+        original = road.read_text()
+        guard = '        if lane < 0 or lane >= len(self.sections[section].lanes):\n'
+        self.assertEqual(original.count(guard), 1)
+        start = original.index('    def _check_lane(')
+        end = original.index('    def _lane_record_boundaries(', start)
+        self.assertIn(guard, original[start:end])
+        road.write_text(original.replace(guard, '        if lane < 0:\n', 1))
+        for rule in selected:
+            self.assertIsNone(self.prove(rule))
+        road.write_text(original)
+        for rule in selected:
+            path = self.root / (rule[0] + '.mojo')
+            source_text = path.read_text()
+            lines = source_text.splitlines(keepends=True)
+            preceding = [i for i in range(rule[1]-1)
+                         if lines[i].startswith('def ')]
+            self.assertTrue(preceding)
+            start = sum(len(line) for line in lines[:preceding[-1]])
+            next_definition = source_text.find('\ndef ', start + 1)
+            end = len(source_text) if next_definition < 0 else next_definition + 1
+            body = source_text[start:end]
+            call = '    road._check_lane(section, lane)\n'
+            self.assertEqual(body.count(call), 1)
+            path.write_text(source_text[:start] + body.replace(call, '    pass\n', 1)
+                            + source_text[end:])
+            with self.subTest(proof_id=rule[5]):
+                self.assertIsNone(self.prove(rule))
+            path.write_text(source_text)
+            self.assertIsNotNone(self.prove(rule))
+
+    def test_groom_length_and_both_partition_endpoints_are_bound(self):
+        rule = next(r for r in loops.GUARDED_LOOP_RULES
+                    if r[5] == 'density-partitioned-nonempty-groom')
+        groom = self.root / 'extensions/humanoid/skeleton/head/hair/groom.mojo'
+        original = groom.read_text()
+        start = original.index('    def __len__(')
+        end = original.index('    def add(', start)
+        body = original[start:end]
+        self.assertEqual(body.count('        return len(self.starts) - 1\n'), 1)
+        groom.write_text(original[:start]
+                         + body.replace('        return len(self.starts) - 1\n',
+                                        '        return 0\n', 1)
+                         + original[end:])
+        self.assertIsNone(self.prove(rule))
+        groom.write_text(original)
+        density = self.root / (rule[0] + '.mojo')
+        original = density.read_text()
+        start = original.index('    def rebuild(')
+        end = original.index('    def _slot(', start)
+        body = original[start:end]
+        for before, after in (
+            ('        if len(groom.starts) == 0 or groom.starts[0] != 0:\n',
+             '        if len(groom.starts) == 0:\n'),
+            ('        if groom.starts[len(groom.starts) - 1] != len(groom.points):\n',
+             '        if False:\n'),
+        ):
+            self.assertEqual(body.count(before), 1)
+            density.write_text(original[:start] + body.replace(before, after, 1)
+                               + original[end:])
+            self.assertIsNone(self.prove(rule))
+            density.write_text(original)
+        self.assertIsNotNone(self.prove(rule))
+
+    def test_active_callers_and_inner_replacement_premises_are_bound(self):
+        active = next(r for r in loops.GUARDED_LOOP_RULES
+                      if r[5] == 'border-active-maintained-nonempty-callers')
+        inner = next(r for r in loops.GUARDED_LOOP_RULES
+                     if r[5] == 'border-inner-owned-nonempty-list')
+        path = self.root / (active[0] + '.mojo')
+        original = path.read_text()
+        start = original.index('def _border_widths(')
+        end = original.index('def _lane_records(', start)
+        body = original[start:end]
+        self.assertEqual(body.count('_active('), 2)
+        for before, after in (
+            ('        if len(borders[i]) == 0:\n', '        if False:\n'),
+            ('                if ids[j] == id - Int(side) and len(borders[j]) > 0:\n',
+             '                if ids[j] == id - Int(side):\n'),
+            ('            if found < 0:\n', '            if False:\n'),
+            ('            inner = borders[found].copy()\n',
+             '            inner = List[_Cubic]()\n'),
+        ):
+            with self.subTest(premise=before.strip()):
+                self.assertEqual(body.count(before), 1)
+                path.write_text(original[:start] + body.replace(before, after, 1)
+                                + original[end:])
+                self.assertIsNone(self.prove(active))
+                self.assertIsNone(self.prove(inner))
+                path.write_text(original)
+                self.assertIsNotNone(self.prove(active))
+                self.assertIsNotNone(self.prove(inner))
+
+    def test_groom_mutation_does_not_disable_independent_count_rule(self):
+        rules = {rule[5]: rule for rule in loops.GUARDED_LOOP_RULES}
+        groom = self.root / 'extensions/humanoid/skeleton/head/hair/groom.mojo'
+        original = groom.read_bytes()
+        groom.write_bytes(original + b'\n# changed length producer\n')
+        self.assertIsNone(self.prove(rules['density-partitioned-nonempty-groom']))
+        self.assertIsNotNone(self.prove(rules['density-validated-positive-cube-count']))
+
+    def test_new_private_caller_alias_or_comment_fails_closed(self):
+        rule = next(r for r in loops.GUARDED_LOOP_RULES
+                    if r[5] == 'border-active-maintained-nonempty-callers')
+        extra = self.root / 'tests/test_added_border_caller.mojo'
+        extra.parent.mkdir(parents=True, exist_ok=True)
+        for body in (
+            'from extensions.carla.opendrive import _active\n',
+            'alias alternate = _active\n',
+            '# conservative unknown reference to _active\n',
+        ):
+            with self.subTest(body=body):
+                extra.write_text(body)
+                self.assertIsNone(self.prove(rule))
+                extra.unlink()
+                self.assertIsNotNone(self.prove(rule))
+
+    def test_mask_keeps_true_and_every_nonloop_obligation(self):
+        for rule in loops.GUARDED_LOOP_RULES:
+            proof = self.prove(rule)
+            module, number = rule[:2]
+            raw = (f'L {module} {number}\nB {module} {number}\n'
+                   f'L {module} {number+1}\nC {module} {number+1} 0\n'
+                   f'M {module} {number+1} 0\n').encode()
+            receipt = {'manifest_sha256': loops.sha256(raw),
+                       'proofs': [{'module': module, **proof}]}
+            envelope = {'receipt': receipt,
+                        'sha256': loops.sha256(loops.canonical(receipt))}
+            with self.subTest(proof_id=rule[5]):
+                masked = loops.masked_manifest(raw, envelope).decode().splitlines()
+                expected = raw.decode().splitlines()
+                expected[1] = (f'R {module} {number} T {proof["kind"]} '
+                               f'{proof["cardinality"]}')
+                self.assertEqual(masked[1:], expected)
+                receipt['proofs'] = []
+                envelope['sha256'] = loops.sha256(loops.canonical(receipt))
+                self.assertEqual(loops.masked_manifest(raw, envelope).decode().splitlines()[1:],
+                                 raw.decode().splitlines())
+
+    def map_owned_list_rules(self):
+        names = {
+            'query-retained-certificate-list',
+            'query-nonempty-winner-rescan',
+            'query-nonempty-competitor-rescan',
+            'query-nonempty-prefix-certificates',
+        }
+        rules = [rule for rule in loops.GUARDED_LOOP_RULES if rule[5] in names]
+        self.assertEqual({rule[1] for rule in rules}, {2272, 2279, 2301, 2378})
+        return rules
+
+    def test_map_owned_list_admission_appends_and_alias_boundaries_are_bound(self):
+        path = self.root / 'extensions/carla/map.mojo'
+        original = path.read_text()
+        begin = original.index('    def _closest_lane_certificate_with_work(')
+        end = original.index('    def _resume_on_segment_certificate(', begin)
+        body = original[begin:end]
+        cases = (
+            ('        var best = -1\n', '        var best = 0\n'),
+            ('        if best < 0:\n            return None\n',
+             '        if False:\n            return None\n'),
+            ('                best = len(indices)\n',
+             '                best = 0\n'),
+            ('            indices.append(index)\n', '            pass\n'),
+            ('            certificates.append(result[1].copy())\n',
+             '            pass\n'),
+            ('            indices.append(index)\n',
+             '            try:\n                indices.append(index)\n'
+             '            except:\n                pass\n'),
+            ('        if best < 0:\n',
+             '        ref escaped = indices\n        escaped.clear()\n'
+             '        if best < 0:\n'),
+            ('        if best < 0:\n',
+             '        ref escaped = certificates\n        escaped.clear()\n'
+             '        if best < 0:\n'),
+            ('        if best < 0:\n',
+             '        unreviewed_outer_list_callback(indices, certificates)\n'
+             '        if best < 0:\n'),
+        )
+        rules = self.map_owned_list_rules()
+        for before, after in cases:
+            with self.subTest(premise=before, replacement=after):
+                self.assertEqual(body.count(before), 1)
+                changed = original[:begin] + body.replace(before, after, 1) + original[end:]
+                path.write_text(changed)
+                for rule in rules:
+                    self.assertIsNone(self.prove(rule))
+                path.write_text(original)
+                for rule in rules:
+                    proof = self.prove(rule)
+                    self.assertEqual((proof['required'], proof['impossible']), ('T', 'F'))
+
+    def test_map_owned_list_each_exact_header_withholds_on_local_clear(self):
+        path = self.root / 'extensions/carla/map.mojo'
+        original = path.read_text()
+        rules = self.map_owned_list_rules()
+        for rule in rules:
+            with self.subTest(header=rule[1]):
+                lines = original.splitlines(keepends=True)
+                line = lines[rule[1] - 1]
+                self.assertIn(' in ' + rule[4] + ':', line)
+                outer = 'indices' if 'indices' in rule[4] else 'certificates'
+                indent = line[:len(line) - len(line.lstrip())]
+                lines.insert(rule[1] - 1, indent + outer + '.clear()\n')
+                path.write_text(''.join(lines))
+                for affected in rules:
+                    self.assertIsNone(self.prove(affected))
+                path.write_text(original)
+                for affected in rules:
+                    self.assertIsNotNone(self.prove(affected))
+
+    def hair_rules(self):
+        return [rule for rule in loops.GUARDED_LOOP_RULES
+                if rule[0] == 'extensions/humanoid/skeleton/head/hair/strands']
+
+    def test_hair_constructor_current_state_and_both_shading_borrows_are_bound(self):
+        prefix = 'extensions/humanoid/skeleton/head/hair/'
+        cases = (
+            ('strands.mojo', 'if segments <= 0:', 'if segments < 0:'),
+            ('strands.mojo', 'self._topology = groom.starts.copy()',
+             'self._topology = List[Int]()'),
+            ('strands.mojo', '        self._check_geometry(assets)\n',
+             '        pass\n'),
+            ('strands.mojo', '        self.density.rebuild(self.groom)\n',
+             '        pass\n'),
+            ('strands.mojo',
+             'if len(self.groom.starts) != len(self._topology):', 'if False:'),
+            ('strands.mojo', 'if self.groom.starts != self._topology:',
+             'if False:'),
+            ('density.mojo',
+             'if len(groom.starts) == 0 or groom.starts[0] != 0:', 'if False:'),
+            ('density.mojo',
+             'if groom.starts[len(groom.starts) - 1] != len(groom.points):',
+             'if False:'),
+            ('density.mojo',
+             'if groom.starts[strand] > groom.starts[strand + 1]:', 'if False:'),
+            ('groom.mojo', 'return len(self.starts) - 1', 'return 0'),
+            ('strands.mojo', '        self._shadow_depths(lights)\n',
+             '        self.groom.points.clear()\n        self._shadow_depths(lights)\n'),
+            ('strands.mojo', '        self._upload(assets)\n',
+             '        self.groom.starts.clear()\n        self._upload(assets)\n'),
+            # These are separate public and private immutable borrow boundaries.
+            ('shading.mojo', 'def shade_groom_into(\n    groom: HairGroom,',
+             'def shade_groom_into(\n    mut groom: HairGroom,'),
+            ('shading.mojo', 'def _shade_groom_into(\n    groom: HairGroom,',
+             'def _shade_groom_into(\n    mut groom: HairGroom,'),
+            ('strands.mojo', '        self._shadow_depths(lights)\n',
+             '        ref alias = self._topology\n'
+             '        alias.clear()\n        self._shadow_depths(lights)\n'),
+        )
+        rules = self.hair_rules()
+        self.assertEqual(len(rules), 2)
+        for name, before, after in cases:
+            path = self.root / (prefix + name)
+            original = path.read_text()
+            with self.subTest(source=name, premise=before):
+                self.assertEqual(original.count(before), 1)
+                path.write_text(original.replace(before, after, 1))
+                for rule in rules:
+                    self.assertIsNone(self.prove(rule))
+                path.write_text(original)
+                for rule in rules:
+                    self.assertIsNotNone(self.prove(rule))
+
+    def test_hair_census_rejects_direct_calls_aliases_writes_and_unknown_references(self):
+        rules = self.hair_rules()
+        extra = self.root / 'tests/new_unreviewed_hair_access.mojo'
+        cases = (
+            'def added(hair):\n    hair._shadow_depths([])\n',
+            'def added(hair, assets):\n    hair._upload(assets)\n',
+            'def added(hair):\n    var alias = hair._upload\n',
+            'def added(mut hair):\n    ref alias = hair._topology\n    alias.clear()\n',
+            'def added(mut hair):\n    hair._topology = [0]\n',
+            '# conservative unknown _shadow_depths reference\n',
+            '# conservative unknown _topology reference\n',
+        )
+        for body in cases:
+            with self.subTest(body=body):
+                extra.write_text(body)
+                for rule in rules:
+                    self.assertIsNone(self.prove(rule))
+                extra.unlink()
+                for rule in rules:
+                    self.assertIsNotNone(self.prove(rule))
+        # Ordinary public edits before shade are handled by its current-state
+        # guards. They do not rely on an exhaustive list of public mutators.
+        extra.write_text('def added(mut hair, assets):\n'
+                         '    hair.groom.points.clear()\n'
+                         '    hair.shade(assets, [], Vector3(), Vector3())\n')
+        for rule in rules:
+            self.assertIsNotNone(self.prove(rule))
+        extra.unlink()
+        # The lexical collisions are source-bound too: adding a hair write
+        # there must not pass merely because the set of paths stays unchanged.
+        for name in ('extensions/carla/agents_route.mojo',
+                     'tests/test_carla_route_search.mojo'):
+            path = self.root / name
+            original = path.read_text()
+            path.write_text(original + cases[3])
+            for rule in rules:
+                self.assertIsNone(self.prove(rule))
+            path.write_text(original)
+
+    def test_hair_census_requires_named_rows_bound_paths_and_successful_reads(self):
+        for rule in self.hair_rules():
+            key = (rule[1], rule[5])
+            with patch.dict(loops.HAIR_RETAINED_RULE_CENSUS, clear=True):
+                self.assertIsNone(self.prove(rule))
+            with patch.dict(loops.HAIR_RETAINED_RULE_CENSUS, {key: ()}):
+                self.assertIsNone(self.prove(rule))
+            changed = list(rule)
+            changed[5] += '-unreviewed'
+            self.assertIsNone(self.prove(tuple(changed)))
+            changed = list(rule)
+            changed[6] = tuple(name for name in rule[6]
+                               if name != 'tests/test_carla_route_search.mojo')
+            self.assertIsNone(self.prove(tuple(changed)))
+            with patch.object(loops.cache_key, 'input_paths',
+                              side_effect=OSError('unreadable census')):
+                self.assertIsNone(self.prove(rule))
+            self.assertIsNotNone(self.prove(rule))
+
+    def test_hair_census_mutation_preserves_independent_historical_and_density_rows(self):
+        rules = self.hair_rules()
+        extra = self.root / 'tests/new_unreviewed_hair_access.mojo'
+        extra.write_text('# unknown _upload caller\n')
+        for rule in rules:
+            self.assertIsNone(self.prove(rule))
+        historical = loops.reviewed_nonempty_loops(self.root, rules[0][0])
+        self.assertEqual(set(historical), {195, 201})
+        density = [rule for rule in loops.GUARDED_LOOP_RULES
+                   if rule[0].endswith('/hair/density')]
+        for rule in density:
+            self.assertIsNotNone(self.prove(rule))
+        extra.unlink()
+        self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, rules[0][0])),
+                         {180, 191, 195, 201})
+
+    def test_resumption_transaction_keeps_cells_on_every_false_return(self):
+        rules = [r for r in loops.GUARDED_LOOP_RULES
+                 if r[5] == 'resumption-transaction-retains-cells']
+        self.assertEqual(len(rules), 1)
+        rule = rules[0]
+        self.assertEqual(rule[:5], ('extensions/carla/lane_refinement', 1314,
+                         'reviewed-nonempty-iterator', None, 'certificate.cells'))
+        self.assertEqual(rule[6:], ((), ()))
+        path = self.root / (rule[0]+'.mojo')
+        original = path.read_text()
+
+        def span(name):
+            start = original.index('def '+name+'(')
+            end = original.find('\ndef ', start+1)
+            end = len(original) if end < 0 else end+1
+            return start, end, original[start:end]
+
+        ha, hb, helper = span('_try_rounded_arc_witness')
+        ca, cb, caller = span('_continue_lane_certificate')
+        ra, rb, reserve = span('_reserve_rounded_arc_box')
+        false_lines = [(i, line) for i, line in enumerate(helper.splitlines(True))
+                       if line.strip() == 'return False']
+        self.assertEqual(len(false_lines), 9)
+        mutations = []
+        for i, line in false_lines:
+            rows = helper.splitlines(True)
+            indent = line[:len(line)-len(line.lstrip())]
+            rows.insert(i, indent+'certificate.cells.clear()\n')
+            mutations.append(('clear before False '+str(i),
+                              original[:ha]+''.join(rows)+original[hb:]))
+        for name, block, start, end, before, after in (
+            ('replacement returns False', helper, ha, hb,
+             '    return True\n', '    return False\n'),
+            ('missing same-call nonempty guard', caller, ca, cb,
+             '    if len(certificate.cells) == 0:\n', '    if False:\n'),
+            ('successful replacement falls through', caller, ca, cb,
+             '    if _try_rounded_arc_witness(\n', '    if not _try_rounded_arc_witness(\n'),
+            ('counter reserve clears cover', reserve, ra, rb,
+             '    certificate.nodes += 1\n', '    certificate.cells.clear()\n'),
+        ):
+            self.assertEqual(block.count(before), 1)
+            mutations.append((name, original[:start]+block.replace(before, after, 1)+original[end:]))
+        rows = original.splitlines(True)
+        self.assertEqual(rows[1313].strip(), 'for cell in certificate.cells:')
+        rows.insert(1313, '    ref alias = certificate.cells\n    alias.clear()\n')
+        mutations.append(('alias before second traversal', ''.join(rows)))
+        self.assertEqual(len(mutations), 14)
+        for name, text in mutations:
+            with self.subTest(premise=name):
+                self.assertNotEqual(text, original)
+                path.write_text(text)
+                self.assertIsNone(self.prove(rule))
+                path.write_text(original)
+                proof = self.prove(rule)
+                self.assertEqual((proof['required'], proof['impossible']), ('T', 'F'))
+                self.assertEqual(proof['cardinality'], 1)
+
+    def test_starts_finite_validation_and_inconclusive_sites_are_not_added(self):
+        rules = loops.GUARDED_LOOP_RULES
+        self.assertFalse(any(r[0] == 'extensions/carla/opendrive' and
+                             'range(len(starts))' == r[4] for r in rules))
+        self.assertFalse(any(r[0] == 'extensions/carla/opendrive' and
+                             'cubic.a' in r[4] for r in rules))
+        self.assertFalse(any(r[0] == 'renderers/renderer' for r in rules))
+        self.assertFalse(any(r[0].endswith('/hair/density') and r[1] in (148, 220)
+                             for r in rules))
+        self.assertEqual({r[1] for r in rules if r[0].endswith('/hair/strands')},
+                         {180, 191})
+
+
+@unittest.skipUnless(os.name == 'posix', 'POSIX runtime alarm and capture groups')
+class NativeCheckerBoundaryTests(unittest.TestCase):
+    def test_runtime_alarm_is_first_and_stays_armed(self):
+        body = native_check.PRODUCTION_DRIVER.split('def main() raises:\n', 1)[1]
+        self.assertTrue(body.startswith('    assert_equal(external_call["alarm", UInt32](UInt32(5)), UInt32(0))\n'))
+        self.assertEqual(body.count('external_call["alarm"'), 1)
+        self.assertNotIn('alarm', body.splitlines()[-1])
+        self.assertIn('external_call["pause", Int32]()', native_check.HANG_DRIVER)
+        self.assertNotIn('sleep', native_check.HANG_DRIVER)
+        self.assertEqual(native_check.RUNTIME_SECONDS, 5)
+
+    def test_exact_command_and_proof_reach_normal_capture_with_absolute_deadline(self):
+        command = ['bound-mojo', 'run', '-I', 'bound-stage', 'bound-suite.mojo']
+        with patch.object(native_check, 'run') as run, \
+                patch.object(native_check.time, 'monotonic', return_value=100), \
+                patch.object(coverage_io, 'shared_deadline', return_value=None):
+            native_check.capture_with_compiler_budget(command, Path('out'), Path('err.gz'),
+                loop_proof=Path('proof.json'), source_root=Path('source'))
+        args, kwargs = run.call_args
+        self.assertEqual(args[0], [sys.executable, str(native_check.ROOT/'tools/coverage_io.py'),
+            'capture', '--out', 'out', '--err', 'err.gz', '--loop-proof', 'proof.json',
+            '--loop-proof-root', 'source', '--', *command])
+        self.assertEqual(float(kwargs['env'][coverage_io.DEADLINE_ENV]), 280)
+        self.assertNotIn('timeout', kwargs)
+        self.assertTrue(kwargs['success'])
+
+    def test_inherited_deadline_is_never_extended(self):
+        for inherited, expected in ((110, 110), (400, 280), (99, 99)):
+            with self.subTest(inherited=inherited), patch.object(native_check, 'run') as run, \
+                    patch.object(native_check.time, 'monotonic', return_value=100), \
+                    patch.object(coverage_io, 'shared_deadline', return_value=inherited):
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', success=False)
+                self.assertEqual(float(run.call_args.kwargs['env'][coverage_io.DEADLINE_ENV]), expected)
+                self.assertFalse(run.call_args.kwargs['success'])
+
+    def test_invalid_bounds_or_incomplete_proofs_do_not_launch(self):
+        for seconds in (0, -1, 181, float('inf'), float('nan'), True, '5'):
+            with self.subTest(seconds=seconds), patch.object(native_check, 'run') as run:
+                with self.assertRaises(RuntimeError):
+                    native_check.capture_with_compiler_budget(['command'], 'out', 'err', seconds=seconds)
+                run.assert_not_called()
+        for arguments in ({'loop_proof': Path('proof')}, {'source_root': Path('root')}):
+            with patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err', **arguments)
+            run.assert_not_called()
+
+    def test_ignored_or_blocked_alarm_is_refused(self):
+        with patch.object(native_check.signal, 'getsignal', return_value=signal.SIG_IGN), \
+                patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
+            native_check.capture_with_compiler_budget(['command'], 'out', 'err')
+        run.assert_not_called()
+        previous = signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGALRM])
+        try:
+            with patch.object(native_check, 'run') as run, self.assertRaises(RuntimeError):
+                native_check.capture_with_compiler_budget(['command'], 'out', 'err')
+            run.assert_not_called()
+        finally:
+            signal.pthread_sigmask(signal.SIG_SETMASK, previous)
+
+    def test_integration_deadline_reaps_descendants_and_private_environment(self):
+        # Exercise the maintained watchdog through this helper's actual CLI.
+        from test_coverage_lifecycle import CoverageLifecycleTests, WORKER
+        with tempfile.TemporaryDirectory(prefix='loop checker deadline ') as directory:
+            root = Path(directory)
+            worker = root/'worker.py'
+            worker.write_text(WORKER)
+            try:
+                with patch.dict(os.environ):
+                    os.environ.pop(coverage_io.DEADLINE_ENV, None)
+                    result = native_check.capture_with_compiler_budget(
+                        [sys.executable, str(worker), str(root), 'child', 'valid'],
+                        root/'out', root/'err.gz', success=False, seconds=2)
+                self.assertEqual(result.returncode, 124)
+                for role in ('child', 'grandchild'):
+                    pid = int((root/(role+'.pid')).read_text())
+                    until = time.monotonic()+2
+                    while not CoverageLifecycleTests.stopped(self, pid):
+                        self.assertLess(time.monotonic(), until, 'capture left live descendant')
+                        time.sleep(.01)
+                self.assertFalse(Path((root/'temporary').read_text()).exists())
+                self.assertFalse(loops.capture_receipt_path(root/'err.gz').exists())
+            finally:
+                for path in root.glob('*.pid'):
+                    with contextlib.suppress(ProcessLookupError):
+                        os.kill(int(path.read_text()), signal.SIGKILL)
+
+
+class MapSuccessorLoopTests(unittest.TestCase):
+    """Exercise actual live states separately from historical premise fixtures."""
+
+    def setUp(self):
+        from carla_lane_oracle import seed_count_contracts as seed_count
+        self.seed = seed_count
+        self.repo = Path(__file__).resolve().parents[1]
+        self.name = seed_count.MODULE
+        self.rules = [rule for rule in loops.GUARDED_LOOP_RULES
+                      if rule[0] == 'extensions/carla/map']
+        self.lines = {1491: 1485, 2272: 2264, 2279: 2271, 2301: 2293,
+                      2373: 2365, 2378: 2370, 2387: 2379, 2396: 2388}
+        self.raw = (self.repo/self.name).read_bytes()
+        self.digest = loops.sha256(self.raw)
+        self.assertIn(self.digest, (seed_count.BEFORE_SHA256, seed_count.AFTER_SHA256))
+        self.after = self.digest == seed_count.AFTER_SHA256
+
+    def assert_live_proofs(self, root):
+        actual = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
+        expected = set(self.lines.values() if self.after else self.lines)
+        self.assertEqual(set(actual), expected)
+        text = (root/self.name).read_text().splitlines()
+        for rule in self.rules:
+            line = self.lines[rule[1]] if self.after else rule[1]
+            proof = actual[line]
+            self.assertEqual((proof['line'], proof['required'], proof['impossible']),
+                             (line, 'T', 'F'))
+            self.assertEqual(proof['proof_id'], rule[5])
+            self.assertEqual(proof['dependency_sha256'][self.name], self.digest)
+            self.assertIn(' in '+proof['expression']+':', text[line-1])
+        tree = loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree')
+        self.assertEqual(set(tree), {666})
+        self.assertEqual((tree[666]['required'], tree[666]['impossible']), ('T', 'F'))
+        self.assertEqual(tree[666]['dependency_sha256'][self.name], self.digest)
+        return actual
+
+    def fixture(self):
+        temporary = tempfile.TemporaryDirectory(prefix='map-successor-loop-')
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        record = self.seed.read_record(self.repo)
+        names = {self.name, self.seed.MIGRATION}
+        for key in ('unchanged_inputs', 'historical_records',
+                    'unchanged_correctness_tests', 'after_correctness_tests'):
+            names.update(record[key])
+        names.update(loops.REVIEWED_LOOP_RULES['extensions/carla/rtree'][0])
+        for name in names:
+            path = root/name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes((self.repo/name).read_bytes())
+        return root
+
+    def test_actual_physical_state_keeps_live_hashes_and_all_true_obligations(self):
+        self.assertEqual({r[1] for r in self.rules}, set(self.lines))
+        self.assertEqual(loops._MAP_SUCCESSOR_LINES, self.lines)
+        self.assert_live_proofs(self.repo)
+
+    def test_missing_future_fixture_cannot_activate_after_in_before_checkout(self):
+        root = self.fixture()
+        (root/self.name).write_text(self.seed.successor_source(self.repo))
+        if not self.after:
+            # An infrastructure-only checkout cannot manufacture the future
+            # count suite. Its actual old bytes must fail the immutable pin.
+            self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+            self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree'), {})
+        else:
+            self.assert_live_proofs(root)
+
+    def test_live_headers_and_frontier_call_mutations_revoke(self):
+        root = self.fixture()
+        self.assert_live_proofs(root)
+        path = root/self.name
+        lines = self.raw.decode().splitlines(keepends=True)
+        for rule in self.rules:
+            line = self.lines[rule[1]] if self.after else rule[1]
+            mutated = list(lines)
+            mutated[line-1] = mutated[line-1].replace(' in ', ' in [] # ', 1)
+            with self.subTest(header=line):
+                path.write_text(''.join(mutated))
+                self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+                self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree'), {})
+        path.write_bytes(self.raw)
+        before = 'var frontier = self._tree._nearest_begin(location, work)'
+        self.assertEqual(self.raw.decode().count(before), 1)
+        path.write_text(self.raw.decode().replace(before, 'var frontier = _Heap()'))
+        self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree'), {})
+        path.write_bytes(self.raw)
+        self.assert_live_proofs(root)
+
+    def test_after_dependency_fixture_and_record_controls_fail_closed(self):
+        root = self.fixture()
+        # Use the source-only reconstruction to test rejection even before the
+        # future fixture exists; only a physical after checkout admits it.
+        (root/self.name).write_text(self.seed.successor_source(self.repo))
+        if self.after:
+            self.assert_live_proofs(root)
+        else:
+            self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+        for name in ('extensions/carla/road.mojo', self.seed.MIGRATION,
+                     'tests/test_carla_winner_seed_recovery.mojo'):
+            path = root/name
+            original = path.read_bytes()
+            with self.subTest(dependency=name):
+                path.write_bytes(original+b'\n# unreviewed successor dependency\n')
+                self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+                self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree'), {})
+                path.unlink()
+                self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+                path.write_bytes(original)
+        if self.after:
+            self.assert_live_proofs(root)
+
+    def test_current_lines_mask_only_the_false_loop_outcomes(self):
+        proofs = self.assert_live_proofs(self.repo)
+        for line, proof in proofs.items():
+            module = 'extensions/carla/map'
+            raw = (f'L {module} {line}\nB {module} {line}\n'
+                   f'C {module} {line+1} 0\nM {module} {line+1} 0\n').encode()
+            receipt = {'manifest_sha256': loops.sha256(raw),
+                       'proofs': [{'module': module, **proof}]}
+            envelope = {'receipt': receipt, 'sha256': loops.sha256(loops.canonical(receipt))}
+            expected = raw.decode().splitlines()
+            expected[1] = f'R {module} {line} T {proof["kind"]} {proof["cardinality"]}'
+            self.assertEqual(loops.masked_manifest(raw, envelope).decode().splitlines()[1:], expected)
+
+
+    def clean_import_probe(self, mode, *, root=None, shadow=False,
+                           internal_error=False, rejected=False):
+        """Use a real script path and fresh interpreter, never ambient imports."""
+        temporary = tempfile.TemporaryDirectory(prefix='oracle-cli-import-')
+        self.addCleanup(temporary.cleanup)
+        fixture = Path(temporary.name)
+        tools = fixture / 'tools'
+        oracle = tools / 'carla_lane_oracle'
+        oracle.mkdir(parents=True)
+        modules = (
+            'seed_count_contracts', 'sum2_guard_contracts', 'source_contracts',
+            'ideal_projection', 'cache_key_contracts', 'reviewed_cleanup_contracts',
+            'accepted_successor_contracts', 'coverage_invariant_contracts',
+            'curve_support_dispatch_contracts', 'frozen_arc_producer_contracts',
+            'grouped_table_contracts',
+        )
+        for name in modules:
+            shutil.copyfile(self.repo / 'tools/carla_lane_oracle' / (name+'.py'),
+                            oracle / (name+'.py'))
+        for name in ('coverage_loop_proofs', 'cache_key',
+                     'coverage_toolchain_identity', 'affected'):
+            shutil.copyfile(self.repo / 'tools' / (name+'.py'), tools / (name+'.py'))
+        if internal_error:
+            with (oracle / 'source_contracts.py').open('a') as output:
+                output.write('\nraise ModuleNotFoundError("oracle-inner-sentinel")\n')
+        script = (tools if mode == 'cli' else oracle if mode == 'direct' else fixture) / 'probe.py'
+        script.write_text("""
+import hashlib, importlib, json, sys, types
+from pathlib import Path
+root = Path(sys.argv[1])
+mode, shadow, internal_error, rejected = sys.argv[2:]
+original_path = list(sys.path)
+prefix = {'cli': 'carla_lane_oracle.', 'package': 'tools.carla_lane_oracle.', 'direct': ''}[mode]
+def check(value, message):
+    if not value:
+        raise RuntimeError(message)
+if shadow == 'True':
+    check(bool(prefix), 'shadow control requires package execution')
+    shadow_module = types.ModuleType('source_contracts')
+    sys.modules['source_contracts'] = shadow_module
+try:
+    seed = importlib.import_module(prefix + 'seed_count_contracts')
+except ModuleNotFoundError as error:
+    check(internal_error == 'True' and str(error) == 'oracle-inner-sentinel',
+          'an internal import error was hidden by alternate import resolution: ' + str(error))
+    check(sys.path == original_path, 'failure changed the import path')
+    print('internal import error propagated without fallback')
+    raise SystemExit(0)
+check(internal_error == 'False', 'internal dependency error was swallowed')
+source = importlib.import_module(prefix + 'source_contracts')
+guard = importlib.import_module(prefix + 'sum2_guard_contracts')
+check(seed.source is source and seed.guard is guard, 'split seed dependency identity')
+check(guard.source_contracts is source, 'split guard source identity')
+check(guard.cache_key.source is source, 'split cache source identity')
+check(guard.reviewed_cleanup_contracts.source is source, 'split cleanup source identity')
+check(guard.reviewed_cleanup_contracts.invariant.source is source, 'split invariant source identity')
+check(guard.reviewed_cleanup_contracts.frozen.source is source, 'split frozen source identity')
+check(guard.reviewed_cleanup_contracts.accepted.source is source, 'split accepted source identity')
+check(guard.reviewed_cleanup_contracts.invariant.curve.source is source, 'split curve source identity')
+check(guard.reviewed_cleanup_contracts.invariant.grouped.token_sha256 is source.token_sha256,
+      'split grouped token function identity')
+if shadow == 'True':
+    check(source is not shadow_module and sys.modules['source_contracts'] is shadow_module,
+          'package import reused or replaced an unrelated direct module')
+check(sys.path == original_path, 'imports changed sys.path')
+if mode == 'cli':
+    import coverage_loop_proofs as loops
+    actual = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
+    tree = loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree')
+    if rejected == 'True':
+        check(not actual and not tree, 'unknown source activated a named proof')
+        print('unknown successor withheld all named Map and R-tree proofs')
+        raise SystemExit(0)
+    digest = hashlib.sha256((root/seed.MODULE).read_bytes()).hexdigest()
+    after = digest == seed.AFTER_SHA256
+    expected = set(loops._MAP_SUCCESSOR_LINES.values() if after else loops._MAP_SUCCESSOR_LINES)
+    check(set(actual) == expected and set(tree) == {666}, 'clean CLI lost expected named proofs')
+    for proof in [*actual.values(), *tree.values()]:
+        check((proof['required'], proof['impossible']) == ('T', 'F'), 'reachable outcome weakened')
+        check(proof['dependency_sha256'][seed.MODULE] == digest, 'proof replaced live source identity')
+    print(json.dumps({'map_lines': sorted(actual), 'rtree_lines': sorted(tree), 'map_sha256': digest}))
+else:
+    before = seed.historical_source(root)
+    check(hashlib.sha256(before.encode()).hexdigest() == seed.BEFORE_SHA256,
+          'source inverse did not reconstruct the reviewed predecessor')
+    print('canonical ' + (prefix or 'direct') + ' imports and reviewed inverse passed')
+check(sys.path == original_path, 'verification changed sys.path')
+""")
+        # -E excludes inherited PYTHONPATH. The real script location supplies
+        # tools, the repository package root, or the direct oracle directory.
+        # The unrelated cwd prevents repository-root discovery from hiding bugs.
+        cwd = fixture / 'unrelated-cwd'
+        cwd.mkdir()
+        command = [sys.executable, '-E', '-B']
+        if sys.flags.optimize:
+            command.append('-O')
+        command.extend([str(script), str(root or self.repo), mode, str(shadow),
+                        str(internal_error), str(rejected)])
+        result = subprocess.run(command, cwd=cwd, check=False, capture_output=True,
+                                text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout
+
+    def test_clean_cli_admits_named_rules_without_ambient_root_imports(self):
+        self.assertIn('map_lines', self.clean_import_probe('cli'))
+
+    def test_package_and_direct_modes_keep_canonical_dependency_identity(self):
+        for mode, shadow in [('package', False), ('package', True),
+                             ('cli', True), ('direct', False)]:
+            with self.subTest(mode=mode, shadow=shadow):
+                self.assertIn('passed' if mode != 'cli' else 'map_lines',
+                              self.clean_import_probe(mode, shadow=shadow))
+
+    def test_internal_dependency_importerror_propagates_without_fallback(self):
+        for mode in ('cli', 'package', 'direct'):
+            with self.subTest(mode=mode):
+                self.assertIn('without fallback',
+                              self.clean_import_probe(mode, internal_error=True))
+
+    def test_clean_cli_unknown_successor_keeps_both_loop_outcomes_required(self):
+        root = self.fixture()
+        with (root/self.name).open('ab') as output:
+            output.write(b'\n# unknown complete source\n')
+        self.assertIn('withheld', self.clean_import_probe('cli', root=root, rejected=True))
+
 
 
 if __name__ == '__main__':

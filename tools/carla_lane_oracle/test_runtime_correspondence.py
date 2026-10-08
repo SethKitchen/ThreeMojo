@@ -22,6 +22,7 @@ import check_runtime_support as runtime
 import heading_correspondence
 import sum2_guard_contracts
 import source_contracts as contracts
+import seed_count_contracts as seed_count
 
 ROOT = Path(__file__).resolve().parents[2]
 TARGET = 'lane_value_bounds.mojo'
@@ -254,7 +255,11 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
             paths.update(json.loads((ROOT/sum2_guard_contracts.PINS).read_text())['protected_inventory'])
             for name in paths:
                 to = root/name; to.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT/name, to)
+                if name == seed_count.MODULE:
+                    # This partial fixture retains the historical dependencies.
+                    to.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
+                else:
+                    shutil.copyfile(ROOT/name, to)
             for mode in ([], ['-O']):
                 for script in ('check_sampled_values.py', 'check_runtime_support.py'):
                     command = [sys.executable, *mode, '-B', str(Path(__file__).parent/script), '--repo-root', str(root)]

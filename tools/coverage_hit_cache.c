@@ -5,6 +5,7 @@
 #define _GNU_SOURCE
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdatomic.h>
@@ -35,14 +36,52 @@ static dev_t pipe_device;
 static ino_t pipe_inode;
 static int enabled;
 static int probe_sink = -1;
+/* Every supported fork contributes its own outstanding prepare increment.
+ * Earlier child callbacks therefore keep the PID-checking path until our
+ * child callback disables the inherited transport. Parent overlap cannot
+ * remove the child's increment after address spaces separate. */
+static atomic_uint forks_in_flight;
+
+static void before_fork(void) {
+    int saved_errno = errno;
+    unsigned count = atomic_load_explicit(&forks_in_flight, memory_order_relaxed);
+    do {
+        /* Never transiently publish zero by wrapping an active count. */
+        if (count == UINT_MAX)
+            abort();
+    } while (!atomic_compare_exchange_weak_explicit(
+        &forks_in_flight, &count, count + 1,
+        memory_order_seq_cst, memory_order_relaxed));
+    errno = saved_errno;
+}
+
+static void after_parent_fork(void) {
+    int saved_errno = errno;
+    unsigned count = atomic_load_explicit(&forks_in_flight, memory_order_relaxed);
+    do {
+        if (count == 0)
+            abort();
+    } while (!atomic_compare_exchange_weak_explicit(
+        &forks_in_flight, &count, count - 1,
+        memory_order_seq_cst, memory_order_relaxed));
+    errno = saved_errno;
+}
+
+static int owns_private_capture(void) {
+    return enabled &&
+        (atomic_load_explicit(&forks_in_flight, memory_order_acquire) == 0 ||
+         getpid() == owner);
+}
 
 static void child_after_fork(void) {
+    int saved_errno = errno;
     /* No locks or allocation in this callback. A fork child cannot retain a
      * hidden writer after redirecting stderr. Its probes use raw fd2 instead. */
     if (probe_sink >= 0)
         close(probe_sink);
     probe_sink = -1;
     enabled = 0;
+    errno = saved_errno;
 }
 
 __attribute__((constructor)) static void initialize_hit_cache(void) {
@@ -51,6 +90,7 @@ __attribute__((constructor)) static void initialize_hit_cache(void) {
     const char *inode = getenv("THREEMOJO_COVERAGE_PIPE_INODE");
     struct stat sink;
     owner = getpid();
+    atomic_init(&forks_in_flight, 0);
     for (size_t i = 0; i < HIT_SLOTS; ++i)
         atomic_init(&slots[i].busy, 0);
     if (device && inode && fstat(2, &sink) == 0 && S_ISFIFO(sink.st_mode)) {
@@ -70,7 +110,7 @@ __attribute__((constructor)) static void initialize_hit_cache(void) {
                 S_ISFIFO(opened.st_mode) && opened.st_dev == sink.st_dev &&
                 opened.st_ino == sink.st_ino &&
                 fcntl(writer, F_SETFL, O_WRONLY) == 0 &&
-                pthread_atfork(NULL, NULL, child_after_fork) == 0) {
+                pthread_atfork(before_fork, after_parent_fork, child_after_fork) == 0) {
                 pipe_device = sink.st_dev;
                 pipe_inode = sink.st_ino;
                 probe_sink = writer;
@@ -117,7 +157,7 @@ static void require_private_sink(void) {
 int threemojo_coverage_emit_hit(const unsigned char *bytes, size_t size, int entered_errno) {
     if (size > HIT_BYTES)
         abort();
-    if (!enabled || getpid() != owner) {
+    if (!owns_private_capture()) {
         errno = entered_errno;
         write_record(2, bytes, size);
         return errno;
@@ -162,7 +202,7 @@ int threemojo_coverage_emit_evaluation(const unsigned char *bytes, size_t size, 
     if (size > HIT_BYTES)
         abort();
     int descriptor = 2;
-    if (enabled && getpid() == owner) {
+    if (owns_private_capture()) {
         require_private_sink();
         descriptor = probe_sink;
     }

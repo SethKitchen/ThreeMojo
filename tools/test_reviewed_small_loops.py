@@ -18,7 +18,12 @@ class SmallLoopTests(unittest.TestCase):
         for module in (SPEED,TREE):
             for name in loops.REVIEWED_LOOP_RULES[module][0]:
                 p=self.root/name;p.parent.mkdir(parents=True,exist_ok=True)
-                p.write_bytes((ROOT/name).read_bytes())
+                if name == 'extensions/carla/map.mojo':
+                    from carla_lane_oracle import seed_count_contracts as seed_count
+                    content = seed_count.historical_source(ROOT).encode('utf-8')
+                else:
+                    content = (ROOT/name).read_bytes()
+                p.write_bytes(content)
 
     def test_exact_partial_outcomes_keep_true(self):
         for module,line,kind,maximum in [(SPEED,154,'reviewed-nonempty-iterator',None),(TREE,666,'reviewed-nonempty-iterator',16)]:

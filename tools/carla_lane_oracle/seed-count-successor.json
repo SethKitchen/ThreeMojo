@@ -1,0 +1,513 @@
+{
+  "after_correctness_tests": {
+    "tests/test_carla_winner_seed_recovery.mojo": "559ad43611e574a29ee6f8eedec31e082759b7a7e2e75d62b31f4ec2f18d6988"
+  },
+  "after_sha256": "9e29cdd57fc37ffa9dc9c09ed9b263ddb7ced5781f938ff13d7fd9b2c6c997a5",
+  "after_token_sha256": "ef1e317a812dec93adc1e47857825cfc747eae7117dd3f9664b7e4dda646b938",
+  "before_sha256": "52dd32213d64275be94ba714bc9b6a57c28f5ba1303525ef1a1aac20b4743c07",
+  "before_token_sha256": "0524759d2516ef9b269c2286cd0bbc01ed8b462718ac33ac276db510739de0c0",
+  "edits": [
+    {
+      "after": "    certificate.terms += reference\n    var center = _expansion_distance_jet(",
+      "after_sha256": "46524bd4696dd3a86aba0acaaeeca3a2fff01c1fc98a94f964b81e2fefc20907",
+      "before": "    certificate.terms += reference\n    var center_reference = _reference_work(road, original_s, original_s)\n    if center_reference <= 0 or center_reference > reference:\n        return False\n    var center = _expansion_distance_jet(",
+      "before_sha256": "d8d1c138fa2182b8a0141e0470ccf4c437b3413300c8f47b793d846a4d27e0a0",
+      "name": "center_count_refusal"
+    },
+    {
+      "after": "            band_low = narrowed_low\n            band_high = narrowed_high\n            domain = _scaled_point_distance_jet(",
+      "after_sha256": "5c5affc3ebf654b83374b680e2150810a5d3ba56a00caa0994973433d36c46d0",
+      "before": "            band_low = narrowed_low\n            band_high = narrowed_high\n            var retry_reference = _reference_work(road, band_low, band_high)\n            if retry_reference <= 0 or retry_reference > reference:\n                return False\n            domain = _scaled_point_distance_jet(",
+      "before_sha256": "9eeb2140f00b3411c4ad49975bd80b1e36062b99db4db33c698b0f3567bcd9cf",
+      "name": "retry_count_refusal"
+    },
+    {
+      "after": "            var point_work = _reference_work(road, s, s)\n            work.charge(0, point_work, node_cost)",
+      "after_sha256": "2c6e35ec3490bebafaff2ab647659bd1233e51a2863753ee42c525435972e41c",
+      "before": "            var point_work = _reference_work(road, s, s)\n            if point_work <= 0 or point_work > reference:\n                return improved\n            work.charge(0, point_work, node_cost)",
+      "before_sha256": "dc0fb880705f7821f03ed435a2a181d53560cd0e27228a11d3fe160032d79680",
+      "name": "proposal_count_refusal"
+    }
+  ],
+  "historical_records": {
+    "tools/carla_lane_oracle/accepted-successor-migration.json": "bb3a7b5e08a0a5400679f410da2c4574b45924294133df2f180f71fd74064d91",
+    "tools/carla_lane_oracle/border-parser-successor.json": "0119f046c502021dc422f82ad602074e24cf3fa192f27fd372e80a927d94860b",
+    "tools/carla_lane_oracle/cache-key-migration.json": "06f0aefb02a1f897563f4e7d25e0a26f3fc56f1bef5f3fcb8eb68b5cd1188d5b",
+    "tools/carla_lane_oracle/canonical-source-correspondence.json": "8490ba39e7c31649d935a1ee48c7628cae638e4f968a52db857904a542477e8d",
+    "tools/carla_lane_oracle/constants.json": "31f1096a37e774523f90f92bc1f1d75c0b288bb74bf226e4cce227625119404c",
+    "tools/carla_lane_oracle/containing-model-removal-migration.json": "3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8",
+    "tools/carla_lane_oracle/coverage-followup-migration.json": "911929b7dc80b5c6e09e0cf27b2c8e1f9db52cd8df398d397fc70c900fed759e",
+    "tools/carla_lane_oracle/coverage-invariant-migration.json": "56a72d9bccbf9e7b8a6b51db2b9944ef4bbf55d9bcc7311f7f9615be3b3b36ac",
+    "tools/carla_lane_oracle/curve-support-dispatch-migration.json": "1a6d7794bf0869a1e717685e556d8400e075ab97917ce8d855da6bd61c3ee19f",
+    "tools/carla_lane_oracle/default-query-restoration-migration.json": "b7b619185f2b0139863d6a1a16a29cad3e91db70c1d6d036ec8f115ab3b329fa",
+    "tools/carla_lane_oracle/distance-validation-contract.json": "74409c5bb90df7e52e7e91c0bb00ed8466e3c0bf4f458507c84f0f72923548bb",
+    "tools/carla_lane_oracle/envelope-budget-contract.json": "c43aa2bfdfb2a33575745eefb44b2f8ff0714a71a31ad750e8c4c0572fa7f2be",
+    "tools/carla_lane_oracle/frozen-arc-producer-migration.json": "70091e23400193257514363570187b47890e3c08c352fe79eb08bf291737cc9f",
+    "tools/carla_lane_oracle/grouped-table-contract.json": "b0ff2742f388bdd88484fc21a9ac15efa8f7b64f7376908207dfdb7d79f66792",
+    "tools/carla_lane_oracle/grouped-y-exponent-ledger.json": "a184b9ba8aa05cc85387f97731c949889be1717271c2307373c30fa67e347f65",
+    "tools/carla_lane_oracle/grouped-y-successor-record.json": "4b72cd07de22d61d70c7aa489e566cd25468189b6a60b5e105fa26ea726e6853",
+    "tools/carla_lane_oracle/lane-control-migration.json": "73d95d594e740205bad4cd900288a68d9f82897474fdc33e4d6043a156790170",
+    "tools/carla_lane_oracle/lane-order-migration.json": "e0aece69b861bc11a197cae17803e3273cdbd0cfed7ed0ca577ca6c3b4d217b1",
+    "tools/carla_lane_oracle/moment-finiteness-contract.json": "06d9206275071726fdda7a58b5aa68c012a361e4e51a5236ff6727c7a8df6f09",
+    "tools/carla_lane_oracle/optional-runtime-migration.json": "36f47160daa93bcedc338c022b1f6b5e41cae424ca7a6531d46d3daded48a158",
+    "tools/carla_lane_oracle/raw-cut-inverse-migration.json": "4f4eb051d9c1f9194796d3073fcadfa9f49dda4c44a851da0a3409ba09587dd0",
+    "tools/carla_lane_oracle/reviewed-cleanup-migration.json": "01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9",
+    "tools/carla_lane_oracle/rounded-line-selector-migration.json": "ccb63b640653126b098185b188e33a036b140919a3c48b1ecb1b1541571ef4c4",
+    "tools/carla_lane_oracle/rounded-line-singleton-migration.json": "e4a0eb6c9e527dd66b2b803ee69754334feecc9bea33ce001cdf584d3a693506",
+    "tools/carla_lane_oracle/runtime-correspondence-migration.json": "61b54904d08b53231c981cdf40edb502caaaf7f791810d752ae57107f12d808d",
+    "tools/carla_lane_oracle/runtime-source-pins.json": "897dc034b66fe150ac092de03c5981168751d2c487b4615d45415df66e46f8c8",
+    "tools/carla_lane_oracle/selection-finiteness-contract.json": "dcd2c780640775e29a566491679dc6fbf5ab1afa43fbfbae86cb778433cf92e8",
+    "tools/carla_lane_oracle/speed-parser-successor.json": "47e949673fb8740816c06d455654c7e7ae43f65ce7d7568a201e83ae16c49364",
+    "tools/carla_lane_oracle/spiral-graph-correspondence.json": "5486b6a6b5dd9eaa60582fd5f26d27ad39a533acc73580ad7e7466c716cf0fb5",
+    "tools/carla_lane_oracle/spiral-moment-pins.json": "f93f01b65069e79bbcf0f056905187c99d0bf438939f5cac00b8b4aff1f4191b",
+    "tools/carla_lane_oracle/spiral-moment-provenance.json": "3a0e9c2a8dcc1de4d8cdf6ddb3796645b355ce507f3123f6b4c8eeebabc801ba",
+    "tools/carla_lane_oracle/sum2-correspondence-migration.json": "a965a4fee4c54ac565a5d2f73e0d815bbf9bb72103e5db7a2b5ebbaf5b8ffd77",
+    "tools/carla_lane_oracle/sum2-guard-pins.json": "229f983ad560d194901aa877b630b08ea9dc656ede5ff61961080c80d1e4fdeb",
+    "tools/carla_lane_oracle/supported-source.json": "e426aa9b4926aeee8238d529c43e223b88d133d9ee05f8867b939b99b4675018",
+    "tools/carla_lane_oracle/translated-parameter-source.json": "4fa22368f74fe53ad18aab0e1a7732bf9cf5dd219b4130d1fd8f496f2076a946",
+    "tools/carla_lane_oracle/winner-sign-query-migration.json": "b154b18213f9f0400661aff93e47b86bf83990c8838dfa0fca00b0fe6710b9a3"
+  },
+  "layout_routing": {
+    "extensions/carla/curve_interval.mojo": "5c435ba916cd5f10322f4a7f04dd3ca9a7addae29aa6690e8ca2d9ad53c9b655",
+    "extensions/carla/geometry.mojo": "3f833096c3c86288f2c2c509f5d16f6dcd28a47660b5eea13876d451877cb986",
+    "extensions/carla/map_search.mojo": "cbec28932750d822bba4e073d28c8204a8238354f893a70d458249a529218e1a",
+    "extensions/carla/road.mojo": "4b77a9e188765b7259715e701a050c7ab1abc70903bb19ae4f9e9e915894b161",
+    "extensions/carla/road_info.mojo": "0a7ce8db23c41fbcdc41a5ea22f772deeacaace4259580b73ca0cdbeb4123677"
+  },
+  "path": "extensions/carla/map.mojo",
+  "premise_declarations": [
+    {
+      "after_token_sha256": "c84fb90510c692450561c93b47cb3f8f5efe565477461a1c288180d8fd6d8018",
+      "before_token_sha256": "c84fb90510c692450561c93b47cb3f8f5efe565477461a1c288180d8fd6d8018",
+      "name": "_seed_exact_interval",
+      "owner": [],
+      "path": "extensions/carla/map.mojo"
+    },
+    {
+      "after_token_sha256": "b7a520ea0c02fdcf5e891c1fda6b7cbf4cf5b18aca7af2378e3e9930b938f2f7",
+      "before_token_sha256": "b7a520ea0c02fdcf5e891c1fda6b7cbf4cf5b18aca7af2378e3e9930b938f2f7",
+      "name": "_seed_reference_domain",
+      "owner": [],
+      "path": "extensions/carla/map.mojo"
+    },
+    {
+      "after_token_sha256": "114f0a4fbdc7b0f4991a417247d57d19b9552885d4db1071d3f3c49d806e87e3",
+      "before_token_sha256": "114f0a4fbdc7b0f4991a417247d57d19b9552885d4db1071d3f3c49d806e87e3",
+      "name": "_winner_seed_room",
+      "owner": [],
+      "path": "extensions/carla/map.mojo"
+    },
+    {
+      "after_token_sha256": "4a12429226509b6428ec35126070941f30f6cefde2eabcb7c1faf781490a695d",
+      "before_token_sha256": "fe900ad0e97842f13852a882bc15e43dc5c5be7863d3eb6d0c7c90fa3d17f54b",
+      "name": "_try_winner_seed",
+      "owner": [],
+      "path": "extensions/carla/map.mojo"
+    },
+    {
+      "after_token_sha256": "f2f7e59cceb0f0351a607184bd7b3544d13e1c77fbed19993b5c5ed4d878b961",
+      "before_token_sha256": "f2f7e59cceb0f0351a607184bd7b3544d13e1c77fbed19993b5c5ed4d878b961",
+      "name": "_query_node_step_cost",
+      "owner": [],
+      "path": "extensions/carla/map.mojo"
+    },
+    {
+      "after_token_sha256": "fd6ab0a015fa5e84179750accd6bf53a71eb3900e5ea6c41666ac4294c9006ba",
+      "before_token_sha256": "fd6ab0a015fa5e84179750accd6bf53a71eb3900e5ea6c41666ac4294c9006ba",
+      "name": "_geometry_distance",
+      "owner": [],
+      "path": "extensions/carla/curve_bounds.mojo"
+    },
+    {
+      "after_token_sha256": "d5f5a83894a15611520b4c9a62e86f18f99d5b67e3d15ee10959ba2652e9f20b",
+      "before_token_sha256": "d5f5a83894a15611520b4c9a62e86f18f99d5b67e3d15ee10959ba2652e9f20b",
+      "name": "_spiral_counts",
+      "owner": [],
+      "path": "extensions/carla/curve_bounds.mojo"
+    },
+    {
+      "after_token_sha256": "53a3ed6af72efe3d207cecc171db7a5d174a145e40a4decf802c05ffe40518f7",
+      "before_token_sha256": "53a3ed6af72efe3d207cecc171db7a5d174a145e40a4decf802c05ffe40518f7",
+      "name": "_reference_work",
+      "owner": [],
+      "path": "extensions/carla/curve_bounds.mojo"
+    },
+    {
+      "after_token_sha256": "d1135fb76b23952642d2de6493d5f1a15e5c7ae4a7baf0ea517e76ab3b1a67ca",
+      "before_token_sha256": "d1135fb76b23952642d2de6493d5f1a15e5c7ae4a7baf0ea517e76ab3b1a67ca",
+      "name": "_ordered_finite",
+      "owner": [],
+      "path": "extensions/carla/curve_minimizer_support.mojo"
+    },
+    {
+      "after_token_sha256": "90499cb4d6e1c26d9caace32a6d5af3cfc2220fe8811658cc9b37bb3f33aacab",
+      "before_token_sha256": "90499cb4d6e1c26d9caace32a6d5af3cfc2220fe8811658cc9b37bb3f33aacab",
+      "name": "_minimizer_support",
+      "owner": [],
+      "path": "extensions/carla/curve_minimizer_support.mojo"
+    },
+    {
+      "after_token_sha256": "f07421407a7760f4d9e0d7ecd4c39f50694447aaa9b5b20dc9870ce00b23aa12",
+      "before_token_sha256": "f07421407a7760f4d9e0d7ecd4c39f50694447aaa9b5b20dc9870ce00b23aa12",
+      "name": "_next_up",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "33529d27643e4a69d7ba8f937c804193a1d5cd332baa54a45ad57955771b6e4d",
+      "before_token_sha256": "33529d27643e4a69d7ba8f937c804193a1d5cd332baa54a45ad57955771b6e4d",
+      "name": "_next_down",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "b210a644afcf99a2d8abe2be8327e291e6a40418a90c1acaefdbad7c3e1e4ac6",
+      "before_token_sha256": "b210a644afcf99a2d8abe2be8327e291e6a40418a90c1acaefdbad7c3e1e4ac6",
+      "name": "_endpoint_in_exact_range",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "63e0975155828889b15426870e9f1ae2397492e28d2d92158bcca71ab10c72a5",
+      "before_token_sha256": "63e0975155828889b15426870e9f1ae2397492e28d2d92158bcca71ab10c72a5",
+      "name": "_residual_bracket",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "95eb46aefaa72ca2bf832dcfbc87a85a6a131e12d7c7e4d853f1e94b654de8b9",
+      "before_token_sha256": "95eb46aefaa72ca2bf832dcfbc87a85a6a131e12d7c7e4d853f1e94b654de8b9",
+      "name": "_directed_endpoint_sum",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "81a034bf2dea8aaffdc2643c4a98ef4c58d7b4f675fb58858749c319f1a00f0f",
+      "before_token_sha256": "81a034bf2dea8aaffdc2643c4a98ef4c58d7b4f675fb58858749c319f1a00f0f",
+      "name": "_directed_endpoint_product",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "de6e001dda1085c71592694f4daeae6c4ff64d9c672ffa3bb05d97d44dfed0b3",
+      "before_token_sha256": "de6e001dda1085c71592694f4daeae6c4ff64d9c672ffa3bb05d97d44dfed0b3",
+      "name": "_tight_sum_bound",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "5f358350bf81a87d95239d47dcd02c16cf4b170c59e9ddef0a7c1b87436f1677",
+      "before_token_sha256": "5f358350bf81a87d95239d47dcd02c16cf4b170c59e9ddef0a7c1b87436f1677",
+      "name": "_tight_product_bound",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "64f2f7fb8748a220fe0e6c0c4cd571896c8b5d4d35cbf8bf372c03fd80b573ed",
+      "before_token_sha256": "64f2f7fb8748a220fe0e6c0c4cd571896c8b5d4d35cbf8bf372c03fd80b573ed",
+      "name": "_roundoff",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "576d44ed3a5edef44430aaa30b59a9adcfaa8b927f08fa90deaf842f2e8a72f6",
+      "before_token_sha256": "576d44ed3a5edef44430aaa30b59a9adcfaa8b927f08fa90deaf842f2e8a72f6",
+      "name": "_stored_difference",
+      "owner": [],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "15e644f42de88cab91551810a300ed6bf6b1d5a6483cb3630bb2f6225bd06cb7",
+      "before_token_sha256": "15e644f42de88cab91551810a300ed6bf6b1d5a6483cb3630bb2f6225bd06cb7",
+      "name": "constant",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "e77ff5b72015fd672e3b170df549180b227abe1af54bc4d21e7147d8297d8961",
+      "before_token_sha256": "e77ff5b72015fd672e3b170df549180b227abe1af54bc4d21e7147d8297d8961",
+      "name": "variable",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "20e277e71366396a5a1b834ee88c10950e395830e28d1b87a32ccb18cfa4c251",
+      "before_token_sha256": "20e277e71366396a5a1b834ee88c10950e395830e28d1b87a32ccb18cfa4c251",
+      "name": "rounded_value",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "97ca7dde652ae03f9991b28065781bcc7da068ed771df563c789a5a72ef8b639",
+      "before_token_sha256": "97ca7dde652ae03f9991b28065781bcc7da068ed771df563c789a5a72ef8b639",
+      "name": "__neg__",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "f972047604c4d6d74e4680cf1fbcaca84eb8744e6acf5881139afdb1bf6a110c",
+      "before_token_sha256": "f972047604c4d6d74e4680cf1fbcaca84eb8744e6acf5881139afdb1bf6a110c",
+      "name": "__add__",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "a481d28615c2cf2bccb4248f1977b7273bf29c8d96121ee339ba5e63d2f15a94",
+      "before_token_sha256": "a481d28615c2cf2bccb4248f1977b7273bf29c8d96121ee339ba5e63d2f15a94",
+      "name": "__sub__",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "1a95c87db84098337bd13ad15c7af78030ebca3b089d0c2865d312cb95d4f7ba",
+      "before_token_sha256": "1a95c87db84098337bd13ad15c7af78030ebca3b089d0c2865d312cb95d4f7ba",
+      "name": "__mul__",
+      "owner": [
+        "_JetExpression"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "34500d987ff89645969a6e4b815c4fe25984aa5b9115ad472b0d2f8955c1fb60",
+      "before_token_sha256": "34500d987ff89645969a6e4b815c4fe25984aa5b9115ad472b0d2f8955c1fb60",
+      "name": "point",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "27bbb97c53ff82796d26945b534f5844b7cbd3a27170c08b3bf8fd79aa0d7c72",
+      "before_token_sha256": "27bbb97c53ff82796d26945b534f5844b7cbd3a27170c08b3bf8fd79aa0d7c72",
+      "name": "is_finite",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "09a62d5a738636a7aede036f9bcf8ce8ab25ca3100962abba77ac6fee292b33e",
+      "before_token_sha256": "09a62d5a738636a7aede036f9bcf8ce8ab25ca3100962abba77ac6fee292b33e",
+      "name": "is_point",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "3b5fa470ac9dda16d87b41ce028acc29aaae55e6a957a9c9a3a9157b02cd9051",
+      "before_token_sha256": "3b5fa470ac9dda16d87b41ce028acc29aaae55e6a957a9c9a3a9157b02cd9051",
+      "name": "__add__",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "3f1a01abdb1b28ba8b1746570781ccef1fa8a853e3af701d5eb63f67c19dae9a",
+      "before_token_sha256": "3f1a01abdb1b28ba8b1746570781ccef1fa8a853e3af701d5eb63f67c19dae9a",
+      "name": "__mul__",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "aec41426a437e17fe954a22dfa4b8a905d3097853c72c46ed38523f454ba28a1",
+      "before_token_sha256": "aec41426a437e17fe954a22dfa4b8a905d3097853c72c46ed38523f454ba28a1",
+      "name": "absolute",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "2546487ae1957ef3b4d6657e8e0db2022b8f12d8cfede6bccc979208d41e866e",
+      "before_token_sha256": "2546487ae1957ef3b4d6657e8e0db2022b8f12d8cfede6bccc979208d41e866e",
+      "name": "maximum",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "51f2d56bf21018c7499537f9383795f24ae594547bbd181dceb3e3cb181584a2",
+      "before_token_sha256": "51f2d56bf21018c7499537f9383795f24ae594547bbd181dceb3e3cb181584a2",
+      "name": "magnitude",
+      "owner": [
+        "_Interval"
+      ],
+      "path": "extensions/carla/curve_interval.mojo"
+    },
+    {
+      "after_token_sha256": "7ebb8d839f23d241c05a8f8b57af4b260082a6dc77307dac1bddf09fcb961168",
+      "before_token_sha256": "7ebb8d839f23d241c05a8f8b57af4b260082a6dc77307dac1bddf09fcb961168",
+      "name": "_require_sum2_environment",
+      "owner": [],
+      "path": "extensions/carla/curve_sum2.mojo"
+    },
+    {
+      "after_token_sha256": "a45d5d84683819848f7f037c15aa83c6279fe67623e64cdb910023eddd3ccf48",
+      "before_token_sha256": "a45d5d84683819848f7f037c15aa83c6279fe67623e64cdb910023eddd3ccf48",
+      "name": "_sum2_supported_environment",
+      "owner": [],
+      "path": "extensions/carla/curve_sum2.mojo"
+    },
+    {
+      "after_token_sha256": "a8806461556ae7725bf0db07f17fa997f2658e6017d63c8c92042fa40685c5ad",
+      "before_token_sha256": "a8806461556ae7725bf0db07f17fa997f2658e6017d63c8c92042fa40685c5ad",
+      "name": "_uncertain",
+      "owner": [],
+      "path": "extensions/carla/curve_trig.mojo"
+    },
+    {
+      "after_token_sha256": "216a7b54799705ba1c3822d19ccca12e28fc60f648c8bdc0da3c90d21cc42440",
+      "before_token_sha256": "216a7b54799705ba1c3822d19ccca12e28fc60f648c8bdc0da3c90d21cc42440",
+      "name": "info_index",
+      "owner": [],
+      "path": "extensions/carla/road_info.mojo"
+    },
+    {
+      "after_token_sha256": "ddcf665743a24840eabd90f8e18363bb328ffc7fc229c36839c69f41c5e19b6f",
+      "before_token_sha256": "ddcf665743a24840eabd90f8e18363bb328ffc7fc229c36839c69f41c5e19b6f",
+      "name": "distance",
+      "owner": [
+        "RoadInfoGeometry"
+      ],
+      "path": "extensions/carla/road_info.mojo"
+    },
+    {
+      "after_token_sha256": "65b81bece1a556f8d58f0d95791e0d54d813b07fb348f9347154d93a700c9ce0",
+      "before_token_sha256": "65b81bece1a556f8d58f0d95791e0d54d813b07fb348f9347154d93a700c9ce0",
+      "name": "validate",
+      "owner": [
+        "_MapQueryWork"
+      ],
+      "path": "extensions/carla/map_search.mojo"
+    },
+    {
+      "after_token_sha256": "832b2d5a71fdab7098ccb2b073ad73c418e755536c0a36f857b95353ebb60120",
+      "before_token_sha256": "832b2d5a71fdab7098ccb2b073ad73c418e755536c0a36f857b95353ebb60120",
+      "name": "_step",
+      "owner": [
+        "_MapQueryWork"
+      ],
+      "path": "extensions/carla/map_search.mojo"
+    },
+    {
+      "after_token_sha256": "c6b5a2562e8ed918f4a6edd18c42e6b045804c036531124c41836cca9d57c4c9",
+      "before_token_sha256": "c6b5a2562e8ed918f4a6edd18c42e6b045804c036531124c41836cca9d57c4c9",
+      "name": "charge",
+      "owner": [
+        "_MapQueryWork"
+      ],
+      "path": "extensions/carla/map_search.mojo"
+    },
+    {
+      "after_token_sha256": "f4a160b1347637ed39d4de2254d82256f958663e757ad45e4dce99e7f99d79d3",
+      "before_token_sha256": "f4a160b1347637ed39d4de2254d82256f958663e757ad45e4dce99e7f99d79d3",
+      "name": "node_cap",
+      "owner": [
+        "_MapQueryWork"
+      ],
+      "path": "extensions/carla/map_search.mojo"
+    },
+    {
+      "after_token_sha256": "034e34763f201a9e6213110e82eadecfcb5f1ace56489dcb7df5fa04fc44babb",
+      "before_token_sha256": "034e34763f201a9e6213110e82eadecfcb5f1ace56489dcb7df5fa04fc44babb",
+      "name": "term_cap",
+      "owner": [
+        "_MapQueryWork"
+      ],
+      "path": "extensions/carla/map_search.mojo"
+    }
+  ],
+  "schema": 1,
+  "scope": "Exact source correspondence for three independently reviewed impossible optional-seed count refusals. This is not a native, compiler, or aggregate coverage qualification.",
+  "theorem": {
+    "arithmetic": "Same-call admitted exact-range and unclamped distance graph, fixed stored rate, hereditary Sterbenz reset, ordered error below one; no generic scalar interval-error monotonicity claim.",
+    "outside_scope": "The13 general lane_refinement/junction guard obligations are unchanged. No budgets, tolerances, workloads, historical record or generic loop-inference rule changes.",
+    "purity": "The full62-module resolved Map import closure binds the owning Road.info layout, selector, geometry fields, actual Jet derivative graph, _uncertain leaf, arithmetic helpers and work counters. Native compiler/stdlib identity and default/contraction-off controls are separate required qualification.",
+    "retained_observables": "Initial fresh FP guard, all executed work debits, point-work calculation, checked-center allowance, point order, finite-score refusal and certificate updates are unchanged."
+  },
+  "unchanged_correctness_tests": {
+    "tests/test_carla_junction_monotone.mojo": "dcb1c80aa63ed3844f5b10ee8d5bde3a9cccca3e7446de29cda589bf2e735f62",
+    "tests/test_carla_lane_certificates.mojo": "618bba59ffaf3ef54aaef3c4c7097fce3a75c9338cd1bb311779e31447a8da19",
+    "tests/test_carla_negative_phase_count_controls.mojo": "614a0b048f26c9494c1c052dc234fc8b90ee402ab73c6836a730ab4fe46e1a60"
+  },
+  "unchanged_inputs": {
+    "extensions/__init__.mojo": "5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479",
+    "extensions/carla/__init__.mojo": "13bda95e7b80d111a65052af5508e95af88c7a17871fcf33f3eaf5dc75fd1a2d",
+    "extensions/carla/curve_bounds.mojo": "a57a5fa078fc6f36389a0abdce1eaa483a1cb7b7325688689a5602e8680ca3fb",
+    "extensions/carla/curve_distance.mojo": "46176387129dd37a5887f3aeec7c96bbb386e4980063cb96f09619832cb09a79",
+    "extensions/carla/curve_frozen_arc.mojo": "fe4a9b4bca0cd23dc2a128fbcb9ff3b4604a870dc0b2b4ff4f8deeb766d2db50",
+    "extensions/carla/curve_interval.mojo": "ff6bf0d35b357047c609ea7cb6dbcbe535446cf4e315d9eac5f6c341ddbf1040",
+    "extensions/carla/curve_minimizer_support.mojo": "bdf79d12f2b3b784574fbd95e2e773ddeb29eb9586cf826c2b6142646341292e",
+    "extensions/carla/curve_rounded_arc.mojo": "7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745",
+    "extensions/carla/curve_rounded_line.mojo": "6741ad9d7434c08070de3c959cb49ac42939ac633d1dcd48c9f5cdfdaa719aed",
+    "extensions/carla/curve_sample_dispatch.mojo": "91ede65bbc39ac57ca54239513b462d3c71e90cacd085b8bafb2bff514767a86",
+    "extensions/carla/curve_sum2.mojo": "2f732d49a891c9b603ccf05fb74779ea79422d74b4c33723ffe40f99e6c54a67",
+    "extensions/carla/curve_trig.mojo": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+    "extensions/carla/geo.mojo": "2b09610f1933d26281a7e018a1474bcb4a59daa63e01ef24528f342cc834a8a5",
+    "extensions/carla/geometry.mojo": "eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c",
+    "extensions/carla/lane_box_cover.mojo": "1ed9978fb4ef7eef3a45c7503dbf5cced03ab1917f6fbf721c785e5a63cce251",
+    "extensions/carla/lane_distance.mojo": "9d0aacab9fccb0a34f8d5c3a5edca1a1fd7ebcded961fc579ec6a44f3880497d",
+    "extensions/carla/lane_geometry.mojo": "8e0917249d8c41233bcb801fac6455d614ed46a7fd8e7505c14259c2a5c81d91",
+    "extensions/carla/lane_refinement.mojo": "d6bb8cb266fa350491f71e92295e70bcbfc2566b34db02400b3a6cb5bb5a93ad",
+    "extensions/carla/lane_value_bounds.mojo": "08978a7aa665aca4b82d41e1ff8b99451c647c0f8e7d6ee010fc6a6143f7959c",
+    "extensions/carla/map_search.mojo": "53c5a1369203b2f57c915f4cacfe2935360bd6f4a676934f1a5dc67df69956a3",
+    "extensions/carla/map_validation.mojo": "c8457abae67e989ae6de1131e3d30c8f101a0ae6fee9ec4f0afabc0f67be7bef",
+    "extensions/carla/math.mojo": "e02aa0a1d41c17403120ebe1bd4672c2d5a41bb81aac66f1abb7e9a1cb42d147",
+    "extensions/carla/polynomial.mojo": "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
+    "extensions/carla/road.mojo": "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
+    "extensions/carla/road_info.mojo": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb",
+    "extensions/carla/rtree.mojo": "be63ea929c25e0a55600d19568e5f8a117e2f712850ea3da0d977c39b002d460",
+    "extensions/carla/speed_limits.mojo": "1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6",
+    "extensions/carla/spiral_domain_proof.mojo": "89a8760eee14ff17c682ac69657eb62391e5dfd7e6e1e11fa8a931f8595e9252",
+    "extensions/carla/spiral_grouped_lane.mojo": "5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b",
+    "extensions/carla/spiral_grouped_roundoff_proof.mojo": "ab0016a54e8a0d2d2dc8235e5954c111f1738ce08868d1c6fc30d454811d7a57",
+    "extensions/carla/spiral_moment_proof.mojo": "f42f436b6e616e39bc2cda70491abf2e441aa40d5d8d1aa7f7ecffe3d0b0d5ac",
+    "extensions/carla/spiral_moment_table.mojo": "1c5a3a21216eaecb42b3947ccb5ec0479d8a120c714d79ebe25f11da5f1096c8",
+    "extensions/carla/spiral_moment_table_data.mojo": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+    "extensions/carla/spiral_roundoff_proof.mojo": "66903c0cfba3315c46e8f48c9af0b3c118db4194236a7e4fe3e893a986c90b0c",
+    "extensions/carla/transform.mojo": "c74c11819f95870d45cf37e7aa013fd72bc9673a4088c3e657efaa6b22999e56",
+    "loaders/__init__.mojo": "5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479",
+    "loaders/js_number.mojo": "286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101",
+    "loaders/xml.mojo": "560daaf80b836fe72069a3100747c38096674219980662d3587e72ed2a480458",
+    "math/__init__.mojo": "5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479",
+    "math/bounds.mojo": "1078b7303170bc239ea0aed1d844ebe4e386636198e7b993ab554d9653583c1c",
+    "math/box_extent.mojo": "7ddcdc6d53201a1cbe491cc4a54534231e8ce86ccaf76332bd4f85aee5f8b3f7",
+    "math/euler.mojo": "8ada9d383b6ca2fa3b8082e40a069e70943bfa78497c6fa9668f050799a424f3",
+    "math/matrix3.mojo": "39cce8a87f30062b530b3573a669005d17f09fbec2939dba1857bed19c604b19",
+    "math/matrix4.mojo": "2e1cfe2cbe4394a2242e162bbe4c7ef20ab746386ff6224358a6d3de611ad28e",
+    "math/matrix_determinant.mojo": "c5b25179893fd2903dbda5de68914a50e662e3428107ef2c3424ef42cafcde19",
+    "math/matrix_inverse.mojo": "34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee",
+    "math/norm.mojo": "5275636f99048885fcc308bfa92fde3d52c5a8eefb48f616f59f8f31a0b5cbb1",
+    "math/quaternion.mojo": "328aac299f3591af2fec898b924d64190a53d8558a118289c5633f56f9a13d26",
+    "math/random.mojo": "f8a00ee7d03897a7c35f2f23d157fb65ce2c2b3fde5e4c91f21e7a764fab1655",
+    "math/remainder.mojo": "b7575b2fde7a212433498422a121c66b12a85e7109614093bb783ad1cc043e58",
+    "math/scaled_products.mojo": "b504f18cff7df27bff4fbf92fbed7aa4868518f1b1507ea1331540d7e6f0afbb",
+    "math/segment.mojo": "f8f42b8b4a0be8ac7aca2e9070b114d7f207ece2ea228ace1e5bef101b6bc1db",
+    "math/smoothstep.mojo": "816816e8897adc10c742ea22e2193b9273635040bc0c6ffbc7c1c9d8594be20b",
+    "math/triangle.mojo": "365317ef7f1a1bd04adc3442430cc874f26691ea0f9c51243578de304e3f3ee3",
+    "math/triangle_normal.mojo": "8e2d7c30411e44b3eb3fd8151b86a2da5f1a285d2a6e169a3b54b786284b3caa",
+    "math/utils.mojo": "8e2279cec8879b18969fc9c02ac9cc22fe20e14fdd57360e2a6805822ed80947",
+    "math/vector2.mojo": "6bc3b252c04e5fe6a562a09e85e69d49bff738aa354cf5856a5613fb89af36e5",
+    "math/vector3.mojo": "4ce87f711940cd7920bd7ffb76d8e34f8a9fe6bf4dff1562b12d9cea3cb735bf",
+    "units/__init__.mojo": "5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479",
+    "units/quantity.mojo": "bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223",
+    "units/si.mojo": "4225e1be95a48a234e38169cef21289e3f9e6f00760be01456d8f826b497979e"
+  }
+}
