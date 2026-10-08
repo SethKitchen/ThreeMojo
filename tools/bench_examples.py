@@ -1028,14 +1028,17 @@ def cross_report() -> str:
     lines = []
     if run_med is not None:
         lines.append(
-            f"The macOS host runs the shared examples a median of {fmt_ratio(run_med)} times faster than the Linux host."
+            f"For these saved runs, the median Linux/macOS whole-process time ratio is {fmt_ratio(run_med)}."
         )
     if compile_med is not None:
         lines.append(
-            f"It compiles them a median of {fmt_ratio(compile_med)} times faster."
+            f"The median Linux/macOS compile-time ratio is {fmt_ratio(compile_med)}."
         )
+    lines.append("Each ratio is Linux time divided by macOS time.")
+    lines.append("")
     lines.append(f"The Linux date is {linux_date}. The macOS date is {mac_date}.")
-    lines.append("The source can differ between those dates.")
+    lines.append("The source and software can differ between these snapshots.")
+    lines.append("These ratios do not isolate hardware speed.")
     lines.append(f"The comparison uses {len(run_ratios)} shared examples.")
     return "\n".join(lines)
 

@@ -7,7 +7,12 @@ Mojo 1.0 is compared when that compiler is installed.
 The draw column names the faster frame loop.
 Whole-process time is summarized, because startup can hide the draw.
 Displayed times are rounded.
-The results file keeps the full sample.
+The results file keeps the recorded values before display rounding.
+
+The dates below describe saved runs, not exact source revisions.
+These retained files do not record the tested commit.
+They do not establish performance for later source changes, including the merge of [#594](https://github.com/SethKitchen/ThreeMojo/pull/594).
+Rerun the benchmarks to measure a later revision.
 
 ## Who wins
 
@@ -19,7 +24,8 @@ cpu-flat fills triangles with a flat color and a depth test.
 It does no lighting, no textures and no file write, so it is not the language comparison.
 
 WebGL is three.js drawing with WebGL 2 when the context runs.
-That draw is the language comparison.
+The table uses that draw when WebGL runs.
+The renderer, backend and work differ, so this does not isolate language speed.
 A host with no GPU compares the CPU flat fill instead.
 
 <!-- BENCH:SCORE:linux -->
@@ -90,10 +96,13 @@ This host measures 61 of them.
 ## Linux against macOS
 
 <!-- BENCH:CROSS -->
-The macOS host runs the shared examples a median of 2.2 times faster than the Linux host.
-It compiles them a median of 5.1 times faster.
+For these saved runs, the median Linux/macOS whole-process time ratio is 2.2.
+The median Linux/macOS compile-time ratio is 5.1.
+Each ratio is Linux time divided by macOS time.
+
 The Linux date is 2026-10-07. The macOS date is 2026-09-26.
-The source can differ between those dates.
+The source and software can differ between these snapshots.
+These ratios do not isolate hardware speed.
 The comparison uses 61 shared examples.
 <!-- /BENCH:CROSS -->
 
