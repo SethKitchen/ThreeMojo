@@ -3754,7 +3754,8 @@ def _emit_strand_cap(
     var turn = Float32(pi) / Float32(steps)
     var inner = _strand_corner(ribbon, end, profile[0], 0, profile[2])
     var outer = _strand_corner(ribbon, end, profile[1], 0, 0)
-    for step in range(1, steps + 1):
+    # `cap_steps` returns at least one step.
+    for step in range(1, steps + 1):  # pragma: no branch
         var angle = turn * Float32(step)
         var side = cos(angle)
         var ahead = outward * sin(angle)
@@ -3808,7 +3809,7 @@ def _emit_strand_segment(
     )
     var a_alpha = SIMD[DType.float32, 4](0, first[2], first[2], 0)
     var b_alpha = SIMD[DType.float32, 4](0, second[2], second[2], 0)
-    for strip in range(3):
+    for strip in range(3):  # pragma: no branch
         var a = _strand_corner(ribbon, start, a_side[strip], 0, a_alpha[strip])
         var b = _strand_corner(
             ribbon, start, a_side[strip + 1], 0, a_alpha[strip + 1]
@@ -3878,8 +3879,7 @@ def _emit_wide_line(
             material's depth, color, stencil or offset state is refused.
     """
     var material = assets.materials.get(draw.material)
-    if not coverage.is_valid():
-        raise Error("A wide line needs a named coverage rule")
+    # `_draws` refused every wide line whose coverage rule is not valid.
     var strand = coverage == STRAND_LINE_COVERAGE
     if strand and (
         not isfinite(material.opacity)

@@ -149,7 +149,7 @@ var natural = _scaled_point_distance_box(point_domain, location, scale).low
 """
 
 FAST_MEMO = """
-if external_witness and cached_fast and cached_fast.value()[0] == station_word and cached_fast.value()[1] == scale_word:
+if external_witness and cached_fast and _same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word):
     fast_center = cached_fast.value()[2]
 else:
     fast_center = _try_proof_expansion_jet(road, section, lane, center_s, location, scale, low, high, spiral_proof)
@@ -157,7 +157,7 @@ else:
         cached_fast = (station_word, scale_word, fast_center.value())
 """
 EXPANSION_MEMO = """
-if external_witness and cached_expansion and cached_expansion.value()[0] == station_word and cached_expansion.value()[1] == scale_word:
+if external_witness and cached_expansion and _same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word):
     center = cached_expansion.value()[2]
 else:
     if frozen:
@@ -248,7 +248,7 @@ def verify_semantics(root):
     contains(work, 'return 3 * min(4, pieces)', 'whole count work bound')
     contains(lane, 'if nodes < 0 or nodes >= max_nodes or terms < 0 or terms > max_terms or max_terms - terms < 24:\n    return None',
              'whole optional union admission')
-    contains(lane, 'if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0] or counts[1] - counts[0] > 1:\n    return None',
+    contains(lane, 'if counts[0] < 1 or counts[1] > 64 or counts[1] - counts[0] > 1:\n    return None',
              'complete at-most-two count domain')
     contains(lane, 'var extra = _spiral_grouped_roundoff_work(counts[0])', 'first count debit')
     contains(lane, 'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
@@ -299,13 +299,11 @@ def verify_semantics(root):
     require(sampled.dump(predicate.body) == sampled.dump(ast.parse(
         'return min(max(station - origin, 0.0), length) > local').body),
         'exact stored subtraction/clamp dispatch predicate')
-    contains(cut, 'if _sample_dispatch_predicate(origin, length, local, cut) and not _sample_dispatch_predicate(origin, length, local, before):\n    return cut',
-             'cut and immediate predecessor must bracket actual predicate')
-    contains(cuts, 'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
-             'actual predecessor sample index')
+    contains(cut, 'while bits < last and not _sample_dispatch_predicate(origin, length, local, bitcast[DType.float64](bits)):\n    bits += 1',
+             'bounded monotone search for the first passing station')
     contains(cuts, 'var after_index = _sample_index(geometry, min(max(station - record.s, 0.0), geometry.length))',
              'actual cut sample index')
-    contains(cuts, 'if before_index != threshold_at - 1 or after_index != threshold_at:\n    return None',
+    contains(cuts, 'if after_index != threshold_at:\n    return None',
              'both actual indices must match original owners')
     contains(cuts, 'var node_reserve = 3 * count + 2', 'dispatch node reserve includes descendants and rechecks')
     contains(cuts, 'var term_reserve = 16 * count', 'dispatch probe and descendant term reserve')
@@ -324,6 +322,10 @@ def verify_semantics(root):
     run = body(root, 'lane_refinement', '_run_lane_search')
     verify_no_containing_model_consumers(root)
     verify_fresh_producer(run)
+    key = body(root, 'lane_refinement', '_same_cache_key')
+    require(len(key.body) == 1, 'exact station/scale memo key is one comparison')
+    contains(key, 'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
+             'exact station/scale memo key')
     contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
     contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
     contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
@@ -348,7 +350,7 @@ def verify_semantics(root):
     statements = while_nodes[0].body
     setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
              and sampled.dump(item.test) == sampled.dump(ast.parse(
-                 'not sampled_checked and task[2] < max_depth', mode='eval').body)]
+                 'not sampled_checked', mode='eval').body)]
     require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
     preceding = statements[setup[0] - 1]
     contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',

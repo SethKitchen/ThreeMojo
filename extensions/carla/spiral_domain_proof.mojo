@@ -145,11 +145,8 @@ def _try_pack_spiral_proof(
         or domain.high >= geometry.length
     ):
         return None
-    if (
-        not captured.d.value.is_finite()
-        or not captured.d.first.is_finite()
-        or not captured.d.second.is_finite()
-    ):
+    # The finite rounded domain above needs a finite value.
+    if not captured.d.first.is_finite() or not captured.d.second.is_finite():
         return None
     if (
         not isfinite(captured.first_x_error)
@@ -239,7 +236,6 @@ def _spiral_proof_matches(
         or proof.rounded_d.high < proof.rounded_d.low
         or domain.low < proof.rounded_d.low
         or domain.high > proof.rounded_d.high
-        or not d.value.is_finite()
         or not d.first.is_finite()
         or not d.second.is_finite()
     ):

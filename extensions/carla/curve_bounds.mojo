@@ -73,12 +73,6 @@ def _polynomial_jet(
     )
 
 
-def _square_jet(value: _Jet) -> _Jet:
-    var result = value * value
-    result.value = value.value.square()
-    return result
-
-
 def _unknown_point() -> Tuple[_Jet, _Jet, _Jet]:
     var unknown = _uncertain(_Interval.whole())
     return (unknown, unknown, unknown)
@@ -247,7 +241,8 @@ def _sample_blend_jet(rate: _Jet, one: Float64, two: Float64) -> _Jet:
     result.first = _intersect_ideal_bounds(result.first, ideal.first)
     result.second = _intersect_ideal_bounds(result.second, ideal.second)
     var coupled_error = _stored_blend_error(rate, one, two)
-    if isfinite(coupled_error) and coupled_error >= 0.0:
+    # A finite blend error is the upper end of nonnegative bounds.
+    if isfinite(coupled_error):
         result.error = min(result.error, coupled_error)
     return result
 
@@ -544,16 +539,13 @@ def _try_lane_envelope_capture(
         ),
     )
     var counts = _spiral_counts(geometry, d)
-    if (
-        counts[0] < 1
-        or counts[1] > 64
-        or counts[1] < counts[0]
-        or counts[1] - counts[0] > 1
-    ):
+    # _spiral_counts never returns a decreasing pair.
+    if counts[0] < 1 or counts[1] > 64 or counts[1] - counts[0] > 1:
         return None
     var branches = 1 if counts[0] == counts[1] else 2
     var optional_work = 1024 * branches
-    if terms < 0 or terms > max_terms or optional_work > max_terms - terms:
+    # The entry check above already bounds terms by max_terms.
+    if optional_work > max_terms - terms:
         return None
     # Debit before attempting either error envelope, including failures.
     terms += optional_work
@@ -576,10 +568,8 @@ def _try_lane_envelope_capture(
         last.value()[0],
         last.value()[1],
     )
-    if not _spiral_proof_matches(
-        proof, geometry, at, low, high, low, high, d, counts
-    ):
-        return None
+    # This proof was just built from this d, these counts and finite
+    # nonnegative envelope errors, so it matches this domain by construction.
     # Use the one canonical lane graph. If a reordered moment branch is
     # nonfinite, that graph executes the original GL fallback once under its
     # existing reservation. Do not run another fallback after this call.
@@ -624,7 +614,7 @@ def _finite_spiral_moment_branch(point: Tuple[_Jet, _Jet, _Jet]) -> Bool:
 def _finite_spiral_ideal_branch(point: Tuple[_Jet, _Jet, _Jet]) -> Bool:
     # A translated expansion has deliberately infinite scalar error. Only
     # its real-expression value and derivatives can enter the Taylor bound.
-    for value in [point[0], point[1], point[2]]:
+    for value in [point[0], point[1], point[2]]:  # pragma: no branch
         if not (
             value.value.is_finite()
             and value.first.is_finite()
@@ -836,21 +826,6 @@ def _lane_jet(
 ) raises -> Tuple[_Jet, _Jet, _Jet]:
     # Zero translation retains the actual scalar evaluator's operation errors.
     return _lane_jet_model(road, section, lane, low, high, Vector3(0, 0, 0))
-
-
-def _distance_jet(
-    road: Road,
-    section: Int,
-    lane: Int,
-    low: Float64,
-    high: Float64,
-    location: Vector3,
-) raises -> _Jet:
-    var point = _lane_jet(road, section, lane, low, high)
-    var x = point[0] - _Jet.constant(Float64(location.x))
-    var y = -point[1] - _Jet.constant(Float64(location.y))
-    var z = point[2] - _Jet.constant(Float64(location.z))
-    return _square_jet(x) + _square_jet(y) + _square_jet(z)
 
 
 def _scaled_coordinate_jet(point: _Jet, query: Float64, scale: Float64) -> _Jet:

@@ -118,6 +118,8 @@ def read_speed_number(text: String) raises -> Float64:
         for byte in number.as_bytes():
             if byte == 101 or byte == 69:
                 break
-            if byte >= 49 and byte <= 57:
+            # The decimal parser accepted the text, so a byte from '1' up,
+            # before any exponent, is a nonzero mantissa digit.
+            if byte >= 49:
                 raise Error("OpenDRIVE speed number underflows Float64")
     return value

@@ -210,7 +210,8 @@ def _sample_blend_value(
     # overflows even though the weighted expression remains bounded.
     result.value = _intersect_ideal_bounds(result.value, ideal.value)
     var coupled_error = _stored_blend_error(rate, one, two)
-    if isfinite(coupled_error) and coupled_error >= 0.0:
+    # A finite blend error is the upper end of nonnegative bounds.
+    if isfinite(coupled_error):
         result.error = min(result.error, coupled_error)
     return result
 

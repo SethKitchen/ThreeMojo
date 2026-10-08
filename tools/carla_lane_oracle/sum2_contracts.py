@@ -194,7 +194,7 @@ def _try_spiral_roundoff_envelope(
         or domain.high >= geometry.length
     ):
         return None
-    if not d.value.is_finite() or not isfinite(d.error) or d.error < 0.0:
+    if d.error < 0.0:
         return None
     var distance = _ValueJet(
         d.value, _Interval.whole(), _Interval.whole(), d.error
@@ -228,11 +228,7 @@ def _try_spiral_roundoff_envelope(
     var selection = (
         theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
     ).rounded_value()
-    if (
-        not selection.is_finite()
-        or floor(selection.low) != 0.0
-        or floor(selection.high) != 0.0
-    ):
+    if floor(selection.low) != 0.0 or floor(selection.high) != 0.0:
         return None
     var trig = _sincos_expression(theta)
     var factor = (

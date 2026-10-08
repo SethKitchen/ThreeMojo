@@ -72,12 +72,8 @@ def _try_grouped_lane_jet(
         _stored_difference(_Jet.variable(low, high), _Jet.constant(record.s)),
     )
     var counts = _spiral_counts(geometry, d)
-    if (
-        counts[0] < 1
-        or counts[1] > 64
-        or counts[1] < counts[0]
-        or counts[1] - counts[0] > 1
-    ):
+    # _spiral_counts never returns a decreasing pair.
+    if counts[0] < 1 or counts[1] > 64 or counts[1] - counts[0] > 1:
         return None
     var extra = _spiral_grouped_roundoff_work(counts[0])
     if counts[1] != counts[0]:

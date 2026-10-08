@@ -41,9 +41,9 @@ CASES = [
     ('support_actual_witness', 'curve_minimizer_support', '_minimizer_support', 'or best < low', 'or best < low - 1.0', 'witness lower containment'),
     ('stored_predicate_strict', 'curve_sample_dispatch', '_sample_dispatch_predicate', ') > local', ') >= local', 'stored subtraction/clamp'),
     ('stored_predicate_subtraction', 'curve_sample_dispatch', '_sample_dispatch_predicate', 'station - origin', 'station + origin', 'stored subtraction/clamp'),
-    ('predecessor_bracket', 'curve_sample_dispatch', '_sample_dispatch_cut', 'and not _sample_dispatch_predicate(origin, length, local, before)', 'and True', 'immediate predecessor'),
-    ('actual_before_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'min(max(before - record.s, 0.0), geometry.length)', 'min(max(station - record.s, 0.0), geometry.length)', 'predecessor sample index'),
-    ('actual_after_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'or after_index != threshold_at', 'or False', 'both actual indices'),
+    ('predecessor_bracket', 'curve_sample_dispatch', '_sample_dispatch_cut', 'bits += 1', 'bits += 2', 'first passing station'),
+    ('actual_cut_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'min(max(station - record.s, 0.0), geometry.length)', 'min(max(station + record.s, 0.0), geometry.length)', 'actual cut sample index'),
+    ('actual_after_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'after_index != threshold_at', 'False', 'both actual indices'),
     ('dispatch_node_headroom', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'nodes > max_nodes - node_reserve', 'nodes > max_nodes - 1', 'complete dispatch followup reserve'),
     ('dispatch_term_headroom', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'term_reserve > max_terms - terms', 'extra > max_terms - terms', 'complete dispatch followup reserve'),
     ('dispatch_term_debit', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'var extra = 8 * count', 'var extra = 6 * count', 'complete optional dispatch debit'),
@@ -96,7 +96,7 @@ CASES.extend([
      'search state reintroduced'),
     ('model_capture_reintroduction', 'lane_refinement', '_run_lane_search',
      'var delta = _Interval(lo, hi) - _Interval.point(center_s)',
-     'var hidden = _try_objective_model(lo, hi, center_s, scale, domain, center)\n                var delta = _Interval(lo, hi) - _Interval.point(center_s)',
+     'var hidden = _try_objective_model(lo, hi, center_s, scale, domain, center)\n            var delta = _Interval(lo, hi) - _Interval.point(center_s)',
      'production consumer reintroduced'),
     ('model_restriction_reintroduction', 'lane_refinement', '_run_lane_search',
      'var best = certificate.s', 'var hidden = _restrict_objective_model(previous, low, high, 1.0)\n    var best = certificate.s',
@@ -119,15 +119,25 @@ CASES.extend([
      'var work = _reference_work(road, lo, hi)', 'var work = _reference_work(road, low, high)',
      'current cell work'),
     ('fast_memo_wrong_station', 'lane_refinement', '_run_lane_search',
-     'cached_fast.value()[0] == station_word', 'cached_fast.value()[0] <= station_word',
+     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)',
+     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], cached_fast.value()[0], scale_word)',
      'exact station/scale proof'),
     ('fast_memo_wrong_scale', 'lane_refinement', '_run_lane_search',
-     'cached_fast.value()[1] == scale_word', 'True', 'exact station/scale proof'),
+     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)',
+     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, cached_fast.value()[1])',
+     'exact station/scale proof'),
     ('expansion_memo_wrong_station', 'lane_refinement', '_run_lane_search',
-     'cached_expansion.value()[0] == station_word', 'cached_expansion.value()[0] <= station_word',
+     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)',
+     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], cached_expansion.value()[0], scale_word)',
      'exact station/scale translated'),
     ('expansion_memo_wrong_scale', 'lane_refinement', '_run_lane_search',
-     'cached_expansion.value()[1] == scale_word', 'True', 'exact station/scale translated'),
+     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)',
+     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, cached_expansion.value()[1])',
+     'exact station/scale translated'),
+    ('memo_key_inexact', 'lane_refinement', '_same_cache_key',
+     'SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
+     'SIMD[DType.uint64, 2](station, scale) <= SIMD[DType.uint64, 2](other_station, other_scale)',
+     'exact station/scale memo key'),
     ('memo_cross_invocation', 'lane_refinement', '_run_lane_search',
      'var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = None',
      'var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = saved',
@@ -266,7 +276,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
     def test_dispatch_cannot_move_before_original_closures(self):
         path = ROOT/'extensions/carla/lane_refinement.mojo'
         original = path.read_text()
-        setup = '''        if not sampled_checked and task[2] < max_depth:
+        setup = '''        if not sampled_checked:
             sampled_checked = True
             sampled_cuts = _try_sample_dispatch_cuts(
                 road, low, high, certificate.nodes, certificate.terms,
@@ -430,7 +440,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
         original = optional.GROUPED_ADMISSION
         for before, after in cases:
             path, changed = self.changed('lane_refinement', '_run_lane_search',
-                original, textwrap.indent(original.replace(before, after, 1).strip(), ' ' * 20))
+                original, textwrap.indent(original.replace(before, after, 1).strip(), ' ' * 16))
             read = Path.read_text
             with self.subTest(change=after), patch.object(Path, 'read_text', lambda p, *a, **k:
                               changed if p == path else read(p, *a, **k)):

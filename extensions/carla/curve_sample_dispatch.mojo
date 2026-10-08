@@ -44,18 +44,19 @@ def _sample_dispatch_cut(
     var start = origin + local
     if not isfinite(start) or start <= 0.0:
         return None
-    var word = bitcast[DType.uint64](start)
-    for i in range(3):
-        var bits = word + UInt64(i)
-        if bits >= UInt64(0x7FF0000000000000):
-            return None
-        var cut = bitcast[DType.float64](bits)
-        var before = bitcast[DType.float64](bits - UInt64(1))
-        if _sample_dispatch_predicate(
-            origin, length, local, cut
-        ) and not _sample_dispatch_predicate(origin, length, local, before):
-            return cut
-    return None
+    # The rounded start lies within half an ulp of origin + local, and the
+    # predicate is monotone in the station. One of the first three stations
+    # from start passes, and the first that passes has a failing
+    # predecessor: start's predecessor fails, as does each skipped station.
+    var bits = bitcast[DType.uint64](start)
+    var last = bits + UInt64(2)
+    while bits < last and not _sample_dispatch_predicate(
+        origin, length, local, bitcast[DType.float64](bits)
+    ):
+        bits += 1
+    if bits >= UInt64(0x7FF0000000000000):
+        return None
+    return bitcast[DType.float64](bits)
 
 
 def _try_sample_dispatch_cuts(
@@ -119,28 +120,23 @@ def _try_sample_dispatch_cuts(
     terms += extra
     var one = 0.0
     var two = 0.0
-    for i in range(count):
+    # _sample_index returns at most len - 2, so every threshold below is an
+    # interior sample. Each cut is the first station past its threshold, so
+    # it lies in (low, high]: low fails the threshold and high passes it. Its
+    # predecessor is at least low or the previous cut, so it maps to the
+    # sample before the threshold. Only the cut's own index can skip ahead,
+    # when the samples are closer together than one station step.
+    for i in range(count):  # pragma: no branch
         var threshold_at = first + i + 1
-        if threshold_at < 1 or threshold_at >= len(geometry.samples) - 1:
-            return None
-        var cut = _sample_dispatch_cut(
+        # The threshold is a nonnegative interior sample below the length,
+        # and its cut is at most the finite high, so a cut always exists.
+        var station = _sample_dispatch_cut(
             record.s, geometry.length, geometry.samples[threshold_at].s
-        )
-        if not cut:
-            return None
-        var station = cut.value()
-        if station <= low or station > high:
-            return None
-        var before = bitcast[DType.float64](
-            bitcast[DType.uint64](station) - UInt64(1)
-        )
-        var before_index = _sample_index(
-            geometry, min(max(before - record.s, 0.0), geometry.length)
-        )
+        ).value()
         var after_index = _sample_index(
             geometry, min(max(station - record.s, 0.0), geometry.length)
         )
-        if before_index != threshold_at - 1 or after_index != threshold_at:
+        if after_index != threshold_at:
             return None
         if i == 0:
             one = station

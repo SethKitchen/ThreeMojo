@@ -78,7 +78,7 @@ CASES = [
     ('sample_blend_operand', 'sampled', TARGET, '_sample_blend_value', 'constant(one)', 'constant(two)'),
     ('sample_index', 'sampled', TARGET, '_sample_value', 'geometry.samples[index + 1]', 'geometry.samples[index]'),
     ('sample_shared_rate', 'sampled', TARGET, '_sample_blend_value', '_stored_blend_error(rate, one, two)', '_stored_blend_error(_ValueJet.constant(0.0), one, two)'),
-    ('sample_negative_guard', 'sampled', TARGET, '_sample_blend_value', 'coupled_error >= 0.0', 'coupled_error <= 0.0'),
+    ('sample_negative_guard', 'sampled', TARGET, '_sample_blend_value', 'if isfinite(coupled_error):', 'if not isfinite(coupled_error):'),
     ('sinc_boundary', 'sampled', TARGET, '_sinc_value', 'domain.high <= _QUARTER_PI', 'domain.high < _QUARTER_PI'),
     ('sinc_coefficients', 'sampled', TARGET, '_sinc_value', '_SIN_COEFFICIENTS', '_ATAN_COEFFICIENTS'),
     ('arc_overflow', 'sampled', TARGET, '_arc_offset_value', 'if not isfinite(radius):', 'if isfinite(radius):'),

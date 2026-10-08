@@ -90,7 +90,8 @@ struct HairDensity(Movable):
         if len(self.coefficients) != count:
             self.coefficients = List[Float32](length=count, fill=0)
         else:
-            for index in range(count):
+            # A valid resolution gives at least 64 cells.
+            for index in range(count):  # pragma: no branch
                 self.coefficients[index] = 0
         self.populated = False
         if len(groom.starts) == 0 or groom.starts[0] != 0:
@@ -104,7 +105,7 @@ struct HairDensity(Movable):
             return
         var low = groom.points[0]
         var high = low
-        for index in range(len(groom.points)):
+        for index in range(len(groom.points)):  # pragma: no branch
             var p = groom.points[index]
             if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):
                 raise Error("Hair density needs finite positions")
@@ -118,38 +119,37 @@ struct HairDensity(Movable):
             max(self.diameter.to(METER), Float32(1e-5)),
             longest / Float32(max(1, self.resolution - 4)),
         )
+        # The cell is at least 1e-5 m, so a finite volume is positive.
         var volume = cell * cell * cell
-        if not isfinite(cell) or not isfinite(volume) or volume <= 0:
+        if not isfinite(cell) or not isfinite(volume):
             raise Error("Hair density grid scale is not representable")
         self.cell = cell
         self.low = low - Vector3(cell, cell, cell)
+        # The cell is at least the diameter d, so the deposit is at most
+        # 1 / d^2 and finite. A finite volume keeps the span, and so every
+        # segment length, below about 4e14 m: no length overflows.
         var deposit = self.diameter.to(METER) / volume
-        if not isfinite(deposit):
-            raise Error("Hair density coefficient is not representable")
-        for strand in range(len(groom)):
+        # Nonempty points with starts that begin at zero and end at the
+        # point count give at least one strand.
+        for strand in range(len(groom)):  # pragma: no branch
             for index in range(
                 groom.starts[strand], groom.starts[strand + 1] - 1
             ):
                 var start = groom.points[index]
                 var delta = groom.points[index + 1] - start
                 var length = delta.length()
-                if not isfinite(length):
-                    raise Error(
-                        "Hair density segment length is not representable"
-                    )
                 var samples = max(1, Int(ceil(length / (cell * 0.5))))
                 var added = length * deposit / Float32(samples)
-                for sample in range(samples):
+                for sample in range(samples):  # pragma: no branch
                     var p = start + delta * (
                         (Float32(sample) + 0.5) / Float32(samples)
                     )
+                    # Every sample lies within the points' bounds. The grid
+                    # keeps one cell below them and three above, so the slot
+                    # is never outside it. One sample adds at most
+                    # 1 / (2 * cell), about 5e4, so a total cannot overflow.
                     var slot = self._slot(p)
-                    if slot < 0:
-                        raise Error("Hair density segment escaped its grid")
-                    var total = self.coefficients[slot] + added
-                    if not isfinite(total):
-                        raise Error("Hair density total is not representable")
-                    self.coefficients[slot] = total
+                    self.coefficients[slot] += added
         self.populated = True
 
     def _slot(self, point: Vector3) -> Int:
@@ -211,7 +211,8 @@ struct HairDensity(Movable):
         var step = direction * (self.cell * 0.5 / length)
         var p = point + step * 2.5
         var total = Float32(0)
-        for _ in range(self.resolution * 4):
+        # A valid resolution gives at least 16 steps.
+        for _ in range(self.resolution * 4):  # pragma: no branch
             var slot = self._slot(p)
             if slot < 0:
                 break

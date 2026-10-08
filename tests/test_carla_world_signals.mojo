@@ -587,12 +587,14 @@ def test_stop_anticipation_uses_physical_speed_units() raises:
     assert_almost_equal(si_time, Float64(0.0315), atol=1e-12)
     assert_true(3 * si_time < Float64(0.1))
     assert_true(4 * si_time > Float64(0.1))
+    # A real zero limit leaves no time after the first emitted pair.
     var speeds: List[String] = [
         'max="50" unit="km/h"',
         'max="13.888888888888889" unit="m/s"',
         'max="50" unit="m/s"',
+        'max="0" unit="m/s"',
     ]
-    var steps: List[Int] = [1, 1, 4]
+    var steps: List[Int] = [1, 1, 4, 1]
     for variant in range(len(speeds)):
         var map = load_opendrive(
             _town().replace('max="50" unit="km/h"', speeds[variant])

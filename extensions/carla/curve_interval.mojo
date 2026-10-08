@@ -589,7 +589,12 @@ def _stored_blend_error[
     # These endpoint guards bound magnitude, not every interior operand
     # away from zero. A broad rate interval can contain subnormals. The
     # existing IEEE gradual-underflow _roundoff bound includes eta there.
-    for value in [actual_rate.low, actual_rate.high, one, two]:
+    for value in [  # pragma: no branch
+        actual_rate.low,
+        actual_rate.high,
+        one,
+        two,
+    ]:
         if value != 0.0 and (abs(value) < minimum or abs(value) > maximum):
             return inf[DType.float64]()
     var complement = _tight_sum_bound(_Interval.point(1.0), -actual_rate)

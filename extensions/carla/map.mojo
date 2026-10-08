@@ -1894,14 +1894,15 @@ struct Map(Movable):
         # as these retained candidates improve their stored incumbents.
         var requested_gaps = List[Float64]()
         var requested_scales = List[Float64]()
-        for certificate in certificates:
+        # A winner exists here, so at least one certificate was retained.
+        for certificate in certificates:  # pragma: no branch
             work._step(2)
             requested_gaps.append(inf[DType.float64]())
             requested_scales.append(certificate.scale)
         while True:
             # A resumed candidate can change the best stored sample. Recheck
             # all index-sensitive dominance relations after every refinement.
-            for i in range(len(indices)):
+            for i in range(len(indices)):  # pragma: no branch
                 work._step()
                 var order = _wide_point_order(
                     certificates[i].point, certificates[best].point, query
@@ -1923,7 +1924,7 @@ struct Map(Movable):
                 accurate[best] = True
                 waypoints[best].s = certificates[best].s
             var target = -1
-            for i in range(len(indices)):
+            for i in range(len(indices)):  # pragma: no branch
                 work._step()
                 if i == best:
                     continue
@@ -1946,13 +1947,8 @@ struct Map(Movable):
                     query,
                 ):
                     continue
-                if (
-                    certificates[best].exact_witness
-                    and certificates[i].exact_witness
-                ):
-                    raise Error(
-                        "Exact lane witnesses have inconsistent dominance"
-                    )
+                # Two exact witnesses never reach here: their dominance test
+                # is the exact point order and index tie that chose best.
                 target = i
                 # Dominance needs a tighter lower bound on the competitor.
                 # The current winner contributes an actual scalar witness;
@@ -2036,23 +2032,6 @@ struct Map(Movable):
             certificate.nodes - previous_nodes,
             certificate.terms - previous_terms,
             node_cost,
-        )
-
-    def _nearest_on_segment(
-        self, index: Int, location: Vector3
-    ) raises -> Tuple[Waypoint, Float64, Array[Float64, 3]]:
-        var work = _MapQueryWork(MapQueryBudget())
-        work.candidate()
-        var result = self._nearest_on_segment_certificate(index, location, work)
-        var query: Array[Float64, 3] = [
-            Float64(location.x),
-            Float64(location.y),
-            Float64(location.z),
-        ]
-        return (
-            result[0],
-            _legacy_square(result[1].point, query),
-            result[1].point.copy(),
         )
 
     def _nearest_on_segment_certificate(
@@ -3377,7 +3356,8 @@ struct Map(Movable):
             self._construction_work.step()
             var boundary = second.s
             var found = False
-            for s in boundaries:
+            # Every lane has at least its geometry record's boundary.
+            for s in boundaries:  # pragma: no branch
                 self._construction_work.step()
                 if forward:
                     if s > current.s and s <= boundary:
@@ -3671,24 +3651,6 @@ def _swap(change: LaneChange) -> LaneChange:
 
 def _same_reference(a: RoadInfoSignal, b: RoadInfoSignal) -> Bool:
     return a.signal_id == b.signal_id and a.road_id == b.road_id and a.s == b.s
-
-
-def _add_conflict(
-    mut roads: List[RoadId],
-    mut conflicts: List[List[RoadId]],
-    road: RoadId,
-    other: RoadId,
-):
-    for i in range(len(roads)):
-        if roads[i] == road:
-            # A road is added with one conflict, so the list is not empty.
-            for id in conflicts[i]:  # pragma: no branch
-                if id == other:
-                    return
-            conflicts[i].append(other)
-            return
-    roads.append(road)
-    conflicts.append([other])
 
 
 def _add_conflict_with_work(

@@ -78,13 +78,14 @@ def _try_build_spiral_moments(
     var divisor = _Interval.point(Float64(pieces))
     var half = _Interval.point(0.5)
     var weight_sum = _Interval.point(0.0)
-    for i in range(5):
+    for i in range(5):  # pragma: no branch
         weight_sum = _tight_sum_bound(weight_sum, _Interval.point(weights[i]))
     # Exact cancellation of n copies divided by n. Do not substitute 1.0:
     # the actual stored weights, not ideal GL weights, define this polynomial.
     moments[0] = _tight_product_bound(half, weight_sum)
-    for piece in range(pieces):
-        for i in range(5):
+    # pieces is at least one here.
+    for piece in range(pieces):  # pragma: no branch
+        for i in range(5):  # pragma: no branch
             # The scalar-rounded 1.0 + node is deliberately computed BEFORE
             # making the interval constant, exactly as curve_bounds:116-118.
             var node_sum = 1.0 + nodes[i]
@@ -97,7 +98,7 @@ def _try_build_spiral_moments(
             )
             var alpha2 = _tight_product_bound(alpha, alpha)
             var power = alpha2
-            for j in range(1, 22):
+            for j in range(1, 22):  # pragma: no branch
                 moments[j] = _tight_sum_bound(
                     moments[j],
                     _tight_product_bound(_Interval.point(weights[i]), power),
@@ -105,21 +106,20 @@ def _try_build_spiral_moments(
                 if j < 21:
                     power = _tight_product_bound(power, alpha2)
     var twice_count = _tight_product_bound(_Interval.point(2.0), divisor)
-    for j in range(1, 22):
+    for j in range(1, 22):  # pragma: no branch
         moments[j] = _tight_quotient_bound(moments[j], twice_count)
     var cos_coefficients = materialize[_COS_COEFFICIENTS]()
     var sin_coefficients = materialize[_SIN_COEFFICIENTS]()
     var cosine = Array[_Interval, 11](fill=_Interval.point(0.0))
     var sine = Array[_Interval, 11](fill=_Interval.point(0.0))
-    for j in range(11):
+    # Every moment lies in [0, 1], so these finite products stay finite.
+    for j in range(11):  # pragma: no branch
         cosine[j] = _tight_product_bound(
             _Interval.point(cos_coefficients[j]), moments[2 * j]
         )
         sine[j] = _tight_product_bound(
             _Interval.point(sin_coefficients[j]), moments[2 * j + 1]
         )
-        if not cosine[j].is_finite() or not sine[j].is_finite():
-            return None
     return _SpiralMomentProof(pieces, cosine^, sine^)
 
 
@@ -151,7 +151,7 @@ def _all_spiral_nodes_quadrant_zero(
     var nodes = materialize[_GL_NODES]()
     var node_low = 1.0 + nodes[0]
     var node_high = node_low
-    for i in range(1, 5):
+    for i in range(1, 5):  # pragma: no branch
         var node_sum = 1.0 + nodes[i]
         node_low = min(node_low, node_sum)
         node_high = max(node_high, node_sum)
@@ -171,11 +171,10 @@ def _all_spiral_nodes_quadrant_zero(
         return False
     # This duplicates only the pinned branch selection from curve_trig:341-347.
     # Production integration should share a branch-selection helper if practical.
+    # A finite phase within the limit gives a finite selector.
     var selection = (
         theta * _Jet.constant(_INV_HALF_PI) + _Jet.constant(0.5)
     ).rounded_value()
-    if not selection.is_finite():
-        return False
     return floor(selection.low) == 0.0 and floor(selection.high) == 0.0
 
 

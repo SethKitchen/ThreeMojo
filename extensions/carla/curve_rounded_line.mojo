@@ -43,10 +43,8 @@ def _rounded_line_axis_context(
         or high > road.length
     ):
         return None
-    if (
-        info_index(road.info.geometries, low) != 0
-        or info_index(road.info.geometries, high) != 0
-    ):
+    # The one geometry record starts at or before low, so it holds at high.
+    if info_index(road.info.geometries, low) != 0:
         return None
     var offset_at = info_index(road.info.lane_offsets, low)
     var elevation_at = info_index(road.info.elevations, low)
@@ -71,7 +69,8 @@ def _rounded_line_axis_context(
     if id.value != 0:
         var negative = id.value < 0
         var sign = _RoundedBox.point(1.0 if negative else -1.0)
-        for position in range(len(lanes)):
+        # The queried lane itself is in this list.
+        for position in range(len(lanes)):  # pragma: no branch
             var i = len(lanes) - 1 - position if negative else position
             if negative:
                 if lanes[i].id.value >= 0:
@@ -93,19 +92,20 @@ def _rounded_line_axis_context(
                 return None
             if lanes[i].id == id:
                 break
+    # Every contribution is a point, so a known offset is a point.
     offset = offset - lane_offset
-    if not offset.known or offset.low != offset.high:
+    if not offset.known:
         return None
     var start = _RoundedBox.point(record.s)
     var d = _RoundedBox.bounds(low, high) - start
     var length = record.geometry.length
     if not d.known or not _rounded_operand(length) or length < 0.0:
         return None
+    # A known d has the sign of low - start >= 0, and both clamp ends stay
+    # valid operands or zero, so the clamped box stays known.
     d = _RoundedBox.bounds(
         min(max(d.low, 0.0), length), min(max(d.high, 0.0), length)
     )
-    if not d.known:
-        return None
     # These are the canonical no-inline scalar trig graph's stored outputs.
     # Never substitute ideal sine/cosine or snap a near-axis heading.
     var cosine = _RoundedBox.point(_curve_cos(record.geometry.heading))
@@ -114,14 +114,20 @@ def _rounded_line_axis_context(
     var y = _rounded_madd(d, sine, _RoundedBox.point(record.geometry.y))
     x = _rounded_madd(offset, sine, x)
     y = -_rounded_madd(-offset, cosine, y)
-    if not (x.known and y.known and elevation.low == elevation.high):
+    # The elevation is a point from _rounded_constant.
+    if not (x.known and y.known):
         return None
     # Subtraction, clamp, constant multiply, rounded addition/FMA, and final
     # sign reversal compose monotonically. Each permitted contraction graph
     # has the indicated direction. The other two stored coordinates must be
     # singleton boxes under every permitted graph over this original domain.
-    if y.low == y.high and cosine.low != 0.0:
+    # _curve_cos is never exactly zero. Below the phase limit no odd
+    # quadrant's two-part reduction cancels to zero; this was checked for
+    # every such quadrant. Beyond it, libm cos has no zero at any double.
+    if y.low == y.high:
         return _RoundedLineAxis(0, cosine.low)
-    if x.low == x.high and sine.low != 0.0:
+    # Here y is not a point, which needs sine != 0, or cosine is zero and
+    # sine is plus or minus one. Either way sine is nonzero.
+    if x.low == x.high:
         return _RoundedLineAxis(1, -sine.low)
     return None

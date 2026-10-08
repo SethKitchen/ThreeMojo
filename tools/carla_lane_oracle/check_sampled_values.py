@@ -25,7 +25,7 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parents[2]
 PRIMITIVE_GRAPH_SHA256 = 'e2e0257a0f42a95bac586638fc5d532f4bc69b882127201bbf343006f2143484'
 REFERENCE_MODULE_GRAPHS = {
-    "curve_bounds.mojo": "51f99d745612d217762d8f39bde1ded5b269d239f05cb765532de631cc64791f",
+    "curve_bounds.mojo": "5e6540bf4848a72e17e52d880de4ad17c9883eff3efd0d74ed9273f2b80900cd",
     "curve_trig.mojo": "4ca47db55caa96ba9ad6c6f43fa65d30a8fefe419f555d46a1a948a2fc606ecc",
     "curve_interval.mojo": "32b7bce9ad0b996fa87a7bc63ff0c905065751d164f7d673342234716523fd8e"
 }
