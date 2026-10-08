@@ -29,18 +29,23 @@ def check_binding(root):
 
 class AnatomyReportBindingTests(unittest.TestCase):
     def test_checked_in_report_matches_current_source(self):
-        # Only Mojo files, report logic and inventory enter this digest.
+        # Only the probe's import closure, report logic and inventory enter
+        # this digest.
         # This Python test and the saved report cannot bind themselves.
         check_binding(av.ROOT)
 
     def test_missing_and_stale_reports_are_rejected(self):
-        for mutation in ('none', 'source', 'added_source', 'removed_source',
-                         'logic', 'inventory', 'missing_report', 'missing_key',
-                         'report_logic_hash'):
+        for mutation in ('none', 'unrelated_source', 'source', 'added_source',
+                         'removed_source', 'probe', 'logic', 'inventory',
+                         'missing_report', 'missing_key', 'report_logic_hash'):
             with self.subTest(mutation=mutation), tempfile.TemporaryDirectory() as folder:
                 root = Path(folder)
                 (root/'tools').mkdir()
                 (root/'docs/validation').mkdir(parents=True)
+                # The probe imports bound, and an `added` module that does
+                # not exist yet. Only the probe's import closure is bound.
+                probe = root/'tools/anatomy_probe.mojo'
+                probe.write_text('from bound import fixture\nfrom added import later\n')
                 source = root/'bound.mojo'
                 logic = root/'tools/anatomy_validity.py'
                 inventory = root/'docs/validation/anatomy-provenance.json'
@@ -51,10 +56,14 @@ class AnatomyReportBindingTests(unittest.TestCase):
                 report = {'build_provenance': {'source_sha256': digest},
                           'report_logic_sha256': hashes['tools/anatomy_validity.py'],
                           'inventory_sha256': hashes['docs/validation/anatomy-provenance.json']}
-                if mutation == 'source':
+                if mutation == 'unrelated_source':
+                    (root/'unrelated.mojo').write_text('def elsewhere(): pass')
+                elif mutation == 'source':
                     source.write_text('def changed(): pass')
                 elif mutation == 'added_source':
-                    (root/'added.mojo').write_text('def added(): pass')
+                    (root/'added.mojo').write_text('def later(): pass')
+                elif mutation == 'probe':
+                    probe.write_text('from bound import fixture\n')
                 elif mutation == 'removed_source':
                     source.unlink()
                 elif mutation == 'logic':
@@ -70,7 +79,7 @@ class AnatomyReportBindingTests(unittest.TestCase):
                     report['report_logic_sha256'] = 'wrong'
                 if mutation != 'missing_report':
                     (root/'docs/validation/anatomy-template-report.json').write_text(json.dumps(report))
-                if mutation == 'none':
+                if mutation in ('none', 'unrelated_source'):
                     check_binding(root)
                 else:
                     with self.assertRaises((ValueError, FileNotFoundError, KeyError)):

@@ -250,12 +250,42 @@ def diagnostic_findings(groups):
     return findings
 
 
+PROBE_SOURCE = 'tools/anatomy_probe.mojo'
+
+
+def probe_sources(root):
+    """Return the Mojo files the probe build can read: its import closure.
+
+    The probe is built from `PROBE_SOURCE` with `-I .`. Imports resolve as
+    `tools/affected.py` resolves them to select test suites: a module beside
+    the importer first, then the repository root. A missing probe source
+    binds no Mojo files, so the digest still changes when it appears.
+    """
+    import affected
+    skip = ('.cache', '.git', 'build', '.venv', 'node_modules')
+    known = {p.relative_to(root).as_posix() for p in root.rglob('*.mojo')
+             if not any(s in skip for s in p.relative_to(root).parts)}
+    if PROBE_SOURCE not in known:
+        return []
+    seen = {PROBE_SOURCE}
+    pending = [PROBE_SOURCE]
+    while pending:
+        path = pending.pop()
+        text = (root/path).read_text(encoding='utf-8')
+        for name in affected.imported_names(text):
+            for target in affected.resolve(name, path, known):
+                if target not in seen:
+                    seen.add(target)
+                    pending.append(target)
+    return [root/path for path in seen]
+
+
 def source_snapshot(root):
     """Read bound inputs once, retaining hashes and the exact inventory bytes."""
     digest = hashlib.sha256()
     hashes = {}
     inventory_path = root/'docs/validation/anatomy-provenance.json'
-    paths = [p for p in root.rglob('*.mojo') if not any(s in ('.cache', '.git', 'build', '.venv', 'node_modules') for s in p.relative_to(root).parts)]
+    paths = probe_sources(root)
     paths += [root/'tools/anatomy_validity.py', inventory_path]
     for path in sorted(paths):
         content = path.read_bytes()

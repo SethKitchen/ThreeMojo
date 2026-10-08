@@ -26,7 +26,7 @@ This rule is reproducible. It does not identify the worst anatomical overlap. Th
 
 Omit `--build` to reuse the probe. Its sidecar must match the source digest and binary digest. Rebuild after a source change. Reports record both digests, the exact compiler version and `--Werror`.
 
-The source digest includes all repository Mojo files, except build and cache copies. It also includes the report writer and provenance inventory. Unrelated Mojo changes therefore require a rebuild. This conservative rule avoids an incomplete dependency claim.
+The source digest includes the import closure of `tools/anatomy_probe.mojo`, which holds every Mojo file the probe build can read. Imports resolve as `tools/affected.py` resolves them to select test suites: a module beside the importer first, then the repository root. The digest also includes the report writer and provenance inventory. A change to a Mojo file outside the closure does not require a rebuild, so unrelated pull requests do not invalidate each other's reports.
 
 The committed report is a reference for its recorded source revision. It does not describe a later combined revision. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
 
