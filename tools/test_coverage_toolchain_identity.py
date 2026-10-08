@@ -50,7 +50,8 @@ class ToolchainIdentityTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        self.base = Path(self.tmp.name)
+        # Match the canonical bases supplied by the maintained entry points.
+        self.base = Path(self.tmp.name).resolve()
         self.a = self.base / 'runner-a'
         self.b = self.base / 'unrelated-root' / 'runner-b'
         self.launcher_a, self.site_a = wheel(self.a)
@@ -61,6 +62,41 @@ class ToolchainIdentityTests(unittest.TestCase):
         self.assertEqual(identity.executable_identity(self.launcher_a), identity.executable_identity(self.launcher_b))
         self.assertEqual(loops._command_identity(str(self.launcher_a), self.a, self.a / 'stage'),
                          loops._command_identity(str(self.launcher_b), self.b, self.b / 'stage'))
+
+    def test_generation_checkpoint_resolves_aliases_without_hiding_external_paths(self):
+        alias = self.base / 'checkout-alias'
+        alias.symlink_to(self.a, target_is_directory=True)
+        build = self.a / 'stage'
+        build.mkdir()
+        (self.a / 'module.mojo').write_text('fn main(): pass\n')
+        staged = build / 'driver'
+        staged.write_bytes(b'staged compiler bytes\n')
+        external = self.base / 'runner-a-external'
+        external.mkdir()
+        outside = external / 'driver'
+        outside.write_bytes(staged.read_bytes())
+        (self.a / 'external-driver').symlink_to(outside)
+
+        def checkpoint(root):
+            return loops.generation_checkpoint(
+                root, root / 'stage', 'Mojo fixture', '-Werror',
+                [str(root / '.venv/bin/mojo'), str(root / 'stage/driver'),
+                 str(root / 'external-driver')], ['module.mojo'])
+
+        before = checkpoint(self.a)
+        self.assertEqual(before, checkpoint(alias))
+        commands = before['compiler_command']
+        self.assertEqual(commands[0]['path'], '@ROOT@/.venv/bin/mojo')
+        self.assertEqual(commands[1]['path'], '@BUILD@/driver')
+        self.assertEqual(commands[2]['path'], str(outside.resolve()))
+        self.assertNotEqual(commands[1], commands[2])
+        staged.write_bytes(staged.read_bytes() + b'changed\n')
+        self.assertNotEqual(before['compiler_command'], checkpoint(alias)['compiler_command'])
+        other = external / 'other-driver'
+        other.write_bytes(outside.read_bytes())
+        (self.a / 'external-driver').unlink()
+        (self.a / 'external-driver').symlink_to(other)
+        self.assertNotEqual(commands[2], checkpoint(alias)['compiler_command'][2])
 
     def test_wrong_venv_shebang_and_import_hooks_fail_closed(self):
         body = self.launcher_a.read_bytes().split(b'\n', 1)[1]
@@ -158,6 +194,25 @@ class ToolchainIdentityTests(unittest.TestCase):
         self.launcher_b.write_text('#!/usr/bin/env python3\nfrom mojo._entrypoints import exec_mojo\n')
         with self.assertRaisesRegex(ValueError, 'interpreter'):
             identity.executable_identity(self.launcher_b)
+
+
+class AliasedTemporaryRootTests(unittest.TestCase):
+    def test_relocated_identity_with_symlinked_temporary_root(self):
+        # Reproduce macOS /var -> /private/var on every supported platform.
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp).resolve()
+            real = base / 'real'
+            real.mkdir()
+            alias = base / 'alias'
+            alias.symlink_to(real, target_is_directory=True)
+            fixture = ToolchainIdentityTests('test_relocated_install_has_same_semantic_identity')
+            try:
+                with patch.object(tempfile, 'tempdir', str(alias)):
+                    fixture.setUp()
+                fixture.test_relocated_install_has_same_semantic_identity()
+                self.assertEqual(fixture.base, fixture.base.resolve())
+            finally:
+                fixture.doCleanups()
 
 
 class HostedIdentitySetupTests(unittest.TestCase):
