@@ -33,10 +33,12 @@ import os
 import sys
 
 import affected
+import native_test_support
 
 # The files that decide how a suite is built and run.
 TOOLING = ["Makefile", "tools/affected.py", "tools/run_suite.py", "tools/suite_key.py",
-           "tools/test_environment.py", "tools/compiler_telemetry.py"]
+           "tools/test_environment.py", "tools/compiler_telemetry.py",
+           "tools/native_test_support.py"]
 
 
 def closure(suite, known, imports):
@@ -89,7 +91,7 @@ def suite_key(suite, settings, known, imports, assets, contents):
     files = closure(suite, known, imports)
     quoted = {prefix for path in files for prefix in imports[path][1]}
     used = [path for path in assets if any(path.startswith(p) for p in quoted)]
-    for path in TOOLING + files + used:
+    for path in TOOLING + files + used + native_test_support.fixture_inputs(files):
         add_file(path)
     return digest.hexdigest()[:20]
 

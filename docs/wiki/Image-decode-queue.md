@@ -18,7 +18,7 @@ Its read buffers and decoder scratch are released before its next claim.
 The limit counts images, not bytes.
 One large image can still need substantial memory.
 
-The call retains completed textures until every job has finished.
+The call retains completed textures until every claimed job has finished.
 It also holds one empty result slot and one error slot per image.
 An empty result slot allocates no texture pixels, mip chain, or color ramp.
 The final pixel and mip buffers move into their destination without another copy.
@@ -41,8 +41,21 @@ A shared image used in two color spaces has two jobs.
 
 Workers finish in any order.
 Each worker owns the result and error slot for its claimed index.
-After all workers join, the first failed job in source order is reported.
+A decode failure advances the atomic queue cursor to the input count.
+Claims after that update return a terminal index and do no decoding.
+Jobs claimed before that update still run to completion.
+The stop update never moves a concurrent terminal cursor backward.
+
+Claimed jobs form a source-order prefix, so every earlier job is included.
+After all workers join, the first failed job in that prefix is reported.
 Even an error with an empty message remains a failure.
+The result does not depend on which claimed error finishes first.
+A retry starts with a fresh cursor. Successful calls keep the same scheduler.
+
+The cursor is unsigned and is checked before conversion to a signed index.
+Each worker makes at most one terminal claim. The nonnegative input count
+and effective worker count are at most Int.MAX, so terminal increments fit
+in UInt64. This bound does not allocate storage for an Int.MAX-sized batch.
 
 A failed CARLA preload adds no new cache entries.
 Existing keys and texture buffers remain unchanged.

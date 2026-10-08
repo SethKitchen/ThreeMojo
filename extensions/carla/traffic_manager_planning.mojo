@@ -37,7 +37,9 @@ fog lights in fog.
 given hash sets; here the difference is the plain one. The turn speed
 uses a translation-stable radius and widens the product before the square
 root. A large finite radius therefore gives a finite speed. The caller
-still clamps that speed to the configured and landmark limits.
+still clamps that speed to the configured and landmark limits. Speed
+signals retain their explicit source units. Desired and landmark speeds
+are compared in m/s, correcting CARLA's mixed km/h and m/s comparison.
 
 Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrafficLightStage.cpp`,
 `MotionPlanStage.cpp` and `VehicleLightStage.cpp`.
@@ -45,6 +47,7 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/trafficmanager/TrafficLightStage.c
 
 from extensions.carla.actor import ActorId, GREEN, OFF, TrafficLightState
 from extensions.carla.map import Map
+from extensions.carla.speed_limits import simulation_speed
 from extensions.carla.math import make_unit_vector
 from extensions.carla.physics.quantities import KILOMETER_PER_HOUR
 from extensions.carla.physics.vehicle_control import VehicleControl
@@ -834,9 +837,9 @@ struct MotionPlanStage(Movable):
         speed difference scales it, each rising linearly with distance to
         the target speed at 3.5 s.
 
-        CARLA passes the sign's limit, in m/s, where a limit in km/h
-        belongs. So a vehicle with a desired speed compares that speed's
-        number in km/h with its target in m/s; the port keeps this.
+        Source speed units are checked before conversion to simulation.
+        Desired speed and the landmark target are compared in m/s. This
+        corrects CARLA's comparison of a desired km/h number with m/s.
 
         Args:
             waypoint: The vehicle's first node.
@@ -872,15 +875,10 @@ struct MotionPlanStage(Movable):
             elif signal.type == "205":
                 minimum = YIELD_TARGET_VELOCITY.value
             elif signal.type == "274":
-                var value = Float32(signal.value) / Float32(3.6)
-                if shared.parameters.has_desired_speed(actor):
-                    value = shared.parameters.get_vehicle_target_velocity(
-                        actor, Velocity(value)
-                    ).to(KILOMETER_PER_HOUR)
-                else:
-                    value = shared.parameters.get_vehicle_target_velocity(
-                        actor, Velocity(value)
-                    ).value
+                var limit = simulation_speed(signal.speed_limit())
+                var value = shared.parameters.get_vehicle_target_velocity(
+                    actor, limit
+                ).value
                 minimum = (
                     value if value
                     < max_target_velocity else max_target_velocity

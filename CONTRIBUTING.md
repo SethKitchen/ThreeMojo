@@ -22,6 +22,18 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 - Documentation must follow the [writing rules](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation). `make docs-check` enforces the ones a tool can check.
 - Everything is written in American English: `color`, `meter`, `center`, `gray`. That includes identifiers, docstrings and comments.
 
+## Focused changes and checks
+
+Keep each pull request focused on one correction. Use the affected test subset
+for that change. Inspect the selection with `AFFECTED=<base-ref>` before a run.
+Shared imports can still select the full suite. Do not drop selected tests or
+weaken coverage checks to make a run smaller.
+
+Avoid changes to the root Makefile, CI workflows, and shared build or coverage
+tools for a feature correction. When a shared change is necessary, put it in a
+separate infrastructure pull request. Explain why it is needed and which checks
+it selects. Keep that exception rare.
+
 ## Upstream behavior and correctness
 
 Keep the upstream API and behavior where they meet the documented contract.

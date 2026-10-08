@@ -1,0 +1,179 @@
+{
+  "scope": "Historical provenance identifiers only; no record here is a replay dependency or replacement for scoped source pins.",
+  "integration_target": {
+    "pr": 594,
+    "parent_specified_base_tree": "3859956e3474cc35fa73b90c005e5cbfcad31c70"
+  },
+  "prior_table_artifact": {
+    "regenerate.py": {
+      "sha256": "6ab5a0bd2c761b0f9dc66c8d8dc72501850b34ef3e2ff9f674e197b57c89e4e3",
+      "bytes": 14236
+    },
+    "exact_coefficients.json": {
+      "sha256": "36f6afb064931eedf05430c9baa0dfae24833674bd70ea7a1a44ff220b634ea9",
+      "bytes": 1351288
+    },
+    "spiral_moment_words.be64": {
+      "sha256": "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446",
+      "bytes": 22528
+    },
+    "NATIVE-QUALIFICATION.json": {
+      "sha256": "8494f01af6a4fdade41ad1f7181b1891e8f52bcc9613e299f38c641a5edf95d2",
+      "bytes": 1172
+    }
+  },
+  "prior_independent_revision2": {
+    "derive_controls.py": {
+      "sha256": "cbc7d9733aa7d52c6934858d27dda7e1915dcbf687621de46b53e8331fd955a5",
+      "bytes": 27022
+    },
+    "oracle_results.json": {
+      "sha256": "35323518e8b3807655672bdcee29fbdc42edf18526a54b02fd1dc47c97a59b0f",
+      "bytes": 1406306
+    },
+    "CORRECTION.md": {
+      "sha256": "447b5bf8346e54fbdadd9c5d0047ca2c99c347738a2549f29275862da5dcd498",
+      "bytes": 5981
+    }
+  },
+  "prior_source_proof_design": {
+    "sha256": "78ebd05c7360700eed9e896e7ca524afa101e21303d8dcda226c09b8e080afce",
+    "bytes": 17346
+  },
+  "native_observations": {
+    "new_execution_by_portable_checker": false,
+    "prior_focused_tests_default": 107,
+    "prior_focused_tests_contraction_off": 107,
+    "prior_readonly_data_bytes": 22528,
+    "prior_dynamic_accessor_bytes": 71,
+    "scope": "Explicit previously pinned accessor probe only; not future callers or whole-map cost"
+  },
+  "data_migration": {
+    "previous_source_sha256": "8562b41343766f69a6a6c4db29b204321a751de118ea5a9702498e1611265f98",
+    "canonical_source_sha256": "2f984e1c7fb4846480feec7678437efc097f9d65bf3b3105c5fd4a10b5a2ca54",
+    "change": "Comment header only; complete declaration and trailing bytes unchanged",
+    "numerical_words_preserved": 2816
+  },
+  "portable_check": {
+    "exact_fraction_matches": 1408,
+    "endpoint_matches": 2816,
+    "zeroth_moment": "36028797018963971/36028797018963968",
+    "source_byte_replay": "Canonical complete source bytes, not word-only equivalence"
+  },
+  "remaining_obligations": [
+    "actual rounded geometry/error graphs and runtime guards",
+    "native and compiler qualification",
+    "full query correctness, budget, coverage and performance gates"
+  ],
+  "formatter_layout_migration": {
+    "previous_source_sha256": "2f984e1c7fb4846480feec7678437efc097f9d65bf3b3105c5fd4a10b5a2ca54",
+    "canonical_source_sha256": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+    "previous_source_bytes": 87600,
+    "canonical_source_bytes": 93232,
+    "change": "One UInt64 array element per line; whitespace only inside the declaration. Header, count labels, endpoint words and order are unchanged.",
+    "numerical_words_preserved": 2816,
+    "words_be64_sha256": "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446",
+    "formatter_evidence": "Canonical source is byte-identical to the retained formatted output. No formatter or native execution was run for this source-only delta."
+  },
+  "canonical_lane_binding_migration": {
+    "authored_commit": "68a87145a71fe92252a26614b06da2e8e9965497",
+    "main_commit": "3b134f2f2c8a56cdc62878d98bd6c5dae1cbeeea",
+    "composed_baseline_tree": "51c2ea2c159dd14fc2baeebf22fbfcf48915f615",
+    "correspondence_file": "tools/carla_lane_oracle/spiral-graph-correspondence.json",
+    "correspondence_sha256": "6ea4c0ca50b821a603805f931439279cb09cd1efa044ae53bdd545031acc178e",
+    "change": "Scalar and alias bindings follow private lane_geometry; receiver/function renaming and formatting only; canonical/public evaluator distinction explicit",
+    "array_scalar_and_rounded_node_words_unchanged": true,
+    "numerical_table_words_unchanged": 2816,
+    "fresh_portable_controls": 34,
+    "independent_optimized_python_mutations_rejected": 11,
+    "scope": "Portable operation/literal/table binding only; runtime fast-proof guards and rounded execution remain separate obligations"
+  },
+  "final_formatter_binding": {
+    "writer_tree": "dda1d4d0c6dbff075407de8130dbef265d0114ee",
+    "receipt_sha256": "2e5c1de3f003196e8b4b81791a12902dc7cc7b5175b7422f1b95faa1f88cbaaf",
+    "blocks": [
+      {
+        "name": "ideal_sincos_selector",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "56061b0775a4da91c0c6b472eea8ec0040a0cd528c873dc707a1a8473755ad72",
+        "after_sha256": "660c00106a75d0b4c17ad87aebc4b7b71d1ab017945b3dc0874b895cc266fdc2",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      },
+      {
+        "name": "ideal_horner",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "64de25b06c5c1dfdff3a1e787abc30381bb3c4c36a631c217cdf94c0c1285e26",
+        "after_sha256": "aacc0792f0e340f1859a6ed4e1d64aa4b35961a53f807f3e4f276857c111c22f",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      },
+      {
+        "name": "ideal_sincos_branch",
+        "path": "extensions/carla/curve_trig.mojo",
+        "before_sha256": "efef6b1e8bdec16fe5f6575717d9893c16dced3dfd2d817c86d9e857e9438701",
+        "after_sha256": "b8a1c365598f4f40a29af377f5189359f200baf1386ec08e8b73650344dd709e",
+        "comparison": "Exact AST operation grouping, no renaming in this format-only delta"
+      }
+    ],
+    "table_bytes_unchanged": true,
+    "numerical_words_preserved": 2816
+  },
+  "stored_half_ideal_projection_migration": {
+    "reviewed_base_tree": "367d8e03ebc57d69dc7d027279c5ca0f695857b5",
+    "frozen_runtime_inventory_sha256": "83c3845e325714fbd1db5599735a847954d1492d85b832010e959839024b766c",
+    "composed_unchanged_evaluator_inventory_sha256": "14cd7ccbf54734b0cf59dc0136eea5c6228ffb4f1a7053cac7910f2ea2775cb4",
+    "historical_blocks": {
+      "ideal_spiral": {
+        "path": "extensions/carla/curve_bounds.mojo",
+        "begin": "def _spiral_expression[",
+        "end": "def _sample_index(",
+        "normalized_source": "def _spiral_expression[\n    derivatives: Bool\n](\n    geometry: RoadGeometry,\n    d: _JetExpression[derivatives],\n    pieces: Int,\n    translation: Vector3,\n) -> Tuple[\n    _JetExpression[derivatives],\n    _JetExpression[derivatives],\n    _JetExpression[derivatives],\n]:\n    comptime Expression = _JetExpression[derivatives]\n    var k0 = Expression.constant(geometry.curvature_start)\n    var rate = Expression.constant(\n        (geometry.curvature_end - geometry.curvature_start) / geometry.length\n    )\n    var step = d / Expression.constant(Float64(pieces))\n    var nodes = materialize[_GL_NODES]()\n    var weights = materialize[_GL_WEIGHTS]()\n    var x = Expression.constant(0.0)\n    var y = Expression.constant(0.0)\n    var piece = 0\n    while piece < pieces:\n        var start = step * Expression.constant(Float64(piece))\n        var i = 0\n        while i < 5:\n            var t = start + step * Expression.constant(\n                0.5\n            ) * Expression.constant(1.0 + nodes[i])\n            var theta = Expression.constant(geometry.heading) + t * (\n                k0 + Expression.constant(0.5) * rate * t\n            )\n            var trig = _sincos_expression(theta)\n            x = (\n                x\n                + step\n                * Expression.constant(0.5)\n                * Expression.constant(weights[i])\n                * trig[1]\n            )\n            y = (\n                y\n                + step\n                * Expression.constant(0.5)\n                * Expression.constant(weights[i])\n                * trig[0]\n            )\n            i += 1\n        piece += 1\n    var heading = Expression.constant(geometry.heading) + d * (\n        k0 + Expression.constant(0.5) * rate * d\n    )\n    return (\n        (\n            Expression.constant(geometry.x)\n            - Expression.constant(Float64(translation.x))\n        )\n        + x,\n        (\n            Expression.constant(geometry.y)\n            + Expression.constant(Float64(translation.y))\n        )\n        + y,\n        heading,\n    )\n",
+        "sha256": "270a3cde3b012388ee8fcb6a4ecc59d837d1583f6c406f942ff98fdccd9f5733"
+      },
+      "scalar_sincos": {
+        "path": "extensions/carla/curve_trig.mojo",
+        "begin": "def _curve_sincos(value: Float64)",
+        "end": "def _curve_sin(value: Float64)",
+        "normalized_source": "def _curve_sincos(value: Float64) -> Tuple[Float64, Float64]:\n    if not isfinite(value):\n        return (sin(value), cos(value))\n    if abs(value) > _PHASE_LIMIT:\n        return (\n            min(max(sin(value), -1.0), 1.0),\n            min(max(cos(value), -1.0), 1.0),\n        )\n    var quadrant = Int(floor(value * _INV_HALF_PI + 0.5))\n    var high = Float64(quadrant) * _HALF_PI_HIGH\n    var low = Float64(quadrant) * _HALF_PI_LOW\n    var reduced = (value - high) - low\n    var square = reduced * reduced\n    var sine = reduced * _scalar_polynomial(\n        materialize[_SIN_COEFFICIENTS](), square\n    )\n    var cosine = _scalar_polynomial(materialize[_COS_COEFFICIENTS](), square)\n    var mode = quadrant & 3\n    if mode == 0:\n        return (sine, cosine)\n    if mode == 1:\n        return (cosine, -sine)\n    if mode == 2:\n        return (-sine, -cosine)\n    return (-cosine, sine)\n",
+        "sha256": "045eb52b44f376b8f34e7a6791fad4a742949c8cdf5005b20a0824bb600bd430"
+      }
+    },
+    "current_block_sha256": {
+      "ideal_spiral": "39e52953c8ca2a386f06e25d63b2454b734e4a08a0e8deadae535e0495efe3cf",
+      "scalar_sincos": "84d4bc9455d01b1e1741ecdf8b310c1a85df5226e1e91fec73b46b21e1b32402",
+      "ideal_uncertain": "5f6a923bf1eb1903449cb5352e271a2a7fa1a829c322f94df9c99d6a100e3b35"
+    },
+    "correspondence": {
+      "helper_projections": 5,
+      "rate_half_commutations": 2,
+      "projected_ast_sha256": "f0f94e038fd4a783b3ed400ffd32801ca0c3bdc54980e2c408d44f50211b9e06"
+    },
+    "claim": "Five stored-half calls project to value times exact one-half. Exactly two historical half-times-rate products commute. This preserves only the exact real ideal stored polynomial; the floating-point and error graphs are changed.",
+    "dependency_binding": "Complete curve_interval token contract, including all imports, primitives, error dependencies, declarations and Mojo qualifiers; top-level caller, trig and canonical scalar routing is separately bound.",
+    "standard_library_assumptions": "Imported std.math/std.memory operations and Mojo builtin semantics remain compiler/native qualification assumptions; this is not a compiler or IEEE execution proof.",
+    "canonical_scalar_evaluator_unchanged": true,
+    "compensated_evaluator_excluded": true,
+    "array_scalar_and_rounded_node_words_unchanged": true,
+    "exact_coefficients_preserved": 1408,
+    "numerical_words_preserved": 2816,
+    "canonical_source_sha256": "63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c",
+    "words_be64_sha256": "72f5e5d09a6f4091e1a537aa89bf80493a427576b5ff86619830721edbc5f446",
+    "remaining_obligations": "Runtime support/translated-consumer gates, full-domain scalar-error validity, native correctness, coverage, CI, station contract and performance remain separate."
+  },
+  "stored_literal_and_sentinel_hardening": {
+    "change": "Token-aware complete actual top-level array/scalar logical declarations replace raw-text prefix extraction. Constant RHS masking occurs only after full literal validation. Every selected block sentinel must begin an actual top-level def/from/decorator token, outside strings/comments/indented bodies.",
+    "stored_geometry_routing": "Exact extensions/carla/geometry.mojo top-level routing/declaration tokens bind GL source names, imports and shadow/redefinition controls; unrelated geometry function-body mathematics is not claimed.",
+    "review_controls": [
+      "COS and GL conditional/concatenation/index/executable suffixes",
+      "COS and GL docstring-decoy declarations",
+      "all four scalar docstring decoys and suffixes",
+      "GL import/shadow/redeclaration",
+      "ideal and canonical scalar function-sentinel docstring decoys",
+      "adjacent numeric/name tokens and empty array elements",
+      "benign comments, whitespace and equal-word numeric spellings"
+    ],
+    "helper_projection_sanity": "Every result Name use is restricted to the initial assignment target, direct result.error assignment receiver, or returned result. Complete source dependency pins remain mandatory.",
+    "coefficient_and_rounding_arithmetic_unchanged": true,
+    "exact_coefficients_preserved": 1408,
+    "numerical_words_preserved": 2816
+  }
+}

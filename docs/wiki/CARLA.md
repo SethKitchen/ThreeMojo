@@ -72,7 +72,7 @@ var surface = to_three_frame(
 
 The frame is OpenDRIVE's. It is right-handed, and the heading turns counter-clockwise from plus x.
 
-CARLA uses the odrSpiral Fresnel code for a spiral. This port integrates the same clothoid with Gauss-Legendre quadrature. The result agrees with a fine numerical integral to 1e-5 meters. It also holds when the two curvatures are equal, where odrSpiral divides by zero.
+CARLA uses the odrSpiral Fresnel code for a spiral. This port uses Gauss-Legendre quadrature. The retained reference fixtures agree with a fine numerical integral to 1e-5 meters, including equal curvatures where odrSpiral divides by zero. These fixtures do not establish a general true-clothoid error bound. Canonical lane positions use [compensated stored-term summation](CARLA-maps#canonical-spiral-arithmetic); the separate reference APIs keep their existing arithmetic.
 
 A poly3 and a paramPoly3 keep CARLA's sample tables and its linear interpolation. A poly3 samples u every 0.3 meters. A paramPoly3 has one interval for each 0.5 meters, and at least five.
 

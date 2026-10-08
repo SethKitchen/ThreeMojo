@@ -36,8 +36,18 @@ chord approximation instead of CARLA's ten-step walk. See `junction_bounds`.
 Source: CARLA 1360bb9, `LibCarla/source/carla/road/MapBuilder.cpp`.
 """
 
+from extensions.carla.curve_sum2 import _require_sum2_environment
 from extensions.carla.geo import GeoLocation, GeoProjection
-from extensions.carla.junction_bounds import _lane_section_box
+from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
+from extensions.carla.map_validation import (
+    _preflight_map_records,
+    _reserve_information_sort,
+    _reserve_road_scan,
+    _reserve_lanes_at,
+    _reserve_lane_scalars,
+)
+from extensions.carla.curve_bounds import _reference_work
+from extensions.carla.junction_bounds import _lane_section_box_with_work
 from extensions.carla.geometry import (
     ARC_LENGTH,
     LINE,
@@ -58,6 +68,7 @@ from extensions.carla.map import (
     SignalDependency,
     Waypoint,
     is_traffic_light,
+    _preflight_map_metadata,
 )
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Lane, LaneKey, Road
@@ -165,9 +176,11 @@ struct MapBuilder(Movable):
     var signals: List[Signal]
     var geo_reference: GeoLocation
     var geo_projection: GeoProjection
+    var _build_work: _MapBuildWork
 
     def __init__(out self):
         """Start with nothing."""
+        self._build_work = _MapBuildWork(MapBuildBudget())
         self.roads = List[Road]()
         self.junctions = List[Junction]()
         self.controllers = List[Controller]()
@@ -458,16 +471,46 @@ struct MapBuilder(Movable):
         )
 
     def create_lane_speed(
-        mut self, lane: Tuple[Int, Int, Int], s: Float64, max: Float64
-    ):
-        """Add a lane speed record, `CreateLaneSpeed`. CARLA drops the unit.
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        max: Float64,
+        unit: String = "",
+    ) raises:
+        """Add a numeric lane speed without dropping its source unit.
 
         Args:
             lane: The lane.
             s: Where the record starts, in meters along the road.
-            max: The limit, in the file's unit.
+            max: The finite nonnegative limit in the source unit.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If the source number or unit is invalid.
         """
-        self._lane(lane).info.speeds.append(RoadInfoSpeed(s, max, "Town"))
+        var record = RoadInfoSpeed(s, max, "Town", unit)
+        self._lane(lane).info.speeds.append(record^)
+
+    def create_lane_speed(
+        mut self,
+        lane: Tuple[Int, Int, Int],
+        s: Float64,
+        max: String,
+        unit: String,
+    ) raises:
+        """Add a numeric lane speed directly from OpenDRIVE text.
+
+        Args:
+            lane: The lane.
+            s: Where the record starts, in meters along the road.
+            max: The original numeric max text. Road keywords are invalid.
+            unit: The original unit; omitted means m/s.
+
+        Raises:
+            Error: If the source number or unit is invalid.
+        """
+        var record = RoadInfoSpeed.from_opendrive(s, max, "Town", unit, False)
+        self._lane(lane).info.speeds.append(record^)
 
     def create_road_mark(
         mut self,
@@ -616,22 +659,46 @@ struct MapBuilder(Movable):
         type: String,
         max: Float64,
         unit: String,
-    ):
-        """Add a road speed record, `CreateRoadSpeed`.
-
-        CARLA drops the road type and the unit, so the record's type is
-        "Town" and its speed is the file's number.
+    ) raises:
+        """Add a numeric road speed without dropping its unit.
 
         Args:
             road: The road's index.
             s: Where the record starts, in meters.
-            type: The road type, such as "town". Dropped.
-            max: The limit, in the file's unit.
-            unit: The unit. Dropped.
+            type: The road type; the compatibility record type stays Town.
+            max: The finite nonnegative source limit.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If the number or unit is invalid.
         """
         _ = type
-        _ = unit
-        self.roads[road].info.speeds.append(RoadInfoSpeed(s, max, "Town"))
+        var record = RoadInfoSpeed(s, max, "Town", unit)
+        self.roads[road].info.speeds.append(record^)
+
+    def create_road_speed(
+        mut self,
+        road: Int,
+        s: Float64,
+        type: String,
+        max: String,
+        unit: String,
+    ) raises:
+        """Add a numeric, unrestricted, undefined or absent road speed.
+
+        Args:
+            road: The road's index.
+            s: Where the record starts, in meters.
+            type: The road type; the compatibility record type stays Town.
+            max: The original max text; empty means no speed element.
+            unit: The source unit; omitted means m/s.
+
+        Raises:
+            Error: If a numeric limit or source unit is invalid.
+        """
+        _ = type
+        var record = RoadInfoSpeed.from_opendrive(s, max, "Town", unit, True)
+        self.roads[road].info.speeds.append(record^)
 
     def add_road_object_crosswalk(
         mut self,
@@ -882,6 +949,7 @@ struct MapBuilder(Movable):
         h_offset: Float64,
         pitch: Float64,
         roll: Float64,
+        value_present: Bool = True,
     ) raises -> SignalReferenceHandle:
         """Add a signal and a reference to it on its road, `AddSignal`.
 
@@ -906,6 +974,7 @@ struct MapBuilder(Movable):
             h_offset: The turn from the road's heading, in radians.
             pitch: Its pitch, in radians.
             roll: Its roll, in radians.
+            value_present: Whether the source supplied a numeric value.
 
         Returns:
             The reference's handle.
@@ -933,6 +1002,7 @@ struct MapBuilder(Movable):
             h_offset,
             pitch,
             roll,
+            value_present,
         )
         var replaced = False
         for i in range(len(self.signals)):
@@ -1237,16 +1307,18 @@ struct MapBuilder(Movable):
 
     # --- building -------------------------------------------------------------
 
-    def _index(self) -> Dict[Int, Int]:
+    def _index(mut self) raises -> Dict[Int, Int]:
         var out = Dict[Int, Int]()
         for i in range(len(self.roads)):
+            self._build_work.step()
             out[self.roads[i].id.value] = i
         return out^
 
     def _edge_lane(
-        self, index: Dict[Int, Int], road_id: RoadId, lane_id: LaneId
+        mut self, index: Dict[Int, Int], road_id: RoadId, lane_id: LaneId
     ) raises -> Optional[LaneKey]:
         # `GetEdgeLanePointer`. The callers pass a road of the map.
+        _reserve_road_scan(self.roads[index[road_id.value]], self._build_work)
         ref road = self.roads[index[road_id.value]]
         var section: Int
         if road.is_positive_direction(lane_id):
@@ -1258,7 +1330,7 @@ struct MapBuilder(Movable):
         return LaneKey(road.id, road.sections[section].id, lane_id)
 
     def _junction_lanes(
-        self,
+        mut self,
         index: Dict[Int, Int],
         junction_id: JuncId,
         road_id: RoadId,
@@ -1268,31 +1340,38 @@ struct MapBuilder(Movable):
         var out = List[Tuple[RoadId, LaneId]]()
         var at = -1
         for i in range(len(self.junctions)):
+            self._build_work.step()
             if self.junctions[i].id == junction_id:
                 at = i
         if at < 0:
             return out^
         for connection in self.junctions[at].connections:
+            self._build_work.step()
             var found = index.get(connection.connecting_road.value)
             if not Bool(found):
                 raise Error("A junction connects a road the map lacks")
             ref road = self.roads[found.value()]
             if road_id == road.predecessor:
+                _reserve_lanes_at(road, self._build_work)
                 for pair in road.lanes_at(0.0):
+                    self._build_work.step()
                     ref lane = road.sections[pair[0]].lanes[pair[1]]
                     if lane_id == lane.predecessor:
                         out.append((road.id, lane.id))
             if road_id == road.successor:
+                _reserve_lanes_at(road, self._build_work)
                 for pair in road.lanes_at(road.length):
+                    self._build_work.step()
                     ref lane = road.sections[pair[0]].lanes[pair[1]]
                     if lane_id == lane.successor:
                         out.append((road.id, lane.id))
         return out^
 
     def _lane_next(
-        self, index: Dict[Int, Int], road: Int, section: Int, lane: Int
+        mut self, index: Dict[Int, Int], road: Int, section: Int, lane: Int
     ) raises -> List[LaneKey]:
         # `GetLaneNext`.
+        _reserve_road_scan(self.roads[road], self._build_work)
         ref r = self.roads[road]
         ref the_lane = r.sections[section].lanes[lane]
         var lane_id = the_lane.id
@@ -1301,6 +1380,7 @@ struct MapBuilder(Movable):
         var next = the_lane.successor if positive else the_lane.predecessor
         var next_is_junction = next_road.value not in index
         var s = r.sections[section].s
+        var road_id = r.id
         var linked = next.value != 0 or lane_id.value == 0
         var out = List[LaneKey]()
         # CARLA asks whether a section follows this one in the lane's
@@ -1310,6 +1390,7 @@ struct MapBuilder(Movable):
             inside = False
             # The road holds this section, so it has sections.
             for other in r.sections:  # pragma: no branch
+                self._build_work.step()
                 if other.s > s:
                     inside = True
         if inside:
@@ -1327,7 +1408,7 @@ struct MapBuilder(Movable):
                     out.append(edge.value())
         else:
             for option in self._junction_lanes(
-                index, JuncId(next_road.value), r.id, lane_id
+                index, JuncId(next_road.value), road_id, lane_id
             ):
                 # The option is a lane of that road, so it has an edge.
                 out.append(self._edge_lane(index, option[0], option[1]).value())
@@ -1337,8 +1418,11 @@ struct MapBuilder(Movable):
         # `CreatePointersBetweenRoadSegments`.
         var index = self._index()
         for r in range(len(self.roads)):
+            self._build_work.step()
             for sec in range(len(self.roads[r].sections)):
+                self._build_work.step()
                 for ln in range(len(self.roads[r].sections[sec].lanes)):
+                    self._build_work.step()
                     var nexts = self._lane_next(index, r, sec, ln)
                     var me = LaneKey(
                         self.roads[r].id,
@@ -1346,40 +1430,52 @@ struct MapBuilder(Movable):
                         self.roads[r].sections[sec].lanes[ln].id,
                     )
                     for key in nexts:
+                        self._build_work.step()
                         var other = self._find(index, key)
                         self.roads[other[0]].sections[other[1]].lanes[
                             other[2]
                         ].prev_lanes.append(me)
                     self.roads[r].sections[sec].lanes[ln].next_lanes = nexts^
         for r in range(len(self.roads)):
+            self._build_work.step()
             var nexts = List[RoadId]()
             var prevs = List[RoadId]()
             var me = self.roads[r].id
             for section in self.roads[r].sections:
+                self._build_work.step()
                 for lane in section.lanes:
+                    self._build_work.step()
                     for key in lane.next_lanes:
+                        self._build_work.step()
+                        self._build_work.step(len(nexts))
                         if key.road_id != me and not _has(nexts, key.road_id):
                             nexts.append(key.road_id)
                     for key in lane.prev_lanes:
+                        self._build_work.step()
+                        self._build_work.step(len(prevs))
                         if key.road_id != me and not _has(prevs, key.road_id):
                             prevs.append(key.road_id)
             self.roads[r].nexts = nexts^
             self.roads[r].prevs = prevs^
 
     def _find(
-        self, index: Dict[Int, Int], key: LaneKey
+        mut self, index: Dict[Int, Int], key: LaneKey
     ) raises -> Tuple[Int, Int, Int]:
         var r = index[key.road_id.value]
+        _reserve_road_scan(self.roads[r], self._build_work)
         var sec = self.roads[r].section_index(key.section_id)
         return (r, sec, self.roads[r].sections[sec].lane_index(key.lane_id))
 
-    def _remove_zero_validities(mut self):
+    def _remove_zero_validities(mut self) raises:
         # `RemoveZeroLaneValiditySignalReferences`.
         for r in range(len(self.roads)):
+            self._build_work.step()
             var kept = List[RoadInfoSignal]()
             for reference in self.roads[r].info.signals:
+                self._build_work.step()
                 var remove = len(reference.validities) > 0
                 for validity in reference.validities:
+                    self._build_work.step()
                     if (
                         validity.from_lane.value != 0
                         or validity.to_lane.value != 0
@@ -1390,13 +1486,21 @@ struct MapBuilder(Movable):
             self.roads[r].info.signals = kept^
 
     def _signal_transform(
-        self, index: Dict[Int, Int], signal: Signal
+        mut self, index: Dict[Int, Int], signal: Signal
     ) raises -> CarlaTransform:
         # `ComputeSignalTransform`, plus a traffic light's quarter meter
         # forward.
         var found = index.get(signal.road_id.value)
         if not Bool(found):
             raise Error("A signal stands on a road the map lacks")
+        var terms = _reference_work(
+            self.roads[found.value()], signal.s, signal.s
+        )
+        if terms < 0:
+            raise Error(
+                "Signal construction cannot resolve reference quadrature work"
+            )
+        self._build_work.term(terms)
         var point = self.roads[found.value()].directed_point_no_lane_offset(
             signal.s
         )
@@ -1424,33 +1528,49 @@ struct MapBuilder(Movable):
     def _solve_signals(mut self, index: Dict[Int, Int]) raises:
         # `SolveSignalReferencesAndTransforms`.
         for road in self.roads:
+            self._build_work.step()
             for reference in road.info.signals:
+                self._build_work.step()
+                self._build_work.step(len(self.signals))
                 _ = self._signal_index(reference.signal_id)
         for i in range(len(self.signals)):
+            self._build_work.step()
             if self.signals[i].using_inertial_position:
                 continue
-            self.signals[i].transform = self._signal_transform(
-                index, self.signals[i]
-            )
+            self._build_work.step(len(self.signals[i].controllers))
+            self._build_work.step(len(self.signals[i].dependencies))
+            var signal = self.signals[i].copy()
+            var transform = self._signal_transform(index, signal)
+            self.signals[i].transform = transform
         for r in range(len(self.roads)):
+            self._build_work.step()
             for k in range(len(self.roads[r].info.signals)):
+                self._build_work.step()
                 if len(self.roads[r].info.signals[k].validities) > 0:
                     continue
                 var s = self.roads[r].info.signals[k].s
                 var lanes = List[LaneId]()
+                _reserve_road_scan(
+                    self.roads[r], self._build_work, section_passes=2
+                )
                 for pair in self.roads[r].lanes_by_distance(s):
+                    self._build_work.step()
                     lanes.append(
                         self.roads[r].sections[pair[0]].lanes[pair[1]].id
                     )
+                self._build_work.step_product(2, len(lanes))
                 self.roads[r].info.signals[k].validities = default_validities(
                     self.roads[r].info.signals[k].orientation(), lanes
                 )
 
-    def _solve_controllers(mut self):
+    def _solve_controllers(mut self) raises:
         # `SolveControllerAndJuntionReferences`.
         for junction in self.junctions:
+            self._build_work.step()
             for controller_id in junction.controllers:
+                self._build_work.step()
                 for c in range(len(self.controllers)):
+                    self._build_work.step()
                     if self.controllers[c].id != controller_id:
                         continue
                     # The junctions come in order of id and name each
@@ -1458,17 +1578,31 @@ struct MapBuilder(Movable):
                     # `std::set` insert puts it.
                     self.controllers[c].junctions.append(junction.id)
                     for signal_id in self.controllers[c].signals:
+                        self._build_work.step()
                         for s in range(len(self.signals)):
+                            self._build_work.step()
                             if self.signals[s].signal_id == signal_id:
+                                self._build_work.step(
+                                    len(self.signals[s].controllers)
+                                )
+                                self._build_work.step()
                                 var ids = self.signals[s].controllers.copy()
                                 ids.append(controller_id)
+                                self._build_work.sort_work(len(ids))
                                 self.signals[s].controllers = _sorted_set(ids)
 
-    def build(mut self) raises -> Map:
+    def build(
+        mut self, budget: MapBuildBudget = MapBuildBudget()
+    ) raises -> Map:
         """Join the pieces into a map, `MapBuilder::Build`.
 
         See the module docstring for the steps. The builder is empty
-        afterwards.
+        afterwards on success. A failure after preflight may consume the
+        builder, but never returns a partial Map.
+
+        Args:
+            budget: One finite ledger for preflight, links, sorting, spatial
+                subdivision, junction proofs/conflicts, and sign relocation.
 
         Returns:
             The map.
@@ -1476,8 +1610,19 @@ struct MapBuilder(Movable):
         Raises:
             Error: If a signal reference names no signal, a junction
                 connects a road the map lacks, or a record a step needs is
-                missing.
+                missing, or the floating-point mode is not round-to-nearest
+                with gradual underflow.
         """
+        _require_sum2_environment()
+        self._build_work = _MapBuildWork(budget)
+        _preflight_map_records(self.roads, self._build_work)
+        _preflight_map_metadata(
+            self.junctions, self.signals, self.controllers, self._build_work
+        )
+        self._build_work.sort_work(len(self.roads))
+        self._build_work.sort_work(len(self.junctions))
+        self._build_work.sort_work(len(self.signals))
+        self._build_work.sort_work(len(self.controllers))
         var roads = List[Road]()
         while len(self.roads) > 0:
             var best = 0
@@ -1492,9 +1637,14 @@ struct MapBuilder(Movable):
         self._link_lanes()
         self._remove_zero_validities()
         for r in range(len(self.roads)):
+            _reserve_information_sort(self.roads[r].info, self._build_work)
             self.roads[r].info.sort()
             for sec in range(len(self.roads[r].sections)):
                 for ln in range(len(self.roads[r].sections[sec].lanes)):
+                    _reserve_information_sort(
+                        self.roads[r].sections[sec].lanes[ln].info,
+                        self._build_work,
+                    )
                     self.roads[r].sections[sec].lanes[ln].info.sort()
         var index = self._index()
         self._solve_signals(index)
@@ -1507,18 +1657,31 @@ struct MapBuilder(Movable):
         self.signals = List[Signal]()
         var controllers = self.controllers^
         self.controllers = List[Controller]()
-        var map = Map(built^, junctions^, signals^, controllers^)
+        var map = Map(
+            built^,
+            junctions^,
+            signals^,
+            controllers^,
+            budget,
+            _initial_work=self._build_work,
+        )
         map.geo_reference = self.geo_reference
         map.geo_projection = self.geo_projection.copy()
+        var post_work = map._construction_work
         for j in range(len(map.junctions)):
-            map.junctions[j].bounding_box = junction_box(
-                map, map.junctions[j].id
+            post_work.step()
+            map.junctions[j].bounding_box = _junction_box_with_work(
+                map, map.junctions[j].id, post_work
             )
         for j in range(len(map.junctions)):
-            var conflicts = map.compute_junction_conflicts(map.junctions[j].id)
+            post_work.step()
+            var conflicts = map._compute_junction_conflicts_with_work(
+                map.junctions[j].id, post_work
+            )
             map.junctions[j].conflict_roads = conflicts[0].copy()
             map.junctions[j].conflicts = conflicts[1].copy()
-        check_signals_on_roads(map)
+        _check_signals_on_roads_with_work(map, post_work)
+        map._construction_work = post_work
         return map^
 
 
@@ -1544,16 +1707,24 @@ def junction_box(map: Map, id: JuncId) raises -> Box3:
             sample interval is invalid, or coefficient/subdivision bounds
             are not finite.
     """
+    var work = _MapBuildWork(MapBuildBudget())
+    return _junction_box_with_work(map, id, work)
+
+
+def _junction_box_with_work(
+    map: Map, id: JuncId, mut work: _MapBuildWork
+) raises -> Box3:
     var box = Box3(
         Vector3(_FLOAT_MAX, _FLOAT_MAX, _FLOAT_MAX),
         Vector3(-_FLOAT_MAX, -_FLOAT_MAX, -_FLOAT_MAX),
     )
-    for pair in map.junction_waypoints(id, LANE_ANY):
+    for pair in map._junction_waypoints_with_work(id, LANE_ANY, work):
+        work.step()
         var start = pair[0]
-        ref road = map.road(start.road_id)
-        var section = road.section_index(start.section_id)
-        var lane = road.sections[section].lane_index(start.lane_id)
-        box.union(_lane_section_box(road, section, lane))
+        var at = map._locate_with_work(start, work)
+        box.union(
+            _lane_section_box_with_work(map.roads[at[0]], at[1], at[2], work)
+        )
     return box
 
 
@@ -1573,11 +1744,19 @@ def check_signals_on_roads(mut map: Map) raises:
     Raises:
         Error: If a lane's records are missing.
     """
+    var work = _MapBuildWork(MapBuildBudget())
+    _check_signals_on_roads_with_work(map, work)
+
+
+def _check_signals_on_roads_with_work(
+    mut map: Map, mut work: _MapBuildWork
+) raises:
     var flags = LANE_SHOULDER | LANE_DRIVING
     for i in range(len(map.signals)):
+        work.step()
         var position = map.signals[i].transform.location
         var rotation = map.signals[i].transform.rotation
-        var closest = map.closest_waypoint_on_road(position, flags)
+        var closest = map._closest_lane_with_build_work(position, flags, work)
         ref name = map.signals[i].name
         if (
             "Stencil_STOP" in name
@@ -1588,21 +1767,22 @@ def check_signals_on_roads(mut map: Map) raises:
         if not Bool(closest):
             continue
         var w = closest.value()
-        var road_transform = map.compute_transform(w)
+        var road_transform = _signal_lane_pose(map, w, work)
         var distance = (road_transform.location - position).length()
-        var width = map.lane_width_meters(w)
+        var width = _signal_lane_width(map, w, work)
         var is_rht = map.road(w.road_id).is_rht
         var direction = 1
         var steps = 0
         while Float64(distance) < width * 0.7 and steps < 10 and direction != 0:
-            var right = map.right(w)
+            work.step()
+            var right = _signal_side(map, w, True, work)
             var right_type = LANE_NONE
             if Bool(right):
-                right_type = map.lane_type(right.value())
-            var left = map.left(w)
+                right_type = _signal_lane_type(map, right.value(), work)
+            var left = _signal_side(map, w, False, work)
             var left_type = LANE_NONE
             if Bool(left):
-                left_type = map.lane_type(left.value())
+                left_type = _signal_lane_type(map, left.value(), work)
             var first = right_type if is_rht else left_type
             var second = left_type if is_rht else right_type
             var toward = 1 if is_rht else -1
@@ -1619,14 +1799,64 @@ def check_signals_on_roads(mut map: Map) raises:
             )
             position = position + displacement * Float32(direction)
             rotation = road_transform.rotation
-            w = map.closest_waypoint_on_road(position, flags).value()
-            road_transform = map.compute_transform(w)
+            w = map._closest_lane_with_build_work(position, flags, work).value()
+            road_transform = _signal_lane_pose(map, w, work)
             distance = (road_transform.location - position).length()
-            width = map.lane_width_meters(w)
+            width = _signal_lane_width(map, w, work)
             steps += 1
         if steps != 10:
             map.signals[i].transform.location = position
             map.signals[i].transform.rotation = rotation
+
+
+def _signal_lane_pose(
+    map: Map, waypoint: Waypoint, mut work: _MapBuildWork
+) raises -> CarlaTransform:
+    var at = map._locate_with_work(waypoint, work)
+    _reserve_lane_scalars(map.roads[at[0]], at[1], work, 2)
+    var terms = _reference_work(map.roads[at[0]], waypoint.s, waypoint.s)
+    if terms < 0:
+        raise Error("Sign relocation cannot resolve pose quadrature work")
+    work.step()
+    work.term(terms)
+    work.term(terms)
+    return map.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+
+
+def _signal_lane_width(
+    map: Map, waypoint: Waypoint, mut work: _MapBuildWork
+) raises -> Float64:
+    var at = map._locate_with_work(waypoint, work)
+    work.step(len(map.roads[at[0]].sections[at[1]].lanes[at[2]].info.widths))
+    return map.roads[at[0]].lane_width(at[1], at[2], waypoint.s)
+
+
+def _signal_lane_type(
+    map: Map, waypoint: Waypoint, mut work: _MapBuildWork
+) raises -> LaneType:
+    var at = map._locate_with_work(waypoint, work)
+    return map.roads[at[0]].sections[at[1]].lanes[at[2]].type
+
+
+def _signal_side(
+    map: Map, waypoint: Waypoint, right: Bool, mut work: _MapBuildWork
+) raises -> Optional[Waypoint]:
+    if waypoint.lane_id.value == 0:
+        raise Error("Lane 0 has no lane beside it")
+    var at = map._locate_with_work(waypoint, work)
+    var outward = right == map.roads[at[0]].is_rht
+    var id = waypoint.lane_id.value
+    var out = waypoint
+    if outward:
+        out.lane_id = LaneId(id + 1 if id > 0 else id - 1)
+    elif abs(id) == 1:
+        out.lane_id = LaneId(-id)
+    else:
+        out.lane_id = LaneId(id - 1 if id > 0 else id + 1)
+    work.step(len(map.roads[at[0]].sections[at[1]].lanes))
+    if map.roads[at[0]].sections[at[1]].contains_lane(out.lane_id):
+        return out
+    return None
 
 
 def _has(ids: List[RoadId], id: RoadId) -> Bool:

@@ -1,0 +1,889 @@
+{
+  "schema": 1,
+  "selected_source": {
+    "source": "/workspace/shared/overnight-lane-perf-20261007/runtime-formatted-qualification",
+    "numerical_predecessor": "68442b0469f5e83ec33fc3314f7f2627998912b40f0ef49459e4ba6574e2d1a0",
+    "files": {
+      "extensions/carla/curve_bounds.mojo": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+      "extensions/carla/curve_minimizer_support.mojo": "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260",
+      "extensions/carla/curve_objective_model.mojo": "bd0083f1d261d6908de1dd60123c7d2de13078d0f8c694796ba64e04c53daf75",
+      "extensions/carla/curve_sample_dispatch.mojo": "2a74be6de0d0a35f2b17f60280747e42f91c083ebb922ded0ae0b13febe55631",
+      "extensions/carla/lane_refinement.mojo": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+      "extensions/carla/map.mojo": "442f941cdee9451151c91ab1c43854a6df93d8c87a0002b3e97a248190778f6a",
+      "extensions/carla/spiral_grouped_lane.mojo": "5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b",
+      "extensions/carla/spiral_grouped_roundoff_proof.mojo": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098"
+    }
+  },
+  "base_tree": "9d5ed702",
+  "base_commit": "6749eaba2a32392d7f9214728c0f2c954c0e57c9",
+  "previous_runtime_pins_sha256": "eaab378d8bbf6fcf84fa6aa4294e2712e3935e6407e6960cee9d16ce643c5bca",
+  "previous_guard_pins_sha256": "f39a66ca9e1359989093f6deb70b5d7ec369d3297627e877eeebb1003e58fb00",
+  "preserved_checker_constants": {
+    "PRIMITIVE_GRAPH_SHA256": "e2e0257a0f42a95bac586638fc5d532f4bc69b882127201bbf343006f2143484",
+    "REFERENCE_MODULE_GRAPHS": {
+      "curve_bounds.mojo": "51f99d745612d217762d8f39bde1ded5b269d239f05cb765532de631cc64791f",
+      "curve_trig.mojo": "4ca47db55caa96ba9ad6c6f43fa65d30a8fefe419f555d46a1a948a2fc606ecc",
+      "curve_interval.mojo": "32b7bce9ad0b996fa87a7bc63ff0c905065751d164f7d673342234716523fd8e"
+    },
+    "SHARED_GRAPHS": {
+      "curve_trig.mojo:_expression_polynomial": "031856283e36ac8dbaef6e455eb6a1502c0c465f70ba809ace51ec5782abb04a",
+      "curve_trig.mojo:_jet_polynomial": "9a773f471ac8ac236f808d0f072ac5372315a3dd2683b16c41899a1b56cfd470",
+      "curve_trig.mojo:_sincos_expression": "89921637fc52fad38092e2c283d238287b3f33035dcc0a33a2b07fddc6042509",
+      "curve_trig.mojo:_sincos_branch_expression": "8ba6cc52dff85cbca95fa9c58142de28140c97d711911bd1f437b11ca2bc857f",
+      "curve_trig.mojo:_sincos_branch": "a99d1be1594ceeea7edf3709312217af35035b590dd621c57c3e6bdf97a26a8a",
+      "curve_trig.mojo:_sincos_jet": "f76f149a0ee85c2e5e3b1dc6b1d8a9cd68a053582fbe4c9d8e562b1848c91b3f",
+      "curve_trig.mojo:_uncertain_expression": "c883bc5e3e7046309b145f178f73848cecc20013551852a80f993f793c1ff00f",
+      "curve_trig.mojo:_uncertain": "e32b28fd29a051ebb13cb14f22cc61a12f137124cc9b9938adf113e606baa21e",
+      "curve_bounds.mojo:_sample_index": "91a5c643d73e15e2b5d3838fff658dc2986e0b28852a0c66ceacdd84e71ca01e",
+      "curve_bounds.mojo:_intersect_ideal_bounds": "0f6d271eb25f2e19f9cfd4c4f8f93691f4452cb50ac5303d7ff898398f8deda3",
+      "curve_bounds.mojo:_lane_jet": "c1d76e057272bbb71d1066e4669a3b7d0e5e87c4497e9d96abf21edc007e2f85",
+      "curve_bounds.mojo:_lane_jet_model": "470c29ee518a71ecc8c6bce3268d38da93d8c27770b9bdf6e6c82989a1032ab0",
+      "curve_bounds.mojo:_lane_jet_model_proof": "17eea195f5bcd6e90781bbc3370f16e5404b67620aad1807b24101ceaebd7218",
+      "curve_bounds.mojo:_reference_jet_capture": "0ebd93d524b35c30cdd27fabc23dd40f1a53241477b0689c37b07b18bce5ad05"
+    }
+  },
+  "preserved_moment_pins_sha256": "f93f01b65069e79bbcf0f056905187c99d0bf438939f5cac00b8b4aff1f4191b",
+  "preserved_lineage": {
+    "runtime-correspondence-migration.json": "6f1e2e225aa31defdcf5012a89696e0b11b380be7bce61a1e7e33eff3539a04d",
+    "sum2-correspondence-migration.json": "c5a170cfa33a1945a12eedd1fd362806e496feaf1669db72d4bc0c4368475c00"
+  },
+  "proof_packets": [
+    {
+      "name": "goal-yield-qualification-review-20261007/REVIEW.json",
+      "sha256": "ea2459329ae0b7fd1cdb746e69fe754770d1bbabfb2cee074962034028433e31"
+    },
+    {
+      "name": "grouped-optional-work-review-20261007/REVIEW.json",
+      "sha256": "652fb691264a685143bd69d9694a777b452fb46e5ca7533271a18735d9bc34be"
+    },
+    {
+      "name": "grouped-optional-work-review-20261007/GOAL-FEE-MIGRATION.json",
+      "sha256": "e439a5d67fed430c63b6bac630d8565792aa06d86c3a790a966c05902a355e00"
+    },
+    {
+      "name": "station-contract-594-20261006/overnight-sampled-proof-20261007/SMOOTH-PRODUCER-REVIEW.md",
+      "sha256": "e61d3ed29395bbb4b52a24b677a3086fc06c3734404ad7d3dba76bb03195f906"
+    },
+    {
+      "name": "station-contract-594-20261006/sample-dispatch-inverse-20261007T0323/PROOF.md",
+      "sha256": "d9f6d08a5a1d9aca4aae691b532aab192f19c5f1f965d603c9f3db4f7c69aec8"
+    }
+  ],
+  "dependency_changes": [
+    {
+      "group": "canonical_accumulation",
+      "path": "extensions/carla/curve_bounds.mojo",
+      "before": "c256d6a212735f9d3e9a522e557ed6716f51c80322979478fe17e67d688fb508",
+      "after": "1874e6c5d58128502df4d052303d02bc866a0fef8b109337bcb38f4b26d6d08b",
+      "raw_sha256": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d"
+    },
+    {
+      "group": "canonical_accumulation",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
+      "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+      "predecessor_after": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+      "preformat_after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673"
+    },
+    {
+      "group": "canonical_accumulation",
+      "path": "extensions/carla/map.mojo",
+      "before": "5725f3b707981148acbeb96472d6cfd84f51dacec4ac49a7f466bc9c4d59c2a6",
+      "after": "fce36e2c75ad06bbe65d756a54169d9e086c3e44c127faa74e86844996dbea68",
+      "raw_sha256": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_minimizer_support.mojo",
+      "before": null,
+      "after": "824b97daf05464245bead74244a52fb976dca17142ecb8feda6e4df2e16ab4a1",
+      "raw_sha256": "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260",
+      "preformat_after": "1e2a5f0197b3999b672da54d8b3f84751e7acb788824569de2ef54d13e17d850"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_objective_model.mojo",
+      "before": null,
+      "after": "e79623381913c4dba830440ad111c7411e9480b2772341be1dd0c8ae68b62fa3",
+      "raw_sha256": "bd0083f1d261d6908de1dd60123c7d2de13078d0f8c694796ba64e04c53daf75",
+      "predecessor_after": "39bd499381376fe8b8862f8e39f89162853a65d4d1d2637c51cc4f4abef67e60",
+      "preformat_after": "8062acdedecfdaed883afe1e9a60946f035acd27eb1c95e3ca6a5dcc17cda048"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_sample_dispatch.mojo",
+      "before": null,
+      "after": "9f428aad8b536bb0545c6a77aea524aa23ba240aa400d75414b91c5e5fcbb8e6",
+      "raw_sha256": "2a74be6de0d0a35f2b17f60280747e42f91c083ebb922ded0ae0b13febe55631",
+      "predecessor_after": "6e16a758bbc3fed7dc10a9012224f85c5dd067688863579be99eab8d32be6ad6",
+      "preformat_after": "cadcf3c85fafe7138ab7f9c5cf79446eb08658a9befd7c1e2a6684ae7f1c8c58"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/spiral_grouped_lane.mojo",
+      "before": null,
+      "after": "6aec19903e64b0ce8141e1660426f904c92325de9501feecad6b02484b1dcfb5",
+      "raw_sha256": "5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b",
+      "preformat_after": "83bc165cae51b2c2eefd12f1c79fc44a558ca650386a6f7a70681b2cecf84966"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/spiral_grouped_roundoff_proof.mojo",
+      "before": null,
+      "after": "ec5113cdd9d7cf590b1d41206410a5207b01105572184b3e786d69100af65404",
+      "raw_sha256": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_bounds.mojo",
+      "before": null,
+      "after": "1874e6c5d58128502df4d052303d02bc866a0fef8b109337bcb38f4b26d6d08b",
+      "raw_sha256": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": null,
+      "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+      "predecessor_after": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+      "preformat_after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/map.mojo",
+      "before": null,
+      "after": "fce36e2c75ad06bbe65d756a54169d9e086c3e44c127faa74e86844996dbea68",
+      "raw_sha256": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/lane_value_bounds.mojo",
+      "before": null,
+      "after": "c844c435ae666043615f06c3e9fbed7ea83d2f48c8df02a600939d85802e8e31",
+      "raw_sha256": "08978a7aa665aca4b82d41e1ff8b99451c647c0f8e7d6ee010fc6a6143f7959c"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_interval.mojo",
+      "before": null,
+      "after": "e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11",
+      "raw_sha256": "ff6bf0d35b357047c609ea7cb6dbcbe535446cf4e315d9eac5f6c341ddbf1040"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_sum2.mojo",
+      "before": null,
+      "after": "3fbcbb7f6ba0b9120500698665f0419acf6618d8bd34b7e18b9d10896282383d",
+      "raw_sha256": "2f732d49a891c9b603ccf05fb74779ea79422d74b4c33723ffe40f99e6c54a67"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_trig.mojo",
+      "before": null,
+      "after": "523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f",
+      "raw_sha256": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/lane_geometry.mojo",
+      "before": null,
+      "after": "00ea4915456784e521c2dc6df118b6a49a2065b43cff41ce959bdcf6909b22c1",
+      "raw_sha256": "8e0917249d8c41233bcb801fac6455d614ed46a7fd8e7505c14259c2a5c81d91"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/geometry.mojo",
+      "before": null,
+      "after": "a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb",
+      "raw_sha256": "eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/road_info.mojo",
+      "before": null,
+      "after": "fe385b3c6ea4ecf4f292914149da1b8570dd409283980b8853efb3f77d7401c9",
+      "raw_sha256": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/polynomial.mojo",
+      "before": null,
+      "after": "d3600fdb1fad0f693d560f56f47c9cf981636279e07ec28d94b73dcb52f96f9b",
+      "raw_sha256": "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/spiral_domain_proof.mojo",
+      "before": null,
+      "after": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
+      "raw_sha256": "da466aa7bec7e6c87fb1e29472e1f28169e7a369e7a1afbdc841f5994276b8e5"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/spiral_moment_proof.mojo",
+      "before": null,
+      "after": "87bef611ae73e97ed67ab4be3d2665244611c8aa6dadd98b19d5a407244363e6",
+      "raw_sha256": "2771e2f9fc9ee1768707b2f03475309d81a066c6be2d8bd27233001c6d09d1ec"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/spiral_moment_table.mojo",
+      "before": null,
+      "after": "378d153c8f9f44bbafaf1fd47f72d375979353342286ca88c316e87ff91fb366",
+      "raw_sha256": "1c5a3a21216eaecb42b3947ccb5ec0479d8a120c714d79ebe25f11da5f1096c8"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/spiral_roundoff_proof.mojo",
+      "before": null,
+      "after": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641",
+      "raw_sha256": "380d8130fd2f18dd93768ed0e7ffb17a45e7b1631a81fbd0f68de1f08fe16ec7"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_frozen_arc.mojo",
+      "before": null,
+      "after": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
+      "raw_sha256": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522"
+    },
+    {
+      "group": "translation",
+      "path": "extensions/carla/curve_bounds.mojo",
+      "before": "c256d6a212735f9d3e9a522e557ed6716f51c80322979478fe17e67d688fb508",
+      "after": "1874e6c5d58128502df4d052303d02bc866a0fef8b109337bcb38f4b26d6d08b",
+      "raw_sha256": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d"
+    },
+    {
+      "group": "translation",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
+      "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+      "predecessor_after": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+      "preformat_after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673"
+    },
+    {
+      "group": "support",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "bd0ee034aef316b34c8c3066d30df124f461e3e090d81dba6f182ceccdfa8c48",
+      "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+      "predecessor_after": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+      "preformat_after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673"
+    },
+    {
+      "group": "support",
+      "path": "extensions/carla/map.mojo",
+      "before": "5725f3b707981148acbeb96472d6cfd84f51dacec4ac49a7f466bc9c4d59c2a6",
+      "after": "fce36e2c75ad06bbe65d756a54169d9e086c3e44c127faa74e86844996dbea68",
+      "raw_sha256": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314"
+    },
+    {
+      "qualifier": "curve_bounds.mojo",
+      "before": "6094a9b8c3139abb6b719cde3578378b895eea52a3a534e5b6888bcb15778659",
+      "after": "ceb769116db9b5344f82c2454868964a8e0b1eb39aa4286d0397ba13c33e8145",
+      "reason": "one additive require_reuse argument changes later name ordinals; all historical ASTs preserved"
+    }
+  ],
+  "guard_caller_changes": [
+    {
+      "module": "curve_bounds",
+      "function": "_lane_jet_model_proof",
+      "before": "c66631030972b9a3fa26bb2ac1627ea90a0e7da8b110c657154570fbef48dbc3",
+      "after": "ad31516a42b5d262e505aa99f0b6c92c2ae1ab64df51f918770295bfabb03152"
+    },
+    {
+      "module": "lane_refinement",
+      "function": "_continue_lane_certificate",
+      "before": "cc53806bffc8191893f200d6cc735ee5f3682fac5376ca28ab79d04ec3ce8de1",
+      "after": "637c3d1d9fc0c9415e0139ad767a4fe700dd0ab8e9bd0b19999c12c3f921cd3f"
+    },
+    {
+      "module": "lane_refinement",
+      "function": "_run_lane_search",
+      "before": null,
+      "after": "142896c5485b570ab3085b0acaf646c6b3c63fec4c87bd4b3d3397058e8076b6",
+      "predecessor_after": "82bb35358855507dc384de0af555e4940fd9676717f96892be0370b7ced72b2b",
+      "preformat_after": "fbcf62ff5ee6a53603b348e061c21f744608c1c4311b28677b9562e347a1cc28"
+    },
+    {
+      "module": "map",
+      "function": "_closest_lane_certificate_with_work",
+      "before": "69df84a96a5ae3867eacc0b4c69779099e39c6fdb787ba14500347765d4cbc8d",
+      "after": "678345de4edf250c82ce435d576ac47af33c9456d0a74600521c8a457c695ca3"
+    },
+    {
+      "module": "curve_objective_model",
+      "function": "_try_objective_model",
+      "before": null,
+      "after": "5dd396b22c43bc5a82dc6bc6562cc3b852c4d10004e3e144e29875068d37e707"
+    },
+    {
+      "module": "curve_objective_model",
+      "function": "_restrict_objective_model",
+      "before": null,
+      "after": "bcac9ac9e14417fc249afd13cade35bf513f7becd4cd6a478c9ae2c5a6ca05c0"
+    },
+    {
+      "module": "curve_minimizer_support",
+      "function": "_minimizer_support",
+      "before": null,
+      "after": "28aac804325477587941a6da01558085b7f4801f06f72717160d26d0e31920af",
+      "preformat_after": "26fed7623f93f7aea38310456c033659da3954a88f305c224e0b22948ea5f948"
+    },
+    {
+      "module": "curve_sample_dispatch",
+      "function": "_sample_dispatch_predicate",
+      "before": null,
+      "after": "5616a31fc0dbc1d66b9f9d9fed40d12b2ff2fb4935603662efcf4f0f5f252bfe"
+    },
+    {
+      "module": "curve_sample_dispatch",
+      "function": "_sample_dispatch_cut",
+      "before": null,
+      "after": "e0bf6f10a7bd3e7f597940c1718dbd170ddbef1c12cbce05483f99e977e4307f",
+      "preformat_after": "4eae7509ed62fe9e4cb84da50fc95171fc153cd20958477b071d487fc015a65a"
+    },
+    {
+      "module": "curve_sample_dispatch",
+      "function": "_try_sample_dispatch_cuts",
+      "before": null,
+      "after": "e19a534de35e4b6833f7b34a049d99b668d54b196b9f4bb86f8c123ad23a4002",
+      "predecessor_after": "7e46fb36a52d1b96353922228219be20d712eceb9a27e89d0ac10edc3fd7d5cc",
+      "preformat_after": "cdb398a3342034da1044743eca27ca368feed20b487825420e3648e7241f5633"
+    },
+    {
+      "module": "spiral_grouped_lane",
+      "function": "_try_grouped_lane_jet",
+      "before": null,
+      "after": "5e448229eafdeb6cff5d26a9bc0c1d3c60ab4fb2662912ad748cfa74d674f9a7",
+      "preformat_after": "11254efa4467012c63ad5f6d9e965c6790e653625f2744d3d266148eadd63fc2"
+    },
+    {
+      "module": "spiral_grouped_roundoff_proof",
+      "function": "_grouped_origin_error",
+      "before": null,
+      "after": "46b0e140cf000b9c24bfbbf8fd1e75cdad3668617475b2b63a57346476931073"
+    },
+    {
+      "module": "spiral_grouped_roundoff_proof",
+      "function": "_try_spiral_grouped_roundoff_envelope",
+      "before": null,
+      "after": "49f600899a5f134d08b0a31360d0dcbd2b9be5b8eae4a6a6b3fd980db6e1a819"
+    },
+    {
+      "module": "spiral_grouped_roundoff_proof",
+      "function": "_try_spiral_grouped_roundoff_envelope_metered",
+      "before": null,
+      "after": "2c3f70ccbd746c6967bee49804e3430a9aae1a8486a1fc29bb5851fffb980547"
+    },
+    {
+      "module": "curve_objective_model",
+      "function": "_objective_followup_room",
+      "before": null,
+      "after": "bef44997f613aa702fb01f0638f4541077b0869cdd8a4a29bb069d743b607ade",
+      "preformat_after": "e305697702c472bca7460de1ea17d091a010d1238d0355788fcfcc3df94b54d3"
+    },
+    {
+      "module": "curve_objective_model",
+      "function": "_objective_recheck_room",
+      "before": null,
+      "after": "3245ad5785c26c28097cb45cf72398e3df7f91700e14c6ee30acee5ee847fd16"
+    }
+  ],
+  "guard_routing_changes": [
+    "curve_bounds",
+    "lane_refinement",
+    "map",
+    "curve_objective_model",
+    "curve_minimizer_support",
+    "curve_sample_dispatch",
+    "spiral_grouped_lane",
+    "spiral_grouped_roundoff_proof"
+  ],
+  "protected_production_inventory": {
+    "extensions/carla/curve_bounds.mojo": "fce73ed7d26349aa6163a4492639feae8f2909e359513d4f4d19f62a1b0fdfd1",
+    "extensions/carla/curve_frozen_arc.mojo": "d110043ffa62c1c3777a305a169ea4092f6196bb10e513b2639dd07471ef4ece",
+    "extensions/carla/curve_minimizer_support.mojo": "982280385b5b1ae29825b381573d8847bed1de5b908e81521d28594abc0f2865",
+    "extensions/carla/curve_objective_model.mojo": "40c9344cbd4cd7495e722cde6c4029757d2712e352be207f1cd7ca6e2cbed02f",
+    "extensions/carla/curve_sample_dispatch.mojo": "87764e54d0d210dde7ec69bd82b53316354163efa7efbb1491bee2ac56aba0e3",
+    "extensions/carla/curve_sum2.mojo": "1fa5ca0a04891d3af7a75c8c88fd4360c1ca594e4565c7853f098b6060fac5e0",
+    "extensions/carla/junction_bounds.mojo": "5fd5e52d20745e066d7f8ec06606bfcd1223d616bcfef0bbc361c70e31d6db50",
+    "extensions/carla/lane_box_cover.mojo": "254f01d1693760605e12c0ce9d3c7b46a780c45e41ebc923b59bb2ceac1362d9",
+    "extensions/carla/lane_geometry.mojo": "f3fa5b4cb867de6bb1925f886ee079ca5528532f50d2219718736529cd9146a0",
+    "extensions/carla/lane_refinement.mojo": "addecd0191f72aa6c401f35c9126e629c40d772b7b902b7427c8d4e68f10df56",
+    "extensions/carla/lane_value_bounds.mojo": "0bfa43346449e88304bbc0390657b12d9e2f99b8a763527e4053d28284b1f47f",
+    "extensions/carla/map.mojo": "46df8c151473ad9a29b23cb11463cb37c85dbe41f513f5bbb2dc21fd5662998c",
+    "extensions/carla/map_builder.mojo": "d5ad40b360a8ace891a44c3b5575a7dc4cd8d9481b5b616c42192e07032ae6e8",
+    "extensions/carla/spiral_domain_proof.mojo": "0aae1ad08c48998c744bb1f4b50ff4895009256f9c935b1c406ccf263fb13288",
+    "extensions/carla/spiral_grouped_lane.mojo": "48b955468cdd76b8bd027699ddaae8f4289114c29e8dd8cee43d179c753274aa",
+    "extensions/carla/spiral_grouped_roundoff_proof.mojo": "4ce113ab10ce8ef072182fa3aee1397e4406825c6ca19782ff0ac79c9d11ba0b",
+    "extensions/carla/spiral_moment_proof.mojo": "de05fb59056c9717b0079fa6604c82ccc48eaee7735603c96e7f2316fe80e23d",
+    "extensions/carla/spiral_moment_table.mojo": "618a334b2b468d75e34030ac65572727511929c01364415f7d568f683638b28c",
+    "extensions/carla/spiral_roundoff_proof.mojo": "41b06fd26d5fc9e978315798eb68d3e7c6cf892a184c9943208f02f4c136a7d3"
+  },
+  "semantic_review": {
+    "curve_bounds": "Only new default-False require_reuse argument and unknown refusal before original GL fallback. Exact removal reproduces the complete historical reference AST; constants and shared graphs remain unchanged.",
+    "lane_refinement": "Invocation-local caches retain immutable road/lane/query/proof identity, exact scale, owner containment and original uniform error. Original terms remain debited. Support uses paired same-ideal center and actual certificate witness. Original edge/closure work and depth validation precede stored dispatch; split children use cut predecessor and preserve depth. Goal-yield validation, frontier, work and tie requirements follow named proof packets. Successor: grouped attempt needs two remaining nodes, keeping one mandatory recheck. Cached split needs four nodes and exact overflow-safe center+8F admission before center debit. Original F and fallback remain in one contiguous bound statement sequence. Final closure successor: both cached goal/accuracy closures reserve a later recheck before their predicates; strict exclusion remains unconditional. Official formatter equivalence replayed independently.",
+    "map": "Goal/external witness continuation and logical node fees retain caller accounting. Selected fees136/142/182 follow the reviewed 100L+fixed model; counter/terminal frontier continuation retains prior work.",
+    "curve_objective_model": "Fresh guard at creation and every restriction; finite whole-owner smooth derivatives; exact scale word; child containment; no substitution of infinite translated center.error for owner uniform error. Successor integer-only _objective_followup_room rejects invalid/overconsumed counters and requires four nodes plus center+8F through safe subtraction/division. Full helper declaration and actual caller arguments are protected. Complete integer-only _objective_recheck_room requires0<=nodes<max_nodes. No FP state or arithmetic is needed for this capacity comparison.",
+    "curve_minimizer_support": "Paired same-ideal uniform error E plus actual evaluated incumbent; conservative outward monotone and convex support; invalid/witness-excluding result restores original cell.",
+    "curve_sample_dispatch": "Stored predicate, predecessor and actual sample-index contracts unchanged. For c in1..2, admit3c+2 nodes and16c terms before charging one node and8c probe terms. Retain2c visited descendants andc+1 validation nodes with four terms per descendant. This is immediate followup, not complete-search capacity.",
+    "spiral_grouped_lane": "Whole original F separately prepaid; at most two counts in1..64 imply C<=24; atomic full C debit before either envelope, never refunded; require_reuse=True rejects hidden GL.",
+    "spiral_grouped_roundoff_proof": "Fresh guarded raw envelope is the only reviewed origin caller; whole 5*n checked Sum2 count and final world origin, all stored symmetric multiplicities, phases and inherited errors retained; metered adapter independently reserves fallback.",
+    "global_inventory": "All production namespaces, including new directories and __init__ reexports, scanned for actual protected helper and source-module NAME tokens. Complete declaration/import routing plus protected NAME-token ordinals catch new direct/alias/module/wildcard routes; existing complete caller/dependency bindings retain arithmetic operations. Explicit test/example/bench/tool/asset/coverage namespaces are outside production authority."
+  },
+  "preservation": {
+    "historical_reference_graph_identical_after_exact_additive_projection": true,
+    "canonical_sum2_helper_unchanged": true,
+    "all_other_old_bindings_unchanged": true
+  },
+  "limits": [
+    "Source correspondence does not establish mathematical/native/coverage/performance qualification.",
+    "Native execution and full CI remain pending.",
+    "External proof packets cover named revisions; final native controls must use selected source bytes.",
+    "Later formatter changes require explicit source rebind and rerun; no auto-refresh command is installed."
+  ],
+  "predecessor_selected_source": {
+    "base": "6749eaba2a32392d7f9214728c0f2c954c0e57c9",
+    "patch_sha256": "0700e970dafb709b20d48fadd66b18fdff35ef0a98ebf7f53a64d7974e97cc47",
+    "files": {
+      "extensions/carla/curve_bounds.mojo": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+      "extensions/carla/curve_minimizer_support.mojo": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+      "extensions/carla/curve_objective_model.mojo": "5d354cfbd8eb123a35446ef5950427d943a16d856fcf1d0ab84c55d025c5ceef",
+      "extensions/carla/curve_sample_dispatch.mojo": "5a9f2fa95a319e9bc9478becf628526f93e66c75e10880734eda76105dd6bd7e",
+      "extensions/carla/lane_refinement.mojo": "0a67a136fa3c7f2f900b1ec3a5e651f72bfd2fbada8f5349a7ce2bc249b615e9",
+      "extensions/carla/map.mojo": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+      "extensions/carla/spiral_grouped_lane.mojo": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+      "extensions/carla/spiral_grouped_roundoff_proof.mojo": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098"
+    },
+    "grouped": true,
+    "status": "guard/defer corrected; native verification pending"
+  },
+  "followup_admission_successor": {
+    "status": "provisional; dispatch exact-cap native replay and final formatted hashes pending",
+    "source_delta_sha256": "caa250428fe641eddf92e8b891a818428b50237138aabfedeec51e6b2d04ba26",
+    "predecessor_tools_patch_sha256": "7029b3316b74003c615ea53ec7450eddbd2c863fbd7b6eea0245844d5eebb20f",
+    "predecessor_migration_sha256": "b680c677d1a6af4c42795138f98d9ba2ae7914d1a707cac4becedf578303d98f",
+    "previous_runtime_pins_sha256": "d87e70ed9acf7e59641f1d2040b7d6f3410a21737d41637e88a94f64d622e91f",
+    "previous_guard_pins_sha256": "876bdc2679f4682f6e069f1a144a2e3418f67de39b7ec9420278a11b866e3b5a",
+    "dependency_changes": [
+      {
+        "group": "canonical_accumulation",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+        "after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "raw_sha256": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/curve_objective_model.mojo",
+        "before": "39bd499381376fe8b8862f8e39f89162853a65d4d1d2637c51cc4f4abef67e60",
+        "after": "8062acdedecfdaed883afe1e9a60946f035acd27eb1c95e3ca6a5dcc17cda048",
+        "raw_sha256": "d520b21720dce7d0ed20613dd4225083860846c4b0c3b38d15ecf3bc0cd41d1a"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/curve_sample_dispatch.mojo",
+        "before": "6e16a758bbc3fed7dc10a9012224f85c5dd067688863579be99eab8d32be6ad6",
+        "after": "cadcf3c85fafe7138ab7f9c5cf79446eb08658a9befd7c1e2a6684ae7f1c8c58",
+        "raw_sha256": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+        "after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "raw_sha256": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16"
+      },
+      {
+        "group": "translation",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+        "after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "raw_sha256": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16"
+      },
+      {
+        "group": "support",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "e0b91ee9ecbf84bce6d31845e3849ef2909a77ff4460c43a99a05154f403007f",
+        "after": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "raw_sha256": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16"
+      }
+    ],
+    "guard_body_changes": [
+      {
+        "module": "lane_refinement",
+        "function": "_run_lane_search",
+        "before": "82bb35358855507dc384de0af555e4940fd9676717f96892be0370b7ced72b2b",
+        "after": "fbcf62ff5ee6a53603b348e061c21f744608c1c4311b28677b9562e347a1cc28"
+      },
+      {
+        "module": "curve_objective_model",
+        "function": "_objective_followup_room",
+        "before": null,
+        "after": "e305697702c472bca7460de1ea17d091a010d1238d0355788fcfcc3df94b54d3"
+      },
+      {
+        "module": "curve_sample_dispatch",
+        "function": "_try_sample_dispatch_cuts",
+        "before": "7e46fb36a52d1b96353922228219be20d712eceb9a27e89d0ac10edc3fd7d5cc",
+        "after": "cdb398a3342034da1044743eca27ca368feed20b487825420e3648e7241f5633"
+      }
+    ],
+    "guard_routing_changes": [
+      "lane_refinement",
+      "curve_objective_model"
+    ],
+    "ledger_sha256": "333f1b0e86e07c700028128f349fb01a85cdafd82492180b71f7318ad930b9e8",
+    "ledger_name": "grouped-optional-work-review-20261007/OPTIONAL-FOLLOWUP-LEDGER.json",
+    "scope": "Immediate descendants and required rechecks only; no complete-search guarantee for arbitrary custom budgets; unchanged logical fees136/142/182.",
+    "predecessor_semantic_review": {
+      "lane_refinement": "Invocation-local caches retain immutable road/lane/query/proof identity, exact scale, owner containment and original uniform error. Original terms remain debited. Support uses paired same-ideal center and actual certificate witness. Original edge/closure work and depth validation precede stored dispatch; split children use cut predecessor and preserve depth. Goal-yield validation, frontier, work and tie requirements follow named proof packets.",
+      "curve_objective_model": "Fresh guard at creation and every restriction; finite whole-owner smooth derivatives; exact scale word; child containment; no substitution of infinite translated center.error for owner uniform error.",
+      "curve_sample_dispatch": "Original stored RN subtraction and clamp predicate; immediate predecessor bracketing plus actual sample-index validation; interior thresholds only; at most two cuts and three probes; debit one node+8 terms per cut before attempts and retain five-node/six-term headroom."
+    },
+    "native_component_receipts": [
+      {
+        "name": "optional-followup-table-build",
+        "receipt_sha256": "05ecf11332cf02197083851b8a2e6fe3b6a95c514fb8c7ec4b737717ef047bf6",
+        "input_manifest_sha256": "ec54dd78a61293f1ea0c1a96de8f8efc619bcfa256abf9693021e0702a019710",
+        "returncode": 0,
+        "source_unchanged": true,
+        "selected_production_inputs": {
+          "extensions/carla/curve_bounds.mojo": {
+            "selected": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+            "native_input": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+            "match": true
+          },
+          "extensions/carla/curve_minimizer_support.mojo": {
+            "selected": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+            "native_input": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+            "match": true
+          },
+          "extensions/carla/curve_objective_model.mojo": {
+            "selected": "d520b21720dce7d0ed20613dd4225083860846c4b0c3b38d15ecf3bc0cd41d1a",
+            "native_input": "d520b21720dce7d0ed20613dd4225083860846c4b0c3b38d15ecf3bc0cd41d1a",
+            "match": true
+          },
+          "extensions/carla/curve_sample_dispatch.mojo": {
+            "selected": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1",
+            "native_input": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1",
+            "match": true
+          },
+          "extensions/carla/lane_refinement.mojo": {
+            "selected": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16",
+            "native_input": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16",
+            "match": true
+          },
+          "extensions/carla/map.mojo": {
+            "selected": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+            "native_input": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+            "match": true
+          },
+          "extensions/carla/spiral_grouped_lane.mojo": {
+            "selected": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+            "native_input": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+            "match": true
+          },
+          "extensions/carla/spiral_grouped_roundoff_proof.mojo": {
+            "selected": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+            "native_input": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+            "match": true
+          }
+        }
+      },
+      {
+        "name": "optional-followup-table-run",
+        "receipt_sha256": "75ae87f28bf00b28503b54b5e3a1f2587f561c42de252d40165bcd7dc33c9c32",
+        "input_manifest_sha256": "ec54dd78a61293f1ea0c1a96de8f8efc619bcfa256abf9693021e0702a019710",
+        "returncode": 0,
+        "source_unchanged": true,
+        "selected_production_inputs": {
+          "extensions/carla/curve_bounds.mojo": {
+            "selected": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+            "native_input": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+            "match": true
+          },
+          "extensions/carla/curve_minimizer_support.mojo": {
+            "selected": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+            "native_input": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+            "match": true
+          },
+          "extensions/carla/curve_objective_model.mojo": {
+            "selected": "d520b21720dce7d0ed20613dd4225083860846c4b0c3b38d15ecf3bc0cd41d1a",
+            "native_input": "d520b21720dce7d0ed20613dd4225083860846c4b0c3b38d15ecf3bc0cd41d1a",
+            "match": true
+          },
+          "extensions/carla/curve_sample_dispatch.mojo": {
+            "selected": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1",
+            "native_input": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1",
+            "match": true
+          },
+          "extensions/carla/lane_refinement.mojo": {
+            "selected": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16",
+            "native_input": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16",
+            "match": true
+          },
+          "extensions/carla/map.mojo": {
+            "selected": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+            "native_input": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+            "match": true
+          },
+          "extensions/carla/spiral_grouped_lane.mojo": {
+            "selected": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+            "native_input": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+            "match": true
+          },
+          "extensions/carla/spiral_grouped_roundoff_proof.mojo": {
+            "selected": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+            "native_input": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+            "match": true
+          }
+        }
+      }
+    ]
+  },
+  "preformat_selected_source": {
+    "base": "6749eaba2a32392d7f9214728c0f2c954c0e57c9",
+    "files": {
+      "extensions/carla/curve_bounds.mojo": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+      "extensions/carla/curve_minimizer_support.mojo": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+      "extensions/carla/curve_objective_model.mojo": "d520b21720dce7d0ed20613dd4225083860846c4b0c3b38d15ecf3bc0cd41d1a",
+      "extensions/carla/curve_sample_dispatch.mojo": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1",
+      "extensions/carla/lane_refinement.mojo": "809fecca9f1d60abe3ae4caba6045339f50be6b8fc4694612ad5ef367bfd4d16",
+      "extensions/carla/map.mojo": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+      "extensions/carla/spiral_grouped_lane.mojo": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+      "extensions/carla/spiral_grouped_roundoff_proof.mojo": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098"
+    },
+    "grouped": true,
+    "status": "provisional immediate-followup admission successor; dispatch exact-cap and final formatted hashes pending",
+    "predecessor_patch_sha256": "0700e970dafb709b20d48fadd66b18fdff35ef0a98ebf7f53a64d7974e97cc47",
+    "successor_delta_sha256": "caa250428fe641eddf92e8b891a818428b50237138aabfedeec51e6b2d04ba26"
+  },
+  "final_format_and_recheck_migration": {
+    "status": "exact final raw source bound; observed selected125-case native cohort pass; full final CI remains separate",
+    "predecessor_tools_patch_sha256": "34ff73bcfc9620c35840bdee9c7061c1923a95c503880fcc453997cbd2d19899",
+    "predecessor_migration_sha256": "8b206040cf4173db973686edce7c3f52cfafcce2f7693c33f5ba434d1f3db1a8",
+    "previous_runtime_pins_sha256": "d958b3cc3ef117682262019438a3d383f74673cb482cfebbf0806808c84318b3",
+    "previous_guard_pins_sha256": "4fd62e27475b3a256157d51ef1acb6cdc7e243d6ae19f95534545e09868b9b29",
+    "dependency_changes": [
+      {
+        "group": "canonical_accumulation",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+        "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/curve_minimizer_support.mojo",
+        "before": "1e2a5f0197b3999b672da54d8b3f84751e7acb788824569de2ef54d13e17d850",
+        "after": "824b97daf05464245bead74244a52fb976dca17142ecb8feda6e4df2e16ab4a1",
+        "raw_sha256": "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/curve_objective_model.mojo",
+        "before": "8062acdedecfdaed883afe1e9a60946f035acd27eb1c95e3ca6a5dcc17cda048",
+        "after": "e79623381913c4dba830440ad111c7411e9480b2772341be1dd0c8ae68b62fa3",
+        "raw_sha256": "bd0083f1d261d6908de1dd60123c7d2de13078d0f8c694796ba64e04c53daf75"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/curve_sample_dispatch.mojo",
+        "before": "cadcf3c85fafe7138ab7f9c5cf79446eb08658a9befd7c1e2a6684ae7f1c8c58",
+        "after": "9f428aad8b536bb0545c6a77aea524aa23ba240aa400d75414b91c5e5fcbb8e6",
+        "raw_sha256": "2a74be6de0d0a35f2b17f60280747e42f91c083ebb922ded0ae0b13febe55631"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/spiral_grouped_lane.mojo",
+        "before": "83bc165cae51b2c2eefd12f1c79fc44a558ca650386a6f7a70681b2cecf84966",
+        "after": "6aec19903e64b0ce8141e1660426f904c92325de9501feecad6b02484b1dcfb5",
+        "raw_sha256": "5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b"
+      },
+      {
+        "group": "optional_runtime",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+        "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6"
+      },
+      {
+        "group": "translation",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+        "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6"
+      },
+      {
+        "group": "support",
+        "path": "extensions/carla/lane_refinement.mojo",
+        "before": "80046a08d6c5a619c772a8bb305b78ae5176875fa65fa29f336a4f9c9343f673",
+        "after": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+        "raw_sha256": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6"
+      }
+    ],
+    "guard_body_changes": [
+      {
+        "module": "lane_refinement",
+        "function": "_run_lane_search",
+        "before": "fbcf62ff5ee6a53603b348e061c21f744608c1c4311b28677b9562e347a1cc28",
+        "after": "142896c5485b570ab3085b0acaf646c6b3c63fec4c87bd4b3d3397058e8076b6"
+      },
+      {
+        "module": "curve_objective_model",
+        "function": "_objective_followup_room",
+        "before": "e305697702c472bca7460de1ea17d091a010d1238d0355788fcfcc3df94b54d3",
+        "after": "bef44997f613aa702fb01f0638f4541077b0869cdd8a4a29bb069d743b607ade"
+      },
+      {
+        "module": "curve_objective_model",
+        "function": "_objective_recheck_room",
+        "before": null,
+        "after": "3245ad5785c26c28097cb45cf72398e3df7f91700e14c6ee30acee5ee847fd16"
+      },
+      {
+        "module": "curve_minimizer_support",
+        "function": "_minimizer_support",
+        "before": "26fed7623f93f7aea38310456c033659da3954a88f305c224e0b22948ea5f948",
+        "after": "28aac804325477587941a6da01558085b7f4801f06f72717160d26d0e31920af"
+      },
+      {
+        "module": "curve_sample_dispatch",
+        "function": "_sample_dispatch_cut",
+        "before": "4eae7509ed62fe9e4cb84da50fc95171fc153cd20958477b071d487fc015a65a",
+        "after": "e0bf6f10a7bd3e7f597940c1718dbd170ddbef1c12cbce05483f99e977e4307f"
+      },
+      {
+        "module": "curve_sample_dispatch",
+        "function": "_try_sample_dispatch_cuts",
+        "before": "cdb398a3342034da1044743eca27ca368feed20b487825420e3648e7241f5633",
+        "after": "e19a534de35e4b6833f7b34a049d99b668d54b196b9f4bb86f8c123ad23a4002"
+      },
+      {
+        "module": "spiral_grouped_lane",
+        "function": "_try_grouped_lane_jet",
+        "before": "11254efa4467012c63ad5f6d9e965c6790e653625f2744d3d266148eadd63fc2",
+        "after": "5e448229eafdeb6cff5d26a9bc0c1d3c60ab4fb2662912ad748cfa74d674f9a7"
+      }
+    ],
+    "guard_routing_changes": [
+      "lane_refinement",
+      "curve_objective_model",
+      "spiral_grouped_lane"
+    ],
+    "proof_packets": [
+      {
+        "path": "overnight-lane-perf-20261007/evidence/REVIEWED-OPTIONAL-FOLLOWUP.patch",
+        "sha256": "68442b0469f5e83ec33fc3314f7f2627998912b40f0ef49459e4ba6574e2d1a0"
+      },
+      {
+        "path": "overnight-lane-perf-20261007/evidence/qualified-source-formatting.json",
+        "sha256": "e3eea3e2912db531ea8ebdc74dd66f3b2efd939dd129b81eb3ccc32cf15f64df"
+      },
+      {
+        "path": "overnight-lane-perf-20261007/evidence/qualified-source-formatting.patch",
+        "sha256": "a8556dc9145433ac541412b37ced6b8c2f5143a40256d9e4363196fb4857735f"
+      },
+      {
+        "path": "overnight-lane-perf-20261007/evidence/FINAL-PRODUCTION-FREEZE.json",
+        "sha256": "b7be3b0e71b73410e8198ca94d9a3c03fcce15bdf536288721e4e3cfc6282889"
+      },
+      {
+        "path": "station-contract-594-20261006/followup-reserve-controls-20261007T0514/ACCEPTED-SOURCE.json",
+        "sha256": "b8098e4b0527d18d37f68fcdd5092e1260bf4f116216d985268c607995318746"
+      },
+      {
+        "path": "grouped-optional-work-review-20261007/FINAL-FORMAT-INDEPENDENT.json",
+        "sha256": "4eaf1533e42bd66df717f74312e3cf2f63b4d23edbfa1e9bb83cb13f3703b939"
+      }
+    ],
+    "independently_replayed_format_equality": {
+      "extensions/carla/curve_bounds.mojo": {
+        "before": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+        "after": "86ed709bdf9f75b0805754ed15f42fa80e13ee399eab56d91a14181679918e6d",
+        "projected_ast_sha256": "5e2042ec6956e27e4ddd5cdba093467f865806d8742b6941e18c415a4d55f101",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/curve_minimizer_support.mojo": {
+        "before": "75e0833ade1ff6578add35c6ae3e0966e7ef153684d0f2150ee2bce51a5d92b5",
+        "after": "8ba1e7f7964af7bcfa8cad21e857fcb67ee92918c58d44ed36767b843095a260",
+        "projected_ast_sha256": "bc992133ec0d90183d819aad8d2ea491b93cbf1f8ea92e31533af7536ed89d31",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/curve_objective_model.mojo": {
+        "before": "79125017f24a57a181b66ef9b1e4d602258b799cf428a64ae52cd4d9dffe0f72",
+        "after": "bd0083f1d261d6908de1dd60123c7d2de13078d0f8c694796ba64e04c53daf75",
+        "projected_ast_sha256": "c13753250b6171c8b9bcce892cea7bdc7fdf339e16bff1496477c7ebd7f09551",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/curve_sample_dispatch.mojo": {
+        "before": "ad8b1b882c31bdaceaaf4cc63a27ef9f9f6d6082ca39d6cf4ab97e392f004cf1",
+        "after": "2a74be6de0d0a35f2b17f60280747e42f91c083ebb922ded0ae0b13febe55631",
+        "projected_ast_sha256": "edc0ddb1f657ea5ed54468d253a1f5835f821e56d9d4c31e07678b2bac5b422b",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/lane_refinement.mojo": {
+        "before": "25036455f32e3a092263fe1879a5ebc51d5c705c9d982398852db3d5814b5b85",
+        "after": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+        "projected_ast_sha256": "5b14ee45992f98104966fca57bc272948226d925f8740b1f8e2eab7a1d0cd821",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/map.mojo": {
+        "before": "22e414d5493b982a2b1f718bb76129281f8e7b5255a21d3a12c0dc30c80da314",
+        "after": "442f941cdee9451151c91ab1c43854a6df93d8c87a0002b3e97a248190778f6a",
+        "projected_ast_sha256": "a2b0a14f2cec9940a75b2733d2927a140f9c158e4d7086621a4f5f80f8b04f56",
+        "borrowed_origins": 5,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/spiral_grouped_lane.mojo": {
+        "before": "2f68cf3b3e7b253271bb81f0f78ac3c037ba9f7e4e3f5f29ad4080db261dfccd",
+        "after": "5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b",
+        "projected_ast_sha256": "9c1229e4160ca22516256130bbb024297d5911fc85093d21892ded6fdd2f91a4",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      },
+      "extensions/carla/spiral_grouped_roundoff_proof.mojo": {
+        "before": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+        "after": "8bb7c5cc0c5c211ae420a3c7329d1a13771f18ef3d89e0d9989b030c0a2b9098",
+        "projected_ast_sha256": "3893ca7a155dfe94cec136255b31085a3ca6bb8d6cad57bb0aabf9c2bec48e6c",
+        "borrowed_origins": 0,
+        "all_comparisons_equal": true
+      }
+    },
+    "semantics": "Both cached goal and accuracy closures require _objective_recheck_room(current_nodes,max_nodes) before their predicates and retain their exact closed-cell/depth data. Strict cached exclusion remains unconditional. The integer helper is fully bound and uses no potentially overflowing subtraction. All immediate followup reservations from the predecessor remain.",
+    "independent_move_anchor_review": "82 move sigils retain exact immediate operand and delimiter anchors in addition to ordinals; complete borrowed-origin tokens and projected AST retain their reviewed correspondence.",
+    "observed_native_component_receipts": [
+      {
+        "path": "overnight-lane-perf-20261007/logs/final-composed-cohort-build.json",
+        "sha256": "5154fce71ecc7dfcc1aadeedf2d13b24ea7fbfd759eb1484f776cacdb889a294",
+        "input_manifest_sha256": "9ccbd830b9ca9d494e771ccb87ab24d7ee8d214515bd036d3e2df47306648e7a",
+        "selected_eight_raw_hashes_match": true,
+        "returncode": 0,
+        "source_unchanged": true
+      },
+      {
+        "path": "overnight-lane-perf-20261007/logs/final-composed-cohort-run.json",
+        "sha256": "a15e76601102854097fd6672020953985cf05a8dadb98054cfd43e7ab603486a",
+        "input_manifest_sha256": "9ccbd830b9ca9d494e771ccb87ab24d7ee8d214515bd036d3e2df47306648e7a",
+        "selected_eight_raw_hashes_match": true,
+        "returncode": 0,
+        "source_unchanged": true
+      }
+    ]
+  },
+  "containing_model_removal_successor": {
+    "record": "containing-model-removal-migration.json",
+    "sha256": "3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8",
+    "scope": "Active successor removes production containing-objective-model reuse only; all preceding migration records remain historical evidence."
+  }
+}
