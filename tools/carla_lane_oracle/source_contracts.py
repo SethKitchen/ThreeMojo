@@ -127,6 +127,18 @@ def verify_group(root, group):
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error
+        elif path == PREFIX + 'map.mojo' and token_sha256(text) != pins['groups'][group][path]:
+            try:
+                import seed_count_contracts as seed_count
+            except ModuleNotFoundError:
+                from tools.carla_lane_oracle import seed_count_contracts as seed_count
+            try:
+                require(hashlib.sha256(text.encode()).hexdigest() == seed_count.AFTER_SHA256,
+                        'unreviewed supplied Map source')
+                checked = seed_count.historical_source(root)
+            except (ValueError, OSError) as error:
+                raise ValueError('runtime source dependency changed [' + group + ']: ' + path
+                                 + ' (' + str(error) + ')') from error
         require(token_sha256(checked) == pins['groups'][group][path],
                 'runtime source dependency changed [' + group + ']: ' + path)
         result[path] = hashlib.sha256(text.encode()).hexdigest()

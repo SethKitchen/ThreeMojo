@@ -14,6 +14,7 @@ import frozen_arc_producer_contracts as frozen
 import source_contracts as source
 import sum2_guard_contracts as guard
 import winner_sign_contracts as winner
+import border_parser_contracts as border
 ROOT = Path(__file__).resolve().parents[2]
 
 class CoverageInvariantContracts(unittest.TestCase):
@@ -33,8 +34,11 @@ class CoverageInvariantContracts(unittest.TestCase):
     def test_live_scope_and_retained_historical_counts(self):
         record = invariant.verify(ROOT)
         result = winner.verify(ROOT)
+        expected = {border.BEFORE_SHA256: (13, 99), border.AFTER_SHA256: (14, 98)}
+        parser_sha = hashlib.sha256((ROOT/border.MODULE).read_bytes()).hexdigest()
+        self.assertIn(parser_sha, expected)
         self.assertEqual((result['reviewed_cleanup_successors'],
-                          result['canonical_dependencies_unchanged']), (13, 99))
+                          result['canonical_dependencies_unchanged']), expected[parser_sha])
         self.assertEqual(len(record['sources']), 4)
         self.assertEqual(len(cleanup.read_record(ROOT)['sources']), 3)
         self.assertEqual(len(cleanup.read_record(ROOT)['sources']) + 1, 4)

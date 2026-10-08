@@ -68,8 +68,23 @@ def verify_premises(root):
         require(guard.significant((root/path).read_text()) ==
                 guard.significant(item['source']), 'interval/environment premise changed: ' + path)
     for item in record['premise_functions']:
-        actual = guard.declaration((root/item['path']).read_text(), item['name'], tuple(item['owner']))
+        text = (root/item['path']).read_text()
+        actual = guard.declaration(text, item['name'], tuple(item['owner']))
         matched = guard.significant(actual) == guard.significant(item['source'])
+        if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
+                'extensions/carla/map.mojo', '_try_winner_seed', ()):
+            try:
+                try:
+                    import seed_count_contracts as seed_count
+                except ModuleNotFoundError:
+                    from tools.carla_lane_oracle import seed_count_contracts as seed_count
+                require(hashlib.sha256(text.encode()).hexdigest() == seed_count.AFTER_SHA256,
+                        'unreviewed supplied Map source')
+                predecessor = seed_count.historical_source(root)
+                actual = guard.declaration(predecessor, item['name'], ())
+                matched = guard.significant(actual) == guard.significant(item['source'])
+            except (ValueError, OSError) as error:
+                require(False, 'reviewed Map caller premise changed: ' + str(error))
         if not matched and item['path'] == 'extensions/carla/lane_refinement.mojo':
             try:
                 try:

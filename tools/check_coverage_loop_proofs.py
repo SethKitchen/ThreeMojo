@@ -4,7 +4,9 @@
 
 Runtime probes remain those of the original instrumenter. Each executable
 keeps the five-second limit; this harness never treats compiler failure as a
-passing runtime test. Use after the compiler-free normal and -O controls.
+passing runtime test. The real raw capture retains compilation, with a new
+180-second integration cap and a native alarm(5) before production calls.
+Use after the compiler-free normal and -O controls.
 """
 
 import argparse
@@ -19,12 +21,31 @@ import signal
 import subprocess
 import sys
 import tempfile
+import time
 
 import coverage_io
 import coverage_loop_proofs as proofs
 
 
 ROOT = Path(__file__).resolve().parent.parent
+RUNTIME_SECONDS = 5
+# This new finite harness-only bound includes compilation and capture setup.
+# It does not replace the runtime alarm or change production capture budgets.
+INTEGRATION_SECONDS = 180
+PRODUCTION_DRIVER = '''from production import total
+from std.testing import assert_equal
+from std.ffi import external_call
+
+def main() raises:
+    assert_equal(external_call["alarm", UInt32](UInt32(5)), UInt32(0))
+    assert_equal(total(0), 1)
+    assert_equal(total(2), 2)
+    print("RESULT production capture")
+'''
+HANG_DRIVER = PRODUCTION_DRIVER.replace(
+    '    assert_equal(total(2), 2)\n    print("RESULT production capture")\n',
+    '    while True:\n        _ = external_call["pause", Int32]()\n')
+COMPILE_ERROR_DRIVER = 'from production import total\n\ndef main() raises:\n    var broken =\n'
 SOURCE = '''from std.testing import assert_equal
 from std.sys import argv
 
@@ -93,10 +114,10 @@ def require(condition, message):
         raise RuntimeError(message)
 
 
-def run(command, *, success=True, timeout=None, cwd=None):
+def run(command, *, success=True, timeout=None, cwd=None, env=None):
     process = subprocess.Popen(command, text=True, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, cwd=cwd,
-                               start_new_session=True)
+                               start_new_session=True, env=env)
     try:
         output, error = process.communicate(timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -107,6 +128,38 @@ def run(command, *, success=True, timeout=None, cwd=None):
     if success and result.returncode:
         raise RuntimeError(f'{command}:\n{result.stdout}\n{result.stderr}')
     return result
+
+
+def require_runtime_alarm():
+    """Refuse inherited signal settings that can disable the native guard."""
+    require(signal.getsignal(signal.SIGALRM) == signal.SIG_DFL,
+            'Runtime alarm needs the default inherited SIGALRM disposition')
+    require(signal.SIGALRM not in signal.pthread_sigmask(signal.SIG_BLOCK, []),
+            'Runtime alarm must not be blocked')
+
+
+def capture_with_compiler_budget(command, output, capture, *, loop_proof=None,
+                                 source_root=None, success=True,
+                                 seconds=INTEGRATION_SECONDS):
+    """Retain the real sealed raw command and its owned-group supervision."""
+    require_runtime_alarm()
+    require((loop_proof is None) == (source_root is None),
+            'Both proof and source root must be supplied together')
+    require(type(seconds) in (int, float) and 0 < seconds <= INTEGRATION_SECONDS,
+            'Invalid compiler/integration bound')
+    deadline = time.monotonic() + seconds
+    inherited = coverage_io.shared_deadline()
+    if inherited is not None:
+        deadline = min(deadline, inherited)
+    environment = os.environ.copy()
+    environment[coverage_io.DEADLINE_ENV] = repr(deadline)
+    arguments = [sys.executable, str(ROOT/'tools/coverage_io.py'), 'capture',
+                 '--out', str(output), '--err', str(capture)]
+    if loop_proof is not None:
+        arguments += ['--loop-proof', str(loop_proof), '--loop-proof-root', str(source_root)]
+    # Do not use an outer SIGKILL timeout: capture owns a separate child group
+    # and its existing absolute-deadline watchdog must reap that whole group.
+    return run([*arguments, '--', *command], success=success, env=environment)
 
 
 def line_of(fragment):
@@ -362,42 +415,120 @@ def main() raises:
         # One complete original manifest goes through the maintained capture
         # wrapper and the official proof-aware reporting boundary end to end.
         production = 'def total(n: Int) -> Int:\n    var value = 0\n    for index in range(2):\n        value += index\n    for index in range(n):\n        value += index\n    return value\n'
-        driver = 'from production import total\nfrom std.testing import assert_equal\n\ndef main() raises:\n    assert_equal(total(0), 1)\n    assert_equal(total(2), 2)\n    print("RESULT production capture")\n'
         (native / 'production.mojo').write_text(production)
         (native / 'tests').mkdir(exist_ok=True)
         suite_name = 'tests/test_production.mojo'
-        (native / suite_name).write_text(driver)
+        hang_name = 'tests/test_production_hang.mojo'
+        failure_name = 'tests/test_production_compile_error.mojo'
+        drivers = {suite_name: PRODUCTION_DRIVER, hang_name: HANG_DRIVER,
+                   failure_name: COMPILE_ERROR_DRIVER}
         production_stage = work / 'production-stage'
         production_stage.mkdir()
         shutil.copytree(ROOT / 'coverage', production_stage / 'coverage', ignore=shutil.ignore_patterns('build'))
         (production_stage / 'tests').mkdir()
-        (production_stage / suite_name).write_text(driver)
+        for name, driver in drivers.items():
+            (native/name).write_text(driver)
+            (production_stage/name).write_text(driver)
         generate(native, production_stage, ['production.mojo'])
         production_proof = proofs.seal(native, production_stage, compiler, flags,
-                                       mojo=[mojo], suites=[suite_name])
+                                       mojo=[mojo], suites=list(drivers))
+        # Build first, then enforce the unchanged executable runtime limit.
+        # The real raw-profile invocation below still includes JIT startup.
+        require_runtime_alarm()
+        executions = []
+        for number, folder in enumerate((native, production_stage)):
+            binary = work/f'production-runtime-{number}'
+            run([mojo, 'build', '-Werror', '-I', str(folder),
+                 str(folder/suite_name), '-o', str(binary)])
+            executions.append(run([str(binary)], timeout=RUNTIME_SECONDS))
+        require(executions[0].stdout == executions[1].stdout == 'RESULT production capture\n',
+                'Prebuilt production runtime output changed')
+        require(not executions[0].stderr, 'Uninstrumented production emitted probes')
+        expected_records = bytearray()
+        reducer = coverage_io.Reducer(expected_records.extend)
+        for line in executions[1].stderr.encode().splitlines(keepends=True):
+            reducer.feed(line)
         hits = production_stage / 'hits'
         hits.mkdir()
         command = [proofs._expand_path(word, native, production_stage) for word in
                    proofs.expected_capture_command(production_proof['receipt']['execution'], suite_name, 'raw')]
         capture = hits / 'test_production.txt.gz'
         output = hits / 'test_production.out'
-        captured = run([sys.executable, str(ROOT / 'tools/coverage_io.py'), 'capture',
-                        '--loop-proof', str(production_stage / 'loop-proofs.json'),
-                        '--loop-proof-root', str(native), '--out', str(output), '--err', str(capture),
-                        '--', *command], timeout=5)
+        captured = capture_with_compiler_budget(command, output, capture,
+                        loop_proof=production_stage/'loop-proofs.json', source_root=native)
         require(output.read_text() == 'RESULT production capture\n', 'Production capture output changed')
+        require(gzip.decompress(capture.read_bytes()) == bytes(expected_records),
+                'Real raw-profile and prebuilt runtime probe evidence differ')
         reported = run([sys.executable, str(ROOT / 'tools/coverage_io.py'), 'report',
                         '--capture-dir', str(hits), '--loop-proof-root', str(native),
                         '--loop-proof-build', str(production_stage), '--compiler=' + compiler,
-                        '--flags=' + flags, '--mojo', mojo, '--suites', suite_name, '--',
+                        '--flags=' + flags, '--mojo', mojo, '--suites', *drivers, '--',
                         str(reporter), str(production_stage / 'manifest.txt')], timeout=5)
         require('100%' in reported.stdout and 'proven impossible 1' in reported.stdout,
                 'Full original manifest failed the proof-aware production report')
         target = evidence / 'production'
         shutil.copytree(production_stage, target)
+        for number, execution in enumerate(executions):
+            (target/f'prebuilt-{number}.out').write_text(execution.stdout)
+            (target/f'prebuilt-{number}.raw.txt').write_text(execution.stderr)
         (target / 'capture-process.out').write_text(captured.stdout + captured.stderr)
         (target / 'report-process.out').write_text(reported.stdout + reported.stderr)
-        results['production-wrapper'] = 'actual raw capture and full original-manifest proof-aware report passed'
+        results['production-wrapper'] = ('actual sealed raw capture and full original-manifest report; '
+                                         'prebuilt executables retain 5s; raw main retains alarm(5); '
+                                         'exact stdout and reduced evidence parity')
+        # These actual raw captures must fail and never leave success receipts.
+        # The alarm stays armed through process exit; pause cannot outlive it.
+        for name, expected in ((hang_name, 128+signal.SIGALRM), (failure_name, None)):
+            stem = Path(name).stem
+            bad_capture, bad_output = hits/(stem+'.txt.gz'), hits/(stem+'.out')
+            receipt_path = proofs.capture_receipt_path(bad_capture)
+            receipt_path.write_text('stale success must be removed')
+            negative_command = [proofs._expand_path(word, native, production_stage) for word in
+                proofs.expected_capture_command(production_proof['receipt']['execution'], name, 'raw')]
+            failed = capture_with_compiler_budget(negative_command,bad_output,bad_capture,
+                loop_proof=production_stage/'loop-proofs.json',source_root=native,success=False)
+            require(failed.returncode != 0 and failed.returncode != 124,
+                    'Runtime alarm or compiler refusal was not observed')
+            if expected is not None:
+                require(failed.returncode == expected, 'Raw runtime did not terminate with SIGALRM')
+                require(b'COVLINE:production:' in gzip.decompress(bad_capture.read_bytes()),
+                        'Forced hang never entered the actual production workload')
+            else:
+                errors = gzip.decompress(bad_capture.read_bytes())
+                require(b'error:' in errors and Path(name).name.encode() in errors,
+                        'Failure was not the actual fixture compiler refusal')
+            require(not receipt_path.exists(), 'Failed raw capture left a success receipt')
+            results[stem] = {'status':failed.returncode,'success_receipt':False}
+            negative = evidence/'production-negatives'/stem
+            negative.mkdir(parents=True)
+            shutil.copyfile(bad_capture, negative/bad_capture.name)
+            shutil.copyfile(bad_output, negative/bad_output.name)
+            (negative/'capture-process.out').write_text(failed.stdout+failed.stderr)
+            (negative/'command.json').write_text(json.dumps(negative_command)+'\n')
+        expired = evidence/'production-deadline'
+        expired.mkdir()
+        expired_capture = expired/'test_production.txt.gz'
+        expired_output = expired/'test_production.out'
+        expired_receipt = proofs.capture_receipt_path(expired_capture)
+        expired_receipt.write_text('stale success must be removed')
+        # An already elapsed inherited deadline cannot start a new suite or
+        # retain an earlier success. Live descendant cleanup has a separate
+        # compiler-free watchdog control.
+        with contextlib.ExitStack() as scope:
+            old_deadline = os.environ.get(coverage_io.DEADLINE_ENV)
+            def restore_deadline():
+                if old_deadline is None:
+                    os.environ.pop(coverage_io.DEADLINE_ENV, None)
+                else:
+                    os.environ[coverage_io.DEADLINE_ENV] = old_deadline
+            scope.callback(restore_deadline)
+            os.environ[coverage_io.DEADLINE_ENV] = repr(time.monotonic()-1)
+            exhausted = capture_with_compiler_budget(command, expired_output, expired_capture,
+                loop_proof=production_stage/'loop-proofs.json', source_root=native, success=False)
+        require(exhausted.returncode == 124, 'Expired integration deadline was extended')
+        require(not expired_receipt.exists(), 'Expired capture retained a success receipt')
+        (expired/'capture-process.out').write_text(exhausted.stdout+exhausted.stderr)
+        results['production-deadline'] = {'status':124,'success_receipt':False}
         (native / 'missing.mojo').write_text('def main():\n    pass\n')
         failed_generation = generate(native, shadow_build, ['shadow.mojo', 'missing.mojo'],
                                      success=False, remove_after_begin='missing.mojo')
