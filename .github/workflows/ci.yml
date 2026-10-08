@@ -64,8 +64,13 @@ jobs:
 
       - name: Install the pinned Mojo toolchain
         run: |
-          uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.1.0"
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
           .venv/bin/mojo --version
 
       # Formatting, lint, the compile-fail cases, the documentation and the
@@ -166,8 +171,13 @@ jobs:
 
       - name: Install the pinned Mojo toolchain
         run: |
-          uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.1.0"
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
           .venv/bin/mojo --version
 
       # Homebrew's X server brings Xvfb and the Xlib the window loads.

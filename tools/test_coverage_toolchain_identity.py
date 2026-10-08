@@ -11,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import venv
 from unittest.mock import patch
 
 import coverage_io
@@ -22,10 +23,10 @@ import test_coverage_loop_proofs as fixtures
 def wheel(root):
     env = root / '.venv'
     binary = env / 'bin'
-    binary.mkdir(parents=True, exist_ok=True)
+    # Exercise a real isolated environment, including Python's own configuration.
+    # The test runner must use an upstream interpreter without distro import hooks.
+    venv.EnvBuilder(with_pip=False, symlinks=True).create(env)
     python = binary / 'python'
-    python.symlink_to(Path(sys.executable).resolve())
-    (env / 'pyvenv.cfg').write_text('home = ' + str(Path(sys.executable).resolve().parent) + '\ninclude-system-site-packages = false\n')
     launcher = binary / 'mojo'
     launcher.write_text('#!' + str(python) + '\nfrom mojo._entrypoints import exec_mojo\nexec_mojo()\n')
     site = env / 'lib' / ('python' + str(sys.version_info.major) + '.' + str(sys.version_info.minor)) / 'site-packages'
@@ -117,6 +118,36 @@ class ToolchainIdentityTests(unittest.TestCase):
         with patch.object(identity.subprocess, 'run', side_effect=changed):
             self.assertNotEqual(before, identity.executable_identity(self.launcher_a))
 
+    def test_interpreter_environment_and_loaded_customizers_fail_closed(self):
+        actual_run = identity.subprocess.run
+        for changed_field, changed_value in (
+                ('implementation', 'other-python'),
+                ('prefix', str(self.b / '.venv')),
+                ('user_site', True),
+                ('user_site', None),
+                ('customizers', ['sitecustomize']),
+                ('customizers', ['usercustomize'])):
+            with self.subTest(field=changed_field, value=changed_value):
+                def changed(*args, **kwargs):
+                    result = actual_run(*args, **kwargs)
+                    fields = json.loads(result.stdout)
+                    fields[changed_field] = changed_value
+                    result.stdout = json.dumps(fields)
+                    return result
+                with patch.object(identity.subprocess, 'run', side_effect=changed):
+                    with self.assertRaisesRegex(ValueError, 'environment or import customization'):
+                        identity.executable_identity(self.launcher_a)
+
+        def extra_site(*args, **kwargs):
+            result = actual_run(*args, **kwargs)
+            fields = json.loads(result.stdout)
+            fields['sites'].append(str(self.b / 'unbound-site-packages'))
+            result.stdout = json.dumps(fields)
+            return result
+        with patch.object(identity.subprocess, 'run', side_effect=extra_site):
+            with self.assertRaisesRegex(ValueError, 'site-packages does not match'):
+                identity.executable_identity(self.launcher_a)
+
     def test_overrides_missing_payload_and_unvalidated_shebang_fail_closed(self):
         with patch.dict(os.environ, {'MODULAR_MOJO_MAX_DRIVER_PATH': '/other/compiler'}):
             with self.assertRaisesRegex(ValueError, 'override'):
@@ -130,6 +161,22 @@ class ToolchainIdentityTests(unittest.TestCase):
 
 
 class HostedIdentitySetupTests(unittest.TestCase):
+    def test_hosted_tooling_uses_an_upstream_test_interpreter(self):
+        root = Path(__file__).resolve().parent.parent
+        workflow = (root / '.github/workflows/ci.yml').read_text()
+        for start, end in (('  lint:', '  cpu:'),
+                           ('  cpu-macos:', '  # Coverage runs beside')):
+            with self.subTest(job=start.strip()):
+                job = workflow.split(start, 1)[1].split(end, 1)[0]
+                self.assertIn('uv python install --no-bin 3.12.14', job)
+                self.assertIn('uv python find --managed-python --no-project 3.12.14', job)
+                self.assertIn('echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"', job)
+                self.assertIn('"$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv', job)
+                self.assertIn('uv pip install --python .venv/bin/python "mojo==1.1.0"', job)
+                self.assertNotIn('uses: actions/setup-python', job)
+                self.assertNotIn('uv venv --prompt ThreeMojo', job)
+                self.assertNotIn('LD_LIBRARY_PATH', job)
+
     def test_capture_and_report_pin_the_same_immutable_toolchain_image(self):
         root = Path(__file__).resolve().parent.parent
         workflow = (root / '.github/workflows/ci.yml').read_text()

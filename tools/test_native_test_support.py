@@ -83,7 +83,25 @@ class NativeTestSupportTests(unittest.TestCase):
         with patch.object(native.subprocess, 'run', return_value=version), \
                 patch.object(native.shutil, 'which', return_value=str(compiler)):
             identity = native.compiler_identity(shlex.quote(str(wrapper)) + ' cc')
-        self.assertEqual(set(identity['files']), {str(wrapper), str(compiler)})
+        self.assertEqual(set(identity['files']), {str(wrapper.resolve()), str(compiler.resolve())})
+
+    def test_native_identity_resolves_a_symlinked_compiler_root_and_binds_bytes(self):
+        real_root = self.root / 'real'
+        real_root.mkdir()
+        alias = self.root / 'alias'
+        alias.symlink_to(real_root, target_is_directory=True)
+        wrapper = self.write('real/wrapper', 'wrapper bytes\n')
+        compiler = self.write('real/compiler', 'compiler before\n')
+        version = subprocess.CompletedProcess([], 0, stdout='same version\n')
+        with patch.object(native.subprocess, 'run', return_value=version), \
+                patch.object(native.shutil, 'which', return_value=str(alias / 'compiler')):
+            command = shlex.quote(str(alias / 'wrapper')) + ' cc'
+            before = native.compiler_identity(command)
+            compiler.write_text('compiler after\n')
+            after = native.compiler_identity(command)
+        self.assertEqual(set(before['files']), {str(wrapper.resolve()), str(compiler.resolve())})
+        self.assertEqual(before['version'], after['version'])
+        self.assertNotEqual(before['files'], after['files'])
 
     def test_build_link_argument_precedes_source_and_preserves_flags(self):
         suite = self.root / SUITE
