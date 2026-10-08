@@ -116,7 +116,18 @@ def verify_group(root, group):
     result = {}
     for path in GROUP_PATHS[group]:
         text = (root / path).read_text(encoding='utf-8')
-        require(token_sha256(text) == pins['groups'][group][path],
+        checked = text
+        if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:
+            try:
+                import cache_key_contracts as cache_key
+            except ModuleNotFoundError:
+                from tools.carla_lane_oracle import cache_key_contracts as cache_key
+            try:
+                checked = cache_key.predecessor_source(root)
+            except (ValueError, OSError) as error:
+                raise ValueError('runtime source dependency changed [' + group + ']: ' + path
+                                 + ' (' + str(error) + ')') from error
+        require(token_sha256(checked) == pins['groups'][group][path],
                 'runtime source dependency changed [' + group + ']: ' + path)
         result[path] = hashlib.sha256(text.encode()).hexdigest()
     return result

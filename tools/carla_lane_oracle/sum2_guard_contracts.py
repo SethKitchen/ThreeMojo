@@ -17,21 +17,31 @@ import tokenize
 try:
     import ideal_projection
     import source_contracts
+    import reviewed_cleanup_contracts
 except ModuleNotFoundError:
-    from tools.carla_lane_oracle import ideal_projection, source_contracts
+    from tools.carla_lane_oracle import (
+        ideal_projection, source_contracts, reviewed_cleanup_contracts,
+    )
+try:
+    import cache_key_contracts as cache_key
+except ModuleNotFoundError:
+    from tools.carla_lane_oracle import cache_key_contracts as cache_key
+
 
 PINS = Path('tools/carla_lane_oracle/sum2-guard-pins.json')
 MANIFEST_SHA256 = '98933650efb2cad39d62a4fe1ddc18c35331cd79dac3fb8b021284148f6b6109'
 FORMAT_MANIFEST_SHA256 = '60448936958e8748ef0a419e6679ec6542e72615ac89a80a7bb24a79581a4e06'
 PUBLIC_DOC_MIGRATION_SHA256 = '4cc4cefa6199c1cfbcfd05a636254d1a061889b9a51951d8ceb723544aa6c3dd'
 CONTAINING_MODEL_REMOVAL_SHA256 = '3407eccdc3a2e58acfea1922f6e9f9cb7b9b5601c2c377b8da64ab5e7fb605f8'
+WINNER_SIGN_MIGRATION_SHA256 = 'b154b18213f9f0400661aff93e47b86bf83990c8838dfa0fca00b0fe6710b9a3'
 FINAL_SOURCE_FREEZE_SHA256 = 'eb64ab48aa4e09ea5c064a8ad7c7801bb7c04fdf5a14c7f61494ba8186930aef'
 CALLERS = {
     'lane_geometry': ('_lane_spiral',),
     'curve_bounds': ('_spiral_expression', '_lane_jet_model_proof'),
     'lane_refinement': ('_lane_certificate_contains', '_refine_lane_certificate',
                         '_continue_lane_certificate', '_run_lane_search'),
-    'map': ('_closest_lane_certificate', '_closest_lane_certificate_with_work', '_create_segments'),
+    'map': ('_closest_lane_certificate', '_closest_lane_certificate_with_work', '_create_segments',
+            '_seed_exact_interval', '_seed_reference_domain', '_winner_seed_room', '_try_winner_seed'),
     'map_builder': ('build',),
     'spiral_domain_proof': ('_try_pack_spiral_proof', '_spiral_proof_branch'),
     'spiral_moment_proof': ('_try_build_spiral_moments', '_try_spiral_moment_expansion'),
@@ -48,7 +58,9 @@ CALLERS = {
         '_try_spiral_grouped_roundoff_envelope_metered'),
 }
 OWNERS = {'map': ('Map',), 'map_builder': ('MapBuilder',)}
-PROTECTED = {'_sum2_update', '_require_sum2_environment', '_sum2_supported_environment',
+OWNER_OVERRIDES = {('map', name): () for name in
+    ('_seed_exact_interval', '_seed_reference_domain', '_winner_seed_room', '_try_winner_seed')}
+PROTECTED = {'_seed_exact_interval', '_seed_reference_domain', '_winner_seed_room', '_try_winner_seed', '_sum2_update', '_require_sum2_environment', '_sum2_supported_environment',
              '_sum2_error', '_sum2_error_checked', '_spiral_proof_branch',
              '_grouped_origin_error', '_try_spiral_grouped_roundoff_envelope',
              '_try_objective_model', '_restrict_objective_model', '_objective_followup_room', '_objective_recheck_room',
@@ -85,7 +97,7 @@ def protected_source_digest(text):
     return hashlib.sha256(json.dumps(record, separators=(',', ':')).encode()).hexdigest()
 
 
-def protected_inventory(root):
+def protected_inventory(root, *, verified_lane_predecessor=None):
     result = {}
     for path in sorted(root.rglob('*.mojo')):
         relative = path.relative_to(root)
@@ -93,7 +105,10 @@ def protected_inventory(root):
                 part.startswith('.')
                 for part in relative.parts):
             continue
-        digest = protected_source_digest(path.read_text())
+        text = path.read_text()
+        if relative.as_posix() == cache_key.MODULE and verified_lane_predecessor is not None:
+            text = verified_lane_predecessor
+        digest = protected_source_digest(text)
         if digest is not None:
             result[relative.as_posix()] = digest
     return result
@@ -215,7 +230,7 @@ def verify(root):
     pins = json.loads((root / PINS).read_text(), object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
                           'public_doc_migration_sha256', 'final_source_freeze_sha256',
-                          'containing_model_removal_sha256',
+                          'containing_model_removal_sha256', 'winner_sign_migration_sha256',
                           'scope', 'helper_source', 'callers', 'protected_inventory'},
             'wrong Sum2 guard pin keys')
     require(type(pins['schema']) is int and pins['schema'] == 2,
@@ -228,21 +243,33 @@ def verify(root):
             'unreviewed final Sum2 format/documentation lineage')
     require(pins['containing_model_removal_sha256'] == CONTAINING_MODEL_REMOVAL_SHA256,
             'unreviewed containing-model removal lineage')
+    require(pins['winner_sign_migration_sha256'] == WINNER_SIGN_MIGRATION_SHA256 and
+            hashlib.sha256((root/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_bytes()).hexdigest() == WINNER_SIGN_MIGRATION_SHA256,
+            'unreviewed winner/sign-query source migration')
     require(set(pins['callers']) == set(CALLERS), 'wrong Sum2 guard caller modules')
     helper = (root/'extensions/carla/curve_sum2.mojo').read_text()
     require(significant(helper) == significant(pins['helper_source']),
             'Sum2 complete guard/helper token graph changed')
     count = 0
+    verified_lane_predecessor = None
     for module, names in CALLERS.items():
         record = pins['callers'][module]
         require(set(record) == {'routing', 'functions'} and set(record['functions']) == set(names),
                 'wrong Sum2 guard caller function set: ' + module)
-        text = (root / ('extensions/carla/' + module + '.mojo')).read_text()
+        path = 'extensions/carla/' + module + '.mojo'
+        text = (root / path).read_text()
+        if path == cache_key.MODULE:
+            try:
+                text = cache_key.reviewed_text(root, path, text)
+            except (ValueError, OSError) as error:
+                raise ValueError('Sum2 complete guarded caller changed or routing changed: '
+                                 + module + ' (' + str(error) + ')') from error
+            verified_lane_predecessor = text
         require(declaration_routing(text) == record['routing'],
                 'Sum2 guard import/declaration routing changed: ' + module)
         spans = []
         for name in names:
-            source, span, tokens = function_span(text, name, OWNERS.get(module, ()))
+            source, span, tokens = function_span(text, name, OWNER_OVERRIDES.get((module, name), OWNERS.get(module, ())))
             require(significant(source) == significant(record['functions'][name]),
                     'Sum2 complete guarded caller changed: ' + module + ':' + name)
             spans.append(span)
@@ -262,8 +289,9 @@ def verify(root):
             if token.type == tokenize.NAME and token.string in PROTECTED:
                 require(any(start <= index < end for start, end in spans + import_spans),
                         'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
-    require(protected_inventory(root) == pins['protected_inventory'],
+    require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor) == pins['protected_inventory'],
             'global protected-helper use/import inventory changed')
+    reviewed_cleanup_contracts.verify(root)
     return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,
             'volatile_loads': 3, 'probe_sum2_calls': 4,
             'unsupported_paths': 'raise, infinity, unknown Jet, or absent optional proof as bound by each caller',

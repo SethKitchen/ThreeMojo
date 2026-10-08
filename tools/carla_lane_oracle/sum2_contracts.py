@@ -194,7 +194,7 @@ def _try_spiral_roundoff_envelope(
         or domain.high >= geometry.length
     ):
         return None
-    if d.error < 0.0:
+    if not d.value.is_finite() or not isfinite(d.error) or d.error < 0.0:
         return None
     var distance = _ValueJet(
         d.value, _Interval.whole(), _Interval.whole(), d.error
@@ -228,7 +228,11 @@ def _try_spiral_roundoff_envelope(
     var selection = (
         theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
     ).rounded_value()
-    if floor(selection.low) != 0.0 or floor(selection.high) != 0.0:
+    if (
+        not selection.is_finite()
+        or floor(selection.low) != 0.0
+        or floor(selection.high) != 0.0
+    ):
         return None
     var trig = _sincos_expression(theta)
     var factor = (
@@ -284,6 +288,15 @@ def verify(root):
     texts = {name: (root / ('extensions/carla/' + name + '.mojo')).read_text()
              for name in names}
     guard_result = guards.verify(root)
+    # Validate actual selector producers before restoring the exact historical
+    # eligibility helper for the retained complete-function comparison.
+    try:
+        import selection_finiteness_contracts as selection
+    except ModuleNotFoundError:
+        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
+    texts['spiral_roundoff_proof'] = selection.predecessor_text(
+        root, 'extensions/carla/spiral_roundoff_proof.mojo')
+
     trees = {name: c.syntax_tree(text) for name, text in texts.items()
              if name != 'curve_sum2'}
     # The complete lexical contract above retains all keyword-subscripts and

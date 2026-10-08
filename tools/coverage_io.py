@@ -18,6 +18,14 @@ import threading
 import time
 
 from test_environment import isolated_environment
+import coverage_loop_proofs
+
+ACTIVE_SOURCE_SHA256 = coverage_loop_proofs.file_sha256(Path(__file__))
+
+
+def _check_proof_consumer(proof):
+    if proof['receipt']['root_inputs'].get('tools/coverage_io.py') != ACTIVE_SOURCE_SHA256:
+        raise ValueError('Stale or modified executing capture/report wrapper')
 
 
 LINE = b'COVLINE:'
@@ -270,11 +278,23 @@ class Reducer(_EvidenceReducer):
         self._accepted_records.add(line)
 
 
-def capture(command, out_path, err_path, *, progress_interval=60):
+def capture(command, out_path, err_path, *, progress_interval=60, loop_proof=None,
+            source_root=None):
     """Run a suite and keep what its probe records tell the report, once
     each, compressed; see `Reducer`."""
     if progress_interval <= 0:
         raise ValueError('progress interval must be positive')
+    proof = None
+    if loop_proof is not None:
+        # A failed replacement capture must never retain an old success receipt.
+        coverage_loop_proofs.capture_receipt_path(err_path).unlink(missing_ok=True)
+        proof = coverage_loop_proofs.read_receipt(loop_proof)
+        _check_proof_consumer(proof)
+        proof_root = Path(source_root) if source_root is not None else Path(__file__).resolve().parent.parent
+        proof_build = Path(loop_proof).resolve().parent
+        coverage_loop_proofs.check_capture_inputs(proof, proof_root, proof_build)
+        coverage_loop_proofs.validate_capture_command(
+            command, proof, proof_root, proof_build, err_path, out_path)
     deadline = shared_deadline()
     suite = Path(out_path).stem
     started = time.monotonic()
@@ -318,6 +338,12 @@ def capture(command, out_path, err_path, *, progress_interval=60):
                 print(''.join(deque(output, maxlen=30)), end='')
             with gzip.open(err_path, 'rt', errors='replace') as errors:
                 print(''.join(deque((line for line in errors if not line.startswith('COV')), maxlen=30)), end='')
+        elif proof is not None:
+            if coverage_loop_proofs.read_receipt(loop_proof) != proof:
+                raise ValueError('Loop-proof binding changed during capture')
+            coverage_loop_proofs.check_capture_inputs(proof, proof_root, proof_build)
+            coverage_loop_proofs.bind_capture(err_path, out_path, proof, command,
+                                              root=proof_root, build=proof_build)
         return status if status >= 0 else 128 - status
     except BaseException:
         progress('aborted')
@@ -376,6 +402,32 @@ def report(command, captures):
         return status if status >= 0 else 128 - status
 
 
+def report_with_loop_proofs(command, captures, *, root, build, compiler, flags,
+                            mojo=None, capture_cache=None, suites=None):
+    """Validate source/tool/capture bindings before applying outcome masks."""
+    build = Path(build)
+    original = build / 'manifest.txt'
+    if not command or Path(command[-1]).resolve() != original.resolve():
+        raise ValueError('The report command must end with the original manifest')
+    proof_path = build / 'loop-proofs.json'
+    settings = {'mojo': mojo, 'capture_cache': capture_cache, 'suites': suites}
+    proof = coverage_loop_proofs.verify(proof_path, root, build, compiler, flags, **settings)
+    _check_proof_consumer(proof)
+    coverage_loop_proofs.verify_captures(captures, proof)
+    derived = coverage_loop_proofs.masked_manifest(original.read_bytes(), proof)
+    with tempfile.TemporaryDirectory(prefix='threemojo-loop-report-') as directory:
+        manifest = Path(directory) / 'manifest.txt'
+        manifest.write_bytes(derived)
+        print('Validated loop-proof binding ' + proof['sha256'], flush=True)
+        status = report([*command[:-1], str(manifest)], captures)
+        # Concurrent changes must not turn a stale report into a passing gate.
+        final_proof = coverage_loop_proofs.verify(proof_path, root, build, compiler, flags, **settings)
+        if final_proof != proof:
+            raise ValueError('Loop-proof identity changed during reporting')
+        coverage_loop_proofs.verify_captures(captures, proof)
+        return status
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='mode', required=True)
@@ -385,9 +437,18 @@ def main():
     run = commands.add_parser('capture')
     run.add_argument('--out', type=Path, required=True)
     run.add_argument('--err', type=Path, required=True)
+    run.add_argument('--loop-proof', type=Path)
+    run.add_argument('--loop-proof-root', type=Path)
     run.add_argument('command', nargs=argparse.REMAINDER)
     read = commands.add_parser('report')
     read.add_argument('--capture-dir', type=Path, required=True)
+    read.add_argument('--loop-proof-root', type=Path)
+    read.add_argument('--loop-proof-build', type=Path)
+    read.add_argument('--compiler', default='')
+    read.add_argument('--flags', default='')
+    read.add_argument('--mojo')
+    read.add_argument('--capture-cache')
+    read.add_argument('--suites', nargs='*')
     read.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
     command = args.command
@@ -398,10 +459,19 @@ def main():
     if args.mode == 'group':
         return group(command, args.seconds)
     if args.mode == 'capture':
-        return capture(command, args.out, args.err)
+        return capture(command, args.out, args.err, loop_proof=args.loop_proof,
+                       source_root=args.loop_proof_root)
     captures = sorted(args.capture_dir.glob('*.txt.gz'))
     if not captures:
         parser.error('no coverage captures were found')
+    if args.loop_proof_root is not None or args.loop_proof_build is not None:
+        if args.loop_proof_root is None or args.loop_proof_build is None:
+            parser.error('both loop-proof root and build are required')
+        return report_with_loop_proofs(command, captures, root=args.loop_proof_root,
+                                      build=args.loop_proof_build,
+                                      compiler=args.compiler, flags=args.flags,
+                                      mojo=args.mojo, capture_cache=args.capture_cache,
+                                      suites=args.suites)
     return report(command, captures)
 
 

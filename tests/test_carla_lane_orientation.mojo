@@ -516,6 +516,10 @@ def test_geometry_validation_guards() raises:
     road.info.geometries[0].geometry.curvature_end = 1e20
     with assert_raises(contains="work"):
         _ = road.lane_transform(0, 2, 1)
+    var geometry = _geometry(LINE)
+    with assert_raises():
+        _ = geometry._derivative_at(nan[DType.float64]())
+    assert_equal(geometry._derivative_at(-1)[0], 0.0)
 
 
 def test_sampled_validation_guards() raises:

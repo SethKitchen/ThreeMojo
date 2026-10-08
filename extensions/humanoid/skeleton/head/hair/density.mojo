@@ -25,6 +25,13 @@ comptime MIN_HAIR_DENSITY_RESOLUTION = 4
 comptime MAX_HAIR_DENSITY_RESOLUTION = 64
 
 
+def _checked_density_point(point: Vector3) raises -> Vector3:
+    """Return the unchanged point after checking all three coordinates."""
+    if not isfinite(point.x) or not isfinite(point.y) or not isfinite(point.z):
+        raise Error("Hair density needs finite positions")
+    return point
+
+
 struct HairDensity(Movable):
     """A uniform grid of the current strands' projected-area density."""
 
@@ -90,8 +97,7 @@ struct HairDensity(Movable):
         if len(self.coefficients) != count:
             self.coefficients = List[Float32](length=count, fill=0)
         else:
-            # A valid resolution gives at least 64 cells.
-            for index in range(count):  # pragma: no branch
+            for index in range(count):
                 self.coefficients[index] = 0
         self.populated = False
         if len(groom.starts) == 0 or groom.starts[0] != 0:
@@ -103,12 +109,10 @@ struct HairDensity(Movable):
                 raise Error("Hair density starts must be ordered")
         if len(groom.points) == 0:
             return
-        var low = groom.points[0]
+        var low = _checked_density_point(groom.points[0])
         var high = low
-        for index in range(len(groom.points)):  # pragma: no branch
-            var p = groom.points[index]
-            if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):
-                raise Error("Hair density needs finite positions")
+        for index in range(1, len(groom.points)):
+            var p = _checked_density_point(groom.points[index])
             low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
             high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
         var span = high - low
@@ -119,36 +123,38 @@ struct HairDensity(Movable):
             max(self.diameter.to(METER), Float32(1e-5)),
             longest / Float32(max(1, self.resolution - 4)),
         )
-        # The cell is at least 1e-5 m, so a finite volume is positive.
         var volume = cell * cell * cell
+        # On the validated rebuild path with ordinary Float32 rounding and
+        # gradual underflow, the cell floor keeps both products positive.
+        # The finite-volume check also bounds the cell above.
         if not isfinite(cell) or not isfinite(volume):
             raise Error("Hair density grid scale is not representable")
         self.cell = cell
         self.low = low - Vector3(cell, cell, cell)
-        # The cell is at least the diameter d, so the deposit is at most
-        # 1 / d^2 and finite. A finite volume keeps the span, and so every
-        # segment length, below about 4e14 m: no length overflows.
+        # Diameter is at most cell, which is at least Float32(1e-5).
+        # Thus diameter / volume stays finite even for tiny diameters.
         var deposit = self.diameter.to(METER) / volume
-        # Nonempty points with starts that begin at zero and end at the
-        # point count give at least one strand.
-        for strand in range(len(groom)):  # pragma: no branch
+        for strand in range(len(groom)):
             for index in range(
                 groom.starts[strand], groom.starts[strand + 1] - 1
             ):
                 var start = groom.points[index]
                 var delta = groom.points[index + 1] - start
                 var length = delta.length()
+                # Finite cubic volume and resolution at most 64 bound
+                # segment length below 2^50 and sample count at most 211.
                 var samples = max(1, Int(ceil(length / (cell * 0.5))))
                 var added = length * deposit / Float32(samples)
-                for sample in range(samples):  # pragma: no branch
+                for sample in range(samples):
                     var p = start + delta * (
                         (Float32(sample) + 0.5) / Float32(samples)
                     )
-                    # Every sample lies within the points' bounds. The grid
-                    # keeps one cell below them and three above, so the slot
-                    # is never outside it. One sample adds at most
-                    # 1 / (2 * cell), about 5e4, so a total cannot overflow.
+                    # With stable validated groom storage, rounded lower
+                    # padding is between zero and twice cell. Bounded span
+                    # and interpolation rounding keep samples in the grid.
                     var slot = self._slot(p)
+                    # Each increment is below 2^16. Float32 additions from
+                    # zero cannot cross 2^42, even for many valid deposits.
                     self.coefficients[slot] += added
         self.populated = True
 
@@ -211,8 +217,7 @@ struct HairDensity(Movable):
         var step = direction * (self.cell * 0.5 / length)
         var p = point + step * 2.5
         var total = Float32(0)
-        # A valid resolution gives at least 16 steps.
-        for _ in range(self.resolution * 4):  # pragma: no branch
+        for _ in range(self.resolution * 4):
             var slot = self._slot(p)
             if slot < 0:
                 break

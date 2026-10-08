@@ -383,9 +383,12 @@ def _outward_float(value: Float64, lower: Bool) raises -> Float32:
         raise Error(
             "Junction canonical enclosure is not finite in public storage"
         )
-    if (lower and Float64(result) > value) or (
-        not lower and Float64(result) < value
-    ):
+    var outside: Bool
+    if lower:
+        outside = Float64(result) > value
+    else:
+        outside = Float64(result) < value
+    if outside:
         if result == 0.0:
             return bitcast[DType.float32](
                 UInt32(0x80000001) if lower else UInt32(1)
@@ -513,10 +516,10 @@ def _monotone_junction_enclosure(
     ):
         return (x, y, z)
     work.step(2)
-    # A monotone coordinate needs a resolved lane graph on [low, high], so
-    # each endpoint's quadrature count is resolved too.
     var first_terms = _reference_work(road, low, low)
     var last_terms = _reference_work(road, high, high)
+    if first_terms < 0 or last_terms < 0:
+        return (x, y, z)
     # Reserve BOTH endpoint traversals and lane scans before either begins.
     # A refused reservation still poisons the original global work ledger.
     work.term(first_terms)
@@ -684,37 +687,35 @@ def _lane_section_box_with_work(
     for i in range(len(breaks) - 1):  # pragma: no branch
         # Keep both sides of a discontinuous record boundary. The previous
         # representable s is the final API input that uses the old records.
-        # Breaks increase strictly within [a, b], so end > breaks[i].
-        var end = bitcast[DType.float64](
-            bitcast[DType.uint64](min(breaks[i + 1], b)) - 1
-        )
+        var end = min(breaks[i + 1], b)
+        if end > breaks[i]:
+            end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
         work.step()
         out.union(_span_box(road, section, lane, breaks[i], end, work))
-    # The z bounds are padded symmetrically, so they overflow together.
-    for bound in [  # pragma: no branch
-        out.min.x,
-        out.min.y,
-        out.min.z,
-        out.max.x,
-        out.max.y,
-        out.max.z,
-    ]:
-        if not isfinite(bound):
-            raise Error("Junction proposal is not finite in public storage")
+    if not (
+        isfinite(out.min.x)
+        and isfinite(out.min.y)
+        and isfinite(out.min.z)
+        and isfinite(out.max.x)
+        and isfinite(out.max.y)
+        and isfinite(out.max.z)
+    ):
+        raise Error("Junction proposal is not finite in public storage")
     # The old analytic expression is only a proposal. Prove the actual
     # canonical lane graph is covered, including both sides of record jumps.
-    for i in range(len(breaks) - 1):  # pragma: no branch
+    for i in range(len(breaks) - 1):
         work.step()
         var start = breaks[i]
         out.expand_by_point(
             _canonical_endpoint(road, section, lane, start, work)
         )
-        # Breaks increase strictly, so the open span between two breaks
-        # starts no later than it ends.
-        var end = bitcast[DType.float64](
-            bitcast[DType.uint64](min(breaks[i + 1], b)) - 1
-        )
-        start = _next_up(start)
-        _certify_junction_span(road, section, lane, start, end, out, work)
+        var end = min(breaks[i + 1], b)
+        if end > start:
+            end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
+            start = _next_up(start)
+            if start <= end:
+                _certify_junction_span(
+                    road, section, lane, start, end, out, work
+                )
     out.expand_by_point(_canonical_endpoint(road, section, lane, b, work))
     return out

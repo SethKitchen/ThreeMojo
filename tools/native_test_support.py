@@ -36,7 +36,22 @@ def compiler_identity(cc):
         raise ValueError('native test compiler command is empty')
     version = subprocess.run([*command, '--version'], check=True, capture_output=True,
                              text=True, timeout=30).stdout
+    # A compiler replacement can preserve --version. Bind executable bytes
+    # as well so existing fixture/hit-helper objects cannot survive it.
+    files = {}
+    for index, argument in enumerate(command):
+        candidate = Path(argument)
+        if not candidate.is_file():
+            resolved = shutil.which(argument)
+            if resolved is None:
+                if index == 0:
+                    raise ValueError('native test compiler executable is missing')
+                continue
+            candidate = Path(resolved)
+        candidate = candidate.resolve()
+        files[str(candidate)] = hashlib.sha256(candidate.read_bytes()).hexdigest()
     return {'command': command, 'version': version, 'flags': list(C_FLAGS),
+            'files': files,
             'system': platform.system(), 'machine': platform.machine()}
 
 

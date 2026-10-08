@@ -17,10 +17,15 @@ import struct
 import sys
 
 sys.dont_write_bytecode = True
-import ideal_projection
-import source_contracts
-import sum2_contracts
-import sum2_guard_contracts
+try:
+    import ideal_projection
+    import source_contracts
+    import sum2_contracts
+    import sum2_guard_contracts
+except ModuleNotFoundError:
+    from tools.carla_lane_oracle import (
+        ideal_projection, source_contracts, sum2_contracts, sum2_guard_contracts,
+    )
 F = Fraction
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = Path('tools/carla_lane_oracle')
@@ -327,7 +332,11 @@ def verify_inputs(root):
                 import check_sampled_values as sampled
             except ModuleNotFoundError:
                 from tools.carla_lane_oracle import check_sampled_values as sampled
-            sampled.reviewed_reference_tree(source)
+            try:
+                sampled.reviewed_reference_tree(source)
+            except sampled.CheckError as error:
+                raise CheckError(
+                    'source routing changed: ' + name + ': ' + str(error)) from error
             rows = json.loads(current)
             declarations = [row for row in rows if row[:2] ==
                             [['NAME', 'def'], ['NAME', '_lane_jet_model_proof']]]
@@ -342,8 +351,6 @@ def verify_inputs(root):
         require(current == expected, 'source routing changed: ' + name)
     try:
         source_contracts.verify_group(root, 'stored_arithmetic')
-        source_contracts.verify_group(root, 'canonical_accumulation')
-        sum2_contracts.verify(root)
     except ValueError as error:
         raise CheckError('stored-half dependency closure: ' + str(error)) from error
     projection = pins['ideal_projection']
@@ -365,6 +372,14 @@ def verify_inputs(root):
         raise CheckError('ideal half projection: ' + str(error)) from error
     require(all(projection[key] == value for key, value in result.items()),
             'wrong ideal-projection result pins')
+    # Diagnose this record's own projection obligations before the cache-key
+    # successor rechecks its immutable historical hash. Keep the complete
+    # interval/helper dependency check above, and all transitive checks here.
+    try:
+        source_contracts.verify_group(root, 'canonical_accumulation')
+        sum2_contracts.verify(root)
+    except ValueError as error:
+        raise CheckError('stored-half dependency closure: ' + str(error)) from error
     sums = [nearest_even(F(1) + node) for node in constants['_GL_NODES']]
     require([hexword(word) for word in sums] == pins['rounded_node_sums'],
             'rounded 1 + node words changed')

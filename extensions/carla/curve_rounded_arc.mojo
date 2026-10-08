@@ -177,10 +177,7 @@ struct _RoundedArc(ImplicitlyCopyable):
         # Heading and both quadrant-reduction products are exactly zero.
         if not selector.known or selector.low < 0.0 or selector.high >= 1.0:
             return [unknown, unknown, unknown]
-        # The selector check above already bounds half by a quarter turn:
-        # _QUARTER_PI * _INV_HALF_PI exceeds 0.5 exactly, so any larger
-        # positive half reaches 1 and any smaller negative half has a fused
-        # selector below 0.
+        # The accepted selector hull already places half inside the quarter.
         var square = half * half
         var sinc = _rounded_polynomial(materialize[_SIN_COEFFICIENTS](), square)
         var cosine = _rounded_polynomial(
@@ -208,8 +205,7 @@ def _rounded_arc_context(
         return None
     if not _RoundedBox.bounds(low, high).known or high > road.length:
         return None
-    # Each kind has exactly one record here. One that starts at or before
-    # low also holds at every high >= low.
+    # Each singleton record active at low also covers the ordered high.
     if info_index(road.info.geometries, low) != 0:
         return None
     if len(road.info.lane_offsets) != 1 or len(road.info.elevations) != 1:
@@ -229,8 +225,7 @@ def _rounded_arc_context(
     if id.value != 0:
         var negative = id.value < 0
         var sign = _RoundedBox.point(1.0 if negative else -1.0)
-        # The queried lane itself is in this list.
-        for position in range(len(lanes)):  # pragma: no branch
+        for position in range(len(lanes)):
             var i = len(lanes) - 1 - position if negative else position
             if negative:
                 if lanes[i].id.value >= 0:

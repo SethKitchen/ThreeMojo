@@ -152,12 +152,8 @@ struct HairStrands(Movable):
         """Check topology and the retained geometry's buffer ownership."""
         if len(self.groom.starts) != len(self._topology):
             raise Error("Hair strand topology cannot change during an update")
-        # A built groom's starts hold at least the leading zero.
-        for index in range(len(self._topology)):  # pragma: no branch
-            if self.groom.starts[index] != self._topology[index]:
-                raise Error(
-                    "Hair strand topology cannot change during an update"
-                )
+        if self.groom.starts != self._topology:
+            raise Error("Hair strand topology cannot change during an update")
         # Check ownership before writing through retained shared buffers.
         # A replacement geometry, or an equal slot in another store, must
         # never be silently updated as though it belonged to this groom.
@@ -181,8 +177,7 @@ struct HairStrands(Movable):
         var depth_count = len(self.groom.points) * len(lights)
         if len(self._optical_depths) != depth_count:
             self._optical_depths = List[Float32](length=depth_count, fill=0)
-        # A built groom has at least one segment, so it has points.
-        for point in range(len(self.groom.points)):  # pragma: no branch
+        for point in range(len(self.groom.points)):
             for light in range(len(lights)):
                 self._optical_depths[
                     point * len(lights) + light
@@ -193,17 +188,17 @@ struct HairStrands(Movable):
     def _upload(mut self, mut assets: Assets) raises:
         """Write current positions and colors into the retained CPU buffer."""
         var vertex = 0
-        for strand in range(len(self.groom)):  # pragma: no branch
+        for strand in range(len(self.groom)):
             for point in range(
                 self.groom.starts[strand], self.groom.starts[strand + 1] - 1
             ):
-                for end in range(2):  # pragma: no branch
+                for end in range(2):
                     var index = point + end
                     var position = self.groom.points[index]
                     self._buffer.set_value(vertex * 6, position.x)
                     self._buffer.set_value(vertex * 6 + 1, position.y)
                     self._buffer.set_value(vertex * 6 + 2, position.z)
-                    for channel in range(3):  # pragma: no branch
+                    for channel in range(3):
                         self._buffer.set_value(
                             vertex * 6 + 3 + channel,
                             self._point_colors[index * 3 + channel],
