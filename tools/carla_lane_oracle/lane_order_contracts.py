@@ -38,7 +38,7 @@ def inventory_entry(text):
 
 def inventory(root, *, verified_lane_predecessor=None):
     result = {}
-    for path in sorted(root.rglob('*.mojo')):
+    for path in sorted(guard.production_mojo_paths(root)):
         rel = path.relative_to(root)
         if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
             continue

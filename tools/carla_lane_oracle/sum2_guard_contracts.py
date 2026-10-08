@@ -10,6 +10,7 @@ This does not execute or qualify native volatile loads or floating-point state.
 from functools import lru_cache
 import hashlib
 import json
+import os
 from pathlib import Path
 import textwrap
 import tokenize
@@ -97,9 +98,35 @@ def protected_source_digest(text):
     return hashlib.sha256(json.dumps(record, separators=(',', ':')).encode()).hexdigest()
 
 
+def production_mojo_paths(root):
+    """Fresh census with the established exclusions pruned before descent.
+
+    Keep nested ordinary directories named tests/tools and matching directories
+    or symlinks: read_text must still reject unreadable matching entries. Like
+    Path.rglob, do not recurse through directory symlinks. Unlike rglob, reject
+    scan/classification errors instead of silently omitting production callers.
+    """
+    root = Path(root)
+    pending = [root]
+    while pending:
+        parent = pending.pop()
+        top_level = parent == root
+        with os.scandir(parent) as scan:
+            entries = list(scan)
+        for entry in entries:
+            name = entry.name
+            if name.startswith('.') or (top_level and name in NONPRODUCTION):
+                continue
+            path = parent / name
+            if path.match('*.mojo'):
+                yield path
+            if entry.is_dir(follow_symlinks=False):
+                pending.append(path)
+
+
 def protected_inventory(root, *, verified_lane_predecessor=None):
     result = {}
-    for path in sorted(root.rglob('*.mojo')):
+    for path in sorted(production_mojo_paths(root)):
         relative = path.relative_to(root)
         if relative.parts[0] in NONPRODUCTION or any(
                 part.startswith('.')

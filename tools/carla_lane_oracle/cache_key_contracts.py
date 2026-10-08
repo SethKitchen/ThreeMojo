@@ -66,7 +66,7 @@ def inventory(root):
     except ModuleNotFoundError:
         from tools.carla_lane_oracle import sum2_guard_contracts as guard
     result = {}
-    for path in sorted(Path(root).rglob('*.mojo')):
+    for path in sorted(guard.production_mojo_paths(root)):
         rel = path.relative_to(root)
         if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
             continue
