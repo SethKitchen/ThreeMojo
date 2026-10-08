@@ -82,7 +82,7 @@ def changed_paths(base):
     # An untracked file matters only when a build reads it: a new module or
     # a new asset. A `.venv` link or an editor's scratch file does not.
     for path in filter(None, untracked.split("\0")):
-        if path.endswith((".mojo", ".py")) or path.startswith("assets/"):
+        if path.endswith((".mojo", ".py", ".c", ".h")) or path.startswith("assets/"):
             paths[path] = False
     return paths
 

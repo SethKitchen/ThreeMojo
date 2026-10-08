@@ -110,6 +110,7 @@ from render.srgb import (
     linear_to_srgb,
 )
 from render.float_image import FloatImage
+from render.texture_buffer import TextureBuffer
 from render.raster_state import STANDARD_DEPTH, DepthMode, window_depth
 from std.math import ceil, floor, fma, isfinite, log2, sqrt
 from std.memory import bitcast
@@ -896,13 +897,13 @@ struct Texture(Movable):
     var height: Int
     # Row-major RGBA from the top, the same layout `Framebuffer` uses, so an
     # image rendered by this project can be fed straight back in as a texture.
-    var pixels: List[UInt8]
+    var pixels: TextureBuffer[UInt8]
     # Whether the texels are bytes in `pixels` or floats in `data`; see
     # `TexelType`. The other list is empty.
     var texel_type: TexelType
     # Row-major RGBA floats from the top, the mip chain after the image, in
     # the same layout `pixels` has: filled for a `FLOAT_TYPE` texture only.
-    var data: List[Float32]
+    var data: TextureBuffer[Float32]
     # How a coordinate past an edge is resolved across, three.js's
     # `wrapS`, and up, its `wrapT`. `set_wrap` sets both.
     var wrap_s: Wrap
@@ -1141,13 +1142,23 @@ struct Texture(Movable):
                 "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1"
             )
 
-    def __init__(out self, *, copy: Self):
-        """Copy another texture, image data included."""
+    def __init__(out self, *, copy: Self, share_data: Bool = False):
+        """Copy a texture with independent sampling and transform state.
+
+        Args:
+            copy: The source texture.
+            share_data: Share unexposed texel and mip allocations until a write.
+                False keeps the existing independent deep-copy behavior.
+        """
         self.width = copy.width
         self.height = copy.height
-        self.pixels = copy.pixels.copy()
+        self.pixels = TextureBuffer(
+            shared=copy.pixels
+        ) if share_data else TextureBuffer(copy.pixels.copy())
         self.texel_type = copy.texel_type
-        self.data = copy.data.copy()
+        self.data = TextureBuffer(
+            shared=copy.data
+        ) if share_data else TextureBuffer(copy.data.copy())
         self.wrap_s = copy.wrap_s
         self.wrap_t = copy.wrap_t
         self.mag_filter = copy.mag_filter

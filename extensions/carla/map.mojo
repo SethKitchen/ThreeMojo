@@ -13,13 +13,49 @@ where a waypoint is (`compute_transform`), what lies ahead of it (`next`,
 `signals_in_distance`), and which waypoint is nearest a point
 (`closest_waypoint_on_road`, `waypoint`).
 
-**The segment index.** CARLA cuts every lane into straight segments, one
-per lane on a straight lane and one each time the heading turns by more
-than 1.8 degrees on a curved one, and keeps them in a Boost R-tree. The
-nearest-waypoint queries ask it for the nearest segment. This port keeps
-the same segments in `extensions.carla.rtree.SegmentCloudRtree`, which
-gives the nearest segment first and breaks a tie by the order the
-segments were made.
+**Two segment indices.** The map keeps CARLA's heading and length
+partition in its own R-tree. `closest_waypoint_on_road`, `waypoint` and
+the sign check at load use it with CARLA's algorithm: the nearest segment,
+then a step along the lane to the point's foot. These queries do not use
+the certified search budget. Input validation, lane stepping and canonical
+pose evaluation can still raise errors. They keep CARLA's approximations:
+the step treats distance along the segment chord as road s.
+
+**The certified index.** `certified_closest_waypoint_on_road` and
+`certified_waypoint` use a second index. It starts with CARLA's partition
+and splits again at record boundaries and until quarter-point
+chord errors are at most one millimeter. A required split without an
+interior Float64 road-s value raises a resolution error. A positive
+nonterminal index step must also advance in lane order. The line and its
+stored-point minima can still be representable. This sampled target is not
+an unsampled error bound. A separate full-center enclosure and the R-tree's
+bounded distance key control candidate admission. An unknown bound keeps
+the candidate. Each remaining candidate exports a bounded minimum-distance
+certificate. Overlapping candidates resume with their remaining work budget.
+Selection requires proved dominance; unresolved work raises an accuracy
+error. Approximate witnesses require strict classification agreement across
+all possible minimizing cells. An exact witness uses its proved minimizer.
+Classification uses the Float64 center before public location narrowing.
+
+Certified queries minimize three-dimensional distance to the stored canonical
+Float64 lane center over the indexed station domains. Station s is the road
+reference parameter, not lane chord length. Public `compute_transform` narrows
+that same center. Road reference and fixed-s helpers describe separate geometry.
+Segment indices resolve exact distance ties. A rounded station plateau keeps
+its incumbent; the API does not promise the first station on that plateau.
+
+The public `segment_count` and `segment` methods expose this accuracy-driven
+index. Its partition and count can change when the geometry requires more
+subdivision. Lane order and index tie rules remain deterministic. The
+certified queries correct curved lane offsets and the treatment of lane
+distance as road s. They cost more and can raise where CARLA's query
+answers, so they are not the default.
+
+The R-tree, full-center bounds, and optional sampled-curve box covers belong
+to the same construction snapshot. Queries do not update these proofs.
+As with the existing index, callers must rebuild the Map after editing its
+source road records. A cover stores only four complete interval boxes; it
+does not copy geometry or change the public segment partition.
 
 **Order.** CARLA keeps roads, junctions and signals in hash maps and
 walks them in hash order. This port walks them in order of id, so a list
@@ -41,7 +77,71 @@ Source: CARLA 1360bb9, `LibCarla/source/carla/road/Map.cpp`,
 and `client/Map.cpp`, `client/Waypoint.cpp`, `client/Landmark.h`.
 """
 
+from extensions.carla.curve_sum2 import _require_sum2_environment
 from extensions.carla.geo import GeoLocation, GeoProjection
+from extensions.carla.curve_bounds import (
+    _reference_work,
+    _lane_jet,
+    _scaled_point_distance_jet,
+    _expansion_distance_jet,
+)
+from extensions.carla.curve_minimizer_support import _minimizer_support
+from extensions.carla.map_search import (
+    MapBuildBudget,
+    MapQueryBudget,
+    _MapBuildWork,
+    _MapQueryWork,
+)
+from extensions.carla.map_validation import (
+    _preflight_map_records,
+    _reserve_lane_boundaries,
+    _reserve_lane_scalars,
+    _reserve_straightness,
+)
+from extensions.carla.geometry import SPIRAL, RoadGeometry
+from extensions.carla.curve_interval import (
+    _Interval,
+    _Jet,
+    _stored_difference,
+    _endpoint_in_exact_range,
+)
+from extensions.carla.spiral_domain_proof import (
+    _SpiralRootCapture,
+    _SpiralDomainProof,
+    _find_spiral_proof,
+    _try_pack_spiral_proof,
+)
+from extensions.carla.lane_box_cover import (
+    _LaneBoxCover,
+    _lane_cover_can_improve,
+    _sampled_lane_box_cover_fast as _sampled_lane_box_cover,
+)
+from extensions.carla.curve_distance import (
+    _finite_point,
+    _wide_point_order,
+)
+from extensions.carla.lane_distance import (
+    _wide_distance_upper,
+    _refinement_square,
+)
+from extensions.carla.lane_refinement import (
+    _LaneCertificate,
+    _checked_center,
+    _LaneExclusionGoal,
+    _indexed_curve_lower,
+    _chord_certificate_capture_fast_with_nodes as _chord_certificate_capture_with_nodes,
+    _ProofNodeWork,
+    _lane_certificate_contains,
+    _lane_box_can_improve,
+    _lane_certificate_dominates,
+    _lane_certificate_dominates_cells,
+    _legacy_square,
+    _midpoint,
+    _next_resume_gap,
+    _refine_lane_certificate,
+    _continue_lane_certificate,
+)
+from extensions.carla.speed_limits import opendrive_speed, NUMERIC_SPEED_LIMIT
 from extensions.carla.math import (
     distance_segment_to_point,
     make_unit_vector,
@@ -71,6 +171,7 @@ from extensions.carla.road_info import (
     SignalId,
     SignalOrientation,
     info_at,
+    info_index,
     infos_in_range,
     signal_orientation_of,
 )
@@ -78,13 +179,15 @@ from extensions.carla.rtree import (
     SegmentCloudRtree,
     SegmentElement,
     SegmentFilter,
+    _segment_distance2,
 )
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from math.bounds import Box3
 from math.vector3 import Vector3
 from std.hashlib import Hasher
-from std.math import ceil, floor, isfinite, sin, sqrt
-from units.si import DEGREE, Angle, Length, METER
+from std.math import ceil, floor, inf, isfinite, sin, sqrt
+from std.memory import bitcast
+from units.si import DEGREE, Angle, Length, METER, Velocity64
 
 # CARLA's `EPSILON`: waypoints sit this far inside a section's edges.
 comptime EPSILON = 10.0 * 2.220446049250313e-16
@@ -335,6 +438,7 @@ struct Signal(Copyable, Movable):
     var type: String
     var subtype: String
     var value: Float64
+    var value_present: Bool
     var unit: String
     # Meters.
     var height: Float64
@@ -373,6 +477,7 @@ struct Signal(Copyable, Movable):
         h_offset: Float64,
         pitch: Float64,
         roll: Float64,
+        value_present: Bool = True,
     ) raises:
         """Create a signal from a file's `signal`.
 
@@ -396,6 +501,7 @@ struct Signal(Copyable, Movable):
             h_offset: The turn from the road's heading, in radians.
             pitch: Its pitch, in radians.
             roll: Its roll, in radians.
+            value_present: Whether the file supplied a numeric value.
 
         Raises:
             Error: If an id is not valid.
@@ -414,6 +520,7 @@ struct Signal(Copyable, Movable):
         self.type = type
         self.subtype = subtype
         self.value = value
+        self.value_present = value_present
         self.unit = unit
         self.height = height
         self.width = width
@@ -432,6 +539,22 @@ struct Signal(Copyable, Movable):
         )
         self.controllers = List[ControllerId]()
         self.using_inertial_position = False
+
+    def speed_limit(self) raises -> Velocity64:
+        """Interpret a speed signal with its explicit source unit.
+
+        Returns:
+            The finite nonnegative speed, retaining Float64 precision.
+
+        Raises:
+            Error: If this is not a speed signal, the value is absent,
+                or its numeric value or explicit unit is invalid.
+        """
+        if self.type != SIGNAL_MAXIMUM_SPEED:
+            raise Error("Only a speed signal has a speed limit")
+        if not self.value_present:
+            raise Error("A speed signal needs a numeric value")
+        return opendrive_speed(self.value, self.unit)
 
     def is_dynamic(self) -> Bool:
         """Return True if the file says `dynamic="yes"`, `GetDynamic`."""
@@ -715,12 +838,125 @@ struct Landmark(Copyable, Movable):
         self.distance = distance
 
 
+def _has_uniform_plan_classification(
+    bounds: Tuple[_Interval, _Interval, _Interval],
+    width: Float64,
+    location: Vector3,
+) -> Bool:
+    # This controls only heuristic eligibility. The supplied full-curve box
+    # must be the existing certified cache, never sampled chord padding.
+    if (
+        not bounds[0].is_finite()
+        or not bounds[1].is_finite()
+        or not bounds[2].is_finite()
+        or not isfinite(width)
+    ):
+        return False
+    if width <= 0.0:
+        # Nonpositive widths retain the original initialization as well.
+        return False
+    var x = bounds[0] - _Interval.point(Float64(location.x))
+    var y = bounds[1] - _Interval.point(Float64(location.y))
+    if not x.is_finite() or not y.is_finite():
+        return False
+    var scale = max(width, max(x.magnitude(), y.magnitude()))
+    var divisor = _Interval.point(scale)
+    var diameter = _Interval.point(width) / divisor
+    var difference = (
+        _Interval.point(4.0) * ((x / divisor).square() + (y / divisor).square())
+        - diameter.square()
+    )
+    # A strict inside bound or a closed outside bound covers every station.
+    # Any uncertain crossing retains the original midpoint initialization.
+    return difference.high < 0.0 or difference.low >= 0.0
+
+
+def _use_projected_spiral_seed(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    bounds: Tuple[_Interval, _Interval, _Interval],
+    location: Vector3,
+) -> Bool:
+    # ARC retains its original witness order and endpoint-proof eligibility.
+    # Variable/transitioning width records retain their original choices too.
+    var geometry_at = info_index(road.info.geometries, low)
+    if geometry_at < 0 or info_index(road.info.geometries, high) != geometry_at:
+        return False
+    if road.info.geometries[geometry_at].geometry.kind != SPIRAL:
+        return False
+    ref widths = road.sections[section].lanes[lane].info.widths
+    var width_at = info_index(widths, low)
+    if width_at < 0 or info_index(widths, high) != width_at:
+        return False
+    ref width = widths[width_at].polynomial
+    if width.b != 0.0 or width.c != 0.0 or width.d != 0.0:
+        return False
+    return _has_uniform_plan_classification(bounds, width.a, location)
+
+
+def _projected_seed(
+    start: Vector3,
+    end: Vector3,
+    first: Float64,
+    second: Float64,
+    location: Vector3,
+) -> Float64:
+    # Initial guess only. Stored Float32 coordinates are widened before
+    # subtraction. A finite nonzero chord has a finite normal Float64 norm.
+    # Degenerate/unsupported arithmetic retains the safe midpoint fallback.
+    var low = min(first, second)
+    var high = max(first, second)
+    var seed = _midpoint(low, high)
+    var dx = Float64(end.x) - Float64(start.x)
+    var dy = Float64(end.y) - Float64(start.y)
+    var dz = Float64(end.z) - Float64(start.z)
+    var qx = Float64(location.x) - Float64(start.x)
+    var qy = Float64(location.y) - Float64(start.y)
+    var qz = Float64(location.z) - Float64(start.z)
+    var denominator = dx * dx + dy * dy + dz * dz
+    var numerator = qx * dx + qy * dy + qz * dz
+    if denominator > 0.0 and isfinite(denominator) and isfinite(numerator):
+        var ratio = min(max(numerator / denominator, 0.0), 1.0)
+        var guess = first + (second - first) * ratio
+        if isfinite(guess):
+            seed = min(max(guess, low), high)
+    return seed
+
+
 @fieldwise_init
 struct _Segment(ImplicitlyCopyable):
     var start: Vector3
     var end: Vector3
     var first: Waypoint
     var second: Waypoint
+    var bounds: Tuple[_Interval, _Interval, _Interval]
+    # -1 means the optional construction proof is absent.
+    var cover_index: Int
+
+
+@fieldwise_init
+struct _CarlaSegment(ImplicitlyCopyable):
+    # One piece of CARLA's `Map::CreateRtree` partition, before refinement.
+    var start: Vector3
+    var end: Vector3
+    var first: Waypoint
+    var second: Waypoint
+
+
+@fieldwise_init
+struct _BuildNextFrame(Movable):
+    # Explicit continuation for the construction-budgeted CARLA graph walk.
+    # Moving list payloads preserves _step's order without recursive stack use.
+    var waypoint: Waypoint
+    var distance: Float64
+    var residual: Float64
+    var entered: Bool
+    var cursor: Int
+    var following: List[Waypoint]
+    var result: List[Waypoint]
 
 
 @fieldwise_init
@@ -730,6 +966,75 @@ struct _LaneTypeFilter(ImplicitlyCopyable, SegmentFilter):
 
     def accepts(self, element: SegmentElement) -> Bool:
         return (element.end_value & self.mask) != 0
+
+
+def _polynomial_value(coefficients: List[Float64], t: Float64) -> Float64:
+    var value = coefficients[len(coefficients) - 1]
+    var i = len(coefficients) - 2
+    while i >= 0:
+        value = value * t + coefficients[i]
+        i -= 1
+    return value
+
+
+def _polynomial_candidates(coefficients: List[Float64]) -> List[Float64]:
+    # Rolle's theorem: the roots of each derivative partition the polynomial
+    # into monotone intervals. Keep those partition points too. Thus repeated
+    # roots need no residual tolerance and cannot disappear at a tangency.
+    # Degree is at most five: recursion has five levels and at most thirty-one
+    # interior candidates. Every sign-changing root gets 64 bounded bisections.
+    if len(coefficients) == 1:
+        return [0.0, 1.0]
+    var derivative = List[Float64]()
+    var index = 1
+    while index < len(coefficients):
+        derivative.append(Float64(index) * coefficients[index])
+        index += 1
+    var partition = _polynomial_candidates(derivative)
+    var candidates: List[Float64] = [0.0]
+    var i = 1
+    while i < len(partition):
+        var low = partition[i - 1]
+        var high = partition[i]
+        var before = _polynomial_value(coefficients, low)
+        var after = _polynomial_value(coefficients, high)
+        if (before < 0.0 and after > 0.0) or (before > 0.0 and after < 0.0):
+            var iterations = 0
+            while iterations < 64:
+                iterations += 1
+                var middle = low + (high - low) * 0.5
+                var value = _polynomial_value(coefficients, middle)
+                if (value < 0.0) == (before < 0.0):
+                    low = middle
+                else:
+                    high = middle
+            candidates.append(low + (high - low) * 0.5)
+        candidates.append(partition[i])
+        i += 1
+    return candidates^
+
+
+def _distance_is_convex(derivative: List[Float64]) -> Bool:
+    # Bernstein coefficients of the quartic second derivative on [0,1].
+    # Strict positive margin keeps roundoff away from the sign certificate.
+    var a = derivative[1]
+    var b = 2.0 * derivative[2]
+    var c = 3.0 * derivative[3]
+    var d = 4.0 * derivative[4]
+    var e = 5.0 * derivative[5]
+    var margin = (
+        64.0 * DOUBLE_EPSILON * (abs(a) + abs(b) + abs(c) + abs(d) + abs(e))
+    )
+    return (
+        min(
+            min(a, a + b * 0.25),
+            min(
+                a + b * 0.5 + c / 6.0,
+                min(a + b * 0.75 + c * 0.5 + d * 0.25, a + b + c + d + e),
+            ),
+        )
+        > margin
+    )
 
 
 def _concat(var dst: List[Waypoint], var src: List[Waypoint]) -> List[Waypoint]:
@@ -811,6 +1116,445 @@ def segment_distance_2d(
 # --- the map ------------------------------------------------------------------
 
 
+def _map_locate_with_work(
+    roads: List[Road],
+    index: Dict[Int, Int],
+    waypoint: Waypoint,
+    mut work: _MapBuildWork,
+) raises -> Tuple[Int, Int, Int]:
+    work.step()
+    if not waypoint.road_id.is_valid():
+        raise Error("Road id is not valid")
+    var found = index.get(waypoint.road_id.value)
+    if not found:
+        raise Error("The map has no road with that id")
+    var r = found.value()
+    work.step(len(roads[r].sections))
+    var section = roads[r].section_index(waypoint.section_id)
+    work.step(len(roads[r].sections[section].lanes))
+    var lane = roads[r].sections[section].lane_index(waypoint.lane_id)
+    if lane < 0:
+        raise Error("The section has no lane with that id")
+    return (r, section, lane)
+
+
+def _query_node_step_cost(
+    lanes: Int, goal: Bool = False, witness: Bool = False
+) raises -> Int:
+    # A generic node has at most 3 edge centers, 42 seed centers, one
+    # initial center and 4 Jets: at most 100*lanes profile visits.
+    # Its 20 fixed units cover 16 node/cell operations, 2 selected-width
+    # lookups, one tightened Taylor recheck, and one bounded tiny-cell
+    # eligibility/depth check. The latter check
+    # uses local words only and at most 5 depth iterations. A closed-cell
+    # recheck uses its own node and at most one selected-width lookup.
+    # A discrete leaf has at most 3 centers and 3 terminals. Including the
+    # first node's initial center, 8*lanes+80 bounds its profile and fixed
+    # work, which is <=100*lanes+20 for every valid lane count >=1.
+    # A later solver with more centers/Jets needs a new audited inventory.
+    # Goal search adds at most six bounded exclusion comparisons: natural,
+    # post-seed natural, cached Taylor, tightened natural, tightened Taylor,
+    # and fallback Taylor.
+    # A closed-cell recheck has only one such comparison, mutually exclusive
+    # with that path. Reserve these units before any goal node can execute.
+    var fixed = 26 if goal else 20
+    fixed += 16  # Stored-dispatch eligibility, cached cuts and split routing.
+    if witness:
+        # Retain the prior containing-model allowance so removing its reuse
+        # does not increase effective budgets or change established node fees.
+        # The fresh per-cell producer is already covered by the generic node.
+        fixed += 14
+    if witness:
+        # Four exact challenger comparisons and one child-order check.
+        # Eighteen more units cover at most three exported frontier entries
+        # per visited node, at six bounded packing operations per entry.
+        # Entry frontier packing is reserved separately before continuation.
+        # One additional bounded support-localization operation.
+        fixed += 26
+    if lanes < 0 or lanes > (9223372036854775807 - fixed) // 100:
+        raise Error("Map query profile work is not representable")
+    return 100 * lanes + fixed
+
+
+def _seed_exact_interval(value: _Interval) -> Bool:
+    # Whole membership in one exact-range lobe matters: admissible zero
+    # endpoints alone do not exclude the tight/fallback gap around zero.
+    if not value.is_finite() or value.high < value.low:
+        return False
+    if value.is_point(0.0):
+        return True
+    return (
+        (value.low > 0.0 or value.high < 0.0)
+        and _endpoint_in_exact_range(value.low)
+        and _endpoint_in_exact_range(value.high)
+    )
+
+
+def _seed_reference_domain(
+    geometry: RoadGeometry, origin: Float64, low: Float64, high: Float64
+) raises -> Bool:
+    # The caller prepays this bounded eligibility graph. Stable tight
+    # arithmetic, hereditary Sterbenz and one unclamped d recipe imply
+    # each descendant reference-count enclosure is nested in its root.
+    _require_sum2_environment()
+    if not _seed_exact_interval(
+        _Interval(low, high)
+    ) or not _endpoint_in_exact_range(origin):
+        return False
+    var d = _stored_difference(_Jet.variable(low, high), _Jet.constant(origin))
+    if not _seed_exact_interval(d.value) or not (
+        0.0 <= d.error and d.error < 1.0
+    ):
+        return False
+    if not isfinite(geometry.length) or geometry.length <= 0.0:
+        return False
+    var rounded = d.rounded_value()
+    if (
+        not rounded.is_finite()
+        or rounded.low <= 0.0
+        or rounded.high >= geometry.length
+    ):
+        return False
+    var k0 = geometry.curvature_start
+    var rate = (geometry.curvature_end - k0) / geometry.length
+    if not _endpoint_in_exact_range(k0) or not _endpoint_in_exact_range(rate):
+        return False
+    var product = _Jet.constant(rate) * d
+    return _seed_exact_interval(product.value)
+
+
+def _winner_seed_room(
+    work: _MapQueryWork,
+    winner: _LaneCertificate,
+    target_nodes: Int,
+    target_terms_used: Int,
+    target_cells: Int,
+    winner_cost: Int,
+    target_cost: Int,
+    winner_reference: Int,
+    target_reference: Int,
+    proof_nodes: Int,
+    followup_steps: Int,
+) raises -> Bool:
+    # An immediate continuation prefix, not a promise that the whole search
+    # will finish. Each retained cell may need one recheck node. Twelve further
+    # nodes cover either a regular task with its optional grouped refresh
+    # or up to eleven tiny-leaf nodes, plus a subsequent recheck.
+    work.validate()
+    var winner_cap = work.node_cap(winner.nodes, winner_cost)
+    var target_cap = work.node_cap(target_nodes, target_cost)
+    var winner_terms = work.term_cap(winner.terms) - winner.terms
+    var target_terms = work.term_cap(target_terms_used) - target_terms_used
+    if (
+        proof_nodes < 0
+        or proof_nodes > 5
+        or followup_steps < 0
+        or winner_reference <= 0
+        or target_reference <= 0
+        or len(winner.cells) > 16372
+        or target_cells < 0
+        or target_cells > 16372
+    ):
+        return False
+    var winner_followup = len(winner.cells) + 12
+    var target_followup = target_cells + 12
+    var seed_nodes = proof_nodes + 85
+    if (
+        winner_followup > winner_cap - winner.nodes
+        or seed_nodes > winner_cap - winner.nodes - winner_followup
+        or target_followup > target_cap - target_nodes
+    ):
+        return False
+    var nodes_left = work.policy.max_nodes - work.nodes
+    if seed_nodes + winner_followup + target_followup > nodes_left:
+        return False
+    var steps_left = (
+        min(work.max_total_steps, work.policy.max_steps) - work.steps
+    )
+    if followup_steps > steps_left:
+        return False
+    steps_left -= followup_steps
+    if seed_nodes + winner_followup > steps_left // winner_cost:
+        return False
+    steps_left -= (seed_nodes + winner_followup) * winner_cost
+    if target_followup > steps_left // target_cost:
+        return False
+    # One complete regular task: 3 edges, 42 local-seed centers, the
+    # initial domain, 2 center charges, a refreshed domain, and grouped
+    # work C <= F. A tiny task uses at most 33 centers. Thus 50 F covers
+    # either route. The original winner-root F also covers every optional
+    # point/band; these reserved terms are not debited unless executed.
+    var winner_units = proof_nodes + 255 + 50
+    if winner_reference > winner_terms // winner_units:
+        return False
+    if target_reference > target_terms // 50:
+        return False
+    var terms_left = work.policy.max_terms - work.terms
+    if winner_reference > terms_left // winner_units:
+        return False
+    terms_left -= winner_units * winner_reference
+    return target_reference <= terms_left // 50
+
+
+def _try_winner_seed(
+    road: Road,
+    section: Int,
+    lane: Int,
+    low: Float64,
+    high: Float64,
+    target_road: Road,
+    target_section: Int,
+    target_low: Float64,
+    target_high: Float64,
+    location: Vector3,
+    mut certificate: _LaneCertificate,
+    target_nodes: Int,
+    target_terms_used: Int,
+    target_cells: Int,
+    followup_steps: Int,
+    mut work: _MapQueryWork,
+) raises -> Bool:
+    # Optional actual-witness proposals. This reconstructed implementation
+    # does not change any cell, lower bound, owner, tolerance or scalar graph.
+    # Fresh FP validation precedes every arithmetic operation and debit.
+    _require_sum2_environment()
+    work.validate()
+    if min(work.max_total_steps, work.policy.max_steps) - work.steps < 60:
+        return False
+    # Fixed admission kernels: bounds/word/scale checks, four geometry
+    # selections, two reference-count queries, two node prices, headroom,
+    # exact-update bookkeeping and the bounded support/interpolation setup.
+    # Fourteen additional bounded kernels per owner establish stable
+    # endpoint arithmetic and one unclamped distance recipe: fresh FP,
+    # station/origin membership, subtraction, value/error/length guards,
+    # rounded range/interior, rate and coefficient checks, product/membership.
+    work._step(60)
+    if (
+        certificate.exact_witness
+        or not isfinite(low)
+        or not isfinite(high)
+        or low <= 0.0
+        or high <= low
+        or not isfinite(certificate.s)
+        or certificate.s < low
+        or certificate.s > high
+        or not isfinite(certificate.scale)
+        or certificate.scale <= 0.0
+        or not isfinite(target_low)
+        or not isfinite(target_high)
+        or target_high < target_low
+    ):
+        return False
+    var owner = info_index(road.info.geometries, low)
+    var other = info_index(target_road.info.geometries, target_low)
+    if (
+        owner < 0
+        or info_index(road.info.geometries, high) != owner
+        or road.info.geometries[owner].geometry.kind != SPIRAL
+        or other < 0
+        or info_index(target_road.info.geometries, target_high) != other
+        or target_road.info.geometries[other].geometry.kind != SPIRAL
+    ):
+        return False
+    if not _seed_reference_domain(
+        road.info.geometries[owner].geometry,
+        road.info.geometries[owner].s,
+        low,
+        high,
+    ) or not _seed_reference_domain(
+        target_road.info.geometries[other].geometry,
+        target_road.info.geometries[other].s,
+        target_low,
+        target_high,
+    ):
+        return False
+    var reference = _reference_work(road, low, high)
+    var target_reference = _reference_work(target_road, target_low, target_high)
+    var node_cost = _query_node_step_cost(
+        len(road.sections[section].lanes), True, True
+    )
+    var target_cost = _query_node_step_cost(
+        len(target_road.sections[target_section].lanes), True, True
+    )
+    if not _winner_seed_room(
+        work,
+        certificate,
+        target_nodes,
+        target_terms_used,
+        target_cells,
+        node_cost,
+        target_cost,
+        reference,
+        target_reference,
+        2,
+        followup_steps,
+    ):
+        return False
+    var query: Array[Float64, 3] = [
+        Float64(location.x),
+        Float64(location.y),
+        Float64(location.z),
+    ]
+    _finite_point(query)
+    _finite_point(certificate.point)
+    var original_s = certificate.s
+    var band_low = low
+    var band_high = high
+    work.charge(1, reference, node_cost)
+    certificate.nodes += 1
+    certificate.terms += reference
+    var domain = _scaled_point_distance_jet(
+        _lane_jet(road, section, lane, band_low, band_high),
+        location,
+        certificate.scale,
+    )
+    work.charge(1, reference, node_cost)
+    certificate.nodes += 1
+    certificate.terms += reference
+    var center_reference = _reference_work(road, original_s, original_s)
+    if center_reference <= 0 or center_reference > reference:
+        return False
+    var center = _expansion_distance_jet(
+        road, section, lane, original_s, location, certificate.scale
+    )
+    if not center.first.is_finite():
+        return False
+    if not domain.first.is_finite() or not domain.second.is_finite():
+        if min(work.max_total_steps, work.policy.max_steps) - work.steps < 12:
+            return False
+        # Separate admission preserves the two-setup smooth-root path.
+        # Charge every retry before its midpoint/containment/progress work.
+        work._step(12)
+        if not _winner_seed_room(
+            work,
+            certificate,
+            target_nodes,
+            target_terms_used,
+            target_cells,
+            node_cost,
+            target_cost,
+            reference,
+            target_reference,
+            3,
+            followup_steps,
+        ):
+            return False
+        for _ in range(3):
+            if domain.first.is_finite() and domain.second.is_finite():
+                break
+            work.charge(1, reference, node_cost)
+            certificate.nodes += 1
+            certificate.terms += reference
+            var narrowed_low = band_low + 0.5 * (original_s - band_low)
+            var narrowed_high = original_s + 0.5 * (band_high - original_s)
+            if (
+                not isfinite(narrowed_low)
+                or not isfinite(narrowed_high)
+                or narrowed_low > original_s
+                or narrowed_high < original_s
+                or narrowed_low >= narrowed_high
+                or (narrowed_low == band_low and narrowed_high == band_high)
+            ):
+                return False
+            band_low = narrowed_low
+            band_high = narrowed_high
+            var retry_reference = _reference_work(road, band_low, band_high)
+            if retry_reference <= 0 or retry_reference > reference:
+                return False
+            domain = _scaled_point_distance_jet(
+                _lane_jet(road, section, lane, band_low, band_high),
+                location,
+                certificate.scale,
+            )
+    if not domain.first.is_finite() or not domain.second.is_finite():
+        return False
+    var support = _minimizer_support(
+        domain, center, original_s, original_s, band_low, band_high
+    )
+    if (
+        not support.is_finite()
+        or support.low <= 0.0
+        or support.high < support.low
+    ):
+        return False
+    # Eight complete dyadic levels give 255 proposals (possibly repeated
+    # endpoints when the stored-word span is tiny). Integer quotient and
+    # remainder interpolation cannot overflow for positive finite words.
+    var first = bitcast[DType.uint64](support.low)
+    var span = bitcast[DType.uint64](support.high) - first
+    var count = 0
+    var improved = False
+    for level in range(8):
+        var denominator = UInt64(1) << UInt64(level + 1)
+        var quotient = span // denominator
+        var remainder = span % denominator
+        for at in range(1 << level):
+            if count % 3 == 0:
+                work.charge(1, 0, node_cost)
+                certificate.nodes += 1
+            count += 1
+            var numerator = UInt64(2 * at + 1)
+            var word = (
+                first
+                + quotient * numerator
+                + (remainder * numerator) // denominator
+            )
+            var s = bitcast[DType.float64](word)
+            # Debit actual quadrature before entering the unchanged compiled
+            # scalar wrapper. Failed evaluations retain both ledgers.
+            var point_work = _reference_work(road, s, s)
+            if point_work <= 0 or point_work > reference:
+                return improved
+            work.charge(0, point_work, node_cost)
+            certificate.terms += point_work
+            var checked_terms = 0
+            var point = _checked_center(
+                road, section, lane, s, checked_terms, point_work
+            )
+            if _wide_point_order(point, certificate.point, query) < 0:
+                var score = _refinement_square[3](
+                    point, query, certificate.scale
+                )
+                if not score.is_finite():
+                    continue
+                certificate.s = s
+                certificate.point = point^
+                certificate.upper = score.high
+                improved = True
+    return improved
+
+
+def _preflight_map_metadata(
+    junctions: List[Junction],
+    signals: List[Signal],
+    controllers: List[Controller],
+    mut work: _MapBuildWork,
+) raises:
+    work.record(len(junctions))
+    work.record(len(signals))
+    work.record(len(controllers))
+    for junction in junctions:
+        work.step()
+        work.record(len(junction.connections))
+        work.record(len(junction.controllers))
+        work.record(len(junction.conflict_roads))
+        work.record(len(junction.conflicts))
+        for conflict in junction.conflicts:
+            work.step()
+            work.record(len(conflict))
+        for connection in junction.connections:
+            work.step()
+            work.record(len(connection.lane_links))
+    for signal in signals:
+        work.step()
+        work.record(len(signal.dependencies))
+        work.record(len(signal.controllers))
+    for controller in controllers:
+        work.step()
+        work.record(len(controller.signals))
+        work.record(len(controller.junctions))
+
+
 struct Map(Movable):
     """An OpenDRIVE road network, CARLA's `road::Map` and `MapData`.
 
@@ -826,7 +1570,21 @@ struct Map(Movable):
     var geo_projection: GeoProjection
     var _road_index: Dict[Int, Int]
     var _segments: List[_Segment]
+    # Immutable after construction, under the existing index snapshot's
+    # source-record validity contract. No query-time geometry cache.
+    var _sampled_covers: List[_LaneBoxCover]
+    # Sparse, owner-local immutable proofs in public segment order. These
+    # follow the same source-record snapshot contract as the existing index.
+    var _spiral_proofs: List[_SpiralDomainProof]
+    var _spiral_proof_units: Int
     var _tree: SegmentCloudRtree
+    # CARLA's own heading and length partition. The default nearest
+    # queries use it; the certified queries use the refined index above.
+    var _carla_segments: List[_CarlaSegment]
+    var _carla_tree: SegmentCloudRtree
+    var _curve_deviation: Float64
+    var _endpoint_scale: Float64
+    var _construction_work: _MapBuildWork
 
     def __init__(
         out self,
@@ -834,6 +1592,8 @@ struct Map(Movable):
         var junctions: List[Junction],
         var signals: List[Signal],
         var controllers: List[Controller],
+        budget: MapBuildBudget = MapBuildBudget(),
+        _initial_work: Optional[_MapBuildWork] = None,
     ) raises:
         """Hold the data and cut the lanes into segments, `Map(MapData)`.
 
@@ -842,11 +1602,26 @@ struct Map(Movable):
             junctions: The junctions, in order of id.
             signals: The signals, in order of id.
             controllers: The controllers, in order of id.
+            budget: Finite global spatial-construction limits.
+            _initial_work: Internal continuation of a builder's admitted work.
 
         Raises:
             Error: If a lane's records are missing where the segments need
-                them.
+                them, an index endpoint is not finite in Float32 storage,
+                or Float64 road-s resolution prevents a required split or
+                a positive nonterminal index step, or the floating-point
+                mode is not round-to-nearest with gradual underflow.
         """
+        budget.validate()
+        self._construction_work = _MapBuildWork(budget)
+        if _initial_work:
+            self._construction_work = _initial_work.value()
+        self._construction_work.validate()
+        if not _initial_work:
+            _preflight_map_records(roads, self._construction_work)
+            _preflight_map_metadata(
+                junctions, signals, controllers, self._construction_work
+            )
         self.roads = roads^
         self.junctions = junctions^
         self.signals = signals^
@@ -855,9 +1630,17 @@ struct Map(Movable):
         self.geo_projection = GeoProjection()
         self._road_index = Dict[Int, Int]()
         for i in range(len(self.roads)):
+            self._construction_work.step()
             self._road_index[self.roads[i].id.value] = i
         self._segments = List[_Segment]()
+        self._sampled_covers = List[_LaneBoxCover]()
+        self._spiral_proofs = List[_SpiralDomainProof]()
+        self._spiral_proof_units = 0
         self._tree = SegmentCloudRtree()
+        self._carla_segments = List[_CarlaSegment]()
+        self._carla_tree = SegmentCloudRtree()
+        self._curve_deviation = 0.0
+        self._endpoint_scale = 0.0
         self._create_segments()
 
     # --- lookups --------------------------------------------------------------
@@ -909,6 +1692,33 @@ struct Map(Movable):
     def _locate(self, waypoint: Waypoint) raises -> Tuple[Int, Int, Int]:
         var r = self.road_index(waypoint.road_id)
         var section = self.roads[r].section_index(waypoint.section_id)
+        var lane = self.roads[r].sections[section].lane_index(waypoint.lane_id)
+        if lane < 0:
+            raise Error("The section has no lane with that id")
+        return (r, section, lane)
+
+    def _locate_with_work(
+        self, waypoint: Waypoint, mut work: _MapBuildWork
+    ) raises -> Tuple[Int, Int, Int]:
+        return _map_locate_with_work(
+            self.roads, self._road_index, waypoint, work
+        )
+
+    def _build_locate(
+        mut self, waypoint: Waypoint
+    ) raises -> Tuple[Int, Int, Int]:
+        return _map_locate_with_work(
+            self.roads, self._road_index, waypoint, self._construction_work
+        )
+
+    def _query_locate(
+        self, waypoint: Waypoint, mut work: _MapQueryWork
+    ) raises -> Tuple[Int, Int, Int]:
+        work._step()
+        var r = self.road_index(waypoint.road_id)
+        work._step(len(self.roads[r].sections))
+        var section = self.roads[r].section_index(waypoint.section_id)
+        work._step(len(self.roads[r].sections[section].lanes))
         var lane = self.roads[r].sections[section].lane_index(waypoint.lane_id)
         if lane < 0:
             raise Error("The section has no lane with that id")
@@ -1037,6 +1847,9 @@ struct Map(Movable):
     def compute_transform(self, waypoint: Waypoint) raises -> CarlaTransform:
         """Return where a waypoint is, `Map::ComputeTransform`.
 
+        Narrow the same canonical Float64 lane center used by nearest queries.
+        Station s is the road-reference parameter, not lane chord length.
+
         Args:
             waypoint: The waypoint.
 
@@ -1044,7 +1857,8 @@ struct Map(Movable):
             Its lane's center at s, facing the way the lane runs.
 
         Raises:
-            Error: If the lane is not in the map or s is off the road.
+            Error: If the lane is not in the map, s is off the road, or a
+                SPIRAL uses an unsupported floating-point mode.
         """
         var at = self._locate(waypoint)
         return self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
@@ -1062,6 +1876,42 @@ struct Map(Movable):
             Error: If the lane is not in the map.
         """
         return self.lane(waypoint).type
+
+    def speed_limit_at(self, waypoint: Waypoint) raises -> Optional[Velocity64]:
+        """Return the lane limit at a waypoint, falling back to its road.
+
+        Args:
+            waypoint: The checked road, section, lane and station.
+
+        Returns:
+            A finite typed speed, including a numeric zero. None means the
+            road state has no numeric limit; the source record keeps whether
+            it is unrestricted, undefined or absent. Signals take precedence
+            when the simulation applies them.
+
+        Raises:
+            Error: If the waypoint or a mutable speed record is invalid.
+        """
+        var location = self._locate(waypoint)
+        ref road = self.roads[location[0]]
+        if (
+            not isfinite(waypoint.s)
+            or waypoint.s < 0
+            or waypoint.s > road.length
+        ):
+            raise Error(
+                "Speed-limit station must be finite and within the road"
+            )
+        ref lane = road.sections[location[1]].lanes[location[2]]
+        var lane_speed = info_at(lane.info.speeds, waypoint.s)
+        if Bool(lane_speed):
+            if lane_speed.value().kind != NUMERIC_SPEED_LIMIT:
+                raise Error("A lane speed must be numeric")
+            return lane_speed.value().limit()
+        var road_speed = info_at(road.info.speeds, waypoint.s)
+        if Bool(road_speed):
+            return road_speed.value().limit()
+        return None
 
     def lane_width(self, waypoint: Waypoint) raises -> Length:
         """Return a waypoint's lane width, `Map::GetLaneWidth`.
@@ -1201,7 +2051,9 @@ struct Map(Movable):
 
         CARLA finds the nearest segment of a lane of the given types, then
         steps from the segment's start by the distance along it to the
-        point's foot.
+        point's foot. The segments are CARLA's heading and length partition.
+        For the certified nearest center, use
+        `certified_closest_waypoint_on_road`.
 
         Args:
             location: The point, in CARLA's frame.
@@ -1215,12 +2067,12 @@ struct Map(Movable):
         """
         if not lane_type.is_valid():
             raise Error("Lane type is not valid")
-        var found = self._tree.get_nearest_neighbours_with_filter(
+        var found = self._carla_tree.get_nearest_neighbours_with_filter(
             location, _LaneTypeFilter(lane_type.value)
         )
         if len(found) == 0:
             return None
-        ref segment = self._segments[found[0].start_value]
+        ref segment = self._carla_segments[found[0].start_value]
         var along = distance_segment_to_point(
             location, segment.start, segment.end
         )
@@ -1241,6 +2093,11 @@ struct Map(Movable):
         self, location: Vector3, lane_type: LaneType = LANE_DRIVING
     ) raises -> Optional[Waypoint]:
         """Return the waypoint under a point, `Map::GetWaypoint`.
+
+        This is CARLA's query: the nearest waypoint from
+        `closest_waypoint_on_road`, kept if the point is within half the
+        lane's width of it in plan. For the certified query, use
+        `certified_waypoint`.
 
         Args:
             location: The point, in CARLA's frame.
@@ -1265,6 +2122,784 @@ struct Map(Movable):
         if dist < self.lane_width_meters(w) * 0.5:
             return w
         return None
+
+    def certified_closest_waypoint_on_road(
+        self,
+        location: Vector3,
+        lane_type: LaneType = LANE_DRIVING,
+        budget: MapQueryBudget = MapQueryBudget(),
+    ) raises -> Optional[Waypoint]:
+        """Return the certified nearest waypoint to a point.
+
+        This query is not CARLA's. It is slower than
+        `closest_waypoint_on_road`, and it can raise where that query
+        answers.
+
+        Minimize three-dimensional distance to the stored Float64 canonical
+        lane center over the indexed domains. The returned s is road-reference
+        station, not lane chord length. Public compute_transform narrows that
+        same center. A rounded plateau need not return its first station.
+        R-tree and full-center bounds admit eligible candidates.
+        Segment indices resolve proved exact-distance ties.
+        Certified full-center boxes can exclude strictly farther candidates.
+        Minimum-distance certificates select among the remaining candidates.
+        Overlaps resume retained cells within the original cumulative limits.
+        An overlap that cannot be resolved within those limits raises.
+
+        Args:
+            location: The point, in CARLA's frame.
+            lane_type: The lane types to search.
+            budget: Finite cumulative candidate, refinement, and index limits.
+
+        Returns:
+            The waypoint, or None if the map has no lane of those types.
+
+        Raises:
+            Error: If the mask is not valid, a center is not finite, or
+                refinement exhausts its numerical or work limit, or candidate
+                minimum bounds overlap without a dominance proof, or the
+                floating-point mode is not round-to-nearest with gradual
+                underflow.
+        """
+        var found = self._closest_lane(location, lane_type, budget)
+        if not Bool(found):
+            return None
+        return found.value()[0]
+
+    def _closest_lane(
+        self,
+        location: Vector3,
+        lane_type: LaneType,
+        budget: MapQueryBudget = MapQueryBudget(),
+    ) raises -> Optional[Tuple[Waypoint, Float64, Array[Float64, 3]]]:
+        var found = self._closest_lane_certificate(location, lane_type, budget)
+        if not Bool(found):
+            return None
+        ref selected = found.value()
+        var query: Array[Float64, 3] = [
+            Float64(location.x),
+            Float64(location.y),
+            Float64(location.z),
+        ]
+        return (
+            selected[0],
+            _legacy_square(selected[1].point, query),
+            selected[1].point.copy(),
+        )
+
+    def _closest_lane_certificate(
+        self,
+        location: Vector3,
+        lane_type: LaneType,
+        budget: MapQueryBudget = MapQueryBudget(),
+    ) raises -> Optional[Tuple[Waypoint, _LaneCertificate]]:
+        var work = _MapQueryWork(budget)
+        return self._closest_lane_certificate_with_work(
+            location, lane_type, work
+        )
+
+    def _closest_lane_certificate_with_work(
+        self, location: Vector3, lane_type: LaneType, mut work: _MapQueryWork
+    ) raises -> Optional[Tuple[Waypoint, _LaneCertificate]]:
+        work.validate()
+        if not lane_type.is_valid():
+            raise Error("Lane type is not valid")
+        var query: Array[Float64, 3] = [
+            Float64(location.x),
+            Float64(location.y),
+            Float64(location.z),
+        ]
+        _finite_point(query)
+        _require_sum2_environment()
+        var indices = List[Int]()
+        var certificates = List[_LaneCertificate]()
+        var waypoints = List[Waypoint]()
+        var accurate = List[Int]()
+        var best = -1
+        var frontier = self._tree._nearest_begin(location, work)
+        var best_radius = Float64(0.0)
+        while True:
+            var candidate = self._tree._nearest_next(
+                location, _LaneTypeFilter(lane_type.value), frontier, work
+            )
+            if not candidate:
+                break
+            var index = candidate.value().start_value
+            ref segment = self._segments[index]
+            if best >= 0:
+                var lower = _indexed_curve_lower(
+                    _segment_distance2(segment.start, segment.end, location),
+                    self._curve_deviation,
+                )
+                if lower > best_radius:
+                    break
+                if not _lane_box_can_improve(
+                    segment.bounds, location, certificates[best].point
+                ):
+                    continue
+                if segment.cover_index >= 0:
+                    if not _lane_cover_can_improve(
+                        self._sampled_covers[segment.cover_index],
+                        location,
+                        certificates[best].point,
+                    ):
+                        continue
+            # Candidate storage is admitted before refinement or any append.
+            work.candidate()
+            var result = self._nearest_on_segment_certificate(
+                index, location, work, seed_only=True
+            )
+            var improves = best < 0
+            if best >= 0:
+                var order = _wide_point_order(
+                    result[1].point, certificates[best].point, query
+                )
+                improves = order < 0 or (order == 0 and index < indices[best])
+            if improves:
+                best = len(indices)
+                best_radius = _wide_distance_upper(result[1].point, query)
+            work._step(len(result[1].cells) + 1)
+            indices.append(index)
+            waypoints.append(result[0])
+            certificates.append(result[1].copy())
+            accurate.append(Int(result[1].exact_witness))
+        if best < 0:
+            return None
+        # Admission's strict full-domain exclusions remain valid
+        # as these retained candidates improve their stored incumbents.
+        var requested_gaps = List[Float64]()
+        var requested_scales = List[Float64]()
+        for certificate in certificates:
+            work._step(2)
+            requested_gaps.append(inf[DType.float64]())
+            requested_scales.append(certificate.scale)
+        while True:
+            # A resumed candidate can change the best stored sample. Recheck
+            # all index-sensitive dominance relations after every refinement.
+            for i in range(len(indices)):
+                work._step()
+                var order = _wide_point_order(
+                    certificates[i].point, certificates[best].point, query
+                )
+                if order < 0 or (order == 0 and indices[i] < indices[best]):
+                    best = i
+            if (accurate[best] & 1) == 0:
+                # A seed or goal-closed candidate is not an accurate result.
+                # Finish the current winner under the original local accuracy
+                # and the same cumulative counters before selecting a pose.
+                self._resume_on_segment_certificate(
+                    indices[best],
+                    location,
+                    certificates[best],
+                    None,
+                    certificates[best].scale,
+                    work,
+                )
+                accurate[best] |= 1
+                waypoints[best].s = certificates[best].s
+            var target = -1
+            for i in range(len(indices)):
+                work._step()
+                if i == best:
+                    continue
+                if _lane_certificate_dominates(
+                    certificates[best],
+                    indices[best],
+                    certificates[i],
+                    indices[i],
+                    query,
+                ):
+                    continue
+                # The terminal-aware proof scans the retained cover only
+                # after the constant-time bound did not establish dominance.
+                work._step(len(certificates[i].cells))
+                if _lane_certificate_dominates_cells(
+                    certificates[best],
+                    indices[best],
+                    certificates[i],
+                    indices[i],
+                    query,
+                ):
+                    continue
+                target = i
+                # Dominance needs a tighter lower bound on the competitor.
+                # The current winner contributes an actual scalar witness;
+                # proving its own exact minimum is unnecessary here. If the
+                # competitor finds a closer witness, the next pass switches
+                # the winner and refines this candidate in its new role.
+                break
+            if target < 0:
+                # A valid wide center does not by itself guarantee that the
+                # selected public pose is finite and has a valid frame.
+                self._validate_query_pose(waypoints[best], work)
+                work._step(len(certificates[best].cells))
+                return (waypoints[best], certificates[best].copy())
+            # Try one optional actual-witness batch only after this unresolved
+            # competitor has already been resumed (possibly under another
+            # winner). Preserve the original first competition pass.
+            if (accurate[best] & 2) == 0 and isfinite(requested_gaps[target]):
+                work._step(4)
+                accurate[best] |= 2
+                var winner_at = self._query_locate(waypoints[best], work)
+                var target_at = self._query_locate(waypoints[target], work)
+                ref winner_road = self.roads[winner_at[0]]
+                ref target_road = self.roads[target_at[0]]
+                work._step(32)
+                var winner_lanes = len(winner_road.sections[winner_at[1]].lanes)
+                var target_lanes = len(target_road.sections[target_at[1]].lanes)
+                # Reserve two candidate rescans, a complete dominance scan,
+                # both relocation/profile prefixes, and frontier packing.
+                # Saturating to remaining+1 declines without integer overflow.
+                var prefix_room = (
+                    min(work.max_total_steps, work.policy.max_steps)
+                    - work.steps
+                )
+                var prefix = 32
+                var prefix_valid = prefix <= prefix_room
+                var metadata: Array[Int, 12] = [
+                    len(indices),
+                    len(indices),
+                    len(indices),
+                    1,
+                    len(winner_road.sections),
+                    winner_lanes,
+                    winner_lanes,
+                    1,
+                    len(target_road.sections),
+                    target_lanes,
+                    target_lanes,
+                    6,
+                ]
+                for value in metadata:
+                    if prefix_valid and value <= prefix_room - prefix:
+                        prefix += value
+                    else:
+                        prefix_valid = False
+                for candidate in certificates:
+                    work._step()
+                    if (
+                        prefix_valid
+                        and len(candidate.cells) <= prefix_room - prefix
+                    ):
+                        prefix += len(candidate.cells)
+                    else:
+                        prefix_valid = False
+                for _ in range(4):
+                    if (
+                        prefix_valid
+                        and len(certificates[best].cells)
+                        <= prefix_room - prefix
+                    ):
+                        prefix += len(certificates[best].cells)
+                    else:
+                        prefix_valid = False
+                for _ in range(10):
+                    if (
+                        prefix_valid
+                        and len(certificates[target].cells)
+                        <= prefix_room - prefix
+                    ):
+                        prefix += len(certificates[target].cells)
+                    else:
+                        prefix_valid = False
+                if prefix_valid:
+                    ref winner_segment = self._segments[indices[best]]
+                    ref target_segment = self._segments[indices[target]]
+                    var target_nodes = certificates[target].nodes
+                    var target_terms = certificates[target].terms
+                    var target_cells = len(certificates[target].cells)
+                    if _try_winner_seed(
+                        winner_road,
+                        winner_at[1],
+                        winner_at[2],
+                        min(winner_segment.first.s, winner_segment.second.s),
+                        max(winner_segment.first.s, winner_segment.second.s),
+                        target_road,
+                        target_at[1],
+                        min(target_segment.first.s, target_segment.second.s),
+                        max(target_segment.first.s, target_segment.second.s),
+                        location,
+                        certificates[best],
+                        target_nodes,
+                        target_terms,
+                        target_cells,
+                        prefix,
+                        work,
+                    ):
+                        accurate[best] &= 2
+                        waypoints[best].s = certificates[best].s
+                        continue
+            var request = _next_resume_gap(
+                certificates[target],
+                requested_gaps[target],
+                requested_scales[target],
+            )
+            requested_gaps[target] = request
+            requested_scales[target] = certificates[target].scale
+            self._resume_on_segment_certificate(
+                indices[target],
+                location,
+                certificates[target],
+                request,
+                requested_scales[target],
+                work,
+                _LaneExclusionGoal(
+                    certificates[best].upper,
+                    certificates[best].scale,
+                    indices[best] < indices[target],
+                ),
+                certificates[best].point.copy(),
+            )
+            accurate[target] = (accurate[target] & 2) | Int(
+                certificates[target].exact_witness
+            )
+            waypoints[target].s = certificates[target].s
+
+    def _resume_on_segment_certificate(
+        self,
+        index: Int,
+        location: Vector3,
+        mut certificate: _LaneCertificate,
+        requested_gap: Optional[Float64],
+        request_scale: Float64,
+        mut work: _MapQueryWork,
+        goal: Optional[_LaneExclusionGoal] = None,
+        external_witness: Optional[Array[Float64, 3]] = None,
+    ) raises:
+        var previous_nodes = certificate.nodes
+        var previous_terms = certificate.terms
+        ref segment = self._segments[index]
+        var at = self._query_locate(segment.first, work)
+        var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
+        work._step(lane_count)
+        work._step_product(4, len(certificate.cells))
+        if external_witness:
+            # Reserve invocation validation and packing of the old frontier.
+            # New entries are covered by the witness-specific node debit.
+            work._step(6)
+            work._step_product(6, len(certificate.cells))
+        var node_cost = _query_node_step_cost(
+            lane_count, Bool(goal), Bool(external_witness)
+        )
+        _continue_lane_certificate(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            min(segment.first.s, segment.second.s),
+            max(segment.first.s, segment.second.s),
+            location,
+            certificate,
+            requested_gap,
+            request_scale,
+            max_nodes=work.node_cap(previous_nodes, node_cost),
+            max_terms=work.term_cap(previous_terms),
+            spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
+            goal=goal,
+            external_witness=external_witness,
+        )
+        work.charge(
+            certificate.nodes - previous_nodes,
+            certificate.terms - previous_terms,
+            node_cost,
+        )
+
+    def _nearest_on_segment(
+        self, index: Int, location: Vector3
+    ) raises -> Tuple[Waypoint, Float64, Array[Float64, 3]]:
+        var work = _MapQueryWork(MapQueryBudget())
+        work.candidate()
+        var result = self._nearest_on_segment_certificate(index, location, work)
+        var query: Array[Float64, 3] = [
+            Float64(location.x),
+            Float64(location.y),
+            Float64(location.z),
+        ]
+        return (
+            result[0],
+            _legacy_square(result[1].point, query),
+            result[1].point.copy(),
+        )
+
+    def _nearest_on_segment_certificate(
+        self,
+        index: Int,
+        location: Vector3,
+        mut work: _MapQueryWork,
+        seed_only: Bool = False,
+    ) raises -> Tuple[Waypoint, _LaneCertificate]:
+        ref segment = self._segments[index]
+        var waypoint = segment.first
+        var at = self._query_locate(waypoint, work)
+        var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
+        work._step(lane_count)
+        var node_cost = _query_node_step_cost(lane_count)
+        var low = min(segment.first.s, segment.second.s)
+        var high = max(segment.first.s, segment.second.s)
+        var seed = _midpoint(low, high)
+        if _use_projected_spiral_seed(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            low,
+            high,
+            segment.bounds,
+            location,
+        ):
+            seed = _projected_seed(
+                segment.start,
+                segment.end,
+                segment.first.s,
+                segment.second.s,
+                location,
+            )
+        # This is not an admission, monotonicity, or accuracy certificate.
+        # The canonical evaluator and unchanged bounded search still verify
+        # the complete actual curve and charge every evaluated scalar point.
+        var result = _refine_lane_certificate(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            low,
+            high,
+            location,
+            seed,
+            0.0,
+            max_nodes=work.node_cap(step_cost=node_cost),
+            max_terms=work.term_cap(),
+            spiral_proof=_find_spiral_proof(self._spiral_proofs, index),
+            seed_only=seed_only,
+        )
+        work.charge(result.nodes, result.terms, node_cost)
+        waypoint.s = result.s
+        return (waypoint, result^)
+
+    def certified_waypoint(
+        self,
+        location: Vector3,
+        lane_type: LaneType = LANE_DRIVING,
+        budget: MapQueryBudget = MapQueryBudget(),
+    ) raises -> Optional[Waypoint]:
+        """Return the certified waypoint under a point.
+
+        This query is not CARLA's. It is slower than `waypoint`, and it can
+        raise where that query answers.
+
+        Select by canonical three-dimensional lane-center distance. Then
+        require strict planar distance below half the width at the proved
+        minimizer. Approximate witnesses require all possible minimizing
+        cells to agree. An exact half-width boundary is outside.
+
+        Args:
+            location: The point, in CARLA's frame.
+            lane_type: The lane types to search.
+            budget: Finite cumulative candidate, refinement, and index limits.
+
+        Returns:
+            The nearest waypoint if the point lies within half its lane's
+            width of it in plan, or None.
+
+        Raises:
+            Error: If the mask is not valid, a center or width is not finite,
+                the width record is absent, refinement exhausts a limit, or
+                lane selection or strict cell classification is unresolved,
+                or the floating-point mode is not round-to-nearest with
+                gradual underflow.
+        """
+        var work = _MapQueryWork(budget)
+        var found = self._closest_lane_certificate_with_work(
+            location, lane_type, work
+        )
+        if not Bool(found):
+            return None
+        ref selected = found.value()
+        var w = selected[0]
+        var at = self._query_locate(w, work)
+        work._step(len(selected[1].cells))
+        var certificate = selected[1].copy()
+        var node_cost = _query_node_step_cost(
+            len(self.roads[at[0]].sections[at[1]].lanes)
+        )
+        var previous_nodes = certificate.nodes
+        var previous_terms = certificate.terms
+        var contained = _lane_certificate_contains(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            location,
+            certificate,
+            max_nodes=work.node_cap(previous_nodes, node_cost),
+            max_terms=work.term_cap(previous_terms),
+        )
+        work.charge(
+            certificate.nodes - previous_nodes,
+            certificate.terms - previous_terms,
+            node_cost,
+        )
+        if contained:
+            return w
+        return None
+
+    def _closest_lane_with_build_work(
+        self, location: Vector3, lane_type: LaneType, mut work: _MapBuildWork
+    ) raises -> Optional[Waypoint]:
+        work.validate()
+        work.step()
+        if not lane_type.is_valid():
+            raise Error("Lane type is not valid")
+        # Keep CARLA's exact heap keys and insertion-order ties. The existing
+        # retained-frontier API meters every push/pop before it executes.
+        # Its limits derive solely from the remaining construction steps;
+        # no separate default query cap changes the construction contract.
+        var remaining_steps = work.policy.max_steps - work.steps
+        var policy = MapQueryBudget(
+            0, 0, 0, remaining_steps, remaining_steps, remaining_steps
+        )
+        var query_work = _MapQueryWork(policy, remaining_steps)
+        var found: Optional[SegmentElement]
+        try:
+            var frontier = self._carla_tree._nearest_begin(location, query_work)
+            found = self._carla_tree._nearest_next(
+                location, _LaneTypeFilter(lane_type.value), frontier, query_work
+            )
+        except:
+            # Retain work even if a later heap admission refuses. A failed
+            # construction admission cannot become a reusable fresh ledger.
+            # This fixed traversal has non-raising keys/filter/heap helpers;
+            # its only admitted Errors are the local work-ledger refusals.
+            work.step(query_work.steps)
+            work.exhausted = True
+            raise Error("Map construction exhausted its global step budget")
+        work.step(query_work.steps)
+        if not found:
+            return None
+        var index = found.value().start_value
+        if index < 0 or index >= len(self._carla_segments):
+            raise Error("CARLA query selected an invalid segment")
+        ref segment = self._carla_segments[index]
+        var start = segment.first
+        var end = segment.second
+        if (
+            start.road_id != end.road_id
+            or start.section_id != end.section_id
+            or start.lane_id != end.lane_id
+            or not isfinite(start.s)
+            or not isfinite(end.s)
+        ):
+            raise Error(
+                "CARLA query segment must stay in one finite lane section"
+            )
+        var along = distance_segment_to_point(
+            location, segment.start, segment.end
+        )
+        var delta = Float64(along[0].value)
+        # The default query resolves this metadata twice (direction and
+        # next). Reuse the same checked location and preserve its arithmetic.
+        var at = self._locate_with_work(start, work)
+        ref road = self.roads[at[0]]
+        work.step(len(road.sections))
+        var length = road.section_length(at[1])
+        var section_start = road.sections[at[1]].s
+        if not isfinite(length) or length < 0.0:
+            raise Error("CARLA query lane section has an invalid length")
+        # A constructed endpoint can round one word beyond its section's
+        # mathematical boundary. The default query retains that endpoint.
+        # Check the actual same-section step below instead of inventing a
+        # stricter endpoint-domain predicate.
+        var forward = road.is_positive_direction(start.lane_id)
+        if start.s > end.s if forward else start.s < end.s:
+            raise Error("CARLA query segment has inconsistent lane direction")
+        var final_s = start.s + delta if forward else start.s - delta
+        var past = final_s >= end.s if forward else final_s <= end.s
+        if past:
+            return end
+        if delta <= 0.0:
+            return start
+        if not delta > 0.0:
+            raise Error("A step needs a positive distance")
+        if delta <= EPSILON:
+            return start
+        # Preserve the cheap same-section branch when its actual rounded
+        # remainder admits this distance. Otherwise follow the original graph
+        # walk with every continuation charged to this construction ledger.
+        work.step()
+        var relative = start.s - section_start
+        var remaining = length - relative if forward else relative
+        if delta > remaining:
+            var following = self._next_with_build_work(start, delta, work)
+            if len(following) == 0:
+                raise Error("CARLA construction query step has no successor")
+            return following[0]
+        var result = start
+        if forward:
+            result.s += delta - EPSILON
+        else:
+            result.s += -delta + EPSILON
+        if not result.s > 0.0:
+            raise Error("A step left the road")
+        return result
+
+    def _successors_with_build_work(
+        self, waypoint: Waypoint, mut work: _MapBuildWork
+    ) raises -> List[Waypoint]:
+        # Same key order and lane-zero exclusion as successors(). Each key,
+        # target lookup, section scan and append is admitted before use.
+        var at = self._locate_with_work(waypoint, work)
+        ref keys = self.roads[at[0]].sections[at[1]].lanes[at[2]].next_lanes
+        var out = List[Waypoint]()
+        var index = 0
+        while index < len(keys):
+            work.step()
+            var key = keys[index]
+            index += 1
+            if key.lane_id.value == 0:
+                continue
+            var target = self._locate_with_work(
+                Waypoint(key.road_id, key.section_id, key.lane_id, 0.0), work
+            )
+            # _start_of_lane scans once in the positive direction and twice
+            # in reverse; reserve both without changing its arithmetic.
+            work.step_product(2, len(self.roads[target[0]].sections))
+            var station = self._start_of_lane(target[0], target[1], target[2])
+            if not isfinite(station):
+                raise Error("CARLA graph successor has a nonfinite station")
+            work.step()
+            out.append(
+                Waypoint(key.road_id, key.section_id, key.lane_id, station)
+            )
+        return out^
+
+    def _next_with_build_work(
+        self, waypoint: Waypoint, distance: Float64, mut work: _MapBuildWork
+    ) raises -> List[Waypoint]:
+        # Iterative _step(..., ahead=True), including CARLA's immediate
+        # return-cycle exclusion and longer-list-first _concat behavior.
+        # Each frame/edge/merge is charged, so longer or zero-progress cycles
+        # exhaust the shared budget instead of consuming the native stack.
+        work.step()
+        var stack = List[_BuildNextFrame]()
+        stack.append(
+            _BuildNextFrame(
+                waypoint,
+                distance,
+                0.0,
+                False,
+                0,
+                List[Waypoint](),
+                List[Waypoint](),
+            )
+        )
+        var returned = List[Waypoint]()
+        var has_returned = False
+        while len(stack) != 0:
+            work.step()
+            var frame = stack.pop()
+            if has_returned:
+                # Charge both payloads, covering extension reallocation and
+                # the bounded longer-list swap. Never refund an empty merge.
+                work.step()
+                work.step(len(frame.result))
+                work.step(len(returned))
+                frame.result = _concat(frame.result^, returned^)
+                returned = List[Waypoint]()
+                has_returned = False
+            if not frame.entered:
+                if not isfinite(frame.distance) or not isfinite(
+                    frame.waypoint.s
+                ):
+                    raise Error(
+                        "CARLA graph step needs a finite station and distance"
+                    )
+                if not frame.distance > 0.0:
+                    raise Error("A step needs a positive distance")
+                if frame.distance <= EPSILON:
+                    work.step()
+                    returned.append(frame.waypoint)
+                    has_returned = True
+                    continue
+                var at = self._locate_with_work(frame.waypoint, work)
+                ref road = self.roads[at[0]]
+                var forward = road.is_positive_direction(frame.waypoint.lane_id)
+                var start = road.sections[at[1]].s
+                work.step(len(road.sections))
+                var length = road.section_length(at[1])
+                if not isfinite(start) or not isfinite(length) or length < 0.0:
+                    raise Error(
+                        "CARLA graph lane section has an invalid length"
+                    )
+                var relative = frame.waypoint.s - start
+                var remaining = length - relative if forward else relative
+                if not isfinite(remaining):
+                    raise Error("CARLA graph step has a nonfinite remainder")
+                if frame.distance <= remaining:
+                    var result = frame.waypoint
+                    if forward:
+                        result.s += frame.distance - EPSILON
+                    else:
+                        result.s += -frame.distance + EPSILON
+                    if not isfinite(result.s) or not result.s > 0.0:
+                        raise Error("A step left the road")
+                    work.step()
+                    returned.append(result)
+                    has_returned = True
+                    continue
+                frame.following = self._successors_with_build_work(
+                    frame.waypoint, work
+                )
+                frame.residual = frame.distance - remaining
+                frame.entered = True
+            if frame.cursor < len(frame.following):
+                var candidate = frame.following[frame.cursor]
+                frame.cursor += 1
+                var after = self._successors_with_build_work(candidate, work)
+                var broken = False
+                var next_index = 0
+                while next_index < len(after):
+                    work.step()
+                    var future = after[next_index]
+                    next_index += 1
+                    if (
+                        future.road_id == frame.waypoint.road_id
+                        and future.lane_id == frame.waypoint.lane_id
+                        and future.section_id == frame.waypoint.section_id
+                    ):
+                        broken = True
+                        break
+                if not broken:
+                    var residual = frame.residual
+                    work.step(2)
+                    stack.append(frame^)
+                    stack.append(
+                        _BuildNextFrame(
+                            candidate,
+                            residual,
+                            0.0,
+                            False,
+                            0,
+                            List[Waypoint](),
+                            List[Waypoint](),
+                        )
+                    )
+                else:
+                    work.step()
+                    stack.append(frame^)
+            else:
+                returned = frame.result^
+                frame.result = List[Waypoint]()
+                has_returned = True
+        return returned^
+
+    def _validate_query_pose(
+        self, waypoint: Waypoint, mut work: _MapQueryWork
+    ) raises:
+        var at = self._query_locate(waypoint, work)
+        work._step_product(4, len(self.roads[at[0]].sections[at[1]].lanes))
+        var terms = _reference_work(self.roads[at[0]], waypoint.s, waypoint.s)
+        if terms < 0:
+            raise Error("Selected lane pose has unresolved quadrature work")
+        # Two separately checked debits avoid overflow in twice-the-cost.
+        work.charge(1, terms)
+        work.charge(0, terms)
+        _ = self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
 
     def waypoint_xodr(
         self, road_id: RoadId, lane_id: LaneId, s: Length
@@ -1690,6 +3325,40 @@ struct Map(Movable):
                     out.append((start, end))
         return out^
 
+    def _junction_waypoints_with_work(
+        self, id: JuncId, lane_type: LaneType, mut work: _MapBuildWork
+    ) raises -> List[Tuple[Waypoint, Waypoint]]:
+        work.step(len(self.junctions))
+        if not lane_type.is_valid():
+            raise Error("Lane type is not valid")
+        var out = List[Tuple[Waypoint, Waypoint]]()
+        ref junction = self.junction(id)
+        for connection in junction.connections:
+            work.step()
+            work.step(len(self.roads))
+            var r = self.road_index(connection.connecting_road)
+            ref road = self.roads[r]
+            for sec in range(len(road.sections)):
+                work.step()
+                ref section = road.sections[sec]
+                for ln in range(len(section.lanes)):
+                    work.step()
+                    ref lane = section.lanes[ln]
+                    if lane.id.value == 0 or not lane.type.matches(lane_type):
+                        continue
+                    # Each edge helper can scan strict section successors twice.
+                    work.step_product(4, len(road.sections))
+                    var start = Waypoint(
+                        road.id,
+                        section.id,
+                        lane.id,
+                        self._start_of_lane(r, sec, ln),
+                    )
+                    var end = start
+                    end.s = self._end_of_lane(r, sec, ln)
+                    out.append((start, end))
+        return out^
+
     def compute_junction_conflicts(
         self, id: JuncId
     ) raises -> Tuple[List[RoadId], List[List[RoadId]]]:
@@ -1708,6 +3377,13 @@ struct Map(Movable):
         Raises:
             Error: If the junction is not in the map.
         """
+        var work = _MapBuildWork(MapBuildBudget())
+        return self._compute_junction_conflicts_with_work(id, work)
+
+    def _compute_junction_conflicts_with_work(
+        self, id: JuncId, mut work: _MapBuildWork
+    ) raises -> Tuple[List[RoadId], List[List[RoadId]]]:
+        work.step(len(self.junctions))
         ref junction = self.junction(id)
         comptime delta = Float32(0.0001)
         var center = junction.location()
@@ -1725,15 +3401,18 @@ struct Map(Movable):
             ),
         )
         var found = List[Int]()
-        for element in self._tree.get_intersections(box):
+        for element in self._tree._intersections_with_work(box, work):
+            work.step()
             found.append(element.start_value)
         var roads = List[RoadId]()
         var conflicts = List[List[RoadId]]()
         for i in range(len(found)):
+            work.step()
             ref one = self._segments[found[i]]
             if self.road(one.first.road_id).junction_id != id:
                 continue
             for j in range(i + 1, len(found)):
+                work.step()
                 ref two = self._segments[found[j]]
                 if self.road(two.first.road_id).junction_id != id:
                     continue
@@ -1744,11 +3423,11 @@ struct Map(Movable):
                     > 2.0
                 ):
                     continue
-                _add_conflict(
-                    roads, conflicts, one.first.road_id, two.first.road_id
+                _add_conflict_with_work(
+                    roads, conflicts, one.first.road_id, two.first.road_id, work
                 )
-                _add_conflict(
-                    roads, conflicts, two.first.road_id, one.first.road_id
+                _add_conflict_with_work(
+                    roads, conflicts, two.first.road_id, one.first.road_id, work
                 )
         return (roads^, conflicts^)
 
@@ -2320,6 +3999,58 @@ struct Map(Movable):
         ref s = self._segments[index]
         return (s.start, s.end, s.first, s.second)
 
+    def _build_next(
+        mut self, waypoint: Waypoint, distance: Float64
+    ) raises -> Waypoint:
+        # Index construction deliberately stays inside one section. Preserve
+        # _step's scalar arithmetic, but never enter unmetered graph recursion.
+        if not distance > 0.0:
+            raise Error("A step needs a positive distance")
+        if distance <= EPSILON:
+            return waypoint
+        var at = self._build_locate(waypoint)
+        self._construction_work.step(len(self.roads[at[0]].sections))
+        var length = self.roads[at[0]].section_length(at[1])
+        var start = self.roads[at[0]].sections[at[1]].s
+        var forward = self.roads[at[0]].is_positive_direction(waypoint.lane_id)
+        var relative = waypoint.s - start
+        var remaining = length - relative if forward else relative
+        if distance > remaining:
+            raise Error("Map construction step cannot remain in its section")
+        var result = waypoint
+        if forward:
+            result.s += distance - EPSILON
+        else:
+            result.s += -distance + EPSILON
+        if not result.s > 0.0:
+            raise Error("A step left the road")
+        return result
+
+    def _build_transform(mut self, waypoint: Waypoint) raises -> CarlaTransform:
+        var at = self._build_locate(waypoint)
+        _reserve_lane_scalars(
+            self.roads[at[0]], at[1], self._construction_work, 2
+        )
+        var terms = _reference_work(self.roads[at[0]], waypoint.s, waypoint.s)
+        if terms < 0:
+            raise Error("Map construction cannot resolve pose quadrature work")
+        self._construction_work.step()
+        self._construction_work.term(terms)
+        self._construction_work.term(terms)
+        return self.roads[at[0]].lane_transform(at[1], at[2], waypoint.s)
+
+    def _reserve_build_point(
+        mut self, road: Int, section: Int, s: Float64
+    ) raises:
+        _reserve_lane_scalars(
+            self.roads[road], section, self._construction_work
+        )
+        var terms = _reference_work(self.roads[road], s, s)
+        if terms < 0:
+            raise Error("Map construction cannot resolve point quadrature work")
+        self._construction_work.step()
+        self._construction_work.term(terms)
+
     def _add_segment(
         mut self,
         a: CarlaTransform,
@@ -2327,13 +4058,209 @@ struct Map(Movable):
         first: Waypoint,
         second: Waypoint,
     ) raises:
-        var lane_type = self.lane(first).type
+        var at = self._build_locate(first)
+        # CARLA's piece goes into its own index unchanged. Each piece adds
+        # at least one refined segment below, so the refined index's
+        # segment and step charges also bound this index.
+        var lane_type = self.roads[at[0]].sections[at[1]].lanes[at[2]].type
+        self._carla_tree.insert_element(
+            a.location, b.location, len(self._carla_segments), lane_type.value
+        )
+        self._carla_segments.append(
+            _CarlaSegment(a.location, b.location, first, second)
+        )
+        _reserve_lane_boundaries(
+            self.roads[at[0]], at[1], self._construction_work
+        )
+        var boundaries = self.roads[at[0]]._lane_record_boundaries(at[1])
+        var forward = first.s < second.s
+        var current = first
+        var current_t = a
+        # Iterate boundaries instead of recursively nesting one stack frame
+        # per source record. The scan and each resulting cell share the ledger.
+        while True:
+            self._construction_work.step()
+            var boundary = second.s
+            var found = False
+            for s in boundaries:
+                self._construction_work.step()
+                if forward:
+                    if s > current.s and s <= boundary:
+                        boundary = s
+                        found = True
+                elif s <= current.s and s > boundary:
+                    boundary = s
+                    found = True
+            if not found:
+                self._subdivide_segment(current_t, b, current, second, 0)
+                return
+            var before = current
+            var after = current
+            after.s = boundary
+            before.s = bitcast[DType.float64](
+                bitcast[DType.uint64](boundary) - 1
+            )
+            var before_t = self._build_transform(before)
+            var after_t = self._build_transform(after)
+            if forward:
+                self._subdivide_segment(current_t, before_t, current, before, 0)
+                current = after
+                current_t = after_t
+            else:
+                self._subdivide_segment(current_t, after_t, current, after, 0)
+                current = before
+                current_t = before_t
+
+    def _subdivide_segment(
+        mut self,
+        a: CarlaTransform,
+        b: CarlaTransform,
+        first: Waypoint,
+        second: Waypoint,
+        depth: Int,
+    ) raises:
+        # Quarter points also expose cubic inflections that a midpoint misses.
+        self._construction_work.step()
+        var at = self._build_locate(first)
+        self._reserve_build_point(at[0], at[1], first.s)
+        var one = self.roads[at[0]]._lane_point(at[1], at[2], first.s)
+        self._reserve_build_point(at[0], at[1], second.s)
+        var two = self.roads[at[0]]._lane_point(at[1], at[2], second.s)
+        var error = 0.0
+        var quarter = 1
+        while quarter < 4:
+            var fraction = Float64(quarter) * 0.25
+            quarter += 1
+            var sample = first
+            sample.s += fraction * (second.s - first.s)
+            self._reserve_build_point(at[0], at[1], sample.s)
+            var point = self.roads[at[0]]._lane_point(at[1], at[2], sample.s)
+            var dx = point.x - (one.x + fraction * (two.x - one.x))
+            var dy = point.y - (one.y + fraction * (two.y - one.y))
+            var dz = point.z - (one.z + fraction * (two.z - one.z))
+            error = max(error, dx * dx + dy * dy + dz * dz)
+        var mid = first
+        mid.s = first.s + (second.s - first.s) * 0.5
+        var turn = self.roads[at[0]]._lane_turn_bound(first.s, second.s)
+        if error > 0.000001 or turn > 0.5:
+            # Adjacent road-s values cannot produce an interior waypoint.
+            # Do not repeat the same failed interval up to the depth cap.
+            if mid.s == first.s or mid.s == second.s:
+                raise Error(
+                    "Lane center cannot meet the spatial subdivision target "
+                    "at Float64 road-s resolution"
+                )
+            if depth >= 24:
+                raise Error("Lane center exceeds the spatial subdivision limit")
+            var middle = self._build_transform(mid)
+            self._subdivide_segment(a, middle, first, mid, depth + 1)
+            self._subdivide_segment(middle, b, mid, second, depth + 1)
+            return
+        var lane_type = self.roads[at[0]].sections[at[1]].lanes[at[2]].type
+        # The index's numerical contract requires finite stored Float32
+        # endpoints. Refuse an unrepresentable index input rather than let
+        # infinity or NaN defeat node bounds. Wide center arithmetic remains.
+        var stored_start: Array[Float64, 3] = [
+            Float64(a.location.x),
+            Float64(a.location.y),
+            Float64(a.location.z),
+        ]
+        var stored_end: Array[Float64, 3] = [
+            Float64(b.location.x),
+            Float64(b.location.y),
+            Float64(b.location.z),
+        ]
+        _finite_point(stored_start)
+        _finite_point(stored_end)
+        # Admit all storage for this segment before inserting any index entry.
+        self._construction_work.segment()
+        var low = first.s
+        var high = second.s
+        var start = a.location
+        var end = b.location
+        if low > high:
+            low = second.s
+            high = first.s
+            start = b.location
+            end = a.location
+        self._construction_work.step()
+        # Root Jet, two endpoint centers and four optional cover Jets each
+        # scan lane profiles. Reserve their full fixed allowance up front.
+        var lane_count = len(self.roads[at[0]].sections[at[1]].lanes)
+        self._construction_work.step_product(10, lane_count)
+        # The successful10*lane_count check also makes1+6*lane_count safe.
+        var node_cost = 1 + 6 * lane_count
+        self._construction_work.proof_headroom()
+        var remaining_steps = (
+            self._construction_work.policy.max_steps
+            - self._construction_work.steps
+        )
+        var proof_nodes = _ProofNodeWork(
+            min(16384, remaining_steps // node_cost),
+            fail_on_limit=remaining_steps // node_cost < 16384,
+        )
+        var captured = _SpiralRootCapture()
+        var certificate = _chord_certificate_capture_with_nodes(
+            self.roads[at[0]],
+            at[1],
+            at[2],
+            low,
+            high,
+            start,
+            end,
+            captured,
+            proof_nodes,
+        )
+        self._construction_work.step_product(proof_nodes.used, node_cost)
+        var construction_terms = certificate[2]
+        var cover = _sampled_lane_box_cover(
+            self.roads[at[0]], at[1], at[2], low, high, construction_terms
+        )
+        var cover_index = -1
+        if cover:
+            cover_index = len(self._sampled_covers)
+            self._sampled_covers.append(cover.value())
+        # Preserve the existing chord and sampled-cover construction work
+        # before spending ANY optional phase-proof/packing allowance.
+        var proof = _try_pack_spiral_proof(
+            self.roads[at[0]],
+            low,
+            high,
+            len(self._segments),
+            captured,
+            len(self._spiral_proofs),
+            construction_terms,
+            self._spiral_proof_units,
+        )
+        if proof:
+            self._spiral_proofs.append(proof.value())
+        self._construction_work.term(construction_terms)
         self._tree.insert_element(
             a.location, b.location, len(self._segments), lane_type.value
         )
-        self._segments.append(_Segment(a.location, b.location, first, second))
+        self._segments.append(
+            _Segment(
+                a.location,
+                b.location,
+                first,
+                second,
+                certificate[1],
+                cover_index,
+            )
+        )
+        self._curve_deviation = max(self._curve_deviation, certificate[0])
+        self._endpoint_scale = max(
+            self._endpoint_scale,
+            Float64(
+                max(
+                    max(abs(start.x), max(abs(start.y), abs(start.z))),
+                    max(abs(end.x), max(abs(end.y), abs(end.z))),
+                )
+            ),
+        )
 
     def _create_segments(mut self) raises:
+        _require_sum2_environment()
         # `Map::CreateRtree`.
         comptime tiny = 0.000001
         comptime min_delta = 1.0
@@ -2341,11 +4268,17 @@ struct Map(Movable):
         comptime max_segment = 100.0
         var starts = List[Waypoint]()
         for r in range(len(self.roads)):
+            self._construction_work.step()
             for sec in range(len(self.roads[r].sections)):
+                self._construction_work.step()
                 ref section = self.roads[r].sections[sec]
                 for ln in range(len(section.lanes)):
+                    self._construction_work.step()
                     if section.lanes[ln].id.value == 0:
                         continue
+                    self._construction_work.step_product(
+                        2, len(self.roads[r].sections)
+                    )
                     starts.append(
                         Waypoint(
                             self.roads[r].id,
@@ -2355,14 +4288,20 @@ struct Map(Movable):
                         )
                     )
         for start in starts:
-            var at = self._locate(start)
-            ref road = self.roads[at[0]]
+            self._construction_work.step()
+            var at = self._build_locate(start)
             var current = start
-            var current_t = self.compute_transform(current)
-            var lane_start = road.sections[at[1]].s
-            var lane_end = lane_start + road.section_length(at[1])
-            var positive = road.is_positive_direction(start.lane_id)
-            var straight = road.lane_is_straight(at[1])
+            var current_t = self._build_transform(current)
+            var lane_start = self.roads[at[0]].sections[at[1]].s
+            self._construction_work.step(len(self.roads[at[0]].sections))
+            var lane_end = lane_start + self.roads[at[0]].section_length(at[1])
+            var positive = self.roads[at[0]].is_positive_direction(
+                start.lane_id
+            )
+            _reserve_straightness(
+                self.roads[at[0]], at[1], self._construction_work
+            )
+            var straight = self.roads[at[0]].lane_is_straight(at[1])
             if straight:
                 var remaining = (
                     lane_end - current.s if positive else current.s - lane_start
@@ -2371,13 +4310,14 @@ struct Map(Movable):
                     continue
                 # The step stops short of the section's end, so it gives
                 # one waypoint on the same lane.
-                var end = self.next(current, remaining)[0]
+                var end = self._build_next(current, remaining)
                 self._add_segment(
-                    current_t, self.compute_transform(end), current, end
+                    current_t, self._build_transform(end), current, end
                 )
                 continue
             var next_w = current
             while True:
+                self._construction_work.step()
                 var remaining = (
                     lane_end - next_w.s if positive else next_w.s - lane_start
                 ) - tiny
@@ -2385,7 +4325,7 @@ struct Map(Movable):
                 if delta < tiny:
                     self._add_segment(
                         current_t,
-                        self.compute_transform(next_w),
+                        self._build_transform(next_w),
                         current,
                         next_w,
                     )
@@ -2393,8 +4333,20 @@ struct Map(Movable):
                 # CARLA also stops where the step leaves the section. A
                 # step of at most `remaining` stops short of the section's
                 # end, so it gives one waypoint in the same section.
-                next_w = self.next(next_w, delta)[0]
-                var next_t = self.compute_transform(next_w)
+                var previous_s = next_w.s
+                next_w = self._build_next(next_w, delta)
+                # This positive nonterminal step must advance in lane order.
+                # The terminal branch above can still insert a zero span.
+                if (
+                    next_w.s
+                    <= previous_s if positive else next_w.s
+                    >= previous_s
+                ):
+                    raise Error(
+                        "Lane index sampling cannot advance "
+                        "at Float64 road-s resolution"
+                    )
+                var next_t = self._build_transform(next_w)
                 var angle = Float64(
                     vector_angle(
                         current_t.rotation.forward_vector(),
@@ -2440,5 +4392,28 @@ def _add_conflict(
                     return
             conflicts[i].append(other)
             return
+    roads.append(road)
+    conflicts.append([other])
+
+
+def _add_conflict_with_work(
+    mut roads: List[RoadId],
+    mut conflicts: List[List[RoadId]],
+    road: RoadId,
+    other: RoadId,
+    mut work: _MapBuildWork,
+) raises:
+    for i in range(len(roads)):
+        work.step()
+        if roads[i] == road:
+            # A road is added with one conflict, so the list is not empty.
+            for id in conflicts[i]:  # pragma: no branch
+                work.step()
+                if id == other:
+                    return
+            work.step()
+            conflicts[i].append(other)
+            return
+    work.step(2)
     roads.append(road)
     conflicts.append([other])

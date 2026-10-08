@@ -1,0 +1,2132 @@
+{
+  "status": "Review-only bound ledger; depends on stated primitive inequalities and selector/phase lemmas",
+  "interpretation": "exponent e denotes absolute upper bound 2^e; B=max(1, ideal magnitude, nonnegative error)",
+  "row_count": 144,
+  "maximum_exponent": 947,
+  "maximum_outward_directed_FMA_or_residual_intermediate_exponent": 802,
+  "overflow_boundary_exponent": 1024,
+  "conservative_margin_bits": 77,
+  "final_accumulator_exponents": {
+    "ideal": 945,
+    "magnitude": 947,
+    "inherited": 945
+  },
+  "rows": [
+    {
+      "label": "distance / exact pieces",
+      "operation": "ValueJet division by integer 1..64",
+      "input_exponents": [
+        608,
+        6
+      ],
+      "result_exponent": 614,
+      "intermediate_exponents": {
+        "tight_value": 609,
+        "denominator_error": 0,
+        "inherited_numerator": 608,
+        "inherited_quotient": 610,
+        "magnitude_next_up": 612,
+        "roundoff": 612,
+        "error_next_up": 614
+      }
+    },
+    {
+      "label": "stored_half(step): ordinary path bounds both paths",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        614,
+        0
+      ],
+      "result_exponent": 623,
+      "intermediate_exponents": {
+        "tight_value": 615,
+        "inherited_product_1": 615,
+        "inherited_product_2": 615,
+        "inherited_product_3": 615,
+        "inherited_first_add": 617,
+        "inherited_second_add": 619,
+        "magnitude_next_up": 621,
+        "roundoff": 621,
+        "error_next_up": 623
+      }
+    },
+    {
+      "label": "factor[0] = half_step * weight",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        623,
+        0
+      ],
+      "result_exponent": 632,
+      "intermediate_exponents": {
+        "tight_value": 624,
+        "inherited_product_1": 624,
+        "inherited_product_2": 624,
+        "inherited_product_3": 624,
+        "inherited_first_add": 626,
+        "inherited_second_add": 628,
+        "magnitude_next_up": 630,
+        "roundoff": 630,
+        "error_next_up": 632
+      }
+    },
+    {
+      "label": "factor[1] = half_step * weight",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        623,
+        0
+      ],
+      "result_exponent": 632,
+      "intermediate_exponents": {
+        "tight_value": 624,
+        "inherited_product_1": 624,
+        "inherited_product_2": 624,
+        "inherited_product_3": 624,
+        "inherited_first_add": 626,
+        "inherited_second_add": 628,
+        "magnitude_next_up": 630,
+        "roundoff": 630,
+        "error_next_up": 632
+      }
+    },
+    {
+      "label": "factor[2] = half_step * weight",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        623,
+        0
+      ],
+      "result_exponent": 632,
+      "intermediate_exponents": {
+        "tight_value": 624,
+        "inherited_product_1": 624,
+        "inherited_product_2": 624,
+        "inherited_product_3": 624,
+        "inherited_first_add": 626,
+        "inherited_second_add": 628,
+        "magnitude_next_up": 630,
+        "roundoff": 630,
+        "error_next_up": 632
+      }
+    },
+    {
+      "label": "admitted theta and exact-zero reduction",
+      "operation": "selector bound plus zero shortcuts",
+      "input_exponents": [],
+      "result_exponent": 1,
+      "intermediate_exponents": {
+        "theta_magnitude_and_error": 1,
+        "zero_high_and_low_reduction_constants": 0
+      }
+    },
+    {
+      "label": "reduced * reduced",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        1,
+        1
+      ],
+      "result_exponent": 11,
+      "intermediate_exponents": {
+        "tight_value": 3,
+        "inherited_product_1": 3,
+        "inherited_product_2": 3,
+        "inherited_product_3": 3,
+        "inherited_first_add": 5,
+        "inherited_second_add": 7,
+        "magnitude_next_up": 9,
+        "roundoff": 9,
+        "error_next_up": 11
+      }
+    },
+    {
+      "label": "sine.horner[9].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        0,
+        11
+      ],
+      "result_exponent": 20,
+      "intermediate_exponents": {
+        "tight_value": 12,
+        "inherited_product_1": 12,
+        "inherited_product_2": 12,
+        "inherited_product_3": 12,
+        "inherited_first_add": 14,
+        "inherited_second_add": 16,
+        "magnitude_next_up": 18,
+        "roundoff": 18,
+        "error_next_up": 20
+      }
+    },
+    {
+      "label": "sine.horner[9].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        20,
+        0
+      ],
+      "result_exponent": 26,
+      "intermediate_exponents": {
+        "tight_value": 22,
+        "inherited_next_up": 22,
+        "magnitude_next_up": 24,
+        "roundoff": 24,
+        "error_next_up": 26
+      }
+    },
+    {
+      "label": "sine.horner[8].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        26,
+        11
+      ],
+      "result_exponent": 46,
+      "intermediate_exponents": {
+        "tight_value": 38,
+        "inherited_product_1": 38,
+        "inherited_product_2": 38,
+        "inherited_product_3": 38,
+        "inherited_first_add": 40,
+        "inherited_second_add": 42,
+        "magnitude_next_up": 44,
+        "roundoff": 44,
+        "error_next_up": 46
+      }
+    },
+    {
+      "label": "sine.horner[8].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        46,
+        0
+      ],
+      "result_exponent": 52,
+      "intermediate_exponents": {
+        "tight_value": 48,
+        "inherited_next_up": 48,
+        "magnitude_next_up": 50,
+        "roundoff": 50,
+        "error_next_up": 52
+      }
+    },
+    {
+      "label": "sine.horner[7].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        52,
+        11
+      ],
+      "result_exponent": 72,
+      "intermediate_exponents": {
+        "tight_value": 64,
+        "inherited_product_1": 64,
+        "inherited_product_2": 64,
+        "inherited_product_3": 64,
+        "inherited_first_add": 66,
+        "inherited_second_add": 68,
+        "magnitude_next_up": 70,
+        "roundoff": 70,
+        "error_next_up": 72
+      }
+    },
+    {
+      "label": "sine.horner[7].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        72,
+        0
+      ],
+      "result_exponent": 78,
+      "intermediate_exponents": {
+        "tight_value": 74,
+        "inherited_next_up": 74,
+        "magnitude_next_up": 76,
+        "roundoff": 76,
+        "error_next_up": 78
+      }
+    },
+    {
+      "label": "sine.horner[6].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        78,
+        11
+      ],
+      "result_exponent": 98,
+      "intermediate_exponents": {
+        "tight_value": 90,
+        "inherited_product_1": 90,
+        "inherited_product_2": 90,
+        "inherited_product_3": 90,
+        "inherited_first_add": 92,
+        "inherited_second_add": 94,
+        "magnitude_next_up": 96,
+        "roundoff": 96,
+        "error_next_up": 98
+      }
+    },
+    {
+      "label": "sine.horner[6].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        98,
+        0
+      ],
+      "result_exponent": 104,
+      "intermediate_exponents": {
+        "tight_value": 100,
+        "inherited_next_up": 100,
+        "magnitude_next_up": 102,
+        "roundoff": 102,
+        "error_next_up": 104
+      }
+    },
+    {
+      "label": "sine.horner[5].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        104,
+        11
+      ],
+      "result_exponent": 124,
+      "intermediate_exponents": {
+        "tight_value": 116,
+        "inherited_product_1": 116,
+        "inherited_product_2": 116,
+        "inherited_product_3": 116,
+        "inherited_first_add": 118,
+        "inherited_second_add": 120,
+        "magnitude_next_up": 122,
+        "roundoff": 122,
+        "error_next_up": 124
+      }
+    },
+    {
+      "label": "sine.horner[5].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        124,
+        0
+      ],
+      "result_exponent": 130,
+      "intermediate_exponents": {
+        "tight_value": 126,
+        "inherited_next_up": 126,
+        "magnitude_next_up": 128,
+        "roundoff": 128,
+        "error_next_up": 130
+      }
+    },
+    {
+      "label": "sine.horner[4].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        130,
+        11
+      ],
+      "result_exponent": 150,
+      "intermediate_exponents": {
+        "tight_value": 142,
+        "inherited_product_1": 142,
+        "inherited_product_2": 142,
+        "inherited_product_3": 142,
+        "inherited_first_add": 144,
+        "inherited_second_add": 146,
+        "magnitude_next_up": 148,
+        "roundoff": 148,
+        "error_next_up": 150
+      }
+    },
+    {
+      "label": "sine.horner[4].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        150,
+        0
+      ],
+      "result_exponent": 156,
+      "intermediate_exponents": {
+        "tight_value": 152,
+        "inherited_next_up": 152,
+        "magnitude_next_up": 154,
+        "roundoff": 154,
+        "error_next_up": 156
+      }
+    },
+    {
+      "label": "sine.horner[3].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        156,
+        11
+      ],
+      "result_exponent": 176,
+      "intermediate_exponents": {
+        "tight_value": 168,
+        "inherited_product_1": 168,
+        "inherited_product_2": 168,
+        "inherited_product_3": 168,
+        "inherited_first_add": 170,
+        "inherited_second_add": 172,
+        "magnitude_next_up": 174,
+        "roundoff": 174,
+        "error_next_up": 176
+      }
+    },
+    {
+      "label": "sine.horner[3].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        176,
+        0
+      ],
+      "result_exponent": 182,
+      "intermediate_exponents": {
+        "tight_value": 178,
+        "inherited_next_up": 178,
+        "magnitude_next_up": 180,
+        "roundoff": 180,
+        "error_next_up": 182
+      }
+    },
+    {
+      "label": "sine.horner[2].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        182,
+        11
+      ],
+      "result_exponent": 202,
+      "intermediate_exponents": {
+        "tight_value": 194,
+        "inherited_product_1": 194,
+        "inherited_product_2": 194,
+        "inherited_product_3": 194,
+        "inherited_first_add": 196,
+        "inherited_second_add": 198,
+        "magnitude_next_up": 200,
+        "roundoff": 200,
+        "error_next_up": 202
+      }
+    },
+    {
+      "label": "sine.horner[2].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        202,
+        0
+      ],
+      "result_exponent": 208,
+      "intermediate_exponents": {
+        "tight_value": 204,
+        "inherited_next_up": 204,
+        "magnitude_next_up": 206,
+        "roundoff": 206,
+        "error_next_up": 208
+      }
+    },
+    {
+      "label": "sine.horner[1].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        208,
+        11
+      ],
+      "result_exponent": 228,
+      "intermediate_exponents": {
+        "tight_value": 220,
+        "inherited_product_1": 220,
+        "inherited_product_2": 220,
+        "inherited_product_3": 220,
+        "inherited_first_add": 222,
+        "inherited_second_add": 224,
+        "magnitude_next_up": 226,
+        "roundoff": 226,
+        "error_next_up": 228
+      }
+    },
+    {
+      "label": "sine.horner[1].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        228,
+        0
+      ],
+      "result_exponent": 234,
+      "intermediate_exponents": {
+        "tight_value": 230,
+        "inherited_next_up": 230,
+        "magnitude_next_up": 232,
+        "roundoff": 232,
+        "error_next_up": 234
+      }
+    },
+    {
+      "label": "sine.horner[0].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        234,
+        11
+      ],
+      "result_exponent": 254,
+      "intermediate_exponents": {
+        "tight_value": 246,
+        "inherited_product_1": 246,
+        "inherited_product_2": 246,
+        "inherited_product_3": 246,
+        "inherited_first_add": 248,
+        "inherited_second_add": 250,
+        "magnitude_next_up": 252,
+        "roundoff": 252,
+        "error_next_up": 254
+      }
+    },
+    {
+      "label": "sine.horner[0].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        254,
+        0
+      ],
+      "result_exponent": 260,
+      "intermediate_exponents": {
+        "tight_value": 256,
+        "inherited_next_up": 256,
+        "magnitude_next_up": 258,
+        "roundoff": 258,
+        "error_next_up": 260
+      }
+    },
+    {
+      "label": "cosine.horner[9].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        0,
+        11
+      ],
+      "result_exponent": 20,
+      "intermediate_exponents": {
+        "tight_value": 12,
+        "inherited_product_1": 12,
+        "inherited_product_2": 12,
+        "inherited_product_3": 12,
+        "inherited_first_add": 14,
+        "inherited_second_add": 16,
+        "magnitude_next_up": 18,
+        "roundoff": 18,
+        "error_next_up": 20
+      }
+    },
+    {
+      "label": "cosine.horner[9].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        20,
+        0
+      ],
+      "result_exponent": 26,
+      "intermediate_exponents": {
+        "tight_value": 22,
+        "inherited_next_up": 22,
+        "magnitude_next_up": 24,
+        "roundoff": 24,
+        "error_next_up": 26
+      }
+    },
+    {
+      "label": "cosine.horner[8].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        26,
+        11
+      ],
+      "result_exponent": 46,
+      "intermediate_exponents": {
+        "tight_value": 38,
+        "inherited_product_1": 38,
+        "inherited_product_2": 38,
+        "inherited_product_3": 38,
+        "inherited_first_add": 40,
+        "inherited_second_add": 42,
+        "magnitude_next_up": 44,
+        "roundoff": 44,
+        "error_next_up": 46
+      }
+    },
+    {
+      "label": "cosine.horner[8].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        46,
+        0
+      ],
+      "result_exponent": 52,
+      "intermediate_exponents": {
+        "tight_value": 48,
+        "inherited_next_up": 48,
+        "magnitude_next_up": 50,
+        "roundoff": 50,
+        "error_next_up": 52
+      }
+    },
+    {
+      "label": "cosine.horner[7].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        52,
+        11
+      ],
+      "result_exponent": 72,
+      "intermediate_exponents": {
+        "tight_value": 64,
+        "inherited_product_1": 64,
+        "inherited_product_2": 64,
+        "inherited_product_3": 64,
+        "inherited_first_add": 66,
+        "inherited_second_add": 68,
+        "magnitude_next_up": 70,
+        "roundoff": 70,
+        "error_next_up": 72
+      }
+    },
+    {
+      "label": "cosine.horner[7].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        72,
+        0
+      ],
+      "result_exponent": 78,
+      "intermediate_exponents": {
+        "tight_value": 74,
+        "inherited_next_up": 74,
+        "magnitude_next_up": 76,
+        "roundoff": 76,
+        "error_next_up": 78
+      }
+    },
+    {
+      "label": "cosine.horner[6].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        78,
+        11
+      ],
+      "result_exponent": 98,
+      "intermediate_exponents": {
+        "tight_value": 90,
+        "inherited_product_1": 90,
+        "inherited_product_2": 90,
+        "inherited_product_3": 90,
+        "inherited_first_add": 92,
+        "inherited_second_add": 94,
+        "magnitude_next_up": 96,
+        "roundoff": 96,
+        "error_next_up": 98
+      }
+    },
+    {
+      "label": "cosine.horner[6].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        98,
+        0
+      ],
+      "result_exponent": 104,
+      "intermediate_exponents": {
+        "tight_value": 100,
+        "inherited_next_up": 100,
+        "magnitude_next_up": 102,
+        "roundoff": 102,
+        "error_next_up": 104
+      }
+    },
+    {
+      "label": "cosine.horner[5].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        104,
+        11
+      ],
+      "result_exponent": 124,
+      "intermediate_exponents": {
+        "tight_value": 116,
+        "inherited_product_1": 116,
+        "inherited_product_2": 116,
+        "inherited_product_3": 116,
+        "inherited_first_add": 118,
+        "inherited_second_add": 120,
+        "magnitude_next_up": 122,
+        "roundoff": 122,
+        "error_next_up": 124
+      }
+    },
+    {
+      "label": "cosine.horner[5].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        124,
+        0
+      ],
+      "result_exponent": 130,
+      "intermediate_exponents": {
+        "tight_value": 126,
+        "inherited_next_up": 126,
+        "magnitude_next_up": 128,
+        "roundoff": 128,
+        "error_next_up": 130
+      }
+    },
+    {
+      "label": "cosine.horner[4].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        130,
+        11
+      ],
+      "result_exponent": 150,
+      "intermediate_exponents": {
+        "tight_value": 142,
+        "inherited_product_1": 142,
+        "inherited_product_2": 142,
+        "inherited_product_3": 142,
+        "inherited_first_add": 144,
+        "inherited_second_add": 146,
+        "magnitude_next_up": 148,
+        "roundoff": 148,
+        "error_next_up": 150
+      }
+    },
+    {
+      "label": "cosine.horner[4].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        150,
+        0
+      ],
+      "result_exponent": 156,
+      "intermediate_exponents": {
+        "tight_value": 152,
+        "inherited_next_up": 152,
+        "magnitude_next_up": 154,
+        "roundoff": 154,
+        "error_next_up": 156
+      }
+    },
+    {
+      "label": "cosine.horner[3].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        156,
+        11
+      ],
+      "result_exponent": 176,
+      "intermediate_exponents": {
+        "tight_value": 168,
+        "inherited_product_1": 168,
+        "inherited_product_2": 168,
+        "inherited_product_3": 168,
+        "inherited_first_add": 170,
+        "inherited_second_add": 172,
+        "magnitude_next_up": 174,
+        "roundoff": 174,
+        "error_next_up": 176
+      }
+    },
+    {
+      "label": "cosine.horner[3].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        176,
+        0
+      ],
+      "result_exponent": 182,
+      "intermediate_exponents": {
+        "tight_value": 178,
+        "inherited_next_up": 178,
+        "magnitude_next_up": 180,
+        "roundoff": 180,
+        "error_next_up": 182
+      }
+    },
+    {
+      "label": "cosine.horner[2].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        182,
+        11
+      ],
+      "result_exponent": 202,
+      "intermediate_exponents": {
+        "tight_value": 194,
+        "inherited_product_1": 194,
+        "inherited_product_2": 194,
+        "inherited_product_3": 194,
+        "inherited_first_add": 196,
+        "inherited_second_add": 198,
+        "magnitude_next_up": 200,
+        "roundoff": 200,
+        "error_next_up": 202
+      }
+    },
+    {
+      "label": "cosine.horner[2].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        202,
+        0
+      ],
+      "result_exponent": 208,
+      "intermediate_exponents": {
+        "tight_value": 204,
+        "inherited_next_up": 204,
+        "magnitude_next_up": 206,
+        "roundoff": 206,
+        "error_next_up": 208
+      }
+    },
+    {
+      "label": "cosine.horner[1].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        208,
+        11
+      ],
+      "result_exponent": 228,
+      "intermediate_exponents": {
+        "tight_value": 220,
+        "inherited_product_1": 220,
+        "inherited_product_2": 220,
+        "inherited_product_3": 220,
+        "inherited_first_add": 222,
+        "inherited_second_add": 224,
+        "magnitude_next_up": 226,
+        "roundoff": 226,
+        "error_next_up": 228
+      }
+    },
+    {
+      "label": "cosine.horner[1].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        228,
+        0
+      ],
+      "result_exponent": 234,
+      "intermediate_exponents": {
+        "tight_value": 230,
+        "inherited_next_up": 230,
+        "magnitude_next_up": 232,
+        "roundoff": 232,
+        "error_next_up": 234
+      }
+    },
+    {
+      "label": "cosine.horner[0].multiply",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        234,
+        11
+      ],
+      "result_exponent": 254,
+      "intermediate_exponents": {
+        "tight_value": 246,
+        "inherited_product_1": 246,
+        "inherited_product_2": 246,
+        "inherited_product_3": 246,
+        "inherited_first_add": 248,
+        "inherited_second_add": 250,
+        "magnitude_next_up": 252,
+        "roundoff": 252,
+        "error_next_up": 254
+      }
+    },
+    {
+      "label": "cosine.horner[0].add_coefficient",
+      "operation": "ValueJet add",
+      "input_exponents": [
+        254,
+        0
+      ],
+      "result_exponent": 260,
+      "intermediate_exponents": {
+        "tight_value": 256,
+        "inherited_next_up": 256,
+        "magnitude_next_up": 258,
+        "roundoff": 258,
+        "error_next_up": 260
+      }
+    },
+    {
+      "label": "sine = reduced * sine_polynomial",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        1,
+        260
+      ],
+      "result_exponent": 270,
+      "intermediate_exponents": {
+        "tight_value": 262,
+        "inherited_product_1": 262,
+        "inherited_product_2": 262,
+        "inherited_product_3": 262,
+        "inherited_first_add": 264,
+        "inherited_second_add": 266,
+        "magnitude_next_up": 268,
+        "roundoff": 268,
+        "error_next_up": 270
+      }
+    },
+    {
+      "label": "group0.weight0.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group0.weight0.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group0.weight0.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group0.weight0.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group0.weight0.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group0.weight0.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        0,
+        921
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 923
+      }
+    },
+    {
+      "label": "group0.weight0.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        0,
+        923
+      ],
+      "result_exponent": 925,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 925
+      }
+    },
+    {
+      "label": "group0.weight0.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        0,
+        921
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 923
+      }
+    },
+    {
+      "label": "group0.weight1.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group0.weight1.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group0.weight1.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group0.weight1.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group0.weight1.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group0.weight1.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        923,
+        921
+      ],
+      "result_exponent": 925,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 925
+      }
+    },
+    {
+      "label": "group0.weight1.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        925,
+        923
+      ],
+      "result_exponent": 927,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 927
+      }
+    },
+    {
+      "label": "group0.weight1.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        923,
+        921
+      ],
+      "result_exponent": 925,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 925
+      }
+    },
+    {
+      "label": "group0.weight2.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group0.weight2.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group0.weight2.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group0.weight2.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group0.weight2.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group0.weight2.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        925,
+        921
+      ],
+      "result_exponent": 927,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 927
+      }
+    },
+    {
+      "label": "group0.weight2.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        927,
+        923
+      ],
+      "result_exponent": 929,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 929
+      }
+    },
+    {
+      "label": "group0.weight2.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        925,
+        921
+      ],
+      "result_exponent": 927,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 927
+      }
+    },
+    {
+      "label": "group1.weight0.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group1.weight0.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group1.weight0.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group1.weight0.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group1.weight0.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group1.weight0.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        927,
+        921
+      ],
+      "result_exponent": 929,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 929
+      }
+    },
+    {
+      "label": "group1.weight0.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        929,
+        923
+      ],
+      "result_exponent": 931,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 931
+      }
+    },
+    {
+      "label": "group1.weight0.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        927,
+        921
+      ],
+      "result_exponent": 929,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 929
+      }
+    },
+    {
+      "label": "group1.weight1.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group1.weight1.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group1.weight1.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group1.weight1.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group1.weight1.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group1.weight1.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        929,
+        921
+      ],
+      "result_exponent": 931,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 931
+      }
+    },
+    {
+      "label": "group1.weight1.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        931,
+        923
+      ],
+      "result_exponent": 933,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 933
+      }
+    },
+    {
+      "label": "group1.weight1.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        929,
+        921
+      ],
+      "result_exponent": 931,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 931
+      }
+    },
+    {
+      "label": "group1.weight2.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group1.weight2.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group1.weight2.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group1.weight2.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group1.weight2.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group1.weight2.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        931,
+        921
+      ],
+      "result_exponent": 933,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 933
+      }
+    },
+    {
+      "label": "group1.weight2.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        933,
+        923
+      ],
+      "result_exponent": 935,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 935
+      }
+    },
+    {
+      "label": "group1.weight2.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        931,
+        921
+      ],
+      "result_exponent": 933,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 933
+      }
+    },
+    {
+      "label": "group2.weight0.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group2.weight0.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group2.weight0.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group2.weight0.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group2.weight0.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group2.weight0.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        933,
+        921
+      ],
+      "result_exponent": 935,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 935
+      }
+    },
+    {
+      "label": "group2.weight0.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        935,
+        923
+      ],
+      "result_exponent": 937,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 937
+      }
+    },
+    {
+      "label": "group2.weight0.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        933,
+        921
+      ],
+      "result_exponent": 935,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 935
+      }
+    },
+    {
+      "label": "group2.weight1.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group2.weight1.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group2.weight1.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group2.weight1.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group2.weight1.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group2.weight1.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        935,
+        921
+      ],
+      "result_exponent": 937,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 937
+      }
+    },
+    {
+      "label": "group2.weight1.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        937,
+        923
+      ],
+      "result_exponent": 939,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 939
+      }
+    },
+    {
+      "label": "group2.weight1.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        935,
+        921
+      ],
+      "result_exponent": 937,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 937
+      }
+    },
+    {
+      "label": "group2.weight2.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group2.weight2.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group2.weight2.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group2.weight2.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group2.weight2.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group2.weight2.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        937,
+        921
+      ],
+      "result_exponent": 939,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 939
+      }
+    },
+    {
+      "label": "group2.weight2.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        939,
+        923
+      ],
+      "result_exponent": 941,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 941
+      }
+    },
+    {
+      "label": "group2.weight2.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        937,
+        921
+      ],
+      "result_exponent": 939,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 939
+      }
+    },
+    {
+      "label": "group3.weight0.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group3.weight0.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group3.weight0.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group3.weight0.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group3.weight0.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group3.weight0.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        939,
+        921
+      ],
+      "result_exponent": 941,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 941
+      }
+    },
+    {
+      "label": "group3.weight0.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        941,
+        923
+      ],
+      "result_exponent": 943,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 943
+      }
+    },
+    {
+      "label": "group3.weight0.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        939,
+        921
+      ],
+      "result_exponent": 941,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 941
+      }
+    },
+    {
+      "label": "group3.weight1.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group3.weight1.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group3.weight1.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group3.weight1.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group3.weight1.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group3.weight1.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        941,
+        921
+      ],
+      "result_exponent": 943,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 943
+      }
+    },
+    {
+      "label": "group3.weight1.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        943,
+        923
+      ],
+      "result_exponent": 945,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 945
+      }
+    },
+    {
+      "label": "group3.weight1.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        941,
+        921
+      ],
+      "result_exponent": 943,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 943
+      }
+    },
+    {
+      "label": "group3.weight2.y = factor * sine",
+      "operation": "ValueJet multiply",
+      "input_exponents": [
+        632,
+        270
+      ],
+      "result_exponent": 911,
+      "intermediate_exponents": {
+        "tight_value": 903,
+        "inherited_product_1": 903,
+        "inherited_product_2": 903,
+        "inherited_product_3": 903,
+        "inherited_first_add": 905,
+        "inherited_second_add": 907,
+        "magnitude_next_up": 909,
+        "roundoff": 909,
+        "error_next_up": 911
+      }
+    },
+    {
+      "label": "group3.weight2.rounded_y",
+      "operation": "Interval add",
+      "input_exponents": [
+        911,
+        911
+      ],
+      "result_exponent": 913,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 913
+      }
+    },
+    {
+      "label": "group3.weight2.copies * y.value",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group3.weight2.copies * rounded.magnitude",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        913
+      ],
+      "result_exponent": 923,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 923
+      }
+    },
+    {
+      "label": "group3.weight2.copies * y.error",
+      "operation": "Interval multiply",
+      "input_exponents": [
+        9,
+        911
+      ],
+      "result_exponent": 921,
+      "intermediate_exponents": {
+        "rounded_endpoint_products": 921
+      }
+    },
+    {
+      "label": "group3.weight2.ideal_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        943,
+        921
+      ],
+      "result_exponent": 945,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 945
+      }
+    },
+    {
+      "label": "group3.weight2.magnitude_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        945,
+        923
+      ],
+      "result_exponent": 947,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 947
+      }
+    },
+    {
+      "label": "group3.weight2.inherited_accumulator",
+      "operation": "Interval add",
+      "input_exponents": [
+        943,
+        921
+      ],
+      "result_exponent": 945,
+      "intermediate_exponents": {
+        "rounded_endpoint_sums": 945
+      }
+    }
+  ]
+}

@@ -61,6 +61,25 @@ comptime MIN_CAP_STEPS = 2
 comptime MAX_CAP_STEPS = 64
 
 
+@fieldwise_init
+struct LineCoverage(Equatable, ImplicitlyCopyable, Writable):
+    """The sample coverage of a wide line: solid or hashed and feathered."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return whether this is one of the two named coverage rules.
+
+        Returns:
+            True for `SOLID_LINE_COVERAGE` or `STRAND_LINE_COVERAGE`.
+        """
+        return self.value == 0 or self.value == 1
+
+
+comptime SOLID_LINE_COVERAGE = LineCoverage(0)
+comptime STRAND_LINE_COVERAGE = LineCoverage(1)
+
+
 struct LineSegments2(ImplicitlyCopyable):
     """A list of wide sticks at a scene node, three.js's `LineSegments2`."""
 
@@ -72,6 +91,11 @@ struct LineSegments2(ImplicitlyCopyable):
     # camera frustum. The sphere bounds the points and not the width, as
     # three.js's does.
     var frustum_culled: Bool
+    # The opt-in strand rule expands by half a pixel and hashes a linear
+    # coverage profile. Ordinary LineSegments2 keeps its solid caps.
+    var coverage: LineCoverage
+    # Wide lines cast only when explicitly requested.
+    var cast_shadow: Bool
 
     def __init__(
         out self,
@@ -80,6 +104,8 @@ struct LineSegments2(ImplicitlyCopyable):
         node: NodeId,
         *,
         frustum_culled: Bool = True,
+        coverage: LineCoverage = SOLID_LINE_COVERAGE,
+        cast_shadow: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -93,9 +119,12 @@ struct LineSegments2(ImplicitlyCopyable):
             node: Index of the scene node giving its world transform.
             frustum_culled: Whether the renderer can skip this line when
                 its bounds are out of view.
+            coverage: Solid three.js lines, or feathered hashed strands.
+                Strand coverage needs an opaque, depth-writing material.
+            cast_shadow: Whether this line is drawn into light depth maps.
 
         Raises:
-            Error: If any id is negative.
+            Error: If an id is negative or the coverage is not named.
         """
         if node.value < 0:
             raise Error("A wide line must name a scene node")
@@ -103,10 +132,14 @@ struct LineSegments2(ImplicitlyCopyable):
             raise Error("A wide line must name a geometry")
         if material.value < 0:
             raise Error("A wide line must name a material")
+        if not coverage.is_valid():
+            raise Error("A wide line needs a named coverage rule")
         self.geometry = geometry
         self.material = material
         self.node = node
         self.frustum_culled = frustum_culled
+        self.coverage = coverage
+        self.cast_shadow = cast_shadow
 
 
 # three.js's `Line2` is a `LineSegments2` with a path for a geometry; see

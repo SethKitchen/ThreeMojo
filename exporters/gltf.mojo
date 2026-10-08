@@ -516,7 +516,7 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
     var flip = _is_written_upside_down(texture)
     var row = texture.width * Texture.CHANNELS
     var out = List[UInt8](capacity=row * texture.height)
-    var pixels = Span(texture.pixels)
+    var pixels = Span(texture.pixels.values())
     # A texture that is not blank has at least one row.
     for y in range(texture.height):  # pragma: no branch
         var source = texture.height - 1 - y if flip else y

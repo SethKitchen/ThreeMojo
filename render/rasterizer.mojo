@@ -5132,7 +5132,9 @@ def rasterize_shaded(
             # Thrown away below a hashed threshold, three.js's
             # `alphahash_fragment`, from the world position here and at
             # the pixels beside it, as the kernel reads them.
-            if hashed and shaded.a < hashed_threshold(nodes):
+            if hashed and shaded.a < hashed_threshold(
+                nodes, a.state.strand_hash
+            ):
                 continue
             # Not covering this sample, WebGL's alpha to coverage.
             if covered and not alpha_covers(shaded.a, x, y):

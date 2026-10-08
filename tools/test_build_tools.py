@@ -187,6 +187,31 @@ class CoverageStagingTests(unittest.TestCase):
     TEST_HELPERS = ('tests/carla_fixed_s_fixture.mojo',
                     'tests/exact_predicates_oracle.mojo')
 
+    def seed_stub_instrumentation(self, root, destination):
+        # The compiler is stubbed, but emits original-format outputs after
+        # make clears the build directory. The proof binding stage stays real.
+        compiler = destination.parent / 'staging_compiler.py'
+        import inspect
+        from test_coverage_loop_proofs import model_generation
+        compiler.write_text(
+            inspect.getsource(model_generation) + '\n' +
+            'from pathlib import Path\nimport shutil, sys\n'
+            'if sys.argv[1:] == ["--version"]:\n'
+            '    print("staging fixture compiler")\n'
+            '    raise SystemExit(0)\n'
+            'index = sys.argv.index("coverage/build_cli.mojo")\n'
+            'build = Path(sys.argv[index + 1])\n'
+            f'root = Path({str(root)!r})\n'
+            'rows = []\n'
+            'for name in sys.argv[index + 2:]:\n'
+            '    target = build / name\n'
+            '    target.parent.mkdir(parents=True, exist_ok=True)\n'
+            '    shutil.copyfile(root / name, target)\n'
+            '    rows.append("L " + name.removesuffix(".mojo") + " 1\\n")\n'
+            '(build / "manifest.txt").write_text("".join(rows))\n'
+            'model_generation(root, build, sys.argv[index + 2:])\n')
+        return compiler
+
     def test_import_only_helpers_are_libraries_and_coverage_passthrough(self):
         import subprocess
         root = Path(__file__).resolve().parent.parent
@@ -224,11 +249,12 @@ class CoverageStagingTests(unittest.TestCase):
                   'tests/test_exact_predicates.mojo')
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / 'instrumented'
+            compiler = self.seed_stub_instrumentation(root, destination)
             # Only the compiler is stubbed; exercise the real copy-through
             # recipe with its default helper classification.
             subprocess.run([
                 'make', '--no-print-directory', '-s', 'coverage-instrument',
-                'MOJO=true', f'COV_DIR={destination}',
+                f'MOJO=python3 {compiler}', f'COV_DIR={destination}',
                 'LIB_SOURCES=math/vector3.mojo', 'COVERED=math/vector3.mojo',
                 f'COVERAGE_TESTS={" ".join(suites)}',
                 f'TESTS={" ".join(suites)}',
@@ -244,9 +270,10 @@ class CoverageStagingTests(unittest.TestCase):
         sibling = 'tests/test_carla_assets.mojo'
         with tempfile.TemporaryDirectory() as directory:
             destination = Path(directory) / 'instrumented'
+            compiler = self.seed_stub_instrumentation(root, destination)
             subprocess.run([
                 'make', '--no-print-directory', '-s', 'coverage-instrument',
-                'MOJO=true', f'COV_DIR={destination}',
+                f'MOJO=python3 {compiler}', f'COV_DIR={destination}',
                 'COVERED=math/vector3.mojo', 'COVERAGE_PASSTHROUGH=',
                 f'COVERAGE_TESTS={selected}', f'TESTS={selected} {sibling}',
             ], cwd=root, check=True, capture_output=True, text=True)

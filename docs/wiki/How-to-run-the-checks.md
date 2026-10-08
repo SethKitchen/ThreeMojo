@@ -34,6 +34,31 @@ Run `make test-portability` to check asset roots from another working directory
 and temporary-file isolation across concurrent native processes.
 `make check-cpu` includes this check.
 
+## Run CPU mode controls
+
+The Sum2 environment suite needs a host C compiler. `CC` selects it.
+The C fixture changes only the test process controls and restores them after each case.
+Production code does not change those controls.
+
+`make test-cpu` and `make coverage` link this fixture automatically.
+The same fixture inventory controls linking, cache inputs and instrumented copies.
+A missing compiler or fixture fails the check. It does not skip the suite.
+
+For a direct build and a timed run, use:
+
+```bash
+python3 tools/native_test_support.py run --root . \
+  --suite tests/test_carla_sum2_environment.mojo --cache .cache/native -- \
+  .venv/bin/mojo build -I . --Werror \
+  -o .cache/sum2-environment tests/test_carla_sum2_environment.mojo
+python3 tools/run_suite.py --seconds 5 \
+  --suite tests/test_carla_sum2_environment.mojo -- .cache/sum2-environment
+```
+
+The fixture has separate x86-64 and AArch64 controls.
+Linux x86-64 results do not qualify Apple Silicon execution.
+Both supported CPU CI jobs run the ordinary suite.
+
 ## Run one example
 
 ```bash

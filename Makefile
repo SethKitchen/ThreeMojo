@@ -35,10 +35,12 @@ LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
-# Import-only diagnostic adapters and test fixtures have no CLI entry point.
-# Copy them through unchanged beside instrumented test suites.
-HELPER_LIBS  := tools/anatomy_pairs.mojo tests/carla_fixed_s_fixture.mojo \
-                tests/exact_predicates_oracle.mojo
+# Test modules prefixed with '_' are import-only helpers, not CLI entry points.
+# Keep the two older named fixtures in the same inventory. Lint their docs,
+# format them, and copy them unchanged beside instrumented test suites.
+TEST_HELPER_LIBS := $(wildcard tests/_*.mojo) tests/carla_fixed_s_fixture.mojo \
+                    tests/exact_predicates_oracle.mojo
+HELPER_LIBS  := tools/anatomy_pairs.mojo $(TEST_HELPER_LIBS)
 TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo)) $(HELPER_LIBS)
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
@@ -212,15 +214,34 @@ endif
 COV_BUDGET := $(shell n=$(words $(COVERAGE_SUITES)); \
                 [ $$n -lt 60 ] && n=60; echo $$n)
 
+# Explicit coverage transport/execution profile. Raw retains the historical
+# JIT path plus the narrow native-fixture repair. Compiled profiles preserve
+# source argv0 and arguments, but use a temporary native executable.
+COV_PROFILE ?= raw
+ifeq ($(filter $(COV_PROFILE),raw aot aot-hits),)
+$(error COV_PROFILE must be raw, aot, or aot-hits)
+endif
+ifeq ($(COV_PROFILE),raw)
+COVERAGE_RUN = python3 tools/native_test_support.py run --root $(COV_DIR)
+else
+COVERAGE_RUN = python3 tools/coverage_hit_aot.py --profile $(COV_PROFILE) --root $(COV_DIR)
+endif
+
 CACHE_DIR := .cache
 # Shell quoting also protects flags that contain spaces or shell punctuation.
 quote = '$(subst ','"'"',$(1))'
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
+# Native test fixtures are test-only. Their compiler identity also invalidates
+# suite stamps; a missing compiler is a build failure, never a skipped suite.
+export CC
+NATIVE_TOOLCHAIN := $(shell python3 tools/native_test_support.py fingerprint \
+                       --cc $(call quote,$(CC)) 2>/dev/null || echo "no-native-compiler")
 HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,$(MOJO)) \
           --setting=$(call quote,$(MOJOFLAGS)) \
           --setting=$(call quote,lint-cpu-build-flags:$(LINT_CPU_BUILD_FLAGS)) \
           --setting=$(call quote,$(TOOLCHAIN)) \
+          --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
           --setting=$(call quote,$(AFFECTED) $(AFFECTED_CHANGE)) \
           --setting=$(call quote,cpu-tests:$(CPU_TESTS)) \
           --setting=$(call quote,shard:$(SHARD)) \
@@ -229,6 +250,8 @@ HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,cpu-docs:$(CPU_DOC_SOURCES)) \
           --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
           --setting=$(call quote,format:$(FORMATTED)) \
+          --setting=$(call quote,coverage-profile:$(COV_PROFILE)) \
+          --setting=$(call quote,coverage-loop-proof-schema:constant-loops-v2) \
           --setting=$(call quote,covered:$(COVERED)) \
           --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
 ifeq ($(strip $(HASH)),)
@@ -300,9 +323,8 @@ help:
 
 check: check-cpu check-gpu
 
-# The half that needs nothing but the Mojo toolchain. This is what to run when
-# MAX is not installed, and what proves the no-dependencies claim is still
-# true.
+# The standard-library production half does not need MAX. Native test-only
+# fixtures also use a host C compiler; they are never linked into production.
 check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check test-tools test-coverage-tool test-portability
 
 # The complete GPU check needs MAX and an accelerator. The status line
@@ -343,6 +365,7 @@ $(TEST_CPU_STAMP):
 	    --setting=$(call quote,$(MOJO)) \
 	    --setting=$(call quote,$(MOJOFLAGS)) \
 	    --setting=$(call quote,$(TOOLCHAIN)) \
+	    --setting=$(call quote,native-tests:$(NATIVE_TOOLCHAIN)) \
 	    --setting=$(call quote,test-timeout:$(TEST_TIMEOUT)) \
 	    $(TEST_SUITES) > $(CACHE_DIR)/suites-to-run || exit 1
 	@xargs -n 2 -P $(JOBS) \
@@ -353,7 +376,9 @@ $(TEST_CPU_STAMP):
 	               "$$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$$1" "$$2" >&3; }; \
 	             progress "$$1" "build-start: $(MOJO) build $(MOJOFLAGS) --Werror -o $$bin $$1"; \
 	             out=$$(python3 tools/compiler_telemetry.py --suite "$$1" --log-fd 3 -- \
-	                    $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
+	                    python3 tools/native_test_support.py run --root . \
+	                      --suite "$$1" --cache $(CACHE_DIR)/native -- \
+	                      $(MOJO) build $(MOJOFLAGS) --Werror -o "$$bin" "$$1" \
 	                    2>&1; build_rc=$$?; \
 	                    progress "$$1" "build-end: exit=$$build_rc"; \
 	                    [ $$build_rc -eq 0 ] || exit $$build_rc; \
@@ -577,6 +602,9 @@ ifeq ($(strip $(COVERED)),)
 	@echo "No measured module is affected; coverage not measured."
 else
 	@for f in $(COVERED); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
+	@python3 tools/coverage_loop_proofs.py begin --root . --build $(COV_DIR) \
+	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
+	  --mojo=$(call quote,$(MOJO)) --sources $(COVERED)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
 	  $(COV_DIR) $(COVERED)); \
 	[ $$rc -eq 0 ] || exit 1
@@ -597,6 +625,11 @@ else
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
+	@python3 tools/native_test_support.py copy --root . --destination $(COV_DIR)
+	@python3 tools/coverage_loop_proofs.py seal --root . --build $(COV_DIR) \
+	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
+	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
+	  --suites $(COVERAGE_TESTS)
 	@mkdir -p $(COV_DIR)/hits
 endif
 
@@ -607,13 +640,17 @@ ifneq ($(strip $(COVERED)),)
 	@# Exact streams are compressed as they arrive. MC-DC record order stays
 	@# intact, without keeping tens of gigabytes of repeated probes on disk.
 	@printf '%s\n' $(COVERAGE_SUITES) \
-	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
+	  | python3 tools/coverage_io.py group --seconds $(COV_BUDGET) -- \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
 	             python3 tools/coverage_io.py capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
-	               --err "$(COV_DIR)/hits/$$name.txt.gz" -- \
-	               $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo"' _ {} \
+	               --err "$(COV_DIR)/hits/$$name.txt.gz" \
+	               --loop-proof "$(COV_DIR)/loop-proofs.json" --loop-proof-root . -- \
+	               $(COVERAGE_RUN) \
+	                 --suite "$(COV_DIR)/tests/$$name.mojo" --cache $(CACHE_DIR)/native-coverage \
+	                 -- \
+	                 $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo"' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
 	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
@@ -642,7 +679,11 @@ ifneq ($(strip $(COVERED)),)
 	  fi; \
 	done; [ $$missing -eq 0 ] || exit 1
 	@# FIFOs feed the original bytes to the reporter one suite at a time.
-	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits -- \
+	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits \
+	  --loop-proof-root . --loop-proof-build $(COV_DIR) \
+	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
+	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
+	  --suites $(COVERAGE_TESTS) -- \
 	  $(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo $(COV_DIR)/manifest.txt
 endif
 
@@ -1612,6 +1653,8 @@ clean-images:
 test-tools:
 	@python3 -m unittest discover -s tools -p 'test_*.py'
 	@python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
+	@python3 -m unittest discover -s tools/carla_lane_oracle -p 'test_*.py'
+	@python3 tools/carla_lane_oracle/spiral_moments.py --check
 
 # Native source-to-source regression: compile first, then enforce the normal
 # five-second limit on each executed test. test-tools remains compiler-free.
@@ -1620,6 +1663,8 @@ test-coverage-tool:
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
 	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
 	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
+	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.
 # Metal kernels as AIR, emitted for a Metal target without a GPU or Apple's

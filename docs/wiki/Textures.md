@@ -951,3 +951,27 @@ The result is a `Float64`, because three.js's result is not always a whole numbe
 ## Why
 
 See [Why mipmaps](Why-mipmaps) and [Why color is linear](Why-color-is-linear).
+
+## Shared texture payloads
+
+`Texture(copy=source)` keeps an independent deep copy of the texels and mip levels.
+Use `Texture(copy=source, share_data=True)` to share the complete byte and float
+payload allocations. Sampling reads those allocations without a copy. The first
+write to a shared payload takes a private copy. Replacing or destroying the
+source does not invalidate another texture that shares its payload.
+
+Each texture keeps its own repeat, offset, center, rotation, wraps, filters,
+color-space state, lookup ramp, mip offsets and other sampling metadata. Changes
+to these fields do not change another texture. Changing a base texel does not
+rebuild the mip chain. Call `regenerate_mipmaps` when required, as before.
+
+The public `pixels` and `data` fields use `TextureBuffer`, not `List`. Indexed
+reads and writes, `len`, `append`, `resize`, and `copy` remain available.
+Use `values()` when a function needs a borrowed read-only List. Use `copy()`
+when it needs an independently owned List. Use `mutable_values()` for a writable
+List, Span, or pointer. That call detaches the payload before it returns.
+
+A buffer that exposed a writable List keeps that state. Any later shared copy
+of that buffer takes an independent snapshot. A retained writable alias cannot
+change the new snapshot. The direct `unsafe_ptr()` is read-only. Do not cast a
+read-only pointer to a writable pointer or keep a pointer after its owner dies.

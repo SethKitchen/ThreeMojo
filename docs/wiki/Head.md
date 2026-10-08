@@ -200,7 +200,9 @@ The shell lies over the skin itself: about seven millimeters deep at the sides a
 - Follow strands fill in round each guide, as AMD's TressFX makes them. Each keeps an offset from its guide that widens toward the tip.
 - Clumping pulls each follower back toward its guide at the tip, so the hair gathers into locks. Frizz moves each tip a little.
 
-Each strand is drawn as a `LineSegments2` a pixel wide, unlit, in colors worked out at its points. A real hair is far thinner than a pixel, so the line stands in for it.
+Each strand uses a feathered `LineSegments2` ribbon, unlit, in colors worked out at its points. Its sample coverage is hashed, with opacity 0.65 by default. A kept sample writes depth. A rejected sample shows what is behind it. The same rule shapes its cast shadow. Ordinary wide lines keep their solid three.js behavior.
+
+See [Strand hair rendering](Strand-hair-rendering) for the coverage rule, motion fields, reference scenes, tests and hardware qualification limits.
 
 The colors are strand-space shading, as Frostbite's hair works it out. Kajiya and Kay's diffuse and Marschner's specular read the strand's direction, not a normal. Marschner's R highlight reflects white off the fiber; TRT passes through it and comes back in the pigment's color. Light is also lost with depth into the hair, as the Beer-Lambert law has it. Call `HairStrands.shade` when the head turns or the camera moves: the highlights move with them. The shading is ported from Frostbitten Hair WebGPU, and the follow strands from AMD TressFX.
 
@@ -208,7 +210,7 @@ Light that diffuses through a fiber crosses it twice, so the pigment tints the d
 
 ### Wind
 
-The hair moves. `HairSimulation(groom)` makes every point of every strand a particle. `step(collider, wind)` moves them a thirtieth of a second. Pass the groom to `write` to move its strands, then call `HairStrands.shade` to draw them. Each step works as position-based dynamics does:
+The hair moves. `HairSimulation(groom)` makes every point of every strand a particle. `step(collider, wind)` moves them a thirtieth of a second. Pass the groom to `write` to move its strands and refresh its normals and scalp-depth proxy. Then call `HairStrands.shade` to rebuild the moving density field, shade the strands and update their shared geometry storage. Each step works as position-based dynamics does:
 
 1. Each point but the root carries on as it moved, less friction, under gravity and the wind.
 2. Each segment keeps the length it was groomed at.

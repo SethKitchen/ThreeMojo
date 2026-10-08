@@ -49,6 +49,25 @@ The world is an entity registry. Each actor has an `ActorId`, from 1 up. The spe
 5. The world finds the road boxes that each vehicle is in. It tells the lights and signs about each vehicle that came or went.
 6. The world takes its snapshot.
 
+### Timestamp quantities
+
+`Timestamp` takes `Duration64` for elapsed, delta and platform time. Its
+`elapsed`, `delta` and `platform` accessors return the stored Float64 value
+without a Float32 conversion. `Timestamp.from_seconds` is the named adapter
+for CARLA's raw Float64 second fields. The fields and printed record format
+remain unchanged.
+
+A frame count must be nonnegative. Elapsed and delta time must be finite and
+nonnegative. Platform time must be finite and can be signed. Each accessor
+and `WorldSnapshot` construction checks the mutable timestamp before use.
+A zero delta is valid. Negative zero keeps its original bits.
+
+This precision contract covers the timestamp boundary. Episode settings and
+the physical integration step still use their existing Float32 duration.
+The settings reject nonfinite times. The substep calculation clamps its
+Float64 count before conversion to Int. `tick` checks timing settings,
+bounded substep count and clock advancement before it changes world state.
+
 ### Signal ids in snapshots
 
 A snapshot holds at most 32 UTF-8 bytes of each traffic light or sign id. This is a byte limit, not a character count. If the 32-byte limit would split a codepoint, the snapshot ends before that codepoint. The result stays valid UTF-8. An ASCII id keeps its first 32 characters.

@@ -57,14 +57,16 @@ def test_results_move_with_their_mip_buffers() raises:
     var batch = TextureDecodeBatch(1, 2)
     batch.textures[0] = Texture(2, 2, pixels^)
     var address = (
-        batch.textures[0].pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+        batch.textures[0]
+        .pixels.unsafe_ptr()
+        .unsafe_origin_cast[ImmutAnyOrigin]()
     )
     batch.check()
     var texture = batch.textures.pop()
     assert_equal(texture.levels, 2)
     assert_equal(len(texture.pixels), 20)
     assert_equal(
-        texture.pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        texture.pixels.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
         address,
     )
     assert_equal(len(batch.textures), 0)

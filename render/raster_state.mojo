@@ -36,8 +36,9 @@ alike.
 
 **The material flags a fragment reads are in the state.** three.js's
 `dithering`, `toneMapped`, `alphaHash`, `alphaToCoverage` and
-`premultipliedAlpha` ride five more bits of `ops_word`, and the
-constant color its `blendColor` and `blendAlpha` set rides four float
+`premultipliedAlpha` ride five more bits of `ops_word`. The opt-in
+strand hash uses bit 26; it does not change the ordinary alpha hash.
+The constant color its `blendColor` and `blendAlpha` set rides four float
 lanes, as the log factor does. The renderer sets each flag only where
 three.js's shader for that primitive reads it; see
 `docs/wiki/Renderer-hooks-and-material-flags.md`.
@@ -427,6 +428,9 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     # threshold, three.js's `alphaHash`. See
     # `render.fragment_flags.alpha_hash_threshold`.
     var alpha_hash: Bool
+    # Select the integer, spatially stable strand threshold when alpha
+    # hashing is on. Ordinary materials keep three.js's sine hash.
+    var strand_hash: Bool
     # Whether a fragment's alpha decides which samples it covers,
     # three.js's `alphaToCoverage`. See `render.fragment_flags.alpha_covers`.
     var alpha_to_coverage: Bool
@@ -466,6 +470,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         blend_green: Float32 = 0,
         blend_blue: Float32 = 0,
         blend_alpha: Float32 = 0,
+        strand_hash: Bool = False,
     ):
         """Create a state. Every default is three.js's.
 
@@ -496,6 +501,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             blend_green: Its green.
             blend_blue: Its blue.
             blend_alpha: The constant alpha, zero to one.
+            strand_hash: Whether that threshold uses the opt-in integer
+                strand hash instead of the ordinary three.js sine hash.
         """
         self.depth_test = depth_test
         self.depth_write = depth_write
@@ -514,6 +521,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         self.dithering = dithering
         self.tone_mapped = tone_mapped
         self.alpha_hash = alpha_hash
+        self.strand_hash = strand_hash
         self.alpha_to_coverage = alpha_to_coverage
         self.premultiplied_alpha = premultiplied_alpha
         self.blend_red = blend_red
@@ -601,7 +609,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             depth function, the stencil function and the three operations,
             then two bits for the depth mode, then one bit each for
             `dithering`, `tone_mapped`, `alpha_hash`, `alpha_to_coverage`
-            and `premultiplied_alpha`, bits 21 to 25. The log factor and
+            and `premultiplied_alpha`, bits 21 to 25. Bit 26 selects
+            `strand_hash`. The log factor and
             the blend constant are not in it.
         """
         return (
@@ -620,6 +629,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             | (Int(self.alpha_hash) << 23)
             | (Int(self.alpha_to_coverage) << 24)
             | (Int(self.premultiplied_alpha) << 25)
+            | (Int(self.strand_hash) << 26)
         )
 
     def stencil_word(self) -> Int:
@@ -668,6 +678,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             alpha_hash=(ops & (1 << 23)) != 0,
             alpha_to_coverage=(ops & (1 << 24)) != 0,
             premultiplied_alpha=(ops & (1 << 25)) != 0,
+            strand_hash=(ops & (1 << 26)) != 0,
         )
 
 

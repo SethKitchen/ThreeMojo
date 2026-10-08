@@ -79,7 +79,7 @@ images. CARLA and glTF use the same [image decode queue](Image-decode-queue).
 Completed maps move into the registry without a second copy of their
 pixels and mipmaps. A failed preload adds no partial cache entries.
 `texture_set` returns independent maps, so changing a set cannot change
-the registry's cached maps. This operation still copies texture data.
+the registry's cached maps. Texture sets share immutable payloads and copy on write.
 
 ## Share cached vehicle resources
 
@@ -392,3 +392,15 @@ its members. A changed extracted file is reported as a mismatch. `fetch`
 refuses to overwrite it. Remove that file explicitly, then run `fetch` to
 restore the verified member. Do this after a package update if an old
 extracted file remains in the cache.
+
+## Decoded texture ownership
+
+A preloaded registry owns each decoded image and its mip chain. Texture sets
+and materials made by `TextureSet.dress` share those payloads until a write.
+Each dressed material still gets separate texture IDs and independent repeat
+and sampling state. Albedo and linear-data decode keys remain distinct.
+
+Call `registry.clear_texture_cache()` to release the registry's decoded-image
+shares and keys. Existing texture sets and dressed materials keep their bytes.
+The next preload reads the source files again. A write to a source set or one
+material's texture does not change another set, material, or cached image.

@@ -683,7 +683,7 @@ struct _Library(Movable):
         texture.validate()
         var size = texture.width * texture.height * Texture.CHANNELS
         var pixels = List[UInt8](capacity=size)
-        pixels.extend(Span(texture.pixels)[0:size])
+        pixels.extend(Span(texture.pixels.values())[0:size])
         var png = encode_png(
             Framebuffer(texture.width, texture.height, pixels^)
         )
@@ -798,7 +798,7 @@ struct _Library(Movable):
             # The full-size image, without the chain that follows it.
             var size = face.width * face.height * Texture.CHANNELS
             var pixels = List[UInt8](capacity=size)
-            pixels.extend(Span(face.pixels)[0:size])
+            pixels.extend(Span(face.pixels.values())[0:size])
             var png = encode_png(Framebuffer(face.width, face.height, pixels^))
             image.string("data:image/png;base64," + encode_base64(png))
         image.end_array()

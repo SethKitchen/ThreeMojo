@@ -39,7 +39,7 @@ This is not a three.js port. See Extensions.
 from extensions.humanoid.skeleton.field import DistanceField
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.vector3 import Vector3
-from std.math import floor, max, min
+from std.math import floor, isfinite, max, min
 
 
 @fieldwise_init
@@ -104,6 +104,36 @@ struct HairPhysics(ImplicitlyCopyable):
         self.probe = Float32(0.001)
 
 
+def _motion_normal(before: Vector3, after: Vector3, normal: Vector3) -> Vector3:
+    """Rotate a rest normal with the shortest rotation of its tangent."""
+    var cosine = min(Float32(1), max(Float32(-1), before.dot(after)))
+    var axis = before
+    axis.cross(after)
+    var turned: Vector3
+    if cosine > Float32(-0.9999):
+        var first = axis
+        first.cross(normal)
+        var second = axis
+        second.cross(first)
+        turned = normal + first + second / (1 + cosine)
+    else:
+        # A half turn has no unique axis. Keep the projected rest normal
+        # when possible, otherwise use a deterministic orthogonal axis.
+        axis = normal - before * normal.dot(before)
+        if axis.length() < Float32(1e-6):
+            var basis = Vector3(1, 0, 0)
+            if abs(before.x) > Float32(0.9):
+                basis = Vector3(0, 1, 0)
+            axis = before
+            axis.cross(basis)
+        axis.normalize()
+        turned = axis * (2 * axis.dot(normal)) - normal
+    if turned.length() == 0:
+        return Vector3(0, 0, 1)
+    turned.normalize()
+    return turned
+
+
 struct HairSimulation(Movable):
     """Every point of a groom as a particle: where it was groomed, where
     it is, and where it was a step ago."""
@@ -113,6 +143,9 @@ struct HairSimulation(Movable):
     var now: List[Vector3]
     var previous: List[Vector3]
     var lengths: List[Float32]
+    var initial_normals: List[Vector3]
+    var initial_depths: List[Float32]
+    var initial_tangents: List[Vector3]
     var physics: HairPhysics
     var frame: Int
 
@@ -130,6 +163,11 @@ struct HairSimulation(Movable):
         self.now = groom.points.copy()
         self.previous = groom.points.copy()
         self.lengths = List[Float32](length=len(groom.points), fill=0)
+        self.initial_normals = groom.normals.copy()
+        self.initial_depths = groom.depths.copy()
+        self.initial_tangents = List[Vector3](capacity=len(groom.points))
+        for index in range(len(groom.points)):
+            self.initial_tangents.append(groom.tangent(index))
         for index in range(len(groom.points) - 1):  # pragma: no branch
             self.lengths[index] = (
                 groom.points[index + 1] - groom.points[index]
@@ -148,7 +186,7 @@ struct HairSimulation(Movable):
                 or a `HairCollider`.
             wind: The wind.
         """
-        ref p = self.physics
+        var p = self.physics
         var dt2 = p.step * p.step
         for strand in range(len(self.starts) - 1):  # pragma: no branch
             var first = self.starts[strand]
@@ -164,46 +202,44 @@ struct HairSimulation(Movable):
             var force = Vector3(0, -p.gravity, 0) + wind.direction * abs(
                 wind.strength * gust
             )
-            var moved = List[Vector3](capacity=end - first)
-            moved.append(self.now[first])
+            # Reuse the particle arrays. No per-strand work list or
+            # allocation is needed for these sequential constraints.
+            self.previous[first] = self.now[first]
             for index in range(first + 1, end):  # pragma: no branch
                 var motion = (self.now[index] - self.previous[index]) * (
                     1 - p.friction
                 )
-                moved.append(self.now[index] + motion + force * dt2)
+                var before = self.now[index]
+                self.now[index] = before + motion + force * dt2
+                self.previous[index] = before
             for _ in range(p.iterations):  # pragma: no branch
-                self._settle(moved, first, collider)
-            for k in range(end - first):  # pragma: no branch
-                self.previous[first + k] = self.now[first + k]
-                self.now[first + k] = moved[k]
+                self._settle(first, end, collider)
         self.frame += 1
 
-    def _settle[
-        F: DistanceField
-    ](self, mut points: List[Vector3], first: Int, collider: F):
+    def _settle[F: DistanceField](mut self, first: Int, end: Int, collider: F):
         """Settle one strand once against every constraint."""
-        ref p = self.physics
-        var count = len(points)
+        var p = self.physics
+        var count = end - first
         var iterations = Float32(p.iterations)
         # Length: the root is fixed, so its segment moves only the other
         # end.
         for k in range(count - 1):  # pragma: no branch
-            var d = points[k + 1] - points[k]
+            var d = self.now[first + k + 1] - self.now[first + k]
             var length = max(d.length(), Float32(1e-9))
             var wrong = 1 - self.lengths[first + k] / length
             var w0 = Float32(0) if k == 0 else Float32(1)
             var delta = d * (wrong * p.length / (w0 + 1))
-            points[k] = points[k] + delta * w0
-            points[k + 1] = points[k + 1] - delta
+            self.now[first + k] = self.now[first + k] + delta * w0
+            self.now[first + k + 1] = self.now[first + k + 1] - delta
         # Global shape, fading from the root to the tip.
         for k in range(1, count):  # pragma: no branch
             var x = Float32(k) / Float32(count - 1)
             var keep = 1 - min(
                 Float32(1), max(Float32(0), (x - p.extent) / p.fade)
             )
-            points[k] = points[k] + (self.initial[first + k] - points[k]) * (
-                p.shape / iterations * keep
-            )
+            self.now[first + k] = self.now[first + k] + (
+                self.initial[first + k] - self.now[first + k]
+            ) * (p.shape / iterations * keep)
         # Local shape: each run of three keeps its bend.
         var bend = p.bend / iterations
         for k in range(count - 2):  # pragma: no branch
@@ -211,23 +247,33 @@ struct HairSimulation(Movable):
             var b = self.initial[first + k + 1]
             var c = self.initial[first + k + 2]
             var rest = (b - (a + b + c) / 3).length()
-            var middle = (points[k] + points[k + 1] + points[k + 2]) / 3
-            var h = points[k + 1] - middle
+            var middle = (
+                self.now[first + k]
+                + self.now[first + k + 1]
+                + self.now[first + k + 2]
+            ) / 3
+            var h = self.now[first + k + 1] - middle
             var height = h.length()
             if height < Float32(1e-9):
                 continue
             var delta = h * (1 - rest / height)
             var w0 = Float32(0) if k == 0 else Float32(1)
             var total = w0 + 2 + 1
-            points[k] = points[k] + delta * (bend * w0 / total * 2)
-            points[k + 1] = points[k + 1] + delta * (bend / total * -4)
-            points[k + 2] = points[k + 2] + delta * (bend / total * 2)
+            self.now[first + k] = self.now[first + k] + delta * (
+                bend * w0 / total * 2
+            )
+            self.now[first + k + 1] = self.now[first + k + 1] + delta * (
+                bend / total * -4
+            )
+            self.now[first + k + 2] = self.now[first + k + 2] + delta * (
+                bend / total * 2
+            )
         # Collisions: a point inside the body goes out along the field's
         # gradient; the points by the root lie against it and are left.
         var push = p.collision / iterations
         var probe = p.probe
         for k in range(3, count):  # pragma: no branch
-            var q = points[k]
+            var q = self.now[first + k]
             var d = collider.distance(q) - p.offset
             if d >= 0:
                 continue
@@ -239,18 +285,52 @@ struct HairSimulation(Movable):
             var length = g.length()
             if length < Float32(1e-12):
                 continue
-            points[k] = q - g * (d * push / length)
+            self.now[first + k] = q - g * (d * push / length)
 
     def write(self, mut groom: HairGroom) raises:
-        """Put the particles' places into the groom it was made from.
+        """Write positions and refresh the motion-dependent shading fields.
+
+        Normals rotate with each tangent from the rest frame. The old
+        scalp depth is a rest-surface proxy: outward displacement reduces
+        it, and inward displacement increases it. It is not a dynamic
+        density estimate. HairStrands.shade rebuilds its separate moving
+        density volume for direct-light self-shadow.
 
         Args:
-            groom: The groom, with as many points as the particles.
+            groom: The groom, with the simulation's topology and fields.
 
         Raises:
-            Error: If the groom holds another count of points.
+            Error: If topology or field counts differ, or a position is
+                not finite. The groom is unchanged after such a failure.
         """
-        if len(groom.points) != len(self.now):
+        if len(groom.points) != len(self.now) or len(groom.starts) != len(
+            self.starts
+        ):
             raise Error("The groom is not the one the hair moves")
-        for index in range(len(self.now)):  # pragma: no branch
+        if len(groom.normals) != len(self.now) or len(groom.depths) != len(
+            self.now
+        ):
+            raise Error("The groom's shading fields do not match the hair")
+        if (
+            len(self.initial_normals) != len(self.now)
+            or len(self.initial_depths) != len(self.now)
+            or len(self.initial_tangents) != len(self.now)
+        ):
+            raise Error("The hair's rest shading fields do not match")
+        if groom.starts != self.starts:
+            raise Error("The groom is not the one the hair moves")
+        for index in range(len(self.now)):
+            var p = self.now[index]
+            if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):
+                raise Error("Hair motion must have finite positions")
+        for index in range(len(self.now)):
             groom.points[index] = self.now[index]
+        for index in range(len(self.now)):
+            var normal = self.initial_normals[index]
+            groom.normals[index] = _motion_normal(
+                self.initial_tangents[index], groom.tangent(index), normal
+            )
+            var lift = (self.now[index] - self.initial[index]).dot(normal)
+            groom.depths[index] = max(
+                Float32(0), self.initial_depths[index] - lift
+            )

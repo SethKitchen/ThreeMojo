@@ -1,0 +1,226 @@
+{
+  "schema": 1,
+  "event": "remove containing-objective-model production reuse",
+  "base_tree": "e161dd9b8f46e2ec006b57fd2167d67a1b217ad5",
+  "scope": "Tools-only migration for the reviewed two-file runtime removal. The current-cell producer runs after its original reference debit; containing ancestor reuse/capture and imports are removed. Exact station/scale expansion memoization, standalone helper, node fees, work/depth caps, all other operations and historical proof obligations remain.",
+  "runtime_freeze": {
+    "manifest": {
+      "base_tree": "e161dd9b8f46e2ec006b57fd2167d67a1b217ad5",
+      "files": {
+        "extensions/carla/lane_refinement.mojo": {
+          "before": "8457cf65de57b52061bd09be86f8b1c992a4dd34e2385928d4f9b577260853e6",
+          "after": "33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315"
+        },
+        "extensions/carla/map.mojo": {
+          "before": "442f941cdee9451151c91ab1c43854a6df93d8c87a0002b3e97a248190778f6a",
+          "after": "312a70b060e78ada52ee6bb4878eeee02b7c593d60472dd152c1eaab89046acd"
+        }
+      },
+      "caps_and_node_fees_unchanged": true,
+      "exact_station_scale_memoization_retained": true,
+      "standalone_objective_helper_unchanged_but_no_longer_imported_by_solver": true
+    },
+    "manifest_sha256": "14cbcd770ef04904669b0db47c3549df3a827ce10fd643ee3535d6798208a3df",
+    "patch_sha256": "8f041565f78063b3341ed1eea44f20790215c0e10c963ec41b53a6a4f27c4920",
+    "format_receipt_sha256": "c8c744d7406fb4db060f44d384b634a1daadca099086f69e0b1b5738d87462fd"
+  },
+  "solver_removal_projection": {
+    "status": "PASS",
+    "removed_nodes": [
+      {
+        "role": "invocation_state",
+        "ast_sha256": "9d37c5cad1603cc21e4375b7eedec07ec4d8b4beabc9008b3473c3974c700112"
+      },
+      {
+        "role": "ancestor_reuse",
+        "ast_sha256": "b7fcb4ad1926ab4c2b5d9e389e73c55a8d7d13875aa4d80799beb6d545f16838"
+      },
+      {
+        "role": "ancestor_capture",
+        "ast_sha256": "67ac29caefa2b90d5125e8ae09fbeb166c82a554a99b7418f05691e9d378db50"
+      }
+    ],
+    "projected_ast_sha256": "8c9e07f05bd97713a0c6046662ae79de7b5346939e153c8b7331ec4f71626f90",
+    "successor_ast_sha256": "8c9e07f05bd97713a0c6046662ae79de7b5346939e153c8b7331ec4f71626f90",
+    "map_complete_tokens_equal": true
+  },
+  "previous_artifacts": {
+    "runtime-source-pins.json": "97983c5eb44fa95d5f9453f61be8348ec076459381a97d31c40cf33149cc0df1",
+    "sum2-guard-pins.json": "b9fda862554b50b4741f2d5f8903b230d6e50178488d439f054987fe46abf5df",
+    "optional_runtime_contracts.py": "bc0e55a8bb8d781e31b9ffdb9eaa129edb8560c2fdf8f37cd04059e9f2ad7081",
+    "test_optional_runtime_contracts.py": "d682f2c58cd599d7f4e6c9e0b10d2d2b17c7c9357355c1e143f2d3c89b9df097",
+    "optional-runtime-migration.json": "425a517130e373c21e026bb7ff78e44a7c31083000e18b6d3bd29643f697049e",
+    "runtime-correspondence-migration.json": "6f1e2e225aa31defdcf5012a89696e0b11b380be7bce61a1e7e33eff3539a04d",
+    "sum2-correspondence-migration.json": "c5a170cfa33a1945a12eedd1fd362806e496feaf1669db72d4bc0c4368475c00"
+  },
+  "dependency_changes": [
+    {
+      "group": "canonical_accumulation",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "after": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "after": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0"
+    },
+    {
+      "group": "translation",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "after": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0"
+    },
+    {
+      "group": "support",
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "e48c2cacf0e1dc1575cb87a66ab0d1860733c76a8b7ce9eab49383195a1d02c7",
+      "after": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0"
+    }
+  ],
+  "guard_body_changes": [
+    {
+      "module": "lane_refinement",
+      "function": "_run_lane_search",
+      "before_source_sha256": "142896c5485b570ab3085b0acaf646c6b3c63fec4c87bd4b3d3397058e8076b6",
+      "after_source_sha256": "851ddd7e8ba753aea5ab3d3f11606f419b55c931d5d4aba229041eac0675b940"
+    }
+  ],
+  "guard_routing_changes": [
+    {
+      "module": "lane_refinement",
+      "before_sha256": "1f8117686ad2f4b33cd16f9bf0e15c8d24f6e1bb32ed05e6dcc25e7496ff0874",
+      "after_sha256": "b8ecbc44ebc2f4586dc65947b5bd93c82bd7e35ce16d27a48c9720c7cf58f1dc"
+    }
+  ],
+  "protected_inventory_changes": [
+    {
+      "path": "extensions/carla/lane_refinement.mojo",
+      "before": "addecd0191f72aa6c401f35c9126e629c40d772b7b902b7427c8d4e68f10df56",
+      "after": "09447e5137eeda036c26172148b4a3524f337a2d4a1acf1be385106eaef36412"
+    }
+  ],
+  "preservation": {
+    "unchanged_dependency_paths": true,
+    "unchanged_qualifiers": true,
+    "unchanged_all_other_dependency_pins": true,
+    "unchanged_all_other_guard_callers": true,
+    "unchanged_helper_source": true,
+    "standalone_model_four_complete_callers_retained": true,
+    "canonical_graph_constants_and_moment_pins_unchanged": true,
+    "prior_guard_manifest_fields_unchanged": true
+  },
+  "historical_removed_caller_controls": [
+    [
+      "model_lifetime",
+      "lane_refinement",
+      "_run_lane_search",
+      "var cached_model: Optional[_ObjectiveModel] = None",
+      "var cached_model: Optional[_ObjectiveModel] = saved_model",
+      "one search invocation"
+    ],
+    [
+      "model_center_provenance",
+      "lane_refinement",
+      "_run_lane_search",
+      "lo, hi, center_s, scale, domain, center",
+      "lo, hi, center_s, scale, center, center",
+      "paired ideal owner"
+    ],
+    [
+      "model_surrogate_provenance",
+      "lane_refinement",
+      "_run_lane_search",
+      "if external_witness and not frozen:",
+      "if external_witness:",
+      "unpaired frozen"
+    ],
+    [
+      "center_error_sentinel",
+      "lane_refinement",
+      "_run_lane_search",
+      "ideal_center.error = inf[DType.float64]()",
+      "ideal_center.error = 0.0",
+      "infinite translated error"
+    ],
+    [
+      "followup_wrong_counter",
+      "lane_refinement",
+      "_run_lane_search",
+      "certificate.nodes, certificate.terms,\n                                max_nodes, max_terms, work, reused_center_work",
+      "0, certificate.terms,\n                                max_nodes, max_terms, work, reused_center_work",
+      "current counters and complete work"
+    ],
+    [
+      "followup_wrong_reference",
+      "lane_refinement",
+      "_run_lane_search",
+      "max_nodes, max_terms, work, reused_center_work",
+      "max_nodes, max_terms, center_work, reused_center_work",
+      "current counters and complete work"
+    ],
+    [
+      "followup_cached_nodes",
+      "lane_refinement",
+      "_run_lane_search",
+      "and max_nodes - certificate.nodes >= 4",
+      "and max_nodes - certificate.nodes >= 3",
+      "depth and four followup nodes"
+    ],
+    [
+      "cached_goal_missing_recheck",
+      "lane_refinement",
+      "_run_lane_search",
+      "_objective_recheck_room(certificate.nodes, max_nodes) and _goal_excludes(reused_lower, scale, goal)",
+      "_goal_excludes(reused_lower, scale, goal)",
+      "cached goal closure must reserve recheck"
+    ],
+    [
+      "cached_goal_reordered_recheck",
+      "lane_refinement",
+      "_run_lane_search",
+      "_objective_recheck_room(certificate.nodes, max_nodes) and _goal_excludes(reused_lower, scale, goal)",
+      "_goal_excludes(reused_lower, scale, goal) and _objective_recheck_room(certificate.nodes, max_nodes)",
+      "cached goal closure must reserve recheck"
+    ],
+    [
+      "cached_accuracy_missing_recheck",
+      "lane_refinement",
+      "_run_lane_search",
+      "_objective_recheck_room(certificate.nodes, max_nodes) and _next_up(best_upper - reused_lower) <= reused_tolerance",
+      "_next_up(best_upper - reused_lower) <= reused_tolerance",
+      "cached accuracy closure must reserve recheck"
+    ],
+    [
+      "cached_accuracy_reordered_recheck",
+      "lane_refinement",
+      "_run_lane_search",
+      "_objective_recheck_room(certificate.nodes, max_nodes) and _next_up(best_upper - reused_lower) <= reused_tolerance",
+      "_next_up(best_upper - reused_lower) <= reused_tolerance and _objective_recheck_room(certificate.nodes, max_nodes)",
+      "cached accuracy closure must reserve recheck"
+    ],
+    [
+      "cached_strict_exclusion_changed",
+      "lane_refinement",
+      "_run_lane_search",
+      "if reused_lower > best_upper:",
+      "if _objective_recheck_room(certificate.nodes, max_nodes) and reused_lower > best_upper:",
+      "strict cached exclusion stays unconditional"
+    ]
+  ],
+  "historical_prior_solver_semantic_block": "    contains(run, 'var cached_model: Optional[_ObjectiveModel] = None', 'model lifetime is one search invocation')\n    contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')\n    contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')\n    contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')\n    expression(run, '_try_objective_model(lo, hi, center_s, scale, domain, center)',\n               'paired ideal owner and translated center')\n    expression(run, 'external_witness and not frozen', 'exclude unpaired frozen ARC surrogate')\n    expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',\n               'support receives same ideal and actual witness')\n    contains(run, 'ideal_center.error = inf[DType.float64]()', 'restricted center retains infinite translated error')\n    contains(run, 'var reused_center_work = _reference_work(road, reused_center_s, reused_center_s)',\n             'reused center retains original work reservation')\n    room = body(root, 'curve_objective_model', '_objective_followup_room')\n    expected_room = sampled.unique_function(sampled.syntax_tree(FOLLOWUP_ROOM), '_objective_followup_room')\n    require(sampled.dump(room) == sampled.dump(expected_room),\n            'complete overflow-safe integer followup admission')\n    call = '_objective_followup_room(certificate.nodes, certificate.terms, max_nodes, max_terms, work, reused_center_work)'\n    expression(run, call, 'cached caller must preserve current counters and complete work arguments')\n    expression(run, 'reused_domain.value().error > reused_tolerance and task[2] < max_depth and max_nodes - certificate.nodes >= 4',\n               'cached split retains depth and four followup nodes')\n    cache_guards = [item for item in ast.walk(run) if isinstance(item, ast.If)\n                    and sampled.dump(item.test) == sampled.dump(ast.parse(call, mode='eval').body)]\n    require(len(cache_guards) == 1 and sampled.dump(cache_guards[0].body[0]) ==\n            sampled.dump(ast.parse('certificate.terms += reused_center_work').body[0]),\n            'cache followup admission must precede center debit')\n    recheck = body(root, 'curve_objective_model', '_objective_recheck_room')\n    require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(\n        sampled.syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),\n        'complete integer cached-closure recheck admission')\n    contains(run, 'if reused_lower > best_upper:\\n    continue',\n             'strict cached exclusion stays unconditional')\n    contains(run, 'if _objective_recheck_room(certificate.nodes, max_nodes) and _goal_excludes(reused_lower, scale, goal):\\n    closed.add(_ClosedInterval(lo, hi, task[2], reused_lower, scale))\\n    continue',\n             'cached goal closure must reserve recheck before its predicate')\n    contains(run, 'if _objective_recheck_room(certificate.nodes, max_nodes) and _next_up(best_upper - reused_lower) <= reused_tolerance:\\n    closed.add(_ClosedInterval(lo, hi, task[2], reused_lower, scale))\\n    continue',\n             'cached accuracy closure must reserve recheck before its predicate')\n    expression(run, '_objective_recheck_room(certificate.nodes, max_nodes)',\n               'both cached closure routes need current node counters', count=2)\n",
+  "replacement_controls": [
+    "Production-wide executable-token rejection of objective-model module, type, constructors/restrictors and admission helpers outside retained standalone module; includes aliases, re-exports, new namespaces and initializers.",
+    "Removed cached-model search state cannot reappear; comments/docstrings and standalone/test consumers remain permitted.",
+    "Current-cell reference-work admission and full producer must immediately follow the original debit without stale-domain substitution or early cached closure.",
+    "Exact station/scale expansion memo remains invocation-local with its complete original fresh fallback.",
+    "Standalone model finite-owner/curvature/error/scale/fresh-FP/admission tests remain active; unchanged complete dependency and caller inventories remain pinned.",
+    "Retained 14-unit node fee allowance cannot be silently removed."
+  ],
+  "qualification_limits": [
+    "Compiler-free source/semantic integrity only; not a mathematical proof or native/coverage/performance/aggregate qualification.",
+    "Observed runtime results remain separate from this checker migration; 19 default driving cohort failures remain.",
+    "No pin-refresh command is installed in the repository."
+  ]
+}
