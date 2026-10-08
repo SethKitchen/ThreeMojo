@@ -286,6 +286,13 @@ def source_snapshot(root):
     hashes = {}
     inventory_path = root/'docs/validation/anatomy-provenance.json'
     paths = probe_sources(root)
+    # Every source file the inventory cites is bound evidence too.
+    if inventory_path.is_file():
+        cited = json.loads(inventory_path.read_bytes())
+        for item in cited.get('parameters', []):
+            for name in item.get('source_files', []):
+                if (root/name).is_file() and root/name not in paths:
+                    paths.append(root/name)
     paths += [root/'tools/anatomy_validity.py', inventory_path]
     for path in sorted(paths):
         content = path.read_bytes()

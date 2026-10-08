@@ -230,6 +230,9 @@ class AnatomyValidityTests(unittest.TestCase):
                     logic.write_text('report fixture')
                     source = root/'bound.mojo'
                     source.write_text('def fixture(): pass')
+                    # The probe's imports bind bound.mojo and a later added.mojo.
+                    (root/'tools/anatomy_probe.mojo').write_text(
+                        'from bound import fixture\nfrom added import added\n')
                     inventory_path = root/'docs/validation/anatomy-provenance.json'
                     inventory = {'parameters': [{'source_files': ['bound.mojo']}]}
                     inventory_path.write_text(json.dumps(inventory))
