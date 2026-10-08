@@ -121,7 +121,7 @@ The shared solver includes the rotational integration described above. CARLA use
 
 ## Static primitive index design
 
-The [static primitive benchmark](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/static-primitive-index-288.md) compares the current sweep with a bounded snapshot BVH. It measures 100, 1,000 and 10,000 static primitives, mixed moving participants and dense ray batches. The report includes allocation costs, brute-force checks and rebuild/refit rules.
+The [static primitive benchmark](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/static-primitive-index-288.md) compares the current sweep with a bounded snapshot BVH. `bench/physics_static_bench.mojo` and `bench/physics_static_bvh.mojo` run that comparison. It measures 100, 1,000 and 10,000 static primitives, mixed moving participants and dense ray batches. The report includes allocation costs, brute-force checks and rebuild/refit rules.
 
 The production sweep and existing world ray path stay unchanged. [Owned query snapshots](Physics-query-snapshots) provide an explicit frozen view for repeated rays. They own bounds, narrow geometry, materials, and historical owner identity. Their documented query policy preserves the current narrow-phase answers. The snapshot measurement report separates retained-query savings from capture costs and experimental index results.
 

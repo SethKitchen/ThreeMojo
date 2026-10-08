@@ -10,24 +10,24 @@ import hashlib
 import json
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import frozen_arc_producer_contracts as frozen
+    from . import coverage_invariant_contracts as invariant
+else:
     import source_contracts as source
     import frozen_arc_producer_contracts as frozen
     import coverage_invariant_contracts as invariant
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
-    from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
-try:
+if __package__:
+    from . import cache_key_contracts as cache_key
+else:
     import cache_key_contracts as cache_key
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import cache_key_contracts as cache_key
 
 
-try:
+if __package__:
+    from . import accepted_successor_contracts as accepted
+else:
     import accepted_successor_contracts as accepted
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import accepted_successor_contracts as accepted
 
 MIGRATION = 'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
 MIGRATION_SHA256 = '01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9'

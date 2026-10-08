@@ -1,3344 +1,4312 @@
 {
-  "generated_at": "2026-09-24",
+  "generated_at": "2026-10-07",
   "host": {
-    "os": "Linux 6.18.33.1-microsoft-standard-WSL2",
-    "cpu": "AMD Ryzen 9 5900X 12-Core Processor",
-    "python": "3.14.4",
+    "os": "Linux 6.12.94+",
+    "cpu": "Intel(R) Xeon(R) Processor",
+    "python": "3.12.3",
     "mojo_1_1": "Mojo 1.1.0 (8189361e)",
     "mojo_1_0": "Mojo 1.0.0 (ed45d567)",
     "node": "v22.14.0"
   },
-  "threejs_webgl": true,
+  "threejs_webgl": false,
   "baselines": {
     "mojo": {
       "ok": true,
-      "seconds": 0.0219,
-      "rss_kib": 12316,
-      "status": 0
+      "seconds": 0.0087,
+      "rss_kib": 9356,
+      "status": 0,
+      "frames_seconds": null
     },
     "node": {
       "ok": true,
-      "seconds": 0.0193,
-      "rss_kib": 43356,
+      "seconds": 0.0213,
+      "rss_kib": 42380,
       "status": 0
     }
   },
-  "mojo10_refused": 4,
-  "mojo10_total": 4,
+  "mojo10_refused": 71,
+  "mojo10_total": 76,
   "probe": {
     "v11": {
       "compile": {
         "ok": true,
-        "seconds": 3.3125,
-        "rss_kib": 342416,
+        "seconds": 3.2174,
+        "rss_kib": 262456,
         "status": 0
       },
       "run": {
         "ok": true,
-        "seconds": 0.055,
-        "rss_kib": 13156,
-        "status": 0
+        "seconds": 0.0595,
+        "rss_kib": 10400,
+        "status": 0,
+        "frames_seconds": null
       }
     },
     "v10": {
       "compile": {
         "ok": true,
-        "seconds": 2.7431,
-        "rss_kib": 352112,
+        "seconds": 3.3125,
+        "rss_kib": 269632,
         "status": 0
       },
       "run": {
         "ok": true,
-        "seconds": 0.0476,
-        "rss_kib": 14700,
-        "status": 0
+        "seconds": 0.0578,
+        "rss_kib": 11652,
+        "status": 0,
+        "frames_seconds": null
       }
     }
   },
   "examples": [
     {
       "name": "triangle",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 240,
       "frames": 1,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 4.6744,
-          "rss_kib": 330036,
+          "seconds": 5.0292,
+          "rss_kib": 269560,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0292,
-          "rss_kib": 13432,
-          "status": 0
+          "seconds": 0.0125,
+          "rss_kib": 10676,
+          "status": 0,
+          "frames_seconds": 0.0014971479000000002
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1056,
-        "rss_kib": 64404,
+        "seconds": 0.0815,
+        "rss_kib": 63920,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.007,
-        "import_seconds": 0.053399999999999996
+        "frames_seconds": 0.0085,
+        "import_seconds": 0.033600000000000005
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2564,
-        "rss_kib": 151896,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0183,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": true,
-          "seconds": 7.7972,
-          "rss_kib": 505552,
+          "seconds": 13.4152,
+          "rss_kib": 426968,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0204,
-          "rss_kib": 13764,
-          "status": 0
+          "seconds": 0.0127,
+          "rss_kib": 10532,
+          "status": 0,
+          "frames_seconds": 0.0016568509
         }
       }
     },
     {
       "name": "spin",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 160,
       "height": 120,
       "frames": 24,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 4.6678,
-          "rss_kib": 329892,
+          "seconds": 4.9261,
+          "rss_kib": 281552,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0429,
-          "rss_kib": 21104,
-          "status": 0
+          "seconds": 0.0245,
+          "rss_kib": 18384,
+          "status": 0,
+          "frames_seconds": 0.0023458389999999997
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1046,
-        "rss_kib": 64868,
+        "seconds": 0.0835,
+        "rss_kib": 64952,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0075,
-        "import_seconds": 0.0519
+        "frames_seconds": 0.009800000000000001,
+        "import_seconds": 0.033600000000000005
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2651,
-        "rss_kib": 151528,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0349,
-        "import_seconds": 0.054200000000000005
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": true,
-          "seconds": 8.3487,
-          "rss_kib": 473616,
+          "seconds": 11.1232,
+          "rss_kib": 442612,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0391,
-          "rss_kib": 21456,
-          "status": 0
+          "seconds": 0.0271,
+          "rss_kib": 18140,
+          "status": 0,
+          "frames_seconds": 0.008369834000000001
         }
       }
     },
     {
       "name": "cube",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 6.3394,
-          "rss_kib": 349328,
+          "seconds": 7.1537,
+          "rss_kib": 326208,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0946,
-          "rss_kib": 44940,
-          "status": 0
+          "seconds": 0.057,
+          "rss_kib": 42108,
+          "status": 0,
+          "frames_seconds": 0.012697564
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1208,
-        "rss_kib": 64804,
+        "seconds": 0.083,
+        "rss_kib": 64852,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0175,
-        "import_seconds": 0.054700000000000006
+        "frames_seconds": 0.0198,
+        "import_seconds": 0.0298
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2789,
-        "rss_kib": 154036,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0455,
-        "import_seconds": 0.055200000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": true,
-          "seconds": 9.1439,
-          "rss_kib": 550136,
+          "seconds": 11.9828,
+          "rss_kib": 468300,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1016,
-          "rss_kib": 45080,
-          "status": 0
+          "seconds": 0.0612,
+          "rss_kib": 41952,
+          "status": 0,
+          "frames_seconds": 0.023125559
         }
       }
     },
     {
       "name": "cubes",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
       "frames": 48,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.6462,
-          "rss_kib": 687304,
+          "seconds": 37.5656,
+          "rss_kib": 881836,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2045,
-          "rss_kib": 58408,
-          "status": 0
+          "seconds": 0.1738,
+          "rss_kib": 56328,
+          "status": 0,
+          "frames_seconds": 0.097341255
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1329,
-        "rss_kib": 66340,
+        "seconds": 0.1322,
+        "rss_kib": 65780,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0305,
-        "import_seconds": 0.0546
+        "frames_seconds": 0.0479,
+        "import_seconds": 0.0421
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2935,
-        "rss_kib": 154092,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.056600000000000004,
-        "import_seconds": 0.0551
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6765,
-          "rss_kib": 200500,
+          "seconds": 13.5831,
+          "rss_kib": 223132,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/cubes.mojo:42:"
+          "error": "Imported from /workspace/examples/cubes.mojo:43:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/cubes.mojo:42:"
+          "error": "Imported from /workspace/examples/cubes.mojo:43:"
         }
       }
     },
     {
       "name": "uv",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 200,
       "frames": 2,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 13.9314,
-          "rss_kib": 568560,
+          "seconds": 35.0725,
+          "rss_kib": 600428,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.045,
-          "rss_kib": 15772,
-          "status": 0
+          "seconds": 0.0367,
+          "rss_kib": 13168,
+          "status": 0,
+          "frames_seconds": 0.01133536
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1133,
-        "rss_kib": 64856,
+        "seconds": 0.0881,
+        "rss_kib": 64848,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0103,
-        "import_seconds": 0.0512
+        "frames_seconds": 0.0114,
+        "import_seconds": 0.034
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2526,
-        "rss_kib": 152172,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0215,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 4.9669,
-          "rss_kib": 195604,
+          "seconds": 10.2236,
+          "rss_kib": 208044,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/uv.mojo:41:"
+          "error": "Imported from /workspace/examples/uv.mojo:42:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/uv.mojo:41:"
+          "error": "Imported from /workspace/examples/uv.mojo:42:"
         }
       }
     },
     {
       "name": "textured",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.8416,
-          "rss_kib": 708268,
+          "seconds": 51.1242,
+          "rss_kib": 899224,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2158,
-          "rss_kib": 54276,
-          "status": 0
+          "seconds": 0.2388,
+          "rss_kib": 49192,
+          "status": 0,
+          "frames_seconds": 0.18375624
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1227,
-        "rss_kib": 64692,
+        "seconds": 0.1081,
+        "rss_kib": 65228,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.019,
-        "import_seconds": 0.053899999999999997
+        "frames_seconds": 0.0314,
+        "import_seconds": 0.0346
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2842,
-        "rss_kib": 153836,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.048299999999999996,
-        "import_seconds": 0.0536
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6385,
-          "rss_kib": 200208,
+          "seconds": 12.5392,
+          "rss_kib": 222660,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/textured.mojo:41:"
+          "error": "Imported from /workspace/examples/textured.mojo:42:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/textured.mojo:41:"
+          "error": "Imported from /workspace/examples/textured.mojo:42:"
         }
       }
     },
     {
       "name": "glass",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.1792,
-          "rss_kib": 721712,
+          "seconds": 48.511,
+          "rss_kib": 908120,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1853,
-          "rss_kib": 51060,
-          "status": 0
+          "seconds": 0.1871,
+          "rss_kib": 49184,
+          "status": 0,
+          "frames_seconds": 0.11941063
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.128,
-        "rss_kib": 65760,
+        "seconds": 0.1111,
+        "rss_kib": 65140,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.024399999999999998,
-        "import_seconds": 0.055200000000000006
+        "frames_seconds": 0.0348,
+        "import_seconds": 0.0329
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2864,
-        "rss_kib": 154516,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0526,
-        "import_seconds": 0.054299999999999994
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6251,
-          "rss_kib": 200736,
+          "seconds": 14.0223,
+          "rss_kib": 223260,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/glass.mojo:38:"
+          "error": "Imported from /workspace/examples/glass.mojo:39:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/glass.mojo:38:"
+          "error": "Imported from /workspace/examples/glass.mojo:39:"
         }
       }
     },
     {
       "name": "floor",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 200,
       "frames": 30,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7496,
-          "rss_kib": 712348,
+          "seconds": 53.4492,
+          "rss_kib": 895644,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.235,
-          "rss_kib": 46096,
-          "status": 0
+          "seconds": 0.2813,
+          "rss_kib": 43736,
+          "status": 0,
+          "frames_seconds": 0.22405931
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1311,
-        "rss_kib": 65228,
+        "seconds": 0.0925,
+        "rss_kib": 65080,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.022699999999999998,
-        "import_seconds": 0.0562
+        "frames_seconds": 0.0252,
+        "import_seconds": 0.0305
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2979,
-        "rss_kib": 153668,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0466,
-        "import_seconds": 0.0565
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.8373,
-          "rss_kib": 200448,
+          "seconds": 9.3192,
+          "rss_kib": 223224,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/floor.mojo:54:"
+          "error": "Imported from /workspace/examples/floor.mojo:55:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/floor.mojo:54:"
+          "error": "Imported from /workspace/examples/floor.mojo:55:"
         }
       }
     },
     {
       "name": "photo",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.0825,
-          "rss_kib": 704768,
+          "seconds": 42.9983,
+          "rss_kib": 933348,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1945,
-          "rss_kib": 51364,
-          "status": 0
+          "seconds": 0.1154,
+          "rss_kib": 48812,
+          "status": 0,
+          "frames_seconds": 0.07806141999999999
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1235,
-        "rss_kib": 65628,
+        "seconds": 0.0678,
+        "rss_kib": 65356,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.019899999999999998,
-        "import_seconds": 0.054200000000000005
+        "frames_seconds": 0.0176,
+        "import_seconds": 0.0225
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2789,
-        "rss_kib": 154028,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0489,
-        "import_seconds": 0.054200000000000005
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.9922,
-          "rss_kib": 201492,
+          "seconds": 8.491,
+          "rss_kib": 224984,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/photo.mojo:41:"
+          "error": "Imported from /workspace/examples/photo.mojo:42:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/photo.mojo:41:"
+          "error": "Imported from /workspace/examples/photo.mojo:42:"
         }
       }
     },
     {
       "name": "lamps",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 260,
       "height": 200,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7007,
-          "rss_kib": 708412,
+          "seconds": 33.6349,
+          "rss_kib": 842244,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1888,
-          "rss_kib": 50560,
-          "status": 0
+          "seconds": 0.1943,
+          "rss_kib": 51640,
+          "status": 0,
+          "frames_seconds": 0.12954987
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.142,
-        "rss_kib": 67544,
+        "seconds": 0.1212,
+        "rss_kib": 67568,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.038700000000000005,
-        "import_seconds": 0.054200000000000005
+        "frames_seconds": 0.0479,
+        "import_seconds": 0.0348
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2885,
-        "rss_kib": 153708,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.047299999999999995,
-        "import_seconds": 0.0554
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5889,
-          "rss_kib": 199436,
+          "seconds": 12.5669,
+          "rss_kib": 223304,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/lamps.mojo:50:"
+          "error": "Imported from /workspace/examples/lamps.mojo:51:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/lamps.mojo:50:"
+          "error": "Imported from /workspace/examples/lamps.mojo:51:"
         }
       }
     },
     {
       "name": "first_scene",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 240,
       "frames": 1,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7962,
-          "rss_kib": 703908,
+          "seconds": 44.0739,
+          "rss_kib": 833208,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.0334,
-          "rss_kib": 15520,
-          "status": 0
+          "seconds": 0.0147,
+          "rss_kib": 13684,
+          "status": 0,
+          "frames_seconds": 0.0048940597
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1071,
-        "rss_kib": 65180,
+        "seconds": 0.0668,
+        "rss_kib": 64300,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0086,
-        "import_seconds": 0.0525
+        "frames_seconds": 0.0085,
+        "import_seconds": 0.0269
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2579,
-        "rss_kib": 152332,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.020399999999999998,
-        "import_seconds": 0.055200000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5674,
-          "rss_kib": 199512,
+          "seconds": 9.6548,
+          "rss_kib": 222212,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/first_scene.mojo:27:"
+          "error": "Imported from /workspace/examples/first_scene.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/first_scene.mojo:27:"
+          "error": "Imported from /workspace/examples/first_scene.mojo:28:"
         }
       }
     },
     {
       "name": "lit_scene",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 240,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7181,
-          "rss_kib": 691300,
+          "seconds": 44.6195,
+          "rss_kib": 883564,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2399,
-          "rss_kib": 68120,
-          "status": 0
+          "seconds": 0.2772,
+          "rss_kib": 66236,
+          "status": 0,
+          "frames_seconds": 0.19266193999999998
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1275,
-        "rss_kib": 64892,
+        "seconds": 0.1183,
+        "rss_kib": 64712,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.023399999999999997,
-        "import_seconds": 0.0551
+        "frames_seconds": 0.0345,
+        "import_seconds": 0.038799999999999994
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.286,
-        "rss_kib": 154096,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0517,
-        "import_seconds": 0.0536
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5975,
-          "rss_kib": 199772,
+          "seconds": 13.0522,
+          "rss_kib": 223072,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/lit_scene.mojo:28:"
+          "error": "Imported from /workspace/examples/lit_scene.mojo:29:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/lit_scene.mojo:28:"
+          "error": "Imported from /workspace/examples/lit_scene.mojo:29:"
         }
       }
     },
     {
       "name": "rotations",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.6151,
-          "rss_kib": 686720,
+          "seconds": 54.0539,
+          "rss_kib": 846572,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1594,
-          "rss_kib": 46092,
-          "status": 0
+          "seconds": 0.1053,
+          "rss_kib": 45232,
+          "status": 0,
+          "frames_seconds": 0.059070496
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1203,
-        "rss_kib": 65752,
+        "seconds": 0.1094,
+        "rss_kib": 64440,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0177,
-        "import_seconds": 0.054299999999999994
+        "frames_seconds": 0.027,
+        "import_seconds": 0.0376
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2825,
-        "rss_kib": 153860,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046299999999999994,
-        "import_seconds": 0.054700000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6035,
-          "rss_kib": 199604,
+          "seconds": 13.3021,
+          "rss_kib": 223068,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/rotations.mojo:26:"
+          "error": "Imported from /workspace/examples/rotations.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/rotations.mojo:26:"
+          "error": "Imported from /workspace/examples/rotations.mojo:27:"
         }
       }
     },
     {
       "name": "ortho",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5728,
-          "rss_kib": 707652,
+          "seconds": 49.4371,
+          "rss_kib": 903672,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1644,
-          "rss_kib": 47632,
-          "status": 0
+          "seconds": 0.1054,
+          "rss_kib": 43516,
+          "status": 0,
+          "frames_seconds": 0.05823755
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1171,
-        "rss_kib": 65556,
+        "seconds": 0.0928,
+        "rss_kib": 65208,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0129,
-        "import_seconds": 0.055
+        "frames_seconds": 0.016,
+        "import_seconds": 0.0335
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2836,
-        "rss_kib": 154104,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0458,
-        "import_seconds": 0.055299999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6557,
-          "rss_kib": 199728,
+          "seconds": 13.3461,
+          "rss_kib": 223800,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/ortho.mojo:24:"
+          "error": "Imported from /workspace/examples/ortho.mojo:25:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/ortho.mojo:24:"
+          "error": "Imported from /workspace/examples/ortho.mojo:25:"
         }
       }
     },
     {
       "name": "geometry",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5231,
-          "rss_kib": 708920,
+          "seconds": 52.5004,
+          "rss_kib": 900056,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1898,
-          "rss_kib": 48164,
-          "status": 0
+          "seconds": 0.2192,
+          "rss_kib": 46240,
+          "status": 0,
+          "frames_seconds": 0.16749364
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1751,
-        "rss_kib": 67668,
+        "seconds": 0.2124,
+        "rss_kib": 67412,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0707,
-        "import_seconds": 0.0538
+        "frames_seconds": 0.101,
+        "import_seconds": 0.041100000000000005
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2874,
-        "rss_kib": 153468,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.053399999999999996,
-        "import_seconds": 0.054299999999999994
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5216,
-          "rss_kib": 199828,
+          "seconds": 14.4971,
+          "rss_kib": 223044,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/geometry.mojo:24:"
+          "error": "Imported from /workspace/examples/geometry.mojo:25:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/geometry.mojo:24:"
+          "error": "Imported from /workspace/examples/geometry.mojo:25:"
         }
       }
     },
     {
       "name": "instances",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5982,
-          "rss_kib": 687240,
+          "seconds": 50.4812,
+          "rss_kib": 869776,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1645,
-          "rss_kib": 45908,
-          "status": 0
+          "seconds": 0.0924,
+          "rss_kib": 44236,
+          "status": 0,
+          "frames_seconds": 0.055024624
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1345,
-        "rss_kib": 67488,
+        "seconds": 0.0976,
+        "rss_kib": 66760,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0319,
-        "import_seconds": 0.053700000000000005
+        "frames_seconds": 0.0365,
+        "import_seconds": 0.027800000000000002
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2803,
-        "rss_kib": 153468,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0475,
-        "import_seconds": 0.0567
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5888,
-          "rss_kib": 198816,
+          "seconds": 9.0737,
+          "rss_kib": 222480,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/instances.mojo:26:"
+          "error": "Imported from /workspace/examples/instances.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/instances.mojo:26:"
+          "error": "Imported from /workspace/examples/instances.mojo:27:"
         }
       }
     },
     {
       "name": "raycast",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.9913,
-          "rss_kib": 722740,
+          "seconds": 32.6414,
+          "rss_kib": 881556,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1949,
-          "rss_kib": 46948,
-          "status": 0
+          "seconds": 0.096,
+          "rss_kib": 45544,
+          "status": 0,
+          "frames_seconds": 0.06585575
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.153,
-        "rss_kib": 69412,
+        "seconds": 0.0944,
+        "rss_kib": 68928,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0505,
-        "import_seconds": 0.0536
+        "frames_seconds": 0.0418,
+        "import_seconds": 0.0233
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2946,
-        "rss_kib": 164016,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0587,
-        "import_seconds": 0.0551
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.7104,
-          "rss_kib": 201128,
+          "seconds": 8.4748,
+          "rss_kib": 226248,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/raycast.mojo:28:"
+          "error": "Imported from /workspace/examples/raycast.mojo:29:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/raycast.mojo:28:"
+          "error": "Imported from /workspace/examples/raycast.mojo:29:"
         }
       }
     },
     {
       "name": "curves",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.118,
-          "rss_kib": 696956,
+          "seconds": 31.3512,
+          "rss_kib": 859520,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1658,
-          "rss_kib": 47048,
-          "status": 0
+          "seconds": 0.0915,
+          "rss_kib": 43844,
+          "status": 0,
+          "frames_seconds": 0.049656585999999996
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1333,
-        "rss_kib": 67864,
+        "seconds": 0.0943,
+        "rss_kib": 66872,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0272,
-        "import_seconds": 0.0541
+        "frames_seconds": 0.0297,
+        "import_seconds": 0.027399999999999997
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2852,
-        "rss_kib": 154144,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.047299999999999995,
-        "import_seconds": 0.055799999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.8701,
-          "rss_kib": 201320,
+          "seconds": 11.7806,
+          "rss_kib": 225936,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/curves.mojo:27:"
+          "error": "Imported from /workspace/examples/curves.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/curves.mojo:27:"
+          "error": "Imported from /workspace/examples/curves.mojo:28:"
         }
       }
     },
     {
       "name": "keyframes",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.0939,
-          "rss_kib": 721080,
+          "seconds": 45.1067,
+          "rss_kib": 931216,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1565,
-          "rss_kib": 46284,
-          "status": 0
+          "seconds": 0.0878,
+          "rss_kib": 45056,
+          "status": 0,
+          "frames_seconds": 0.045290996
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1216,
-        "rss_kib": 65172,
+        "seconds": 0.0844,
+        "rss_kib": 65116,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0185,
-        "import_seconds": 0.0541
+        "frames_seconds": 0.020300000000000002,
+        "import_seconds": 0.0293
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2836,
-        "rss_kib": 153976,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046799999999999994,
-        "import_seconds": 0.0545
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.9992,
-          "rss_kib": 202624,
+          "seconds": 11.7318,
+          "rss_kib": 228556,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/keyframes.mojo:29:"
+          "error": "Imported from /workspace/examples/keyframes.mojo:30:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/keyframes.mojo:29:"
+          "error": "Imported from /workspace/examples/keyframes.mojo:30:"
         }
       }
     },
     {
       "name": "skinning",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.0099,
-          "rss_kib": 713664,
+          "seconds": 42.4891,
+          "rss_kib": 794004,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.164,
-          "rss_kib": 46456,
-          "status": 0
+          "seconds": 0.0953,
+          "rss_kib": 45628,
+          "status": 0,
+          "frames_seconds": 0.04596547
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1248,
-        "rss_kib": 65480,
+        "seconds": 0.1009,
+        "rss_kib": 65512,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0161,
-        "import_seconds": 0.0562
+        "frames_seconds": 0.0183,
+        "import_seconds": 0.0353
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2868,
-        "rss_kib": 154356,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0511,
-        "import_seconds": 0.0538
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6543,
-          "rss_kib": 200948,
+          "seconds": 11.9716,
+          "rss_kib": 223504,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/skinning.mojo:29:"
+          "error": "Imported from /workspace/examples/skinning.mojo:30:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/skinning.mojo:29:"
+          "error": "Imported from /workspace/examples/skinning.mojo:30:"
         }
       }
     },
     {
       "name": "phong",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.6596,
-          "rss_kib": 709932,
+          "seconds": 49.7559,
+          "rss_kib": 871472,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1982,
-          "rss_kib": 46412,
-          "status": 0
+          "seconds": 0.1942,
+          "rss_kib": 46524,
+          "status": 0,
+          "frames_seconds": 0.13465855
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1525,
-        "rss_kib": 67412,
+        "seconds": 0.1351,
+        "rss_kib": 66868,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0461,
-        "import_seconds": 0.0551
+        "frames_seconds": 0.0598,
+        "import_seconds": 0.0316
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.281,
-        "rss_kib": 153980,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.049,
-        "import_seconds": 0.054299999999999994
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5507,
-          "rss_kib": 199164,
+          "seconds": 12.8324,
+          "rss_kib": 223632,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/phong.mojo:25:"
+          "error": "Imported from /workspace/examples/phong.mojo:26:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/phong.mojo:25:"
+          "error": "Imported from /workspace/examples/phong.mojo:26:"
         }
       }
     },
     {
       "name": "fog",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5399,
-          "rss_kib": 686688,
+          "seconds": 49.5543,
+          "rss_kib": 843008,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1566,
-          "rss_kib": 46752,
-          "status": 0
+          "seconds": 0.0937,
+          "rss_kib": 43752,
+          "status": 0,
+          "frames_seconds": 0.031036077999999998
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1212,
-        "rss_kib": 64700,
+        "seconds": 0.0975,
+        "rss_kib": 64556,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0178,
-        "import_seconds": 0.054799999999999995
+        "frames_seconds": 0.0218,
+        "import_seconds": 0.0368
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2835,
-        "rss_kib": 153592,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.047200000000000006,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5849,
-          "rss_kib": 198400,
+          "seconds": 12.4224,
+          "rss_kib": 223236,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/fog.mojo:26:"
+          "error": "Imported from /workspace/examples/fog.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/fog.mojo:26:"
+          "error": "Imported from /workspace/examples/fog.mojo:27:"
         }
       }
     },
     {
       "name": "culling",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5404,
-          "rss_kib": 687544,
+          "seconds": 56.5501,
+          "rss_kib": 891592,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.155,
-          "rss_kib": 45844,
-          "status": 0
+          "seconds": 0.1118,
+          "rss_kib": 43692,
+          "status": 0,
+          "frames_seconds": 0.046631929999999995
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1353,
-        "rss_kib": 66136,
+        "seconds": 0.1403,
+        "rss_kib": 65620,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0308,
-        "import_seconds": 0.056
+        "frames_seconds": 0.0416,
+        "import_seconds": 0.0479
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2815,
-        "rss_kib": 154040,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.047,
-        "import_seconds": 0.054700000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5683,
-          "rss_kib": 199368,
+          "seconds": 13.968,
+          "rss_kib": 222760,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/culling.mojo:26:"
+          "error": "Imported from /workspace/examples/culling.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/culling.mojo:26:"
+          "error": "Imported from /workspace/examples/culling.mojo:27:"
         }
       }
     },
     {
       "name": "clipping",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7509,
-          "rss_kib": 710520,
+          "seconds": 66.4008,
+          "rss_kib": 843940,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1642,
-          "rss_kib": 47412,
-          "status": 0
+          "seconds": 2.5855,
+          "rss_kib": 45160,
+          "status": 0,
+          "frames_seconds": 0.06818758
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1213,
-        "rss_kib": 64416,
+        "seconds": 0.7988,
+        "rss_kib": 64448,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0178,
-        "import_seconds": 0.0544
+        "frames_seconds": 0.040100000000000004,
+        "import_seconds": 0.0407
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2806,
-        "rss_kib": 153764,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046200000000000005,
-        "import_seconds": 0.0555
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6159,
-          "rss_kib": 199724,
+          "seconds": 16.3767,
+          "rss_kib": 223220,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/clipping.mojo:25:"
+          "error": "Imported from /workspace/examples/clipping.mojo:26:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/clipping.mojo:25:"
+          "error": "Imported from /workspace/examples/clipping.mojo:26:"
         }
       }
     },
     {
       "name": "gpu_backend",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.8605,
-          "rss_kib": 710948,
+          "seconds": 61.7941,
+          "rss_kib": 887968,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1686,
-          "rss_kib": 46980,
-          "status": 0
+          "seconds": 0.1772,
+          "rss_kib": 45056,
+          "status": 0,
+          "frames_seconds": 0.10271496000000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.135,
-        "rss_kib": 65956,
+        "seconds": 0.116,
+        "rss_kib": 65592,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0317,
-        "import_seconds": 0.054200000000000005
+        "frames_seconds": 0.040100000000000004,
+        "import_seconds": 0.0334
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2813,
-        "rss_kib": 154216,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046299999999999994,
-        "import_seconds": 0.0541
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6466,
-          "rss_kib": 200368,
+          "seconds": 17.1054,
+          "rss_kib": 223968,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/gpu_backend.mojo:26:"
+          "error": "Imported from /workspace/examples/gpu_backend.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/gpu_backend.mojo:26:"
+          "error": "Imported from /workspace/examples/gpu_backend.mojo:27:"
         }
       }
     },
     {
       "name": "exposure",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5083,
-          "rss_kib": 699484,
+          "seconds": 52.4875,
+          "rss_kib": 781536,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1853,
-          "rss_kib": 46828,
-          "status": 0
+          "seconds": 0.1872,
+          "rss_kib": 46392,
+          "status": 0,
+          "frames_seconds": 0.1363665
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1184,
-        "rss_kib": 64984,
+        "seconds": 0.0996,
+        "rss_kib": 64596,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0173,
-        "import_seconds": 0.052899999999999996
+        "frames_seconds": 0.025,
+        "import_seconds": 0.0342
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2801,
-        "rss_kib": 153776,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.047,
-        "import_seconds": 0.055
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.55,
-          "rss_kib": 199084,
+          "seconds": 12.7962,
+          "rss_kib": 223624,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/exposure.mojo:26:"
+          "error": "Imported from /workspace/examples/exposure.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/exposure.mojo:26:"
+          "error": "Imported from /workspace/examples/exposure.mojo:27:"
         }
       }
     },
     {
       "name": "model",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.0282,
-          "rss_kib": 780036,
+          "seconds": 50.2936,
+          "rss_kib": 941096,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1642,
-          "rss_kib": 47256,
-          "status": 0
+          "seconds": 0.1109,
+          "rss_kib": 45716,
+          "status": 0,
+          "frames_seconds": 0.058236828000000004
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1226,
-        "rss_kib": 64792,
+        "seconds": 0.0932,
+        "rss_kib": 64440,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0181,
-        "import_seconds": 0.0551
+        "frames_seconds": 0.0215,
+        "import_seconds": 0.030600000000000002
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2772,
-        "rss_kib": 153828,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046799999999999994,
-        "import_seconds": 0.0535
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.7681,
-          "rss_kib": 201664,
+          "seconds": 15.2597,
+          "rss_kib": 224112,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/model.mojo:25:"
+          "error": "Imported from /workspace/examples/model.mojo:26:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/model.mojo:25:"
+          "error": "Imported from /workspace/examples/model.mojo:26:"
         }
       }
     },
     {
       "name": "orbit",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.4999,
-          "rss_kib": 710640,
+          "seconds": 65.2313,
+          "rss_kib": 840244,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1651,
-          "rss_kib": 48196,
-          "status": 0
+          "seconds": 0.175,
+          "rss_kib": 43772,
+          "status": 0,
+          "frames_seconds": 0.073838165
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1228,
-        "rss_kib": 67556,
+        "seconds": 0.1439,
+        "rss_kib": 66584,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0189,
-        "import_seconds": 0.0541
+        "frames_seconds": 0.026199999999999998,
+        "import_seconds": 0.047
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2797,
-        "rss_kib": 153884,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0466,
-        "import_seconds": 0.054700000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5717,
-          "rss_kib": 199256,
+          "seconds": 15.7342,
+          "rss_kib": 223256,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/orbit.mojo:27:"
+          "error": "Imported from /workspace/examples/orbit.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/orbit.mojo:27:"
+          "error": "Imported from /workspace/examples/orbit.mojo:28:"
         }
       }
     },
     {
       "name": "clock",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.6524,
-          "rss_kib": 709880,
+          "seconds": 40.1019,
+          "rss_kib": 927580,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.164,
-          "rss_kib": 45924,
-          "status": 0
+          "seconds": 0.0869,
+          "rss_kib": 44884,
+          "status": 0,
+          "frames_seconds": 0.044554670000000005
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.12,
-        "rss_kib": 64704,
+        "seconds": 0.071,
+        "rss_kib": 64472,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0173,
-        "import_seconds": 0.054799999999999995
+        "frames_seconds": 0.0162,
+        "import_seconds": 0.0237
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2811,
-        "rss_kib": 153800,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0464,
-        "import_seconds": 0.055799999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5915,
-          "rss_kib": 200624,
+          "seconds": 8.1359,
+          "rss_kib": 222668,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/clock.mojo:27:"
+          "error": "Imported from /workspace/examples/clock.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/clock.mojo:27:"
+          "error": "Imported from /workspace/examples/clock.mojo:27:"
         }
       }
     },
     {
       "name": "chain",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7119,
-          "rss_kib": 714384,
+          "seconds": 27.7754,
+          "rss_kib": 842096,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1571,
-          "rss_kib": 45924,
-          "status": 0
+          "seconds": 0.0751,
+          "rss_kib": 45552,
+          "status": 0,
+          "frames_seconds": 0.039773724
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1211,
-        "rss_kib": 65460,
+        "seconds": 0.0638,
+        "rss_kib": 65272,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.017,
-        "import_seconds": 0.0555
+        "frames_seconds": 0.0145,
+        "import_seconds": 0.0224
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2867,
-        "rss_kib": 153824,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0504,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6203,
-          "rss_kib": 199564,
+          "seconds": 7.661,
+          "rss_kib": 223316,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/chain.mojo:25:"
+          "error": "Imported from /workspace/examples/chain.mojo:26:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/chain.mojo:25:"
+          "error": "Imported from /workspace/examples/chain.mojo:26:"
         }
       }
     },
     {
       "name": "additive",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.4688,
-          "rss_kib": 702600,
+          "seconds": 36.8308,
+          "rss_kib": 870312,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1825,
-          "rss_kib": 46872,
-          "status": 0
+          "seconds": 0.2077,
+          "rss_kib": 45752,
+          "status": 0,
+          "frames_seconds": 0.13028057999999998
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1212,
-        "rss_kib": 64896,
+        "seconds": 0.1084,
+        "rss_kib": 64452,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0173,
-        "import_seconds": 0.054799999999999995
+        "frames_seconds": 0.0228,
+        "import_seconds": 0.0353
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2841,
-        "rss_kib": 153988,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.047,
-        "import_seconds": 0.0551
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6066,
-          "rss_kib": 198812,
+          "seconds": 12.5212,
+          "rss_kib": 223032,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/additive.mojo:26:"
+          "error": "Imported from /workspace/examples/additive.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/additive.mojo:26:"
+          "error": "Imported from /workspace/examples/additive.mojo:27:"
         }
       }
     },
     {
       "name": "normals",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.4635,
-          "rss_kib": 704504,
+          "seconds": 44.0003,
+          "rss_kib": 825720,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1887,
-          "rss_kib": 46664,
-          "status": 0
+          "seconds": 0.1568,
+          "rss_kib": 44460,
+          "status": 0,
+          "frames_seconds": 0.10551271
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1453,
-        "rss_kib": 67392,
+        "seconds": 0.1105,
+        "rss_kib": 66776,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0421,
-        "import_seconds": 0.0546
+        "frames_seconds": 0.045,
+        "import_seconds": 0.0297
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2834,
-        "rss_kib": 153356,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0453,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5774,
-          "rss_kib": 198484,
+          "seconds": 12.2424,
+          "rss_kib": 222864,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/normals.mojo:24:"
+          "error": "Imported from /workspace/examples/normals.mojo:25:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/normals.mojo:24:"
+          "error": "Imported from /workspace/examples/normals.mojo:25:"
         }
       }
     },
     {
       "name": "fragments",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.6245,
-          "rss_kib": 706596,
+          "seconds": 48.4021,
+          "rss_kib": 747692,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1981,
-          "rss_kib": 45932,
-          "status": 0
+          "seconds": 0.2058,
+          "rss_kib": 44956,
+          "status": 0,
+          "frames_seconds": 0.13132463000000003
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1293,
-        "rss_kib": 65356,
+        "seconds": 0.1236,
+        "rss_kib": 65500,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0263,
-        "import_seconds": 0.054200000000000005
+        "frames_seconds": 0.0356,
+        "import_seconds": 0.0364
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2807,
-        "rss_kib": 153768,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046799999999999994,
-        "import_seconds": 0.0536
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5161,
-          "rss_kib": 199304,
+          "seconds": 14.3823,
+          "rss_kib": 222788,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/fragments.mojo:26:"
+          "error": "Imported from /workspace/examples/fragments.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/fragments.mojo:26:"
+          "error": "Imported from /workspace/examples/fragments.mojo:27:"
         }
       }
     },
     {
       "name": "edges",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 48,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 4.7166,
-          "rss_kib": 332132,
+          "seconds": 6.0975,
+          "rss_kib": 280956,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.135,
-          "rss_kib": 51036,
-          "status": 0
+          "seconds": 0.1623,
+          "rss_kib": 48900,
+          "status": 0,
+          "frames_seconds": 0.012969103000000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1202,
-        "rss_kib": 65316,
+        "seconds": 0.1762,
+        "rss_kib": 64908,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.012,
-        "import_seconds": 0.058
+        "frames_seconds": 0.0264,
+        "import_seconds": 0.053700000000000005
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.287,
-        "rss_kib": 152960,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0506,
-        "import_seconds": 0.0559
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": true,
-          "seconds": 8.3019,
-          "rss_kib": 476548,
+          "seconds": 19.0521,
+          "rss_kib": 426592,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1217,
-          "rss_kib": 51428,
-          "status": 0
+          "seconds": 0.1037,
+          "rss_kib": 48980,
+          "status": 0,
+          "frames_seconds": 0.042735775
         }
       }
     },
     {
       "name": "lines",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.9171,
-          "rss_kib": 682244,
+          "seconds": 54.0384,
+          "rss_kib": 835568,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1632,
-          "rss_kib": 47444,
-          "status": 0
+          "seconds": 0.1546,
+          "rss_kib": 45876,
+          "status": 0,
+          "frames_seconds": 0.07364538600000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1284,
-        "rss_kib": 67700,
+        "seconds": 0.1161,
+        "rss_kib": 67956,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.02,
-        "import_seconds": 0.0541
+        "frames_seconds": 0.03,
+        "import_seconds": 0.0351
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2847,
-        "rss_kib": 154248,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0512,
-        "import_seconds": 0.0531
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5994,
-          "rss_kib": 198684,
+          "seconds": 13.7117,
+          "rss_kib": 223008,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/lines.mojo:31:"
+          "error": "Imported from /workspace/examples/lines.mojo:32:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/lines.mojo:31:"
+          "error": "Imported from /workspace/examples/lines.mojo:32:"
         }
       }
     },
     {
       "name": "sprites",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.8699,
-          "rss_kib": 720860,
+          "seconds": 46.4792,
+          "rss_kib": 919132,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.171,
-          "rss_kib": 45908,
-          "status": 0
+          "seconds": 0.1105,
+          "rss_kib": 45740,
+          "status": 0,
+          "frames_seconds": 0.06966061000000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1328,
-        "rss_kib": 67832,
+        "seconds": 0.1076,
+        "rss_kib": 67000,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.028399999999999998,
-        "import_seconds": 0.0533
+        "frames_seconds": 0.032600000000000004,
+        "import_seconds": 0.0317
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2898,
-        "rss_kib": 155404,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0536,
-        "import_seconds": 0.054700000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5415,
-          "rss_kib": 200176,
+          "seconds": 14.2232,
+          "rss_kib": 223492,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/sprites.mojo:42:"
+          "error": "Imported from /workspace/examples/sprites.mojo:43:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/sprites.mojo:42:"
+          "error": "Imported from /workspace/examples/sprites.mojo:43:"
         }
       }
     },
     {
       "name": "stereo",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 120,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.9894,
-          "rss_kib": 720200,
+          "seconds": 54.9524,
+          "rss_kib": 849752,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.157,
-          "rss_kib": 34828,
-          "status": 0
+          "seconds": 0.0944,
+          "rss_kib": 35796,
+          "status": 0,
+          "frames_seconds": 0.061070213000000005
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1255,
-        "rss_kib": 67444,
+        "seconds": 0.085,
+        "rss_kib": 67440,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0232,
-        "import_seconds": 0.0528
+        "frames_seconds": 0.0242,
+        "import_seconds": 0.0268
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2823,
-        "rss_kib": 153604,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.048,
-        "import_seconds": 0.054299999999999994
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6601,
-          "rss_kib": 200216,
+          "seconds": 9.1269,
+          "rss_kib": 224512,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/stereo.mojo:32:"
+          "error": "Imported from /workspace/examples/stereo.mojo:33:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/stereo.mojo:32:"
+          "error": "Imported from /workspace/examples/stereo.mojo:33:"
         }
       }
     },
     {
       "name": "television",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.5203,
-          "rss_kib": 728912,
+          "seconds": 59.8857,
+          "rss_kib": 877636,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2117,
-          "rss_kib": 50240,
-          "status": 0
+          "seconds": 0.3643,
+          "rss_kib": 49808,
+          "status": 0,
+          "frames_seconds": 0.23598879
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1213,
-        "rss_kib": 64604,
+        "seconds": 0.0991,
+        "rss_kib": 64464,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0159,
-        "import_seconds": 0.056
+        "frames_seconds": 0.0205,
+        "import_seconds": 0.0353
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2818,
-        "rss_kib": 153748,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046799999999999994,
-        "import_seconds": 0.0545
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6731,
-          "rss_kib": 200152,
+          "seconds": 17.3396,
+          "rss_kib": 223448,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/television.mojo:32:"
+          "error": "Imported from /workspace/examples/television.mojo:33:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/television.mojo:32:"
+          "error": "Imported from /workspace/examples/television.mojo:33:"
         }
       }
     },
     {
       "name": "mirror",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 30,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.4114,
-          "rss_kib": 684744,
+          "seconds": 58.6231,
+          "rss_kib": 890060,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.896,
-          "rss_kib": 42188,
-          "status": 0
+          "seconds": 0.5393,
+          "rss_kib": 42620,
+          "status": 0,
+          "frames_seconds": 0.45976862
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1365,
-        "rss_kib": 67268,
+        "seconds": 0.13,
+        "rss_kib": 67156,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0325,
-        "import_seconds": 0.055
+        "frames_seconds": 0.0423,
+        "import_seconds": 0.037
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2794,
-        "rss_kib": 153524,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0434,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.7037,
-          "rss_kib": 200584,
+          "seconds": 14.7706,
+          "rss_kib": 224444,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/mirror.mojo:46:"
+          "error": "Imported from /workspace/examples/mirror.mojo:47:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/mirror.mojo:46:"
+          "error": "Imported from /workspace/examples/mirror.mojo:47:"
         }
       }
     },
     {
       "name": "split",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.2295,
-          "rss_kib": 712172,
+          "seconds": 59.4041,
+          "rss_kib": 871252,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2088,
-          "rss_kib": 46996,
-          "status": 0
+          "seconds": 0.1738,
+          "rss_kib": 46496,
+          "status": 0,
+          "frames_seconds": 0.117338104
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1347,
-        "rss_kib": 67864,
+        "seconds": 0.13,
+        "rss_kib": 66780,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.031100000000000003,
-        "import_seconds": 0.0546
+        "frames_seconds": 0.0418,
+        "import_seconds": 0.0376
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2851,
-        "rss_kib": 153788,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0484,
-        "import_seconds": 0.055
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.7074,
-          "rss_kib": 200740,
+          "seconds": 12.0988,
+          "rss_kib": 224168,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/split.mojo:29:"
+          "error": "Imported from /workspace/examples/split.mojo:30:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/split.mojo:29:"
+          "error": "Imported from /workspace/examples/split.mojo:30:"
         }
       }
     },
     {
       "name": "physical",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 480,
       "height": 220,
       "frames": 1,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.7003,
-          "rss_kib": 720112,
+          "seconds": 37.1761,
+          "rss_kib": 843796,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1421,
-          "rss_kib": 56976,
-          "status": 0
+          "seconds": 0.0373,
+          "rss_kib": 37648,
+          "status": 0,
+          "frames_seconds": 0.022657988
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1182,
-        "rss_kib": 65664,
+        "seconds": 0.0618,
+        "rss_kib": 65564,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0105,
-        "import_seconds": 0.055299999999999995
+        "frames_seconds": 0.0094,
+        "import_seconds": 0.0229
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2728,
-        "rss_kib": 161312,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.03,
-        "import_seconds": 0.0557
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.4789,
-          "rss_kib": 198580,
+          "seconds": 7.9155,
+          "rss_kib": 222320,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/physical.mojo:37:"
+          "error": "Imported from /workspace/examples/physical.mojo:38:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/physical.mojo:37:"
+          "error": "Imported from /workspace/examples/physical.mojo:38:"
         }
       }
     },
     {
       "name": "outlines",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.4613,
-          "rss_kib": 721780,
+          "seconds": 28.834,
+          "rss_kib": 753044,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.161,
-          "rss_kib": 45736,
-          "status": 0
+          "seconds": 0.0671,
+          "rss_kib": 45352,
+          "status": 0,
+          "frames_seconds": 0.034002544
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1152,
-        "rss_kib": 65096,
+        "seconds": 0.0608,
+        "rss_kib": 65260,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0147,
-        "import_seconds": 0.052899999999999996
+        "frames_seconds": 0.013099999999999999,
+        "import_seconds": 0.022600000000000002
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2839,
-        "rss_kib": 153392,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.045899999999999996,
-        "import_seconds": 0.055299999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.9146,
-          "rss_kib": 201356,
+          "seconds": 7.6472,
+          "rss_kib": 224428,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/outlines.mojo:33:"
+          "error": "Imported from /workspace/examples/outlines.mojo:34:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/outlines.mojo:33:"
+          "error": "Imported from /workspace/examples/outlines.mojo:34:"
         }
       }
     },
     {
       "name": "shadows",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.0231,
-          "rss_kib": 716956,
+          "seconds": 28.926,
+          "rss_kib": 835896,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2163,
-          "rss_kib": 49788,
-          "status": 0
+          "seconds": 0.1627,
+          "rss_kib": 46852,
+          "status": 0,
+          "frames_seconds": 0.13223617999999998
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1299,
-        "rss_kib": 65124,
+        "seconds": 0.0674,
+        "rss_kib": 65216,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0249,
-        "import_seconds": 0.0549
+        "frames_seconds": 0.0209,
+        "import_seconds": 0.0213
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3353,
-        "rss_kib": 157696,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.09770000000000001,
-        "import_seconds": 0.055299999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6749,
-          "rss_kib": 199348,
+          "seconds": 7.3621,
+          "rss_kib": 223292,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/shadows.mojo:28:"
+          "error": "Imported from /workspace/examples/shadows.mojo:29:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/shadows.mojo:28:"
+          "error": "Imported from /workspace/examples/shadows.mojo:29:"
         }
       }
     },
     {
       "name": "wide",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.8361,
-          "rss_kib": 694588,
+          "seconds": 27.8545,
+          "rss_kib": 843512,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.193,
-          "rss_kib": 48780,
-          "status": 0
+          "seconds": 0.0911,
+          "rss_kib": 46992,
+          "status": 0,
+          "frames_seconds": 0.059208992
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1373,
-        "rss_kib": 67792,
+        "seconds": 0.0778,
+        "rss_kib": 66660,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0347,
-        "import_seconds": 0.053700000000000005
+        "frames_seconds": 0.0297,
+        "import_seconds": 0.0223
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2901,
-        "rss_kib": 155052,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.053700000000000005,
-        "import_seconds": 0.055
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6383,
-          "rss_kib": 199292,
+          "seconds": 7.0499,
+          "rss_kib": 222716,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/wide.mojo:27:"
+          "error": "Imported from /workspace/examples/wide.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/wide.mojo:27:"
+          "error": "Imported from /workspace/examples/wide.mojo:28:"
         }
       }
     },
     {
       "name": "bloom",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 22.5229,
-          "rss_kib": 844172,
+          "seconds": 40.672,
+          "rss_kib": 951616,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.3998,
-          "rss_kib": 48732,
-          "status": 0
+          "seconds": 0.2577,
+          "rss_kib": 52304,
+          "status": 0,
+          "frames_seconds": 0.22381362999999999
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1632,
-        "rss_kib": 67016,
+        "seconds": 0.0961,
+        "rss_kib": 67068,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0572,
-        "import_seconds": 0.0538
+        "frames_seconds": 0.0475,
+        "import_seconds": 0.0221
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3061,
-        "rss_kib": 160776,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.061200000000000004,
-        "import_seconds": 0.0549
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 6.9643,
-          "rss_kib": 207400,
+          "seconds": 9.8705,
+          "rss_kib": 251176,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/bloom.mojo:26:"
+          "error": "Imported from /workspace/examples/bloom.mojo:36:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/bloom.mojo:26:"
+          "error": "Imported from /workspace/examples/bloom.mojo:36:"
         }
       }
     },
     {
       "name": "gizmo",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.1279,
-          "rss_kib": 711112,
+          "seconds": 27.4473,
+          "rss_kib": 864344,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1872,
-          "rss_kib": 48512,
-          "status": 0
+          "seconds": 0.0901,
+          "rss_kib": 49172,
+          "status": 0,
+          "frames_seconds": 0.058922535000000005
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1292,
-        "rss_kib": 67316,
+        "seconds": 0.0673,
+        "rss_kib": 67508,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0242,
-        "import_seconds": 0.055299999999999995
+        "frames_seconds": 0.0201,
+        "import_seconds": 0.0216
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2877,
-        "rss_kib": 154236,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0492,
-        "import_seconds": 0.0557
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 6.0414,
-          "rss_kib": 202648,
+          "seconds": 7.6114,
+          "rss_kib": 226292,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/gizmo.mojo:32:"
+          "error": "Imported from /workspace/examples/gizmo.mojo:33:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/gizmo.mojo:32:"
+          "error": "Imported from /workspace/examples/gizmo.mojo:33:"
         }
       }
     },
     {
       "name": "json_scene",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 26.9386,
-          "rss_kib": 1023720,
+          "seconds": 59.0899,
+          "rss_kib": 1638332,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1694,
-          "rss_kib": 46168,
-          "status": 0
+          "seconds": 0.0651,
+          "rss_kib": 47124,
+          "status": 0,
+          "frames_seconds": 0.03358606
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1178,
-        "rss_kib": 65072,
+        "seconds": 0.0604,
+        "rss_kib": 64476,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0157,
-        "import_seconds": 0.0535
+        "frames_seconds": 0.0134,
+        "import_seconds": 0.0214
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2792,
-        "rss_kib": 153916,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.046799999999999994,
-        "import_seconds": 0.0535
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 7.952,
-          "rss_kib": 215320,
+          "seconds": 14.7494,
+          "rss_kib": 277796,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/json_scene.mojo:27:"
+          "error": "Imported from /workspace/examples/json_scene.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/json_scene.mojo:27:"
+          "error": "Imported from /workspace/examples/json_scene.mojo:28:"
         }
       }
     },
     {
       "name": "reloaded",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 26.6728,
-          "rss_kib": 894172,
+          "seconds": 56.9639,
+          "rss_kib": 1294296,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2167,
-          "rss_kib": 48164,
-          "status": 0
+          "seconds": 0.1291,
+          "rss_kib": 46356,
+          "status": 0,
+          "frames_seconds": 0.096087036
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1643,
-        "rss_kib": 67672,
+        "seconds": 0.0975,
+        "rss_kib": 67072,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0583,
-        "import_seconds": 0.055299999999999995
+        "frames_seconds": 0.0495,
+        "import_seconds": 0.0217
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2854,
-        "rss_kib": 153948,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0505,
-        "import_seconds": 0.054799999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 8.2517,
-          "rss_kib": 215704,
+          "seconds": 16.7609,
+          "rss_kib": 279544,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/reloaded.mojo:28:"
+          "error": "Imported from /workspace/examples/reloaded.mojo:29:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/reloaded.mojo:28:"
+          "error": "Imported from /workspace/examples/reloaded.mojo:29:"
         }
       }
     },
     {
       "name": "gem",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 18.21,
-          "rss_kib": 680352,
+          "seconds": 30.3482,
+          "rss_kib": 912856,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.4073,
-          "rss_kib": 52492,
-          "status": 0
+          "seconds": 0.3148,
+          "rss_kib": 51852,
+          "status": 0,
+          "frames_seconds": 0.28232153
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1459,
-        "rss_kib": 67804,
+        "seconds": 0.0875,
+        "rss_kib": 67316,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.041299999999999996,
-        "import_seconds": 0.0535
+        "frames_seconds": 0.0356,
+        "import_seconds": 0.023100000000000002
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.5115,
-        "rss_kib": 171376,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.2726,
-        "import_seconds": 0.055
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.613,
-          "rss_kib": 200756,
+          "seconds": 8.0263,
+          "rss_kib": 223220,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/gem.mojo:26:"
+          "error": "Imported from /workspace/examples/gem.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/gem.mojo:26:"
+          "error": "Imported from /workspace/examples/gem.mojo:27:"
         }
       }
     },
     {
       "name": "distance",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.264,
-          "rss_kib": 703576,
+          "seconds": 30.8053,
+          "rss_kib": 878004,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.196,
-          "rss_kib": 47256,
-          "status": 0
+          "seconds": 0.1358,
+          "rss_kib": 48804,
+          "status": 0,
+          "frames_seconds": 0.09557059
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1491,
-        "rss_kib": 67772,
+        "seconds": 0.0929,
+        "rss_kib": 67004,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.045399999999999996,
-        "import_seconds": 0.054700000000000006
+        "frames_seconds": 0.039799999999999995,
+        "import_seconds": 0.0232
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2782,
-        "rss_kib": 153792,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.045899999999999996,
-        "import_seconds": 0.054700000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.544,
-          "rss_kib": 199224,
+          "seconds": 8.2647,
+          "rss_kib": 222908,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/distance.mojo:25:"
+          "error": "Imported from /workspace/examples/distance.mojo:26:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/distance.mojo:25:"
+          "error": "Imported from /workspace/examples/distance.mojo:26:"
         }
       }
     },
     {
       "name": "unfogged",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5977,
-          "rss_kib": 710428,
+          "seconds": 32.0598,
+          "rss_kib": 909688,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1574,
-          "rss_kib": 46132,
-          "status": 0
+          "seconds": 0.0695,
+          "rss_kib": 45632,
+          "status": 0,
+          "frames_seconds": 0.037394062
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1214,
-        "rss_kib": 65568,
+        "seconds": 0.0605,
+        "rss_kib": 65480,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0157,
-        "import_seconds": 0.055799999999999995
+        "frames_seconds": 0.013699999999999999,
+        "import_seconds": 0.0221
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.289,
-        "rss_kib": 154808,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0554,
-        "import_seconds": 0.0541
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.6293,
-          "rss_kib": 199320,
+          "seconds": 7.5339,
+          "rss_kib": 223156,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/unfogged.mojo:27:"
+          "error": "Imported from /workspace/examples/unfogged.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/unfogged.mojo:27:"
+          "error": "Imported from /workspace/examples/unfogged.mojo:28:"
         }
       }
     },
     {
       "name": "targets",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 17.5699,
-          "rss_kib": 699468,
+          "seconds": 27.0849,
+          "rss_kib": 839576,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2661,
-          "rss_kib": 47404,
-          "status": 0
+          "seconds": 0.1648,
+          "rss_kib": 46280,
+          "status": 0,
+          "frames_seconds": 0.13180328
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1462,
-        "rss_kib": 67612,
+        "seconds": 0.0849,
+        "rss_kib": 68904,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0404,
-        "import_seconds": 0.0555
+        "frames_seconds": 0.0347,
+        "import_seconds": 0.022699999999999998
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2831,
-        "rss_kib": 154440,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.049,
-        "import_seconds": 0.0554
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 5.5922,
-          "rss_kib": 199248,
+          "seconds": 7.5241,
+          "rss_kib": 220844,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/targets.mojo:35:"
+          "error": "Imported from /workspace/examples/targets.mojo:36:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/targets.mojo:35:"
+          "error": "Imported from /workspace/examples/targets.mojo:36:"
         }
       }
     },
     {
       "name": "layers",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.1636,
-          "rss_kib": 727440,
+          "seconds": 34.5126,
+          "rss_kib": 798936,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.3272,
-          "rss_kib": 60884,
-          "status": 0
+          "seconds": 0.3028,
+          "rss_kib": 58296,
+          "status": 0,
+          "frames_seconds": 0.25197752
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1618,
-        "rss_kib": 67420,
+        "seconds": 0.1257,
+        "rss_kib": 67088,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0565,
-        "import_seconds": 0.053399999999999996
+        "frames_seconds": 0.060700000000000004,
+        "import_seconds": 0.0289
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3187,
-        "rss_kib": 164812,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0717,
-        "import_seconds": 0.055799999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 6.0706,
-          "rss_kib": 203088,
+          "seconds": 10.3007,
+          "rss_kib": 223952,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/layers.mojo:26:"
+          "error": "Imported from /workspace/examples/layers.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/layers.mojo:26:"
+          "error": "Imported from /workspace/examples/layers.mojo:27:"
         }
       }
     },
     {
       "name": "graph",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.2042,
-          "rss_kib": 734084,
+          "seconds": 47.4039,
+          "rss_kib": 944532,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2309,
-          "rss_kib": 46728,
-          "status": 0
+          "seconds": 0.4121,
+          "rss_kib": 46040,
+          "status": 0,
+          "frames_seconds": 0.27979187
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1483,
-        "rss_kib": 67880,
+        "seconds": 0.1338,
+        "rss_kib": 68960,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0431,
-        "import_seconds": 0.055299999999999995
+        "frames_seconds": 0.054299999999999994,
+        "import_seconds": 0.0337
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2855,
-        "rss_kib": 154400,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0503,
-        "import_seconds": 0.054
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 6.2399,
-          "rss_kib": 203528,
+          "seconds": 14.182,
+          "rss_kib": 226500,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/graph.mojo:27:"
+          "error": "Imported from /workspace/examples/graph.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/graph.mojo:27:"
+          "error": "Imported from /workspace/examples/graph.mojo:28:"
         }
       }
     },
     {
       "name": "basis",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 26.1636,
-          "rss_kib": 857708,
+          "seconds": 79.426,
+          "rss_kib": 912212,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.22,
-          "rss_kib": 55168,
-          "status": 0
+          "seconds": 0.2114,
+          "rss_kib": 52764,
+          "status": 0,
+          "frames_seconds": 0.112629654
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1214,
-        "rss_kib": 65324,
+        "seconds": 0.0922,
+        "rss_kib": 64856,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0144,
-        "import_seconds": 0.054700000000000006
+        "frames_seconds": 0.0212,
+        "import_seconds": 0.0296
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2894,
-        "rss_kib": 160164,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.053399999999999996,
-        "import_seconds": 0.055799999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 9.9895,
-          "rss_kib": 216144,
+          "seconds": 19.7391,
+          "rss_kib": 239208,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/basis.mojo:28:"
+          "error": "Imported from /workspace/examples/basis.mojo:29:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/basis.mojo:28:"
+          "error": "Imported from /workspace/examples/basis.mojo:29:"
         }
       }
     },
     {
       "name": "coats",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 320,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 19.1877,
-          "rss_kib": 747704,
+          "seconds": 57.1066,
+          "rss_kib": 843532,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.3236,
-          "rss_kib": 54764,
-          "status": 0
+          "seconds": 0.4158,
+          "rss_kib": 65172,
+          "status": 0,
+          "frames_seconds": 0.30830386
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1676,
-        "rss_kib": 69016,
+        "seconds": 0.1619,
+        "rss_kib": 67336,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.058,
-        "import_seconds": 0.056
+        "frames_seconds": 0.07859999999999999,
+        "import_seconds": 0.0341
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3068,
-        "rss_kib": 161548,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0665,
-        "import_seconds": 0.053399999999999996
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 6.2279,
-          "rss_kib": 202836,
+          "seconds": 13.6996,
+          "rss_kib": 223256,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/coats.mojo:27:"
+          "error": "Imported from /workspace/examples/coats.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/coats.mojo:27:"
+          "error": "Imported from /workspace/examples/coats.mojo:28:"
         }
       }
     },
     {
       "name": "skyjson",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 33.1818,
-          "rss_kib": 1122020,
+          "seconds": 118.177,
+          "rss_kib": 1561048,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.7722,
-          "rss_kib": 53312,
-          "status": 0
+          "seconds": 0.6101,
+          "rss_kib": 51588,
+          "status": 0,
+          "frames_seconds": 0.48066467
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1399,
-        "rss_kib": 67456,
+        "seconds": 0.1374,
+        "rss_kib": 67452,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.036,
-        "import_seconds": 0.0535
+        "frames_seconds": 0.0535,
+        "import_seconds": 0.0373
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3568,
-        "rss_kib": 162472,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.1154,
-        "import_seconds": 0.055799999999999995
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 9.5111,
-          "rss_kib": 225660,
+          "seconds": 30.1892,
+          "rss_kib": 278500,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/skyjson.mojo:33:"
+          "error": "Imported from /workspace/examples/skyjson.mojo:34:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/skyjson.mojo:33:"
+          "error": "Imported from /workspace/examples/skyjson.mojo:34:"
         }
       }
     },
     {
       "name": "daylight",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 31.52,
-          "rss_kib": 1037672,
+          "seconds": 65.5315,
+          "rss_kib": 1262100,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 1.8798,
-          "rss_kib": 47848,
-          "status": 0
+          "seconds": 1.9675,
+          "rss_kib": 48776,
+          "status": 0,
+          "frames_seconds": 1.9219482
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.215,
-        "rss_kib": 67508,
+        "seconds": 0.1766,
+        "rss_kib": 66760,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.111,
-        "import_seconds": 0.0535
+        "frames_seconds": 0.1155,
+        "import_seconds": 0.0289
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2912,
-        "rss_kib": 154544,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.055,
-        "import_seconds": 0.0557
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 9.4569,
-          "rss_kib": 227876,
+          "seconds": 10.9569,
+          "rss_kib": 242140,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/daylight.mojo:27:"
+          "error": "Imported from /workspace/examples/daylight.mojo:28:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/daylight.mojo:27:"
+          "error": "Imported from /workspace/examples/daylight.mojo:28:"
         }
       }
     },
     {
       "name": "faces",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 23.6672,
-          "rss_kib": 763992,
+          "seconds": 38.7324,
+          "rss_kib": 791336,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.1742,
-          "rss_kib": 47236,
-          "status": 0
+          "seconds": 0.1729,
+          "rss_kib": 45648,
+          "status": 0,
+          "frames_seconds": 0.110788155
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.1281,
-        "rss_kib": 65384,
+        "seconds": 0.1115,
+        "rss_kib": 65244,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.0223,
-        "import_seconds": 0.055
+        "frames_seconds": 0.0298,
+        "import_seconds": 0.0354
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.2929,
-        "rss_kib": 159760,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0514,
-        "import_seconds": 0.055200000000000006
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 7.7071,
-          "rss_kib": 215856,
+          "seconds": 11.7602,
+          "rss_kib": 222744,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/faces.mojo:26:"
+          "error": "Imported from /workspace/examples/faces.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/faces.mojo:26:"
+          "error": "Imported from /workspace/examples/faces.mojo:27:"
         }
       }
     },
     {
       "name": "utah",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 25.5123,
-          "rss_kib": 831148,
+          "seconds": 45.9313,
+          "rss_kib": 899988,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.2647,
-          "rss_kib": 48948,
-          "status": 0
+          "seconds": 0.2549,
+          "rss_kib": 48684,
+          "status": 0,
+          "frames_seconds": 0.17063695
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.2291,
-        "rss_kib": 69032,
+        "seconds": 0.1825,
+        "rss_kib": 69268,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.07379999999999999,
-        "import_seconds": 0.055600000000000004
+        "frames_seconds": 0.07690000000000001,
+        "import_seconds": 0.027600000000000003
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3484,
-        "rss_kib": 160388,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.052899999999999996,
-        "import_seconds": 0.0562
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 8.8431,
-          "rss_kib": 218764,
+          "seconds": 13.7249,
+          "rss_kib": 224672,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/utah.mojo:26:"
+          "error": "Imported from /workspace/examples/utah.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/utah.mojo:26:"
+          "error": "Imported from /workspace/examples/utah.mojo:27:"
         }
       }
     },
     {
       "name": "blobs",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
       "width": 240,
       "height": 180,
       "frames": 36,
       "threemojo": {
         "compile": {
           "ok": true,
-          "seconds": 39.9103,
-          "rss_kib": 859364,
+          "seconds": 71.7989,
+          "rss_kib": 887900,
           "status": 0
         },
         "run": {
           "ok": true,
-          "seconds": 0.172,
-          "rss_kib": 47420,
-          "status": 0
+          "seconds": 0.1325,
+          "rss_kib": 43612,
+          "status": 0,
+          "frames_seconds": 0.06816987000000001
         }
       },
       "threejs_flat": {
         "ok": true,
-        "seconds": 0.2619,
-        "rss_kib": 69996,
+        "seconds": 0.2667,
+        "rss_kib": 69424,
         "status": 0,
         "backend": "cpu-flat",
-        "frames_seconds": 0.11359999999999999,
-        "import_seconds": 0.056799999999999996
+        "frames_seconds": 0.1419,
+        "import_seconds": 0.0332
       },
       "threejs_webgl": {
-        "ok": true,
-        "seconds": 0.3619,
-        "rss_kib": 156896,
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
         "status": 0,
-        "backend": "webgl",
-        "frames_seconds": 0.0733,
-        "import_seconds": 0.0557
+        "backend": "",
+        "error": "skipped"
       },
       "mojo10": {
         "compile": {
           "ok": false,
-          "seconds": 12.346,
-          "rss_kib": 220396,
+          "seconds": 21.234,
+          "rss_kib": 227800,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/blobs.mojo:26:"
+          "error": "Imported from /workspace/examples/blobs.mojo:27:"
         },
         "run": {
           "ok": false,
           "seconds": null,
           "rss_kib": null,
           "status": 1,
-          "error": "Imported from /mnt/d/git/ThreeMojo/examples/blobs.mojo:26:"
+          "error": "Imported from /workspace/examples/blobs.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "flipbook",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 54.2951,
+          "rss_kib": 892684,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2369,
+          "rss_kib": 47016,
+          "status": 0,
+          "frames_seconds": 0.14448698
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.2147,
+        "rss_kib": 68840,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.055299999999999995,
+        "import_seconds": 0.06509999999999999
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 15.0823,
+          "rss_kib": 224472,
+          "status": 1,
+          "error": "Imported from /workspace/examples/flipbook.mojo:34:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/flipbook.mojo:34:"
+        }
+      }
+    },
+    {
+      "name": "ripples",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 75.3938,
+          "rss_kib": 1137264,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.6661,
+          "rss_kib": 54288,
+          "status": 0,
+          "frames_seconds": 0.5137344399999999
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.2201,
+        "rss_kib": 67144,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0889,
+        "import_seconds": 0.044
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 20.0075,
+          "rss_kib": 242348,
+          "status": 1,
+          "error": "Imported from /workspace/examples/ripples.mojo:28:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/ripples.mojo:28:"
+        }
+      }
+    },
+    {
+      "name": "baked",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 48.4251,
+          "rss_kib": 886100,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 1.2324,
+          "rss_kib": 46152,
+          "status": 0,
+          "frames_seconds": 0.78832605
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0995,
+        "rss_kib": 65696,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.032799999999999996,
+        "import_seconds": 0.028300000000000002
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 8.6629,
+          "rss_kib": 227456,
+          "status": 1,
+          "error": "Imported from /workspace/examples/baked.mojo:31:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/baked.mojo:31:"
+        }
+      }
+    },
+    {
+      "name": "diagram",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 12.801,
+          "rss_kib": 549616,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0687,
+          "rss_kib": 43292,
+          "status": 0,
+          "frames_seconds": 0.03554518
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0776,
+        "rss_kib": 65232,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0254,
+        "import_seconds": 0.0228
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": true,
+          "seconds": 16.9036,
+          "rss_kib": 657756,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.0718,
+          "rss_kib": 42560,
+          "status": 0,
+          "frames_seconds": 0.037705196
+        }
+      }
+    },
+    {
+      "name": "bricks",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 58.4542,
+          "rss_kib": 1034860,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1538,
+          "rss_kib": 44772,
+          "status": 0,
+          "frames_seconds": 0.08536711
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0938,
+        "rss_kib": 65108,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.022699999999999998,
+        "import_seconds": 0.0324
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 14.9857,
+          "rss_kib": 228912,
+          "status": 1,
+          "error": "Imported from /workspace/examples/bricks.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/bricks.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "terrain",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 62.1276,
+          "rss_kib": 873360,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1843,
+          "rss_kib": 44460,
+          "status": 0,
+          "frames_seconds": 0.11864140000000001
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.172,
+        "rss_kib": 67104,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.060399999999999995,
+        "import_seconds": 0.049
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 15.4685,
+          "rss_kib": 223032,
+          "status": 1,
+          "error": "Imported from /workspace/examples/terrain.mojo:30:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/terrain.mojo:30:"
+        }
+      }
+    },
+    {
+      "name": "override",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 51.8339,
+          "rss_kib": 860020,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.19,
+          "rss_kib": 49080,
+          "status": 0,
+          "frames_seconds": 0.13375104
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1541,
+        "rss_kib": 66592,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.067,
+        "import_seconds": 0.0394
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 12.8013,
+          "rss_kib": 223140,
+          "status": 1,
+          "error": "Imported from /workspace/examples/override.mojo:27:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/override.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "clay",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 63.8333,
+          "rss_kib": 1000992,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2066,
+          "rss_kib": 46276,
+          "status": 0,
+          "frames_seconds": 0.123103676
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1459,
+        "rss_kib": 66648,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0593,
+        "import_seconds": 0.0334
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 14.8517,
+          "rss_kib": 230384,
+          "status": 1,
+          "error": "Imported from /workspace/examples/clay.mojo:29:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/clay.mojo:29:"
+        }
+      }
+    },
+    {
+      "name": "cells",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 38.1259,
+          "rss_kib": 882380,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.8591,
+          "rss_kib": 44684,
+          "status": 0,
+          "frames_seconds": 0.8170503499999999
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1139,
+        "rss_kib": 68200,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0549,
+        "import_seconds": 0.0256
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 8.8464,
+          "rss_kib": 226472,
+          "status": 1,
+          "error": "Imported from /workspace/examples/cells.mojo:31:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/cells.mojo:31:"
+        }
+      }
+    },
+    {
+      "name": "cloud",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 30.3145,
+          "rss_kib": 761120,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1113,
+          "rss_kib": 43624,
+          "status": 0,
+          "frames_seconds": 0.061353962000000005
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0559,
+        "rss_kib": 61176,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0033,
+        "import_seconds": 0.0229
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 7.7278,
+          "rss_kib": 222044,
+          "status": 1,
+          "error": "Imported from /workspace/examples/cloud.mojo:30:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/cloud.mojo:30:"
+        }
+      }
+    },
+    {
+      "name": "bounce",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 33.8383,
+          "rss_kib": 862976,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 7.4619,
+          "rss_kib": 50812,
+          "status": 0,
+          "frames_seconds": 7.4186943
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0869,
+        "rss_kib": 65404,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.033299999999999996,
+        "import_seconds": 0.024399999999999998
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 8.3833,
+          "rss_kib": 228032,
+          "status": 1,
+          "error": "Imported from /workspace/examples/bounce.mojo:28:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/bounce.mojo:28:"
+        }
+      }
+    },
+    {
+      "name": "sunlight",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 33.4303,
+          "rss_kib": 861332,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2188,
+          "rss_kib": 46940,
+          "status": 0,
+          "frames_seconds": 0.17139026000000002
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0796,
+        "rss_kib": 65596,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0258,
+        "import_seconds": 0.0242
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 8.8798,
+          "rss_kib": 223624,
+          "status": 1,
+          "error": "Imported from /workspace/examples/sunlight.mojo:30:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/sunlight.mojo:30:"
+        }
+      }
+    },
+    {
+      "name": "vase",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 36.846,
+          "rss_kib": 874468,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1347,
+          "rss_kib": 44384,
+          "status": 0,
+          "frames_seconds": 0.07680714000000001
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1102,
+        "rss_kib": 66752,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0409,
+        "import_seconds": 0.0293
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 11.156,
+          "rss_kib": 225048,
+          "status": 1,
+          "error": "Imported from /workspace/examples/vase.mojo:28:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/vase.mojo:28:"
+        }
+      }
+    },
+    {
+      "name": "sapling",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 45.6596,
+          "rss_kib": 746824,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1023,
+          "rss_kib": 44360,
+          "status": 0,
+          "frames_seconds": 0.05008771
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.0947,
+        "rss_kib": 65460,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0208,
+        "import_seconds": 0.0335
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 13.0464,
+          "rss_kib": 224124,
+          "status": 1,
+          "error": "Imported from /workspace/examples/sapling.mojo:27:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/sapling.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "particles",
+      "measured_on": "2026-10-07",
+      "measurement_date_source": "direct",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 52.9091,
+          "rss_kib": 906600,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.1111,
+          "rss_kib": 46264,
+          "status": 0,
+          "frames_seconds": 0.058378320000000004
+        }
+      },
+      "threejs_flat": {
+        "ok": true,
+        "seconds": 0.1148,
+        "rss_kib": 67424,
+        "status": 0,
+        "backend": "cpu-flat",
+        "frames_seconds": 0.0324,
+        "import_seconds": 0.031
+      },
+      "threejs_webgl": {
+        "ok": false,
+        "seconds": null,
+        "rss_kib": null,
+        "status": 0,
+        "backend": "",
+        "error": "skipped"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 13.4528,
+          "rss_kib": 228564,
+          "status": 1,
+          "error": "Imported from /workspace/examples/particles.mojo:39:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /workspace/examples/particles.mojo:39:"
         }
       }
     }

@@ -3,10 +3,10 @@
 """Explicit current-graph checks before reversible historical projection."""
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/accepted-successor-migration.json'
 MIGRATION_SHA256 = 'bb3a7b5e08a0a5400679f410da2c4574b45924294133df2f180f71fd74064d91'

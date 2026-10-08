@@ -19,6 +19,7 @@ or third-party implementation is added by this module.
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.vector3 import Vector3
 from std.math import ceil, floor, isfinite, max, min
+from std.sys import size_of
 from units.si import Length, METER
 
 comptime MIN_HAIR_DENSITY_RESOLUTION = 4
@@ -141,9 +142,9 @@ struct HairDensity(Movable):
                 var start = groom.points[index]
                 var delta = groom.points[index + 1] - start
                 var length = delta.length()
-                # Finite cubic volume and resolution at most 64 bound
-                # segment length below 2^50 and sample count at most 211.
-                var samples = max(1, Int(ceil(length / (cell * 0.5))))
+                # Check the rounded count before its Float32-to-Int cast.
+                # Every accepted count is positive, without an artificial cap.
+                var samples = _checked_density_samples(length / (cell * 0.5))
                 var added = length * deposit / Float32(samples)
                 for sample in range(samples):
                     var p = start + delta * (
@@ -195,7 +196,8 @@ struct HairDensity(Movable):
             an exterior point or a zero direction.
 
         Raises:
-            Error: If the point or direction is not finite.
+            Error: If the point or direction is not finite, or the current
+                resolution or diameter is outside its domain.
         """
         if (
             not isfinite(point.x)
@@ -209,6 +211,7 @@ struct HairDensity(Movable):
             or not isfinite(direction.z)
         ):
             raise Error("Hair optical depth needs a finite light direction")
+        self.validate()
         if not self.populated or self._slot(point) < 0:
             return 0
         var length = direction.length()
@@ -224,3 +227,30 @@ struct HairDensity(Movable):
             total += self.coefficients[slot] * self.cell * 0.5
             p = p + step
         return total
+
+
+def _checked_density_samples(ratio: Float32) raises -> Int:
+    """Round a sample ratio up, with at least one representable sample.
+
+    Args:
+        ratio: The segment length divided by the half-cell step.
+
+    Returns:
+        At least one sample, preserving the minimum for finite small values.
+
+    Raises:
+        Error: If the rounded count is nonfinite or exceeds signed Int.
+    """
+    comptime assert size_of[Int]() == 4 or size_of[Int]() == 8
+    var rounded = ceil(ratio)
+    if not isfinite(rounded):
+        raise Error("Hair density sample count is not representable")
+    if rounded <= 1:
+        return 1
+    # Int.MIN is exactly -2^(width-1) on the supported signed Int widths.
+    # Convert that exact power before negation; never negate Int.MIN as Int.
+    # Float32(Int.MAX) rounds up to the excluded limit and is not inclusive.
+    var exclusive_limit = -Float32(Int.MIN)
+    if rounded >= exclusive_limit:
+        raise Error("Hair density sample count is not representable")
+    return Int(rounded)

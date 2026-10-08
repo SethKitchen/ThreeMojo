@@ -50,8 +50,10 @@ way by habit:
 ## Process
 
 - Every feature has a GitHub issue and a line in the README checklist. Tick the box, link the wiki page, and close the issue in the same change.
-- Keep each PR to the files its work needs, so CI runs only the affected suites. `tools/affected.py` selects the suites that import a changed `.mojo` file or quote a changed asset. Documentation selects none.
-- Do not edit a global build input unless the work cannot be done another way. A global input is any file that is not a `.mojo` source, an asset or documentation: for example the `Makefile`, `.github/workflows/`, the coverage tool, `tools/*.py` and the pin `*.json` files. A change to one runs every suite. Put an unavoidable global change in its own PR, and group several into one.
+- Keep each PR to the files its work needs. Hosted CI uses `tools/ci_scope.py` to select checks for changed inputs and their consumers. Inspect the selection before a run; do not drop selected checks. The legacy `AFFECTED` path uses `tools/affected.py`, where a changed test expands through its full imported-library closure. Shared inputs can still select every suite.
+- Scoped coverage checks changed production modules and their affected production consumers at the full thresholds. Documentation changes select documentation checks. A manual CI run is the full audit. Scoped success does not establish global coverage of unchanged libraries.
+- Update an existing branch from `main` for material or relevant changes, or to resolve conflicts. Do not refresh it after every unrelated minor change.
+- Do not edit shared build inputs unless the work cannot be done another way. The `Makefile`, shared build tools and unknown inputs select the full audit. CI routing and known Python tooling have scoped checks. Put an unavoidable shared change in its own PR, and group related changes together.
 - Build and test inside a Linux environment. Mojo has no native Windows build.
 - Do not edit the wiki in the browser. Edit `docs/wiki/` and let the CI workflow publish it.
 - The agent skills in `skills-lock.json` are fetched with `npx skills experimental_install` and bumped with `npx skills update -p -y`. Never write `computedHash` by hand: the tool computes it over every file in the skill folder, and it has changed the way it computes it before.

@@ -18,6 +18,7 @@ from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 import spiral_moments as m
+import seed_count_contracts as seed_count
 
 
 def sparse_add(left, right):
@@ -126,6 +127,8 @@ class TableTests(unittest.TestCase):
         cls.rows = m.derive_coefficients(cls.constants)
         cls.source = m.generate_source(cls.rows)
         cls.original = (m.ROOT/m.DATA).read_bytes()
+        # Partial mutation fixtures use the verified historical Map bytes.
+        cls.historical_map = seed_count.historical_source(m.ROOT).encode('utf-8')
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -144,7 +147,10 @@ class TableTests(unittest.TestCase):
         for path in paths:
             destination = self.root/path
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(m.ROOT/path, destination)
+            if path == Path(seed_count.MODULE):
+                destination.write_bytes(self.historical_map)
+            else:
+                shutil.copyfile(m.ROOT/path, destination)
 
     def change(self, path, before, after):
         target = self.root/path

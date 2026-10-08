@@ -50,7 +50,11 @@ Zero opacity writes no shadow depth. A hidden node or a disabled caster writes n
 
 `HairDensity` supplies direct-light self-shadow in strand space. Each cell stores segment length times fiber diameter divided by cell volume. The current positions rebuild the grid before shading. A ray toward each distant light integrates that density, and Beer-Lambert attenuation uses the result.
 
-The default grid has 24 cells on each axis. The permitted range is four through 64. The default physical fiber diameter is 80 micrometers.
+The default grid has 24 cells on each axis. The permitted range is four through 64. The default physical fiber diameter is 80 micrometers. The diameter must be finite and positive.
+
+Construction, rebuilding and optical-depth queries check both settings. A query checks its finite point and light direction first, even when the grid is empty. After changing either setting, rebuild the grid before querying it. Invalid current settings now raise an error before a query reads the grid, including an empty grid. Earlier queries did not check these settings.
+
+Rebuilding checks the rounded sample count before conversion to signed `Int`. A nonfinite count or a positive count outside that integer range raises an error. Earlier conversions had no defined result for these values. Finite counts at most one use one sample. This check adds no fixed sample cap and preserves healthy rebuild results.
 
 This is a coarse volume approximation. It is not strand-exact visibility. The ray skips one cell near its origin to reduce self-occlusion from its own fiber. That bias also misses nearby fibers.
 

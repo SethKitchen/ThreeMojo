@@ -184,6 +184,9 @@ This helper visits all eligible lane centers and preserves exact-tie ordering.
 It does not call or change the Map nearest-waypoint search.
 See [fixed-s nearest lane queries](CARLA-fixed-s-nearest) for limits and record rules.
 
+`bench/carla_segment_numerics_bench.mojo` times ordinary segment queries.
+`bench/carla_road_fixed_s_bench.mojo` times this fixed-s query.
+
 ## Traffic rules
 
 A road with `rule="LHT"` keeps traffic to the left. Its left lanes run with s and its right lanes against it. `right`, `left`, the lane change and the sign placement all follow the rule.

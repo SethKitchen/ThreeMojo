@@ -86,8 +86,47 @@ class BenchmarkProvenanceTests(unittest.TestCase):
         self.assertEqual(bench.measurement_label(row), '2026-10-01')
         table = bench.example_table(slim['examples'], False)
         self.assertIn('| Measured |', table)
+        self.assertIn('| Draw winner |', table)
         self.assertIn('| 2026-10-01 |', table)
         self.assertIn('per-row measurement date is unknown', table)
+        self.assertNotIn('background-color', table)
+
+    def test_draw_winner_uses_frame_time_and_refused_compiles_stay_out(self):
+        row = example('cube')
+        row['threemojo']['run']['frames_seconds'] = 0.020
+        row['threejs_webgl'] = dict(METRIC) | {'frames_seconds': 0.050, 'backend': 'webgl'}
+        row['threejs_flat'] = dict(METRIC) | {'frames_seconds': 0.010}
+        table = bench.example_table([row], True)
+        self.assertIn('| Mojo |', table)
+        refused = example('spin')
+        refused['mojo10'] = {'compile': {'ok': False, 'seconds': 1.0}, 'run': {'ok': False}}
+        version = bench.mojo10_table({'compile': dict(METRIC), 'run': dict(METRIC)},
+                                     {'compile': dict(METRIC), 'run': dict(METRIC)},
+                                     [refused])
+        self.assertNotIn('`spin`', version)
+        self.assertIn('Refused catalog rows: 1', version)
+        self.assertNotIn('background-color', version)
+
+    def test_cross_host_ratios_do_not_assume_macos_is_faster(self):
+        with tempfile.TemporaryDirectory() as directory:
+            paths = {key: Path(directory) / (key + '.json') for key in bench.PLATFORMS}
+            mac = payload('2026-09-01', [example('cube')])
+            paths['macos'].write_text(json.dumps(mac))
+            for ratio in (0.5, 1.0, 2.0):
+                with self.subTest(ratio=ratio):
+                    linux = payload('2026-10-01', [example('cube')])
+                    for metric in ('compile', 'run'):
+                        linux['examples'][0]['threemojo'][metric]['seconds'] = ratio
+                    paths['linux'].write_text(json.dumps(linux))
+                    with patch.object(bench, 'results_path', side_effect=paths.__getitem__):
+                        report = bench.cross_report()
+                    shown = bench.fmt_ratio(ratio)
+                    self.assertIn('Linux/macOS whole-process time ratio is ' + shown, report)
+                    self.assertIn('Linux/macOS compile-time ratio is ' + shown, report)
+                    self.assertIn('Each ratio is Linux time divided by macOS time.', report)
+                    self.assertIn('The Linux date is 2026-10-01. The macOS date is 2026-09-01.', report)
+                    self.assertIn('These ratios do not isolate hardware speed.', report)
+                    self.assertNotIn('faster', report)
 
     def run_main(self, incompatible):
         with tempfile.TemporaryDirectory() as directory, ExitStack() as stack:

@@ -23,6 +23,7 @@ import optional_runtime_contracts as optional
 import source_contracts as sources
 import sum2_guard_contracts as guards
 import check_sampled_values as sampled
+import seed_count_contracts as seed_count
 
 ROOT = Path(__file__).resolve().parents[2]
 # name, module, function, exact before, exact after, semantic diagnostic
@@ -294,7 +295,11 @@ class OptionalRuntimeContracts(unittest.TestCase):
             for path in paths:
                 target = root/path
                 target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copyfile(ROOT/path, target)
+                if path == seed_count.MODULE:
+                    # This partial fixture retains the historical inventory.
+                    target.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
+                else:
+                    shutil.copyfile(ROOT/path, target)
             self.assertEqual(guards.verify(root)['status'], 'PASS')
             cases = [
                 'from extensions.carla.curve_sum2 import _sum2_error_checked as concealed\ndef unchecked():\n    return concealed(1.0, 0.0, 5)\n',
@@ -404,6 +409,11 @@ class OptionalRuntimeContracts(unittest.TestCase):
                 self.assertEqual(cache_step['before_sha256'], expected)
                 self.assertEqual(cache_key.predecessor_source(ROOT), cache_step['before'])
                 expected = cache_step['after_sha256']
+            if path == seed_count.MODULE:
+                seed_step = seed_count.verify(ROOT)
+                if seed_step is not None:
+                    self.assertEqual(seed_step['before_sha256'], expected)
+                    expected = seed_step['after_sha256']
             self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), expected)
         self.assertTrue(manifest['solver_removal_projection']['map_complete_tokens_equal'])
         self.assertEqual(manifest['solver_removal_projection']['projected_ast_sha256'],
