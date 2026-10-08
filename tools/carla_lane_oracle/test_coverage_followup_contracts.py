@@ -20,7 +20,7 @@ class CoverageFollowupContracts(unittest.TestCase):
         step=record['sources']['extensions/carla/curve_sample_dispatch.mojo']
         self.assertEqual(step['before_sha256'],prior['sources']['extensions/carla/curve_sample_dispatch.mojo']['after_sha256'])
         result=winner.verify(ROOT)
-        self.assertEqual((result['reviewed_cleanup_successors'],result['canonical_dependencies_unchanged']),(13,99))
+        self.assertEqual((result['reviewed_cleanup_successors'],result['canonical_dependencies_unchanged']),(14,98))
         self.assertEqual(len(prior['sources'])+4,8)
         self.assertEqual(112-8,104)
 

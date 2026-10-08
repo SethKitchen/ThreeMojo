@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "event": "Give border-only OpenDRIVE lanes their widths (#577)",
+  "path": "extensions/carla/opendrive.mojo",
+  "scope": "The reader makes width records from the <border> records of a lane that has no <width>, as ASAM OpenDRIVE 1.8.1 section 11.6.2 defines them, and refuses the border combinations that ASAM forbids. All later geometry reads width records, so no certified, pinned or sign-query source changes.",
+  "before_sha256": "4c7ac574196b83d025b84cf6c88261d5e3f3b9ce69923262fcf3cb935e9bf1e5",
+  "before_token_sha256": "3dfc5672424f8550e358758c5f32c3dd21253bb848dd0e4648ae1ceed1269f5c",
+  "after_sha256": "95f1bffa139e50579d695a61f1b21e02499cd78d5face75672d12f9b7280ddbc",
+  "after_token_sha256": "e0cfcd049e7669d43412cd5d689e4dc39283d4d1d24e99c50be89c5727a01523",
+  "correctness_tests": {
+    "tests/test_carla_lane_borders.mojo": "e00bcef653999c6fd8319d891a4d6a68f0ea8896b582140151f30b04bd8d1b84"
+  }
+}

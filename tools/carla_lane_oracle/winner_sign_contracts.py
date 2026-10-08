@@ -114,6 +114,14 @@ def verify(root):
     successors[parser_edge['path']] = parser_edge
 
     try:
+        import border_width_contracts as borders
+    except ModuleNotFoundError:
+        from tools.carla_lane_oracle import border_width_contracts as borders
+    border_edge = borders.verify(root)
+    require(border_edge['path'] not in successors, 'duplicate border-width edge')
+    successors[border_edge['path']] = border_edge
+
+    try:
         import cache_key_contracts as cache_key
     except ModuleNotFoundError:
         from tools.carla_lane_oracle import cache_key_contracts as cache_key

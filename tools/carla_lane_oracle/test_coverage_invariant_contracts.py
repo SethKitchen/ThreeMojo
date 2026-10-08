@@ -34,7 +34,7 @@ class CoverageInvariantContracts(unittest.TestCase):
         record = invariant.verify(ROOT)
         result = winner.verify(ROOT)
         self.assertEqual((result['reviewed_cleanup_successors'],
-                          result['canonical_dependencies_unchanged']), (13, 99))
+                          result['canonical_dependencies_unchanged']), (14, 98))
         self.assertEqual(len(record['sources']), 4)
         self.assertEqual(len(cleanup.read_record(ROOT)['sources']), 3)
         self.assertEqual(len(cleanup.read_record(ROOT)['sources']) + 1, 4)

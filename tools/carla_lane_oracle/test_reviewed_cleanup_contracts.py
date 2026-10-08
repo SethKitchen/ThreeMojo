@@ -20,8 +20,8 @@ class ReviewedCleanupContracts(unittest.TestCase):
     def test_positive_source_and_exact_historical_scope(self):
         record = cleanup.verify(ROOT)
         result = winner.verify(ROOT)
-        self.assertEqual(result['canonical_dependencies_unchanged'], 99)
-        self.assertEqual(result['reviewed_cleanup_successors'], 13)
+        self.assertEqual(result['canonical_dependencies_unchanged'], 98)
+        self.assertEqual(result['reviewed_cleanup_successors'], 14)
         self.assertFalse(result['native_qualification_claimed'])
         prior = json.loads((ROOT/winner.MIGRATION).read_text())
         self.assertEqual(len(prior['canonical_source_unchanged']), 112)

@@ -526,9 +526,7 @@ struct RoadInfoLaneWidth(ImplicitlyCopyable, RoadInfo):
 struct RoadInfoLaneBorder(ImplicitlyCopyable, RoadInfo):
     """A lane's outer border as a cubic in s, `RoadInfoLaneBorder`.
 
-    CARLA stores it and does not read it. The OpenDRIVE reader also makes
-    width records from the borders of a lane that has no widths; see
-    `extensions.carla.opendrive`.
+    CARLA stores it and does not read it.
     """
 
     var s: Float64
