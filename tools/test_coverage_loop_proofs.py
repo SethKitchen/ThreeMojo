@@ -9,6 +9,7 @@ import io
 import json
 import os
 import signal
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -1400,6 +1401,133 @@ class MapSuccessorLoopTests(unittest.TestCase):
             expected = raw.decode().splitlines()
             expected[1] = f'R {module} {line} T {proof["kind"]} {proof["cardinality"]}'
             self.assertEqual(loops.masked_manifest(raw, envelope).decode().splitlines()[1:], expected)
+
+
+    def clean_import_probe(self, mode, *, root=None, shadow=False,
+                           internal_error=False, rejected=False):
+        """Use a real script path and fresh interpreter, never ambient imports."""
+        temporary = tempfile.TemporaryDirectory(prefix='oracle-cli-import-')
+        self.addCleanup(temporary.cleanup)
+        fixture = Path(temporary.name)
+        tools = fixture / 'tools'
+        oracle = tools / 'carla_lane_oracle'
+        oracle.mkdir(parents=True)
+        modules = (
+            'seed_count_contracts', 'sum2_guard_contracts', 'source_contracts',
+            'ideal_projection', 'cache_key_contracts', 'reviewed_cleanup_contracts',
+            'accepted_successor_contracts', 'coverage_invariant_contracts',
+            'curve_support_dispatch_contracts', 'frozen_arc_producer_contracts',
+            'grouped_table_contracts',
+        )
+        for name in modules:
+            shutil.copyfile(self.repo / 'tools/carla_lane_oracle' / (name+'.py'),
+                            oracle / (name+'.py'))
+        for name in ('coverage_loop_proofs', 'cache_key',
+                     'coverage_toolchain_identity', 'affected'):
+            shutil.copyfile(self.repo / 'tools' / (name+'.py'), tools / (name+'.py'))
+        if internal_error:
+            with (oracle / 'source_contracts.py').open('a') as output:
+                output.write('\nraise ModuleNotFoundError("oracle-inner-sentinel")\n')
+        script = (tools if mode == 'cli' else oracle if mode == 'direct' else fixture) / 'probe.py'
+        script.write_text("""
+import hashlib, importlib, json, sys, types
+from pathlib import Path
+root = Path(sys.argv[1])
+mode, shadow, internal_error, rejected = sys.argv[2:]
+original_path = list(sys.path)
+prefix = {'cli': 'carla_lane_oracle.', 'package': 'tools.carla_lane_oracle.', 'direct': ''}[mode]
+def check(value, message):
+    if not value:
+        raise RuntimeError(message)
+if shadow == 'True':
+    check(bool(prefix), 'shadow control requires package execution')
+    shadow_module = types.ModuleType('source_contracts')
+    sys.modules['source_contracts'] = shadow_module
+try:
+    seed = importlib.import_module(prefix + 'seed_count_contracts')
+except ModuleNotFoundError as error:
+    check(internal_error == 'True' and str(error) == 'oracle-inner-sentinel',
+          'an internal import error was hidden by alternate import resolution: ' + str(error))
+    check(sys.path == original_path, 'failure changed the import path')
+    print('internal import error propagated without fallback')
+    raise SystemExit(0)
+check(internal_error == 'False', 'internal dependency error was swallowed')
+source = importlib.import_module(prefix + 'source_contracts')
+guard = importlib.import_module(prefix + 'sum2_guard_contracts')
+check(seed.source is source and seed.guard is guard, 'split seed dependency identity')
+check(guard.source_contracts is source, 'split guard source identity')
+check(guard.cache_key.source is source, 'split cache source identity')
+check(guard.reviewed_cleanup_contracts.source is source, 'split cleanup source identity')
+check(guard.reviewed_cleanup_contracts.invariant.source is source, 'split invariant source identity')
+check(guard.reviewed_cleanup_contracts.frozen.source is source, 'split frozen source identity')
+check(guard.reviewed_cleanup_contracts.accepted.source is source, 'split accepted source identity')
+check(guard.reviewed_cleanup_contracts.invariant.curve.source is source, 'split curve source identity')
+check(guard.reviewed_cleanup_contracts.invariant.grouped.token_sha256 is source.token_sha256,
+      'split grouped token function identity')
+if shadow == 'True':
+    check(source is not shadow_module and sys.modules['source_contracts'] is shadow_module,
+          'package import reused or replaced an unrelated direct module')
+check(sys.path == original_path, 'imports changed sys.path')
+if mode == 'cli':
+    import coverage_loop_proofs as loops
+    actual = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
+    tree = loops.reviewed_nonempty_loops(root, 'extensions/carla/rtree')
+    if rejected == 'True':
+        check(not actual and not tree, 'unknown source activated a named proof')
+        print('unknown successor withheld all named Map and R-tree proofs')
+        raise SystemExit(0)
+    digest = hashlib.sha256((root/seed.MODULE).read_bytes()).hexdigest()
+    after = digest == seed.AFTER_SHA256
+    expected = set(loops._MAP_SUCCESSOR_LINES.values() if after else loops._MAP_SUCCESSOR_LINES)
+    check(set(actual) == expected and set(tree) == {666}, 'clean CLI lost expected named proofs')
+    for proof in [*actual.values(), *tree.values()]:
+        check((proof['required'], proof['impossible']) == ('T', 'F'), 'reachable outcome weakened')
+        check(proof['dependency_sha256'][seed.MODULE] == digest, 'proof replaced live source identity')
+    print(json.dumps({'map_lines': sorted(actual), 'rtree_lines': sorted(tree), 'map_sha256': digest}))
+else:
+    before = seed.historical_source(root)
+    check(hashlib.sha256(before.encode()).hexdigest() == seed.BEFORE_SHA256,
+          'source inverse did not reconstruct the reviewed predecessor')
+    print('canonical ' + (prefix or 'direct') + ' imports and reviewed inverse passed')
+check(sys.path == original_path, 'verification changed sys.path')
+""")
+        # -E excludes inherited PYTHONPATH. The real script location supplies
+        # tools, the repository package root, or the direct oracle directory.
+        # The unrelated cwd prevents repository-root discovery from hiding bugs.
+        cwd = fixture / 'unrelated-cwd'
+        cwd.mkdir()
+        command = [sys.executable, '-E', '-B']
+        if sys.flags.optimize:
+            command.append('-O')
+        command.extend([str(script), str(root or self.repo), mode, str(shadow),
+                        str(internal_error), str(rejected)])
+        result = subprocess.run(command, cwd=cwd, check=False, capture_output=True,
+                                text=True, timeout=10)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        return result.stdout
+
+    def test_clean_cli_admits_named_rules_without_ambient_root_imports(self):
+        self.assertIn('map_lines', self.clean_import_probe('cli'))
+
+    def test_package_and_direct_modes_keep_canonical_dependency_identity(self):
+        for mode, shadow in [('package', False), ('package', True),
+                             ('cli', True), ('direct', False)]:
+            with self.subTest(mode=mode, shadow=shadow):
+                self.assertIn('passed' if mode != 'cli' else 'map_lines',
+                              self.clean_import_probe(mode, shadow=shadow))
+
+    def test_internal_dependency_importerror_propagates_without_fallback(self):
+        for mode in ('cli', 'package', 'direct'):
+            with self.subTest(mode=mode):
+                self.assertIn('without fallback',
+                              self.clean_import_probe(mode, internal_error=True))
+
+    def test_clean_cli_unknown_successor_keeps_both_loop_outcomes_required(self):
+        root = self.fixture()
+        with (root/self.name).open('ab') as output:
+            output.write(b'\n# unknown complete source\n')
+        self.assertIn('withheld', self.clean_import_probe('cli', root=root, rejected=True))
+
 
 
 if __name__ == '__main__':

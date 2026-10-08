@@ -4,10 +4,10 @@ import hashlib
 import math
 import struct
 
-try:
+if __package__:
+    from .source_contracts import token_sha256
+else:
     from source_contracts import token_sha256
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle.source_contracts import token_sha256
 
 TOKEN_SHA256='3fcfc637a40c4e322b5747f27f8d77163c3f47a49d1092b37c20744cafecba40'
 MODULE='extensions/carla/spiral_grouped_roundoff_proof.mojo'

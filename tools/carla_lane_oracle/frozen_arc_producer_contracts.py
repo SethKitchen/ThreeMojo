@@ -9,10 +9,10 @@ elsewhere. This source binding does not certify native or aggregate behavior.
 import hashlib
 import json
 
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/frozen-arc-producer-migration.json'
 MIGRATION_SHA256 = '70091e23400193257514363570187b47890e3c08c352fe79eb08bf291737cc9f'

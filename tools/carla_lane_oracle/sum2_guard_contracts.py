@@ -15,18 +15,18 @@ from pathlib import Path
 import textwrap
 import tokenize
 
-try:
+if __package__:
+    from . import (
+        ideal_projection, source_contracts, reviewed_cleanup_contracts,
+    )
+else:
     import ideal_projection
     import source_contracts
     import reviewed_cleanup_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import (
-        ideal_projection, source_contracts, reviewed_cleanup_contracts,
-    )
-try:
+if __package__:
+    from . import cache_key_contracts as cache_key
+else:
     import cache_key_contracts as cache_key
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import cache_key_contracts as cache_key
 
 
 PINS = Path('tools/carla_lane_oracle/sum2-guard-pins.json')

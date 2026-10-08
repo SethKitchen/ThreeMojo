@@ -13,10 +13,10 @@ import json
 from pathlib import Path
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MODULE = 'extensions/carla/lane_refinement.mojo'
 MIGRATION = 'tools/carla_lane_oracle/cache-key-migration.json'

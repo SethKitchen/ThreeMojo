@@ -8,10 +8,10 @@ A composed integration must migrate runtime and guarded-caller pins separately.
 import hashlib
 import json
 
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/curve-support-dispatch-migration.json'
 MIGRATION_SHA256 = '1a6d7794bf0869a1e717685e556d8400e075ab97917ce8d855da6bd61c3ee19f'

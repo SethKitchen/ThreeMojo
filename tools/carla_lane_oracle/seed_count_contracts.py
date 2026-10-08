@@ -14,12 +14,12 @@ import textwrap
 import tokenize
 from pathlib import Path
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
 
 def _sibling_tool(name):
     """Load the executing checker's fixed sibling, independent of sys.path."""
