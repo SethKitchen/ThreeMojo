@@ -158,18 +158,25 @@ def _try_spiral_grouped_roundoff_envelope(
     var rate_value = rate.value()
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
-    # Exactly the stored pairs, with actual multiplicities 2,2,1. A changed
-    # table must not silently keep a symmetry assumption or ideal weight sum.
-    if weights[0] != weights[4] or weights[1] != weights[3]:
-        return None
+    # Materialized copies come only from these immutable compile-time tables.
+    # Reject an incompatible table at compilation, before this helper can run.
+    # The stored pair multiplicities remain 2,2,1; no ideal weight sum is used.
+    comptime assert _GL_WEIGHTS[0] == _GL_WEIGHTS[4]
+    comptime assert _GL_WEIGHTS[1] == _GL_WEIGHTS[3]
+    comptime assert _GL_WEIGHTS[0] > 0.0 and _GL_WEIGHTS[0] <= 1.0
+    comptime assert _GL_NODES[0] > -1.0 and _GL_NODES[0] < 1.0
+    comptime assert _GL_WEIGHTS[1] > 0.0 and _GL_WEIGHTS[1] <= 1.0
+    comptime assert _GL_NODES[1] > -1.0 and _GL_NODES[1] < 1.0
+    comptime assert _GL_WEIGHTS[2] > 0.0 and _GL_WEIGHTS[2] <= 1.0
+    comptime assert _GL_NODES[2] > -1.0 and _GL_NODES[2] < 1.0
+    comptime assert _GL_WEIGHTS[3] > 0.0 and _GL_WEIGHTS[3] <= 1.0
+    comptime assert _GL_NODES[3] > -1.0 and _GL_NODES[3] < 1.0
+    comptime assert _GL_WEIGHTS[4] > 0.0 and _GL_WEIGHTS[4] <= 1.0
+    comptime assert _GL_NODES[4] > -1.0 and _GL_NODES[4] < 1.0
     var node_low = inf[DType.float64]()
     var node_high = -inf[DType.float64]()
     for i in range(5):
-        if not isfinite(weights[i]) or weights[i] <= 0.0:
-            return None
         var node = 1.0 + nodes[i]
-        if not isfinite(node):
-            return None
         node_low = min(node_low, node)
         node_high = max(node_high, node)
     var distance = _ValueJet(

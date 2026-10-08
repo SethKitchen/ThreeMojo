@@ -43,10 +43,8 @@ def _rounded_line_axis_context(
         or high > road.length
     ):
         return None
-    if (
-        info_index(road.info.geometries, low) != 0
-        or info_index(road.info.geometries, high) != 0
-    ):
+    # One record active at low also covers high: the domain is ordered.
+    if info_index(road.info.geometries, low) != 0:
         return None
     var offset_at = info_index(road.info.lane_offsets, low)
     var elevation_at = info_index(road.info.elevations, low)

@@ -244,10 +244,13 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             paths = set(p for group in contracts.GROUP_PATHS.values() for p in group)
+            from reviewed_cleanup_contracts import PROTECTED_INPUTS
+            paths.update(PROTECTED_INPUTS)
             paths.add('extensions/carla/lane_value_bounds.mojo')
             paths.add(str(contracts.PINS))
             paths.add('tools/carla_lane_oracle/spiral-moment-pins.json')
             paths.add('tools/carla_lane_oracle/sum2-guard-pins.json')
+            paths.add('tools/carla_lane_oracle/winner-sign-query-migration.json')
             paths.update(json.loads((ROOT/sum2_guard_contracts.PINS).read_text())['protected_inventory'])
             for name in paths:
                 to = root/name; to.parent.mkdir(parents=True, exist_ok=True)

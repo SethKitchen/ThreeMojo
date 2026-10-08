@@ -229,7 +229,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
         self.assertTrue(expected.issubset(sources.GROUP_PATHS['optional_runtime']))
         self.assertEqual(len(expected), 5)
         self.assertFalse(self.semantic['native_execution_qualified'])
-        self.assertEqual(self.guarded['complete_caller_declarations'], 29)
+        self.assertEqual(self.guarded['complete_caller_declarations'], 33)
 
     def test_omitted_new_dependency_rejects_schema(self):
         read = Path.read_text
@@ -266,7 +266,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
     def test_dispatch_cannot_move_before_original_closures(self):
         path = ROOT/'extensions/carla/lane_refinement.mojo'
         original = path.read_text()
-        setup = '''        if not sampled_checked and task[2] < max_depth:
+        setup = '''        if not sampled_checked:
             sampled_checked = True
             sampled_cuts = _try_sample_dispatch_cuts(
                 road, low, high, certificate.nodes, certificate.terms,
@@ -285,7 +285,10 @@ class OptionalRuntimeContracts(unittest.TestCase):
         pins = json.loads(self.pins[guards.PINS])
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            paths = set(pins['protected_inventory']) | {str(guards.PINS)}
+            paths = set(pins['protected_inventory']) | {str(guards.PINS),
+                'tools/carla_lane_oracle/winner-sign-query-migration.json'}
+            from reviewed_cleanup_contracts import PROTECTED_INPUTS
+            paths.update(PROTECTED_INPUTS)
             for module in guards.CALLERS:
                 paths.add('extensions/carla/' + module + '.mojo')
             for path in paths:
@@ -379,6 +382,19 @@ class OptionalRuntimeContracts(unittest.TestCase):
             for step in successors['raw_successors'].get(path, []):
                 self.assertEqual(step['before'], expected)
                 expected = step['after']
+            latest = json.loads((ROOT/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_text())
+            for step in latest['raw_successors'].get(path, []):
+                self.assertEqual(step['before'], expected)
+                expected = step['after']
+            if path == 'extensions/carla/lane_refinement.mojo':
+                import coverage_invariant_contracts as invariant
+                import lane_control_contracts as lane
+                step = invariant.verify(ROOT)['sources'][path]
+                scoped = lane.verify(ROOT)
+                self.assertEqual(step['before_sha256'], expected)
+                self.assertEqual(scoped['before_sha256'], expected)
+                self.assertEqual(step['after_sha256'], scoped['after_sha256'])
+                expected = step['after_sha256']
             self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), expected)
         self.assertTrue(manifest['solver_removal_projection']['map_complete_tokens_equal'])
         self.assertEqual(manifest['solver_removal_projection']['projected_ast_sha256'],

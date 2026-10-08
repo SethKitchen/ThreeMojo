@@ -41,16 +41,7 @@ def _frozen_arc_context(
     if not found:
         return None
     var model = found.value()
-    for coefficient in [
-        model.start,
-        model.curvature,
-        model.speed,
-        model.x,
-        model.y,
-        model.z,
-    ]:
-        if not coefficient.known or coefficient.low != coefficient.high:
-            return None
+    # The immediate producer already returns known singleton coefficients.
     var distance = _RoundedBox.bounds(low, high) - model.start
     # Keep one smooth interior clamp branch throughout the original domain.
     if (

@@ -32,6 +32,15 @@ def main() raises:
         raise Error("usage: build_cli <build-dir> <source.mojo>...")
 
     var build_dir = String(args[1])
+    # Invalidate a prior generation before any output changes. The complete
+    # index is published only after every output and the manifest are written.
+    var origin_index_path = build_dir + "/origins.ready"
+    Path(origin_index_path).write_text(String(""))
+    var checkpoint = String("")
+    var checkpoint_path = Path(build_dir + "/generation-inputs.json")
+    if checkpoint_path.exists():
+        checkpoint = checkpoint_path.read_text()
+    var origin_names = String("")
     var manifest = String("")
     var total_lines = 0
     var total_branches = 0
@@ -40,27 +49,62 @@ def main() raises:
     for index in range(2, len(args)):
         var source_path = String(args[index])
         var module = module_name(source_path)
-        var result = instrument(Path(source_path).read_text(), module)
+        var original = Path(source_path).read_text()
+        var result = instrument(original, module)
 
         Path(build_dir + "/" + source_path).write_text(result.text)
 
+        var fragment = String("")
         for line in result.lines:
-            manifest += "L " + module + " " + String(line) + "\n"
+            fragment += "L " + module + " " + String(line) + "\n"
         for position in range(len(result.branches)):
             var line = result.branches[position]
-            manifest += "B " + module + " " + String(line) + "\n"
+            fragment += "B " + module + " " + String(line) + "\n"
             # A compound decision also reports each of its operands, and each
             # operand additionally owes an MC-DC independence pair.
             for index in range(result.conditions[position]):
                 var suffix = module + " " + String(line) + " " + String(index)
-                manifest += "C " + suffix + "\n"
-                manifest += "M " + suffix + "\n"
+                fragment += "C " + suffix + "\n"
+                fragment += "M " + suffix + "\n"
             total_conditions += result.conditions[position]
 
         total_lines += len(result.lines)
         total_branches += len(result.branches)
+        manifest += fragment
+        # This trusted producer records the exact input of instrument and
+        # its exact output/manifest fragment together. Lengths are UTF-8 bytes,
+        # so source text, CR/LF endings and embedded delimiters are unambiguous.
+        var origin = (
+            "COVORIGIN1 "
+            + String(source_path.byte_length())
+            + " "
+            + String(original.byte_length())
+            + " "
+            + String(result.text.byte_length())
+            + " "
+            + String(fragment.byte_length())
+            + "\n"
+            + source_path
+            + original
+            + result.text
+            + fragment
+        )
+        Path(build_dir + "/" + source_path + ".cov-origin").write_text(origin)
+        origin_names += String(source_path.byte_length()) + "\n" + source_path
 
     Path(build_dir + "/" + MANIFEST_NAME).write_text(manifest)
+    Path(origin_index_path).write_text(
+        "COVORIGIN_INDEX2 "
+        + String(len(args) - 2)
+        + " "
+        + String(manifest.byte_length())
+        + " "
+        + String(checkpoint.byte_length())
+        + "\n"
+        + manifest
+        + checkpoint
+        + origin_names
+    )
     print(
         "Instrumented",
         len(args) - 2,

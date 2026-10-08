@@ -30,8 +30,11 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         shutil.copyfile(ROOT/'tools/carla_lane_oracle/spiral-moment-pins.json', moment_pin)
         guard_pin = self.root/'tools/carla_lane_oracle/sum2-guard-pins.json'
         shutil.copyfile(ROOT/'tools/carla_lane_oracle/sum2-guard-pins.json', guard_pin)
+        migration = 'tools/carla_lane_oracle/winner-sign-query-migration.json'
+        shutil.copyfile(ROOT/migration, self.root/migration)
         from tools.carla_lane_oracle.source_contracts import GROUP_PATHS
-        paths = set(GROUP_PATHS['canonical_accumulation'])
+        from tools.carla_lane_oracle.reviewed_cleanup_contracts import PROTECTED_INPUTS
+        paths = set(GROUP_PATHS['canonical_accumulation']) | set(PROTECTED_INPUTS)
         paths.update(json.loads(guard_pin.read_text())['protected_inventory'])
         paths.update(GROUP_PATHS['optional_runtime'])
         paths.update('extensions/carla/' + name for name in

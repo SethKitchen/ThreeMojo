@@ -383,9 +383,12 @@ def _outward_float(value: Float64, lower: Bool) raises -> Float32:
         raise Error(
             "Junction canonical enclosure is not finite in public storage"
         )
-    if (lower and Float64(result) > value) or (
-        not lower and Float64(result) < value
-    ):
+    var outside: Bool
+    if lower:
+        outside = Float64(result) > value
+    else:
+        outside = Float64(result) < value
+    if outside:
         if result == 0.0:
             return bitcast[DType.float32](
                 UInt32(0x80000001) if lower else UInt32(1)

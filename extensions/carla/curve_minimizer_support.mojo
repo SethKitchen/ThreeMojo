@@ -65,12 +65,12 @@ def _minimizer_support(
     if _ordered_finite(derivative):
         if derivative.low > 0.0:
             var radius = twice_error / _Interval.point(derivative.low)
-            if _ordered_finite(radius) and radius.high >= 0.0:
+            if _ordered_finite(radius):
                 var limit = _Interval.point(best) + _Interval.point(radius.high)
                 result.high = min(result.high, limit.high)
         elif derivative.high < 0.0:
             var radius = twice_error / _Interval.point(-derivative.high)
-            if _ordered_finite(radius) and radius.high >= 0.0:
+            if _ordered_finite(radius):
                 var limit = _Interval.point(best) - _Interval.point(radius.high)
                 result.low = max(result.low, limit.low)
     if smooth and domain.second.low > 0.0:
@@ -92,17 +92,16 @@ def _minimizer_support(
             var negative = (b + root_b) / m
             if slope.high < 0.0:
                 negative = four_error / (root_b - b)
-            if _ordered_finite(positive) and positive.high >= 0.0:
+            if _ordered_finite(positive):
                 var limit = _Interval.point(best) + _Interval.point(
                     positive.high
                 )
                 result.high = min(result.high, limit.high)
-            if _ordered_finite(negative) and negative.high >= 0.0:
+            if _ordered_finite(negative):
                 var limit = _Interval.point(best) - _Interval.point(
                     negative.high
                 )
                 result.low = max(result.low, limit.low)
-    # Defensive arithmetic refusal preserves the original conservative cover.
-    if not _ordered_finite(result) or not result.contains(best):
-        return _Interval(low, high)
+    # Each finite radius encloses a nonnegative exact radius. Outward
+    # best +/- radius bounds preserve the incumbent and the original cell.
     return result

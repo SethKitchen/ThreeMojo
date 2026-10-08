@@ -374,12 +374,16 @@ def _expansion_center(low: Float64, high: Float64, best: Float64) -> Float64:
     var center = min(max(best, low), high)
     if center <= low:
         var interior = _next_up(low)
-        if interior > low and interior < high:
+        # next_up(low) exceeds low unless low is NaN or positive infinity;
+        # neither exceptional result can be below high.
+        if interior < high:
             return interior
         return _midpoint(low, high)
     if center >= high:
         var interior = _next_down(high)
-        if interior > low and interior < high:
+        # next_down(high) is below high unless high is NaN or negative
+        # infinity; neither exceptional result can exceed low.
+        if interior > low:
             return interior
         return _midpoint(low, high)
     return center
@@ -1913,7 +1917,8 @@ def _run_lane_search(
         # Keep each source owner unchanged while isolating the exact stored
         # sample-dispatch transition. Adjacent words leave no station gap.
         # Declined setup or unavailable depth retains the original path.
-        if not sampled_checked and task[2] < max_depth:
+        # The preceding depth refusal dominates both dispatch paths.
+        if not sampled_checked:
             sampled_checked = True
             sampled_cuts = _try_sample_dispatch_cuts(
                 road,
@@ -1924,7 +1929,7 @@ def _run_lane_search(
                 max_nodes,
                 max_terms,
             )
-        if sampled_cuts and task[2] < max_depth:
+        if sampled_cuts:
             var split_at = 0.0
             if lo < sampled_cuts.value()[0] and sampled_cuts.value()[0] <= hi:
                 split_at = sampled_cuts.value()[0]
@@ -1938,14 +1943,15 @@ def _run_lane_search(
                 var before = bitcast[DType.float64](
                     bitcast[DType.uint64](split_at) - UInt64(1)
                 )
-                if before >= lo:
-                    if external_witness and best >= split_at:
-                        pending.append((lo, before, task[2] + 1))
-                        pending.append((split_at, hi, task[2] + 1))
-                    else:
-                        pending.append((split_at, hi, task[2] + 1))
-                        pending.append((lo, before, task[2] + 1))
-                    continue
+                # A positive cut is strictly above lo. Its predecessor is
+                # therefore at least lo, including zero and subnormal words.
+                if external_witness and best >= split_at:
+                    pending.append((lo, before, task[2] + 1))
+                    pending.append((split_at, hi, task[2] + 1))
+                else:
+                    pending.append((split_at, hi, task[2] + 1))
+                    pending.append((lo, before, task[2] + 1))
+                continue
         if external_witness and best >= middle:
             pending.append((lo, middle, task[2] + 1))
             pending.append((middle, hi, task[2] + 1))

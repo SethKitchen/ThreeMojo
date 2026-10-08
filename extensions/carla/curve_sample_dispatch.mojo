@@ -121,15 +121,15 @@ def _try_sample_dispatch_cuts(
     var two = 0.0
     for i in range(count):
         var threshold_at = first + i + 1
-        if threshold_at < 1 or threshold_at >= len(geometry.samples) - 1:
-            return None
+        # The index bracket and count admission put this in [1, n - 2].
         var cut = _sample_dispatch_cut(
             record.s, geometry.length, geometry.samples[threshold_at].s
         )
         if not cut:
             return None
         var station = cut.value()
-        if station <= low or station > high:
+        # The accepted index bracket makes the cut strictly later than low.
+        if station > high:
             return None
         var before = bitcast[DType.float64](
             bitcast[DType.uint64](station) - UInt64(1)

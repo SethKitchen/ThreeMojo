@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "base_tree": "818188d0487e72d21d7ea0137b1ce02e14a93b53",
+  "scope": "Only the reviewed five redundant singleton high lookups, implied ARC quarter guard, and outward Float32 Boolean selection. Source correspondence is not native or aggregate qualification.",
+  "prior_winner_sign_migration_sha256": "b154b18213f9f0400661aff93e47b86bf83990c8838dfa0fca00b0fe6710b9a3",
+  "runtime_pins_before_sha256": "17dd3a5495e216511099f8340c18f5e9db990fcbf30d236ccc6da0e7ca48d880",
+  "guard_pins_before_sha256": "a2e02bf09d4b1660ea44c290971bd248176f282dbd352b7961ca35658d54c883",
+  "sources": {
+    "extensions/carla/curve_rounded_line.mojo": {
+      "before_sha256": "af00f76f66323ce85b0f794cbe7162d63e6db864c49a052827f565c2332383ec",
+      "after_sha256": "aeb7b6722b223493d9a86422a17500be9c68d1b7d3de8bd441795001dc513f35",
+      "before_token_sha256": "ffa102da3054d085385e05d13886a734aa838465b01dd85baa04d47894e25d32",
+      "after_token_sha256": "dd1400b11b6bf90dde2198a304d84e40f5527c2a41175fcc49aeba444fb57706"
+    },
+    "extensions/carla/curve_rounded_arc.mojo": {
+      "before_sha256": "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+      "after_sha256": "7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745",
+      "before_token_sha256": "983e6589f60d814a4f5826eadad6357b87619bf87677fc961f7cc0bd12349e58",
+      "after_token_sha256": "e98252c83b51b5421643d388556efcd839ef64dfddb37cef37084d48782642f9"
+    },
+    "extensions/carla/junction_bounds.mojo": {
+      "before_sha256": "98fc27702e365e19c3b226d1a7b525bce5aa82b5b11fb6caff79ce39416024e2",
+      "after_sha256": "c933e03b6bde0bede8fb0745e9c1ef075d9699fde72b74795368943381d1aa74",
+      "before_token_sha256": "83493444663f6125fb884d402e21f5976b3e27dd637cce9c39bb1ff00697751b",
+      "after_token_sha256": "35aa94a154256542285a5dc4ab2b1a6378c501fb9cbf737511b129c23f51cb47"
+    }
+  },
+  "runtime_token_successors": [
+    {
+      "group": "eligibility",
+      "path": "extensions/carla/curve_rounded_line.mojo",
+      "before": "ffa102da3054d085385e05d13886a734aa838465b01dd85baa04d47894e25d32",
+      "after": "dd1400b11b6bf90dde2198a304d84e40f5527c2a41175fcc49aeba444fb57706"
+    },
+    {
+      "group": "eligibility",
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "before": "983e6589f60d814a4f5826eadad6357b87619bf87677fc961f7cc0bd12349e58",
+      "after": "e98252c83b51b5421643d388556efcd839ef64dfddb37cef37084d48782642f9"
+    },
+    {
+      "group": "support",
+      "path": "extensions/carla/junction_bounds.mojo",
+      "before": "83493444663f6125fb884d402e21f5976b3e27dd637cce9c39bb1ff00697751b",
+      "after": "35aa94a154256542285a5dc4ab2b1a6378c501fb9cbf737511b129c23f51cb47"
+    }
+  ],
+  "reviews": {
+    "singleton_high_lookups": {
+      "sha256": "97031558ec9cc16113141d8255fc62719e383a0223c09de3ab00610092b056a4",
+      "review": {
+        "status": "accepted narrow source proof; native qualification may proceed; no adoption/publication claim",
+        "input_manifest_sha256": "8d9cb2ab43ed4d847fdd03b09b506fee9d35daff264f73abe17ea0ddd5d2a46a",
+        "patch_sha256": "fc1625bc4b5b104508a314fc71372740f08d5a3e20344632032d4371665666d3",
+        "files": {
+          "extensions/carla/curve_rounded_line.mojo": {
+            "before_sha256": "af00f76f66323ce85b0f794cbe7162d63e6db864c49a052827f565c2332383ec",
+            "after_sha256": "aeb7b6722b223493d9a86422a17500be9c68d1b7d3de8bd441795001dc513f35"
+          },
+          "extensions/carla/curve_rounded_arc.mojo": {
+            "before_sha256": "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+            "after_sha256": "43ea62f449e99a58d20be3a9839dbd863014bd827fa74214fba8a042380b1384"
+          }
+        },
+        "road_info_sha256": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb",
+        "proof": [
+          "For len(records)==1, the exact info_index loop makes one comparison records[0].distance()<=s and returns0 on true or-1 on false.",
+          "Each deleted high lookup is preceded by its own singleton predicate, a locally constructed known RoundedBox proving finite ordered low<=high, and a successful lookup at low.",
+          "For a finite or negative-infinite stored start r, r<=low and low<=high imply r<=high. NaN and positive infinity cannot pass the retained low comparison. Signed zeros preserve the same comparison result. Thus every deleted comparison would have returned0.",
+          "All four concrete record types return their stored s field directly; there is no callback, allocation, counter update or error in the omitted comparison. Invalid section/lane and all earlier domain/kind/count guards retain their order.",
+          "LINE has only a singleton geometry guarantee. Its high offset/elevation/width checks remain intact, so this proof is not extended to multi-record profiles. ARC checks singleton geometry, offsets, elevations and each traversed width before the relevant lookup.",
+          "The subsequent polynomial, rounded-operation, range and finite guards remain byte-for-byte in the patch. Bound producers, arithmetic, canonical point/pose graph, owner/index rules, prices and caps are unchanged."
+        ],
+        "assumptions": [
+          "Valid owned List storage and immutable/stable Road borrow through the call; no unsafe concurrent mutation.",
+          "The existing rounded-model floating-point premises apply. This is a source-specific comparison proof, not a universal property of arbitrary RoadInfo callbacks or unknown domains.",
+          "Malformed public field values remain within the audit, including missing/multiple lists, NaN and infinite starts, negative starts and inverted/nonfinite endpoints. No extra sortedness premise is needed for one record."
+        ],
+        "native_controls_required": [
+          "Existing LINE/ARC context and bound controls in default/off modes.",
+          "Low-active record at/below low, record between low/high, NaN/+infinity/-infinity starts, invalid/unknown domain, missing/multiple records and invalid section/lane.",
+          "A LINE profile crossing a later record must retain its existing refusal; supported model/bounds must match baseline.",
+          "Fresh source-pin migration and targeted real coverage before any composed adoption."
+        ]
+      }
+    },
+    "quarter_guard": {
+      "sha256": "ca3a5a9302f18bc4cff63a4b7e1b093be2e2cee6a2da9bf9b32b214a4976de34",
+      "review": {
+        "allowed_delta": "Remove only the quarter abs/max check and its return in _RoundedArc.center; mechanically remove the now-unused import only if required. Keep every other guard.",
+        "checked_cases": 60,
+        "checks": {
+          "check_exact_threshold.py": "72f7a78922ba777ded65bd5b83d580e30947920152f6e5840bbef2ff129d721e",
+          "exact-normal.json": "1b82ee929e00c7e8b528e7ab371927c3bbd45c613c7e6985071b10f094979988",
+          "exact-optimized.json": "1b82ee929e00c7e8b528e7ab371927c3bbd45c613c7e6985071b10f094979988"
+        },
+        "limitations": [
+          "Correctly rounded explicit FMA and ordinary supported language/compiler semantics are required.",
+          "No native build, adoption, platform-wide FP certification, coverage credit, or publication approval.",
+          "No unsafe local mutation or concurrent data race."
+        ],
+        "normal_optimized_equal": true,
+        "proof_sha256": "0e610fc6052ad48d03a73c9134252234bb2623eac1ff95d0539d47c8a791afee",
+        "reviewed_at_utc": "2026-10-07T22:18:00Z",
+        "runtime_proof_path": "/workspace/shared/curve-proposal-coverage-classification-20261007T2115/REVIEW.md",
+        "runtime_proof_sha256": "67b96430e55faa0427a2963258cd1391d217d66d03ec4c1cbca8eeb65652db74",
+        "source_root": "/workspace/shared/combined-solver-sign-composition-20261007T1946/source/extensions/carla",
+        "source_sha256": {
+          "curve_frozen_arc.mojo": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+          "curve_rounded_arc.mojo": "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+          "curve_trig.mojo": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+          "lane_refinement.mojo": "33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315"
+        },
+        "status": "accepted_narrow_source_proof_native_qualification_pending"
+      }
+    },
+    "outward_float": {
+      "sha256": "8ecc348a29a28417f0f100c0d3a3ea716d5134204adb0edfe4d40223d5bd4c7e",
+      "review": {
+        "status": "accepted source-control equivalence; native qualification may proceed; no adoption/coverage credit",
+        "source_pins_sha256": "946f1260dc19166385a157a05719637668cc685bfe261022331834c242349dc0",
+        "patch_sha256": "e611fabeca1bf4a0ac881c56130b7e5ec1f4c905f38d1369088d22a2fc614d72",
+        "original_module_sha256": "98fc27702e365e19c3b226d1a7b525bce5aa82b5b11fb6caff79ce39416024e2",
+        "proposal_module_sha256": "c933e03b6bde0bede8fb0745e9c1ef075d9699fde72b74795368943381d1aa74",
+        "proof": [
+          "For lower=True, the original (lower and G) or (not lower and S) selects G. For lower=False it selects S. The explicit if/else assigns exactly that Boolean before the unchanged adjustment. This identity holds even without assuming G and S are mutually exclusive.",
+          "On either source path exactly one selected Float64(result) comparison is evaluated. result and value are stored scalar locals/parameters and lower is Bool, so selecting the comparison has no callback or mutable-input effect.",
+          "The Float32 conversion and initial nonfinite rejection prefix are byte-identical. The zero special case, sign-dependent adjacent-word step, adjusted nonfinite rejection and returned word suffix are byte-identical.",
+          "Exact positive/negative zero, tiny nonzero values rounded to zero, ordinary/subnormal transitions, negative values and endpoint overflow therefore retain the same result or error site. The argument does not require a new rounding-mode/FMA premise beyond the unchanged conversion.",
+          "The old condition repeats the same lower value at two observed leaf positions; when the second occurrence is evaluated it equals the first. Its absence of an independent MC/DC pair is a source correlation, not justification for fabricating input data. The new control graph must get a fresh manifest/capture."
+        ],
+        "independent_replay": {
+          "normal": 65690,
+          "optimized": 65690,
+          "checker_sha256": "4e13a6e407d751a501dad2a12aec8e1799951d20f203c2eb2b37f1a075a0efb0",
+          "scope": "model and source-block checks only; not native execution or exhaustive floating-point enumeration"
+        },
+        "required": [
+          "Native original/refactored comparison under supported compiler modes, including finite rounding directions, signed-zero/subnormal boundaries and both nonfinite error sites.",
+          "Fresh source-pin migration and genuine instrumented coverage for the changed control graph.",
+          "No claims about performance, public query availability, physical geometry accuracy or publication follow from this local refactor."
+        ]
+      }
+    }
+  },
+  "runtime_pins_after_sha256": "1ed52e48eec9ec40f879f5227b6f43ca3a8417ec75bcde5aeff77d25f8f9c44e",
+  "guard_pins_after_sha256": "a2e02bf09d4b1660ea44c290971bd248176f282dbd352b7961ca35658d54c883",
+  "premise_dependencies": {
+    "extensions/carla/road_info.mojo": {
+      "raw_sha256": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb",
+      "token_sha256": "fe385b3c6ea4ecf4f292914149da1b8570dd409283980b8853efb3f77d7401c9"
+    },
+    "extensions/carla/curve_trig.mojo": {
+      "raw_sha256": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+      "token_sha256": "523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f"
+    }
+  },
+  "frozen_outward_reference_token_sha256": "a544c51e92396e721b5a2a06e99f4521b7d9d15641c210eb832c301ecd8664c2",
+  "unchanged_protected_inventory": {
+    "extensions/carla/junction_bounds.mojo": "5fd5e52d20745e066d7f8ec06606bfcd1223d616bcfef0bbc361c70e31d6db50"
+  }
+}

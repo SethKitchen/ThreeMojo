@@ -7,8 +7,8 @@
       "extensions/carla/curve_interval.mojo": "e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11",
       "extensions/carla/curve_bounds.mojo": "1874e6c5d58128502df4d052303d02bc866a0fef8b109337bcb38f4b26d6d08b",
       "extensions/carla/spiral_roundoff_proof.mojo": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641",
-      "extensions/carla/lane_refinement.mojo": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0",
-      "extensions/carla/map.mojo": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e",
+      "extensions/carla/lane_refinement.mojo": "689bc95961ef25619ccdafa4b5f99d55bb05909891ed6ffd0ca41fd1f43c5e7f",
+      "extensions/carla/map.mojo": "0524759d2516ef9b269c2286cd0bbc01ed8b462718ac33ac276db510739de0c0",
       "extensions/carla/map_builder.mojo": "627ce91ee8d9626d9a326dd950dc85da6ca273e1fdc045128d3f119186207765",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
       "extensions/carla/spiral_moment_proof.mojo": "87bef611ae73e97ed67ab4be3d2665244611c8aa6dadd98b19d5a407244363e6",
@@ -22,9 +22,9 @@
       "extensions/carla/spiral_moment_proof.mojo": "87bef611ae73e97ed67ab4be3d2665244611c8aa6dadd98b19d5a407244363e6",
       "extensions/carla/spiral_moment_table.mojo": "378d153c8f9f44bbafaf1fd47f72d375979353342286ca88c316e87ff91fb366",
       "extensions/carla/spiral_roundoff_proof.mojo": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641",
-      "extensions/carla/curve_rounded_arc.mojo": "983e6589f60d814a4f5826eadad6357b87619bf87677fc961f7cc0bd12349e58",
-      "extensions/carla/curve_rounded_line.mojo": "ffa102da3054d085385e05d13886a734aa838465b01dd85baa04d47894e25d32",
-      "extensions/carla/curve_frozen_arc.mojo": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
+      "extensions/carla/curve_rounded_arc.mojo": "e98252c83b51b5421643d388556efcd839ef64dfddb37cef37084d48782642f9",
+      "extensions/carla/curve_rounded_line.mojo": "dd1400b11b6bf90dde2198a304d84e40f5527c2a41175fcc49aeba444fb57706",
+      "extensions/carla/curve_frozen_arc.mojo": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2",
       "extensions/carla/geometry.mojo": "a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb",
       "extensions/carla/road_info.mojo": "fe385b3c6ea4ecf4f292914149da1b8570dd409283980b8853efb3f77d7401c9",
       "extensions/carla/polynomial.mojo": "d3600fdb1fad0f693d560f56f47c9cf981636279e07ec28d94b73dcb52f96f9b",
@@ -34,28 +34,28 @@
     "translation": {
       "extensions/carla/curve_bounds.mojo": "1874e6c5d58128502df4d052303d02bc866a0fef8b109337bcb38f4b26d6d08b",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
-      "extensions/carla/curve_frozen_arc.mojo": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
-      "extensions/carla/lane_refinement.mojo": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0"
+      "extensions/carla/curve_frozen_arc.mojo": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2",
+      "extensions/carla/lane_refinement.mojo": "689bc95961ef25619ccdafa4b5f99d55bb05909891ed6ffd0ca41fd1f43c5e7f"
     },
     "support": {
-      "extensions/carla/lane_refinement.mojo": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0",
-      "extensions/carla/map.mojo": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e",
+      "extensions/carla/lane_refinement.mojo": "689bc95961ef25619ccdafa4b5f99d55bb05909891ed6ffd0ca41fd1f43c5e7f",
+      "extensions/carla/map.mojo": "0524759d2516ef9b269c2286cd0bbc01ed8b462718ac33ac276db510739de0c0",
       "extensions/carla/lane_distance.mojo": "bcbec3a9af9bbcfd2fa2710936c4d5a6fac7fc2fbac09813d0a5732c0f798918",
-      "extensions/carla/junction_bounds.mojo": "83493444663f6125fb884d402e21f5976b3e27dd637cce9c39bb1ff00697751b",
+      "extensions/carla/junction_bounds.mojo": "35aa94a154256542285a5dc4ab2b1a6378c501fb9cbf737511b129c23f51cb47",
       "extensions/carla/spiral_domain_proof.mojo": "325f1e5b1766704075f5a8785da1f30496c7cfb1087c07eef322006bda0d2450",
       "extensions/carla/spiral_moment_table.mojo": "378d153c8f9f44bbafaf1fd47f72d375979353342286ca88c316e87ff91fb366",
       "extensions/carla/spiral_moment_proof.mojo": "87bef611ae73e97ed67ab4be3d2665244611c8aa6dadd98b19d5a407244363e6",
       "extensions/carla/spiral_roundoff_proof.mojo": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641"
     },
     "optional_runtime": {
-      "extensions/carla/curve_minimizer_support.mojo": "824b97daf05464245bead74244a52fb976dca17142ecb8feda6e4df2e16ab4a1",
+      "extensions/carla/curve_minimizer_support.mojo": "cc258cda45b4a7a3f01114c78c36f1d2032b1a2d129383a5cce34e18e96521d8",
       "extensions/carla/curve_objective_model.mojo": "e79623381913c4dba830440ad111c7411e9480b2772341be1dd0c8ae68b62fa3",
-      "extensions/carla/curve_sample_dispatch.mojo": "9f428aad8b536bb0545c6a77aea524aa23ba240aa400d75414b91c5e5fcbb8e6",
+      "extensions/carla/curve_sample_dispatch.mojo": "aba01b26fdc7a7d1a963498903edfdff9b7933e631c5ef2567c0cf8e78d16140",
       "extensions/carla/spiral_grouped_lane.mojo": "6aec19903e64b0ce8141e1660426f904c92325de9501feecad6b02484b1dcfb5",
-      "extensions/carla/spiral_grouped_roundoff_proof.mojo": "ec5113cdd9d7cf590b1d41206410a5207b01105572184b3e786d69100af65404",
+      "extensions/carla/spiral_grouped_roundoff_proof.mojo": "3fcfc637a40c4e322b5747f27f8d77163c3f47a49d1092b37c20744cafecba40",
       "extensions/carla/curve_bounds.mojo": "1874e6c5d58128502df4d052303d02bc866a0fef8b109337bcb38f4b26d6d08b",
-      "extensions/carla/lane_refinement.mojo": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0",
-      "extensions/carla/map.mojo": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e",
+      "extensions/carla/lane_refinement.mojo": "689bc95961ef25619ccdafa4b5f99d55bb05909891ed6ffd0ca41fd1f43c5e7f",
+      "extensions/carla/map.mojo": "0524759d2516ef9b269c2286cd0bbc01ed8b462718ac33ac276db510739de0c0",
       "extensions/carla/lane_value_bounds.mojo": "c844c435ae666043615f06c3e9fbed7ea83d2f48c8df02a600939d85802e8e31",
       "extensions/carla/curve_interval.mojo": "e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11",
       "extensions/carla/curve_sum2.mojo": "3fbcbb7f6ba0b9120500698665f0419acf6618d8bd34b7e18b9d10896282383d",
@@ -68,7 +68,7 @@
       "extensions/carla/spiral_moment_proof.mojo": "87bef611ae73e97ed67ab4be3d2665244611c8aa6dadd98b19d5a407244363e6",
       "extensions/carla/spiral_moment_table.mojo": "378d153c8f9f44bbafaf1fd47f72d375979353342286ca88c316e87ff91fb366",
       "extensions/carla/spiral_roundoff_proof.mojo": "44bcb15e5ffd6a542de8ff340f58e456daa3ebe0f10e964222b29a385a53e641",
-      "extensions/carla/curve_frozen_arc.mojo": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b"
+      "extensions/carla/curve_frozen_arc.mojo": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2"
     }
   },
   "qualifiers": {

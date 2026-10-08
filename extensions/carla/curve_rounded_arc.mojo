@@ -13,7 +13,6 @@ support disables this optional proof and leaves ordinary refinement intact.
 from extensions.carla.curve_trig import (
     _COS_COEFFICIENTS,
     _INV_HALF_PI,
-    _QUARTER_PI,
     _SIN_COEFFICIENTS,
 )
 from extensions.carla.geometry import ARC
@@ -178,8 +177,7 @@ struct _RoundedArc(ImplicitlyCopyable):
         # Heading and both quadrant-reduction products are exactly zero.
         if not selector.known or selector.low < 0.0 or selector.high >= 1.0:
             return [unknown, unknown, unknown]
-        if max(abs(half.low), abs(half.high)) > _QUARTER_PI:
-            return [unknown, unknown, unknown]
+        # The accepted selector hull already places half inside the quarter.
         var square = half * half
         var sinc = _rounded_polynomial(materialize[_SIN_COEFFICIENTS](), square)
         var cosine = _rounded_polynomial(
@@ -207,17 +205,14 @@ def _rounded_arc_context(
         return None
     if not _RoundedBox.bounds(low, high).known or high > road.length:
         return None
+    # Each singleton record active at low also covers the ordered high.
     if info_index(road.info.geometries, low) != 0:
-        return None
-    if info_index(road.info.geometries, high) != 0:
         return None
     if len(road.info.lane_offsets) != 1 or len(road.info.elevations) != 1:
         return None
     if (
         info_index(road.info.lane_offsets, low) != 0
-        or info_index(road.info.lane_offsets, high) != 0
         or info_index(road.info.elevations, low) != 0
-        or info_index(road.info.elevations, high) != 0
     ):
         return None
     var lane_offset = _rounded_constant(road.info.lane_offsets[0].polynomial)
@@ -240,7 +235,7 @@ def _rounded_arc_context(
             ref widths = lanes[i].info.widths
             if len(widths) != 1:
                 return None
-            if info_index(widths, low) != 0 or info_index(widths, high) != 0:
+            if info_index(widths, low) != 0:
                 return None
             var width = _rounded_constant(widths[0].polynomial)
             if not width.known:

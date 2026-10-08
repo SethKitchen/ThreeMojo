@@ -17,10 +17,15 @@ import struct
 import sys
 
 sys.dont_write_bytecode = True
-import ideal_projection
-import source_contracts
-import sum2_contracts
-import sum2_guard_contracts
+try:
+    import ideal_projection
+    import source_contracts
+    import sum2_contracts
+    import sum2_guard_contracts
+except ModuleNotFoundError:
+    from tools.carla_lane_oracle import (
+        ideal_projection, source_contracts, sum2_contracts, sum2_guard_contracts,
+    )
 F = Fraction
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = Path('tools/carla_lane_oracle')

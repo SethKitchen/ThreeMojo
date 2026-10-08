@@ -348,7 +348,7 @@ def verify_semantics(root):
     statements = while_nodes[0].body
     setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
              and sampled.dump(item.test) == sampled.dump(ast.parse(
-                 'not sampled_checked and task[2] < max_depth', mode='eval').body)]
+                 'not sampled_checked', mode='eval').body)]
     require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
     preceding = statements[setup[0] - 1]
     contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',

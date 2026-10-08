@@ -1,0 +1,213 @@
+{
+  "schema": 1,
+  "scope": "Remove only immediate six-coefficient revalidation after the complete bound producer; retain distance and clamp guards. No native composed qualification.",
+  "previous_cleanup_migration_sha256": "01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9",
+  "runtime_pins_before_sha256": "1ed52e48eec9ec40f879f5227b6f43ca3a8417ec75bcde5aeff77d25f8f9c44e",
+  "guard_pins_unchanged_sha256": "a2e02bf09d4b1660ea44c290971bd248176f282dbd352b7961ca35658d54c883",
+  "source_successor": {
+    "path": "extensions/carla/curve_frozen_arc.mojo",
+    "before_sha256": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+    "after_sha256": "fe4a9b4bca0cd23dc2a128fbcb9ff3b4604a870dc0b2b4ff4f8deeb766d2db50",
+    "before_token_sha256": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
+    "after_token_sha256": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2"
+  },
+  "runtime_token_successors": [
+    {
+      "group": "eligibility",
+      "path": "extensions/carla/curve_frozen_arc.mojo",
+      "before": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
+      "after": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2"
+    },
+    {
+      "group": "optional_runtime",
+      "path": "extensions/carla/curve_frozen_arc.mojo",
+      "before": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
+      "after": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2"
+    },
+    {
+      "group": "translation",
+      "path": "extensions/carla/curve_frozen_arc.mojo",
+      "before": "bdb72a6b3b4032ca7bf74b66c4a173c105ed8a51c2cf7d8d88bd5e4e070fb95b",
+      "after": "ac61013b311f2fa7339bb7730bf3beff02fb775956b6fd082d177e1aa94f2ac2"
+    }
+  ],
+  "function_sources": [
+    {
+      "path": "extensions/carla/curve_frozen_arc.mojo",
+      "name": "_frozen_arc_context",
+      "owner": [],
+      "source": "def _frozen_arc_context(\n    road: Road,\n    section: Int,\n    lane: Int,\n    low: Float64,\n    high: Float64,\n) raises -> Optional[_RoundedArc]:\n    # Its caller MUST reserve the optional validation work before entry.\n    # These are structural record checks, never a zero-derivative inference.\n    var found = _rounded_arc_context(road, section, lane, low, high)\n    if not found:\n        return None\n    var model = found.value()\n    # The immediate producer already returns known singleton coefficients.\n    var distance = _RoundedBox.bounds(low, high) - model.start\n    # Keep one smooth interior clamp branch throughout the original domain.\n    if (\n        not distance.known\n        or distance.low <= 0.0\n        or distance.high >= model.length\n    ):\n        return None\n    return model\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_arc_context",
+      "owner": [],
+      "source": "def _rounded_arc_context(\n    road: Road, section: Int, lane: Int, low: Float64, high: Float64\n) raises -> Optional[_RoundedArc]:\n    # The caller reserves its root node and term before this validation.\n    # Require one active geometry, offset, and elevation on the whole domain.\n    road._check_lane(section, lane)\n    if len(road.info.geometries) != 1:\n        return None\n    ref record = road.info.geometries[0]\n    if record.geometry.kind != ARC or record.geometry.heading != 0.0:\n        return None\n    if not _RoundedBox.bounds(low, high).known or high > road.length:\n        return None\n    # Each singleton record active at low also covers the ordered high.\n    if info_index(road.info.geometries, low) != 0:\n        return None\n    if len(road.info.lane_offsets) != 1 or len(road.info.elevations) != 1:\n        return None\n    if (\n        info_index(road.info.lane_offsets, low) != 0\n        or info_index(road.info.elevations, low) != 0\n    ):\n        return None\n    var lane_offset = _rounded_constant(road.info.lane_offsets[0].polynomial)\n    var elevation = _rounded_constant(road.info.elevations[0].polynomial)\n    if not lane_offset.known or not elevation.known:\n        return None\n    ref lanes = road.sections[section].lanes\n    var id = lanes[lane].id\n    var offset = _RoundedBox.point(0.0)\n    if id.value != 0:\n        var negative = id.value < 0\n        var sign = _RoundedBox.point(1.0 if negative else -1.0)\n        for position in range(len(lanes)):\n            var i = len(lanes) - 1 - position if negative else position\n            if negative:\n                if lanes[i].id.value >= 0:\n                    continue\n            elif lanes[i].id.value < 1:\n                continue\n            ref widths = lanes[i].info.widths\n            if len(widths) != 1:\n                return None\n            if info_index(widths, low) != 0:\n                return None\n            var width = _rounded_constant(widths[0].polynomial)\n            if not width.known:\n                return None\n            var contribution = sign * width\n            if lanes[i].id == id:\n                contribution = contribution * _RoundedBox.point(0.5)\n            offset = offset + contribution\n            if not offset.known:\n                return None\n            if lanes[i].id == id:\n                break\n    offset = offset - lane_offset\n    var curvature = _RoundedBox.point(record.geometry.curvature_start)\n    if not curvature.known or curvature.low == 0.0 or not offset.known:\n        return None\n    # Reciprocal of a guarded nonzero input remains normal and finite.\n    var radius = _RoundedBox.point(_rounded_reciprocal(curvature.low))\n    var speed = (radius + offset) * curvature\n    var x = _RoundedBox.point(record.geometry.x)\n    var y = _RoundedBox.point(record.geometry.y) - offset\n    var start = _RoundedBox.point(record.s)\n    if not (speed.known and x.known and y.known and start.known):\n        return None\n    if not _rounded_operand(record.geometry.length):\n        return None\n    return _RoundedArc(\n        start, record.geometry.length, curvature, speed, x, y, elevation\n    )\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_operand",
+      "owner": [],
+      "source": "def _rounded_operand(value: Float64) -> Bool:\n    var low = bitcast[DType.float64](UInt64(623) << UInt64(52))\n    var high = bitcast[DType.float64](UInt64(1423) << UInt64(52))\n    return isfinite(value) and (\n        value == 0.0 or (abs(value) >= low and abs(value) <= high)\n    )\n\n\n# These boundaries prevent the enclosure's unfused path from contracting.\n# fma is explicit in the other path. No fast-math reassociation is assumed.\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_add",
+      "owner": [],
+      "source": "@no_inline\ndef _rounded_add(a: Float64, b: Float64) -> Float64:\n    return a + b\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_multiply",
+      "owner": [],
+      "source": "@no_inline\ndef _rounded_multiply(a: Float64, b: Float64) -> Float64:\n    return a * b\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_fma",
+      "owner": [],
+      "source": "@no_inline\ndef _rounded_fma(a: Float64, b: Float64, c: Float64) -> Float64:\n    return fma(a, b, c)\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_reciprocal",
+      "owner": [],
+      "source": "@no_inline\ndef _rounded_reciprocal(value: Float64) -> Float64:\n    return 1.0 / value\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_madd",
+      "owner": [],
+      "source": "def _rounded_madd(\n    a: _RoundedBox, b: _RoundedBox, c: _RoundedBox\n) -> _RoundedBox:\n    if not a.known or not b.known or not c.known:\n        return _RoundedBox.unknown()\n    var separate = a * b + c\n    if not separate.known:\n        return _RoundedBox.unknown()\n    # Bilinearity gives extrema at endpoint pairs. Addition is monotone.\n    var low = _rounded_fma(a.low, b.low, c.low)\n    low = min(low, _rounded_fma(a.low, b.high, c.low))\n    low = min(low, _rounded_fma(a.high, b.low, c.low))\n    low = min(low, _rounded_fma(a.high, b.high, c.low))\n    var high = _rounded_fma(a.low, b.low, c.high)\n    high = max(high, _rounded_fma(a.low, b.high, c.high))\n    high = max(high, _rounded_fma(a.high, b.low, c.high))\n    high = max(high, _rounded_fma(a.high, b.high, c.high))\n    return separate.hull(_RoundedBox.bounds(low, high))\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "_rounded_constant",
+      "owner": [],
+      "source": "def _rounded_constant(polynomial: CubicPolynomial) -> _RoundedBox:\n    if polynomial.b != 0.0 or polynomial.c != 0.0 or polynomial.d != 0.0:\n        return _RoundedBox.unknown()\n    # For finite s, all variable terms are exact zero in either graph.\n    return _RoundedBox.point(polynomial.a)\n\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "unknown",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "@staticmethod\ndef unknown() -> Self:\n    return Self(0.0, 0.0, False)\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "bounds",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "@staticmethod\ndef bounds(low: Float64, high: Float64) -> Self:\n    var valid = (\n        _rounded_operand(low)\n        and _rounded_operand(high)\n        and low <= high\n        and (low > 0.0 or high < 0.0 or (low == 0.0 and high == 0.0))\n    )\n    return Self(low, high, valid)\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "point",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "@staticmethod\ndef point(value: Float64) -> Self:\n    return Self.bounds(value, value)\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "__neg__",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "def __neg__(self) -> Self:\n    return Self(-self.high, -self.low, self.known)\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "hull",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "def hull(self, other: Self) -> Self:\n    if not self.known or not other.known:\n        return Self.unknown()\n    return Self.bounds(min(self.low, other.low), max(self.high, other.high))\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "__add__",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "def __add__(self, other: Self) -> Self:\n    if not self.known or not other.known:\n        return Self.unknown()\n    # RN is monotone. No adjacent-ULP expansion belongs in this type.\n    return Self.bounds(\n        _rounded_add(self.low, other.low),\n        _rounded_add(self.high, other.high),\n    )\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "__sub__",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "def __sub__(self, other: Self) -> Self:\n    return self + (-other)\n\n"
+    },
+    {
+      "path": "extensions/carla/curve_rounded_arc.mojo",
+      "name": "__mul__",
+      "owner": [
+        "_RoundedBox"
+      ],
+      "source": "def __mul__(self, other: Self) -> Self:\n    if not self.known or not other.known:\n        return Self.unknown()\n    var a = _rounded_multiply(self.low, other.low)\n    var b = _rounded_multiply(self.low, other.high)\n    var c = _rounded_multiply(self.high, other.low)\n    var d = _rounded_multiply(self.high, other.high)\n    return Self.bounds(min(min(a, b), min(c, d)), max(max(a, b), max(c, d)))\n\n\n"
+    }
+  ],
+  "rounded_arc_routing": "[[[],[[3,\"\\\"\\\"\\\"Guarded rounded-output boxes for one constant zero-heading ARC graph.\\n\\nThese bounds enclose stored Float64 outputs, not real-expression values.\\nThey do not change _Interval, _Jet, or the scalar lane evaluator. Unknown\\nsupport disables this optional proof and leaves ordinary refinement intact.\\n\\\"\\\"\\\"\"]]],[[],[[1,\"from\"],[1,\"extensions\"],[55,\".\"],[1,\"carla\"],[55,\".\"],[1,\"curve_trig\"],[1,\"import\"],[55,\"(\"],[1,\"_COS_COEFFICIENTS\"],[55,\",\"],[1,\"_INV_HALF_PI\"],[55,\",\"],[1,\"_SIN_COEFFICIENTS\"],[55,\",\"],[55,\")\"]]],[[],[[1,\"from\"],[1,\"extensions\"],[55,\".\"],[1,\"carla\"],[55,\".\"],[1,\"geometry\"],[1,\"import\"],[1,\"ARC\"]]],[[],[[1,\"from\"],[1,\"extensions\"],[55,\".\"],[1,\"carla\"],[55,\".\"],[1,\"polynomial\"],[1,\"import\"],[1,\"CubicPolynomial\"]]],[[],[[1,\"from\"],[1,\"extensions\"],[55,\".\"],[1,\"carla\"],[55,\".\"],[1,\"road\"],[1,\"import\"],[1,\"Road\"]]],[[],[[1,\"from\"],[1,\"extensions\"],[55,\".\"],[1,\"carla\"],[55,\".\"],[1,\"road_info\"],[1,\"import\"],[1,\"info_index\"]]],[[],[[1,\"from\"],[1,\"std\"],[55,\".\"],[1,\"math\"],[1,\"import\"],[1,\"fma\"],[55,\",\"],[1,\"isfinite\"]]],[[],[[1,\"from\"],[1,\"std\"],[55,\".\"],[1,\"memory\"],[1,\"import\"],[1,\"bitcast\"]]],[[],[[1,\"def\"],[1,\"_rounded_operand\"],[55,\"(\"],[1,\"value\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Bool\"],[55,\":\"]]],[[],[[55,\"@\"],[1,\"no_inline\"]]],[[],[[1,\"def\"],[1,\"_rounded_add\"],[55,\"(\"],[1,\"a\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"b\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Float64\"],[55,\":\"]]],[[],[[55,\"@\"],[1,\"no_inline\"]]],[[],[[1,\"def\"],[1,\"_rounded_multiply\"],[55,\"(\"],[1,\"a\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"b\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Float64\"],[55,\":\"]]],[[],[[55,\"@\"],[1,\"no_inline\"]]],[[],[[1,\"def\"],[1,\"_rounded_fma\"],[55,\"(\"],[1,\"a\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"b\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"c\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Float64\"],[55,\":\"]]],[[],[[55,\"@\"],[1,\"no_inline\"]]],[[],[[1,\"def\"],[1,\"_rounded_reciprocal\"],[55,\"(\"],[1,\"value\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Float64\"],[55,\":\"]]],[[],[[55,\"@\"],[1,\"fieldwise_init\"]]],[[],[[1,\"struct\"],[1,\"_RoundedBox\"],[55,\"(\"],[1,\"ImplicitlyCopyable\"],[55,\")\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"var\"],[1,\"low\"],[55,\":\"],[1,\"Float64\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"var\"],[1,\"high\"],[55,\":\"],[1,\"Float64\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"var\"],[1,\"known\"],[55,\":\"],[1,\"Bool\"]]],[[[\"struct\",\"_RoundedBox\"]],[[55,\"@\"],[1,\"staticmethod\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"unknown\"],[55,\"(\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[55,\"@\"],[1,\"staticmethod\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"bounds\"],[55,\"(\"],[1,\"low\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"high\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[55,\"@\"],[1,\"staticmethod\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"point\"],[55,\"(\"],[1,\"value\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"__neg__\"],[55,\"(\"],[1,\"self\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"hull\"],[55,\"(\"],[1,\"self\"],[55,\",\"],[1,\"other\"],[55,\":\"],[1,\"Self\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"__add__\"],[55,\"(\"],[1,\"self\"],[55,\",\"],[1,\"other\"],[55,\":\"],[1,\"Self\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"__sub__\"],[55,\"(\"],[1,\"self\"],[55,\",\"],[1,\"other\"],[55,\":\"],[1,\"Self\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[[\"struct\",\"_RoundedBox\"]],[[1,\"def\"],[1,\"__mul__\"],[55,\"(\"],[1,\"self\"],[55,\",\"],[1,\"other\"],[55,\":\"],[1,\"Self\"],[55,\")\"],[55,\"->\"],[1,\"Self\"],[55,\":\"]]],[[],[[1,\"def\"],[1,\"_rounded_madd\"],[55,\"(\"],[1,\"a\"],[55,\":\"],[1,\"_RoundedBox\"],[55,\",\"],[1,\"b\"],[55,\":\"],[1,\"_RoundedBox\"],[55,\",\"],[1,\"c\"],[55,\":\"],[1,\"_RoundedBox\"],[55,\")\"],[55,\"->\"],[1,\"_RoundedBox\"],[55,\":\"]]],[[],[[1,\"def\"],[1,\"_rounded_polynomial\"],[55,\"[\"],[1,\"n\"],[55,\":\"],[1,\"Int\"],[55,\"]\"],[55,\"(\"],[1,\"coefficients\"],[55,\":\"],[1,\"Array\"],[55,\"[\"],[1,\"Float64\"],[55,\",\"],[1,\"n\"],[55,\"]\"],[55,\",\"],[1,\"x\"],[55,\":\"],[1,\"_RoundedBox\"],[55,\")\"],[55,\"->\"],[1,\"_RoundedBox\"],[55,\":\"]]],[[],[[1,\"def\"],[1,\"_rounded_constant\"],[55,\"(\"],[1,\"polynomial\"],[55,\":\"],[1,\"CubicPolynomial\"],[55,\")\"],[55,\"->\"],[1,\"_RoundedBox\"],[55,\":\"]]],[[],[[55,\"@\"],[1,\"fieldwise_init\"]]],[[],[[1,\"struct\"],[1,\"_RoundedArc\"],[55,\"(\"],[1,\"ImplicitlyCopyable\"],[55,\")\"],[55,\":\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"start\"],[55,\":\"],[1,\"_RoundedBox\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"length\"],[55,\":\"],[1,\"Float64\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"curvature\"],[55,\":\"],[1,\"_RoundedBox\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"speed\"],[55,\":\"],[1,\"_RoundedBox\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"x\"],[55,\":\"],[1,\"_RoundedBox\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"y\"],[55,\":\"],[1,\"_RoundedBox\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"var\"],[1,\"z\"],[55,\":\"],[1,\"_RoundedBox\"]]],[[[\"struct\",\"_RoundedArc\"]],[[1,\"def\"],[1,\"center\"],[55,\"(\"],[1,\"self\"],[55,\",\"],[1,\"low\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"high\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[55,\"->\"],[1,\"Array\"],[55,\"[\"],[1,\"_RoundedBox\"],[55,\",\"],[2,\"3\"],[55,\"]\"],[55,\":\"]]],[[],[[1,\"def\"],[1,\"_rounded_arc_context\"],[55,\"(\"],[1,\"road\"],[55,\":\"],[1,\"Road\"],[55,\",\"],[1,\"section\"],[55,\":\"],[1,\"Int\"],[55,\",\"],[1,\"lane\"],[55,\":\"],[1,\"Int\"],[55,\",\"],[1,\"low\"],[55,\":\"],[1,\"Float64\"],[55,\",\"],[1,\"high\"],[55,\":\"],[1,\"Float64\"],[55,\")\"],[1,\"raises\"],[55,\"->\"],[1,\"Optional\"],[55,\"[\"],[1,\"_RoundedArc\"],[55,\"]\"],[55,\":\"]]]]",
+  "premise_dependencies": {
+    "extensions/carla/polynomial.mojo": {
+      "raw_sha256": "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
+      "token_sha256": "d3600fdb1fad0f693d560f56f47c9cf981636279e07ec28d94b73dcb52f96f9b"
+    },
+    "extensions/carla/road.mojo": {
+      "raw_sha256": "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
+      "token_sha256": "8a7ec7dc9c25aba463a47aae9c6bd4bee41cc1f84636efc4da92850afd61a94e"
+    },
+    "extensions/carla/road_info.mojo": {
+      "raw_sha256": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb",
+      "token_sha256": "fe385b3c6ea4ecf4f292914149da1b8570dd409283980b8853efb3f77d7401c9"
+    },
+    "extensions/carla/curve_trig.mojo": {
+      "raw_sha256": "3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909",
+      "token_sha256": "523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f"
+    }
+  },
+  "component_receipt_sha256": "112ea89f2c116bbea09ff970654898fa5f97d9d4bd27740bfe2081d9b8e32658",
+  "independent_proof": {
+    "sha256": "741c1afc2463b973c8a4f8904178c656c45a356002f8e9001bcb0fd4289798a3",
+    "record": {
+      "baseline_root": "/workspace/shared/combined-solver-sign-composition-20261007T1946/source/extensions/carla",
+      "baseline_sha256": {
+        "curve_frozen_arc.mojo": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+        "curve_rounded_arc.mojo": "83b4f7620b96860af672f18052b2642d4fb3ab553a58cf7ace15a4616eba396e",
+        "polynomial.mojo": "ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354",
+        "road.mojo": "d9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0",
+        "road_info.mojo": "60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb"
+      },
+      "caveats": [
+        "Ordinary valid Mojo objects and stable call environment, no unsafe local corruption or concurrent mutation.",
+        "Does not establish a contract for independently constructed models accepted by other helpers.",
+        "Fresh successor default/off native qualification, source-pin migration, and actual coverage remain required."
+      ],
+      "coverage_credit": false,
+      "lookup_quarter_successor_root": "/workspace/shared/rounded-context-quarter-successor-20261007T2221/source/extensions/carla",
+      "native_run": false,
+      "proof_sha256": "bee97e967d77656623cb37f2e31a772c3807b3d421f0ab2fdd0d396ab21ecdec",
+      "required_binding": [
+        "Complete producer and immediate consumer bodies",
+        "Box point/bounds/unknown/neg/add/sub/mul and scalar primitive boundaries",
+        "RoundedArc layout and constructor mapping",
+        "Complete protected dependency lineage; mutation controls for widening/unknown/guard/producer changes"
+      ],
+      "reviewed_at_utc": "2026-10-07T22:36:00Z",
+      "reviewed_successor_delta": "Only previously reviewed high-end lookups, center quarter check/import, and comments; coefficient construction and its guards unchanged.",
+      "scope": "Remove only six-field known/singleton revalidation loop from _frozen_arc_context; retain all producer and downstream guards.",
+      "source_edited": false,
+      "status": "accepted_narrow_producer_consumer_removal_native_qualification_pending",
+      "successor_sha256": {
+        "curve_frozen_arc.mojo": "f7898a57be1c956136f9345675d26c6322c0016243eb095c1d748494fde3c522",
+        "curve_rounded_arc.mojo": "7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745"
+      }
+    }
+  },
+  "runtime_pins_after_sha256": "b5a075120f09b38bc707d56a04d5f7149abbfede56bad0ece45c3156eea96525",
+  "frozen_reference_token_sha256": "d8ef02e2f0c9606f75386f9246942ac5cccd575412632909c3840b886c398098"
+}

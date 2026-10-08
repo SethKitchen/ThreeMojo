@@ -9,6 +9,10 @@ The saved control register is restored on success or exception. This suite
 must run on each supported CPU; x86 success does not qualify Apple Silicon.
 """
 
+from tests._winner_seed_recovery_fp_controls import (
+    _winner_seed_fp_fixture,
+    _assert_winner_seed_refuses_hostile_state,
+)
 from extensions.carla.curve_sum2 import _sum2_supported_environment, _sum2_error
 from extensions.carla.curve_bounds import (
     _spiral_jet,
@@ -66,6 +70,8 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
     assert_true(modes == 5 or modes == 7)
     print("CPU_MODE_COUNT", modes)
     var map = load_opendrive_file("assets/carla/town.xodr")
+    var winner_seed_road = map.roads[map.road_index(RoadId(5))].copy()
+    var winner_seed_fixture = _winner_seed_fp_fixture(winner_seed_road)
     var query = Vector3(19.200000762939453, -99.26249694824219, 0)
     var waypoint = map.certified_closest_waypoint_on_road(query).value()
     var road = _sampled_road(1.0)
@@ -132,6 +138,11 @@ def test_sum2_refuses_unsupported_cpu_state_and_restores_controls() raises:
                 )
                 assert_equal(actual & mask, expected)
                 assert_true(not _sum2_supported_environment())
+                _assert_winner_seed_refuses_hostile_state(
+                    winner_seed_road,
+                    winner_seed_fixture[0],
+                    winner_seed_fixture[1],
+                )
                 _assert_objective_refuses_hostile_state(
                     objective_fixture[0],
                     objective_fixture[1],

@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import shlex
 import signal
 import subprocess
 import tempfile
@@ -63,6 +64,26 @@ class NativeTestSupportTests(unittest.TestCase):
                     native, 'compiler_identity', side_effect=AssertionError('not needed')):
                 self.assertEqual(native.prepare_command(
                     self.root, suite, self.root/'cache', '', command), command)
+
+    def test_native_identity_binds_compiler_bytes_even_with_same_version(self):
+        compiler = self.write('compiler', 'compiler before\n')
+        version = subprocess.CompletedProcess([], 0, stdout='unchanged version\n')
+        with patch.object(native.subprocess, 'run', return_value=version):
+            before = native.compiler_identity(shlex.quote(str(compiler)))
+            compiler.write_text('compiler after\n')
+            after = native.compiler_identity(shlex.quote(str(compiler)))
+        self.assertEqual(before['version'], after['version'])
+        self.assertEqual(before['command'], after['command'])
+        self.assertNotEqual(before['files'], after['files'])
+
+    def test_native_identity_binds_resolved_compiler_behind_a_wrapper(self):
+        wrapper = self.write('wrapper', 'wrapper bytes\n')
+        compiler = self.write('compiler', 'compiler bytes\n')
+        version = subprocess.CompletedProcess([], 0, stdout='same version\n')
+        with patch.object(native.subprocess, 'run', return_value=version), \
+                patch.object(native.shutil, 'which', return_value=str(compiler)):
+            identity = native.compiler_identity(shlex.quote(str(wrapper)) + ' cc')
+        self.assertEqual(set(identity['files']), {str(wrapper), str(compiler)})
 
     def test_build_link_argument_precedes_source_and_preserves_flags(self):
         suite = self.root / SUITE
@@ -246,6 +267,10 @@ class NativeTestSupportTests(unittest.TestCase):
             self.assertEqual(compile.call_count, 4)
             self.assertEqual(json.loads(three.with_suffix('.json').read_text())['object_sha256'],
                              hashlib.sha256(three.read_bytes()).hexdigest())
+            changed_bytes = {**changed_compiler, 'files': {'/external/cc': 'changed digest'}}
+            four = native.build_object(self.root, FIXTURE, self.root/'cache', changed_bytes)
+            self.assertNotEqual(three, four)
+            self.assertEqual(compile.call_count, 5)
 
     def test_failed_compile_never_installs_object_or_metadata(self):
         error = subprocess.CalledProcessError(7, ['fake-cc'])
