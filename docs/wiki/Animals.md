@@ -118,6 +118,8 @@ Near a joint, the colors of the two bones blend over the blend radius of their s
 
 `Pose` turns bones about their head joints. A child bone rides its parent. `Pose.root` moves the whole animal.
 
+![A wolf walks one stride, seen from the side](out/walk.png)
+
 `walk_pose` gives an in-place lateral-sequence walk. Dynamic similarity supplies a reference stride at a Froude number, 0.25 by default. `walk_stride` caps that stride to the common reach of all four two-link legs. The visual stride can therefore be shorter than the reference. See [Animal anatomy](Animal-anatomy#gait-timing).
 
 Each foot is in stance for 70 % of the cycle. Two-bone inverse kinematics keep a stance foot at its bind height while it moves backward under the body. All four feet use the same bounded sweep. The leg targets compensate for the body bob. The tail swings once. A rig without four legs gets its bind pose.

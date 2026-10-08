@@ -562,6 +562,8 @@ exact multiples, representable neighbors, and seeded random pairs. Run
 `--write` only for an intentional fixture change. The native suite compares
 bits, without a tolerance.
 
+`bench/periodic_remainder_bench.mojo` times ordinary calls and hard finite inputs.
+
 CPU evidence does not verify GPU runtime behavior.
 
 #### Differences from three.js

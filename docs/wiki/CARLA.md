@@ -6,6 +6,12 @@ The `extensions/carla/` modules port the CARLA driving simulator: everything tha
 
 ![An RGB image with LiDAR points, a semantic image and a depth image](out/carla.png)
 
+![The RGB camera, with one LiDAR sweep over the road](out/carla_rgb.png)
+
+![The same view in CityScapes semantic colors](out/carla_semantic.png)
+
+![Logarithmic depth of the same road, dark near the camera and light far away](out/carla_depth.png)
+
 Images can include CC BY 4.0 CARLA vehicles and town content.
 Keep the [asset credits](CARLA-assets#credit-the-assets) with shared images.
 
@@ -19,6 +25,9 @@ To render the images, run `mojo run -I . examples/carla_town.mojo out/carla_town
 |---|---|
 | [CARLA geometry](CARLA-geometry) | CARLA's vector and arc math, bounding boxes, geo-projections, the R-tree, meshes, point clouds and image converters |
 | [CARLA maps](CARLA-maps) | The OpenDRIVE parser, the road map and its queries, and the road meshes |
+| [CARLA lane orientation](CARLA-lane-orientation) | Lane heading, pitch and the corrected rotation basis |
+| [CARLA fixed-s nearest](CARLA-fixed-s-nearest) | Nearest lane at one s, with exact stored centers |
+| [CARLA point distance](CARLA-point-distance) | Exact ordering of stored point distances |
 | [CARLA physics](CARLA-physics) | The rigid-body solver, the vehicle model and the walker controller |
 | [CARLA world](CARLA-world) | Actors, the tick, snapshots, traffic lights, signs, blueprints and weather |
 | [CARLA sensors](CARLA-sensors) | Every CARLA sensor, its raw data and the sensor manager |

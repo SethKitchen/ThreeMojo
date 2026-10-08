@@ -121,6 +121,9 @@ Rollback storage still scales with mutable body state and reports. Initial discr
 
 The [acceleration report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/continuous-collision-636.md) reports complete steps, build cost, retained memory, requested allocations, small scenes and worst-overlap controls. It reuses the original 2048, 8192 and 32768 triangle workloads. These are synthetic sphere probes. Measured improvement does not establish universal real-time capacity. Ray costs and cold index construction remain additional concerns.
 
+`bench/physics_ccd_bench.mojo` times the steps.
+`bench/physics_ccd_index_bench.mojo` times the triangle index.
+
 Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
 
 General shapes and moving-pair CCD remain separate work in [issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635). The immutable-mesh acceleration in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636) does not provide the mutable primitive ownership API in [issue 633](https://github.com/SethKitchen/ThreeMojo/issues/633).
