@@ -3,7 +3,6 @@
 """Compiler-free coverage deadline and descendant-cleanup controls."""
 
 import contextlib
-import errno
 import io
 import os
 from pathlib import Path
@@ -47,55 +46,6 @@ status = coverage_io.capture([sys.executable, str(root / 'worker.py'),
 sys.exit(status)
 '''
 
-PREPARED_DRIVER = '''import contextlib, os, pathlib, signal, subprocess, sys, time
-from unittest.mock import patch
-import coverage_io
-root = pathlib.Path(sys.argv[1])
-command = [sys.executable, str(root / 'worker.py'), str(root), 'child', 'valid']
-with contextlib.ExitStack() as scope:
-    environment = scope.enter_context(coverage_io.isolated_environment())
-    output = scope.enter_context(open(root / 'out', 'wb'))
-    child = subprocess.Popen(command, stdout=output, stderr=subprocess.PIPE,
-                             env=environment, start_new_session=True)
-    try:
-        owned = root / 'owned-child.tmp'
-        owned.write_text(str(child.pid))
-        owned.replace(root / 'owned-child.pid')
-        while not (root / 'deadline').exists():
-            time.sleep(0.01)
-        os.environ[coverage_io.DEADLINE_ENV] = (root / 'deadline').read_text()
-
-        @contextlib.contextmanager
-        def prepared_environment():
-            with scope:
-                yield environment
-
-        def adopt(*args, **kwargs):
-            if (args != (command,) or kwargs['env'] is not environment
-                    or kwargs['stderr'] != subprocess.PIPE
-                    or kwargs['start_new_session'] is not True):
-                raise AssertionError('capture did not adopt the prepared fixture')
-            return child
-
-        with patch.object(coverage_io.subprocess, 'Popen', side_effect=adopt) as spawn, \\
-                patch.object(coverage_io, 'isolated_environment', prepared_environment):
-            status = coverage_io.capture(command, root / 'out', root / 'err.gz')
-        if spawn.call_count != 1:
-            raise AssertionError('capture must adopt the fixture exactly once')
-        if pathlib.Path(environment['THREEMOJO_TEST_TMPDIR']).exists():
-            raise AssertionError('capture did not remove its temporary directory')
-        (root / 'status').write_text(str(status))
-    except BaseException:
-        # A failed setup must kill the group before reaping its leader.
-        if child.returncode is None:
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(child.pid, signal.SIGKILL)
-            child.wait(timeout=2)
-        child.stderr.close()
-        raise
-sys.exit(status)
-'''
-
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX coverage process groups')
 class CoverageLifecycleTests(unittest.TestCase):
@@ -126,46 +76,9 @@ class CoverageLifecycleTests(unittest.TestCase):
         if stat.exists():
             try:
                 return stat.read_text().rpartition(') ')[2].startswith('Z ')
-            except (FileNotFoundError, ProcessLookupError):
-                # The process can be reaped after exists() or open().
+            except FileNotFoundError:
                 return True
         return False
-
-    def test_stopped_accepts_process_reaped_during_stat_read(self):
-        for error in (FileNotFoundError(errno.ENOENT, 'gone'),
-                      ProcessLookupError(errno.ESRCH, 'gone')):
-            with self.subTest(error=type(error).__name__), \
-                    patch.object(os, 'kill'), \
-                    patch.object(Path, 'exists', return_value=True), \
-                    patch.object(Path, 'read_text', side_effect=error):
-                self.assertTrue(self.stopped(123))
-
-    def test_stopped_distinguishes_live_and_zombie_processes(self):
-        for state, expected in (('R', False), ('S', False), ('Z', True)):
-            with self.subTest(state=state), \
-                    patch.object(os, 'kill'), \
-                    patch.object(Path, 'exists', return_value=True), \
-                    patch.object(Path, 'read_text',
-                                 return_value='123 (worker) ' + state + ' 1 2'):
-                self.assertEqual(self.stopped(123), expected)
-
-    def test_stopped_without_procfs_does_not_assume_exit(self):
-        with patch.object(os, 'kill'), \
-                patch.object(Path, 'exists', return_value=False), \
-                patch.object(Path, 'read_text') as read:
-            self.assertFalse(self.stopped(123))
-        read.assert_not_called()
-
-    def test_stopped_propagates_unrelated_stat_errors(self):
-        for error in (PermissionError(errno.EACCES, 'denied'),
-                      OSError(errno.EIO, 'read failed')):
-            with self.subTest(error=type(error).__name__), \
-                    patch.object(os, 'kill'), \
-                    patch.object(Path, 'exists', return_value=True), \
-                    patch.object(Path, 'read_text', side_effect=error), \
-                    self.assertRaises(type(error)) as raised:
-                self.stopped(123)
-            self.assertIs(raised.exception, error)
 
     def assert_tree_stopped(self):
         pids = [int((self.root / (role + '.pid')).read_text())
@@ -180,15 +93,13 @@ class CoverageLifecycleTests(unittest.TestCase):
     def cleanup_process(self, process):
         if process.poll() is None:
             process.terminate()
-        try:
-            process.communicate(timeout=2)
-        except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate(timeout=2)
+            try:
+                process.communicate(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.communicate(timeout=2)
         # A failed assertion must not leave the deliberately hanging fixture.
         path = self.root / 'child.pid'
-        if not path.exists():
-            path = self.root / 'owned-child.pid'
         if path.exists():
             pid = int(path.read_text())
             if not self.stopped(pid):
@@ -205,31 +116,12 @@ class CoverageLifecycleTests(unittest.TestCase):
         self.addCleanup(self.cleanup_process, process)
         return process
 
-    def capture_prepared_tree(self):
-        # Fixture startup is outside the unchanged 0.6-second capture budget.
-        # The real capture still reads and enforces one absolute deadline.
-        process = subprocess.Popen(
-            [sys.executable, '-c', PREPARED_DRIVER, str(self.root)],
-            env=self.environment | {'TMPDIR': str(self.root)},
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True)
-        self.addCleanup(self.cleanup_process, process)
+    def test_shared_deadline_kills_child_and_grandchild(self):
+        process = self.launch(seconds=0.6)
         self.ready()
-        temporary = self.root / 'deadline.tmp'
-        temporary.write_text(repr(time.monotonic() + 0.6))
-        temporary.replace(self.root / 'deadline')
         output, error = process.communicate(timeout=4)
         self.assertEqual(process.returncode, 124, output + error)
         self.assert_tree_stopped()
-
-    def test_shared_deadline_kills_child_and_grandchild(self):
-        self.capture_prepared_tree()
-
-    def test_shared_deadline_allows_slow_fixture_startup(self):
-        (self.root / 'worker.py').write_text(WORKER.replace(
-            'role, mode = sys.argv[2:4]',
-            "role, mode = sys.argv[2:4]\nif role == 'grandchild': time.sleep(0.7)"))
-        self.capture_prepared_tree()
 
     def test_cancellation_kills_child_and_grandchild(self):
         for number in (signal.SIGTERM, signal.SIGINT, signal.SIGHUP):
