@@ -101,6 +101,14 @@ for y in range(self.height):  # pragma: no branch
 
 Use the pragma only when the other outcome is provably unreachable.
 
+The maintained coverage pipeline also records conservative constant-loop
+proofs without adding pragmas. An independently verified literal range or list
+can have one required outcome and one explicitly impossible outcome. Dynamic
+or uncertain loops still require both. The report retains the original
+potential denominator and lists every impossible classification. See
+[constant-loop outcome proofs](Coverage-tool#constant-loop-outcome-proofs)
+for the supported subset and source/capture binding rules.
+
 ## Raise the time budget
 
 The Makefile gives the run one second per suite. A slower machine exceeds that budget without anything being wrong:

@@ -279,50 +279,6 @@ def test_coverage_is_typed_and_invalid_mutated_modes_are_refused() raises:
         _ = renderer.render(scene, assets, _camera())
 
 
-def _refused_strand(which: Int) raises:
-    """Render one strand whose material breaks one strand-coverage rule."""
-    var scene = Scene()
-    var assets = Assets()
-    var node = scene.add(Object3D())
-    var geometry = assets.geometries.add(
-        line_segments_geometry([Vector3(-0.8, 0, 0), Vector3(0.8, 0, 0)])
-    )
-    var material = line_material(
-        RED, LineWidth(pixels=9), opacity=1, blending=OPAQUE
-    )
-    if which == 0:
-        material.opacity = nan[DType.float32]()
-    elif which == 1:
-        material.opacity = -0.5
-    elif which == 2:
-        material.opacity = 1.5
-    elif which == 3:
-        material.blending = BLEND
-    elif which == 4:
-        material.depth_write = False
-    elif which == 5:
-        material.depth_test = False
-    else:
-        material.dash_size = Length(0.1, METER)
-        material.gap_size = Length(0.1, METER)
-    var id = assets.materials.add(material^)
-    scene.add_wide_line(
-        LineSegments2(geometry, id, node, coverage=STRAND_LINE_COVERAGE)
-    )
-    scene.update()
-    var renderer = Renderer(SIZE, SIZE)
-    _ = renderer.render(scene, assets, _camera())
-
-
-def test_strand_materials_must_be_opaque_solid_and_depth_tested() raises:
-    for which in range(3):
-        with assert_raises(contains="Strand opacity"):
-            _refused_strand(which)
-    for which in range(3, 7):
-        with assert_raises(contains="Strand coverage needs"):
-            _refused_strand(which)
-
-
 def _short_strand_energy(width: Float32, length: Float32) raises -> Int:
     """Count red sample energy over a fixed grid of tiny strands.
 

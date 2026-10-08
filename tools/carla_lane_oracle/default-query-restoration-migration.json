@@ -15,16 +15,6 @@
       {
         "before": "312a70b060e78ada52ee6bb4878eeee02b7c593d60472dd152c1eaab89046acd",
         "after": "450eba96bcc25414014b33436cb431c4d3409ed3621581411bff17b6e94b01d0"
-      },
-      {
-        "before": "450eba96bcc25414014b33436cb431c4d3409ed3621581411bff17b6e94b01d0",
-        "after": "cf5e0ae7bf0967a5a39eea4845dc1f4b0ce8bbb9813138a4216b2068beec194b"
-      }
-    ],
-    "extensions/carla/lane_refinement.mojo": [
-      {
-        "before": "33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315",
-        "after": "908b782a43370784567119eb6b8bdf2f84c5b03c741ce0d86c58111c3338f7da"
       }
     ]
   },
@@ -33,16 +23,6 @@
       {
         "before": "fce36e2c75ad06bbe65d756a54169d9e086c3e44c127faa74e86844996dbea68",
         "after": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e"
-      },
-      {
-        "before": "12198fff6d0451dc623cbfc3dcb2e2bf8e363a8ddd9bfe973000c3f67c3a7d0e",
-        "after": "9a8a91dfea8c9cd711086ab86bf0db90d00827fc2cac05baf2d080551735fb2d"
-      }
-    ],
-    "extensions/carla/lane_refinement.mojo": [
-      {
-        "before": "0aba76d3b062564f1f5d098bdb72714481171c29b1f347edf427689dca249de0",
-        "after": "b2a20f28c3acd0a66f0ac24ee2f387dc70db3d926155080e5d8ddf87108faa0b"
       }
     ]
   },
@@ -54,8 +34,5 @@
       },
       "routing": "Regenerated with declaration_routing: the module docstring, the _CarlaSegment struct and the Map index fields. No guard caller body changes."
     }
-  },
-  "later_events": [
-    "Close the 100% coverage gate: remove checks that earlier checks already decide, remove two unused map helpers, key the expansion memos with one exact station/scale comparison (_same_cache_key), and drop the depth test from dispatch setup because the depth refusal precedes it. The second steps above record this event."
-  ]
+  }
 }

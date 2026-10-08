@@ -64,7 +64,6 @@ def _minimizer_support(
     var twice_error = _Interval.point(2.0) * _Interval.point(domain.error)
     if _ordered_finite(derivative):
         if derivative.low > 0.0:
-            # A nonnegative error over a positive slope is nonnegative.
             var radius = twice_error / _Interval.point(derivative.low)
             if _ordered_finite(radius):
                 var limit = _Interval.point(best) + _Interval.point(radius.high)
@@ -93,8 +92,6 @@ def _minimizer_support(
             var negative = (b + root_b) / m
             if slope.high < 0.0:
                 negative = four_error / (root_b - b)
-            # Each root is at least the magnitude it offsets, so both
-            # distances are nonnegative.
             if _ordered_finite(positive):
                 var limit = _Interval.point(best) + _Interval.point(
                     positive.high
@@ -105,6 +102,6 @@ def _minimizer_support(
                     negative.high
                 )
                 result.low = max(result.low, limit.low)
-    # Every tightened end moves toward best by a nonnegative finite radius,
-    # so the result stays ordered, finite and contains best.
+    # Each finite radius encloses a nonnegative exact radius. Outward
+    # best +/- radius bounds preserve the incumbent and the original cell.
     return result

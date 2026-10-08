@@ -71,21 +71,31 @@ def _try_build_spiral_moments(
     if work > max_proof_terms - proof_terms:
         return None
     proof_terms += work
-    # No optional arrays, loops, or persistent side-table insertion before debit.
+    # No runtime arrays, loops, or insertion before debit. These compile-time
+    # bounds and the admitted count keep every moment intermediate finite.
+    comptime for index in range(5):
+        comptime assert _GL_NODES[index] > -1.0 and _GL_NODES[index] < 1.0
+        comptime assert _GL_WEIGHTS[index] > 0.0 and _GL_WEIGHTS[index] <= 1.0
+    comptime for index in range(11):
+        comptime assert (
+            _COS_COEFFICIENTS[index] >= -1.0 and _COS_COEFFICIENTS[index] <= 1.0
+        )
+        comptime assert (
+            _SIN_COEFFICIENTS[index] >= -1.0 and _SIN_COEFFICIENTS[index] <= 1.0
+        )
     var moments = Array[_Interval, 22](fill=_Interval.point(0.0))
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
     var divisor = _Interval.point(Float64(pieces))
     var half = _Interval.point(0.5)
     var weight_sum = _Interval.point(0.0)
-    for i in range(5):  # pragma: no branch
+    for i in range(5):
         weight_sum = _tight_sum_bound(weight_sum, _Interval.point(weights[i]))
     # Exact cancellation of n copies divided by n. Do not substitute 1.0:
     # the actual stored weights, not ideal GL weights, define this polynomial.
     moments[0] = _tight_product_bound(half, weight_sum)
-    # pieces is at least one here.
-    for piece in range(pieces):  # pragma: no branch
-        for i in range(5):  # pragma: no branch
+    for piece in range(pieces):
+        for i in range(5):
             # The scalar-rounded 1.0 + node is deliberately computed BEFORE
             # making the interval constant, exactly as curve_bounds:116-118.
             var node_sum = 1.0 + nodes[i]
@@ -98,7 +108,7 @@ def _try_build_spiral_moments(
             )
             var alpha2 = _tight_product_bound(alpha, alpha)
             var power = alpha2
-            for j in range(1, 22):  # pragma: no branch
+            for j in range(1, 22):
                 moments[j] = _tight_sum_bound(
                     moments[j],
                     _tight_product_bound(_Interval.point(weights[i]), power),
@@ -106,14 +116,13 @@ def _try_build_spiral_moments(
                 if j < 21:
                     power = _tight_product_bound(power, alpha2)
     var twice_count = _tight_product_bound(_Interval.point(2.0), divisor)
-    for j in range(1, 22):  # pragma: no branch
+    for j in range(1, 22):
         moments[j] = _tight_quotient_bound(moments[j], twice_count)
     var cos_coefficients = materialize[_COS_COEFFICIENTS]()
     var sin_coefficients = materialize[_SIN_COEFFICIENTS]()
     var cosine = Array[_Interval, 11](fill=_Interval.point(0.0))
     var sine = Array[_Interval, 11](fill=_Interval.point(0.0))
-    # Every moment lies in [0, 1], so these finite products stay finite.
-    for j in range(11):  # pragma: no branch
+    for j in range(11):
         cosine[j] = _tight_product_bound(
             _Interval.point(cos_coefficients[j]), moments[2 * j]
         )
@@ -151,7 +160,7 @@ def _all_spiral_nodes_quadrant_zero(
     var nodes = materialize[_GL_NODES]()
     var node_low = 1.0 + nodes[0]
     var node_high = node_low
-    for i in range(1, 5):  # pragma: no branch
+    for i in range(1, 5):
         var node_sum = 1.0 + nodes[i]
         node_low = min(node_low, node_sum)
         node_high = max(node_high, node_sum)
@@ -171,10 +180,11 @@ def _all_spiral_nodes_quadrant_zero(
         return False
     # This duplicates only the pinned branch selection from curve_trig:341-347.
     # Production integration should share a branch-selection helper if practical.
-    # A finite phase within the limit gives a finite selector.
     var selection = (
         theta * _Jet.constant(_INV_HALF_PI) + _Jet.constant(0.5)
     ).rounded_value()
+    if not selection.is_finite():
+        return False
     return floor(selection.low) == 0.0 and floor(selection.high) == 0.0
 
 

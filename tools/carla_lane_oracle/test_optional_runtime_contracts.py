@@ -41,9 +41,9 @@ CASES = [
     ('support_actual_witness', 'curve_minimizer_support', '_minimizer_support', 'or best < low', 'or best < low - 1.0', 'witness lower containment'),
     ('stored_predicate_strict', 'curve_sample_dispatch', '_sample_dispatch_predicate', ') > local', ') >= local', 'stored subtraction/clamp'),
     ('stored_predicate_subtraction', 'curve_sample_dispatch', '_sample_dispatch_predicate', 'station - origin', 'station + origin', 'stored subtraction/clamp'),
-    ('predecessor_bracket', 'curve_sample_dispatch', '_sample_dispatch_cut', 'bits += 1', 'bits += 2', 'first passing station'),
-    ('actual_cut_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'min(max(station - record.s, 0.0), geometry.length)', 'min(max(station + record.s, 0.0), geometry.length)', 'actual cut sample index'),
-    ('actual_after_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'after_index != threshold_at', 'False', 'both actual indices'),
+    ('raw_inverse_adjacent_bracket', 'curve_sample_dispatch', '_sample_dispatch_cut', 'word += UInt64(1)', 'word += UInt64(2)', 'raw inverse operation graph'),
+    ('actual_before_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'min(max(before - record.s, 0.0), geometry.length)', 'min(max(station - record.s, 0.0), geometry.length)', 'predecessor sample index'),
+    ('actual_after_index', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'or after_index != threshold_at', 'or False', 'both actual indices'),
     ('dispatch_node_headroom', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'nodes > max_nodes - node_reserve', 'nodes > max_nodes - 1', 'complete dispatch followup reserve'),
     ('dispatch_term_headroom', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'term_reserve > max_terms - terms', 'extra > max_terms - terms', 'complete dispatch followup reserve'),
     ('dispatch_term_debit', 'curve_sample_dispatch', '_try_sample_dispatch_cuts', 'var extra = 8 * count', 'var extra = 6 * count', 'complete optional dispatch debit'),
@@ -96,7 +96,7 @@ CASES.extend([
      'search state reintroduced'),
     ('model_capture_reintroduction', 'lane_refinement', '_run_lane_search',
      'var delta = _Interval(lo, hi) - _Interval.point(center_s)',
-     'var hidden = _try_objective_model(lo, hi, center_s, scale, domain, center)\n            var delta = _Interval(lo, hi) - _Interval.point(center_s)',
+     'var hidden = _try_objective_model(lo, hi, center_s, scale, domain, center)\n                var delta = _Interval(lo, hi) - _Interval.point(center_s)',
      'production consumer reintroduced'),
     ('model_restriction_reintroduction', 'lane_refinement', '_run_lane_search',
      'var best = certificate.s', 'var hidden = _restrict_objective_model(previous, low, high, 1.0)\n    var best = certificate.s',
@@ -119,25 +119,15 @@ CASES.extend([
      'var work = _reference_work(road, lo, hi)', 'var work = _reference_work(road, low, high)',
      'current cell work'),
     ('fast_memo_wrong_station', 'lane_refinement', '_run_lane_search',
-     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)',
-     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], cached_fast.value()[0], scale_word)',
+     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)', '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], scale_word, scale_word)',
      'exact station/scale proof'),
     ('fast_memo_wrong_scale', 'lane_refinement', '_run_lane_search',
-     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)',
-     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, cached_fast.value()[1])',
-     'exact station/scale proof'),
+     '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, scale_word)', '_same_cache_key(cached_fast.value()[0], cached_fast.value()[1], station_word, station_word)', 'exact station/scale proof'),
     ('expansion_memo_wrong_station', 'lane_refinement', '_run_lane_search',
-     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)',
-     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], cached_expansion.value()[0], scale_word)',
+     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)', '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], scale_word, scale_word)',
      'exact station/scale translated'),
     ('expansion_memo_wrong_scale', 'lane_refinement', '_run_lane_search',
-     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)',
-     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, cached_expansion.value()[1])',
-     'exact station/scale translated'),
-    ('memo_key_inexact', 'lane_refinement', '_same_cache_key',
-     'SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
-     'SIMD[DType.uint64, 2](station, scale) <= SIMD[DType.uint64, 2](other_station, other_scale)',
-     'exact station/scale memo key'),
+     '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, scale_word)', '_same_cache_key(cached_expansion.value()[0], cached_expansion.value()[1], station_word, station_word)', 'exact station/scale translated'),
     ('memo_cross_invocation', 'lane_refinement', '_run_lane_search',
      'var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = None',
      'var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = saved',
@@ -239,7 +229,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
         self.assertTrue(expected.issubset(sources.GROUP_PATHS['optional_runtime']))
         self.assertEqual(len(expected), 5)
         self.assertFalse(self.semantic['native_execution_qualified'])
-        self.assertEqual(self.guarded['complete_caller_declarations'], 29)
+        self.assertEqual(self.guarded['complete_caller_declarations'], 33)
 
     def test_omitted_new_dependency_rejects_schema(self):
         read = Path.read_text
@@ -295,7 +285,10 @@ class OptionalRuntimeContracts(unittest.TestCase):
         pins = json.loads(self.pins[guards.PINS])
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
-            paths = set(pins['protected_inventory']) | {str(guards.PINS)}
+            paths = set(pins['protected_inventory']) | {str(guards.PINS),
+                'tools/carla_lane_oracle/winner-sign-query-migration.json'}
+            from reviewed_cleanup_contracts import PROTECTED_INPUTS
+            paths.update(PROTECTED_INPUTS)
             for module in guards.CALLERS:
                 paths.add('extensions/carla/' + module + '.mojo')
             for path in paths:
@@ -389,6 +382,28 @@ class OptionalRuntimeContracts(unittest.TestCase):
             for step in successors['raw_successors'].get(path, []):
                 self.assertEqual(step['before'], expected)
                 expected = step['after']
+            latest = json.loads((ROOT/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_text())
+            for step in latest['raw_successors'].get(path, []):
+                self.assertEqual(step['before'], expected)
+                expected = step['after']
+            if path == 'extensions/carla/lane_refinement.mojo':
+                import coverage_invariant_contracts as invariant
+                import lane_control_contracts as lane
+                step = invariant.verify(ROOT)['sources'][path]
+                scoped = lane.verify(ROOT)
+                self.assertEqual(step['before_sha256'], expected)
+                self.assertEqual(scoped['before_sha256'], expected)
+                self.assertEqual(step['after_sha256'], scoped['after_sha256'])
+                expected = step['after_sha256']
+                import coverage_followup_contracts as followup
+                next_step = followup.verify(ROOT)['sources'][path]
+                self.assertEqual(next_step['before_sha256'], expected)
+                expected = next_step['after_sha256']
+                import cache_key_contracts as cache_key
+                cache_step = cache_key.verify(ROOT)
+                self.assertEqual(cache_step['before_sha256'], expected)
+                self.assertEqual(cache_key.predecessor_source(ROOT), cache_step['before'])
+                expected = cache_step['after_sha256']
             self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(), expected)
         self.assertTrue(manifest['solver_removal_projection']['map_complete_tokens_equal'])
         self.assertEqual(manifest['solver_removal_projection']['projected_ast_sha256'],
@@ -440,7 +455,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
         original = optional.GROUPED_ADMISSION
         for before, after in cases:
             path, changed = self.changed('lane_refinement', '_run_lane_search',
-                original, textwrap.indent(original.replace(before, after, 1).strip(), ' ' * 16))
+                original, textwrap.indent(original.replace(before, after, 1).strip(), ' ' * 20))
             read = Path.read_text
             with self.subTest(change=after), patch.object(Path, 'read_text', lambda p, *a, **k:
                               changed if p == path else read(p, *a, **k)):

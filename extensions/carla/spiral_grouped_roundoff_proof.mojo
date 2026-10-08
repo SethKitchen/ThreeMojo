@@ -58,9 +58,7 @@ def _grouped_term(
     mut ideal: _Interval,
     mut magnitude: _Interval,
     mut inherited: _Interval,
-):
-    # A refused term poisons the ideal sum, so _grouped_origin_error refuses
-    # the whole envelope. No term is ever silently left out of the sums.
+) -> Bool:
     if (
         count < 1
         or count > 320
@@ -69,16 +67,15 @@ def _grouped_term(
         or not isfinite(term.error)
         or term.error < 0.0
     ):
-        ideal = _Interval.whole()
-        return
+        return False
     var rounded = term.rounded_value()
     if not rounded.is_finite():
-        ideal = _Interval.whole()
-        return
+        return False
     var copies = _Interval.point(Float64(count))
     ideal = ideal + copies * term.value
     magnitude = magnitude + copies * _Interval.point(rounded.magnitude())
     inherited = inherited + copies * _Interval.point(term.error)
+    return ideal.is_finite() and magnitude.is_finite() and inherited.is_finite()
 
 
 def _grouped_origin_error(
@@ -161,12 +158,24 @@ def _try_spiral_grouped_roundoff_envelope(
     var rate_value = rate.value()
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
-    # Exactly the stored pairs, with actual multiplicities 2,2,1. The stored
-    # table's symmetry, positive finite weights and finite nodes are checked
-    # by tests/test_carla_spiral_guards.mojo; a changed table fails there.
+    # Materialized copies come only from these immutable compile-time tables.
+    # Reject an incompatible table at compilation, before this helper can run.
+    # The stored pair multiplicities remain 2,2,1; no ideal weight sum is used.
+    comptime assert _GL_WEIGHTS[0] == _GL_WEIGHTS[4]
+    comptime assert _GL_WEIGHTS[1] == _GL_WEIGHTS[3]
+    comptime assert _GL_WEIGHTS[0] > 0.0 and _GL_WEIGHTS[0] <= 1.0
+    comptime assert _GL_NODES[0] > -1.0 and _GL_NODES[0] < 1.0
+    comptime assert _GL_WEIGHTS[1] > 0.0 and _GL_WEIGHTS[1] <= 1.0
+    comptime assert _GL_NODES[1] > -1.0 and _GL_NODES[1] < 1.0
+    comptime assert _GL_WEIGHTS[2] > 0.0 and _GL_WEIGHTS[2] <= 1.0
+    comptime assert _GL_NODES[2] > -1.0 and _GL_NODES[2] < 1.0
+    comptime assert _GL_WEIGHTS[3] > 0.0 and _GL_WEIGHTS[3] <= 1.0
+    comptime assert _GL_NODES[3] > -1.0 and _GL_NODES[3] < 1.0
+    comptime assert _GL_WEIGHTS[4] > 0.0 and _GL_WEIGHTS[4] <= 1.0
+    comptime assert _GL_NODES[4] > -1.0 and _GL_NODES[4] < 1.0
     var node_low = inf[DType.float64]()
     var node_high = -inf[DType.float64]()
-    for i in range(5):  # pragma: no branch
+    for i in range(5):
         var node = 1.0 + nodes[i]
         node_low = min(node_low, node)
         node_high = max(node_high, node)
@@ -180,7 +189,7 @@ def _try_spiral_grouped_roundoff_envelope(
     var phases = Array[_ValueJet, 4](fill=_ValueJet.constant(0.0))
     # Establish every group's original rounded phase branch before the first
     # polynomial evaluation. An ineligible later group cannot waste trig work.
-    for group in range(4):  # pragma: no branch
+    for group in range(4):
         var low = group * pieces // 4
         var high = (group + 1) * pieces // 4
         if low == high:
@@ -196,12 +205,15 @@ def _try_spiral_grouped_roundoff_envelope(
         var selection = (
             theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
         ).rounded_value()
-        # A finite phase within the limit gives a finite selector.
+        # The ordered theta and nonnegative error are bounded by the phase gate.
+        # Multiplication by k<=1 and addition of 0.5 cannot overflow this selector.
+        comptime assert _INV_HALF_PI > 0.0 and _INV_HALF_PI <= 1.0
+        comptime assert _PHASE_LIMIT > 0.0 and _PHASE_LIMIT <= 1048576.0
         if floor(selection.low) != 0.0 or floor(selection.high) != 0.0:
             return None
         phases[group] = theta
     var factors = Array[_ValueJet, 3](fill=_ValueJet.constant(0.0))
-    for weight in range(3):  # pragma: no branch
+    for weight in range(3):
         factors[weight] = half_step * _ValueJet.constant(weights[weight])
     var x_ideal = _Interval.point(0.0)
     var y_ideal = _Interval.point(0.0)
@@ -209,19 +221,22 @@ def _try_spiral_grouped_roundoff_envelope(
     var y_magnitude = _Interval.point(0.0)
     var x_inherited = _Interval.point(0.0)
     var y_inherited = _Interval.point(0.0)
-    for group in range(4):  # pragma: no branch
+    for group in range(4):
         var low = group * pieces // 4
         var high = (group + 1) * pieces // 4
         if low == high:
             continue
         var trig = _sincos_expression(phases[group])
-        for weight in range(3):  # pragma: no branch
+        for weight in range(3):
             var multiplicity = 1 if weight == 2 else 2
             var copies = (high - low) * multiplicity
             var x = factors[weight] * trig[1]
             var y = factors[weight] * trig[0]
-            _grouped_term(x, copies, x_ideal, x_magnitude, x_inherited)
-            _grouped_term(y, copies, y_ideal, y_magnitude, y_inherited)
+            if not _grouped_term(x, copies, x_ideal, x_magnitude, x_inherited):
+                return None
+            # The source-bound Y-finiteness lemma proves this call succeeds
+            # after X. Keep the call and all three accumulator writes.
+            _ = _grouped_term(y, copies, y_ideal, y_magnitude, y_inherited)
     var x_error = _grouped_origin_error(
         x_ideal, x_magnitude, x_inherited, 5 * pieces, geometry.x
     )

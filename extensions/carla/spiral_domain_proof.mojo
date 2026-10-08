@@ -138,15 +138,23 @@ def _try_pack_spiral_proof(
     ref geometry = road.info.geometries[at].geometry
     if not _spiral_proof_geometry(geometry):
         return None
+    # Validate distance representation before interval arithmetic. Capture
+    # provenance and association still remain caller-owned preconditions.
+    if (
+        not captured.d.value.is_finite()
+        or captured.d.value.low > captured.d.value.high
+        or not captured.d.first.is_finite()
+        or not captured.d.second.is_finite()
+        or not isfinite(captured.d.error)
+        or captured.d.error < 0.0
+    ):
+        return None
     var domain = captured.d.rounded_value()
     if (
         not domain.is_finite()
         or domain.low <= 0.0
         or domain.high >= geometry.length
     ):
-        return None
-    # The finite rounded domain above needs a finite value.
-    if not captured.d.first.is_finite() or not captured.d.second.is_finite():
         return None
     if (
         not isfinite(captured.first_x_error)
@@ -225,6 +233,17 @@ def _spiral_proof_matches(
         or high > root_high
     ):
         return False
+    # These checks do not reconstruct or authenticate the caller's Jet.
+    # They reject malformed numeric representation before using its bounds.
+    if (
+        not d.value.is_finite()
+        or d.value.low > d.value.high
+        or not d.first.is_finite()
+        or not d.second.is_finite()
+        or not isfinite(d.error)
+        or d.error < 0.0
+    ):
+        return False
     var domain = d.rounded_value()
     if (
         not domain.is_finite()
@@ -236,8 +255,6 @@ def _spiral_proof_matches(
         or proof.rounded_d.high < proof.rounded_d.low
         or domain.low < proof.rounded_d.low
         or domain.high > proof.rounded_d.high
-        or not d.first.is_finite()
-        or not d.second.is_finite()
     ):
         return False
     if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0]:

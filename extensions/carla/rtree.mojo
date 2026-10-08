@@ -663,9 +663,7 @@ struct _Rtree(Movable):
                     return item.index
                 continue
             ref node = self.nodes[item.index]
-            # As in nearest(): only a nonempty tree's nodes are queued, and
-            # every queued node has children.
-            for child in node.children:  # pragma: no branch
+            for child in node.children:
                 work.queue_push(len(heap.items))
                 if node.leaf:
                     heap.push(

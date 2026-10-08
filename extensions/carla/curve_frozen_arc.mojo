@@ -41,9 +41,7 @@ def _frozen_arc_context(
     if not found:
         return None
     var model = found.value()
-    # Every model coefficient is a known stored point: _rounded_arc_context
-    # builds each one from points, and a _RoundedBox operation on points
-    # rounds once to a point or refuses as unknown.
+    # The immediate producer already returns known singleton coefficients.
     var distance = _RoundedBox.bounds(low, high) - model.start
     # Keep one smooth interior clamp branch throughout the original domain.
     if (

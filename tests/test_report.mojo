@@ -351,6 +351,115 @@ def test_large_report_counts_stay_separate_and_keep_the_same_totals() raises:
     assert_true("12000/12000 100%" in report.text)
 
 
+def _loop_manifest(required: String, kind: String, count: Int) -> String:
+    return (
+        "P constant-loops-v2 "
+        + "a" * 64
+        + "\nR m 2 "
+        + required
+        + " "
+        + kind
+        + " "
+        + String(count)
+        + "\n"
+    )
+
+
+def test_constant_loop_retains_its_reachable_outcome_and_lineage() raises:
+    var report = build_report(
+        parse_manifest(_loop_manifest("T", "literal-range", 3)),
+        parse_hits("COVLINE:m:2:T\n"),
+        parse_traces(""),
+    )
+    assert_equal(report.covered, 1)
+    assert_equal(report.total, 1)
+    assert_equal(report.potential, 2)
+    assert_true(report.is_complete())
+    assert_true(
+        "False proven impossible (literal-range cardinality 3)" in report.text
+    )
+    assert_true(
+        "DENOMINATOR potential 2, required 1, proven impossible 1"
+        in report.text
+    )
+    assert_false("never evaluated False" in report.text)
+
+
+def test_constant_empty_loop_still_requires_false() raises:
+    var report = build_report(
+        parse_manifest(_loop_manifest("F", "literal-list", 0)),
+        parse_hits("COVLINE:m:2:F\n"),
+        parse_traces(""),
+    )
+    assert_true(report.is_complete())
+    assert_equal(report.total, 1)
+    assert_equal(report.potential, 2)
+    assert_true("True proven impossible" in report.text)
+
+
+def test_unexecuted_constant_loop_cannot_pass_without_a_hit() raises:
+    for count in [0, 3]:
+        var required = String("F") if count == 0 else String("T")
+        var report = build_report(
+            parse_manifest(_loop_manifest(required, "literal-range", count)),
+            Hits(),
+            parse_traces(""),
+        )
+        assert_equal(report.covered, 0)
+        assert_equal(report.total, 1)
+        assert_false(report.is_complete())
+        assert_true(
+            ("required loop outcome " + required + " never observed")
+            in report.text
+        )
+
+
+def test_constant_loop_proofs_reject_contradictory_real_hits() raises:
+    for count in [0, 3]:
+        var required = String("F") if count == 0 else String("T")
+        with assert_raises(contains="Constant-loop proof contradicted"):
+            _ = build_report(
+                parse_manifest(
+                    _loop_manifest(required, "literal-range", count)
+                ),
+                parse_hits("COVLINE:m:2:T\nCOVLINE:m:2:F\n"),
+                parse_traces(""),
+            )
+
+
+def test_constant_empty_loop_does_not_remove_body_line_obligations() raises:
+    var report = build_report(
+        parse_manifest(_loop_manifest("F", "literal-list", 0) + "L m 3\n"),
+        parse_hits("COVLINE:m:2:F\n"),
+        parse_traces(""),
+    )
+    assert_equal(report.covered, 1)
+    assert_equal(report.total, 2)
+    assert_equal(report.potential, 3)
+    assert_false(report.is_complete())
+    assert_true("never executed: 3" in report.text)
+
+
+def test_loop_mask_requires_supported_provenance_and_cardinality() raises:
+    for manifest in [
+        String("R m 2 T literal-range 3\n"),
+        String("P future ") + "a" * 64 + "\n",
+        String("P constant-loops-v2 not-a-digest\n"),
+        _loop_manifest("T", "literal-range", 0),
+        _loop_manifest("F", "literal-range", 3),
+        _loop_manifest("T", "unproved", 3),
+        _loop_manifest("T", "literal-list", -1),
+    ]:
+        with assert_raises():
+            _ = parse_manifest(manifest)
+
+
+def test_loop_mask_cannot_duplicate_or_replace_a_compound_decision() raises:
+    for other in [String("B m 2\n"), String("C m 2 0\n"), String("M m 2 0\n")]:
+        with assert_raises():
+            _ = parse_manifest(_loop_manifest("T", "literal-range", 3) + other)
+
+
 def main() raises:
     with TestScratch():
         TestSuite.discover_tests[__functions_in_module()]().run()

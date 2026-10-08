@@ -101,9 +101,7 @@ def _try_spiral_roundoff_envelope(
         or domain.high >= geometry.length
     ):
         return None
-    # The finite rounded domain above already needs a finite value and a
-    # finite error; only a negative error remains to refuse.
-    if d.error < 0.0:
+    if not d.value.is_finite() or not isfinite(d.error) or d.error < 0.0:
         return None
     var distance = _ValueJet(
         d.value, _Interval.whole(), _Interval.whole(), d.error
@@ -114,7 +112,7 @@ def _try_spiral_roundoff_envelope(
     var node_high = node_low
     var weight_low = weights[0]
     var weight_high = weight_low
-    for i in range(1, 5):  # pragma: no branch
+    for i in range(1, 5):
         var node = 1.0 + nodes[i]
         node_low = min(node_low, node)
         node_high = max(node_high, node)
@@ -137,7 +135,10 @@ def _try_spiral_roundoff_envelope(
     var selection = (
         theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
     ).rounded_value()
-    # A finite phase within the limit gives a finite selector.
+    # The ordered theta and nonnegative error are bounded by the phase gate.
+    # Multiplication by k<=1 and addition of 0.5 cannot overflow this selector.
+    comptime assert _INV_HALF_PI > 0.0 and _INV_HALF_PI <= 1.0
+    comptime assert _PHASE_LIMIT > 0.0 and _PHASE_LIMIT <= 1048576.0
     if floor(selection.low) != 0.0 or floor(selection.high) != 0.0:
         return None
     var trig = _sincos_expression(theta)

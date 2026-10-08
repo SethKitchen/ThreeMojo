@@ -221,6 +221,10 @@ def verify_fresh_producer(run):
 
 
 def verify_semantics(root):
+    helper = body(root, 'lane_refinement', '_same_cache_key')
+    require(sampled.dump(helper.body) == sampled.dump(sampled.syntax_tree(
+        'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)').body),
+        'exact UInt64 pair helper comparison')
     model = body(root, 'curve_objective_model', '_try_objective_model')
     restrict = body(root, 'curve_objective_model', '_restrict_objective_model')
     cut = body(root, 'curve_sample_dispatch', '_sample_dispatch_cut')
@@ -248,7 +252,7 @@ def verify_semantics(root):
     contains(work, 'return 3 * min(4, pieces)', 'whole count work bound')
     contains(lane, 'if nodes < 0 or nodes >= max_nodes or terms < 0 or terms > max_terms or max_terms - terms < 24:\n    return None',
              'whole optional union admission')
-    contains(lane, 'if counts[0] < 1 or counts[1] > 64 or counts[1] - counts[0] > 1:\n    return None',
+    contains(lane, 'if counts[0] < 1 or counts[1] > 64 or counts[1] < counts[0] or counts[1] - counts[0] > 1:\n    return None',
              'complete at-most-two count domain')
     contains(lane, 'var extra = _spiral_grouped_roundoff_work(counts[0])', 'first count debit')
     contains(lane, 'if counts[1] != counts[0]:\n    extra += _spiral_grouped_roundoff_work(counts[1])',
@@ -299,11 +303,11 @@ def verify_semantics(root):
     require(sampled.dump(predicate.body) == sampled.dump(ast.parse(
         'return min(max(station - origin, 0.0), length) > local').body),
         'exact stored subtraction/clamp dispatch predicate')
-    contains(cut, 'while bits < last and not _sample_dispatch_predicate(origin, length, local, bitcast[DType.float64](bits)):\n    bits += 1',
-             'bounded monotone search for the first passing station')
+    contains(cuts, 'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
+             'actual predecessor sample index')
     contains(cuts, 'var after_index = _sample_index(geometry, min(max(station - record.s, 0.0), geometry.length))',
              'actual cut sample index')
-    contains(cuts, 'if after_index != threshold_at:\n    return None',
+    contains(cuts, 'if before_index != threshold_at - 1 or after_index != threshold_at:\n    return None',
              'both actual indices must match original owners')
     contains(cuts, 'var node_reserve = 3 * count + 2', 'dispatch node reserve includes descendants and rechecks')
     contains(cuts, 'var term_reserve = 16 * count', 'dispatch probe and descendant term reserve')
@@ -322,10 +326,6 @@ def verify_semantics(root):
     run = body(root, 'lane_refinement', '_run_lane_search')
     verify_no_containing_model_consumers(root)
     verify_fresh_producer(run)
-    key = body(root, 'lane_refinement', '_same_cache_key')
-    require(len(key.body) == 1, 'exact station/scale memo key is one comparison')
-    contains(key, 'return SIMD[DType.uint64, 2](station, scale) == SIMD[DType.uint64, 2](other_station, other_scale)',
-             'exact station/scale memo key')
     contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
     contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
     contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
@@ -366,6 +366,13 @@ def verify_semantics(root):
     # Only the exact additive default-false refusal is projected away. All
     # historical complete reference graph digests remain unchanged.
     sampled.reviewed_reference_tree((root / 'extensions/carla/curve_bounds.mojo').read_text())
+    # The exact reviewed raw inverse establishes the same immediate bracket
+    # without re-evaluating predecessors. Keep every outer admission above.
+    try:
+        import raw_cut_inverse_contracts as raw_inverse
+    except ModuleNotFoundError:
+        from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw_inverse
+    raw_inverse.verify_premises(root)
     return {'status': 'PASS', 'new_modules': list(NEW_MODULES),
             'checked_error_edge': 'guarded raw -> grouped origin -> checked Sum2 leaf',
             'containing_model_consumers': 'absent from production; standalone helper retained',

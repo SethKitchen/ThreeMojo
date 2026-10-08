@@ -355,7 +355,7 @@ raw grouped envelope to private origin error to the checked Sum2 leaf. The raw
 entry checks the environment on each invocation. Grouped reconstruction must
 use `require_reuse=True` to prohibit an unreserved GL fallback.
 
-The guard checker binds 29 complete caller declarations in 14 modules. Its
+The guard checker binds 33 complete caller declarations in 14 modules. Its
 additional global production sweep records all actual protected helper and
 source-module uses. The sweep binds import/declaration routing and protected
 NAME-token ordinals. The complete caller and dependency contracts bind the
@@ -416,3 +416,76 @@ These controls establish source integrity and the reviewed scheduling removal,
 not native behavior, coverage, performance or final CI qualification. Separate
 runtime diagnostics still have 19 default driving cohort failures; removing
 this optimization does not establish default-budget success for every query.
+
+
+### Winner seed and construction sign-query successor
+
+`winner-sign-query-migration.json` follows the retained default-query restoration
+without rewriting its historical record. Three Map dependency placements move
+to the reviewed combined source. Four top-level helpers gain complete lexical
+bindings; two are fresh floating-point guard entry points. Existing Map methods
+retain their Map owner, with explicit empty-owner overrides only for those helpers.
+
+`winner_sign_contracts.py` checks unchanged canonical dependencies and default
+query bodies, prepaid eligibility, strict witness improvement and immediate
+continuation reserves. Its mutations cover missing fresh guards, underpriced
+work, changed ownership and stale migration data. These checks do not establish
+full query availability, performance acceptance or hosted CI success.
+
+### Reviewed control-flow cleanup successor
+
+`reviewed-cleanup-migration.json` preserves the winner/sign record above.
+It permits exactly three later source changes. The rounded LINE and ARC
+contexts omit five high-station lookups. Each omitted lookup follows a
+singleton check, an ordered finite domain, and a successful low lookup.
+LINE keeps the high lookups for its possible multi-record profiles.
+The ARC center also omits a quarter check implied by its accepted selector
+hull. The selector graph, stored constants, and all other guards remain bound.
+
+The junction outward conversion selects its comparison with an explicit
+Boolean branch. It retains the original conversion, finite checks, signed-zero
+handling, and adjacent-word step. A native test keeps the original function
+as a frozen reference and compares values and error results.
+
+`reviewed_cleanup_contracts.py` binds the complete three-file successor,
+its two unchanged proof dependencies, and the exact dependency-pin changes.
+The migration changes three runtime token placements. The protected-use
+inventory stays byte-identical, as do all guarded caller bodies and owners.
+The winner check retains 109 unchanged dependencies and admits exactly these
+three reviewed successors. Mutation controls check the retained premises
+without relying on the complete-file digest to reject a changed premise.
+Temporary fixtures must include `PROTECTED_INPUTS` from that checker.
+
+These checks establish source correspondence only. Component captures do not
+establish a complete composed coverage pass. Native tests, aggregate coverage,
+timing limits, and hosted checks remain separate requirements.
+
+### Immediate frozen ARC producer successor
+
+`frozen-arc-producer-migration.json` retains the three-file cleanup record
+unchanged. It removes only the immediate six-coefficient revalidation loop
+after `_rounded_arc_context` succeeds. The distance and interior-clamp guards
+remain. Other callers that receive independently constructed models gain no
+new assumption from this removal.
+
+`frozen_arc_producer_contracts.py` binds the complete producer and consumer,
+the rounded constant helper, all Box constructors and operators used by the
+producer, and the scalar primitive boundaries. It also binds the full field
+layout and constructor mapping. The existing Road, RoadInfo, polynomial, and
+trig source dependencies remain fixed. The producer's known singleton result
+therefore remains tied to the reviewed operation graph.
+
+The successor changes three additional runtime token placements for frozen ARC:
+eligibility, optional runtime, and translation. Restoring those values reproduces the
+accepted three-file cleanup pin file exactly. Restoring that record's three
+entries then reproduces the earlier numerical/sign pin file. All six
+placements are checked; historical JSON and the Sum2 guard pins stay unchanged.
+The winner check now retains 108 unchanged dependencies and four reviewed
+successors.
+
+The new mutations independently check full producer and Box declarations.
+They reject missing known checks, widened points, changed primitive boundaries,
+an injected FMA path, changed field order, changed constructor arguments, and
+lost downstream clamp checks. The native parity test keeps the complete
+original consumer as a frozen reference. Component native and coverage results
+remain separate from qualification of the complete composed source.

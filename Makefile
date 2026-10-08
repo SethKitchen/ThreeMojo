@@ -251,6 +251,7 @@ HASH := $(shell python3 tools/cache_key.py \
           --setting=$(call quote,negative:$(COMPILE_FAIL_RUN)) \
           --setting=$(call quote,format:$(FORMATTED)) \
           --setting=$(call quote,coverage-profile:$(COV_PROFILE)) \
+          --setting=$(call quote,coverage-loop-proof-schema:constant-loops-v2) \
           --setting=$(call quote,covered:$(COVERED)) \
           --setting=$(call quote,gpu:$(GPU_TESTS) $(GPU_HOST_TESTS) $(GPU_ENTRY_POINTS) $(GPU_LIB_SOURCES)))
 ifeq ($(strip $(HASH)),)
@@ -601,6 +602,9 @@ ifeq ($(strip $(COVERED)),)
 	@echo "No measured module is affected; coverage not measured."
 else
 	@for f in $(COVERED); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
+	@python3 tools/coverage_loop_proofs.py begin --root . --build $(COV_DIR) \
+	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
+	  --mojo=$(call quote,$(MOJO)) --sources $(COVERED)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
 	  $(COV_DIR) $(COVERED)); \
 	[ $$rc -eq 0 ] || exit 1
@@ -622,6 +626,10 @@ else
 	@mkdir -p $(COV_DIR)/tests
 	@[ -z "$(strip $(TESTS))" ] || cp $(TESTS) $(COV_DIR)/tests/
 	@python3 tools/native_test_support.py copy --root . --destination $(COV_DIR)
+	@python3 tools/coverage_loop_proofs.py seal --root . --build $(COV_DIR) \
+	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
+	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
+	  --suites $(COVERAGE_TESTS)
 	@mkdir -p $(COV_DIR)/hits
 endif
 
@@ -637,7 +645,8 @@ ifneq ($(strip $(COVERED)),)
 	      sh -c 'name=$$(basename "$$1" .mojo); \
 	             python3 tools/coverage_io.py capture \
 	               --out "$(COV_DIR)/hits/$$name.out" \
-	               --err "$(COV_DIR)/hits/$$name.txt.gz" -- \
+	               --err "$(COV_DIR)/hits/$$name.txt.gz" \
+	               --loop-proof "$(COV_DIR)/loop-proofs.json" --loop-proof-root . -- \
 	               $(COVERAGE_RUN) \
 	                 --suite "$(COV_DIR)/tests/$$name.mojo" --cache $(CACHE_DIR)/native-coverage \
 	                 -- \
@@ -670,7 +679,11 @@ ifneq ($(strip $(COVERED)),)
 	  fi; \
 	done; [ $$missing -eq 0 ] || exit 1
 	@# FIFOs feed the original bytes to the reporter one suite at a time.
-	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits -- \
+	@python3 tools/coverage_io.py report --capture-dir $(COV_DIR)/hits \
+	  --loop-proof-root . --loop-proof-build $(COV_DIR) \
+	  --compiler=$(call quote,$(TOOLCHAIN)) --flags=$(call quote,$(MOJOFLAGS)) \
+	  --mojo=$(call quote,$(MOJO)) --capture-cache=$(call quote,$(CACHE_DIR)/native-coverage) \
+	  --suites $(COVERAGE_TESTS) -- \
 	  $(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo $(COV_DIR)/manifest.txt
 endif
 
@@ -1650,6 +1663,7 @@ test-coverage-tool:
 	@python3 tools/check_coverage_protocol.py --mojo $(MOJO)
 	@python3 tools/check_coverage_sources.py --mojo $(MOJO)
 	@python3 tools/check_coverage_loops.py --mojo $(MOJO)
+	@python3 tools/check_coverage_loop_proofs.py --mojo $(MOJO)
 	@python3 tools/check_coverage_hit_profile.py --mojo $(MOJO)
 
 # Subprocess-only contracts need native children with different environments.

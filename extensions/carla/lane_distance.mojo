@@ -47,8 +47,7 @@ def _refinement_square[
     # Error-free residuals tighten ONLY the witness's upward distance bound.
     var original = _normalized_square[axes](point, query, scale)
     var tighter = _Interval.point(0.0)
-    # Every instance has two or three axes.
-    for axis in range(axes):  # pragma: no branch
+    for axis in range(axes):
         var gap = _tight_sum_bound(
             _Interval.point(point[axis]), -_Interval.point(query[axis])
         )

@@ -50,6 +50,8 @@ way by habit:
 ## Process
 
 - Every feature has a GitHub issue and a line in the README checklist. Tick the box, link the wiki page, and close the issue in the same change.
+- Keep each PR to the files its work needs, so CI runs only the affected suites. `tools/affected.py` selects the suites that import a changed `.mojo` file or quote a changed asset. Documentation selects none.
+- Do not edit a global build input unless the work cannot be done another way. A global input is any file that is not a `.mojo` source, an asset or documentation: for example the `Makefile`, `.github/workflows/`, the coverage tool, `tools/*.py` and the pin `*.json` files. A change to one runs every suite. Put an unavoidable global change in its own PR, and group several into one.
 - Build and test inside a Linux environment. Mojo has no native Windows build.
 - Do not edit the wiki in the browser. Edit `docs/wiki/` and let the CI workflow publish it.
 - The agent skills in `skills-lock.json` are fetched with `npx skills experimental_install` and bumped with `npx skills update -p -y`. Never write `computedHash` by hand: the tool computes it over every file in the skill folder, and it has changed the way it computes it before.
