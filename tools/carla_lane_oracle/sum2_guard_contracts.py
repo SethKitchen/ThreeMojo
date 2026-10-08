@@ -331,9 +331,7 @@ def verify(root):
                         import seed_count_contracts as seed_count
                     except ModuleNotFoundError:
                         from tools.carla_lane_oracle import seed_count_contracts as seed_count
-                    require(hashlib.sha256(text.encode()).hexdigest() == seed_count.AFTER_SHA256,
-                            'unreviewed supplied Map source')
-                    text = seed_count.historical_source(root)
+                    text = seed_count.reviewed_text(root, path, text)
                 except (ValueError, OSError) as error:
                     raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                      + module + ' (' + str(error) + ')') from error

@@ -8,6 +8,7 @@ source needs no new edge. Historical pins and live debit checks remain live.
 No broad verifier is called here: this is the bottom of the successor graph.
 """
 import hashlib
+import importlib.util
 import json
 import textwrap
 import tokenize
@@ -19,11 +20,20 @@ try:
 except ModuleNotFoundError:
     from tools.carla_lane_oracle import source_contracts as source
     from tools.carla_lane_oracle import sum2_guard_contracts as guard
-try:
-    import affected
-    import cache_key
-except ModuleNotFoundError:
-    from tools import affected, cache_key
+
+def _sibling_tool(name):
+    """Load the executing checker's fixed sibling, independent of sys.path."""
+    path = Path(__file__).resolve().parents[1] / (name + '.py')
+    spec = importlib.util.spec_from_file_location('_seed_count_' + name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError('cannot load checker sibling: ' + str(path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+affected = _sibling_tool('affected')
+cache_key = _sibling_tool('cache_key')
 
 MODULE = 'extensions/carla/map.mojo'
 MIGRATION = 'tools/carla_lane_oracle/seed-count-successor.json'
@@ -261,3 +271,23 @@ def historical_source(root):
     require(verify(root) is not None, 'after Map did not activate its reviewed edge')
     require((root/MODULE).read_bytes().decode('utf-8') == text, 'Map changed during reconstruction')
     return predecessor_source(text, read_record(root))
+
+
+def reviewed_text(root, path, text):
+    """Project a token-equivalent view of the verified physical after Map.
+
+    Comments in a caller's text view do not change the physical compiler
+    input. Executable tokens, indentation and statement boundaries must
+    still match. The live bytes and every successor dependency are checked
+    on each call; this does not admit another physical source variant.
+    """
+    require(str(path) == MODULE, 'wrong supplied Map path')
+    require(source.token_sha256(text) == AFTER_TOKEN_SHA256,
+            'unreviewed supplied Map source')
+    physical = (Path(root)/MODULE).read_bytes()
+    require(hashlib.sha256(physical).hexdigest() == AFTER_SHA256,
+            'supplied after view needs the exact physical after Map')
+    require(verify(root) is not None, 'after Map did not activate its reviewed edge')
+    require((Path(root)/MODULE).read_bytes() == physical,
+            'Map changed during supplied-view verification')
+    return predecessor_source(physical.decode('utf-8'), read_record(root))

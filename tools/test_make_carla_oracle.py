@@ -85,14 +85,14 @@ class CarlaOracleWiringTests(unittest.TestCase):
 
     def test_linux_and_macos_ci_invoke_the_official_tool_target(self):
         workflow = (ROOT / '.github/workflows/ci.yml').read_text()
-        linux = workflow.split('\n  lint:\n', 1)[1].split('\n  cpu:\n', 1)[0]
-        commands = [line.strip() for line in linux.splitlines()
-                    if line.strip().startswith('make ')]
-        self.assertTrue(any('test-tools' in shlex.split(command) for command in commands))
-        macos = workflow.split('\n  cpu-macos:\n', 1)[1].split('\n  coverage-capture:\n', 1)[0]
-        targets = re.findall(r'^\s+target:\s+(.+)$', macos, re.MULTILINE)
-        self.assertTrue(any('test-tools' in shlex.split(target) for target in targets))
-        self.assertIn('run: make -B ${{ matrix.target }}', macos)
+        for name in ('lint', 'lint-macos'):
+            job = workflow.split('\n  ' + name + ':\n', 1)[1]
+            job = re.split(r'\n  [a-z][\w-]*:\n', job, maxsplit=1)[0]
+            commands = re.findall(r'^\s+run: (.+)$', job, re.MULTILINE)
+            self.assertIn(['python3', 'tools/ci_scope.py', 'run', '--', 'test-tools'],
+                          [shlex.split(command) for command in commands])
+            self.assertIn("if: needs.scope.outputs.run_tools == 'true'", job)
+
 
 
 if __name__ == '__main__':

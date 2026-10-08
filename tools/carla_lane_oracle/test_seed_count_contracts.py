@@ -93,6 +93,72 @@ class SeedCountSuccessorTests(unittest.TestCase):
                 with self.assertRaises(ValueError): seed.historical_source(ROOT)
                 with self.assertRaises(ValueError): seed.successor_source(ROOT)
 
+    def test_supplied_comments_require_actual_reviewed_after_state(self):
+        actual_after = seed.sha((ROOT/MAP).read_bytes().decode()) == seed.AFTER_SHA256
+        for text in (self.after, self.after+'\n# benign supplied commentary\n'):
+            with self.subTest(actual_after=actual_after, comment=text != self.after):
+                self.assertEqual(seed.source.token_sha256(text), seed.AFTER_TOKEN_SHA256)
+                if actual_after:
+                    self.assertEqual(seed.reviewed_text(ROOT, MAP, text), self.before)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'exact physical after Map'):
+                        seed.reviewed_text(ROOT, MAP, text)
+
+    def test_supplied_semantic_indentation_and_wrong_module_views_reject(self):
+        semantic = self.after.replace('var point_work = _reference_work(road, s, s)',
+                                      'var point_work = 0', 1)
+        indentation = self.after.replace('\n    ', '\n        ')
+        for text in (semantic, indentation, self.before):
+            with self.subTest(digest=seed.sha(text)), self.live_after():
+                self.assertNotEqual(seed.source.token_sha256(text), seed.AFTER_TOKEN_SHA256)
+                with self.assertRaisesRegex(ValueError, 'unreviewed supplied Map source'):
+                    seed.reviewed_text(ROOT, MAP, text)
+        with self.assertRaisesRegex(ValueError, 'wrong supplied Map path'):
+            seed.reviewed_text(ROOT, BOUNDS, self.after)
+
+    def test_supplied_view_cannot_hide_physical_comment_crlf_or_before(self):
+        for text in (self.after+'\n# physical change\n',
+                     self.after.replace('\n', '\r\n'), self.before):
+            with self.subTest(digest=seed.sha(text)), self.live_after({MAP:text.encode()}):
+                with self.assertRaisesRegex(ValueError, 'exact physical after Map'):
+                    seed.reviewed_text(ROOT, MAP, self.after)
+
+    def test_supplied_view_rechecks_live_dependencies(self):
+        path = next(iter(self.record['unchanged_inputs']))
+        with self.live_after({path:(ROOT/path).read_bytes()+b'\n# physical dependency change\n'}):
+            with self.assertRaisesRegex(ValueError, path):
+                seed.reviewed_text(ROOT, MAP, self.after+'\n# benign supplied view\n')
+
+    def test_supplied_view_rejects_a_changed_physical_snapshot(self):
+        read = Path.read_bytes
+        reads = 0
+        def changed(path, *args, **kwargs):
+            nonlocal reads
+            if path == ROOT/MAP:
+                reads += 1
+                return (self.after if reads == 1 else self.before).encode()
+            return read(path, *args, **kwargs)
+        with patch.object(Path, 'read_bytes', changed):
+            with self.assertRaisesRegex(ValueError, 'after Map did not activate'):
+                seed.reviewed_text(ROOT, MAP, self.after)
+
+    def test_supplied_view_rejects_after_before_after_read_sequence(self):
+        read = Path.read_bytes
+        dependency = next(iter(self.record['unchanged_inputs']))
+        reads = 0
+        def changed(path, *args, **kwargs):
+            nonlocal reads
+            if path == ROOT/MAP:
+                reads += 1
+                return (self.before if reads == 2 else self.after).encode()
+            if path == ROOT/dependency:
+                return read(path, *args, **kwargs)+b'\n# changed live dependency\n'
+            return read(path, *args, **kwargs)
+        with patch.object(Path, 'read_bytes', changed):
+            with self.assertRaisesRegex(ValueError, 'after Map did not activate'):
+                seed.reviewed_text(ROOT, MAP, self.after)
+        self.assertEqual(reads, 2)
+
     def test_scoped_declarations_distinguish_owners_and_decorators(self):
         text = 'struct One:\n    def same():\n        return 1\n\nstruct Two:\n    @always_inline\n    def same():\n        return 2\n'
         self.assertIn('return 1', seed.declaration(text,'same',('One',)))

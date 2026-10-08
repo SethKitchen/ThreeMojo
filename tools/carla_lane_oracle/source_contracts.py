@@ -133,9 +133,7 @@ def verify_group(root, group):
             except ModuleNotFoundError:
                 from tools.carla_lane_oracle import seed_count_contracts as seed_count
             try:
-                require(hashlib.sha256(text.encode()).hexdigest() == seed_count.AFTER_SHA256,
-                        'unreviewed supplied Map source')
-                checked = seed_count.historical_source(root)
+                checked = seed_count.reviewed_text(root, path, text)
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error

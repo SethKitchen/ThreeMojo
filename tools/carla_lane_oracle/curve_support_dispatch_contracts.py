@@ -78,9 +78,7 @@ def verify_premises(root):
                     import seed_count_contracts as seed_count
                 except ModuleNotFoundError:
                     from tools.carla_lane_oracle import seed_count_contracts as seed_count
-                require(hashlib.sha256(text.encode()).hexdigest() == seed_count.AFTER_SHA256,
-                        'unreviewed supplied Map source')
-                predecessor = seed_count.historical_source(root)
+                predecessor = seed_count.reviewed_text(root, item['path'], text)
                 actual = guard.declaration(predecessor, item['name'], ())
                 matched = guard.significant(actual) == guard.significant(item['source'])
             except (ValueError, OSError) as error:
