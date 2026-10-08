@@ -29,7 +29,8 @@ after a farther one. Other methods retain the precision rules below.
 Lane orientation corrects CARLA's lateral-slope-as-angle calculation. It
 differentiates the selected reference position and offset frame, accumulated
 widths and lane offset before Float32 storage. Pitch uses actual horizontal
-speed. Border-only lane geometry remains a separate unsupported contract.
+speed. The OpenDRIVE reader turns border-only lanes into width records, so
+this code reads widths only.
 Center coordinates and the fixed-s query arithmetic are unchanged.
 
 Lane transforms and Map query witnesses use one lane-center expression in

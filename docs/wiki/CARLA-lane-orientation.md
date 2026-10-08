@@ -26,9 +26,9 @@ resolves that storage precision. For example, rounding can collapse a very
 small offset circle to one stored point while its unrounded tangent still
 has a direction.
 
-This correction does not evaluate border-only widths or centerlines.
-[Issue #577](https://github.com/SethKitchen/ThreeMojo/issues/577) tracks that
-separate parser and width contract. Superelevation, crossfall, shape and
+The OpenDRIVE reader turns border-only lanes into width records, so this
+correction covers them through their widths. See
+[CARLA lane borders](CARLA-lane-borders). Superelevation, crossfall, shape and
 lane-height geometry remain outside this centerline model.
 [Issue #302](https://github.com/SethKitchen/ThreeMojo/issues/302) tracks the
 separate nearest-waypoint and index consistency work.
