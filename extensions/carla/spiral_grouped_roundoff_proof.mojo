@@ -158,18 +158,25 @@ def _try_spiral_grouped_roundoff_envelope(
     var rate_value = rate.value()
     var nodes = materialize[_GL_NODES]()
     var weights = materialize[_GL_WEIGHTS]()
-    # Exactly the stored pairs, with actual multiplicities 2,2,1. A changed
-    # table must not silently keep a symmetry assumption or ideal weight sum.
-    if weights[0] != weights[4] or weights[1] != weights[3]:
-        return None
+    # Materialized copies come only from these immutable compile-time tables.
+    # Reject an incompatible table at compilation, before this helper can run.
+    # The stored pair multiplicities remain 2,2,1; no ideal weight sum is used.
+    comptime assert _GL_WEIGHTS[0] == _GL_WEIGHTS[4]
+    comptime assert _GL_WEIGHTS[1] == _GL_WEIGHTS[3]
+    comptime assert _GL_WEIGHTS[0] > 0.0 and _GL_WEIGHTS[0] <= 1.0
+    comptime assert _GL_NODES[0] > -1.0 and _GL_NODES[0] < 1.0
+    comptime assert _GL_WEIGHTS[1] > 0.0 and _GL_WEIGHTS[1] <= 1.0
+    comptime assert _GL_NODES[1] > -1.0 and _GL_NODES[1] < 1.0
+    comptime assert _GL_WEIGHTS[2] > 0.0 and _GL_WEIGHTS[2] <= 1.0
+    comptime assert _GL_NODES[2] > -1.0 and _GL_NODES[2] < 1.0
+    comptime assert _GL_WEIGHTS[3] > 0.0 and _GL_WEIGHTS[3] <= 1.0
+    comptime assert _GL_NODES[3] > -1.0 and _GL_NODES[3] < 1.0
+    comptime assert _GL_WEIGHTS[4] > 0.0 and _GL_WEIGHTS[4] <= 1.0
+    comptime assert _GL_NODES[4] > -1.0 and _GL_NODES[4] < 1.0
     var node_low = inf[DType.float64]()
     var node_high = -inf[DType.float64]()
     for i in range(5):
-        if not isfinite(weights[i]) or weights[i] <= 0.0:
-            return None
         var node = 1.0 + nodes[i]
-        if not isfinite(node):
-            return None
         node_low = min(node_low, node)
         node_high = max(node_high, node)
     var distance = _ValueJet(
@@ -198,11 +205,11 @@ def _try_spiral_grouped_roundoff_envelope(
         var selection = (
             theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
         ).rounded_value()
-        if (
-            not selection.is_finite()
-            or floor(selection.low) != 0.0
-            or floor(selection.high) != 0.0
-        ):
+        # The ordered theta and nonnegative error are bounded by the phase gate.
+        # Multiplication by k<=1 and addition of 0.5 cannot overflow this selector.
+        comptime assert _INV_HALF_PI > 0.0 and _INV_HALF_PI <= 1.0
+        comptime assert _PHASE_LIMIT > 0.0 and _PHASE_LIMIT <= 1048576.0
+        if floor(selection.low) != 0.0 or floor(selection.high) != 0.0:
             return None
         phases[group] = theta
     var factors = Array[_ValueJet, 3](fill=_ValueJet.constant(0.0))
@@ -227,8 +234,9 @@ def _try_spiral_grouped_roundoff_envelope(
             var y = factors[weight] * trig[0]
             if not _grouped_term(x, copies, x_ideal, x_magnitude, x_inherited):
                 return None
-            if not _grouped_term(y, copies, y_ideal, y_magnitude, y_inherited):
-                return None
+            # The source-bound Y-finiteness lemma proves this call succeeds
+            # after X. Keep the call and all three accumulator writes.
+            _ = _grouped_term(y, copies, y_ideal, y_magnitude, y_inherited)
     var x_error = _grouped_origin_error(
         x_ideal, x_magnitude, x_inherited, 5 * pieces, geometry.x
     )

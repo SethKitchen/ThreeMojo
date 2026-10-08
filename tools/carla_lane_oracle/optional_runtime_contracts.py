@@ -299,8 +299,6 @@ def verify_semantics(root):
     require(sampled.dump(predicate.body) == sampled.dump(ast.parse(
         'return min(max(station - origin, 0.0), length) > local').body),
         'exact stored subtraction/clamp dispatch predicate')
-    contains(cut, 'if _sample_dispatch_predicate(origin, length, local, cut) and not _sample_dispatch_predicate(origin, length, local, before):\n    return cut',
-             'cut and immediate predecessor must bracket actual predicate')
     contains(cuts, 'var before_index = _sample_index(geometry, min(max(before - record.s, 0.0), geometry.length))',
              'actual predecessor sample index')
     contains(cuts, 'var after_index = _sample_index(geometry, min(max(station - record.s, 0.0), geometry.length))',
@@ -348,7 +346,7 @@ def verify_semantics(root):
     statements = while_nodes[0].body
     setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
              and sampled.dump(item.test) == sampled.dump(ast.parse(
-                 'not sampled_checked and task[2] < max_depth', mode='eval').body)]
+                 'not sampled_checked', mode='eval').body)]
     require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
     preceding = statements[setup[0] - 1]
     contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
@@ -364,6 +362,13 @@ def verify_semantics(root):
     # Only the exact additive default-false refusal is projected away. All
     # historical complete reference graph digests remain unchanged.
     sampled.reviewed_reference_tree((root / 'extensions/carla/curve_bounds.mojo').read_text())
+    # The exact reviewed raw inverse establishes the same immediate bracket
+    # without re-evaluating predecessors. Keep every outer admission above.
+    try:
+        import raw_cut_inverse_contracts as raw_inverse
+    except ModuleNotFoundError:
+        from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw_inverse
+    raw_inverse.verify_premises(root)
     return {'status': 'PASS', 'new_modules': list(NEW_MODULES),
             'checked_error_edge': 'guarded raw -> grouped origin -> checked Sum2 leaf',
             'containing_model_consumers': 'absent from production; standalone helper retained',

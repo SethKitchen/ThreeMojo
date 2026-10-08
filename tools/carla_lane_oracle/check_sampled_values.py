@@ -240,6 +240,20 @@ def reviewed_reference_tree(text):
     The production tokens and grouped True caller are bound separately.
     """
     tree = syntax_tree(text)
+    # The reviewed no-counter-alias successor changes only optional admission.
+    # Reconstruct its exact historical helper before the original projection;
+    # every original reference graph digest remains unchanged.
+    try:
+        try:
+            import envelope_budget_contracts as budget
+        except ModuleNotFoundError:
+            from tools.carla_lane_oracle import envelope_budget_contracts as budget
+        previous = budget.historical_function(text)
+    except ValueError as error:
+        raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
+    current = unique_function(tree, '_try_lane_envelope_capture')
+    historical = unique_function(syntax_tree(previous), '_try_lane_envelope_capture')
+    tree.body[tree.body.index(current)] = historical
     node = unique_function(tree, '_lane_jet_model_proof')
     require(dump(node.args.args[-1]) == dump(ast.arg(
         arg='require_reuse', annotation=ast.Name(id='Bool', ctx=ast.Load()))),

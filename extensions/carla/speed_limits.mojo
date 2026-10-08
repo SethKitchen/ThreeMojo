@@ -91,6 +91,39 @@ def simulation_speed(speed: Velocity64) raises -> Velocity:
     return Velocity(value)
 
 
+def _speed_decimal_syntax(number: String) -> Bool:
+    """Check the complete finite XML decimal grammar, without conversion."""
+    var mantissa_digits = 0
+    var exponent_digits = 0
+    var exponent = False
+    var point = False
+    var sign_allowed = True
+    for byte in number.as_bytes():
+        if byte >= 48 and byte <= 57:
+            if exponent:
+                exponent_digits += 1
+            else:
+                mantissa_digits += 1
+            sign_allowed = False
+        elif byte == 43 or byte == 45:
+            if not sign_allowed:
+                return False
+            sign_allowed = False
+        elif byte == 46:
+            if exponent or point:
+                return False
+            point = True
+            sign_allowed = False
+        elif byte == 69 or byte == 101:
+            if exponent or mantissa_digits == 0:
+                return False
+            exponent = True
+            sign_allowed = True
+        else:
+            return False
+    return mantissa_digits > 0 and (not exponent or exponent_digits > 0)
+
+
 def read_speed_number(text: String) raises -> Float64:
     """Read one entire finite nonnegative OpenDRIVE speed number.
 
@@ -107,6 +140,9 @@ def read_speed_number(text: String) raises -> Float64:
     var number = String(text.strip())
     if number.byte_length() == 0:
         raise Error("OpenDRIVE speed needs a numeric max value")
+    # Float64 also accepts non-XML syntax, including f/F and repeated points.
+    if not _speed_decimal_syntax(number):
+        raise Error("OpenDRIVE speed needs a numeric max value")
     var value: Float64
     try:
         value = Float64(number)
@@ -118,6 +154,7 @@ def read_speed_number(text: String) raises -> Float64:
         for byte in number.as_bytes():
             if byte == 101 or byte == 69:
                 break
-            if byte >= 49 and byte <= 57:
+            # Validated mantissa nondigits (+, -, .) are all below byte 49.
+            if byte >= 49:
                 raise Error("OpenDRIVE speed number underflows Float64")
     return value

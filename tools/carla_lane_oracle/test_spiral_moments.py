@@ -132,7 +132,10 @@ class TableTests(unittest.TestCase):
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)/'repo'
         paths = {m.PINS, m.DATA, m.source_contracts.PINS,
-                 Path(m.DEPENDENCIES['guard_pin_file'])}
+                 Path(m.DEPENDENCIES['guard_pin_file']),
+                 Path('tools/carla_lane_oracle/winner-sign-query-migration.json')}
+        from reviewed_cleanup_contracts import PROTECTED_INPUTS
+        paths.update(Path(path) for path in PROTECTED_INPUTS)
         paths.update(Path(path) for path in m.DEPENDENCIES['paths'])
         guard_pins = json.loads((m.ROOT/m.DEPENDENCIES['guard_pin_file']).read_text())
         paths.update(Path(path) for path in guard_pins['protected_inventory'])

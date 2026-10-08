@@ -3,11 +3,14 @@
 """Check the maintained coverage tree's import inputs without compiling Mojo."""
 
 import os
+import inspect
 import shutil
 from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import coverage_loop_proofs
+from test_coverage_loop_proofs import model_generation
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -34,7 +37,13 @@ class CoverageInputTests(unittest.TestCase):
             path.write_text('original ' + name + '\n')
         shutil.copyfile(ROOT / 'tools/native_test_support.py',
                         self.root / 'tools/native_test_support.py')
+        for name in coverage_loop_proofs.TOOL_INPUTS:
+            destination = self.root / name
+            if name != 'Makefile' and not destination.exists():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(ROOT / name, destination)
         (self.root / 'compiler.py').write_text(
+            inspect.getsource(model_generation) + '\n' +
             'import os, sys\n'
             'from pathlib import Path\n'
             'assert sys.argv[1:3] == ["run", "coverage/build_cli.mojo"]\n'
@@ -45,8 +54,10 @@ class CoverageInputTests(unittest.TestCase):
             '    path = root / name\n'
             '    path.parent.mkdir(parents=True, exist_ok=True)\n'
             '    path.write_text("instrumented " + name + "\\n")\n'
-            '(root / "manifest.txt").write_text("\\n".join(sys.argv[4:]))\n')
+            '(root / "manifest.txt").write_text("".join("L " + name.removesuffix(".mojo") + " 1\\n" for name in sys.argv[4:]))\n'
+            'model_generation(Path.cwd(), root, sys.argv[4:])\n')
         source = (ROOT / 'Makefile').read_text()
+        quote = next(line for line in source.splitlines() if line.startswith('quote ='))
         start = source.index('define run\n')
         run = source[start:source.index('\nendef', start) + len('\nendef')]
         start = source.index('COVERAGE_PASSTHROUGH :=')
@@ -54,7 +65,7 @@ class CoverageInputTests(unittest.TestCase):
         start = source.index('coverage-instrument:\n')
         recipe = source[start:source.index('\ncoverage-capture:', start)]
         (self.root / 'Makefile').write_text(
-            'MOJO := python3 compiler.py\nMOJOFLAGS :=\nCOV_DIR := build\n'
+            'MOJO := python3 compiler.py\nMOJOFLAGS :=\nCOV_DIR := build\n' + quote + '\n' +
             'LIB_SOURCES := math/measured.mojo math/unmeasured.mojo\n'
             'HELPER_LIBS := tests/_shared.mojo tests/_nested.mojo\n'
             'ENTRY_POINTS := bench/helper.mojo bench/nested/driver.mojo '
@@ -72,7 +83,10 @@ class CoverageInputTests(unittest.TestCase):
         result = self.make()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual((self.root / 'build/manifest.txt').read_text(),
-                         'math/measured.mojo')
+                         'L math/measured 1\n')
+        coverage_loop_proofs.verify(self.root / 'build/loop-proofs.json',
+                                    self.root, self.root / 'build', '', '',
+                                    mojo='python3 compiler.py', capture_cache='/native-coverage', suites=[])
         for name in self.inputs:
             target = self.root / 'build' / name
             if name == 'examples/unrelated.mojo':
@@ -100,7 +114,7 @@ class CoverageInputTests(unittest.TestCase):
         self.assertEqual((self.root / 'build/tests/_nested.mojo').read_bytes(), nested)
         self.assertEqual((self.root / 'build/tests/_shared.mojo').read_bytes(), shared)
         self.assertEqual((self.root / 'build/manifest.txt').read_text(),
-                         'math/measured.mojo')
+                         'L math/measured 1\n')
 
     def test_empty_measurement_stays_unmeasured(self):
         result = self.make('COVERED=')

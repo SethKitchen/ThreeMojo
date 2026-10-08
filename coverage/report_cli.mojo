@@ -16,6 +16,12 @@ hold them.
 
 Exits non-zero when anything measurable went uncovered, so `make coverage` can
 act as a gate rather than just a readout.
+
+An original manifest keeps its original denominator. The official Python
+report wrapper validates source, tool, proof and capture identities before
+passing a temporary manifest with explicit constant-loop outcome masks.
+This CLI checks their representation and contradictory runtime observations;
+the wrapper owns the external source/proof identity validation.
 """
 
 from coverage.mcdc import DecisionTrace, TraceParser, merge_traces

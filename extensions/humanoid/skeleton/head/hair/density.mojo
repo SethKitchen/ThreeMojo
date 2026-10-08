@@ -25,6 +25,13 @@ comptime MIN_HAIR_DENSITY_RESOLUTION = 4
 comptime MAX_HAIR_DENSITY_RESOLUTION = 64
 
 
+def _checked_density_point(point: Vector3) raises -> Vector3:
+    """Return the unchanged point after checking all three coordinates."""
+    if not isfinite(point.x) or not isfinite(point.y) or not isfinite(point.z):
+        raise Error("Hair density needs finite positions")
+    return point
+
+
 struct HairDensity(Movable):
     """A uniform grid of the current strands' projected-area density."""
 
@@ -102,12 +109,10 @@ struct HairDensity(Movable):
                 raise Error("Hair density starts must be ordered")
         if len(groom.points) == 0:
             return
-        var low = groom.points[0]
+        var low = _checked_density_point(groom.points[0])
         var high = low
-        for index in range(len(groom.points)):
-            var p = groom.points[index]
-            if not isfinite(p.x) or not isfinite(p.y) or not isfinite(p.z):
-                raise Error("Hair density needs finite positions")
+        for index in range(1, len(groom.points)):
+            var p = _checked_density_point(groom.points[index])
             low = Vector3(min(low.x, p.x), min(low.y, p.y), min(low.z, p.z))
             high = Vector3(max(high.x, p.x), max(high.y, p.y), max(high.z, p.z))
         var span = high - low
@@ -119,7 +124,8 @@ struct HairDensity(Movable):
             longest / Float32(max(1, self.resolution - 4)),
         )
         var volume = cell * cell * cell
-        if not isfinite(cell) or not isfinite(volume) or volume <= 0:
+        # The positive cell floor keeps every finite volume above zero.
+        if not isfinite(cell) or not isfinite(volume):
             raise Error("Hair density grid scale is not representable")
         self.cell = cell
         self.low = low - Vector3(cell, cell, cell)

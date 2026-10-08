@@ -19,8 +19,8 @@ Each width and offset contributes both its value and its derivative.
 Elevation contributes its derivative to the vertical tangent.
 
 The derivative is taken from the selected position expression before its
-Float32 conversions. The returned position still uses the existing two
-Float32 lateral offsets, Float32 elevation, and final Float32 coordinates.
+Float32 conversions. The canonical center retains Float64 lateral offsets and elevation.
+The public transform narrows the final position to Float32 coordinates.
 A finite difference of rounded positions is meaningful only when its step
 resolves that storage precision. For example, rounding can collapse a very
 small offset circle to one stored point while its unrounded tangent still

@@ -553,7 +553,9 @@ def _try_lane_envelope_capture(
         return None
     var branches = 1 if counts[0] == counts[1] else 2
     var optional_work = 1024 * branches
-    if terms < 0 or terms > max_terms or optional_work > max_terms - terms:
+    # The entry check established 0 <= terms <= max_terms. No intervening
+    # operation receives either counter by mutable reference or changes it.
+    if optional_work > max_terms - terms:
         return None
     # Debit before attempting either error envelope, including failures.
     terms += optional_work

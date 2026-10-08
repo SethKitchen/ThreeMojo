@@ -5,9 +5,9 @@
 
 """Exact stored-sample dispatch cuts without changing index ownership.
 
-A cut is admitted only after its actual stored subtraction/clamp predicate
-is true and its immediate predecessor's predicate is false. The short probe
-is optional; all unsupported or unbracketed cases retain the original solver.
+Every returned cut has a true stored subtraction/clamp predicate and a false
+immediate-predecessor predicate. The finite three-candidate inverse follows
+from round-to-nearest arithmetic; unsupported inputs retain the original solver.
 """
 
 from extensions.carla.curve_sum2 import _sum2_supported_environment
@@ -44,18 +44,22 @@ def _sample_dispatch_cut(
     var start = origin + local
     if not isfinite(start) or start <= 0.0:
         return None
-    var word = bitcast[DType.uint64](start)
-    for i in range(3):
-        var bits = word + UInt64(i)
-        if bits >= UInt64(0x7FF0000000000000):
-            return None
-        var cut = bitcast[DType.float64](bits)
-        var before = bitcast[DType.float64](bits - UInt64(1))
-        if _sample_dispatch_predicate(
-            origin, length, local, cut
-        ) and not _sample_dispatch_predicate(origin, length, local, before):
-            return cut
-    return None
+    # RN(origin + local) has a predecessor whose predicate is false.
+    # If neither of the first two candidates is true, the second successor
+    # must be true whenever finite. Its excess over the exact sum is at
+    # least 1.5 upward ulps, also larger than local's rounding half-ulp.
+    if _sample_dispatch_predicate(origin, length, local, start):
+        return start
+    var word = bitcast[DType.uint64](start) + UInt64(1)
+    if word >= UInt64(0x7FF0000000000000):
+        return None
+    var cut = bitcast[DType.float64](word)
+    if _sample_dispatch_predicate(origin, length, local, cut):
+        return cut
+    word += UInt64(1)
+    if word >= UInt64(0x7FF0000000000000):
+        return None
+    return bitcast[DType.float64](word)
 
 
 def _try_sample_dispatch_cuts(
@@ -121,15 +125,15 @@ def _try_sample_dispatch_cuts(
     var two = 0.0
     for i in range(count):
         var threshold_at = first + i + 1
-        if threshold_at < 1 or threshold_at >= len(geometry.samples) - 1:
-            return None
+        # The index bracket and count admission put this in [1, n - 2].
         var cut = _sample_dispatch_cut(
             record.s, geometry.length, geometry.samples[threshold_at].s
         )
         if not cut:
             return None
         var station = cut.value()
-        if station <= low or station > high:
+        # The accepted index bracket makes the cut strictly later than low.
+        if station > high:
             return None
         var before = bitcast[DType.float64](
             bitcast[DType.uint64](station) - UInt64(1)

@@ -28,6 +28,16 @@ The format defines the road keywords separately in
 [ASAM's max-speed type](https://publications.pages.asam.net/standards/ASAM_OpenDRIVE/ASAM_OpenDRIVE_Specification/v1.8.1/specification/16_annexes/map_uml_data_types.html).
 The existing record type used for tree placement remains unchanged.
 
+Numeric speed text must match the complete decimal or exponent form from
+[XML Schema double](https://www.w3.org/TR/xmlschema11-2/#double).
+A leading sign, a decimal point and one signed exponent are supported.
+At least one mantissa digit is required. An exponent requires digits.
+
+The parser refuses language suffixes such as `0f` and malformed forms such
+as `+.`, `1..0`, `1e2e3` and `0+0`. Earlier conversion accepted those forms.
+This correction can reject malformed maps that previously loaded.
+Valid decimal values, signed zero and nonzero-underflow rejection are unchanged.
+
 ## Signals and simulation
 
 `Signal` retains its raw value, unit and whether a value was supplied.

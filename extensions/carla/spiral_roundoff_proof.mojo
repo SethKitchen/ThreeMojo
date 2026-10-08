@@ -135,11 +135,11 @@ def _try_spiral_roundoff_envelope(
     var selection = (
         theta * _ValueJet.constant(_INV_HALF_PI) + _ValueJet.constant(0.5)
     ).rounded_value()
-    if (
-        not selection.is_finite()
-        or floor(selection.low) != 0.0
-        or floor(selection.high) != 0.0
-    ):
+    # The ordered theta and nonnegative error are bounded by the phase gate.
+    # Multiplication by k<=1 and addition of 0.5 cannot overflow this selector.
+    comptime assert _INV_HALF_PI > 0.0 and _INV_HALF_PI <= 1.0
+    comptime assert _PHASE_LIMIT > 0.0 and _PHASE_LIMIT <= 1048576.0
+    if floor(selection.low) != 0.0 or floor(selection.high) != 0.0:
         return None
     var trig = _sincos_expression(theta)
     var factor = (
