@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Regression tests for dependency selection, cache identity, and state keys."""
 
+import os
 from pathlib import Path
 import re
 import tempfile
@@ -177,9 +178,16 @@ class MakeCacheTests(unittest.TestCase):
             extra.write_text('cache-key-test:\n\t@echo $(HASH)\n')
             command = ['make', '--no-print-directory', '-s', '-f', 'Makefile',
                        '-f', str(extra), 'cache-key-test']
-            full = subprocess.check_output(command, cwd=root, text=True).strip()
+            # CI runs this under `make AFFECTED=...`, which reaches this make
+            # through MAKEFLAGS and the environment. A documentation-only
+            # change then selects no suites, so CPU_TESTS= changes nothing.
+            # Compare the explicit overrides against the full selection.
+            env = {key: value for key, value in os.environ.items()
+                   if key not in ('AFFECTED', 'MAKEFLAGS', 'MFLAGS', 'MAKELEVEL')}
+            full = subprocess.check_output(command, cwd=root, text=True, env=env).strip()
             for override in ('CPU_TESTS=', 'COVERED=', 'MOJOFLAGS=-I . -O0'):
-                partial = subprocess.check_output(command + [override], cwd=root, text=True).strip()
+                partial = subprocess.check_output(command + [override], cwd=root, text=True,
+                                                  env=env).strip()
                 self.assertNotEqual(full, partial, override)
 
 
