@@ -1221,7 +1221,7 @@ def _refuse_all(mut dvs: DVSCamera) raises:
         inf[DType.float64](),
         nan[DType.float64](),
         -1.0,
-        9223372036.854773,
+        9.2e9 + 0.001,
     ]:
         with assert_raises(contains="time must be finite"):
             _ = dvs.simulate(_frame([200]), Duration64(bad))
@@ -1255,23 +1255,35 @@ def test_event_camera_refusals_leave_its_state_unchanged() raises:
     assert_equal(refused.current_time, control.current_time)
 
 
-def test_event_camera_accepts_the_largest_safe_time() raises:
-    # 9223372036.85477 s is the largest Float64 time whose nanoseconds stay
-    # within 2**63 - 4096; the next Float64 above it is refused.
-    var cap = 9223372036.85477
-    var dvs = DVSCamera(_linear(30), 1, 1, 0)
-    _ = dvs.simulate(_frame([100]), Duration64(cap - 1.0))
-    var up = dvs.simulate(_frame([200]), Duration64(cap))
-    assert_equal(len(up), 3)
-    assert_true(up[0].t > Int((cap - 1.0) * 1e9))
-    assert_true(up[2].t <= Int(cap * 1e9))
-    assert_equal(dvs.current_time, 9223372036854770688)
-    # A later frame at the cap reads the stored event times back safely.
-    var down = dvs.simulate(_frame([100]), Duration64(cap))
-    for event in down:
-        assert_true(event.t <= Int(cap * 1e9))
+def _one_step_events(start: Float64, end: Float64) raises -> List[DVSEvent]:
+    # A black pixel that turns RGB 1 crosses a threshold of gray(1) once.
+    var dvs = DVSCamera(_linear(gray(Color(1, 1, 1))), 1, 1, 0)
+    _ = dvs.simulate(_frame([0]), Duration64(start))
+    return dvs.simulate(_frame([1]), Duration64(end))
+
+
+def test_event_camera_cap_keeps_large_ticks_in_range() raises:
+    # 9.2e9 s is the latest frame time. Float32 interpolation can overshoot
+    # a tick by about 8 * 2**-24 of its length, so the times are checked by
+    # range, not exactly.
+    var cap = 9.2e9
+    var limit = Int(cap * 1e9) + Int(8.0 * cap * 1e9 / 16777216.0) + 8192
+    for start in [0.0, cap - 138.0, cap - 1.0]:
+        var events = _one_step_events(start, cap)
+        assert_equal(len(events), 1)
+        assert_true(events[0].t >= Int(start * 1e9))
+        assert_true(events[0].t <= limit)
+    # Stored event times read back at the cap, and a clock that runs back
+    # to zero, stay in range too.
+    var dvs = DVSCamera(_linear(gray(Color(1, 1, 1))), 1, 1, 0)
+    _ = dvs.simulate(_frame([0]), Duration64(0.0))
+    _ = dvs.simulate(_frame([1]), Duration64(cap))
+    for event in dvs.simulate(_frame([0]), Duration64(cap)):
+        assert_true(event.t >= 0 and event.t <= limit)
+    for event in dvs.simulate(_frame([1]), Duration64(0.0)):
+        assert_true(event.t >= 0 and event.t <= limit)
     with assert_raises(contains="time must be finite"):
-        _ = dvs.simulate(_frame([100]), Duration64(9223372036.854773))
+        _ = dvs.simulate(_frame([0]), Duration64(cap + 0.001))
 
 
 # --- V2X ---------------------------------------------------------------------------

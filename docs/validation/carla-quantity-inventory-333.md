@@ -53,9 +53,10 @@ almost every file in `extensions/carla/` as an unchanged live consumer.
 | `ALSM.current_time`, `ALSM.elapsed_last_actor_destruction` | Internal traffic manager state |
 
 Each migrated boundary refuses a nonfinite or negative value with an error.
-The event camera also refuses a time whose nanoseconds exceed 2^63 - 4096,
-about 292 years. A stored event time goes to seconds and back, and the
-result must still fit in an `Int`. The tests feed a microsecond tick one
+The event camera also refuses a time above 9.2e9 seconds, about 291 years.
+Its Float32 interpolation can overshoot a tick by about 8 * 2^-24 of the
+tick, and a stored event time goes to seconds and back. Below the cap each
+result keeps wide headroom inside an `Int`. The tests feed a microsecond tick one
 million seconds into a run, and the input digits survive in the event
 times and the lane invasion timestamp. This keeps the input precision. It
 does not make the event interpolation exact: CARLA's camera narrows the

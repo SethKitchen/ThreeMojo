@@ -837,10 +837,11 @@ def _nanoseconds(seconds: Float64) -> Int:
     return Int(seconds * 1e9)
 
 
-# The most nanoseconds an event time can have: 2**63 - 4096. A stored event
-# time goes to seconds and back, which can add up to about 3000 ns, and the
-# result must still fit in an `Int`. That is about 292 years.
-comptime _MAX_EVENT_NANOSECONDS = Float64(9223372036854771712)
+# The latest frame time, about 291.5 years. CARLA interpolates an event's
+# time inside a tick in Float32 nanoseconds, which can overshoot the tick by
+# about 8 * 2**-24 of its length, and a stored event time goes to seconds and
+# back. Below 9.2e9 s every such time keeps wide headroom inside an `Int`.
+comptime _MAX_EVENT_SECONDS = Float64(9.2e9)
 
 
 struct DVSCamera(Copyable, Movable):
@@ -910,11 +911,11 @@ struct DVSCamera(Copyable, Movable):
         if not (
             isfinite(elapsed_seconds)
             and elapsed_seconds >= 0
-            and elapsed_seconds * 1e9 <= _MAX_EVENT_NANOSECONDS
+            and elapsed_seconds <= _MAX_EVENT_SECONDS
         ):
             raise Error(
                 "An event camera's time must be finite, nonnegative and at"
-                " most 2**63 - 4096 nanoseconds"
+                " most 9.2e9 seconds"
             )
         self.last_image = List[Float32]()
         for y in range(self.height):  # pragma: no branch
