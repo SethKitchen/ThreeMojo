@@ -252,6 +252,10 @@ def _sweep_capsule_triangle(
     if length == 0:
         return best
     normal /= length
+    if _wide_dot(start - a, normal) < 0 and _wide_dot(end - a, normal) < 0:
+        # The mesh remains one-sided. A capsule wholly behind the face
+        # never reaches its front, as each cap sweep already reports.
+        return best
     var vertices = [a, b, c]
     for i in range(3):  # pragma: no branch
         var p = vertices[i]

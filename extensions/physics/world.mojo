@@ -545,11 +545,7 @@ struct PhysicsWorld(Movable):
                 spin = _wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
             var speed = sqrt(_wide_dot(v, v) + spin)
             var push = _wide(body.push_velocity)
-            # A capsule's bounding sphere adds its half height. A sphere's
-            # half height is zero.
-            var bound = Float64(body.shape.radius) + Float64(
-                body.shape.half_height
-            )
+            var bound = _ccd_bound(body)
             reach[i] = bound + Float64(h) * (
                 speed + sqrt(_wide_dot(push, push))
             )
@@ -672,7 +668,7 @@ struct PhysicsWorld(Movable):
                 .shape_world_rotation()
                 .rotate(Vector3(0, 0, self.bodies[i].shape.half_height))
             )
-        var bound = radius + Float64(self.bodies[i].shape.half_height)
+        var bound = _ccd_bound(self.bodies[i])
         var remaining = Float64(h)
         var count = 0
         var indexed = (
@@ -875,8 +871,12 @@ struct PhysicsWorld(Movable):
                     _wide(triangle.b) - _wide(triangle.a),
                     _wide(triangle.c) - _wide(triangle.a),
                 )
+                # A sphere's two endpoints are equal. A capsule is behind
+                # only when both of its endpoints are, as in mesh_contacts.
                 if (
                     _wide_dot(_wide(shape.start) - _wide(triangle.a), normal)
+                    < 0
+                    and _wide_dot(_wide(shape.end) - _wide(triangle.a), normal)
                     < 0
                 ):
                     continue
@@ -1342,6 +1342,22 @@ def _ccd_coordinate(value: Vector3) raises:
         raise Error(
             "CCD coordinates must stay within one million meters of the origin"
         )
+
+
+def _ccd_bound(body: RigidBody) -> Float64:
+    # The radius of a sphere around the body's center that holds its shape.
+    # A capsule uses its world half axis, because a quaternion within the
+    # unit tolerance can lengthen the axis past its nominal half height.
+    var bound = Float64(body.shape.radius)
+    if body.shape.kind != CAPSULE:
+        return bound
+    var half = _wide(
+        body.shape_world_rotation().rotate(
+            Vector3(0, 0, body.shape.half_height)
+        )
+    )
+    # Round outward: the sum, the root and the addition each round.
+    return (bound + sqrt(_wide_dot(half, half))) * 1.000000000000001
 
 
 def _ccd_rotation(value: Quaternion) raises:

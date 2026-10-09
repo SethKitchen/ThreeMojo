@@ -272,5 +272,102 @@ def test_overlapping_reach_and_precision_are_refused() raises:
         fast.step(Duration(1))
 
 
+def test_a_capsule_wholly_behind_the_face_is_not_caught() raises:
+    # Both endpoints start 0.2 m behind the face, so both caps miss. The
+    # segment and vertex features must not catch it from the back either.
+    var triangle = Triangle(
+        Vector3(0, 0, 0), Vector3(-1, 0, 0), Vector3(0, -1, 0)
+    )
+    var hit = _sweep(
+        _v(1, -0.5, -0.2), _v(1, 0.5, -0.2), _v(-1, 0, 0.25), 0.1, triangle
+    )
+    assert_equal(hit[0], 2)
+
+
+def _straddling(flip: Bool) raises -> PhysicsWorld:
+    var turn = Quaternion(1, 0, 0, 0) if flip else Quaternion.identity()
+    var world = _world(
+        _capsule(Vector3(0, 0, 0), Vector3(0, 0, -1), turn, 0.1, 0.2)
+    )
+    world.margin = 0
+    world.step(Duration(0.3))
+    return world^
+
+
+def test_endpoint_order_does_not_change_an_initial_overlap() raises:
+    # Half a turn about x swaps the endpoints of the same capsule. It
+    # straddles the floor with its upper half in front, so both orders are
+    # the same front-side overlap.
+    var plain = _straddling(False)
+    var flipped = _straddling(True)
+    assert_equal(plain.bodies[1].position.z, flipped.bodies[1].position.z)
+    assert_true(plain.bodies[1].position.z > 0)
+    assert_equal(
+        plain.bodies[1].linear_velocity.z, flipped.bodies[1].linear_velocity.z
+    )
+    assert_equal(plain.contact_count, flipped.contact_count)
+
+
+def _long_tip(brute: Bool) raises -> PhysicsWorld:
+    # This rotation's squared norm is 1.0000081, inside the unit tolerance.
+    # It lengthens the 100 m half axis by about 0.0016 m, much more than
+    # the 0.0001 m radius. The tip's triangle lies outside the nominal
+    # bound, and eight distant triangles make the mesh use its index.
+    var body = _capsule(
+        Vector3(0.001, 0, 0),
+        Vector3(-1, 0, 0),
+        Quaternion.identity(),
+        0.0001,
+        100,
+    )
+    # Set directly, because the constructor normalizes its rotation.
+    body.rotation = Quaternion(1.000004, 0, 0, 0)
+    var tip = -body.shape_world_rotation().rotate(Vector3(0, 0, 100)).z
+    var triangles = List[Triangle]()
+    triangles.append(
+        Triangle(
+            Vector3(0, -0.001, tip - 0.0002),
+            Vector3(0, 0.001, tip - 0.0002),
+            Vector3(0, 0, tip + 0.0002),
+        )
+    )
+    for k in range(8):
+        var x = Float32(10 + 10 * k)
+        triangles.append(
+            Triangle(
+                Vector3(x, 0, -50), Vector3(x + 1, 0, -50), Vector3(x, 1, -50)
+            )
+        )
+    var world = PhysicsWorld()
+    world.gravity = Vector3(0, 0, 0)
+    world.margin = 0
+    world.collision_detection = SPHERE_MESH_CCD
+    world._ccd_brute_force = brute
+    _ = world.add_body(
+        RigidBody(
+            STATIC,
+            Shape.mesh(triangles^),
+            Mass(0),
+            Vector3(0, 0, 0),
+            Quaternion.identity(),
+        )
+    )
+    _ = world.add_body(body^)
+    world.step(Duration(0.002))
+    return world^
+
+
+def test_the_index_holds_a_tip_past_the_nominal_half_height() raises:
+    var brute = _long_tip(True)
+    var indexed = _long_tip(False)
+    assert_equal(brute.contact_count, 1)
+    assert_equal(brute.bodies[1].linear_velocity.x, 0)
+    assert_equal(indexed.contact_count, brute.contact_count)
+    assert_equal(indexed.bodies[1].position.x, brute.bodies[1].position.x)
+    assert_equal(
+        indexed.bodies[1].linear_velocity.x, brute.bodies[1].linear_velocity.x
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
