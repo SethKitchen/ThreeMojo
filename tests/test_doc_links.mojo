@@ -247,6 +247,22 @@ def test_review_cases_34_to_40() raises:
         ),
         [_missing(5, "Missing_Page")],
     )
+    # github-slugger drops U+00AB and U+00A0, written as a reference or
+    # as the character.
+    _case("43", "# A&laquo;B\n[ok](#ab)\n# A«B\n[ok](#ab-1)\n", [])
+    var nbsp = chr(0xA0)
+    _case(
+        "44",
+        "# A&nbsp;B\n[ok](#ab)\n# A" + nbsp + "B\n[ok](#ab-1)\n",
+        [],
+    )
+    # Letters, combining marks, digits and connectors stay.
+    var mark = chr(0x301)
+    _case(
+        "45",
+        "# Árbol e" + mark + " x² ‿ y\n[ok](#árbol-e" + mark + "-x-‿-y)\n",
+        [],
+    )
     # A hexadecimal reference, an unknown name and a one-line raw block.
     _case(
         "41",
