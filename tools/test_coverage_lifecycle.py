@@ -103,6 +103,81 @@ sys.exit(status)
 
 
 class CoverageGroupCleanupTests(unittest.TestCase):
+    def test_successful_group_signal_is_not_repeated_while_reaping(self):
+        process = self.process()
+        attempts = 0
+
+        def wait(timeout):
+            nonlocal attempts
+            self.assertEqual(timeout, None if attempts == 4 else 0)
+            self.assertFalse(process.active)
+            attempts += 1
+            # Same-thread callbacks can arrive during an owner-managed reap.
+            process._signal(signal.SIGHUP, None)
+            if attempts <= 3:
+                raise subprocess.TimeoutExpired('owned', timeout)
+            process.child.returncode = -signal.SIGKILL
+            return process.child.returncode
+
+        def killpg(pid, number):
+            self.assertEqual((pid, number), (process.child.pid, signal.SIGKILL))
+            self.assertTrue(process.active)
+            self.assertIsNone(process.child.returncode)
+            # Reentry before the syscall returns cannot start another kill.
+            process._signal(signal.SIGTERM, None)
+
+        process.child.wait.side_effect = wait
+        with patch.object(coverage_io.os, 'killpg', side_effect=killpg) as kill:
+            process.cancel(128 + signal.SIGINT)
+            self.assertTrue(process.active, 'successful dispatch does not reap')
+            self.assertEqual(process.wait(), 128 + signal.SIGINT)
+            process.__exit__()
+        kill.assert_called_once_with(process.child.pid, signal.SIGKILL)
+        self.assertFalse(process.active)
+        self.assertEqual(attempts, 5)
+        self.assertTrue(process.child.stderr.closed)
+
+    def test_successful_group_signal_still_reaps_on_exit(self):
+        process = self.process()
+        with patch.object(coverage_io.os, 'killpg') as kill:
+            process.cancel(124)
+            process._kill()
+            process.__exit__()
+        kill.assert_called_once_with(process.child.pid, signal.SIGKILL)
+        process.child.wait.assert_called_once_with(timeout=None)
+        self.assertFalse(process.active)
+        self.assertTrue(process.child.stderr.closed)
+
+    def test_failed_first_signal_does_not_complete_group_dispatch(self):
+        process = self.process(live=True)
+        denied = PermissionError(errno.EPERM, 'denied')
+        with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                patch.object(coverage_io.os, 'killpg', side_effect=[denied, None]) as kill:
+            with self.assertRaises(PermissionError) as raised:
+                process.cancel(124)
+            self.assertIs(raised.exception, denied)
+            self.assertTrue(process.active)
+            process._kill()
+            process.cancel(143)
+            process._kill()
+        self.assertEqual(kill.call_args_list,
+                         [call(process.child.pid, signal.SIGKILL)] * 2)
+
+    def test_successful_dispatch_does_not_mask_a_later_reap_failure(self):
+        process = self.process()
+        error = OSError(errno.ECHILD, 'uncertain reap')
+        process.child.wait.side_effect = error
+        with patch.object(coverage_io.os, 'killpg') as kill:
+            process.cancel(124)
+            for cleanup in (process.wait, process.__exit__, lambda: process.cancel(143)):
+                with self.assertRaises(OSError) as raised:
+                    cleanup()
+                self.assertIs(raised.exception, error)
+        kill.assert_called_once_with(process.child.pid, signal.SIGKILL)
+        process.child.wait.assert_called_once_with(timeout=0)
+        self.assertFalse(process.active)
+        self.assertIs(process.cleanup_error, error)
+
     def process(self, *, live=False, during_wait=None):
         process = coverage_io._CaptureProcess(['owned'], None, None, None)
         child = Mock(pid=12345, returncode=None, stderr=io.BytesIO())
