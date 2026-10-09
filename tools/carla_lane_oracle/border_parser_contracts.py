@@ -144,6 +144,7 @@ def verify_source(text, record):
             'after_token_sha256': AFTER_TOKEN_SHA256}
 
 
+@source.lexical_memo_scope()
 def verify(root):
     """Check the real source, retained lineage, live consumers and tests."""
     root = Path(root)
