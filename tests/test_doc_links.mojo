@@ -236,6 +236,17 @@ def test_review_cases_34_to_40() raises:
         [_missing(5, "RealMissing")],
     )
     _case("40", "[valid](Target#se&#99;tion)\n", [], ["Target", "# Section\n"])
+    # Named references outside any short list, an unknown name and a
+    # reference without its semicolon, which both stay text.
+    _case(
+        "42",
+        (
+            "# &Aacute;rbol\n# &notaname; X\n# &amp B\n"
+            "[a](#%C3%A1rbol) [b](#notaname-x) [c](#amp-b)\n"
+            "[bad](Missing&lowbar;Page)\n"
+        ),
+        [_missing(5, "Missing_Page")],
+    )
     # A hexadecimal reference, an unknown name and a one-line raw block.
     _case(
         "41",
