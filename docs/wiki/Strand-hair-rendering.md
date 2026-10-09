@@ -87,6 +87,10 @@ The selected open-source targets remain the existing Frostbitten Hair WebGPU sha
 
 The new coverage, density grid and procedural scenes add no third-party asset or implementation dependency.
 
+## CPU stage costs
+
+`bench/hair_cost_bench.mojo` times growth, upload, shading and one simulation step at several groom sizes. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-cost-298.md) records one machine's results and the decisions they support. On that machine the default groom needs about 53 milliseconds a frame on one thread. Simulating the guides only cuts the step by about seven times. Shading still needs parallel or GPU work to fit a 60 frames-per-second frame.
+
 ## Hardware qualification
 
 A 1920 by 1080 frame at 60 frames per second has a 16.667 millisecond budget. A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
