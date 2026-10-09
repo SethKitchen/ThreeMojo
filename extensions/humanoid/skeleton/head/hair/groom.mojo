@@ -36,7 +36,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from extensions.humanoid.genome import HAIR_CURL, HAIR_LENGTH
 from extensions.humanoid.side import RIGHT
-from extensions.humanoid.skeleton.field import DistanceField, cross, smin
+from extensions.humanoid.skeleton.field import DistanceField, smin
 from extensions.humanoid.skeleton.head.frame import (
     HeadDimensions,
     HeadMuscleDimensions,
@@ -171,6 +171,13 @@ def _unit(key: Int, salt: Int) -> Float32:
 def _signed(key: Int, salt: Int) -> Float32:
     """Return a value in -1 through 1 hashed from a key and a salt."""
     return 2 * _unit(key, salt) - 1
+
+
+def _cross(a: Vector3, b: Vector3) -> Vector3:
+    """Return the cross product of `a` and `b`."""
+    return Vector3(
+        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
+    )
 
 
 def _unit_vector(v: Vector3, fallback: Vector3) -> Vector3:
@@ -589,7 +596,7 @@ struct _Comb(ImplicitlyCopyable):
         if n < Float32(1e-5):
             return Vector3(0, 0, 0)
         t = t / n
-        var across = cross(normal, t)
+        var across = _cross(normal, t)
         var sway = self.sway * sin(phase + travelled / self.wavelength)
         return _unit_vector(t + across * sway, t)
 
@@ -1029,7 +1036,7 @@ def _braid(
     The braid narrows a little toward its tip.
     """
     var lane = Float32(key % 3)
-    var across = _unit_vector(cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
+    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
     var angle = Float32(2 * pi) * _unit(key, 71)
     var spread = width * Float32(0.2) * sqrt(_unit(key, 73))
     var core = tie
@@ -1039,7 +1046,7 @@ def _braid(
         going = _unit_vector(going * Float32(0.8) + Vector3(0, -0.45, 0), going)
         core = core + going * step
         along += step
-        var back = _unit_vector(cross(across, going), away)
+        var back = _unit_vector(_cross(across, going), away)
         var a = Float32(2 * pi) * (lane / 3 + along / twist)
         var w = width * (1 - Float32(0.35) * along / length)
         strand.append(
@@ -1139,8 +1146,8 @@ def _tail(
     ponytail: out from the head at first, then down, fanning a little
     wider toward its tip."""
     var angle = Float32(2 * pi) * _unit(key, 51)
-    var across = _unit_vector(cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
-    var up = cross(across, away)
+    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
+    var up = _cross(across, away)
     var fan = _unit(key, 53)
     var along = Float32(0)
     var core = tie
@@ -1170,8 +1177,8 @@ def _coil(
     it winds round, so it never cuts through the ball.
     """
     var middle = tie + away * (radius * BUN_FLOAT)
-    var across = _unit_vector(cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
-    var up = cross(across, away)
+    var across = _unit_vector(_cross(away, Vector3(0, 1, 0)), Vector3(1, 0, 0))
+    var up = _cross(across, away)
     var lean = Float32(-0.9) + Float32(1.8) * _unit(key, 61)
     var start = Float32(2 * pi) * _unit(key, 63)
     var turns = Float32(1.2) + _unit(key, 65)
@@ -1236,7 +1243,7 @@ def _curl(
         var tangent = _unit_vector(points[j + 1] - points[j], Vector3(0, -1, 0))
         var n = normals[j]
         var outward = _unit_vector(n - tangent * n.dot(tangent), n)
-        var across = cross(outward, tangent)
+        var across = _cross(outward, tangent)
         var angle = phase + Float32(2 * pi) * s / spec.curl_length
         var swing = spec.curl * min(
             Float32(1), max(Float32(0), 2 * (s - taut) / spec.curl_length)
@@ -1287,7 +1294,7 @@ def _follow(
         var s = Float32(k) / Float32(last)
         var ahead = points[min(k + 1, last)] - points[max(k - 1, 0)]
         var n = normals[k]
-        var across = _unit_vector(cross(n, ahead), Vector3(1, 0, 0))
+        var across = _unit_vector(_cross(n, ahead), Vector3(1, 0, 0))
         var spread = (1 + spec.tip_spread * s) * (1 - spec.clump * s * s)
         var frizz = spec.frizz * s * s
         var p = (
