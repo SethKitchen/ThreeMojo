@@ -16,12 +16,15 @@ The rules come from ASD-STE100, Simplified Technical English:
 - The spelling is American English: "color", "meter", "center", "gray".
 
 Code blocks, tables, headings, badges and HTML comments are not checked.
-Inline code and link targets do not count as words. The tool prints one
-line per problem and exits with an error when there is at least one.
+Inline code and link targets do not count as words. The tool also checks
+each wiki link with `tools/doc_links.mojo`. It prints one line per problem
+and exits with an error when there is at least one.
 """
 
 from std.pathlib import Path
 from std.sys import argv
+
+from tools.doc_links import Fence, check_links
 
 comptime MAX_WORDS = 25
 comptime MAX_SENTENCES = 6
@@ -345,7 +348,7 @@ def check_file(path: String) raises -> List[String]:
     """
     var problems = List[String]()
     var text = Path(path).read_text()
-    var in_fence = False
+    var fence = Fence()
     var in_comment = False
     var paragraph = String("")
     var paragraph_line = 0
@@ -362,10 +365,7 @@ def check_file(path: String) raises -> List[String]:
             if stripped.find("-->") < 0:
                 in_comment = True
             continue
-        if stripped.startswith("```"):
-            in_fence = not in_fence
-            continue
-        if in_fence:
+        if fence.is_code(stripped):
             continue
         var skip = (
             stripped == ""
@@ -404,11 +404,17 @@ def main() raises:
     if len(args) < 2:
         raise Error("usage: doc_lint <file.md>...")
     var problems = 0
+    var paths = List[String]()
     for index in range(1, len(args)):
-        var found = check_file(String(args[index]))
+        paths.append(String(args[index]))
+        var found = check_file(paths[index - 1])
         for problem in found:
             print(problem)
         problems += len(found)
+    var links = check_links(paths)
+    for problem in links:
+        print(problem)
+    problems += len(links)
     if problems > 0:
         raise Error(String(problems) + " documentation problems found")
     print("Documentation follows the rules:", len(args) - 1, "files.")

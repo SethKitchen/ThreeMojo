@@ -63,7 +63,9 @@ make docs-check
 
 The tool reports each sentence over the limit, each paragraph over six sentences, each forbidden word, and each British spelling. It skips code blocks, tables and headings.
 
-`make test-tools` also checks the wiki links. It reports each wiki link to a page or a heading that does not exist. A wiki link is `[text](Page)`, `[text](Page#anchor)`, `[text](#anchor)`, or a README link to the GitHub wiki. An anchor is GitHub's slug of a heading: lower case, with punctuation removed and each space changed to `-`. The link check skips code.
+The tool also checks the wiki links. It reports each wiki link to a page or a heading that does not exist. A wiki link is `[text](Page)`, `[text](Page#anchor)`, `[text](#anchor)`, or a link to the GitHub wiki.
+
+An anchor is GitHub's slug of a heading: lower case, with punctuation removed and each space changed to `-`. A repeated anchor gets the first free `-1` or `-2` suffix. The check decodes `%XX` escapes and ignores a link title. It skips fenced and inline code. A fence closes only with its own character, repeated at least as many times as it opened.
 
 ## Publish the wiki
 
