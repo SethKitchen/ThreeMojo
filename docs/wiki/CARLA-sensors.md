@@ -145,6 +145,8 @@ The sensor reports each body that pushed its parent in the tick. It gives the ot
 
 The sensor follows the four bottom corners of its parent vehicle's box. When the corners move, it asks the map which marks each corner crossed. It reports only when a mark was crossed.
 
+`LaneInvasionSensor.tick` takes the snapshot time as a `Duration64`. The time must be finite and nonnegative. The event's `timestamp` field keeps the same Float64 seconds.
+
 ### Obstacle
 
 The detector sweeps a sphere of `hit_radius` along its forward vector for `distance`. The sweep passes through the detector and its parent. With `only_dynamics`, it meets only the bodies that move.
@@ -161,6 +163,8 @@ A ground-truth camera casts one ray through the center of each pixel.
 - RGB is a shaded stand-in: the tag's CityScapes color times the light on the surface. The [rendering tier](CARLA) draws the real image.
 
 The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick.
+
+`DVSCamera.simulate` takes the frame time as a `Duration64`, so a short tick late in a run keeps its Float64 digits. The time must be finite, nonnegative and at most 9.2e9 seconds. A larger time has too many nanoseconds for an event's `Int` time.
 
 ### Wide-angle lens
 

@@ -118,6 +118,7 @@ from extensions.carla.world import (
 )
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from std.math import inf, nan
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
@@ -128,6 +129,7 @@ from std.testing import (
     assert_true,
 )
 from units.si import (
+    Duration64,
     DEGREE,
     KILOGRAM,
     METER,
@@ -366,16 +368,24 @@ def test_lane_invasion_crosses_the_center_mark() raises:
     _near(corners[0], 9, 4.15, 0.75)
     _near(corners[3], 11, -0.65, 0.75)
     var sensor = LaneInvasionSensor(box)
-    assert_false(Bool(sensor.tick(world.map, 1, 0.05, _pose(10, 1.75, 0))))
+    assert_false(
+        Bool(sensor.tick(world.map, 1, Duration64(0.05), _pose(10, 1.75, 0)))
+    )
     # Standing still is no move.
-    assert_false(Bool(sensor.tick(world.map, 2, 0.1, _pose(10, 1.75, 0))))
+    assert_false(
+        Bool(sensor.tick(world.map, 2, Duration64(0.1), _pose(10, 1.75, 0)))
+    )
     # Along the lane: no mark crossed.
-    assert_false(Bool(sensor.tick(world.map, 3, 0.15, _pose(10.5, 1.75, 0))))
+    assert_false(
+        Bool(sensor.tick(world.map, 3, Duration64(0.15), _pose(10.5, 1.75, 0)))
+    )
     # A frame that is not newer is skipped.
-    assert_false(Bool(sensor.tick(world.map, 3, 0.15, _pose(11, 1.75, 0))))
+    assert_false(
+        Bool(sensor.tick(world.map, 3, Duration64(0.15), _pose(11, 1.75, 0)))
+    )
     # To y = -0.5: the left corners go from 0.75 to -1.5 and cross the
     # center; the right ones stay in the lane.
-    var event = sensor.tick(world.map, 4, 0.2, _pose(11.5, -0.5, 0))
+    var event = sensor.tick(world.map, 4, Duration64(0.2), _pose(11.5, -0.5, 0))
     assert_true(Bool(event))
     var e = event.value().copy()
     assert_equal(e.frame, 4)
@@ -384,6 +394,21 @@ def test_lane_invasion_crosses_the_center_mark() raises:
     assert_equal(e.crossed_lane_markings[0].type, SOLID)
     assert_equal(e.crossed_lane_markings[0].color, MARKING_YELLOW)
     _near(e.transform.location, 11.5, -0.5, 0)
+
+
+def test_lane_invasion_time_keeps_float64_and_is_checked() raises:
+    var world = _world()
+    var car = _car(world, 10, 1.75)
+    var sensor = LaneInvasionSensor(world.get_bounding_box(car))
+    var start = 123456789.000001
+    _ = sensor.tick(world.map, 1, Duration64(start), _pose(10, 1.75, 0))
+    var event = sensor.tick(
+        world.map, 2, Duration64(start + 1.0e-6), _pose(11.5, -0.5, 0)
+    )
+    assert_equal(event.value().timestamp, start + 1.0e-6)
+    for bad in [inf[DType.float64](), nan[DType.float64](), -0.5]:
+        with assert_raises(contains="lane invasion time"):
+            _ = sensor.tick(world.map, 3, Duration64(bad), _pose(10, 1.75, 0))
 
 
 # --- obstacles ----------------------------------------------------------------------

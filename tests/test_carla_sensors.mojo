@@ -209,6 +209,8 @@ from render.framebuffer import (
 )
 from std.math import (
     cos,
+    inf,
+    nan,
     pi,
     sin,
     sqrt,
@@ -222,6 +224,7 @@ from std.testing import (
     assert_true,
 )
 from units.si import (
+    Duration64,
     DEGREE,
     PER_METER,
     RADIAN,
@@ -1111,10 +1114,10 @@ def test_event_camera_crossings() raises:
     assert_almost_equal(gray(Color(100, 100, 100)), 99.99, atol=1e-4)
     assert_almost_equal(gray(Color(255, 0, 0)), 76.2195, atol=1e-4)
     var dvs = DVSCamera(_linear(30), 1, 1, 0)
-    assert_equal(len(dvs.simulate(_frame([100]), 1.0)), 0)
+    assert_equal(len(dvs.simulate(_frame([100]), Duration64(1.0))), 0)
     # Crossings at 129.99, 159.99 and 189.99 of the rise to 199.98, at
     # 30, 60 and 90 hundredths-of-99.99 of the 0.1 s tick.
-    var up = dvs.simulate(_frame([200]), 1.1)
+    var up = dvs.simulate(_frame([200]), Duration64(1.1))
     assert_equal(len(up), 3)
     assert_true(up[0].pol)
     assert_equal(up[0].x, 0)
@@ -1122,11 +1125,11 @@ def test_event_camera_crossings() raises:
     assert_almost_equal(Float64(up[1].t), 1060006000.6, atol=8)
     assert_almost_equal(Float64(up[2].t), 1090009000.9, atol=8)
     # Down to 109.989 from the last crossing, 189.99: 159.99 and 129.99.
-    var down = dvs.simulate(_frame([110]), 1.2)
+    var down = dvs.simulate(_frame([110]), Duration64(1.2))
     assert_equal(len(down), 2)
     assert_false(down[0].pol)
     # No change, no events.
-    assert_equal(len(dvs.simulate(_frame([110]), 1.3)), 0)
+    assert_equal(len(dvs.simulate(_frame([110]), Duration64(1.3))), 0)
     assert_true(String(up[0]).startswith("Event(x=0, y=0, t="))
 
 
@@ -1134,10 +1137,10 @@ def test_event_camera_refractory_period() raises:
     var config = _linear(30)
     config.refractory_period_ns = 40000000
     var dvs = DVSCamera(config, 1, 1, 0)
-    _ = dvs.simulate(_frame([100]), 1.0)
+    _ = dvs.simulate(_frame([100]), Duration64(1.0))
     # The second crossing comes 30 ms after the first and is dropped;
     # the third, 60 ms after, is kept.
-    var up = dvs.simulate(_frame([200]), 1.1)
+    var up = dvs.simulate(_frame([200]), Duration64(1.1))
     assert_equal(len(up), 2)
     assert_almost_equal(Float64(up[1].t), 1090009000.9, atol=8)
 
@@ -1146,17 +1149,17 @@ def test_event_camera_time_going_back() raises:
     # A frame from before the last event: its crossings fall before that
     # event and give none, though the reference still moves.
     var dvs = DVSCamera(_linear(30), 1, 1, 0)
-    _ = dvs.simulate(_frame([100]), 1.0)
-    assert_equal(len(dvs.simulate(_frame([200]), 1.1)), 3)
-    assert_equal(len(dvs.simulate(_frame([110]), 0.5)), 0)
+    _ = dvs.simulate(_frame([100]), Duration64(1.0))
+    assert_equal(len(dvs.simulate(_frame([200]), Duration64(1.1))), 3)
+    assert_equal(len(dvs.simulate(_frame([110]), Duration64(0.5))), 0)
 
 
 def test_event_camera_sorts_by_time() raises:
     var dvs = DVSCamera(_linear(90), 2, 1, 0)
-    _ = dvs.simulate(_frame([100, 100]), 1.0)
+    _ = dvs.simulate(_frame([100, 100]), Duration64(1.0))
     # Pixel 0 crosses 189.99 at 0.9 of its rise; pixel 1 at 0.6 of its
     # rise to 249.975, so it comes first.
-    var events = dvs.simulate(_frame([200, 250]), 1.1)
+    var events = dvs.simulate(_frame([200, 250]), Duration64(1.1))
     assert_equal(len(events), 2)
     assert_equal(events[0].x, 1)
     assert_equal(events[1].x, 0)
@@ -1166,18 +1169,18 @@ def test_event_camera_sorts_by_time() raises:
 def test_event_camera_log_and_noise() raises:
     var config = DVSConfig()
     var dvs = DVSCamera(config, 1, 1, 0)
-    _ = dvs.simulate(_frame([100]), 0.0)
+    _ = dvs.simulate(_frame([100]), Duration64(0.0))
     # log(0.001 + 99.99 / 255) = -0.93365 up to log(0.001 + 199.98 / 255)
     # = -0.24176: crossings at -0.63365 and -0.33365.
-    assert_equal(len(dvs.simulate(_frame([200]), 0.1)), 2)
+    assert_equal(len(dvs.simulate(_frame([200]), Duration64(0.1))), 2)
     var noisy = config
     noisy.sigma_positive_threshold = 1e-6
     noisy.sigma_negative_threshold = 1e-6
     var jitter = DVSCamera(noisy, 1, 1, 1)
-    _ = jitter.simulate(_frame([100]), 0.0)
-    assert_equal(len(jitter.simulate(_frame([200]), 0.1)), 2)
+    _ = jitter.simulate(_frame([100]), Duration64(0.0))
+    assert_equal(len(jitter.simulate(_frame([200]), Duration64(0.1))), 2)
     # Down to log(0.001 + 109.989 / 255) = -0.83857: one crossing.
-    assert_equal(len(jitter.simulate(_frame([110]), 0.2)), 1)
+    assert_equal(len(jitter.simulate(_frame([110]), Duration64(0.2))), 1)
 
 
 def test_event_camera_settings() raises:
@@ -1201,9 +1204,24 @@ def test_event_camera_settings() raises:
         _ = DVSCamera(zero, 1, 1, 0)
     var dvs = DVSCamera(c, 2, 1, 0)
     with assert_raises(contains="must be its size"):
-        _ = dvs.simulate(_frame([1]), 0)
+        _ = dvs.simulate(_frame([1]), Duration64(0))
     with assert_raises(contains="must be its size"):
-        _ = dvs.simulate(Framebuffer(2, 2, Color(0, 0, 0)), 0)
+        _ = dvs.simulate(Framebuffer(2, 2, Color(0, 0, 0)), Duration64(0))
+
+
+def test_event_camera_time_keeps_float64_and_is_checked() raises:
+    # A microsecond tick a million seconds in keeps its Float64 digits.
+    var dvs = DVSCamera(_linear(30), 1, 1, 0)
+    _ = dvs.simulate(_frame([100]), Duration64(1.0e6))
+    var up = dvs.simulate(_frame([200]), Duration64(1.0e6 + 1.0e-6))
+    assert_equal(len(up), 3)
+    assert_equal(up[0].t, 1000000000000000 + 300)
+    assert_equal(up[2].t, 1000000000000000 + 900)
+    # Nonfinite, negative and too-large times are refused before use.
+    for bad in [inf[DType.float64](), nan[DType.float64](), -1.0, 9.3e9]:
+        with assert_raises(contains="time must be finite"):
+            _ = dvs.simulate(_frame([100]), Duration64(bad))
+    _ = dvs.simulate(_frame([100]), Duration64(9.2e9))
 
 
 # --- V2X ---------------------------------------------------------------------------

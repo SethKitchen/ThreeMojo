@@ -77,6 +77,7 @@ from extensions.carla.traffic_sign import (
 from extensions.carla.transform import CarlaRotation, CarlaTransform
 from extensions.carla.world import EpisodeSettings, World
 from math.vector3 import Vector3
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -85,7 +86,16 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import DEGREE, METER, SECOND, Angle, Duration, Length, Velocity
+from units.si import (
+    DEGREE,
+    METER,
+    SECOND,
+    Angle,
+    Duration,
+    Length,
+    Length64,
+    Velocity,
+)
 
 comptime SPECTATOR = ActorId(1)
 comptime L2001 = ActorId(2)
@@ -843,26 +853,33 @@ def test_landmark_queries() raises:
     var start = world.map.waypoint_xodr(
         RoadId(1), LaneId(-1), Length(10, METER)
     ).value()
-    var ahead = world.get_traffic_lights_from_waypoint(start, 38)
+    var ahead = world.get_traffic_lights_from_waypoint(start, Length64(38))
     assert_equal(len(ahead), 1)
     assert_equal(ahead[0], L2001)
     # Further on: the reference to 2001 on road 10, light 2009, which is
     # not placed, and 2005 on road 13.
-    var further = world.get_traffic_lights_from_waypoint(start, 46)
+    var further = world.get_traffic_lights_from_waypoint(start, Length64(46))
     assert_equal(len(further), 2)
     assert_equal(further[0], L2001)
     assert_equal(further[1], L2005)
     var end = world.map.waypoint_xodr(
         RoadId(2), LaneId(1), Length(49, METER)
     ).value()
-    assert_equal(len(world.get_traffic_lights_from_waypoint(end, 5)), 0)
+    assert_equal(
+        len(world.get_traffic_lights_from_waypoint(end, Length64(5))), 0
+    )
+    for bad in [inf[DType.float64](), nan[DType.float64](), -1.0]:
+        with assert_raises(contains="light search distance"):
+            _ = world.get_traffic_lights_from_waypoint(start, Length64(bad))
     var east = world.map.waypoint_xodr(
         RoadId(2), LaneId(-1), Length(0, METER)
     ).value()
     # Ahead on road 2 are the 60 km/h sign and light 2003. The light's
     # validity runs from lane 1 down to -3, and CARLA's search takes a
     # validity from its low lane to its high one, so it misses the light.
-    assert_equal(len(world.get_traffic_lights_from_waypoint(east, 35)), 0)
+    assert_equal(
+        len(world.get_traffic_lights_from_waypoint(east, Length64(35))), 0
+    )
     var light = world.map.landmarks_from_id(SignalId("2001"))[0].copy()
     var stop = world.map.landmarks_from_id(SignalId("3001"))[0].copy()
     var paint = world.map.landmarks_from_id(SignalId("3004"))[0].copy()

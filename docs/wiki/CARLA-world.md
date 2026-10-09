@@ -135,6 +135,8 @@ A stage changes on the first tick that takes the elapsed time past the stage's t
 
 `set_traffic_light_state` sets one light. The controller does not know, and its next stage sets the light again. `freeze` stops every light, as in CARLA.
 
+`get_traffic_lights_from_waypoint` finds the lights within a distance ahead of a waypoint. The distance is a `Length64`, so a long search keeps its Float64 meters. It must be finite and nonnegative.
+
 ### A light's boxes
 
 Each lane that a light holds gets a box 3 m before the light, against the lane's traffic. The box is 3 m long, half a lane wide and 2 m high. On a junction lane with one predecessor outside the junction, the box moves to that predecessor.
