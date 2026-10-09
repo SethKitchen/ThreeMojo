@@ -78,7 +78,9 @@ Geometry nearer than the water keeps its pixel. Water nearer than the geometry r
 
 The water is an endless plane at the given height. It repeats the ocean patch. The camera must be a centered perspective camera above the water. Water nearer than the near plane or past the far plane is not drawn. With the page's camera, `compose` gives the `LINEAR` picture below the horizon.
 
-The water keeps Clearwater's sun. It does not take the scene's lights. It shades the pebble bed under the surface, not the scene's geometry under the water. It has no GPU path, and it does not establish a frame rate. See [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300).
+`set_sun` lights the water from a scene's directional light. Pass the light's position minus its target. The direction must be finite and above the horizon. The default is Clearwater's sun. The sun lights the reflections, the bed and the caustics.
+
+The water shades the pebble bed under the surface, not the scene's geometry under the water. It has no GPU path, and it does not establish a frame rate. See [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300).
 
 ## Pictures
 

@@ -1108,6 +1108,46 @@ def test_composition_refuses_unsupported_cameras() raises:
             _ = water.compose(image, shifted, Length(0.0, METER), stones)
 
 
+def test_water_scene_takes_the_scene_sun() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var scene = _scene(Duration(5.0, SECOND))
+    var page = scene.draw(4, 3, LINEAR, False, stones, pitch)
+    # A directional light's position minus its target, any length.
+    scene.set_sun(Vector3(0.0, 2.0, 0.0))
+    assert_equal(scene.sun.x, 0.0)
+    assert_equal(scene.sun.y, 1.0)
+    var overhead = scene.draw(4, 3, LINEAR, False, stones, pitch)
+    var changed = 0
+    for y in range(3):
+        for x in range(4):
+            if page.get_pixel(x, y).r != overhead.get_pixel(x, y).r:
+                changed += 1
+    assert_true(changed > 0)
+    # Composition shades with the same sun as the scene's own picture.
+    var image = Framebuffer(4, 3, Color(0, 0, 0))
+    _ = scene.compose(image, _page_camera(4, 3), Length(0.0, METER), stones)
+    for y in range(3):
+        for x in range(4):
+            assert_true(
+                abs(
+                    Int(image.get_pixel(x, y).g)
+                    - Int(overhead.get_pixel(x, y).g)
+                )
+                <= 2
+            )
+    for bad in [
+        Vector3(0, 0, 0),
+        Vector3(0, -1, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, nan[DType.float32](), 0),
+        Vector3(inf[DType.float32](), 1, 0),
+    ]:
+        with assert_raises():
+            scene.set_sun(bad)
+    assert_equal(scene.sun.y, 1.0)
+
+
 def test_composition_skips_water_outside_the_depth_range() raises:
     # Water nearer than the near plane, or past the far plane, is not drawn.
     var stones = _stones()

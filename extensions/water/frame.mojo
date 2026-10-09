@@ -210,6 +210,55 @@ def water_radiance(
     Returns:
         Linear radiance before grading.
     """
+    return _lit_radiance(
+        look,
+        ndc_x,
+        ndc_y,
+        aspect,
+        surface,
+        ripples,
+        caustics,
+        bed,
+        clock,
+        pixel_x,
+        pixel_y,
+        sun_direction(),
+    )
+
+
+def _lit_radiance(
+    look: CameraLook,
+    ndc_x: Float32,
+    ndc_y: Float32,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    pixel_x: Float32,
+    pixel_y: Float32,
+    sun: Vector3,
+) -> Vector3:
+    """Shade one view ray under the sun toward `sun`.
+
+    Args:
+        look: The camera basis.
+        ndc_x: Horizontal normalized coordinate, -1 to 1.
+        ndc_y: Vertical normalized coordinate, -1 at the bottom.
+        aspect: Width over height.
+        surface: The ocean FFT surface.
+        ripples: The local wave-equation window.
+        caustics: The refracted-grid texture.
+        bed: The pebble photograph.
+        clock: Frame time, used by the suspended specks.
+        pixel_x: Normalized width of one pixel. Zero skips the mip footprint.
+        pixel_y: Normalized height of one pixel. Zero skips the mip footprint.
+        sun: The unit direction toward the sun. Y is up.
+
+    Returns:
+        Linear radiance before grading.
+    """
     var rd = _ray(look, ndc_x, ndc_y, aspect)
     var hit = _surface_hit(look, ndc_x, ndc_y, aspect, surface, ripples)
     var wd = hit.direction
@@ -238,7 +287,6 @@ def water_radiance(
     var reflected = _reflect(wd.x, wd.y, wd.z, normal)
     if reflected.y < 0.0:
         reflected = Vector3(reflected.x, -reflected.y, reflected.z)
-    var sun = sun_direction()
     var sky = sky_radiance(reflected.x, reflected.y, reflected.z, sun)
     var refl = sky * 1.25
     var variance = slope.z
@@ -875,6 +923,8 @@ struct WaterScene(Movable):
     """Seconds since the start of the simulation."""
     var steps: Int
     """How many times `advance` has stepped the ripples since a reset."""
+    var sun: Vector3
+    """The unit direction toward the sun. Y is up. See `set_sun`."""
     var _spectrum: ComplexField
     var _ripples: RippleField
     var _glare: Optional[GlareKernels]
@@ -906,6 +956,7 @@ struct WaterScene(Movable):
         self.start = start
         self.clock = start
         self.steps = 0
+        self.sun = sun_direction()
         self._spectrum = build_spectrum(
             ocean, Length(_PATCH_METERS), _TARGET_SLOPE
         )
@@ -923,6 +974,29 @@ struct WaterScene(Movable):
         self._ripples = RippleField(self.ocean, clearwater_ripple_size())
         self.clock = self.start
         self.steps = 0
+
+    def set_sun(mut self, toward: Vector3) raises:
+        """Light the water from the direction `toward`, such as a scene's
+        directional light: its position minus its target.
+
+        Args:
+            toward: A finite direction toward the sun, above the horizon.
+                It does not need unit length.
+
+        Raises:
+            Error: If the direction is not finite, has zero length, or does
+                not point above the horizon.
+        """
+        var length = sqrt(
+            toward.x * toward.x + toward.y * toward.y + toward.z * toward.z
+        )
+        if not (isfinite(length) and length > 0.0):
+            raise Error("A water sun direction must be finite and nonzero")
+        if not (toward.y > 0.0):
+            raise Error("A water sun must be above the horizon")
+        self.sun = Vector3(
+            toward.x / length, toward.y / length, toward.z / length
+        )
 
     def advance(mut self, dt: Duration, drop: Bool) raises:
         """Step the ripple equation once, then move the clock by `dt`.
@@ -953,7 +1027,7 @@ struct WaterScene(Movable):
     def _caustics(self, surface: SurfaceField) raises -> CausticField:
         return render_caustics(
             surface,
-            sun_direction(),
+            self.sun,
             Length(_DEPTH_METERS),
             self.caustic_grid,
             self.caustic_resolution,
@@ -1052,7 +1126,7 @@ struct WaterScene(Movable):
                     x, y, z
                 ):
                     continue
-                var rgb = water_radiance(
+                var rgb = _lit_radiance(
                     look,
                     ndc_x,
                     ndc_y,
@@ -1064,6 +1138,7 @@ struct WaterScene(Movable):
                     clock,
                     2.0 / Float32(width),
                     2.0 / Float32(height),
+                    self.sun,
                 )
                 var graded = grade_pixel(
                     rgb.x,
@@ -1136,7 +1211,7 @@ struct WaterScene(Movable):
             for x in range(width):  # pragma: no branch
                 var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
                 var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-                var rgb = water_radiance(
+                var rgb = _lit_radiance(
                     look,
                     ndc_x,
                     ndc_y,
@@ -1148,6 +1223,7 @@ struct WaterScene(Movable):
                     clock,
                     2.0 / Float32(width),
                     2.0 / Float32(height),
+                    self.sun,
                 )
                 var p = (y * width + x) * 3
                 hdr[p] = rgb.x
