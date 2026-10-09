@@ -17,7 +17,7 @@ An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule 
 
 A capsule's inverse inertia must be zero in every element, and its angular velocity and angular push must be zero. A capsule then only translates, as a character or walker body does. Its half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
 
-A body's reachable region must not overlap another moving body's reachable region, including the contact margin. A capsule's region uses its bounding sphere: its radius plus its half height.
+A body's reachable region must not overlap another moving body's reachable region, including the contact margin. A capsule's region uses a bounding sphere around its actual world-space segment. The radius includes an outward-rounded length of the Float32-rotated half axis. The same bound selects swept mesh candidates. This includes stretch from accepted near-unit rotations and rotation roundoff.
 
 The bound uses the sphere's total translational and rotational energy after the force update. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
 
@@ -47,7 +47,7 @@ The sphere's orientation advances separately over each time segment. It uses the
 
 Initial front-side overlaps keep the existing contact solver and pose-only split correction. Stationary and slow front-side contacts keep the previous speculative-contact path. A negative-depth contact is deferred to the sweep when its closing travel exceeds the existing contact margin. This prevents a fast sphere from bouncing before it reaches the surface. The margin is not enlarged.
 
-CCD rejects initial backface contacts, including a sphere that already overlaps the back of the face. It does not catch a sphere that starts behind a triangle and crosses toward its front during that segment. This one-sided rule also applies to edge and vertex candidates.
+CCD rejects initial backface contacts, including a sphere that already overlaps the back of the face. It does not catch a sphere that starts behind a triangle and crosses toward its front during that segment. This one-sided rule also applies to edge and vertex candidates. A capsule is behind the face only when both segment endpoints start behind it. Reversing the endpoints does not change admission. A segment that starts partly in front keeps the existing overlap and split-correction response.
 
 The opt-in mode corrects the tunneling example in [issue 292](https://github.com/SethKitchen/ThreeMojo/issues/292), recorded against the port at `af6c253`. The test uses radius 0.1 m, initial z 0.15 m, velocity -30 m/s and step 0.01 s. The sphere now stops at z = 0.1 m on a plastic horizontal mesh. Discrete mode still reaches z = -0.15 m. This is a correction to the port's own solver. It does not claim an identical CARLA trajectory.
 
@@ -99,7 +99,7 @@ Very thin triangles, excessive travel, coarse world coordinates and unsupported 
 
 Triangle ties retain triangle insertion order. Equal feature times retain face order, then edge and vertex order. Spheres are processed in body insertion order. Their independent swept events are stably sorted by time, with body order breaking equal times. Initial discrete-solver reports precede swept reports. Each report still supplies equal and opposite normal-impulse events.
 
-`contact_count` includes initial contact points and each swept impact. `events` is replaced after a successful step. The mode does not promise bitwise equality across compiler versions or architectures.
+`contact_count` includes initial contact points and each swept impact. `events` is replaced after a successful step. The mode does not promise bitwise equality across compiler versions, architectures or floating-point contraction modes. A rounded edge-to-cap tangency can add a small later impulse and change the capsule impact count.
 
 `ccd_max_impacts` defaults to 16 per sphere per step. Valid limits are 1 through 1024. The loop does not discard remaining time, freeze a body or continue through a surface after exhaustion. It raises an error.
 

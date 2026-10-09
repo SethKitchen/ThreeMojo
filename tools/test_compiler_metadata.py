@@ -13,9 +13,10 @@ import subprocess
 import signal
 import sys
 import tempfile
+import threading
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 import compiler_metadata as metadata
 
@@ -127,6 +128,212 @@ class CompilerMetadataTests(unittest.TestCase):
         text, status = metadata.read_command([sys.executable, '-c', 'import time; time.sleep(5)'], timeout=0.05)
         self.assertEqual((text, status), (None, 'timeout'))
         self.assertLess(time.monotonic()-started, 2)
+
+    def cleanup_denial(self, *, live=False, probe=None, platform='darwin', number=errno.EPERM,
+                       wait_error=None):
+        child = Mock(pid=12345, returncode=None, stdout=io.BytesIO())
+        events = []
+        denied = PermissionError(number, 'initial denial')
+
+        def wait(timeout=None):
+            events.append(('wait', timeout))
+            self.assertIsNotNone(timeout, 'cleanup waits must stay bounded')
+            if wait_error is not None:
+                raise wait_error
+            if live:
+                raise subprocess.TimeoutExpired('owned', timeout)
+            child.returncode = 0
+            return 0
+
+        def killpg(pid, signal_number):
+            events.append(('signal', signal_number))
+            self.assertEqual(pid, child.pid)
+            if signal_number == signal.SIGKILL:
+                self.assertIsNone(child.returncode, 'never signal after reaping')
+                raise denied
+            self.assertEqual(signal_number, 0)
+            self.assertEqual(child.returncode, 0, 'probe must follow reaping')
+            if probe is not None:
+                raise probe
+
+        child.wait.side_effect = wait
+        with patch.object(metadata.subprocess, 'Popen', return_value=child), \
+                patch.object(metadata.selectors, 'DefaultSelector'), \
+                patch.object(metadata.sys, 'platform', platform), \
+                patch.object(metadata.os, 'killpg', side_effect=killpg):
+            if not live and platform == 'darwin' and number == errno.EPERM and isinstance(probe, ProcessLookupError):
+                self.assertEqual(metadata.read_command(['owned'], timeout=0), (None, 'timeout'))
+            else:
+                expected = wait_error or probe or denied
+                with self.assertRaises(type(expected)) as raised:
+                    metadata.read_command(['owned'], timeout=0)
+                self.assertIs(raised.exception, expected)
+        self.assertTrue(child.stdout.closed, 'failure must also close the local pipe')
+        return child, events
+
+    def test_darwin_eperm_with_live_leader_fails_without_unbounded_wait(self):
+        child, events = self.cleanup_denial(live=True)
+        self.assertIsNone(child.returncode)
+        self.assertEqual(events, [('signal', signal.SIGKILL), ('wait', 0)])
+
+    def test_reaped_leader_with_present_or_denied_group_fails(self):
+        for probe in (None, PermissionError(errno.EPERM, 'probe denied'),
+                      OSError(errno.EIO, 'probe failed'), KeyboardInterrupt(), SystemExit(143)):
+            with self.subTest(probe=probe):
+                child, events = self.cleanup_denial(probe=probe)
+                self.assertEqual(child.returncode, 0)
+                self.assertEqual(events, [('signal', signal.SIGKILL), ('wait', 0), ('signal', 0)])
+
+    def test_unexpected_reap_failure_propagates_without_another_wait_or_signal(self):
+        for error in (OSError(errno.ECHILD, 'wait failed'), KeyboardInterrupt(), SystemExit(143)):
+            with self.subTest(error=error):
+                child, events = self.cleanup_denial(wait_error=error)
+                self.assertIsNone(child.returncode)
+                self.assertEqual(events, [('signal', signal.SIGKILL), ('wait', 0)])
+
+    def test_reaped_leader_with_absent_group_preserves_timeout_without_more_signals(self):
+        child, events = self.cleanup_denial(probe=ProcessLookupError(errno.ESRCH, 'gone'))
+        self.assertEqual(child.returncode, 0)
+        self.assertEqual(events, [('signal', signal.SIGKILL), ('wait', 0), ('signal', 0), ('wait', 0)])
+
+    def test_unrelated_platform_and_permission_errors_are_not_reclassified(self):
+        for platform, number in (('linux', errno.EPERM), ('darwin', errno.EACCES)):
+            with self.subTest(platform=platform, errno=number):
+                child, events = self.cleanup_denial(platform=platform, number=number)
+                self.assertIsNone(child.returncode)
+                self.assertEqual(events, [('signal', signal.SIGKILL)])
+
+    def test_managed_signals_defer_across_reap_even_from_another_thread(self):
+        for number in (signal.SIGTERM, signal.SIGINT, signal.SIGALRM):
+            for already_exited in (False, True):
+                with self.subTest(signal=number, reaped=already_exited):
+                    child = Mock(pid=12345, returncode=None, stdout=io.BytesIO())
+                    first = True
+                    old_handlers = {n: signal.getsignal(n) for n in
+                                    (signal.SIGTERM, signal.SIGINT, signal.SIGALRM)}
+                    old_timer = signal.getitimer(signal.ITIMER_REAL)
+                    old_guard = getattr(metadata._REAP_STATE, 'guard', None)
+
+                    def wait(timeout):
+                        nonlocal first
+                        self.assertEqual(timeout, 0)
+                        if first:
+                            first = False
+                            if already_exited:
+                                child.returncode = 0
+                            sender = threading.Thread(target=lambda: os.kill(os.getpid(), number))
+                            sender.start()
+                            sender.join(timeout=1)
+                            self.assertFalse(sender.is_alive())
+                            # A Python callback ran on main despite delivery
+                            # from another thread, and must have been deferred.
+                            self.assertIsNotNone(metadata._REAP_STATE.guard.pending)
+                            if not already_exited:
+                                raise subprocess.TimeoutExpired('owned', 0)
+                        else:
+                            child.returncode = -signal.SIGKILL
+                        return child.returncode
+
+                    def collect(_compiler):
+                        metadata.read_command(['owned'], timeout=0.2)
+                        self.fail('managed signal was not replayed')
+
+                    def killpg(pid, signum):
+                        self.assertEqual((pid, signum), (child.pid, signal.SIGKILL))
+                        self.assertIsNone(child.returncode, 'destructive signal after reaping')
+
+                    child.wait.side_effect = wait
+                    with patch.object(metadata.subprocess, 'Popen', return_value=child), \
+                            patch.object(metadata.selectors, 'DefaultSelector') as selector, \
+                            patch.object(metadata, 'collect', side_effect=collect), \
+                            patch.object(metadata.os, 'killpg', side_effect=killpg) as kill, \
+                            contextlib.redirect_stdout(io.StringIO()) as output:
+                        selector.return_value.__enter__.return_value.get_map.return_value = {}
+                        if number == signal.SIGALRM:
+                            self.assertEqual(metadata.main([]), 0)
+                            self.assertEqual(json.loads(output.getvalue())['status'], 'unavailable')
+                        else:
+                            with self.assertRaises(SystemExit) as raised:
+                                metadata.main([])
+                            self.assertEqual(raised.exception.code, 128 + number)
+                    self.assertEqual(kill.call_count, 0 if already_exited else 1)
+                    self.assertEqual(child.wait.call_count, 1 if already_exited else 2)
+                    self.assertTrue(child.stdout.closed)
+                    self.assertEqual({n: signal.getsignal(n) for n in old_handlers}, old_handlers)
+                    self.assertEqual(signal.getitimer(signal.ITIMER_REAL), old_timer)
+                    self.assertIs(getattr(metadata._REAP_STATE, 'guard', None), old_guard)
+
+    def test_normal_wait_unexpected_errors_are_not_swallowed_as_unavailable(self):
+        for error in (OSError(errno.ECHILD, 'uncertain reap'), KeyboardInterrupt(), SystemExit(143)):
+            with self.subTest(error=error):
+                child = Mock(pid=12345, returncode=None, stdout=io.BytesIO())
+                child.wait.side_effect = error
+                with patch.object(metadata.subprocess, 'Popen', return_value=child), \
+                        patch.object(metadata.selectors, 'DefaultSelector') as selector, \
+                        patch.object(metadata.os, 'killpg') as kill, \
+                        self.assertRaises(type(error)) as raised:
+                    selector.return_value.__enter__.return_value.get_map.return_value = {}
+                    metadata.read_command(['owned'], timeout=0.2)
+                self.assertIs(raised.exception, error)
+                kill.assert_not_called()
+                child.wait.assert_called_once_with(timeout=0)
+                self.assertTrue(child.stdout.closed)
+
+    def test_worker_thread_read_does_not_borrow_main_thread_signal_guard(self):
+        result, guards = [], []
+        old_guard = getattr(metadata._REAP_STATE, 'guard', None)
+        main_guard = metadata._ReapGuard()
+        main_guard.active = True
+        metadata._REAP_STATE.guard = main_guard
+        def worker():
+            guards.append(getattr(metadata._REAP_STATE, 'guard', None))
+            result.append(metadata.read_command([sys.executable, '-c', 'print("worker")']))
+        thread = threading.Thread(target=worker)
+        try:
+            thread.start()
+            thread.join(timeout=2)
+            self.assertFalse(thread.is_alive())
+            self.assertEqual(guards, [None])
+            self.assertEqual(result, [('worker\n', 'ok')])
+            self.assertTrue(main_guard.active)
+            self.assertIsNone(main_guard.pending)
+        finally:
+            metadata._REAP_STATE.guard = old_guard
+
+    def test_managed_cancellation_reaps_a_real_live_child_after_stdout_closes(self):
+        real_popen = subprocess.Popen
+        child = None
+        def spawn(*args, **kwargs):
+            nonlocal child
+            child = real_popen(*args, **kwargs)
+            real_wait = child.wait
+            first = True
+            def wait(timeout=None):
+                nonlocal first
+                if first:
+                    first = False
+                    signal.raise_signal(signal.SIGTERM)
+                    self.assertIsNotNone(metadata._REAP_STATE.guard.pending)
+                return real_wait(timeout=timeout)
+            child.wait = wait
+            return child
+        def collect(_compiler):
+            metadata.read_command([sys.executable, '-c', 'import os,time;os.close(1);time.sleep(5)'])
+            self.fail('cancellation was lost')
+        try:
+            with patch.object(metadata.subprocess, 'Popen', side_effect=spawn), \
+                    patch.object(metadata, 'collect', side_effect=collect), \
+                    self.assertRaises(SystemExit) as raised:
+                metadata.main([])
+            self.assertEqual(raised.exception.code, 143)
+            self.assertEqual(child.returncode, -signal.SIGKILL)
+            self.assertTrue(child.stdout.closed)
+        finally:
+            if child is not None and child.returncode is None:
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(child.pid, signal.SIGKILL)
+                child.wait(timeout=1)
+                child.stdout.close()
 
     def test_owned_descendant_running_accepts_reaped_process(self):
         for error in (FileNotFoundError(errno.ENOENT, 'gone'),

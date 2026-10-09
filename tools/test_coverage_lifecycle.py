@@ -13,7 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 
 import coverage_io
 
@@ -48,7 +48,7 @@ sys.exit(status)
 '''
 
 PREPARED_DRIVER = '''import contextlib, os, pathlib, signal, subprocess, sys, time
-from unittest.mock import patch
+from unittest.mock import Mock, call, patch
 import coverage_io
 root = pathlib.Path(sys.argv[1])
 parent = int(sys.argv[2]) if len(sys.argv) > 2 else os.getppid()
@@ -100,6 +100,294 @@ with contextlib.ExitStack() as scope:
         raise
 sys.exit(status)
 '''
+
+
+class CoverageGroupCleanupTests(unittest.TestCase):
+    def process(self, *, live=False, during_wait=None):
+        process = coverage_io._CaptureProcess(['owned'], None, None, None)
+        child = Mock(pid=12345, returncode=None, stderr=io.BytesIO())
+        process.child, process.active = child, True
+
+        def wait(timeout=None):
+            if timeout == 0:
+                self.assertFalse(process.active, 'signals must be disabled before reaping')
+                if during_wait is not None:
+                    during_wait(process)
+                if live:
+                    raise subprocess.TimeoutExpired('owned', timeout)
+            child.returncode = 0
+            return 0
+
+        child.wait.side_effect = wait
+        return process
+
+    def test_normal_wait_disarms_before_a_reentrant_signal_after_reaping(self):
+        process = self.process()
+
+        def wait(timeout):
+            self.assertIn(timeout, (0, None))
+            self.assertFalse(process.active)
+            process.child.returncode = 0
+            process._signal(signal.SIGTERM, None)
+            return 0
+
+        process.child.wait.side_effect = wait
+        with patch.object(coverage_io.os, 'killpg') as killpg:
+            self.assertEqual(process.wait(), 128 + signal.SIGTERM)
+            process.__exit__()
+        killpg.assert_not_called()
+        self.assertFalse(process.active)
+
+    def test_normal_wait_replays_cancellation_if_the_disarmed_wait_times_out(self):
+        process = self.process()
+        attempts = 0
+
+        def wait(timeout):
+            nonlocal attempts
+            self.assertEqual(timeout, 0)
+            self.assertFalse(process.active)
+            attempts += 1
+            if attempts == 1:
+                process._signal(signal.SIGTERM, None)
+                raise subprocess.TimeoutExpired('owned', timeout)
+            process.child.returncode = -signal.SIGKILL
+            return process.child.returncode
+
+        def killpg(pid, number):
+            self.assertEqual((pid, number), (process.child.pid, signal.SIGKILL))
+            self.assertTrue(process.active)
+            self.assertIsNone(process.child.returncode)
+
+        process.child.wait.side_effect = wait
+        with patch.object(coverage_io.os, 'killpg', side_effect=killpg) as kill:
+            self.assertEqual(process.wait(), 128 + signal.SIGTERM)
+        self.assertEqual(attempts, 2)
+        self.assertFalse(process.active)
+        kill.assert_called_once_with(process.child.pid, signal.SIGKILL)
+
+    def test_normal_wait_failure_stays_disarmed_on_later_cleanup(self):
+        for error in (OSError(errno.ECHILD, 'wait failed'), KeyboardInterrupt(), SystemExit(143)):
+            with self.subTest(error=error):
+                process = self.process()
+                process.child.wait.side_effect = error
+                with patch.object(coverage_io.os, 'killpg') as killpg:
+                    for action in (process.wait, process.__exit__, lambda: process.cancel(124)):
+                        with self.assertRaises(type(error)) as raised:
+                            action()
+                        self.assertIs(raised.exception, error)
+                self.assertFalse(process.active)
+                process.child.wait.assert_called_once_with(timeout=0)
+                killpg.assert_not_called()
+
+    def test_reap_timeout_cannot_rearm_an_already_inactive_identity(self):
+        process = self.process()
+        process.active = False
+        process.child.wait.side_effect = subprocess.TimeoutExpired('owned', 0)
+        with self.assertRaises(subprocess.TimeoutExpired):
+            process._reap(timeout=0)
+        self.assertFalse(process.active)
+
+    def test_exit_disarms_before_a_reentrant_signal_after_reaping(self):
+        process = self.process()
+
+        def wait(timeout):
+            self.assertIsNone(timeout)
+            self.assertFalse(process.active)
+            process.child.returncode = 0
+            process._signal(signal.SIGTERM, None)
+            return 0
+
+        process.child.wait.side_effect = wait
+        with patch.object(coverage_io.os, 'killpg') as killpg:
+            process.__exit__()
+        killpg.assert_called_once_with(process.child.pid, signal.SIGKILL)
+        process.child.wait.assert_called_once_with(timeout=None)
+        self.assertFalse(process.active)
+        self.assertTrue(process.child.stderr.closed)
+
+    def test_darwin_eperm_with_live_leader_fails_without_waiting(self):
+        process = self.process(live=True)
+        denied = PermissionError(errno.EPERM, 'denied')
+        with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                patch.object(coverage_io.os, 'killpg', side_effect=denied) as killpg:
+            with self.assertRaises(PermissionError) as raised:
+                process.cancel(124)
+            self.assertIs(raised.exception, denied)
+            self.assertTrue(process.active)
+            self.assertIsNone(process.child.returncode)
+            process.child.wait.assert_called_once_with(timeout=0)
+            with self.assertRaises(PermissionError):
+                process._kill()
+        self.assertEqual(killpg.call_args_list,
+                         [call(process.child.pid, signal.SIGKILL)] * 2)
+        self.assertIsNone(process.cleanup_error)
+
+    def test_live_permission_failure_keeps_owned_group_retry_available(self):
+        for platform in ('darwin', 'linux'):
+            with self.subTest(platform=platform):
+                process = self.process(live=True)
+                denied = PermissionError(errno.EPERM, 'denied')
+                with patch.object(coverage_io.sys, 'platform', platform), \
+                        patch.object(coverage_io.os, 'killpg', side_effect=[denied, None]) as killpg:
+                    with self.assertRaises(PermissionError) as raised:
+                        process._kill()
+                    self.assertIs(raised.exception, denied)
+                    self.assertTrue(process.active)
+                    self.assertIsNone(process.cleanup_error)
+                    process._kill()
+                self.assertEqual(killpg.call_args_list,
+                                 [call(process.child.pid, signal.SIGKILL)] * 2)
+
+    def test_unexpected_reap_error_remains_disarmed_and_cannot_wait_on_exit(self):
+        for error in (OSError(errno.ECHILD, 'wait failed'),
+                      InterruptedError(errno.EINTR, 'interrupted'),
+                      KeyboardInterrupt(), SystemExit(143)):
+            with self.subTest(error=error):
+                process = self.process()
+                process.child.wait.side_effect = error
+                with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                        patch.object(coverage_io.os, 'killpg',
+                                     side_effect=PermissionError(errno.EPERM, 'denied')) as killpg:
+                    for cleanup in (process._kill, process.__exit__, lambda: process.cancel(124)):
+                        with self.assertRaises(type(error)) as raised:
+                            cleanup()
+                        self.assertIs(raised.exception, error)
+                self.assertFalse(process.active)
+                self.assertIs(process.cleanup_error, error)
+                process.child.wait.assert_called_once_with(timeout=0)
+                killpg.assert_called_once_with(process.child.pid, signal.SIGKILL)
+
+    def test_unexpected_probe_error_cannot_erase_failure_after_reaping(self):
+        for error in (OSError(errno.EIO, 'probe failed'), RuntimeError('probe interrupted'),
+                      KeyboardInterrupt(), SystemExit(143)):
+            with self.subTest(error=error):
+                process = self.process()
+                with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                        patch.object(coverage_io.os, 'killpg', side_effect=[
+                            PermissionError(errno.EPERM, 'denied'), error]) as killpg:
+                    for cleanup in (process._kill, process.__exit__, lambda: process.cancel(124)):
+                        with self.assertRaises(type(error)) as raised:
+                            cleanup()
+                        self.assertIs(raised.exception, error)
+                self.assertFalse(process.active)
+                self.assertIs(process.cleanup_error, error)
+                process.child.wait.assert_called_once_with(timeout=0)
+                self.assertEqual(killpg.call_args_list,
+                                 [call(process.child.pid, signal.SIGKILL), call(process.child.pid, 0)])
+
+    def test_reaped_leader_with_present_or_denied_group_remains_failure(self):
+        for result in (None, PermissionError(errno.EPERM, 'group denied')):
+            with self.subTest(probe=result):
+                process = self.process()
+                denied = PermissionError(errno.EPERM, 'initial denial')
+                expected = result if isinstance(result, PermissionError) else denied
+                with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                        patch.object(coverage_io.os, 'killpg', side_effect=[denied, result]) as killpg:
+                    with self.assertRaises(PermissionError) as raised:
+                        process.cancel(124)
+                    self.assertIs(raised.exception, expected)
+                    self.assertFalse(process.active)
+                    self.assertEqual(process.child.returncode, 0)
+                    # Reaping must neither erase a failure nor allow a later
+                    # cancellation/exit to signal a possibly recycled PID.
+                    for cleanup in (lambda: process.cancel(143), process.__exit__):
+                        with self.assertRaises(PermissionError) as repeated:
+                            cleanup()
+                        self.assertIs(repeated.exception, expected)
+                self.assertEqual(killpg.call_args_list,
+                                 [call(process.child.pid, signal.SIGKILL), call(process.child.pid, 0)])
+                process.child.wait.assert_called_once_with(timeout=0)
+
+    def test_reaped_leader_and_absent_group_disable_later_destructive_signals(self):
+        process = self.process(during_wait=lambda owned: owned._signal(signal.SIGTERM, None))
+        denied = PermissionError(errno.EPERM, 'denied')
+
+        def killpg(pid, number):
+            if number == signal.SIGKILL:
+                self.assertTrue(process.active)
+                self.assertIsNone(process.child.returncode)
+                raise denied
+            self.assertFalse(process.active)
+            self.assertEqual(process.child.returncode, 0)
+            raise ProcessLookupError(errno.ESRCH, 'gone')
+
+        with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                patch.object(coverage_io.os, 'killpg', side_effect=killpg) as kill:
+            process._kill()
+            self.assertIsNone(process.cleanup_error)
+            process.cancel(124)
+            process.__exit__()
+        self.assertFalse(process.active)
+        self.assertEqual(process.cancelled_status, 128 + signal.SIGTERM)
+        self.assertEqual(kill.call_args_list,
+                         [call(process.child.pid, signal.SIGKILL), call(process.child.pid, 0)])
+        self.assertTrue(process.child.stderr.closed)
+
+    def test_signal_reentry_cannot_reap_before_an_outer_destructive_signal(self):
+        process = self.process()
+        entered = False
+
+        def killpg(pid, number):
+            nonlocal entered
+            if number == signal.SIGKILL:
+                if not entered:
+                    entered = True
+                    process._signal(signal.SIGTERM, None)
+                self.assertTrue(process.active)
+                self.assertIsNone(process.child.returncode, 'nested cleanup reaped before outer signal')
+                raise PermissionError(errno.EPERM, 'denied')
+            self.assertEqual(number, 0)
+            self.assertFalse(process.active)
+            self.assertEqual(process.child.returncode, 0)
+            raise ProcessLookupError(errno.ESRCH, 'gone')
+
+        with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                patch.object(coverage_io.os, 'killpg', side_effect=killpg) as kill:
+            process._kill()
+            process.cancel(124)
+        self.assertEqual(process.cancelled_status, 128 + signal.SIGTERM)
+        self.assertEqual(kill.call_args_list,
+                         [call(process.child.pid, signal.SIGKILL), call(process.child.pid, 0)])
+        process.child.wait.assert_called_once_with(timeout=0)
+
+    def test_unrelated_platform_permission_and_probe_errors_propagate(self):
+        for platform, number in (('linux', errno.EPERM), ('darwin', errno.EACCES)):
+            with self.subTest(platform=platform, errno=number):
+                process = self.process()
+                error = PermissionError(number, 'denied')
+                with patch.object(coverage_io.sys, 'platform', platform), \
+                        patch.object(coverage_io.os, 'killpg', side_effect=error), \
+                        self.assertRaises(PermissionError) as raised:
+                    process._kill()
+                self.assertIs(raised.exception, error)
+                process.child.wait.assert_not_called()
+        process = self.process()
+        error = OSError(errno.EIO, 'probe failed')
+        with patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                patch.object(coverage_io.os, 'killpg', side_effect=[PermissionError(errno.EPERM, 'denied'), error]):
+            for cleanup in (process._kill, process.__exit__):
+                with self.assertRaises(OSError) as raised:
+                    cleanup()
+                self.assertIs(raised.exception, error)
+
+    def test_parser_error_survives_verified_absent_group_cleanup(self):
+        process = self.process()
+        process.child.stderr = io.BytesIO(b'COVBRANCH:m:1:garbage\n')
+        with tempfile.TemporaryDirectory() as directory, \
+                patch.object(coverage_io.subprocess, 'Popen', return_value=process.child), \
+                patch.object(coverage_io.sys, 'platform', 'darwin'), \
+                patch.object(coverage_io.os, 'killpg', side_effect=[
+                    PermissionError(errno.EPERM, 'denied'), ProcessLookupError(errno.ESRCH, 'gone')]) as killpg, \
+                contextlib.redirect_stdout(io.StringIO()):
+            # The real context manager owns this fake child. Its nonblocking
+            # wait is the state witness, rather than the PID-only old test.
+            process.child.wait.side_effect = None
+            process.child.wait.return_value = 0
+            with self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
+                coverage_io.capture(['owned'], Path(directory)/'out', Path(directory)/'err.gz')
+        self.assertEqual(killpg.call_args_list,
+                         [call(process.child.pid, signal.SIGKILL), call(process.child.pid, 0)])
+        self.assertTrue(process.child.stderr.closed)
 
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX coverage process groups')
