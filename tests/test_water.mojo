@@ -16,6 +16,7 @@ from extensions.water.field import ComplexField, complex_mul, fft2
 from extensions.water.filter import anisotropic_step
 from extensions.water.frame import (
     CameraLook,
+    WaterScene,
     camera_look,
     floor_f,
     grade_pixel,
@@ -88,12 +89,14 @@ from extensions.water.view import (
     require_view,
 )
 from math.vector3 import Vector3
-from std.math import sqrt
+from std.math import inf, nan, sqrt
+from render.framebuffer import Framebuffer
 from render.png import SRGB, DecodedImage
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -860,6 +863,118 @@ def test_caustic_splat_rejects_collapsed_and_caps_tight_focus() raises:
     z[7] = 0.51
     _splat(image, x, z, live, 0, 1, 2, 1, 0, 0, 0, 0, 0.5, 1)
     assert_almost_equal(image.channel(0, 0, 1), Float32(40))
+
+
+def _assert_same_picture(a: Framebuffer, b: Framebuffer) raises:
+    assert_equal(a.width, b.width)
+    assert_equal(a.height, b.height)
+    for y in range(a.height):
+        for x in range(a.width):
+            var p = a.get_pixel(x, y)
+            var q = b.get_pixel(x, y)
+            assert_equal(p.r, q.r)
+            assert_equal(p.g, q.g)
+            assert_equal(p.b, q.b)
+            assert_equal(p.a, q.a)
+
+
+def _scene(clock: Duration) raises -> WaterScene:
+    return WaterScene(SpectrumResolution(4), 2, 4, SpectrumResolution(4), clock)
+
+
+def test_water_scene_draws_what_render_water_draws() raises:
+    # render_water is one scene step and one draw, for every view.
+    var clock = Duration(5.0, SECOND)
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    for view in [CAUSTICS, LINEAR, FRAME, GLARE]:
+        var scene = _scene(clock)
+        scene.advance(Duration(0.0, SECOND), True)
+        _assert_same_picture(
+            scene.draw(3, 2, view, True, stones, pitch),
+            render_water(
+                3,
+                2,
+                clock,
+                view,
+                True,
+                SpectrumResolution(4),
+                2,
+                4,
+                SpectrumResolution(4),
+                True,
+                stones,
+                pitch,
+            ),
+        )
+
+
+def test_water_scene_steps_deterministically_and_resets() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var a = _scene(Duration(1.0, SECOND))
+    var b = _scene(Duration(1.0, SECOND))
+    var tick = Duration(1.0 / 60.0, SECOND)
+    for k in range(12):
+        a.advance(tick, k % 5 == 0)
+        b.advance(tick, k % 5 == 0)
+    assert_equal(a.steps, 12)
+    assert_equal(a.clock.value, b.clock.value)
+    var first = a.draw(3, 2, FRAME, False, stones, pitch)
+    _assert_same_picture(first, b.draw(3, 2, FRAME, False, stones, pitch))
+    # Drawing does not change the simulation.
+    assert_equal(a.steps, 12)
+    _assert_same_picture(first, a.draw(3, 2, FRAME, False, stones, pitch))
+    # A reset scene replays exactly as a new one does.
+    a.reset()
+    assert_equal(a.steps, 0)
+    assert_equal(a.clock.value, 1.0)
+    var fresh = _scene(Duration(1.0, SECOND))
+    for k in range(3):
+        a.advance(tick, k == 0)
+        fresh.advance(tick, k == 0)
+    _assert_same_picture(
+        a.draw(3, 2, LINEAR, False, stones, pitch),
+        fresh.draw(3, 2, LINEAR, False, stones, pitch),
+    )
+
+
+def test_water_scene_keeps_bounded_resources() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var scene = _scene(Duration(0.0, SECOND))
+    var cells = len(scene._ripples.height)
+    var spectrum = len(scene._spectrum.samples)
+    # The glare kernels are built on the first frame that needs them, and
+    # a reset keeps them.
+    assert_false(Bool(scene._glare))
+    _ = scene.draw(2, 2, LINEAR, False, stones, pitch)
+    assert_false(Bool(scene._glare))
+    _ = scene.draw(2, 2, GLARE, False, stones, pitch)
+    assert_true(Bool(scene._glare))
+    for k in range(400):
+        scene.advance(Duration(0.01, SECOND), k % 7 == 0)
+    scene.reset()
+    assert_true(Bool(scene._glare))
+    assert_equal(len(scene._ripples.height), cells)
+    assert_equal(len(scene._ripples.velocity), cells)
+    assert_equal(len(scene._spectrum.samples), spectrum)
+
+
+def test_water_scene_refuses_bad_steps_and_pictures() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var scene = _scene(Duration(0.0, SECOND))
+    for bad in [inf[DType.float32](), nan[DType.float32](), -0.5]:
+        with assert_raises(contains="time step"):
+            scene.advance(Duration(bad, SECOND), False)
+    assert_equal(scene.steps, 0)
+    with assert_raises(contains="dimensions"):
+        _ = scene.draw(0, 2, FRAME, False, stones, pitch)
+    with assert_raises(contains="dimensions"):
+        _ = scene.draw(2, 0, FRAME, False, stones, pitch)
+    with assert_raises():
+        _ = scene.draw(2, 2, WaterView(8), False, stones, pitch)
 
 
 def main() raises:
