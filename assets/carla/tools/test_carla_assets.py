@@ -11,6 +11,8 @@ import hashlib
 import io
 import json
 import math
+import os
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -519,6 +521,448 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.extracted.read_bytes(), b'original pixels')
         self.assertEqual(self._cli('verify', '--strict')[0], 0)
         self.assertEqual(self.manifest, self.original)
+
+
+class StageRenderTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Fixture()
+        self.addCleanup(self.fixture.close)
+        self.output = self.fixture.root / 'distribution'
+        self.manifest_path = self.fixture.root / 'custom-manifest.json'
+        free = texture_entry('https://example.org/asphalt.jpg', None)
+        scanned = texture_entry(None, _sum(b'archive'), 'brick', 'brick.jpg')
+        scanned.update(license='CC-BY-4.0', author='Custom Author', title='Custom Brick',
+                       changes='Converted for this historical render.')
+        self.manifest = manifest_of(free, scanned)
+        self.manifest_bytes = (' \r\n' + json.dumps(self.manifest, indent=4) + '\r\n\t').encode()
+        self.manifest_path.write_bytes(self.manifest_bytes)
+        self.render = self.fixture.source / 'render.png'
+        self.render.write_bytes(b'\x89PNG\r\n\x1a\n\x00exact fixture bytes\xff')
+        self.other = self.fixture.source / 'other.apng'
+        self.other.write_bytes(b'animation bytes\x00\xff')
+
+    def run_stage(self, *renders):
+        error = io.StringIO()
+        with redirect_stderr(error):
+            result = tool.main(['--manifest', str(self.manifest_path),
+                                '--cache', str(self.fixture.cache), 'stage-render',
+                                '--output', str(self.output),
+                                *[str(path) for path in renders or (self.render,)]])
+        return result, error.getvalue()
+
+    def test_exact_copies_custom_manifest_and_credits_leave_sources_and_cache_unchanged(self):
+        self.fixture.cache.mkdir()
+        (self.fixture.cache / 'sentinel.zip').write_bytes(b'pinned archive untouched')
+        (self.fixture.source / 'render.credits.md').write_bytes(b'do not copy this sidecar')
+        before = {path: path.read_bytes() for path in self.fixture.root.rglob('*') if path.is_file()}
+        self.assertEqual(self.run_stage(self.render, self.other), (0, ''))
+        self.assertEqual({p.name for p in self.output.iterdir()},
+                         {'render.png', 'other.apng', 'manifest.json', 'ATTRIBUTION.md'})
+        for source in (self.render, self.other):
+            self.assertEqual((self.output / source.name).read_bytes(), before[source])
+        self.assertEqual((self.output / 'manifest.json').read_bytes(), self.manifest_bytes)
+        attribution = (self.output / 'ATTRIBUTION.md').read_text()
+        self.assertEqual(attribution, tool.credits(self.manifest, everything=True))
+        self.assertIn('Custom Brick', attribution)
+        self.assertIn('Custom Author', attribution)
+        self.assertIn('Converted for this historical render.', attribution)
+        self.assertIn('CC0 entries', attribution)
+        self.assertNotIn('CARLA Team', attribution)
+        for path, data in before.items():
+            self.assertEqual(path.read_bytes(), data, path)
+        self.assertEqual(list(self.fixture.cache.iterdir()), [self.fixture.cache / 'sentinel.zip'])
+        self.assertFalse((self.fixture.source / 'manifest.json').exists())
+        self.assertFalse((self.fixture.source / 'ATTRIBUTION.md').exists())
+
+    def test_manifest_is_read_parsed_and_validated_once_for_both_outputs(self):
+        original_credits = tool.credits
+
+        def change_disk_after_snapshot(manifest, everything=False):
+            self.manifest_path.write_text(json.dumps(manifest_of()))
+            return original_credits(manifest, everything)
+
+        with patch.object(tool, '_stage_source', wraps=tool._stage_source) as opened, \
+                patch.object(tool.json, 'loads', wraps=json.loads) as parsed, \
+                patch.object(tool, 'check_manifest', wraps=tool.check_manifest) as checked, \
+                patch.object(tool, 'credits', side_effect=change_disk_after_snapshot) as credited:
+            self.assertEqual(self.run_stage(), (0, ''))
+        self.assertEqual(sum(call.args == (self.manifest_path,) for call in opened.call_args_list), 1)
+        parsed.assert_called_once()
+        checked.assert_called_once()
+        credited.assert_called_once_with(checked.call_args.args[0], everything=True)
+        self.assertIs(credited.call_args.args[0], checked.call_args.args[0])
+        self.assertEqual((self.output / 'manifest.json').read_bytes(), self.manifest_bytes)
+        self.assertEqual((self.output / 'ATTRIBUTION.md').read_text(),
+                         original_credits(self.manifest, everything=True))
+
+    def test_default_manifest_is_supported(self):
+        with redirect_stderr(io.StringIO()):
+            self.assertEqual(tool.main(['stage-render', '--output', str(self.output),
+                                        str(self.render)]), 0)
+        self.assertEqual((self.output / 'manifest.json').read_bytes(), tool.MANIFEST.read_bytes())
+        self.assertEqual((self.output / 'ATTRIBUTION.md').read_bytes(),
+                         (tool.MANIFEST.parent / 'ATTRIBUTION.md').read_bytes())
+
+    def test_no_cache_network_fetch_export_or_native_process_is_needed(self):
+        def forbidden(*args, **kwargs):
+            self.fail('staging invoked a network, cache, export or native entry point')
+        with patch.object(tool, 'fetch', side_effect=forbidden), \
+                patch.object(tool, 'verify', side_effect=forbidden), \
+                patch.object(tool, 'cached', side_effect=forbidden), \
+                patch.object(tool, '_download', side_effect=forbidden), \
+                patch.object(tool, '_extract', side_effect=forbidden), \
+                patch.object(tool, 'save_manifest', side_effect=forbidden), \
+                patch.object(tool.urllib.request, 'urlopen', side_effect=forbidden), \
+                patch.object(subprocess, 'run', side_effect=forbidden), \
+                patch.object(subprocess, 'Popen', side_effect=forbidden):
+            self.assertEqual(self.run_stage(), (0, ''))
+        self.assertFalse(self.fixture.cache.exists())
+
+    def test_bad_render_inputs_fail_before_creating_any_output(self):
+        link = self.fixture.source / 'linked.png'
+        link.symlink_to(self.render)
+        dangling = self.fixture.source / 'dangling.png'
+        dangling.symlink_to(self.fixture.source / 'missing.png')
+        fifo = self.fixture.source / 'pipe.png'
+        os.mkfifo(fifo)
+        for bad in (self.fixture.source / 'missing.png', self.fixture.source, link, dangling, fifo):
+            with self.subTest(path=bad):
+                result, error = self.run_stage(self.render, bad)
+                self.assertEqual(result, 1)
+                self.assertTrue(error)
+                self.assertFalse(self.output.exists())
+
+    def test_duplicate_files_basename_collisions_and_reserved_names_are_refused(self):
+        elsewhere = self.fixture.root / 'elsewhere'
+        elsewhere.mkdir()
+        hardlink = elsewhere / 'hardlink.png'
+        os.link(self.render, hardlink)
+        collision = elsewhere / self.render.name
+        collision.write_bytes(b'other bytes')
+        case_collision = elsewhere / 'RENDER.PNG'
+        case_collision.write_bytes(b'case collision')
+        for duplicate in (self.render, hardlink, collision, case_collision):
+            with self.subTest(path=duplicate):
+                self.assertEqual(self.run_stage(self.render, duplicate)[0], 1)
+                self.assertFalse(self.output.exists())
+        for name in ('manifest.json', 'MANIFEST.JSON', 'ATTRIBUTION.md', 'attribution.MD'):
+            reserved = elsewhere / name
+            reserved.write_bytes(b'reserved')
+            with self.subTest(name=name):
+                self.assertEqual(self.run_stage(reserved)[0], 1)
+                self.assertFalse(self.output.exists())
+
+    def test_invalid_manifest_inputs_fail_before_creating_output(self):
+        for data in (b'{broken', b'\xff', b'{}', b'{"format": 1, "entries": false}'):
+            with self.subTest(data=data):
+                self.manifest_path.write_bytes(data)
+                self.assertEqual(self.run_stage()[0], 1)
+                self.assertFalse(self.output.exists())
+        self.manifest_path.unlink()
+        self.assertEqual(self.run_stage()[0], 1)
+        self.manifest_path.mkdir()
+        self.assertEqual(self.run_stage()[0], 1)
+        self.manifest_path.rmdir()
+        for target in (self.render, self.fixture.source / 'missing.json'):
+            self.manifest_path.symlink_to(target)
+            self.assertEqual(self.run_stage()[0], 1)
+            self.manifest_path.unlink()
+        self.assertFalse(self.output.exists())
+
+    def test_cli_requires_output_and_at_least_one_render(self):
+        for args in (['stage-render'], ['stage-render', '--output', str(self.output)],
+                     ['stage-render', str(self.render)]):
+            with self.subTest(args=args), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    tool.main(args)
+                self.assertEqual(raised.exception.code, 2)
+        with self.assertRaisesRegex(tool.StageError, 'at least one'):
+            tool.stage_render(self.manifest_path, self.output, [])
+        self.assertFalse(self.output.exists())
+
+    def test_existing_destinations_are_untouched_including_empty_and_dangling(self):
+        self.output.write_bytes(b'existing file')
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertEqual(self.output.read_bytes(), b'existing file')
+        self.output.unlink()
+        self.output.mkdir()
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertEqual(list(self.output.iterdir()), [])
+        (self.output / 'user.txt').write_bytes(b'user content')
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertEqual((self.output / 'user.txt').read_bytes(), b'user content')
+        (self.output / 'user.txt').unlink()
+        self.output.rmdir()
+        for target in (self.fixture.source, self.fixture.root / 'missing'):
+            self.output.symlink_to(target)
+            self.assertEqual(self.run_stage()[0], 1)
+            self.assertTrue(self.output.is_symlink())
+            self.assertEqual(self.output.readlink(), target)
+            self.output.unlink()
+
+    def test_output_parent_must_exist(self):
+        self.output = self.output / 'nested'
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertFalse(self.output.parent.exists())
+
+    def test_destination_created_after_preflight_is_not_reused_or_removed(self):
+        original_mkdir = Path.mkdir
+        for kind in ('directory', 'file', 'symlink'):
+            with self.subTest(kind=kind):
+                def race(path, *args, **kwargs):
+                    if path == self.output:
+                        if kind == 'directory':
+                            original_mkdir(path)
+                            (path / 'user.txt').write_bytes(b'racing directory')
+                        elif kind == 'file':
+                            path.write_bytes(b'racing file')
+                        else:
+                            path.symlink_to(self.fixture.root / 'absent')
+                    return original_mkdir(path, *args, **kwargs)
+                with patch.object(Path, 'mkdir', race):
+                    self.assertEqual(self.run_stage()[0], 1)
+                if kind == 'directory':
+                    self.assertEqual((self.output / 'user.txt').read_bytes(), b'racing directory')
+                    (self.output / 'user.txt').unlink()
+                    self.output.rmdir()
+                elif kind == 'file':
+                    self.assertEqual(self.output.read_bytes(), b'racing file')
+                    self.output.unlink()
+                else:
+                    self.assertTrue(self.output.is_symlink())
+                    self.output.unlink()
+
+    def test_output_file_created_during_copy_is_never_overwritten(self):
+        original_write = tool._stage_write
+        for kind in ('file', 'symlink'):
+            self.output = self.fixture.root / f'racing-output-{kind}'
+
+            def insert_file(directory, name, source):
+                target = self.output / name
+                if kind == 'file':
+                    target.write_bytes(b'racing user file')
+                else:
+                    target.symlink_to(self.other)
+                original_write(directory, name, source)
+
+            with self.subTest(kind=kind), patch.object(tool, '_stage_write', insert_file):
+                result, error = self.run_stage()
+            self.assertEqual(result, 1)
+            self.assertIn('staging incomplete', error)
+            target = self.output / self.render.name
+            if kind == 'file':
+                self.assertEqual(target.read_bytes(), b'racing user file')
+            else:
+                self.assertTrue(target.is_symlink())
+                self.assertEqual(target.readlink(), self.other)
+                self.assertEqual(self.other.read_bytes(), b'animation bytes\x00\xff')
+            self.assertEqual(len(list(self.output.iterdir())), 1)
+
+    def test_copy_failures_retain_partial_outputs_with_explicit_status(self):
+        original_copy = tool.shutil.copyfileobj
+        for fail_at in range(1, 5):
+            self.output = self.fixture.root / f'failed-copy-{fail_at}'
+            calls = 0
+
+            def fail_copy(source, target):
+                nonlocal calls
+                calls += 1
+                if calls == fail_at:
+                    target.write(b'partial output')
+                    raise OSError('injected copy failure')
+                original_copy(source, target)
+
+            with self.subTest(copy=fail_at), patch.object(tool.shutil, 'copyfileobj', fail_copy):
+                result, error = self.run_stage(self.render, self.other)
+            self.assertEqual(result, 1)
+            self.assertIn('injected copy failure', error)
+            self.assertIn('staging incomplete', error)
+            self.assertIn(str(self.output.absolute()), error)
+            self.assertEqual(len(list(self.output.iterdir())), fail_at)
+            partial = (self.render.name, self.other.name, 'manifest.json', 'ATTRIBUTION.md')[fail_at - 1]
+            self.assertEqual((self.output / partial).read_bytes(), b'partial output')
+            if fail_at <= 2:
+                self.assertFalse((self.output / 'manifest.json').exists())
+                self.assertFalse((self.output / 'ATTRIBUTION.md').exists())
+        self.assertEqual(self.manifest_path.read_bytes(), self.manifest_bytes)
+        self.assertEqual(self.render.read_bytes(), b'\x89PNG\r\n\x1a\n\x00exact fixture bytes\xff')
+
+    def test_direct_writer_failure_retains_partial_bytes_and_returns_failure(self):
+        original_fdopen = os.fdopen
+
+        class BrokenWriter:
+            def __init__(self, stream):
+                self.stream = stream
+
+            def __enter__(self):
+                self.stream.__enter__()
+                return self
+
+            def __exit__(self, *args):
+                return self.stream.__exit__(*args)
+
+            def write(self, data):
+                self.stream.write(data[:3])
+                raise OSError('injected write failure')
+
+        def fail_write(fd, mode, *args, **kwargs):
+            stream = original_fdopen(fd, mode, *args, **kwargs)
+            return BrokenWriter(stream) if mode == 'wb' else stream
+
+        with patch.object(tool.os, 'fdopen', fail_write):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('injected write failure', error)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual((self.output / self.render.name).read_bytes(), self.render.read_bytes()[:3])
+        self.assertFalse((self.output / 'manifest.json').exists())
+        self.assertFalse((self.output / 'ATTRIBUTION.md').exists())
+
+    def test_file_creation_failure_retains_prior_outputs_and_reports_incomplete(self):
+        original_open = os.open
+
+        def fail_open(path, *args, **kwargs):
+            if path == 'ATTRIBUTION.md':
+                raise OSError('injected output creation failure')
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(tool.os, 'open', fail_open):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('injected output creation failure', error)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual((self.output / self.render.name).read_bytes(), self.render.read_bytes())
+        self.assertEqual((self.output / 'manifest.json').read_bytes(), self.manifest_bytes)
+        self.assertFalse((self.output / 'ATTRIBUTION.md').exists())
+
+    def test_failure_preserves_user_added_or_replaced_files(self):
+        original_write = tool._stage_write
+        for replacement in ('added', 'replaced', 'symlink'):
+            self.output = self.fixture.root / f'failure-{replacement}'
+            def fail_after_render(directory, name, source):
+                if name == 'manifest.json':
+                    if replacement == 'added':
+                        (self.output / 'user.txt').write_bytes(b'user addition')
+                    else:
+                        target = self.output / self.render.name
+                        target.unlink()
+                        if replacement == 'replaced':
+                            target.write_bytes(b'user replacement')
+                        else:
+                            target.symlink_to(self.other)
+                    raise OSError('injected later failure')
+                original_write(directory, name, source)
+
+            with self.subTest(replacement=replacement), \
+                    patch.object(tool, '_stage_write', fail_after_render):
+                result, error = self.run_stage()
+            self.assertEqual(result, 1)
+            self.assertIn('staging incomplete', error)
+            target = self.output / ('user.txt' if replacement == 'added' else self.render.name)
+            self.assertEqual(len(list(self.output.iterdir())), 2 if replacement == 'added' else 1)
+            if replacement == 'symlink':
+                self.assertTrue(target.is_symlink())
+                self.assertEqual(target.readlink(), self.other)
+            else:
+                self.assertEqual(target.read_bytes(),
+                                 b'user addition' if replacement == 'added' else b'user replacement')
+
+    def test_replaced_output_directory_is_left_untouched(self):
+        original_write = tool._stage_write
+        moved = self.fixture.root / 'moved-distribution'
+
+        def replace_directory(directory, name, source):
+            original_write(directory, name, source)
+            if name == self.render.name:
+                self.output.rename(moved)
+                self.output.mkdir()
+                (self.output / 'user.txt').write_bytes(b'user directory')
+
+        with patch.object(tool, '_stage_write', replace_directory):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual((self.output / 'user.txt').read_bytes(), b'user directory')
+        self.assertEqual({p.name for p in moved.iterdir()},
+                         {self.render.name, 'manifest.json', 'ATTRIBUTION.md'})
+
+    def test_failure_never_attempts_destructive_cleanup(self):
+        with patch.object(tool.shutil, 'copyfileobj', side_effect=OSError('copy failed')), \
+                patch.object(tool.os, 'unlink', side_effect=AssertionError('must not unlink')), \
+                patch.object(Path, 'rmdir', side_effect=AssertionError('must not remove directories')):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('copy failed', error)
+        self.assertIn('staging incomplete', error)
+        self.assertIn(str(self.output.absolute()), error)
+        self.assertTrue((self.output / self.render.name).exists())
+
+    def test_directory_replaced_immediately_after_mkdir_survives_failure(self):
+        original_mkdir = Path.mkdir
+        moved = self.fixture.root / 'original-directory'
+
+        def replace_after_mkdir(path, *args, **kwargs):
+            result = original_mkdir(path, *args, **kwargs)
+            if path == self.output:
+                path.rename(moved)
+                original_mkdir(path)
+                (path / 'user.txt').write_bytes(b'racing user directory')
+            return result
+
+        with patch.object(Path, 'mkdir', replace_after_mkdir), \
+                patch.object(tool.shutil, 'copyfileobj', side_effect=OSError('copy failed')):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual((self.output / 'user.txt').read_bytes(), b'racing user directory')
+        self.assertTrue(moved.is_dir())
+
+    def test_input_replaced_by_symlink_during_open_is_refused(self):
+        original_open = os.open
+
+        def replace_input(path, *args, **kwargs):
+            if path == self.render:
+                self.render.unlink()
+                self.render.symlink_to(self.other)
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(tool.os, 'open', replace_input):
+            self.assertEqual(self.run_stage()[0], 1)
+        self.assertFalse(self.output.exists())
+        self.assertEqual(self.other.read_bytes(), b'animation bytes\x00\xff')
+
+    def test_input_replaced_by_regular_file_during_open_is_refused(self):
+        original_open = os.open
+        original_bytes = self.render.read_bytes()
+        moved = self.fixture.source / 'original-render.png'
+
+        def replace_input(path, *args, **kwargs):
+            if path == self.render:
+                self.render.rename(moved)
+                self.render.write_bytes(b'replacement input')
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(tool.os, 'open', replace_input):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('input changed while opening it', error)
+        self.assertFalse(self.output.exists())
+        self.assertEqual(moved.read_bytes(), original_bytes)
+        self.assertEqual(self.render.read_bytes(), b'replacement input')
+
+    def test_credits_stdout_flags_and_output_still_create_no_sidecars(self):
+        common = ['--manifest', str(self.manifest_path), 'credits']
+        before = {p for p in self.fixture.root.rglob('*')}
+        for everything in (False, True):
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(tool.main([*common, *(['--all'] if everything else [])]), 0)
+            self.assertEqual(output.getvalue(), tool.credits(self.manifest, everything))
+            self.assertEqual({p for p in self.fixture.root.rglob('*')}, before)
+        destination = self.fixture.root / 'custom-credits.md'
+        self.assertEqual(tool.main([*common, '--output', str(destination)]), 0)
+        self.assertEqual(destination.read_text(), tool.credits(self.manifest))
+        self.assertEqual({p for p in self.fixture.root.rglob('*')}, before | {destination})
 
 
 class CreditTests(unittest.TestCase):
