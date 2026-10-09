@@ -35,7 +35,6 @@ from loaders.gltf import load_gltf
 from loaders.draco import (
     DRACO_COMPRESSED,
     DRACO_CORNER,
-    DRACO_INTEGER,
     DRACO_NORMALS,
     DRACO_POINT_CLOUD,
     DRACO_QUANTIZED,

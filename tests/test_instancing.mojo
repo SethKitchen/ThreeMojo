@@ -45,7 +45,6 @@ from units.si import Angle, DEGREE, Length, METER
 
 comptime WIDTH = 24
 comptime HEIGHT = 18
-comptime TOLERANCE = Float64(1e-6)
 
 
 def a_camera(z: Float32 = 6) raises -> PerspectiveCamera:

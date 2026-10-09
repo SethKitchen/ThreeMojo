@@ -46,6 +46,7 @@ from generators.utils import (
     Vec3d,
     basis_matrix,
     generator_random,
+    length_meters as _len,
     meters,
     place,
     place_yaw_scale,
@@ -395,11 +396,6 @@ def _plan_tower(
             Vec3d(fw, total_height, fd),
         )
     )
-
-
-def _len(value: Float64) -> Length:
-    """Return a number of meters as a length."""
-    return Length(Float32(value), METER)
 
 
 def _plan_edge(

@@ -255,7 +255,6 @@ from std.testing import (
 )
 from units.si import FOOT, Length, MILLIMETER
 
-comptime TOLERANCE = 1.0e-5
 comptime COARSE = Length(4.0, MILLIMETER)
 
 

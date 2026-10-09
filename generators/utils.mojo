@@ -325,6 +325,30 @@ def radians(angle: Angle) -> Float64:
     return Float64(angle.to(RADIAN))
 
 
+def length_meters(value: Float64) -> Length:
+    """Return a number of meters as a length.
+
+    Args:
+        value: The size in meters.
+
+    Returns:
+        The length.
+    """
+    return Length(Float32(value), METER)
+
+
+def angle_radians(value: Float64) -> Angle:
+    """Return a number of radians as an angle.
+
+    Args:
+        value: The size in radians.
+
+    Returns:
+        The angle.
+    """
+    return Angle(Float32(value), RADIAN)
+
+
 def check_finite(value: Float64, what: String) raises:
     """Refuse a number that is infinite or not a number.
 
