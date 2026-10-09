@@ -58,6 +58,8 @@ from extensions.water.view import (
     require_view,
 )
 from cameras.camera import Camera
+from core.scene import Scene
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from std.math import cos, exp, isfinite, pow, sin, sqrt, tan
@@ -944,11 +946,13 @@ struct WaterScene(Movable):
             caustic_grid: Ray-grid cells on one side.
             caustic_resolution: Caustic texels on one side.
             glare_resolution: Diffraction FFT size.
-            start: The clock of the first frame.
+            start: The finite clock of the first frame. It can be negative.
 
         Raises:
-            Error: If a resolution is not valid.
+            Error: If a resolution is not valid, or `start` is not finite.
         """
+        if not isfinite(start.value):
+            raise Error("A water start clock must be finite")
         self.ocean = ocean
         self.caustic_grid = caustic_grid
         self.caustic_resolution = caustic_resolution
@@ -1007,13 +1011,17 @@ struct WaterScene(Movable):
             drop: True taps the middle of the ripple window this step.
 
         Raises:
-            Error: If `dt` is not finite or is negative.
+            Error: If `dt` is not finite or is negative, or the next clock
+                is not finite. The simulation does not change on refusal.
         """
         if not (isfinite(dt.value) and dt.value >= 0):
             raise Error("A water time step must be finite and nonnegative")
+        var next_clock = self.clock.value + dt.value
+        if not isfinite(next_clock):
+            raise Error("The next water clock must be finite")
         var strength = Float32(0.07) if drop else Float32(0.0)
         step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
-        self.clock = Duration(self.clock.value + dt.value, SECOND)
+        self.clock = Duration(next_clock, SECOND)
         self.steps += 1
 
     def _surface(self) raises -> SurfaceField:
@@ -1050,7 +1058,7 @@ struct WaterScene(Movable):
         its pixel, and water nearer than the geometry replaces it and writes
         its depth. A ray at or above the horizon leaves the pixel alone. The
         water is an endless plane at `water_level` that repeats the ocean
-        patch. It keeps Clearwater's own sun.
+        patch. It uses the direction set by `set_sun`.
 
         Parameters:
             C: The camera type.
@@ -1058,7 +1066,8 @@ struct WaterScene(Movable):
         Args:
             image: The rendered scene, with its depth buffer. It is changed.
             camera: The camera that rendered `image`. It must be a centered
-                perspective camera above the water.
+                perspective camera above the water, not attached to a node.
+                Use the scene overload for an attached camera.
             water_level: The world height of the still water plane.
             bed: The pebble photograph.
 
@@ -1067,13 +1076,72 @@ struct WaterScene(Movable):
 
         Raises:
             Error: If the camera is not a centered perspective camera, it
-                is not above the water, or a matrix is invalid.
+                is not above the water, is attached, or a matrix is invalid.
         """
-        var projection = camera.projection_matrix()
+        return self._compose_view(
+            image,
+            camera.projection_matrix(),
+            camera.view_matrix(),
+            water_level,
+            bed,
+        )
+
+    def compose[
+        C: Camera
+    ](
+        mut self,
+        mut image: Framebuffer,
+        scene: Scene,
+        camera: C,
+        water_level: Length,
+        bed: PebbleBed,
+    ) raises -> Int:
+        """Compose water through the same camera and scene as the renderer.
+
+        Resolve the camera's view before changing the framebuffer. An
+        attached camera uses its node's current world transform, including
+        its parents. A detached camera keeps the placement from `place`.
+
+        Parameters:
+            C: The camera type.
+
+        Args:
+            image: The rendered scene, with its depth buffer. It is changed.
+            scene: The scene that was rendered, with current world matrices.
+            camera: The centered perspective camera that rendered `image`.
+                It must be above the water. It can be attached to a node.
+            water_level: The world height of the still water plane.
+            bed: The pebble photograph.
+
+        Returns:
+            How many pixels now show water.
+
+        Raises:
+            Error: If the camera's view is invalid, its node is absent, or
+                the attached scene is stale. Also if the projection is not
+                centered perspective, or the camera is not above the water.
+        """
+        return self._compose_view(
+            image,
+            camera.projection_matrix(),
+            camera.view_matrix_in(scene),
+            water_level,
+            bed,
+        )
+
+    def _compose_view(
+        mut self,
+        mut image: Framebuffer,
+        projection: Matrix4,
+        view: Matrix4,
+        water_level: Length,
+        bed: PebbleBed,
+    ) raises -> Int:
+        # Both public paths resolve exactly one view before any image writes.
         ref p = projection.elements
         if p[11] != -1.0 or p[8] != 0.0 or p[9] != 0.0:
             raise Error("Water composition needs a centered perspective camera")
-        var world = camera.view_matrix()
+        var world = view
         world.invert()
         ref w = world.elements
         var above = w[13] - water_level.value
@@ -1100,7 +1168,7 @@ struct WaterScene(Movable):
             w[14],
         )
         var clip = projection
-        clip.multiply(camera.view_matrix())
+        clip.multiply(view)
         var surface = self._surface()
         var caustics = self._caustics(surface)
         var clock = self.clock
@@ -1297,7 +1365,7 @@ def render_water(
     Args:
         width: Image width in pixels. It must be positive.
         height: Image height in pixels. It must be positive.
-        clock: Seconds since the start.
+        clock: Finite seconds since the start. It can be negative.
         view: Which picture. See `WaterView`.
         sway: True adds the idle camera bob.
         ocean: Spectrum resolution.
@@ -1313,7 +1381,7 @@ def render_water(
         texture scaled by 0.25, without the tone curve.
 
     Raises:
-        Error: If a size or the view is not valid.
+        Error: If a size or the view is not valid, or `clock` is not finite.
     """
     if width <= 0 or height <= 0:
         raise Error("Water image dimensions must be positive")

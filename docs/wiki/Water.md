@@ -57,7 +57,11 @@ for frame in range(60):
     var image = scene.draw(320, 180, FRAME, True, bed, Angle(-0.72, RADIAN))
 ```
 
-`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. `draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
+`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. The resulting clock must also be finite. A refused step leaves the ripples, clock and step count unchanged.
+
+`draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
+
+The start clock must be finite. Finite negative start times are valid. `WaterScene` checks the start before it builds resources. This also makes `render_water` refuse nonfinite time. Earlier versions could propagate a nonfinite time into the picture. Valid finite times keep the same arithmetic and step order.
 
 `reset` returns the ripples and the clock to the start. It keeps the spectrum and the glare kernels. The buffers keep their sizes for the life of the scene.
 
@@ -65,12 +69,14 @@ for frame in range(60):
 
 ## Compose it with a scene
 
-Use `compose` to put the water into a picture that the renderer made. Pass the rendered framebuffer, the camera that rendered it and the height of the still water.
+Use `compose` to put the water into a picture that the renderer made. Pass the rendered framebuffer, the updated scene, its camera and the height of the still water. An attached camera uses its node and parent transforms.
 
 ```mojo
 var image = renderer.render(scene, assets, camera)
-var shown = water.compose(image, camera, Length(0.0, METER), bed)
+var shown = water.compose(image, scene, camera, Length(0.0, METER), bed)
 ```
+
+The overload without a scene accepts detached cameras. An attached camera with a stale scene or invalid node is refused before any pixels or depths change. Update the scene before rendering and composing.
 
 Each pixel casts the camera's own ray. A ray that reaches the water shades it as the `LINEAR` picture does. Its depth is then tested against the framebuffer.
 
