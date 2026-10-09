@@ -21,7 +21,7 @@ Original local subdivision/accuracy limits remain in effect.
 
 A single builder ledger continues through input preflight, lane linking, sorting, the Map index, junction bounds, conflict pairs and repeated sign-localization queries. Sorting reserves its worst-case comparison count. Source record admission happens before builder mutation. A later failure can consume a builder, as a move-based construction operation, but no partial public Map is returned.
 
-The XML document and the input Road/record containers already exist before building. These policies do not cap XML parsing, input-file size, allocator bytes or exact RSS. They count logical work/storage units. Border records count as source storage; this does not implement or certify the separate unsupported border-only geometry contract.
+The XML document and the input Road/record containers already exist before building. These policies do not cap XML parsing, input-file size, allocator bytes or exact RSS. They count logical work/storage units. Border records count as source storage. The width records that the reader makes for a border-only lane count as width records; see [CARLA lane borders](CARLA-lane-borders).
 
 There is no persistent validation cache that survives public record mutation. As before, changing source road records invalidates an existing Map index snapshot.
 

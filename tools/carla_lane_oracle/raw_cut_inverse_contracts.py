@@ -3,10 +3,10 @@
 """Exact guarded raw-inverse successor; no unproved branch exclusion."""
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/raw-cut-inverse-migration.json'
 MIGRATION_SHA256 = '4f4eb051d9c1f9194796d3073fcadfa9f49dda4c44a851da0a3409ba09587dd0'
@@ -39,10 +39,10 @@ def verify_premises(root):
     # Independently bind the complete lexical operations rather than relying
     # on the successor digest. The proof requires this exact stored predicate,
     # fresh environment guard, admission tests, and ordered adjacent candidates.
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     record = read_record(root)
     require(guard.significant((root/SOURCE_PATH).read_text()) ==
             guard.significant(record['after_source']), 'raw inverse operation graph changed')

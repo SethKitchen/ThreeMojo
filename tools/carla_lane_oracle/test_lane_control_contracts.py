@@ -28,7 +28,18 @@ class LaneControlContracts(unittest.TestCase):
         for rel in files:
             dest = self.root / rel
             dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(self.source / rel, dest)
+            if rel == 'extensions/carla/map.mojo':
+                import seed_count_contracts as seed
+                text = (self.source/rel).read_bytes().decode('utf-8')
+                if seed.sha(text) == seed.SCORE_AFTER_SHA256:
+                    # Keep this partial lane-mutation fixture at the verified
+                    # predecessor, as the lane-order/cache fixtures already do.
+                    seed.verify_score(self.source)
+                    self.assertEqual((self.source/rel).read_bytes().decode('utf-8'), text)
+                    text = seed.score_predecessor_source(text)
+                dest.write_bytes(text.encode('utf-8'))
+            else:
+                shutil.copyfile(self.source / rel, dest)
 
     def tearDown(self):
         self.temp.cleanup()

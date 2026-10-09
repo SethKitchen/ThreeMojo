@@ -148,7 +148,7 @@ The cost is memory. An integer attribute holds its numbers twice.
 
 ### Who reads the integers
 
-- The [glTF loader](glTF) reads each vertex attribute in its accessor's component type, with its `normalized` flag. A quantized attribute of `KHR_mesh_quantization` keeps its integers.
+- The [glTF loader](Model-files#gltf) reads each vertex attribute in its accessor's component type, with its `normalized` flag. A quantized attribute of `KHR_mesh_quantization` keeps its integers.
 - The glTF exporter writes an integer attribute in its own component type, with `normalized`. It requires `KHR_mesh_quantization` for the types that extension names, as three.js does. A 32-bit integer attribute is written as floats, as three.js converts one.
 - [Scene JSON](Scene-JSON) writes and reads the typed array's name, its integers and `normalized`.
 

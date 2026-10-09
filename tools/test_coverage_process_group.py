@@ -18,11 +18,17 @@ class FakeChild:
     def __init__(self, exit_status):
         self.pid = 4242
         self.exit_status = exit_status
-        self.polls = 0
+        self.waits = 0
+        self.returncode = None
 
-    def poll(self):
-        self.polls += 1
-        return self.exit_status
+    def wait(self, timeout):
+        if timeout != 0:
+            raise AssertionError('the helper must never use a blocking wait')
+        self.waits += 1
+        if self.exit_status is None:
+            raise subprocess.TimeoutExpired('owned', timeout)
+        self.returncode = self.exit_status
+        return self.returncode
 
 
 def denied():
@@ -43,10 +49,9 @@ class KillOwnedGroupTests(unittest.TestCase):
             if result is not None:
                 raise result
         with patch.object(group.sys, 'platform', platform), \
-                patch.object(group.os, 'killpg', side_effect=killpg), \
-                patch.object(group.time, 'sleep'):
+                patch.object(group.os, 'killpg', side_effect=killpg):
             try:
-                return group.kill_owned_group(child, settle=0.05), calls
+                return group.kill_owned_group(child, reap=child.wait), calls
             except PermissionError as error:
                 return error, calls
 
@@ -54,30 +59,43 @@ class KillOwnedGroupTests(unittest.TestCase):
         for first in (None, gone()):
             child = FakeChild(0)
             reaped, calls = self.kill(child, [first])
-            self.assertIs(reaped, False)
+            self.assertIsNone(reaped)
             self.assertEqual(calls, [(4242, signal.SIGKILL)])
-            self.assertEqual(child.polls, 0)
+            self.assertEqual(child.waits, 0)
 
     def test_eperm_off_macos_is_a_real_denial(self):
         child = FakeChild(0)
         error, calls = self.kill(child, [denied()], platform='linux')
         self.assertIsInstance(error, PermissionError)
         self.assertEqual(calls, [(4242, signal.SIGKILL)])
-        self.assertEqual(child.polls, 0)
+        self.assertEqual(child.waits, 0)
+
+    def test_darwin_eacces_is_not_reclassified_as_eperm(self):
+        child = FakeChild(0)
+        error, calls = self.kill(child, [PermissionError(errno.EACCES, 'denied')])
+        self.assertEqual(error.errno, errno.EACCES)
+        self.assertEqual(calls, [(4242, signal.SIGKILL)])
+        self.assertEqual(child.waits, 0)
+
+    def test_ownership_callback_is_required_before_a_destructive_signal(self):
+        with patch.object(group.os, 'killpg') as kill:
+            with self.assertRaises(TypeError):
+                group.kill_owned_group(FakeChild(0))
+        kill.assert_not_called()
 
     def test_live_leader_with_eperm_is_rejected(self):
         child = FakeChild(None)
         error, calls = self.kill(child, [denied()])
         self.assertIsInstance(error, PermissionError)
         self.assertEqual(calls, [(4242, signal.SIGKILL)])
-        self.assertEqual(child.polls, 1)
+        self.assertEqual(child.waits, 1)
 
     def test_reaped_leader_with_absent_group_is_accepted(self):
         child = FakeChild(-9)
-        reaped, calls = self.kill(child, [denied(), denied(), gone()])
-        self.assertIs(reaped, True)
+        reaped, calls = self.kill(child, [denied(), gone()])
+        self.assertIsNone(reaped)
         # After the reap, only signal 0 reaches the group.
-        self.assertEqual(calls, [(4242, signal.SIGKILL), (4242, 0), (4242, 0)])
+        self.assertEqual(calls, [(4242, signal.SIGKILL), (4242, 0)])
 
     def test_reaped_leader_with_surviving_group_is_rejected(self):
         child = FakeChild(0)
@@ -85,28 +103,30 @@ class KillOwnedGroupTests(unittest.TestCase):
         self.assertIsInstance(error, PermissionError)
         self.assertEqual(calls, [(4242, signal.SIGKILL), (4242, 0)])
 
-    def test_reaped_leader_with_denied_group_is_rejected_after_settle(self):
+    def test_reaped_leader_with_denied_group_is_rejected_without_a_new_budget(self):
         child = FakeChild(0)
         error, calls = self.kill(child, [denied()])
         self.assertIsInstance(error, PermissionError)
-        self.assertGreater(len(calls), 2)
+        self.assertEqual(len(calls), 2)
         self.assertTrue(all(number == 0 for _, number in calls[1:]))
 
     def test_capture_stops_signaling_a_leader_it_reaped(self):
         process = coverage_io._CaptureProcess(['true'], None, None, None)
         process.child, process.active = FakeChild(0), True
-        with patch.object(coverage_io, 'kill_owned_group', return_value=True) as kill:
+        with patch.object(group.sys, 'platform', 'darwin'), \
+                patch.object(group.os, 'killpg', side_effect=[denied(), gone()]) as kill:
             process._kill()
             process._kill()
-        kill.assert_called_once_with(process.child)
+        self.assertEqual(kill.call_count, 2)
+        self.assertEqual(process.child.waits, 1)
         self.assertFalse(process.active)
 
     def test_capture_keeps_ownership_while_the_leader_is_unreaped(self):
         process = coverage_io._CaptureProcess(['true'], None, None, None)
         process.child, process.active = FakeChild(None), True
-        with patch.object(coverage_io, 'kill_owned_group', return_value=False) as kill:
+        with patch.object(coverage_io, 'kill_owned_group') as kill:
             process._kill()
-        kill.assert_called_once_with(process.child)
+        kill.assert_called_once_with(process.child, reap=process._reap)
         self.assertTrue(process.active)
 
     @unittest.skipUnless(hasattr(os, 'killpg'), 'POSIX process groups')
@@ -114,7 +134,7 @@ class KillOwnedGroupTests(unittest.TestCase):
         child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'],
                                  start_new_session=True)
         try:
-            self.assertIs(group.kill_owned_group(child), False)
+            self.assertIsNone(group.kill_owned_group(child, reap=child.wait))
             self.assertEqual(child.wait(timeout=5), -signal.SIGKILL)
         finally:
             if child.returncode is None:

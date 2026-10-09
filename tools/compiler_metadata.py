@@ -17,6 +17,7 @@ import selectors
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 from coverage_process_group import kill_owned_group
@@ -32,14 +33,68 @@ BUILD_ARGS = ['-I', '.', '--num-threads', '1',
               '--Werror',
               '-o', '.cache/bin/test_exact_predicates', 'tests/test_exact_predicates.mojo']
 
+_REAP_STATE = threading.local()
+
+
+class _ReapGuard:
+    def __init__(self):
+        self.active = False
+        self.pending = None
+
+    def deliver(self, error):
+        if self.active:
+            if self.pending is None:
+                self.pending = error
+        else:
+            raise error
+
 
 def read_command(command, timeout=TIMEOUT, limit=MAX_OUTPUT):
     """Read at most limit bytes; stop only the owned metadata process on error."""
     child = None
     reaped = False
+    can_signal = False
+    reap_error = None
+
+    def wait_owned(timeout):
+        nonlocal can_signal, reaped, reap_error
+        deadline = time.monotonic() + timeout
+        while True:
+            # main's stable callbacks defer only across a nonblocking reap
+            # and ownership update. Thread-local signal masking alone cannot
+            # prevent Python callbacks delivered through another thread.
+            guard = getattr(_REAP_STATE, 'guard', None)
+            was_guarded = guard.active if guard is not None else False
+            if guard is not None:
+                guard.active = True
+            was_owned = can_signal
+            can_signal = False
+            try:
+                try:
+                    code = child.wait(timeout=0)
+                except subprocess.TimeoutExpired:
+                    can_signal = was_owned
+                except BaseException as error:
+                    reap_error = error
+                    raise
+                else:
+                    reaped = True
+                    return code
+            finally:
+                if guard is not None:
+                    guard.active = was_guarded
+                    if not was_guarded and guard.pending is not None:
+                        error, guard.pending = guard.pending, None
+                        raise error
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise subprocess.TimeoutExpired(command, timeout)
+            time.sleep(min(0.01, remaining))
+
     try:
         child = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                                  start_new_session=True)
+        can_signal = True
         data = bytearray()
         deadline = time.monotonic() + timeout
         with selectors.DefaultSelector() as selector:
@@ -57,25 +112,28 @@ def read_command(command, timeout=TIMEOUT, limit=MAX_OUTPUT):
                         if len(data) > limit:
                             return None, 'output-limit'
             try:
-                code = child.wait(timeout=max(0.001, deadline - time.monotonic()))
-                reaped = True
+                code = wait_owned(timeout=max(0.001, deadline - time.monotonic()))
             except subprocess.TimeoutExpired:
                 return None, 'timeout'
         return (data.decode('ascii', 'replace'), 'ok') if code == 0 else (None, 'failed')
     except OSError:
+        if reap_error is not None:
+            raise
         return None, 'unavailable'
     finally:
         if child is not None:
-            if not reaped:
-                # No poll/wait has reaped this PID on an early return, so its
-                # owned group cannot be confused with a reused PID/group.
-                kill_owned_group(child)
-                try:
-                    child.wait(timeout=1.0)
-                except subprocess.TimeoutExpired:
-                    raise MetadataDeadline()
-            if child.stdout is not None:
-                child.stdout.close()
+            try:
+                if not reaped and can_signal:
+                    # No poll/wait has reaped this PID on an early return, so its
+                    # owned group cannot be confused with a reused PID/group.
+                    kill_owned_group(child, reap=wait_owned)
+                    try:
+                        wait_owned(timeout=1.0)
+                    except subprocess.TimeoutExpired:
+                        raise MetadataDeadline()
+            finally:
+                if child.stdout is not None:
+                    child.stdout.close()
 
 
 def file_identity(path):
@@ -155,17 +213,20 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('--compiler', default='.venv/bin/mojo')
     args = parser.parse_args(argv)
+    guard = _ReapGuard()
+    previous_guard = getattr(_REAP_STATE, 'guard', None)
 
     def expired(_number, _frame):
-        raise MetadataDeadline()
+        guard.deliver(MetadataDeadline())
 
     def cancelled(number, _frame):
         # Unwind read_command's cleanup before leaving this metadata process.
-        raise SystemExit(128 + number)
+        guard.deliver(SystemExit(128 + number))
 
     handlers = {number: signal.getsignal(number) for number in
                 (signal.SIGALRM, signal.SIGINT, signal.SIGTERM)}
     previous_timer = signal.getitimer(signal.ITIMER_REAL)
+    _REAP_STATE.guard = guard
     signal.signal(signal.SIGALRM, expired)
     signal.signal(signal.SIGINT, cancelled)
     signal.signal(signal.SIGTERM, cancelled)
@@ -179,6 +240,7 @@ def main(argv):
         except (Exception, MetadataDeadline):
             result = {'compiler_metadata': 1, 'status': 'unavailable'}
     finally:
+        _REAP_STATE.guard = previous_guard
         signal.setitimer(signal.ITIMER_REAL, 0)
         for number, handler in handlers.items():
             signal.signal(number, handler)

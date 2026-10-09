@@ -15,6 +15,8 @@ class WinnerSignContracts(unittest.TestCase):
     def test_source_correspondence_and_distinct_lexical_owners(self):
         result = contracts.verify(ROOT)
         self.assertEqual(result['source_bound_helpers'], 4)
+        self.assertEqual(result['numerical_score_helpers'], int(
+            'def _winner_seed_update_score(' in (ROOT/'extensions/carla/map.mojo').read_text()))
         self.assertEqual(result['fresh_environment_entries'], 2)
         self.assertFalse(result['native_qualification_claimed'])
         text = (ROOT/'extensions/carla/map.mojo').read_text()
@@ -29,18 +31,23 @@ class WinnerSignContracts(unittest.TestCase):
     def test_disabled_or_underpriced_optional_routes_reject(self):
         path = ROOT/'extensions/carla/map.mojo'
         original = path.read_text()
+        reserve = ('min(len(winner.cells), 16373)'
+                   if 'var winner_followup = min(len(winner.cells), 16373) + 12' in original
+                   else 'len(winner.cells)')
+        incumbent = ('incumbent' if 'def _winner_seed_update_score(' in original
+                     else 'certificate.point')
         replacements = (
             ('work._step(60)', 'work._step(59)'),
-            ('var winner_followup = len(winner.cells) + 12',
-             'var winner_followup = len(winner.cells) + 11'),
+            ('var winner_followup = '+reserve+' + 12',
+             'var winner_followup = '+reserve+' + 11'),
             ('var target_followup = target_cells + 12',
              'var target_followup = target_cells + 11'),
             ('var winner_units = proof_nodes + 255 + 50',
              'var winner_units = proof_nodes + 255 + 49'),
             ('return target_reference <= terms_left // 50',
              'return target_reference <= terms_left // 49'),
-            ('if _wide_point_order(point, certificate.point, query) < 0:',
-             'if _wide_point_order(point, certificate.point, query) <= 0:'),
+            ('if _wide_point_order(point, '+incumbent+', query) < 0:',
+             'if _wide_point_order(point, '+incumbent+', query) <= 0:'),
             ('work.charge(0, point_work, node_cost)',
              'work.charge(0, 0, node_cost)'),
         )

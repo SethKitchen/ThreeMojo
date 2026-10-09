@@ -127,5 +127,8 @@ The [road-s proof](CARLA-road-s-resolution) establishes why the current
 parameter-matched construction criterion is impossible for that fixture.
 The line and its direct-Road stored-point minima remain representable.
 Final consumer, coverage, format, generated-code and performance gates
-remain required. Border-only lanes (#577) and global work budgets (#580)
-are not implemented by these corrections.
+remain required. These corrections do not implement global work budgets
+(#580).
+
+The OpenDRIVE reader handles border-only lanes (#577). See
+[CARLA lane borders](CARLA-lane-borders).

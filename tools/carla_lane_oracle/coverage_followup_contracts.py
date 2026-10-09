@@ -3,18 +3,18 @@
 """Explicit reviewed raw-cut, finite-moment, budget, and ordered-lane lineage."""
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-try:
+if __package__:
+    from . import accepted_successor_contracts as accepted
+else:
     import accepted_successor_contracts as accepted
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import accepted_successor_contracts as accepted
-try:
+if __package__:
+    from . import cache_key_contracts as cache_key
+else:
     import cache_key_contracts as cache_key
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import cache_key_contracts as cache_key
 
 
 MIGRATION = 'tools/carla_lane_oracle/coverage-followup-migration.json'
@@ -83,18 +83,18 @@ def verify(root):
     for path,item in record['sources'].items():
         require(source.token_sha256(accepted.predecessor_text(root, path) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, (root/path).read_text())) == item['after_token_sha256'],
                 'complete successor changed: ' + path)
-    try:
+    if __package__:
+        from . import raw_cut_inverse_contracts as raw
+        from . import moment_finiteness_contracts as moment
+        from . import envelope_budget_contracts as budget
+        from . import lane_order_contracts as order
+        from . import selection_finiteness_contracts as selection
+    else:
         import raw_cut_inverse_contracts as raw
         import moment_finiteness_contracts as moment
         import envelope_budget_contracts as budget
         import lane_order_contracts as order
         import selection_finiteness_contracts as selection
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw
-        from tools.carla_lane_oracle import moment_finiteness_contracts as moment
-        from tools.carla_lane_oracle import envelope_budget_contracts as budget
-        from tools.carla_lane_oracle import lane_order_contracts as order
-        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
     raw.verify(root); moment.verify(root); budget.verify(root); order.verify(root); selection.verify(root)
     return record
 

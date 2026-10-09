@@ -79,6 +79,8 @@ class _CaptureProcess:
         self.environment, self.deadline = environment, deadline
         self.child = None
         self.active = False
+        self.cleanup_error = None
+        self.killing = False
         self.cancelled_status = None
         self.lock = threading.RLock()
         self.stopped = threading.Event()
@@ -86,9 +88,46 @@ class _CaptureProcess:
         self.handlers = {}
 
     def _kill(self):
-        if self.active and kill_owned_group(self.child):
-            # Reaped: the PID may be reused, so never signal it again.
-            self.active = False
+        # Python signal handlers can reenter this method despite the RLock.
+        # A nested cleanup must not reap between the active check and signal.
+        if self.killing:
+            return
+        self.killing = True
+        try:
+            self._kill_owned()
+        finally:
+            self.killing = False
+
+    def _kill_owned(self):
+        if self.cleanup_error is not None:
+            raise self.cleanup_error
+        if self.active:
+            try:
+                kill_owned_group(self.child, reap=self._reap)
+            except BaseException as error:
+                # Reaped/uncertain ownership must stay disarmed even when
+                # the helper's later probe fails or a signal interrupts it.
+                if not self.active:
+                    self.cleanup_error = error
+                raise
+
+    def _reap(self, timeout=None):
+        if self.cleanup_error is not None:
+            raise self.cleanup_error
+        # The caller holds the lock against the watchdog. Disarm first also
+        # covers a Python signal handler between kernel reaping and return.
+        was_active = self.active
+        self.active = False
+        try:
+            return self.child.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            self.active = was_active
+            raise
+        except BaseException as error:
+            # An interrupted/failed reap has uncertain ownership. Keep it
+            # disarmed and preserve the failure on later cancellation/exit.
+            self.cleanup_error = error
+            raise
 
     def cancel(self, status):
         with self.lock:
@@ -134,11 +173,13 @@ class _CaptureProcess:
             # cannot target a PID after wait has made it available for reuse.
             with self.lock:
                 try:
-                    status = self.child.wait(timeout=0)
+                    status = self._reap(timeout=0)
                 except subprocess.TimeoutExpired:
-                    pass
+                    # A handler may have recorded cancellation while reaping
+                    # was disarmed. Retry the signal only while still owned.
+                    if self.cancelled_status is not None:
+                        self._kill()
                 else:
-                    self.active = False
                     return self.cancelled_status if self.cancelled_status is not None else status
             # Never hold or repeatedly reacquire the lock while waiting: the
             # watchdog needs it even when a child closes stderr before exit.
@@ -152,8 +193,7 @@ class _CaptureProcess:
             with self.lock:
                 self._kill()
                 if self.child is not None:
-                    self.child.wait()
-                    self.active = False
+                    self._reap()
                     self.child.stderr.close()
         finally:
             for number, handler in self.handlers.items():

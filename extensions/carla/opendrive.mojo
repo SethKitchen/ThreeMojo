@@ -29,6 +29,12 @@ the unit or turn a road's no-limit/undefined keyword into numeric zero.
 Speed numbers are strict, finite and nonnegative. Other numeric fields
 keep the documented pugixml compatibility reader.
 
+**Border-only lanes.** CARLA stores `<border>` records and gives a lane
+with no `<width>` zero width. This reader makes width records from the
+borders of such a lane, as ASAM OpenDRIVE 1.8.1 section 11.6.2 defines
+them, and refuses the border combinations that ASAM forbids. Widths win
+where a lane has both.
+
 **Objects.** A crosswalk object becomes a crosswalk record. An object
 named "Speed_..." or "speed_..." becomes a speed-limit signal of type 274,
 and one whose name holds "Stencil_STOP" a stop signal of type 206, as
@@ -57,6 +63,14 @@ from extensions.carla.road_info import (
     lane_type_of,
 )
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
+from math.scaled_products import (
+    _Scaled,
+    _at_exponent,
+    _split,
+    _sum_products,
+    _two_sum,
+)
+from std.math import copysign, isfinite, sqrt
 from std.pathlib import Path
 
 comptime _INT32_MIN = -2147483648
@@ -399,10 +413,253 @@ def _geometries(doc: _Doc, mut builder: MapBuilder) raises:
                 )
 
 
+@fieldwise_init
+struct _Cubic(ImplicitlyCopyable):
+    # One lane record: its lane, where it starts along the road, and its
+    # cubic in the distance from that start.
+    var lane: Int
+    var start: Float64
+    var a: Float64
+    var b: Float64
+    var c: Float64
+    var d: Float64
+
+    def at(self, s: Float64) -> _Cubic:
+        # The same cubic, re-expanded about s (a Taylor shift).
+        var h = s - self.start
+        return _Cubic(
+            self.lane,
+            s,
+            self.a + h * (self.b + h * (self.c + h * self.d)),
+            self.b + h * (2.0 * self.c + 3.0 * h * self.d),
+            self.c + 3.0 * h * self.d,
+            self.d,
+        )
+
+    def value(self, x: Float64) -> Float64:
+        # The cubic at x meters past its start.
+        return self.a + x * (self.b + x * (self.c + x * self.d))
+
+
+def _active(records: List[_Cubic], s: Float64) -> _Cubic:
+    # The last record that starts at or before s. The first record starts
+    # at or before the section's start, and the caller's s is in the
+    # section.
+    var found = records[0]
+    # Every caller's list holds at least one record.
+    for record in records:
+        if record.start <= s:
+            found = record
+    return found
+
+
+def _border_ratio(
+    numerator: _Scaled[DType.float64], denominator: _Scaled[DType.float64]
+) -> Float64:
+    # The caller supplies a nonzero denominator. Keep its exponent until
+    # the final division; an infinite result is outside any finite piece.
+    return _at_exponent(
+        _split(
+            numerator.fraction / denominator.fraction,
+            numerator.exponent - denominator.exponent,
+        ),
+        0,
+    )
+
+
+def _lowest(cubic: _Cubic, length: Float64) raises -> Float64:
+    # The cubic's least value on [0, length]: at an end or where its
+    # derivative b + 2 c x + 3 d x^2 is zero.
+    if (
+        not isfinite(cubic.a)
+        or not isfinite(cubic.b)
+        or not isfinite(cubic.c)
+        or not isfinite(cubic.d)
+        or not isfinite(length)
+    ):
+        raise Error(
+            "OpenDRIVE <border> width needs finite coefficients and length"
+        )
+    if length < 0.0:
+        raise Error("OpenDRIVE <border> width needs a nonnegative length")
+    var last = cubic.value(length)
+    if not isfinite(last):
+        raise Error("OpenDRIVE <border> width exceeds the numeric range")
+    var lowest = min(cubic.a, last)
+    var roots = List[Float64]()
+    if cubic.d == 0.0:
+        if cubic.c != 0.0:
+            roots.append(
+                _border_ratio(
+                    _split(-cubic.b),
+                    _sum_products[DType.float64, 1]([cubic.c], [2.0], [1.0]),
+                )
+            )
+    else:
+        # c^2 - 3 d b has the exact sign of the finite stored coefficients.
+        # Exponent-tagged products avoid overflow, underflow and a false
+        # zero when nearly equal products cancel.
+        var discriminant = _sum_products[DType.float64, 2](
+            [cubic.c, cubic.d], [cubic.c, cubic.b], [1.0, -3.0]
+        )
+        if discriminant.fraction >= 0.0:
+            var divisor = _sum_products[DType.float64, 1](
+                [cubic.d], [3.0], [1.0]
+            )
+            if discriminant.fraction == 0.0:
+                roots.append(_border_ratio(_split(-cubic.c), divisor))
+            else:
+                var fraction = discriminant.fraction
+                var exponent = discriminant.exponent
+                if exponent % 2 != 0:
+                    fraction *= 2.0
+                    exponent -= 1
+                var root = _split(sqrt(fraction), exponent // 2)
+                root.fraction = -copysign(root.fraction, cubic.c)
+                var numerator = _two_sum(_split(-cubic.c), root)[0]
+                # One root uses the same-sign sum; the other uses the
+                # product of the roots. Neither subtracts near equals.
+                roots.append(_border_ratio(numerator, divisor))
+                roots.append(_border_ratio(_split(cubic.b), numerator))
+    for x in roots:
+        if x > 0.0 and x < length:
+            var value = cubic.value(x)
+            if not isfinite(value):
+                raise Error(
+                    "OpenDRIVE <border> width exceeds the numeric range"
+                )
+            lowest = min(lowest, value)
+    return lowest
+
+
+def _border_widths(
+    doc: _Doc, group: Int, s: Float64, end: Float64, offset_free: Bool
+) raises -> List[_Cubic]:
+    # ASAM OpenDRIVE 1.8.1, section 11.6.2: a <border> is a lane's outer
+    # limit, as a t-coordinate from the reference line. A lane with borders
+    # and no widths gets the width between its border and its inner
+    # neighbor's, or the reference line for lanes 1 and -1. Width records
+    # win where a lane has both. The rules exclusive_width_border,
+    # exclusive_offset_border and overlap_with_inner_lanes are refused.
+    var ids = List[Int]()
+    var borders = List[List[_Cubic]]()
+    var with_width = False
+    var bordered = 0
+    for node in doc.children(group, "lane"):
+        var id = doc.int(node, "id")
+        var records = List[_Cubic]()
+        if len(doc.children(node, "width")) > 0:
+            with_width = True
+        else:
+            for border in doc.children(node, "border"):
+                var record = _Cubic(
+                    id,
+                    doc.double(border, "sOffset") + s,
+                    doc.double(border, "a"),
+                    doc.double(border, "b"),
+                    doc.double(border, "c"),
+                    doc.double(border, "d"),
+                )
+                # Keep the records ordered by start; a tie keeps file order.
+                var at = len(records)
+                while at > 0 and records[at - 1].start > record.start:
+                    at -= 1
+                records.insert(at, record)
+        if len(records) > 0:
+            # Map building needs a width record at the section's start.
+            if records[0].start > s:
+                raise Error(
+                    "OpenDRIVE <border> lane "
+                    + String(id)
+                    + " has no border at its lane section's start"
+                )
+            bordered += 1
+        ids.append(id)
+        borders.append(records^)
+    var result = List[_Cubic]()
+    if bordered == 0:
+        return result^
+    if with_width:
+        raise Error(
+            "OpenDRIVE lane group mixes <border> lanes with <width> lanes"
+        )
+    if not offset_free:
+        raise Error(
+            "OpenDRIVE <border> lanes cannot use a nonzero <laneOffset>"
+        )
+    if end <= s:
+        raise Error("OpenDRIVE <border> lanes need a lane section of length")
+    # At least one lane has borders here, so the lists are not empty.
+    for i in range(len(ids)):
+        var id = ids[i]
+        if len(borders[i]) == 0:
+            continue
+        var side = Float64(1.0) if id > 0 else Float64(-1.0)
+        var inner: List[_Cubic] = [_Cubic(0, s, 0.0, 0.0, 0.0, 0.0)]
+        if abs(id) > 1:
+            var found = -1
+            for j in range(len(ids)):
+                if ids[j] == id - Int(side) and len(borders[j]) > 0:
+                    found = j
+            if found < 0:
+                raise Error(
+                    "OpenDRIVE <border> lane "
+                    + String(id)
+                    + " needs its inner lane's border"
+                )
+            inner = borders[found].copy()
+        # Each piece starts at the section's start or where either border
+        # record starts inside the section.
+        var cuts: List[Float64] = [s]
+        # Both border lists and the cut list hold at least one entry.
+        for record in borders[i]:
+            cuts.append(record.start)
+        for record in inner:
+            cuts.append(record.start)
+        sort(cuts)
+        var starts = List[Float64]()
+        for cut in cuts:
+            if cut >= s and cut < end:
+                if len(starts) == 0 or starts[len(starts) - 1] != cut:
+                    starts.append(cut)
+        # Finite, ordered bounds retain the section's start. A nonfinite
+        # endpoint can leave this list empty before builder validation.
+        for k in range(len(starts)):
+            var outer = _active(borders[i], starts[k]).at(starts[k])
+            var under = _active(inner, starts[k]).at(starts[k])
+            var width = _Cubic(
+                id,
+                starts[k],
+                side * (outer.a - under.a),
+                side * (outer.b - under.b),
+                side * (outer.c - under.c),
+                side * (outer.d - under.d),
+            )
+            var stop = end
+            if k + 1 < len(starts):
+                stop = starts[k + 1]
+            # Allow a nanometer of rounding where two borders meet.
+            if _lowest(width, stop - starts[k]) < -1.0e-9:
+                raise Error(
+                    "OpenDRIVE <border> of lane "
+                    + String(id)
+                    + " crosses its inner border"
+                )
+            result.append(width)
+    return result^
+
+
 def _lane_records(
-    doc: _Doc, mut builder: MapBuilder, road_id: RoadId, s: Float64, group: Int
+    doc: _Doc,
+    mut builder: MapBuilder,
+    road_id: RoadId,
+    s: Float64,
+    end: Float64,
+    group: Int,
+    offset_free: Bool,
 ) raises:
-    # `LaneParser`'s `ParseLanes`.
+    # `LaneParser`'s `ParseLanes`, plus border-only lane widths.
+    var derived = _border_widths(doc, group, s, end, offset_free)
     for node in doc.children(group, "lane"):
         var lane_id = LaneId(doc.int(node, "id"))
         var lane = builder.lane(road_id, lane_id, s)
@@ -416,7 +673,14 @@ def _lane_records(
                 doc.double(width, "c"),
                 doc.double(width, "d"),
             )
-        if len(widths) == 0:
+        var from_borders = 0
+        for piece in derived:
+            if piece.lane == lane_id.value:
+                builder.create_lane_width(
+                    lane, piece.start, piece.a, piece.b, piece.c, piece.d
+                )
+                from_borders += 1
+        if len(widths) == 0 and from_borders == 0:
             builder.create_lane_width(lane, s, 0.0, 0.0, 0.0, 0.0)
             if lane_id.value != 0:
                 print(
@@ -518,13 +782,24 @@ def _lanes(doc: _Doc, mut builder: MapBuilder) raises:
     for road in doc.children(doc.top(), "road"):
         var id = RoadId(doc.uint(road, "id"))
         for lanes in doc.children(road, "lanes"):
-            for section in doc.children(lanes, "laneSection"):
-                var s = doc.double(section, "s")
+            var offset_free = True
+            for offset in doc.children(lanes, "laneOffset"):
+                for term in ["a", "b", "c", "d"]:
+                    if doc.double(offset, term) != 0.0:
+                        offset_free = False
+            var sections = doc.children(lanes, "laneSection")
+            for k in range(len(sections)):
+                var s = doc.double(sections[k], "s")
+                var end = doc.double(road, "length")
+                if k + 1 < len(sections):
+                    end = doc.double(sections[k + 1], "s")
                 # The list is a constant and not empty.
                 for side in ["left", "center", "right"]:  # pragma: no branch
-                    var group = doc.child(section, side)
+                    var group = doc.child(sections[k], side)
                     if group != NO_ELEMENT:
-                        _lane_records(doc, builder, id, s, group)
+                        _lane_records(
+                            doc, builder, id, s, end, group, offset_free
+                        )
 
 
 def _profiles(doc: _Doc, mut builder: MapBuilder) raises:

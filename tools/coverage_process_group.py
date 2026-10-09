@@ -2,59 +2,47 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Kill a child's owned process group without masking a real denial."""
 
+import errno
 import os
 import signal
+import subprocess
 import sys
-import time
-
-# Time for launchd to reap zombie descendants after their leader is reaped.
-SETTLE_SECONDS = 1.0
 
 
-def kill_owned_group(child, settle=SETTLE_SECONDS):
-    """Send SIGKILL to the group that a `start_new_session` child leads.
-
-    macOS (XNU `killpg1`) skips zombie members and reports EPERM when it
-    signals nobody. That is the result for a group whose members have all
-    exited before the leader is reaped. It is also the result for a live
-    member that refuses the signal. This function accepts EPERM only after
-    it reaps the leader without blocking and a signal-0 probe of the group
-    reports ESRCH. It sends no destructive signal after it reaps the leader.
+def kill_owned_group(child, *, reap):
+    """Signal an owned group; accept Darwin EPERM only after proven absence.
 
     Args:
-        child: A `subprocess.Popen` started with `start_new_session=True`
-            and not reaped yet.
-        settle: Seconds to wait for the probe to report ESRCH.
+        child: An unreaped child started with `start_new_session=True`.
+        reap: Owner-managed wait callback accepting `timeout=0`. It must
+            disarm destructive signals before reaping, restore ownership
+            only on TimeoutExpired, and retain uncertain/reaped state on
+            every error path. The caller must also prevent reentrant kills.
 
     Returns:
-        True when this call reaped the leader, so the caller must not signal
-        its PID again. False otherwise.
+        None after SIGKILL succeeds or the group is confirmed absent. The
+        callback updates ownership before reaping, not after this returns.
 
     Raises:
-        PermissionError: When the group may still hold a live member.
+        PermissionError: If a live leader or a present/denied group remains.
+        BaseException: If the owner-managed reap or group probe fails.
     """
     try:
         os.killpg(child.pid, signal.SIGKILL)
-        return False
     except ProcessLookupError:
-        return False
+        pass
     except PermissionError as error:
-        if sys.platform != 'darwin':
+        if sys.platform != 'darwin' or error.errno != errno.EPERM:
             raise
-        denied = error
-    if child.poll() is None:
-        raise denied
-    deadline = time.monotonic() + settle
-    while True:
+        # EPERM alone cannot distinguish a zombie-only group from denial.
+        try:
+            reap(timeout=0)
+        except subprocess.TimeoutExpired:
+            raise error
+        # The owner disarmed the identity before releasing its PID. Never
+        # send another destructive signal, and add no fresh settling budget.
         try:
             os.killpg(child.pid, 0)
         except ProcessLookupError:
-            return True
-        except PermissionError:
-            pass
-        else:
-            # A member is live and signalable, so the first SIGKILL missed it.
-            raise denied
-        if time.monotonic() >= deadline:
-            raise denied
-        time.sleep(0.01)
+            return
+        raise error

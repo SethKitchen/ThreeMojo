@@ -17,15 +17,16 @@ import struct
 import sys
 
 sys.dont_write_bytecode = True
-try:
+if __package__:
+    from . import ideal_projection
+    from . import source_contracts
+    from . import sum2_contracts
+    from . import sum2_guard_contracts
+else:
     import ideal_projection
     import source_contracts
     import sum2_contracts
     import sum2_guard_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import (
-        ideal_projection, source_contracts, sum2_contracts, sum2_guard_contracts,
-    )
 F = Fraction
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE = Path('tools/carla_lane_oracle')
@@ -328,10 +329,10 @@ def verify_inputs(root):
         if name == 'ideal_caller':
             # Keep the historical routing pin. Validate the exact additive
             # try-only refusal, then project only its default-False parameter.
-            try:
+            if __package__:
+                from . import check_sampled_values as sampled
+            else:
                 import check_sampled_values as sampled
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import check_sampled_values as sampled
             try:
                 sampled.reviewed_reference_tree(source)
             except sampled.CheckError as error:
