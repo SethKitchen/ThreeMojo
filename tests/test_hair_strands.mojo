@@ -32,14 +32,18 @@ from extensions.humanoid.skeleton.head.hair.shading import (
     kajiya_kay,
     marschner,
     scattered,
+    _shade_strands,
     segment_colors,
     shade_groom,
 )
+from extensions.humanoid.skeleton.head.hair.density import HairDensity
 from extensions.humanoid.skeleton.head.hair.strands import (
     _linear,
+    _march,
     add_groom,
 )
 from math.vector3 import Vector3
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -279,6 +283,109 @@ def test_azimuth_is_independent_of_the_projection_length() raises:
     )
     assert_true(abs(result.x - expected) < 1e-4)
     assert_true(abs(result.y - expected) < 1e-4)
+
+
+def test_parallel_shading_equals_the_serial_arithmetic() raises:
+    # Strands shade in parallel runs; every point keeps the serial bits.
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var hair = add_groom(scene, assets, root, _person(), 40, 2)
+    var lights: List[HairLight] = [
+        HairLight(Vector3(0.48, 0.64, 0.6), Vector3(3, 3, 3)),
+        HairLight(Vector3(-0.6, 0.8, 0), Vector3(1, 1, 1)),
+    ]
+    var eye = Vector3(0, 1.6, 1.0)
+    var ambient = Vector3(0.1, 0.1, 0.1)
+    hair.shade(assets, lights, eye, ambient)
+    var count = len(hair.groom.points)
+    # The self-shadow depths match the checked serial integral.
+    for point in range(count):
+        for light in range(2):
+            assert_equal(
+                hair._optical_depths[point * 2 + light],
+                hair.density.optical_depth(
+                    hair.groom.points[point], lights[light].direction
+                ),
+            )
+    # The colors match one serial run over every strand.
+    var serial = List[Float32](length=count * 3, fill=-1)
+    _shade_strands(
+        hair.groom,
+        hair.look,
+        lights,
+        eye,
+        ambient,
+        serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        hair._optical_depths,
+        0,
+        len(hair.groom),
+    )
+    for index in range(count * 3):
+        assert_equal(hair._point_colors[index], serial[index])
+    # An empty groom shades to nothing.
+    assert_equal(
+        len(shade_groom(HairGroom(), hair.look, lights, eye, ambient)), 0
+    )
+
+
+def test_parallel_shadow_depths_keep_the_serial_checks() raises:
+    var lights: List[HairLight] = [
+        HairLight(Vector3(0.48, 0.64, 0.6), Vector3(3, 3, 3))
+    ]
+    var eye = Vector3(0, 1.6, 1.0)
+    var ambient = Vector3(0.1, 0.1, 0.1)
+    var bad = nan[DType.float32]()
+    for axis in range(3):
+        var scene = Scene()
+        var assets = Assets()
+        var root = scene.add(Object3D())
+        var hair = add_groom(scene, assets, root, _person(), 20, 1)
+        var tilted = List[HairLight]()
+        var direction = Vector3(0.48, 0.64, 0.6)
+        if axis == 0:
+            direction.x = bad
+        elif axis == 1:
+            direction.y = bad
+        else:
+            direction.z = bad
+        tilted.append(HairLight(direction, Vector3(1, 1, 1)))
+        with assert_raises(contains="finite light direction"):
+            hair.shade(assets, tilted, eye, ambient)
+        # The density rebuild refuses a nonfinite point before any march.
+        var point = hair.groom.points[0]
+        if axis == 0:
+            point.x = bad
+        elif axis == 1:
+            point.y = bad
+        else:
+            point.z = bad
+        hair.groom.points[0] = point
+        with assert_raises(contains="finite positions"):
+            hair.shade(assets, lights, eye, ambient)
+
+
+def test_the_parallel_march_is_the_checked_integral() raises:
+    var empty = HairDensity(4)
+    var up = Vector3(0, 1, 0)
+    assert_equal(_march(empty, Vector3(0, 0, 0), up), 0)
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var hair = add_groom(scene, assets, root, _person(), 20, 1)
+    hair.density.rebuild(hair.groom)
+    var inside = hair.groom.points[len(hair.groom.points) // 2]
+    for direction in [
+        up,
+        Vector3(0, 0, 0),
+        Vector3(3.0e38, 3.0e38, 0),
+        Vector3(-0.3, 0.2, 0.9),
+    ]:
+        for point in [inside, Vector3(0, 0, -50)]:
+            assert_equal(
+                _march(hair.density, point, direction),
+                hair.density.optical_depth(point, direction),
+            )
 
 
 def main() raises:

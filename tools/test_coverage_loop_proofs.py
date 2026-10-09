@@ -712,7 +712,7 @@ class GuardedLoopTests(unittest.TestCase):
 
     def test_exact_rule_inventory_and_required_true(self):
         rules = loops.GUARDED_LOOP_RULES
-        self.assertEqual(len(rules), 26)
+        self.assertEqual(len(rules), 25)
         self.assertEqual(sum(r[0] == 'extensions/carla/opendrive' for r in rules), 7)
         self.assertEqual(len({r[5] for r in rules}), len(rules))
         self.assertEqual(len({r[:2] for r in rules}), len(rules))
@@ -1071,7 +1071,7 @@ class GuardedLoopTests(unittest.TestCase):
              '        alias.clear()\n        self._shadow_depths(lights)\n'),
         )
         rules = self.hair_rules()
-        self.assertEqual(len(rules), 2)
+        self.assertEqual(len(rules), 1)
         for name, before, after in cases:
             path = self.root / (prefix + name)
             original = path.read_text()
@@ -1149,14 +1149,14 @@ class GuardedLoopTests(unittest.TestCase):
         for rule in rules:
             self.assertIsNone(self.prove(rule))
         historical = loops.reviewed_nonempty_loops(self.root, rules[0][0])
-        self.assertEqual(set(historical), {195, 201})
+        self.assertEqual(set(historical), {225, 231})
         density = [rule for rule in loops.GUARDED_LOOP_RULES
                    if rule[0].endswith('/hair/density')]
         for rule in density:
             self.assertIsNotNone(self.prove(rule))
         extra.unlink()
         self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, rules[0][0])),
-                         {180, 191, 195, 201})
+                         {221, 225, 231})
 
     def test_resumption_transaction_keeps_cells_on_every_false_return(self):
         rules = [r for r in loops.GUARDED_LOOP_RULES
@@ -1225,7 +1225,7 @@ class GuardedLoopTests(unittest.TestCase):
         self.assertFalse(any(r[0].endswith('/hair/density') and r[1] in (148, 220)
                              for r in rules))
         self.assertEqual({r[1] for r in rules if r[0].endswith('/hair/strands')},
-                         {180, 191})
+                         {221})
 
 
 @unittest.skipUnless(os.name == 'posix', 'POSIX runtime alarm and capture groups')
@@ -1345,7 +1345,7 @@ class DensityBoundaryLoopTests(unittest.TestCase):
             header = (self.root / (rule[0]+'.mojo')).read_text().splitlines()[line-1]
             self.assertIn(' in '+proof['expression']+':', header)
         strands = loops.reviewed_nonempty_loops(self.root, self.strands)
-        self.assertEqual(set(strands), {180, 191, 195, 201})
+        self.assertEqual(set(strands), {221, 225, 231})
         if successor:
             self.assertEqual((density[149]['cardinality'], density[149]['maximum_cardinality']), (1, None))
             self.assertEqual((density[223]['cardinality'], density[223]['minimum_cardinality'], density[223]['maximum_cardinality']), (1, 16, 256))
@@ -1358,14 +1358,14 @@ class DensityBoundaryLoopTests(unittest.TestCase):
             self.assertEqual(loops.repaired_density_loops(self.root), {})
         return density
 
-    def test_exact_before_after_pair_preserves_four_old_rows_and_live_hashes(self):
+    def test_exact_before_after_pair_preserves_three_old_rows_and_live_hashes(self):
         for successor in (False, True):
             with self.subTest(successor=successor):
                 self.assert_paired_rows(successor)
                 self.assertEqual(loops.reviewed_density_source(self.root), self.before)
                 self.assertEqual(loops.reviewed_density_source(self.root, successor=True), self.after)
         self.assertEqual(loops.GUARDED_LOOP_SOURCE_SHA256[loops.DENSITY_SOURCE], loops.DENSITY_BEFORE_SHA256)
-        self.assertEqual(len(self.hair_rules), 4)
+        self.assertEqual(len(self.hair_rules), 3)
 
     def test_original_masks_keep_true_and_unrelated_entries_on_both_sources(self):
         # Manifest-only controls, not manufactured native capture evidence.
@@ -1487,7 +1487,7 @@ class DensityBoundaryLoopTests(unittest.TestCase):
                         shadow.write_text('unreviewed resolver surface')
                     with self.subTest(root=str(destination), name=str(shadow)):
                         self.assertEqual(loops.reviewed_nonempty_loops(self.root, self.density, include_roots=roots), {})
-                        self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, self.strands, include_roots=roots)), {195, 201})
+                        self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, self.strands, include_roots=roots)), {225, 231})
                         # Old bindings are retained; this guard is specific to
                         # the newly reviewed source, not a historical repin.
                         self.path.write_text(self.before)
