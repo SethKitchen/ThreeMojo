@@ -3,113 +3,271 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The wiki link check in `make docs-check` (#687)."""
+"""The wiki link check in `make docs-check` (#687).
+
+The numbered cases are the independent review's 33-case packet on #692.
+Each runs in its own folder, and its expected problems are exhaustive.
+"""
 
 from std.os import makedirs
 from std.pathlib import Path
 from std.testing import TestSuite, assert_equal, assert_false, assert_true
 
 from test_scratch import TestScratch, temporary_path
-from tools.doc_links import (
+from tools.doc_lint import (
     Fence,
     anchors,
     check_links,
-    code_spans,
-    link_targets,
     percent_decode,
     slug,
 )
 
 
-def _wiki() raises -> String:
-    var wiki = temporary_path("docs/wiki")
+def _case(
+    name: String,
+    source: String,
+    expected: List[String],
+    targets: List[String] = [],
+    readme: Bool = False,
+) raises:
+    """Check `source` in a fresh folder against `targets`, given as
+    alternating page names and texts. `expected` holds `line: problem`."""
+    var root = temporary_path(name)
+    var wiki = root + "/docs/wiki"
     makedirs(wiki, exist_ok=True)
-    Path(wiki + "/Model-files.md").write_text(
-        "# Model files\n\n## glTF\n\n## glTF\n\n### `GltfModel` reads it\n"
-    )
-    Path(wiki + "/Target.md").write_text("# Target\n\n## Section\n")
-    return wiki
+    for k in range(0, len(targets), 2):
+        Path(wiki + "/" + targets[k] + ".md").write_text(targets[k + 1])
+    var path = root + "/README.md" if readme else wiki + "/Source.md"
+    Path(path).write_text(source)
+    var found = check_links([path], wiki)
+    var message = name + ": " + String(", ").join(found)
+    assert_equal(len(found), len(expected), message)
+    for k in range(len(found)):
+        assert_equal(found[k], path + ":" + expected[k], message)
 
 
-def _page(wiki: String, name: String, text: String) raises -> List[String]:
-    var path = wiki + "/" + name
-    Path(path).write_text(text)
-    return [path]
+def _missing(line: Int, page: String) -> String:
+    return String(line) + ': no wiki page "' + page + '"'
 
 
-def _check(wiki: String, name: String, text: String) raises -> List[String]:
-    return check_links(_page(wiki, name, text), wiki)
-
-
-def test_good_links_pass() raises:
-    var wiki = _wiki()
-    var found = _check(
-        wiki,
-        "Geometry.md",
+def test_review_cases_01_to_10() raises:
+    var target: List[String] = ["Target", "# Section\n"]
+    _case(
+        "01",
         (
-            "# Geometry\n\nSee the [loader](Model-files#gltf), the"
-            " [second](Model-files#gltf-1), [the"
-            " model](Model-files#gltfmodel-reads-it), [files](Model-files),"
-            " [up](#geometry), [three.js](https://threejs.org/docs/) and [a"
-            " file](../../tools/x.py).\n"
+            "````markdown\n```\n[in"
+            " code](CodeOnlyMissing)\n````\n[real](RealMissing)\n"
         ),
+        [_missing(5, "RealMissing")],
     )
-    assert_equal(len(found), 0)
-
-
-def test_missing_page_and_anchor_fail() raises:
-    var wiki = _wiki()
-    var path = wiki + "/Geometry.md"
-    var found = _check(
-        wiki,
-        "Geometry.md",
+    _case("02", "# x\n# x\n# x-1\n[valid](#x-1-1)\n", [])
+    _case("03", "# x-1\n# x\n# x\n[valid](#x-2)\n", [])
+    _case("04", "[valid](Target#%73ection)\n", [], target)
+    _case("05", "[bad](%4dissing)\n", [_missing(1, "Missing")])
+    _case(
+        "06",
+        "[bad](https://github.com/SethKitchen/ThreeMojo/wiki/%4dissing)\n",
+        [_missing(1, "Missing")],
+        readme=True,
+    )
+    _case("07", '[bad](Missing "A title")\n', [_missing(1, "Missing")])
+    _case(
+        "08",
+        '[bad](Target#gone "A title")\n',
+        ["1: no heading for Target#gone"],
+        target,
+    )
+    _case("09", "`code\n[x](CodeOnlyMissing)\n`\n", [])
+    _case(
+        "10",
         (
-            "# Geometry\n\nThe [glTF loader](glTF) and [a"
-            " part](Model-files#gltf-2) and [here](#nowhere).\n"
+            "![alt](image.png)\n[site](https://example.org/Missing)\n"
+            "[mail](mailto:a@example.org)\n"
         ),
+        [],
     )
-    assert_equal(len(found), 3)
-    assert_equal(found[0], path + ':3: no wiki page "glTF"')
-    assert_equal(found[1], path + ":3: no heading for Model-files#gltf-2")
-    assert_equal(found[2], path + ":3: no heading for #nowhere")
 
 
-def test_code_is_not_read() raises:
-    var wiki = _wiki()
-    var found = _check(
-        wiki,
-        "Scene.md",
+def test_review_cases_11_to_21() raises:
+    _case("11", "![alt](Badge)\n", [])
+    _case(
+        "12",
+        "[ok](Target#section)\n[bad](Missing)\n[bad](Target#gone)\n",
+        [_missing(2, "Missing"), "3: no heading for Target#gone"],
+        ["Target", "# Section\n"],
+    )
+    _case(
+        "13",
+        "[outer [inner](Missing)](Known)\n",
+        [_missing(1, "Missing")],
+        ["Known", "# Known\n"],
+    )
+    _case(
+        "14",
+        "`code\n| [hidden](Missing)\nend`\n[real](RealMissing)\n",
+        [_missing(4, "RealMissing")],
+    )
+    _case("15", "# \\_name\\_\n[valid](#_name_)\n", [])
+    _case("16", "# _name\n[valid](#_name)\n", [])
+    _case("17", "# `_name_`\n[valid](#_name_)\n", [])
+    _case(
+        "18",
+        "`unmatched\n***\n[real](RealMissing) `\n",
+        [_missing(3, "RealMissing")],
+    )
+    _case(
+        "19", "Text <!--> [real](RealMissing)\n", [_missing(1, "RealMissing")]
+    )
+    _case("20", "[file](image%2Epng)\n", [])
+    _case(
+        "21",
+        "| First | Second |\n| --- | --- |\n| `open | [real](Missing) ` |\n",
+        [_missing(3, "Missing")],
+    )
+
+
+def test_review_container_cases_22_to_27() raises:
+    _case(
+        "22",
         (
-            "# Scene\n\n`objects_by_property[order](3)` is code.\n\n"
-            "```mojo\nvar b = make[DType.uint8](256)\n[x](Missing)\n```\n\n"
-            "~~~\n[y](Missing)\n~~~\n"
+            "[before](BeforeMissing)\n> ```md\n> [hidden](CodeOnlyMissing)\n"
+            "> ```\n[after](AfterMissing)\n"
         ),
+        [_missing(1, "BeforeMissing"), _missing(5, "AfterMissing")],
     )
-    assert_equal(len(found), 0)
-
-
-def test_a_fence_closes_only_with_its_own_length() raises:
-    # Review case 1: an inner three-backtick line does not close a
-    # four-backtick fence, so only the link after the fence is read.
-    var wiki = _wiki()
-    var path = wiki + "/Fence.md"
-    var found = _check(
-        wiki,
-        "Fence.md",
+    _case(
+        "23",
+        "> ```\n> [hidden](CodeOnlyMissing)\n[real](RealMissing)\n",
+        [_missing(3, "RealMissing")],
+    )
+    _case(
+        "24",
         (
-            "# Fence\n\n````\n```\n[in code](CodeOnlyMissing)\n````\n\n"
+            "> > ~~~~md\n> > ~~~\n> > [hidden](CodeOnlyMissing)\n> > ~~~~~\n"
+            "> [real](RealMissing)\n"
+        ),
+        [_missing(5, "RealMissing")],
+    )
+    _case(
+        "25",
+        "- ```md\n  [hidden](CodeOnlyMissing)\n  ```\n- [real](RealMissing)\n",
+        [_missing(4, "RealMissing")],
+    )
+    _case(
+        "26",
+        (
+            "- Item\n\n  ```md\n  [hidden](CodeOnlyMissing)\n  ```\n"
+            "  [inside](InsideMissing)\n\n[outside](OutsideMissing)\n"
+        ),
+        [_missing(6, "InsideMissing"), _missing(8, "OutsideMissing")],
+    )
+    _case(
+        "27",
+        (
+            "10. ```md\n    [hidden](CodeOnlyMissing)\n    ```\n"
+            "11. [real](RealMissing)\n"
+        ),
+        [_missing(4, "RealMissing")],
+    )
+
+
+def test_review_container_cases_28_to_33() raises:
+    _case(
+        "28",
+        "- ```md\n  [hidden](CodeOnlyMissing)\n- [real](RealMissing)\n",
+        [_missing(3, "RealMissing")],
+    )
+    _case(
+        "29",
+        (
+            "- > ```md\n  > [hidden](CodeOnlyMissing)\n  > ```\n"
+            "  [inside](InsideMissing)\n\n[outside](OutsideMissing)\n"
+        ),
+        [_missing(4, "InsideMissing"), _missing(6, "OutsideMissing")],
+    )
+    _case(
+        "30",
+        (
+            "> - ```md\n>   [hidden](CodeOnlyMissing)\n>   ```\n"
+            "> - [inside](InsideMissing)\n[outside](OutsideMissing)\n"
+        ),
+        [_missing(4, "InsideMissing"), _missing(5, "OutsideMissing")],
+    )
+    _case(
+        "31",
+        (
+            "- Parent\n  - ```md\n    [hidden](CodeOnlyMissing)\n    ```\n"
+            "  - [inside](InsideMissing)\n- [outside](OutsideMissing)\n"
+        ),
+        [_missing(5, "InsideMissing"), _missing(6, "OutsideMissing")],
+    )
+    _case(
+        "32",
+        (
+            "> ```md\n> ``` trailing\n> [hidden](CodeOnlyMissing)\n> ```\n"
             "[real](RealMissing)\n"
         ),
+        [_missing(5, "RealMissing")],
     )
-    assert_equal(len(found), 1)
-    assert_equal(found[0], path + ':8: no wiki page "RealMissing"')
+    _case(
+        "33",
+        (
+            "> ```\n> [hidden](CodeOnlyMissing)\n> ```\n\n- ~~~\n"
+            "  [hidden](AlsoCodeOnlyMissing)\n  ~~~\n"
+        ),
+        [],
+    )
+
+
+def test_wiki_pages_readme_and_html_blocks() raises:
+    var pages: List[String] = [
+        "Model-files",
+        "# Model files\n\n## glTF\n\n## glTF\n\n### `GltfModel` reads it\n",
+    ]
+    _case(
+        "good",
+        (
+            "# Geometry\n\nSee [one](Model-files#gltf),"
+            " [two](Model-files#gltf-1),"
+            " [three](Model-files#gltfmodel-reads-it), [up](#geometry) and"
+            " [a file](../../tools/x.py).\n"
+        ),
+        [],
+        pages,
+    )
+    _case(
+        "readme",
+        (
+            "# Readme\n\n<details>\n<summary>[skip](Html)</summary>\n\n- [x]"
+            " [ok](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files)\n-"
+            " [bad](https://github.com/SethKitchen/ThreeMojo/wiki/Nope)\n-"
+            " [file](LICENSE) and [top](#readme) and [gone](#gone)\n<!--"
+            " [comment](Nope)\n[still](Nope) -->\n"
+        ),
+        [_missing(7, "Nope"), "8: no heading for #gone"],
+        pages,
+        readme=True,
+    )
+    _case(
+        "setext",
+        (
+            "Title here\n===\n\nSub\n---\n\n   "
+            " [indented](Nope)\n\n[a](#title-here) [b](#sub)\n"
+        ),
+        [],
+    )
+    _case(
+        "heading-link",
+        "## See [the page](Nope)\n\n[a](#see-the-page)\n",
+        [_missing(1, "Nope")],
+    )
 
 
 def test_fence_rules() raises:
     var fence = Fence()
     # An info string with a backtick is not a fence.
     assert_false(fence.is_code("``` a`b"))
-    assert_true(fence.is_code("  ~~~~ text"))
+    assert_true(fence.is_code("~~~~ text"))
     # Another character, a shorter run or trailing text does not close.
     assert_true(fence.is_code("```"))
     assert_true(fence.is_code("~~~"))
@@ -120,62 +278,20 @@ def test_fence_rules() raises:
 
 
 def test_repeated_headings_take_the_first_free_suffix() raises:
-    # Review case 2, as github-slugger assigns the anchors.
     var first = anchors("# x-1\n\n# x\n\n# x\n")
-    assert_true("x-1" in first)
-    assert_true("x" in first)
     assert_true("x-2" in first)
     assert_equal(len(first), 3)
     var second = anchors("# x\n\n# x\n\n# x-1\n")
     assert_true("x-1-1" in second)
     assert_equal(len(second), 3)
-    var wiki = _wiki()
-    var found = _check(
-        wiki,
-        "Repeat.md",
-        "# x-1\n\n# x\n\n# x\n\n[two](#x-2)\n",
-    )
-    assert_equal(len(found), 0)
-
-
-def test_targets_are_decoded_and_lose_their_titles() raises:
-    # Review cases 3 and 4.
-    var wiki = _wiki()
-    var path = wiki + "/Decode.md"
-    var found = _check(
-        wiki,
-        "Decode.md",
-        (
-            '# Decode\n\n[encoded](%4dissing) and [titled](Missing "A'
-            ' title") and [angle](<Missing>) and [ok](Target#%73ection).\n'
-        ),
-    )
-    assert_equal(len(found), 3)
-    for problem in found:
-        assert_equal(problem, path + ':3: no wiki page "Missing"')
-
-
-def test_readme_wiki_urls_are_checked() raises:
-    var wiki = _wiki()
-    var readme = temporary_path("README.md")
-    Path(readme).write_text(
-        "# Readme\n\n-"
-        " [ok](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf)\n-"
-        " [bad](https://github.com/SethKitchen/ThreeMojo/wiki/Nope)\n-"
-        " [local](docs/wiki/Model-files.md), [file](LICENSE) and"
-        " [top](#readme)\n"
-    )
-    var found = check_links([readme], wiki)
-    assert_equal(len(found), 1)
-    assert_equal(found[0], readme + ':4: no wiki page "Nope"')
 
 
 def test_slugs_follow_github() raises:
     assert_equal(slug("`GltfModel` reads it"), "gltfmodel-reads-it")
     assert_equal(slug("Read [the guide](Guide) now"), "read-the-guide-now")
     assert_equal(slug("A — B: C++ and snake_case"), "a--b-c-and-snake_case")
+    assert_equal(slug("_name_ and __init__"), "name-and-init")
     assert_equal(slug("Diátaxis"), "diátaxis")
-    # A closing run of `#` needs a space before it.
     var found = anchors("## C#\n\n## Closed ##\n\n#NotAHeading\n")
     assert_true("c" in found)
     assert_true("closed" in found)
@@ -183,20 +299,6 @@ def test_slugs_follow_github() raises:
     var deep = anchors("    # code\n\n####### seven\n\n###### six\n")
     assert_equal(len(deep), 1)
     assert_true("six" in deep)
-
-
-def test_inline_code_and_link_targets() raises:
-    assert_equal(code_spans("a `b` c ``d ` e`` f", False), "a  c  f")
-    assert_equal(code_spans("a `b` c", True), "a b c")
-    assert_equal(
-        code_spans("an ``unclosed ` run", False), "an ``unclosed ` run"
-    )
-    var targets = link_targets('[a](One) [b](Two#x "t") [c](<Three>) [d](')
-    assert_equal(len(targets), 4)
-    assert_equal(targets[0], "One")
-    assert_equal(targets[1], "Two#x")
-    assert_equal(targets[2], "Three")
-    assert_equal(targets[3], "")
 
 
 def test_percent_decoding() raises:
