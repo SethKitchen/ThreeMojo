@@ -37,7 +37,11 @@ This is not a three.js port. See Extensions.
 """
 
 from extensions.humanoid.skeleton.field import DistanceField
-from extensions.humanoid.skeleton.head.hair.groom import HairGroom
+from extensions.humanoid.skeleton.head.hair.groom import (
+    HairGroom,
+    _unit_vector,
+    follower_across,
+)
 from math.vector3 import Vector3
 from std.math import floor, isfinite, max, min
 
@@ -148,16 +152,42 @@ struct HairSimulation(Movable):
     var initial_tangents: List[Vector3]
     var physics: HairPhysics
     var frame: Int
+    # True steps the guides only and lays each follower along its guide.
+    var guides_only: Bool
+    var guides: List[Int]
+    var follow_across: List[Float32]
+    var follow_up: List[Float32]
 
     def __init__(
-        out self, groom: HairGroom, physics: HairPhysics = HairPhysics()
-    ):
+        out self,
+        groom: HairGroom,
+        physics: HairPhysics = HairPhysics(),
+        guides_only: Bool = False,
+    ) raises:
         """Start the particles at rest where the groom lays them.
 
         Args:
             groom: The strands.
             physics: How they move; Frostbitten's defaults by default.
+            guides_only: True steps only the guide strands. Each follower
+                then keeps its groomed offsets in its moved guide's frame,
+                as TressFX lays follow strands. This costs about as much as
+                the guides alone.
+
+        Raises:
+            Error: If `guides_only` is set and the groom's guide records do
+                not match its strands.
         """
+        if guides_only and (
+            len(groom.guides) != len(groom)
+            or len(groom.follow_across) != len(groom.points)
+            or len(groom.follow_up) != len(groom.points)
+        ):
+            raise Error("The groom's guide records do not match its strands")
+        self.guides_only = guides_only
+        self.guides = groom.guides.copy()
+        self.follow_across = groom.follow_across.copy()
+        self.follow_up = groom.follow_up.copy()
         self.starts = groom.starts.copy()
         self.initial = groom.points.copy()
         self.now = groom.points.copy()
@@ -189,6 +219,8 @@ struct HairSimulation(Movable):
         var p = self.physics
         var dt2 = p.step * p.step
         for strand in range(len(self.starts) - 1):  # pragma: no branch
+            if self.guides_only and self.guides[strand] >= 0:
+                continue
             var first = self.starts[strand]
             var end = self.starts[strand + 1]
             # Verlet: each point but the root carries on as it moved,
@@ -214,7 +246,38 @@ struct HairSimulation(Movable):
                 self.previous[index] = before
             for _ in range(p.iterations):  # pragma: no branch
                 self._settle(first, end, collider)
+        if self.guides_only:
+            self._lay_followers()
         self.frame += 1
+
+    def _lay_followers(mut self):
+        # Each follower point sits at its guide point, offset across the
+        # hair and up off it in the guide's moved frame.
+        for strand in range(len(self.starts) - 1):
+            var guide = self.guides[strand]
+            if guide < 0:
+                continue
+            var first = self.starts[strand]
+            var lead = self.starts[guide]
+            var last = self.starts[guide + 1] - 1 - lead
+            for k in range(
+                self.starts[strand + 1] - first
+            ):  # pragma: no branch
+                var before = self.now[lead + max(k - 1, 0)]
+                var after = self.now[lead + min(k + 1, last)]
+                var normal = _motion_normal(
+                    self.initial_tangents[lead + k],
+                    _unit_vector(after - before, Vector3(0, -1, 0)),
+                    self.initial_normals[lead + k],
+                )
+                var across = follower_across(before, after, normal)
+                var point = (
+                    self.now[lead + k]
+                    + across * self.follow_across[first + k]
+                    + normal * self.follow_up[first + k]
+                )
+                self.now[first + k] = point
+                self.previous[first + k] = point
 
     def _settle[F: DistanceField](mut self, first: Int, end: Int, collider: F):
         """Settle one strand once against every constraint."""

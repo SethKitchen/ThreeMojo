@@ -433,6 +433,13 @@ struct HairGroom(Movable, Sized):
     var starts: List[Int]
     # Each strand's brightness, near one.
     var shades: List[Float32]
+    # Each strand's guide: -1 for a guide or a lone strand, otherwise the
+    # strand it follows, which has as many points.
+    var guides: List[Int]
+    # How far each follower point lies from its guide's matching point,
+    # across the hair and up off it, in meters. Zero on a guide.
+    var follow_across: List[Float32]
+    var follow_up: List[Float32]
 
     def __init__(out self):
         """Start an empty groom."""
@@ -441,6 +448,9 @@ struct HairGroom(Movable, Sized):
         self.depths = List[Float32]()
         self.starts = [0]
         self.shades = List[Float32]()
+        self.guides = List[Int]()
+        self.follow_across = List[Float32]()
+        self.follow_up = List[Float32]()
 
     def __len__(self) -> Int:
         """Return how many strands the groom holds."""
@@ -465,8 +475,56 @@ struct HairGroom(Movable, Sized):
             self.points.append(points[index])
             self.normals.append(normals[index])
             self.depths.append(depths[index])
+            self.follow_across.append(0)
+            self.follow_up.append(0)
         self.starts.append(len(self.points))
         self.shades.append(shade)
+        self.guides.append(-1)
+
+    def add_follower(
+        mut self,
+        points: List[Vector3],
+        normals: List[Vector3],
+        depths: List[Float32],
+        shade: Float32,
+        guide: Int,
+        across: List[Float32],
+        up: List[Float32],
+    ) raises:
+        """Append one strand that follows the guide strand `guide`.
+
+        Args:
+            points: Its points, root first.
+            normals: The hair's normal under each point.
+            depths: How deep under the groom's outer surface each lies.
+            shade: Its brightness.
+            guide: The strand it follows: an earlier guide with as many
+                points.
+            across: How far each point lies across the hair from its
+                guide's matching point.
+            up: How far each point lies up off the hair from it.
+
+        Raises:
+            Error: If `guide` is not an earlier guide with as many points,
+                or a list length differs.
+        """
+        if guide < 0 or guide >= len(self) or self.guides[guide] != -1:
+            raise Error("A follower needs an earlier guide strand")
+        var count = len(points)
+        if (
+            self.starts[guide + 1] - self.starts[guide] != count
+            or len(normals) != count
+            or len(depths) != count
+            or len(across) != count
+            or len(up) != count
+        ):
+            raise Error("A follower must match its guide's point count")
+        self.add(points, normals, depths, shade)
+        self.guides[len(self.guides) - 1] = guide
+        var first = len(self.follow_across) - count
+        for k in range(count):  # pragma: no branch
+            self.follow_across[first + k] = across[k]
+            self.follow_up[first + k] = up[k]
 
     def tangent(self, index: Int) -> Vector3:
         """Return the unit direction along its strand at point `index`.
@@ -485,6 +543,25 @@ struct HairGroom(Movable, Sized):
             - self.points[max(index - 1, first)]
         )
         return _unit_vector(d, Vector3(0, -1, 0))
+
+
+def follower_across(
+    before: Vector3, after: Vector3, normal: Vector3
+) -> Vector3:
+    """Return the unit direction across the hair at a guide point.
+
+    A follower's point lies at its guide's point plus this direction times
+    its across offset, plus the normal times its up offset.
+
+    Args:
+        before: The guide's point before this one, or this one at the root.
+        after: The guide's point after this one, or this one at the tip.
+        normal: The hair's normal at this point.
+
+    Returns:
+        The unit vector square to the normal and to the strand.
+    """
+    return _unit_vector(_cross(normal, after - before), Vector3(1, 0, 0))
 
 
 def _strand_of(starts: List[Int], index: Int) -> Int:
@@ -739,8 +816,11 @@ def groom_hair(
             depths.append(max(Float32(0), top - levels[index]))
         _curl(points, normals, depths, spec, key)
         groom.add(points, normals, depths, _shade(key, 0))
+        var lead = len(groom) - 1
         for follower in range(spec.followers):  # pragma: no branch
-            _follow(groom, spec, points, normals, depths, key, follower + 1)
+            _follow(
+                groom, spec, points, normals, depths, key, follower + 1, lead
+            )
     if len(groom) == 0:
         raise Error("No guide found a root on the scalp's hair")
     return groom^
@@ -787,7 +867,7 @@ def _finish[
     snap: Bool,
     taut: Float32 = 0,
     drape: Bool = False,
-):
+) raises:
     """Curl a laid or designed strand, keep it off the skin, and add it
     and its followers to the groom.
 
@@ -840,8 +920,9 @@ def _finish[
         points[k] = p
         depths[k] = max(Float32(0), top - d)
     groom.add(points, normals, depths, _shade(key, 0))
+    var lead = len(groom) - 1
     for follower in range(spec.followers):  # pragma: no branch
-        _follow(groom, spec, points, normals, depths, key, follower + 1)
+        _follow(groom, spec, points, normals, depths, key, follower + 1, lead)
 
 
 def _designed(
@@ -1273,8 +1354,9 @@ def _follow(
     depths: List[Float32],
     key: Int,
     follower: Int,
-):
-    """Append one follower of the guide through `points`.
+    guide: Int,
+) raises:
+    """Append one follower of the guide strand `guide`, through `points`.
 
     TressFX offsets a follower's every point from its guide's by one
     vector in the plane square to the guide's first segment, times one
@@ -1290,23 +1372,28 @@ def _follow(
     var mine = List[Vector3]()
     var ups = List[Vector3]()
     var deep = List[Float32]()
+    var sideways = List[Float32]()
+    var lifted = List[Float32]()
     for k in range(len(points)):  # pragma: no branch
         var s = Float32(k) / Float32(last)
-        var ahead = points[min(k + 1, last)] - points[max(k - 1, 0)]
         var n = normals[k]
-        var across = _unit_vector(_cross(n, ahead), Vector3(1, 0, 0))
+        var across = follower_across(
+            points[max(k - 1, 0)], points[min(k + 1, last)], n
+        )
         var spread = (1 + spec.tip_spread * s) * (1 - spec.clump * s * s)
         var frizz = spec.frizz * s * s
-        var p = (
-            points[k]
-            + across * (a * spread + frizz * _signed(key, salt + 3 + k))
-            + n
-            * (c * spread + frizz * Float32(0.5) * _signed(key, salt + 40 + k))
+        var side = a * spread + frizz * _signed(key, salt + 3 + k)
+        var lift = c * spread + frizz * Float32(0.5) * _signed(
+            key, salt + 40 + k
         )
-        mine.append(p)
+        mine.append(points[k] + across * side + n * lift)
         ups.append(n)
         deep.append(max(Float32(0), depths[k] - c * spread))
-    groom.add(mine, ups, deep, _shade(key, follower))
+        sideways.append(side)
+        lifted.append(lift)
+    groom.add_follower(
+        mine, ups, deep, _shade(key, follower), guide, sideways, lifted
+    )
 
 
 def groom_lines(groom: HairGroom) raises -> BufferGeometry:

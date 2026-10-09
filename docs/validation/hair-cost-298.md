@@ -15,6 +15,8 @@ times five frames of each per-frame stage and reports the median:
 - `step+write`: one `HairSimulation.step` against a scalp collider, and
   `HairSimulation.write` back into the groom.
 - `shade after step`: the shading pass that follows a moved groom.
+- `guides-only step`: `HairSimulation(groom, guides_only=True).step`, which
+  steps the guides and lays each follower along its moved guide.
 
 Run it with `mojo run -I . bench/hair_cost_bench.mojo`.
 
@@ -23,32 +25,35 @@ Windows 11, Mojo 1.1.0 (`8189361e`). The stages run on one thread.
 
 ## Results
 
-| Guides x followers | Strands | Points | Vertex bytes | Grow and upload | Shade | Step and write | Shade after step |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 250 x 2 | 708 | 4,713 | 192,240 | 84 ms | 1.36 ms | 2.17 ms | 1.37 ms |
-| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 229 ms | 9.59 ms | 16.3 ms | 9.60 ms |
-| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 330 ms | 20.2 ms | 33.3 ms | 20.3 ms |
-| 1500 x 0 (guides only) | 1,455 | 9,785 | 399,840 | 297 ms | 2.86 ms | 4.62 ms | 2.85 ms |
+| Guides x followers | Strands | Points | Vertex bytes | Grow and upload | Shade | Step and write | Shade after step | Guides-only step |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 250 x 2 | 708 | 4,713 | 192,240 | 85 ms | 1.39 ms | 2.26 ms | 1.39 ms | 0.80 ms |
+| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 230 ms | 9.76 ms | 16.1 ms | 9.76 ms | 4.05 ms |
+| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 334 ms | 20.5 ms | 33.9 ms | 20.5 ms | 7.08 ms |
+| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 303 ms | 2.89 ms | 4.80 ms | 2.89 ms | 4.04 ms |
 
 Both per-frame stages scale linearly with the point count. The step costs
 about 0.49 microseconds a point, and shading about 0.30 microseconds a point.
 Shading after a step costs the same as shading a still groom. Growth is a
-one-time cost, and most of it is the guides: the guides-only groom takes 297
-of the default groom's 330 milliseconds.
+one-time cost, and most of it is the guides: the groom without followers takes 303
+of the default groom's 334 milliseconds.
 
 The default groom's per-frame hair work is about 53 milliseconds on one
 thread. A 60 frames-per-second frame has 16.7 milliseconds for everything,
-so the current CPU path cannot meet that target with the default groom.
+so the full CPU path cannot meet that target with the default groom. With
+guides-only simulation the per-frame hair work is about 28 milliseconds,
+and shading is most of it.
 
 ## Decisions
 
-- **Simulate the guides only.** Followers can follow their guide in the
-  guide's frame. The guides-only step costs 4.6 milliseconds, about one
-  seventh of the full step. The follower interpolation is a fixed offset per
-  point, so it adds a pass that is cheaper than the step. This is the next
-  simulation change.
+- **Simulate the guides only.** This is now `guides_only=True`. The groom
+  records each follower's guide and its offsets across the hair and up off
+  it. The simulation steps the guides and lays each follower at those
+  offsets in its moved guide's frame, as TressFX lays follow strands. For the
+  default groom the step falls from 33.9 to 7.1 milliseconds. The guides
+  move exactly as in the full step.
 - **Move shading off one CPU thread.** Shading is 20 milliseconds for the
-  default groom even with guide-only simulation. It is a per-point loop with
+  default groom even with guides-only simulation. It is a per-point loop with
   no dependency between strands, so it can run in parallel on the CPU or on
   the GPU. The GPU path stays a separate decision with the rasterizer work
   in #298 and the general compositor in

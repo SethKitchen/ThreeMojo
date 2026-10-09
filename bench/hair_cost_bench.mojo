@@ -87,6 +87,12 @@ def _measure(guides: Int, followers: Int) raises:
         low - Vector3(0.1, 0.1, 0.1),
         high + Vector3(0.1, 0.1, 0.1),
     )
+    var guided = HairSimulation(hair.groom, guides_only=True)
+    var guided_times = List[Int]()
+    for _ in range(FRAMES):
+        start = perf_counter_ns()
+        guided.step(collider, HairWind(Vector3(1, 0, 0), 0.5))
+        guided_times.append(Int(perf_counter_ns() - start))
     var motion = HairSimulation(hair.groom)
     var step_times = List[Int]()
     var dynamic_shade_times = List[Int]()
@@ -116,6 +122,8 @@ def _measure(guides: Int, followers: Int) raises:
         + String(_median(step_times^))
         + " ms, shade after step "
         + String(_median(dynamic_shade_times^))
+        + " ms, guides-only step "
+        + String(_median(guided_times^))
         + " ms"
     )
 

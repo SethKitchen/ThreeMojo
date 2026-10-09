@@ -89,7 +89,7 @@ The new coverage, density grid and procedural scenes add no third-party asset or
 
 ## CPU stage costs
 
-`bench/hair_cost_bench.mojo` times growth, upload, shading and one simulation step at several groom sizes. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-cost-298.md) records one machine's results and the decisions they support. On that machine the default groom needs about 53 milliseconds a frame on one thread. Simulating the guides only cuts the step by about seven times. Shading still needs parallel or GPU work to fit a 60 frames-per-second frame.
+`bench/hair_cost_bench.mojo` times growth, upload, shading and one simulation step at several groom sizes. The [cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-cost-298.md) records one machine's results and the decisions they support. On that machine the default groom needs about 53 milliseconds a frame on one thread. Pass `guides_only=True` to `HairSimulation` to step the guides only. Each follower then keeps its groomed offsets in its moved guide's frame, and the step costs about a fifth as much. Shading still needs parallel or GPU work to fit a 60 frames-per-second frame.
 
 ## Hardware qualification
 

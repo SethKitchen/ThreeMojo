@@ -10,13 +10,17 @@ from extensions.humanoid.skeleton.head.hair.collider import (
     FAR_AWAY,
     HairCollider,
 )
-from extensions.humanoid.skeleton.head.hair.groom import HairGroom
+from extensions.humanoid.skeleton.head.hair.groom import (
+    HairGroom,
+    follower_across,
+)
 from extensions.humanoid.skeleton.head.hair.simulation import (
     HairPhysics,
     HairSimulation,
     HairWind,
 )
 from math.vector3 import Vector3
+from std.math import max, min, sqrt
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 
 
@@ -143,6 +147,116 @@ def test_the_head_pushes_the_hair_out() raises:
     var flat = HairSimulation(_hanging(0))
     flat.step(_collider(True), HairWind(Vector3(1, 0, 0), 0))
     assert_true(abs(flat.now[7].x) < 1e-6)
+
+
+def _guided(bent: Bool = True) raises -> HairGroom:
+    """Return one hanging guide and two followers offset from it."""
+    var groom = _hanging(0.25, bent)
+    var count = len(groom.points)
+    for f in range(2):  # pragma: no branch
+        var points = List[Vector3]()
+        var across = List[Float32]()
+        var up = List[Float32]()
+        for k in range(count):  # pragma: no branch
+            var side = Float32(0.004) * Float32(f + 1)
+            var lift = Float32(0.001) * Float32(k)
+            var p = groom.points[k]
+            var turn = follower_across(
+                groom.points[max(k - 1, 0)],
+                groom.points[min(k + 1, count - 1)],
+                groom.normals[k],
+            )
+            points.append(p + turn * side + groom.normals[k] * lift)
+            across.append(side)
+            up.append(lift)
+        var normals = List[Vector3](length=count, fill=Vector3(0, 1, 0))
+        var depths = List[Float32](length=count, fill=0)
+        groom.add_follower(points, normals, depths, 1, 0, across, up)
+    return groom^
+
+
+def test_guides_only_moves_guides_as_the_full_step() raises:
+    var groom = _guided()
+    var full = HairSimulation(groom)
+    var guided = HairSimulation(groom, guides_only=True)
+    var collider = _collider()
+    for _ in range(20):  # pragma: no branch
+        full.step(collider, HairWind(Vector3(1, 0, 0), 1))
+        guided.step(collider, HairWind(Vector3(1, 0, 0), 1))
+    # The guide strand moves exactly as before; strands are independent.
+    for k in range(8):  # pragma: no branch
+        assert_true(guided.now[k] == full.now[k])
+    # Each follower point keeps its groomed distance from its guide point.
+    for f in range(2):  # pragma: no branch
+        for k in range(8):  # pragma: no branch
+            var side = Float32(0.004) * Float32(f + 1)
+            var lift = Float32(0.001) * Float32(k)
+            var gap = (guided.now[8 * (f + 1) + k] - guided.now[k]).length()
+            assert_true(abs(gap - sqrt(side * side + lift * lift)) < 1e-5)
+            assert_true(
+                guided.previous[8 * (f + 1) + k] == guided.now[8 * (f + 1) + k]
+            )
+    # The followers moved with their guide.
+    assert_true(guided.now[15].x > groom.points[15].x + 0.001)
+    guided.write(groom)
+    assert_true(groom.points[23] == guided.now[23])
+
+
+def test_guides_only_lays_followers_where_they_were_groomed() raises:
+    for bent in [False, True]:
+        var groom = _guided(bent)
+        var guided = HairSimulation(groom, guides_only=True)
+        guided._lay_followers()
+        for index in range(len(groom.points)):  # pragma: no branch
+            assert_true(
+                (guided.now[index] - groom.points[index]).length() < 1e-6
+            )
+
+
+def test_followers_need_a_matching_earlier_guide() raises:
+    var groom = _guided()
+    var points = List[Vector3](length=8, fill=Vector3(0, 0, 0))
+    var normals = List[Vector3](length=8, fill=Vector3(0, 1, 0))
+    var depths = List[Float32](length=8, fill=0)
+    var offsets = List[Float32](length=8, fill=0)
+    var short = List[Float32](length=7, fill=0)
+    var shorter = List[Vector3](length=7, fill=Vector3(0, 1, 0))
+    # A negative strand, one past the last, and a follower are no guide.
+    for guide in [-1, len(groom), 1]:
+        with assert_raises(contains="earlier guide"):
+            groom.add_follower(
+                points, normals, depths, 1, guide, offsets, offsets
+            )
+    with assert_raises(contains="point count"):
+        groom.add_follower(shorter, shorter, short, 1, 0, short, short)
+    with assert_raises(contains="point count"):
+        groom.add_follower(points, shorter, depths, 1, 0, offsets, offsets)
+    with assert_raises(contains="point count"):
+        groom.add_follower(points, normals, short, 1, 0, offsets, offsets)
+    with assert_raises(contains="point count"):
+        groom.add_follower(points, normals, depths, 1, 0, short, offsets)
+    with assert_raises(contains="point count"):
+        groom.add_follower(points, normals, depths, 1, 0, offsets, short)
+    assert_equal(len(groom), 3)
+
+
+def test_guides_only_needs_matching_guide_records() raises:
+    for change in range(3):
+        var groom = _guided()
+        if change == 0:
+            _ = groom.guides.pop()
+        elif change == 1:
+            _ = groom.follow_across.pop()
+        else:
+            _ = groom.follow_up.pop()
+        with assert_raises(contains="guide records"):
+            _ = HairSimulation(groom, guides_only=True)
+        _ = HairSimulation(groom)
+    # An empty groom has no guide and no follower to lay.
+    var empty = HairSimulation(HairGroom(), guides_only=True)
+    empty.step(_collider(), HairWind(Vector3(1, 0, 0), 1))
+    assert_equal(empty.frame, 1)
+    assert_equal(len(empty.now), 0)
 
 
 def main() raises:
