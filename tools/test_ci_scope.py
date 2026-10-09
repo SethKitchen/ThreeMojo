@@ -69,6 +69,40 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual({name for name, flag in value['flags'].items() if flag}, {'tools', 'lint'})
         self.assertTrue(all(not files for files in value['files'].values()))
 
+    def test_carla_control_generators_select_their_compiler_free_replay_gate(self):
+        for name in ('lane_distance', 'power', 'directed', 'index'):
+            with self.subTest(generator=name):
+                value = selected({f'tools/generate_carla_{name}_controls.py': False})
+                self.assertFalse(value['full'])
+                self.assertEqual({key for key, flag in value['flags'].items() if flag},
+                                 {'tools', 'lint'})
+                self.assertTrue(all(not files for files in value['files'].values()))
+        for path in ('tools/generate_carla_unknown_controls.py',
+                     'tools/generate_carla_distance_controls.py',
+                     'tools/generate_carla_power_controls.py.extra'):
+            self.assertTrue(selected({path: False})['full'], path)
+
+    def test_carla_generated_fixtures_keep_native_consumers(self):
+        for name in ('lane_distance_fraction', 'power_fraction',
+                     'directed_fraction', 'index_admission'):
+            fixture = f'tests/test_carla_{name}.mojo'
+            sources = dict(SOURCES)
+            sources[fixture] = 'from core.used import used\n'
+            sources['tests/test_replay_consumer.mojo'] = (
+                f'from tests.test_carla_{name} import used\n')
+            with self.subTest(fixture=fixture):
+                value = selected({fixture: False}, sources=sources)
+                self.assertFalse(value['full'])
+                self.assertTrue(value['flags']['native'])
+                self.assertTrue(value['flags']['cpu'])
+                self.assertEqual(set(value['files']['cpu_tests']),
+                                 {fixture, 'tests/test_replay_consumer.mojo'})
+                mixed = selected({fixture: False,
+                                  'tools/generate_carla_power_controls.py': False},
+                                 sources=sources)
+                self.assertEqual(mixed['files']['cpu_tests'], value['files']['cpu_tests'])
+                self.assertTrue(mixed['flags']['tools'])
+
     def test_pr682_transport_and_proofs_run_real_native_protocol_checks(self):
         for path in ['tools/coverage_hit_cache.c', 'tools/fixtures/coverage_hit_transport_faults.c',
                      'tools/coverage_hit_faults.py', 'tools/check_coverage_loop_proofs.py',
