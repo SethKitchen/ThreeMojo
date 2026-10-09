@@ -15,10 +15,12 @@ if __package__:
     from . import source_contracts as source
     from . import sum2_guard_contracts as guard
     from . import speed_parser_contracts as speed
+    from . import runtime_boundary_contracts as boundary
 else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import speed_parser_contracts as speed
+    import runtime_boundary_contracts as boundary
 
 MODULE = 'extensions/carla/opendrive.mojo'
 MIGRATION = 'tools/carla_lane_oracle/border-parser-successor.json'
@@ -147,6 +149,7 @@ def verify(root):
     root = Path(root)
     record = read_record(root)
     edge = verify_source((root/MODULE).read_bytes().decode('utf-8'), record)
+    consumers = boundary.verify(root)
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
         for path, expected in record[group].items():
             actual = hashlib.sha256((root/path).read_bytes()).hexdigest()
@@ -164,6 +167,10 @@ def verify(root):
                 require(map_edge is not None and map_edge['before_sha256'] == expected
                         and map_edge['after_sha256'] == actual,
                         'Map consumer edge does not extend the immutable parser record')
+            elif group == 'unchanged_inputs' and path in consumers:
+                require(expected == consumers[path]['before_sha256']
+                        and actual == consumers[path]['after_sha256'],
+                        'runtime boundary consumer does not extend the record: ' + path)
             else:
                 require(actual == expected,
                         'historical record or live consumer changed: ' + path)

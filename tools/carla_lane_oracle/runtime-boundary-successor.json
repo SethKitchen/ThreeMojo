@@ -1,0 +1,45 @@
+{
+  "schema": 1,
+  "issue": 333,
+  "scope": "Reviewed #333 runtime boundary edges for four Map consumers: DVSCamera.simulate and LaneInvasionSensor.tick take Duration64, World.get_traffic_lights_from_waypoint takes Length64, each refuses nonfinite or negative input, and SensorManager wraps its two calls. No parser, Map query or lane geometry source changes. Every other consumer change remains fail-closed.",
+  "edges": {
+    "extensions/carla/cameras.mojo": {
+      "before_sha256": "59999d17b9e35d25e56d24a1e88f25738378426c0baf9e69332dfcfdbe26d6b5",
+      "after_sha256": "dbff553682707e52175a967b7a09618716f1c7c8ba28c17e1fa7f6225725e778",
+      "before_token_sha256": "7c427f6ef3dd8ec00aacfbd72b27771fc8f4759f727ae2b007488259baf28960",
+      "after_token_sha256": "a8038afbfcbd536fd5f12b10f6a2718ddb1f2d480d97854f8db4375264e1b65d"
+    },
+    "extensions/carla/lane_invasion.mojo": {
+      "before_sha256": "3049273d70f2cf83335533d1a92783bb128fd69fe32530a9d04386b8efd3acec",
+      "after_sha256": "3b7262b84e9e170c0e7181e7e013a6763376b34b9e65feddcd98a2c457350850",
+      "before_token_sha256": "b47ce3c5eacb1197b491509490d5754cda2b7b58607393ade14c6f1aa1d7554a",
+      "after_token_sha256": "aa6689b8b166448f64a5b66cda02235aacb555d952f4a37e52ae6d1551f8629b"
+    },
+    "extensions/carla/sensor_manager.mojo": {
+      "before_sha256": "caf4123e0abcbe6cb8ab8dc413b83fb4dced11b3459186b9b21f9e74e86d5d15",
+      "after_sha256": "cf801d357feeaf3c9d0d49dd3953b332243fd398c0ed1c876e4d9301e9251a7b",
+      "before_token_sha256": "9320387e29cdb57c600e93c859f6d4679f4a65125a9104708cec6b3720ec01a0",
+      "after_token_sha256": "b2eb67ce39823f19d7c7e78acaa6f5545ef936d146506d4f397893047f30dc4e"
+    },
+    "extensions/carla/world.mojo": {
+      "before_sha256": "db35b64842ddac2d5fdea6f4c502e72b19ad892a191ee4614bb33390c4c464eb",
+      "after_sha256": "0c7a44bfda063270715b20dfee7d21d08390f3db97f60c3bb9ddd959eaa6becd",
+      "before_token_sha256": "b680d37dd6e8dbe29a60265068adfa560df102c8f42142ef82d6bedc931bca25",
+      "after_token_sha256": "9a50dbb87e6b604699dc19bd38f62abd0351b7b279fab5e1e37e3f81863c9d72"
+    }
+  },
+  "correctness_tests": {
+    "tests/test_carla_sensors.mojo": "9355b707492acb411fd46532ad0583a61d7af3092d6f71c8b1dbecd7a74eebb0",
+    "tests/test_carla_sensors_world.mojo": "6889f58abeaecfa9233712335ae88f9fd9ff0048b1cb9909e7f30bb8b8dc56d7",
+    "tests/test_carla_world_signals.mojo": "f81c31ffbfeeab1a2e4e32693bbf7ecf0694e31b250692864dccf6aa7338fdd5",
+    "tests/compile_fail/carla_event_camera_time_rejects_float32_duration.mojo": "75a8da75c59855547f927b47cdc9d937a0c0e59b23953375e09fc1b5b078b4e8",
+    "tests/compile_fail/carla_event_camera_time_rejects_length.mojo": "c0d338a141b0c2d82ac1c80fdb31664df5104ce0f644a0c36297bd2300d1c4a8",
+    "tests/compile_fail/carla_event_camera_time_rejects_raw_float64.mojo": "6117b021abadfe2e7983052c366a7564e0f86f530390708d3e93b48bd71db049",
+    "tests/compile_fail/carla_lane_invasion_time_rejects_float32_duration.mojo": "4c5f6a2a65a4f3ed78c5b5d4c5ac51f5e856dba482e9bdac5388a8d8b90466e0",
+    "tests/compile_fail/carla_lane_invasion_time_rejects_length.mojo": "46145c44ec6d323c221c939ad1964207cd4e40a86bf03b1691e3d8b699f61dab",
+    "tests/compile_fail/carla_lane_invasion_time_rejects_raw_float64.mojo": "b8b249ffc7831456ac80e3f0173487482e6c2a2178a7b9a6e5d54b9f1a88389a",
+    "tests/compile_fail/carla_light_search_distance_rejects_duration.mojo": "11695cb7029cd451adb86f78f1c3147680e875fc2a8f3ceaa815540aced5f3d3",
+    "tests/compile_fail/carla_light_search_distance_rejects_float32_length.mojo": "0b8d1558e10eb4c9e96e682d56c78830759de65f6e418da40036e5e60b7a4b2b",
+    "tests/compile_fail/carla_light_search_distance_rejects_raw_float64.mojo": "b08f8d73fa0ccc2b6480f9fbf0e4fc1edbf1d226e6296d568603ac45c685860d"
+  }
+}
