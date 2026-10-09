@@ -1,6 +1,6 @@
 # Sphere and static-mesh continuous collision
 
-Use `SPHERE_MESH_CCD` to prevent a supported sphere from passing through a static triangle during a step. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior.
+Use `SPHERE_MESH_CCD` to prevent a supported sphere or rotation-locked capsule from passing through a static triangle during a step. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior.
 
 ```mojo
 from extensions.physics.ccd import SPHERE_MESH_CCD
@@ -13,11 +13,15 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be either a dynamic sphere or a motionless static triangle mesh. Each sphere must have zero shape offset and zero mass-center offset. Its inverse inertia must be positive and isotropic. The sphere can spin. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
+An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be positive and isotropic, and the sphere can spin. 
 
-A sphere's reachable region must not overlap another sphere's reachable region, including the contact margin. The bound uses the sphere's total translational and rotational energy after the force update. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
+A capsule's inverse inertia must be zero in every element, and its angular velocity and angular push must be zero. A capsule then only translates, as a character or walker body does. Its half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
 
-The mode refuses colliding boxes, convex hulls, capsules, kinematic bodies, static primitives, offset spheres and interacting moving bodies. General convex, capsule, rotating-offset and moving-pair CCD remain unsupported. This feature does not turn a box chassis or a capsule walker into a continuous collider.
+A body's reachable region must not overlap another moving body's reachable region, including the contact margin. A capsule's region uses its bounding sphere: its radius plus its half height.
+
+The bound uses the sphere's total translational and rotational energy after the force update. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
+
+The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic bodies, static primitives, offset spheres and interacting moving bodies. General convex, rotating-capsule, rotating-offset and moving-pair CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.
 
@@ -34,6 +38,8 @@ Body state, collision flags, materials, sphere radii and solver settings stay li
 Forces, gravity and damping update velocity once per step. The swept path is piecewise linear at that post-update velocity. It is not the curved path of continuous acceleration.
 
 The sweep tests the triangle face, its three edge cylinders and its three vertex spheres. It uses the earliest approaching front-side contact. After an impact, it applies a normal impulse and a Coulomb-limited tangential impulse. It then sweeps the remaining time with the changed velocity. More than one impact can occur in a step.
+
+A capsule's sweep adds two features to the two cap spheres. The segment can reach a triangle edge, and a triangle vertex can reach the segment's cylinder. The segment's interior reaches the face itself only when the segment is parallel to it. Then the whole segment reaches the plane at once, and a cap over the face or an edge crossing reports that time. Because the capsule cannot rotate, its friction impulse changes only its velocity.
 
 The normal response cannot add kinetic energy for restitution between zero and one. Tangential response dissipates slip energy. These statements apply to the ideal static, isotropic impulse calculation. Stored state still rounds to Float32. External forces and the existing split-overlap correction are separate operations.
 

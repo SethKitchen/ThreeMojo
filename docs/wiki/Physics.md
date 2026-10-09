@@ -127,4 +127,4 @@ The production sweep and existing world ray path stay unchanged. [Owned query sn
 
 ## Continuous collision
 
-The opt-in [sphere/static-mesh sweep](Continuous-collision) handles fast, centered dynamic spheres against one-sided static triangles. It supports multiple impacts and transactional failure. Other shapes and interacting moving bodies are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.
+The opt-in [sphere/static-mesh sweep](Continuous-collision) handles fast, centered dynamic spheres and rotation-locked capsules against one-sided static triangles. It supports multiple impacts and transactional failure. Other shapes and interacting moving bodies are refused. The default discrete mode keeps its previous behavior. Read the support, precision and performance limits before use.

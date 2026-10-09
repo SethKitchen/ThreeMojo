@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Analytic sphere sweeps against the front of static triangles.
+"""Analytic sphere and rotation-locked capsule sweeps against the front of
+static triangles.
 
 This module uses Float64 intermediates, not exact predicates. The world
 opts in through a typed mode and checks its narrower supported domain.
@@ -19,7 +20,7 @@ from std.math import sqrt
 
 @fieldwise_init
 struct CollisionDetection(Equatable, ImplicitlyCopyable, Writable):
-    """Select discrete contacts or the supported sphere/static-mesh sweep."""
+    """Select discrete contacts or the supported sphere/capsule mesh sweep."""
 
     var value: Int
 
@@ -193,4 +194,115 @@ def _sweep_triangle(
         best = _choose(
             start, travel, p, normal, a, _root(start - p, travel, radius), best
         )
+    return best
+
+
+def _segment_parameters(
+    start: SIMD[DType.float64, 4],
+    axis: SIMD[DType.float64, 4],
+    point: SIMD[DType.float64, 4],
+    edge: SIMD[DType.float64, 4],
+    denominator: Float64,
+) -> Tuple[Float64, Float64]:
+    # Closest points of two nonparallel lines, start + u axis and
+    # point + w edge. The denominator is |axis x edge|^2, which is not zero.
+    var offset = start - point
+    var aa = _wide_dot(axis, axis)
+    var ae = _wide_dot(axis, edge)
+    var ee = _wide_dot(edge, edge)
+    var ao = _wide_dot(axis, offset)
+    var eo = _wide_dot(edge, offset)
+    return (
+        (ae * eo - ee * ao) / denominator,
+        (aa * eo - ae * ao) / denominator,
+    )
+
+
+def _sweep_capsule_triangle(
+    start: SIMD[DType.float64, 4],
+    end: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    radius: Float64,
+    triangle: Triangle,
+) raises -> _SweepHit:
+    # A capsule that only translates is the sphere of radius swept along
+    # its segment. Its first contact with the front of a triangle is a cap
+    # sphere on the triangle, the segment on an edge, or a vertex on the
+    # segment's cylinder. The segment's interior reaches the face itself
+    # only when it is parallel to it, and then all of it reaches the plane
+    # at once: a cap over the face or an edge crossing reports that time.
+    var best = _sweep_triangle(start, travel, radius, triangle)
+    var cap = _sweep_triangle(end, travel, radius, triangle)
+    if cap.fraction < best.fraction:
+        best = cap
+    var axis = end - start
+    var length_sq = _wide_dot(axis, axis)
+    if length_sq == 0:
+        return best
+    var middle = start + axis * 0.5
+    if not _sweep_domain(
+        middle, travel, radius, radius + 0.5 * sqrt(length_sq), triangle
+    ):
+        return best
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var normal = _wide_cross(b - a, c - a)
+    var length = sqrt(_wide_dot(normal, normal))
+    if length == 0:
+        return best
+    normal /= length
+    var vertices = [a, b, c]
+    for i in range(3):  # pragma: no branch
+        var p = vertices[i]
+        var edge = vertices[(i + 1) % 3] - p
+        # The segment's interior on this edge. Parallel lines meet first
+        # at a cap or a vertex, which the other features cover.
+        var cross = _wide_cross(axis, edge)
+        var cross_sq = _wide_dot(cross, cross)
+        if cross_sq > 0:
+            var unit = cross / sqrt(cross_sq)
+            var gap = _wide_dot(start - p, unit)
+            var rate = _wide_dot(travel, unit)
+            var fraction = Float64(2)
+            if abs(gap) <= radius:
+                fraction = 0
+            elif gap * rate < 0:
+                var target = radius if gap > 0 else -radius
+                fraction = (target - gap) / rate
+            if fraction <= 1:
+                var at = start + travel * fraction
+                var params = _segment_parameters(at, axis, p, edge, cross_sq)
+                if (
+                    min(params[0], params[1]) >= 0
+                    and max(params[0], params[1]) <= 1
+                ):
+                    best = _choose(
+                        start + axis * params[0],
+                        travel,
+                        p + edge * params[1],
+                        normal,
+                        a,
+                        fraction,
+                        best,
+                    )
+        # This vertex on the segment's cylinder. In the capsule's frame the
+        # vertex moves by -travel.
+        var offset = p - start
+        var along = _wide_dot(offset, axis) / length_sq
+        var delta = -_wide_dot(travel, axis) / length_sq
+        var fraction = _root(
+            offset - axis * along, -travel - axis * delta, radius
+        )
+        var coordinate = along + fraction * delta
+        if coordinate >= 0 and coordinate <= 1:
+            best = _choose(
+                start + axis * coordinate,
+                travel,
+                p,
+                normal,
+                a,
+                fraction,
+                best,
+            )
     return best
