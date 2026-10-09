@@ -7,6 +7,7 @@ Each named edge has exact reviewed endpoints. The unchanged before
 source needs no new edge. Historical pins and live debit checks remain live.
 No broad verifier is called here: this is the bottom of the successor graph.
 """
+from functools import lru_cache
 import hashlib
 import importlib.util
 import json
@@ -64,14 +65,63 @@ OPTIONAL_PREMISE_HASHES = {'_winner_seed_room': '700d00aff6ebf60c3a7a00429ea28df
 OPTIONAL_EXTRA_PREMISES = (('extensions/carla/map_search.mojo', 'validate', ('MapQueryBudget',), 'd4844df8e4cbed35dfa9533c921cacc7975ea2cfed0d4efd57f6541b078a1cdc'), ('extensions/carla/map_search.mojo', '_step_product', ('_MapQueryWork',), '123e48a4de30fe5f383a3e2d4c4b747f53b4181fc672a040560ef72d1d27f825'), ('extensions/carla/curve_sum2.mojo', '_sum2_update', (), 'ce9a6e6e0203c349208ed4d0feee47106c0fbc1b9addd3517a0003b11990f18b'))
 
 
+# A third, separate edge removes only locally proved error/support guards.
+# It does not rewrite either the count edge or the published optional edge.
+# Error theorem: stored_difference(variable, constant) starts with two zero
+# errors. Its sum/roundoff graph returns zero or a nonnegative allowance;
+# Sterbenz's override is zero. The retained error<1 gate and exact-range
+# |value endpoints|<=2^400 bound rounded_value by next_up(2^400+1), finite.
+# Support theorem: admission/narrowing retain 0<band_low<=original_s<=band_high
+# with finite endpoints. Invalid models return this band. Applied ordered
+# finite radii enclose nonnegative real radii, so high>=0. Clipping best+radius
+# above and best-radius below preserves best and the band. A limit can overflow
+# to infinity; min/max with the finite band endpoint still preserves the band.
+# No arbitrary-interval monotonicity or finite near-MAX addition is assumed.
+# Retain score refusal: exact improvement and genuine point-gap scale alone
+# do NOT prove finite interval score (MAX-(-1) has an infinite outward bound).
+# Native materialization/coverage remains a separate qualification requirement.
+SUPPORT_AFTER_SHA256 = 'b9acf04cb54a84b89928739ea9c4e1098843149b6e926cf043b3333a1cdff518'
+SUPPORT_AFTER_TOKEN_SHA256 = '57b5ab51af0a83edabbfa783a9857c8f88f435244f0f171649e4290da69c58d3'
+SUPPORT_EDITS = (('nonnegative_stored_difference_error', '    if not _seed_exact_interval(d.value) or not (\n        0.0 <= d.error and d.error < 1.0\n    ):\n', '    if not _seed_exact_interval(d.value) or not d.error < 1.0:\n'), ('bounded_finite_rounded_distance', '    if (\n        not rounded.is_finite()\n        or rounded.low <= 0.0\n        or rounded.high >= geometry.length\n    ):\n', '    if rounded.low <= 0.0 or rounded.high >= geometry.length:\n'), ('positive_finite_minimizer_support', '    var support = _minimizer_support(\n        domain, center, original_s, original_s, band_low, band_high\n    )\n    if (\n        not support.is_finite()\n        or support.low <= 0.0\n        or support.high < support.low\n    ):\n        return False\n', '    var support = _minimizer_support(\n        domain, center, original_s, original_s, band_low, band_high\n    )\n'))
+SUPPORT_PREMISE_HASHES = {'_seed_reference_domain': '2dac22303e098b801af08b9abfab282dae48a6895c3ef5754a27ddee83871d1e', '_try_winner_seed': 'ed2260b961b4492a0bb8362e65bb8aee62d2896c58f3ec41dab025a4d0135254'}
+SUPPORT_EXTRA_PREMISES = (('extensions/carla/curve_interval.mojo', 'whole', ('_Interval',), '86d1e02f0f8cb20cee66f09ed7e2342d0e56c1d6b7a99de864cb52fb14019dbc'), ('extensions/carla/curve_interval.mojo', 'rounded', ('_Interval',), '4097f0ddac630fbd70272ab9cea2c963fb9150d999d07c32114ea8624813d8aa'), ('extensions/carla/curve_interval.mojo', '__neg__', ('_Interval',), '9e2f35fa8cbc07e6d6ae013d35510b2dd0b3d0327c995ed00f5c9416b12e2dfa'), ('extensions/carla/curve_interval.mojo', '__sub__', ('_Interval',), 'a481d28615c2cf2bccb4248f1977b7273bf29c8d96121ee339ba5e63d2f15a94'), ('extensions/carla/curve_interval.mojo', '__truediv__', ('_Interval',), 'd63998431c4fb89405f915fea9a3de39f5026da3eb3081bad1305c69b2401316'), ('extensions/carla/curve_interval.mojo', 'square', ('_Interval',), '5ba837ee949861751a9996bee84a5cb02bf767c2100e3c8b4f6e3621a910d922'), ('extensions/carla/curve_interval.mojo', 'sqrt', ('_Interval',), '6b3199c6c1f107ea5bad08837c6ff7ad389e655b1eb20ce4d42c904ed271c359'), ('extensions/carla/curve_interval.mojo', 'contains', ('_Interval',), 'a1b087462723ccf3cbc7b63725adf7b67c2487dde5e8a1928acf5be31dbfaf93'))
+
+
+# A fourth exact edge replaces one frontier-size refusal by its existing
+# continuation-headroom refusal. This does NOT prove large frontiers absent.
+# Successful node_cap establishes 0<=winner_cap-winner.nodes<=16384. For
+# L=len(winner.cells)<=16372, min(L,16373)+12 is exactly L+12. For L>=16373,
+# the bounded reservation is 16385 and the first headroom leaf refuses.
+# All earlier validation/cap calls and their exception order are unchanged;
+# intervening target count comparisons are pure. Later arithmetic/debits are
+# unreachable in the saturated case. Integer addition is bounded by 16385.
+# Preserve both target_cells guards, headroom order, thresholds and charges.
+FRONTIER_AFTER_SHA256 = '37dcfb47476001ba8633a2c9dbb78b2d5f83bc069a0c4551d32ca6fdbb4c60bf'
+FRONTIER_AFTER_TOKEN_SHA256 = '214a759d7cb2f804b214bf7324e621d36c83be40af1ecb497550609f6b6bc063'
+FRONTIER_EDITS = (('bounded_winner_frontier_guard', '        or target_reference <= 0\n        or len(winner.cells) > 16372\n        or target_cells < 0\n', '        or target_reference <= 0\n        or target_cells < 0\n'), ('saturating_winner_frontier_reservation', '    var winner_followup = len(winner.cells) + 12\n', '    var winner_followup = min(len(winner.cells), 16373) + 12\n'))
+FRONTIER_PREMISE_HASHES = {'_winner_seed_room': '6fe8fb2c7802c06ac92466ad1903bb8146548c91f014b3ec4d33b754c1916908'}
+
+
+# A fifth, separate edge extracts order-before-score without removing refusal.
+# This is a numerical helper-boundary witness, not SPIRAL producer reachability.
+SCORE_AFTER_SHA256 = '70ec94630e2530e9389fdb6388ff4c139bb268f5549f1a9f06602b6dfebecb94'
+SCORE_AFTER_TOKEN_SHA256 = '56e9801cd0b87c07b67ff96286cac37ef621cee7c2967fb16bd979c1f6981b06'
+SCORE_EDITS = (('extract_finite_winner_score', 'def _try_winner_seed(\n', 'def _winner_seed_update_score(\n    point: Array[Float64, 3],\n    incumbent: Array[Float64, 3],\n    query: Array[Float64, 3],\n    scale: Float64,\n) raises -> Tuple[Bool, Float64]:\n    # Borrowed points; the caller supplies a positive finite scale and an\n    # established FP environment. The second result is unusable on refusal.\n    if _wide_point_order(point, incumbent, query) < 0:\n        var score = _refinement_square[3](point, query, scale)\n        if not score.is_finite():\n            return (False, 0.0)\n        return (True, score.high)\n    return (False, 0.0)\n\n\ndef _try_winner_seed(\n'), ('call_finite_winner_score', '            if _wide_point_order(point, certificate.point, query) < 0:\n                var score = _refinement_square[3](\n                    point, query, certificate.scale\n                )\n                if not score.is_finite():\n                    continue\n                certificate.s = s\n                certificate.point = point^\n                certificate.upper = score.high\n                improved = True\n', '            var update = _winner_seed_update_score(\n                point, certificate.point, query, certificate.scale\n            )\n            if update[0]:\n                certificate.s = s\n                certificate.point = point^\n                certificate.upper = update[1]\n                improved = True\n'))
+SCORE_HELPER_TOKEN_SHA256 = '155efb5cb2224594d4f58a59cbd6e3c84b80ee21bcc8fed50f4252bbab6cb331'
+SCORE_CALLER_TOKEN_SHA256 = '530591a025e3ab9a31870ed03f0b79d871e8a96c958eb688aa31d047b0143e40'
+SCORE_ROUTING_SHA256 = '6e7a09a1e19c18f4510e3574df0cf9ff3c86096ef06b3f588dd34f9dd77ed50f'
+SCORE_TESTS = {'tests/test_carla_winner_seed_update_score.mojo': 'fb9b3c95f3e390bebf2be132544371c5626ed7b9be77181d6701aa2e89a9f3e4'}
+
+
 def require(value, message):
     """Keep rejection controls active in optimized Python."""
     if not value:
         raise ValueError('reviewed seed-count successor: ' + message)
 
 
-def _function_spans(text):
-    """Parse one immutable text snapshot, retaining every lexical owner."""
+@lru_cache(maxsize=32)
+def _function_span_snapshot(text):
+    """Memoize only exact-text lexical spans as immutable nested tuples."""
     tokens = source.tokens(text)
     found, scopes, statement, decorators = [], [], [], {}
     pending, indents, ends = None, [], {}
@@ -119,7 +169,12 @@ def _function_spans(text):
         snippet = textwrap.dedent(''.join(lines[first:last]))
         require(bool(snippet.strip()), 'empty declaration: '+name)
         result.setdefault((owner,name), []).append((snippet,first,last))
-    return result
+    return tuple((key, tuple(values)) for key, values in result.items())
+
+
+def _function_spans(text):
+    """Return fresh mutable wrappers over an exact-text lexical snapshot."""
+    return {key: list(values) for key, values in _function_span_snapshot(text)}
 
 
 def _function_span(text, name, expected_owner, *, spans=None):
@@ -185,6 +240,12 @@ def successor_source(root):
     """Build the exact after fixture; this does not qualify a live root."""
     record = read_record(root)
     text = (Path(root)/MODULE).read_bytes().decode('utf-8')
+    if sha(text) == SCORE_AFTER_SHA256:
+        text = score_predecessor_source(text)
+    if sha(text) == FRONTIER_AFTER_SHA256:
+        text = frontier_predecessor_source(text)
+    if sha(text) == SUPPORT_AFTER_SHA256:
+        text = support_predecessor_source(text)
     if sha(text) == OPTIONAL_AFTER_SHA256:
         text = optional_predecessor_source(text)
     if sha(text) == BEFORE_SHA256:
@@ -258,6 +319,235 @@ def optional_successor_source(root):
     return text
 
 
+def support_predecessor_source(text):
+    """Invert the separate error/support edge to the unchanged optional endpoint."""
+    require(sha(text) == SUPPORT_AFTER_SHA256
+            and source.token_sha256(text) == SUPPORT_AFTER_TOKEN_SHA256,
+            'unknown support-guard successor')
+    require(tuple(item[0] for item in SUPPORT_EDITS) == (
+        'nonnegative_stored_difference_error', 'bounded_finite_rounded_distance',
+        'positive_finite_minimizer_support'), 'support-guard inverse inventory changed')
+    for name, before, after in reversed(SUPPORT_EDITS):
+        require(bool(before) and bool(after) and text.count(after) == 1,
+                'missing or ambiguous support-guard inverse: '+name)
+        text = text.replace(after, before, 1)
+    require(sha(text) == OPTIONAL_AFTER_SHA256
+            and source.token_sha256(text) == OPTIONAL_AFTER_TOKEN_SHA256,
+            'support-guard inverse does not reconstruct published optional source')
+    return text
+
+
+def support_successor_source(root):
+    """Build only the fixed new fixture, without qualifying a physical root."""
+    text = optional_successor_source(root)
+    for name, before, after in SUPPORT_EDITS:
+        require(text.count(before) == 1, 'missing support-guard forward anchor: '+name)
+        text = text.replace(before, after, 1)
+    support_predecessor_source(text)
+    return text
+
+
+def verify_support(root):
+    """Verify the new edge and actual premises without masking older endpoints."""
+    root = Path(root)
+    record = read_record(root)
+    text = (root/MODULE).read_bytes().decode('utf-8')
+    optional = support_predecessor_source(text)
+    middle = optional_predecessor_source(optional)
+    prior_edge = verify_source(middle, record)
+    require(prior_edge is not None, 'support edge must follow both prior successors')
+    _verify_bound_inputs(root, record)
+    verify_premises(root, record, after=True, optional=True, support=True)
+    require((root/MODULE).read_bytes().decode('utf-8') == text,
+            'Map changed during support-guard verification')
+    optional_edge = {'path': MODULE, 'before_sha256': AFTER_SHA256,
+                     'after_sha256': OPTIONAL_AFTER_SHA256,
+                     'before_token_sha256': AFTER_TOKEN_SHA256,
+                     'after_token_sha256': OPTIONAL_AFTER_TOKEN_SHA256}
+    support_edge = {'path': MODULE, 'before_sha256': OPTIONAL_AFTER_SHA256,
+                    'after_sha256': SUPPORT_AFTER_SHA256,
+                    'before_token_sha256': OPTIONAL_AFTER_TOKEN_SHA256,
+                    'after_token_sha256': SUPPORT_AFTER_TOKEN_SHA256}
+    return {'path': MODULE, 'before_sha256': BEFORE_SHA256,
+            'after_sha256': SUPPORT_AFTER_SHA256,
+            'before_token_sha256': BEFORE_TOKEN_SHA256,
+            'after_token_sha256': SUPPORT_AFTER_TOKEN_SHA256,
+            'edges': [prior_edge, optional_edge, support_edge]}
+
+
+def frontier_predecessor_source(text):
+    """Invert only the exact bounded-frontier edge to the support endpoint."""
+    require(sha(text) == FRONTIER_AFTER_SHA256
+            and source.token_sha256(text) == FRONTIER_AFTER_TOKEN_SHA256,
+            'unknown frontier-reservation successor')
+    require(tuple(item[0] for item in FRONTIER_EDITS) == (
+        'bounded_winner_frontier_guard', 'saturating_winner_frontier_reservation'),
+            'frontier-reservation inverse inventory changed')
+    for name, before, after in reversed(FRONTIER_EDITS):
+        require(bool(before) and bool(after) and text.count(after) == 1,
+                'missing or ambiguous frontier-reservation inverse: '+name)
+        text = text.replace(after, before, 1)
+    require(sha(text) == SUPPORT_AFTER_SHA256
+            and source.token_sha256(text) == SUPPORT_AFTER_TOKEN_SHA256,
+            'frontier inverse does not reconstruct separate support endpoint')
+    return text
+
+
+def frontier_successor_source(root):
+    """Build the fixed frontier fixture without admitting an unreviewed root."""
+    text = support_successor_source(root)
+    for name, before, after in FRONTIER_EDITS:
+        require(text.count(before) == 1, 'missing frontier forward anchor: '+name)
+        text = text.replace(before, after, 1)
+    frontier_predecessor_source(text)
+    return text
+
+
+def verify_frontier(root):
+    """Verify the separate frontier edge, all earlier edges and actual premises."""
+    root = Path(root)
+    record = read_record(root)
+    text = (root/MODULE).read_bytes().decode('utf-8')
+    support = frontier_predecessor_source(text)
+    optional = support_predecessor_source(support)
+    middle = optional_predecessor_source(optional)
+    prior_edge = verify_source(middle, record)
+    require(prior_edge is not None, 'frontier edge must follow all preceding edges')
+    _verify_bound_inputs(root, record)
+    verify_premises(root, record, after=True, optional=True, support=True, frontier=True)
+    require((root/MODULE).read_bytes().decode('utf-8') == text,
+            'Map changed during frontier-reservation verification')
+    endpoints = ((AFTER_SHA256, AFTER_TOKEN_SHA256),
+                 (OPTIONAL_AFTER_SHA256, OPTIONAL_AFTER_TOKEN_SHA256),
+                 (SUPPORT_AFTER_SHA256, SUPPORT_AFTER_TOKEN_SHA256),
+                 (FRONTIER_AFTER_SHA256, FRONTIER_AFTER_TOKEN_SHA256))
+    edges = [prior_edge]
+    for before, after in zip(endpoints, endpoints[1:]):
+        edges.append({'path': MODULE, 'before_sha256': before[0],
+                      'after_sha256': after[0], 'before_token_sha256': before[1],
+                      'after_token_sha256': after[1]})
+    return {'path': MODULE, 'before_sha256': BEFORE_SHA256,
+            'after_sha256': FRONTIER_AFTER_SHA256,
+            'before_token_sha256': BEFORE_TOKEN_SHA256,
+            'after_token_sha256': FRONTIER_AFTER_TOKEN_SHA256, 'edges': edges}
+
+
+def verify_score_live(text):
+    """Check the physical helper AND complete caller before RHS projection.
+
+    The caller pin includes exact arguments, branch, final loop position,
+    borrowing/move, all writes, charges and fresh first-operation FP guard.
+    The helper pin includes strict comparison, score evaluation, finite refusal
+    and unmodified high endpoint. Check lexical owner and multiplicity too.
+    """
+    spans = _function_spans(text)
+    for name, expected in (('_winner_seed_update_score', SCORE_HELPER_TOKEN_SHA256),
+                           ('_try_winner_seed', SCORE_CALLER_TOKEN_SHA256)):
+        require(sum(len(values) for (owner, found), values in spans.items()
+                    if found == name) == 1, 'ambiguous score declaration: '+name)
+        require(source.token_sha256(declaration(text, name, spans=spans)) == expected,
+                'live score helper/caller operation graph changed: '+name)
+
+
+def verify_score_caller_inventory(root):
+    """Keep the borrowed helper's caller-supplied FP/scale preconditions closed.
+
+    This new name has its own production census; historical protected-name
+    pins remain immutable. Only the exact Map definition and one call exist.
+    The existing census includes package re-exports and nested namespaces.
+    """
+    root = Path(root)
+    found = {}
+    for path in guard.production_mojo_paths(root):
+        rel = path.relative_to(root)
+        if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
+            continue
+        text = path.read_text()
+        if '_winner_seed_update_score' not in text:
+            continue
+        count = sum(token.type == tokenize.NAME and token.string == '_winner_seed_update_score'
+                    for token in source.tokens(text))
+        if count:
+            found[rel.as_posix()] = count
+    require(found == {MODULE: 2}, 'score helper production caller inventory changed')
+
+
+def score_live_observables(text):
+    """Normalize only the proven result-to-upper correspondence, never omit it."""
+    verify_score_live(text)
+    actual = declaration(text, '_try_winner_seed')
+    require(actual.count('certificate.upper = update[1]') == 1,
+            'missing unique score upper correspondence')
+    actual = actual.replace('certificate.upper = update[1]',
+                            'certificate.upper = score.high', 1)
+    return guard._winner_seed_live_observables(actual)
+
+
+def score_predecessor_source(text):
+    """Invert only the exact extraction edge to the unchanged frontier source."""
+    require(sha(text) == SCORE_AFTER_SHA256
+            and source.token_sha256(text) == SCORE_AFTER_TOKEN_SHA256,
+            'unknown score-helper successor')
+    verify_score_live(text)
+    require(tuple(item[0] for item in SCORE_EDITS) == (
+        'extract_finite_winner_score', 'call_finite_winner_score'),
+            'score-helper inverse inventory changed')
+    for name, before, after in reversed(SCORE_EDITS):
+        require(bool(before) and bool(after) and text.count(after) == 1,
+                'missing or ambiguous score-helper inverse: '+name)
+        text = text.replace(after, before, 1)
+    require(sha(text) == FRONTIER_AFTER_SHA256
+            and source.token_sha256(text) == FRONTIER_AFTER_TOKEN_SHA256,
+            'score-helper inverse does not reconstruct frontier endpoint')
+    return text
+
+
+def score_successor_source(root):
+    """Build the fixed extraction fixture without qualifying a physical root."""
+    text = frontier_successor_source(root)
+    for name, before, after in SCORE_EDITS:
+        require(text.count(before) == 1, 'missing score-helper forward anchor: '+name)
+        text = text.replace(before, after, 1)
+    score_predecessor_source(text)
+    return text
+
+
+def verify_score(root):
+    """Verify all five exact edges and live helper/caller/dependency premises."""
+    root = Path(root)
+    record = read_record(root)
+    text = (root/MODULE).read_bytes().decode('utf-8')
+    for path, expected in SCORE_TESTS.items():
+        require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+                'score-helper numerical fixture changed: '+path)
+    frontier = score_predecessor_source(text)
+    support = frontier_predecessor_source(frontier)
+    optional = support_predecessor_source(support)
+    middle = optional_predecessor_source(optional)
+    prior_edge = verify_source(middle, record)
+    require(prior_edge is not None, 'score edge must follow all preceding edges')
+    _verify_bound_inputs(root, record)
+    verify_score_caller_inventory(root)
+    verify_premises(root, record, after=True, optional=True, support=True,
+                    frontier=True, score=True)
+    require((root/MODULE).read_bytes().decode('utf-8') == text,
+            'Map changed during score-helper verification')
+    endpoints = ((AFTER_SHA256, AFTER_TOKEN_SHA256),
+                 (OPTIONAL_AFTER_SHA256, OPTIONAL_AFTER_TOKEN_SHA256),
+                 (SUPPORT_AFTER_SHA256, SUPPORT_AFTER_TOKEN_SHA256),
+                 (FRONTIER_AFTER_SHA256, FRONTIER_AFTER_TOKEN_SHA256),
+                 (SCORE_AFTER_SHA256, SCORE_AFTER_TOKEN_SHA256))
+    edges = [prior_edge]
+    for before, after in zip(endpoints, endpoints[1:]):
+        edges.append({'path': MODULE, 'before_sha256': before[0],
+                      'after_sha256': after[0], 'before_token_sha256': before[1],
+                      'after_token_sha256': after[1]})
+    return {'path': MODULE, 'before_sha256': BEFORE_SHA256,
+            'after_sha256': SCORE_AFTER_SHA256,
+            'before_token_sha256': BEFORE_TOKEN_SHA256,
+            'after_token_sha256': SCORE_AFTER_TOKEN_SHA256, 'edges': edges}
+
+
 def _verify_bound_inputs(root, record):
     require(dependency_inventory(root) == {MODULE, *record['unchanged_inputs']},
             'live import or package-resolution closure changed')
@@ -293,13 +583,21 @@ def verify_optional(root):
             'edges': [prior_edge, local_edge]}
 
 
-def verify_premises(root, record, *, after, optional=False):
+def verify_premises(root, record, *, after, optional=False, support=False, frontier=False, score=False):
     """Check each actual operation graph independently of whole-file pins."""
     root = Path(root)
-    # Reuse derived spans only within this verified call, never across reads.
+    require(not score or frontier, 'score premises require frontier edge')
+    require(not frontier or support, 'frontier premises require the support edge')
+    require(not support or (after and optional),
+            'support premises require both preceding edges')
+    # Read actual source on every call. Only exact-text lexical computation
+    # is memoized; no filesystem snapshot, comparison or admission is cached.
     snapshots = {}
     for path, expected in record['layout_routing'].items():
         text = (root/path).read_bytes().decode('utf-8')
+        if score and path == MODULE:
+            verify_score_live(text)
+            expected = SCORE_ROUTING_SHA256
         require(sha(guard.declaration_routing(text)) == expected,
                 'live owning-storage or declaration routing changed: '+path)
         snapshots[path] = (text, _function_spans(text))
@@ -313,6 +611,12 @@ def verify_premises(root, record, *, after, optional=False):
         expected = item['after_token_sha256'] if after else item['before_token_sha256']
         if optional and path == MODULE and not item['owner']:
             expected = OPTIONAL_PREMISE_HASHES.get(item['name'], expected)
+        if support and path == MODULE and not item['owner']:
+            expected = SUPPORT_PREMISE_HASHES.get(item['name'], expected)
+        if frontier and path == MODULE and not item['owner']:
+            expected = FRONTIER_PREMISE_HASHES.get(item['name'], expected)
+        if score and path == MODULE and not item['owner'] and item['name'] == '_try_winner_seed':
+            expected = SCORE_CALLER_TOKEN_SHA256
         require(source.token_sha256(actual) == expected,
                 'live theorem premise changed: '+item['path']+':'+'.'.join([*item['owner'], item['name']]))
     if optional:
@@ -321,13 +625,23 @@ def verify_premises(root, record, *, after, optional=False):
             actual = declaration((root/path).read_bytes().decode('utf-8'), name, owner)
             require(source.token_sha256(actual) == expected,
                     'live optional-guard premise changed: '+path+':'+'.'.join((*owner,name)))
+    if support:
+        for path, name, owner, expected in SUPPORT_EXTRA_PREMISES:
+            actual = declaration((root/path).read_bytes().decode('utf-8'), name, owner)
+            require(source.token_sha256(actual) == expected,
+                    'live support-guard premise changed: '+path+':'+'.'.join((*owner,name)))
     # These statements are read from the real after body, never the inverse.
     text = (root/MODULE).read_bytes().decode('utf-8')
     actual = guard.declaration(text, '_try_winner_seed', ())
-    previous = optional_predecessor_source(text) if optional else text
+    previous = score_predecessor_source(text) if score else text
+    previous = frontier_predecessor_source(previous) if frontier else previous
+    previous = support_predecessor_source(previous) if support else previous
+    previous = optional_predecessor_source(previous) if optional else previous
     prior = guard.declaration(predecessor_source(previous, record) if after else previous,
                               '_try_winner_seed', ())
-    require(guard._winner_seed_live_observables(actual) ==
+    actual_observables = (score_live_observables(text) if score else
+                          guard._winner_seed_live_observables(actual))
+    require(actual_observables ==
             guard._winner_seed_live_observables(prior),
             'live fresh-environment guard or ordered debits changed')
 
@@ -337,6 +651,12 @@ def verify(root):
     root = Path(root)
     record = read_record(root)
     text = (root/MODULE).read_bytes().decode('utf-8')
+    if sha(text) == SCORE_AFTER_SHA256:
+        return verify_score(root)
+    if sha(text) == FRONTIER_AFTER_SHA256:
+        return verify_frontier(root)
+    if sha(text) == SUPPORT_AFTER_SHA256:
+        return verify_support(root)
     if sha(text) == OPTIONAL_AFTER_SHA256:
         return verify_optional(root)
     edge = verify_source(text, record)
@@ -355,11 +675,14 @@ def historical_source(root):
     text = (root/MODULE).read_bytes().decode('utf-8')
     if sha(text) == BEFORE_SHA256:
         return text
-    require(sha(text) in {AFTER_SHA256, OPTIONAL_AFTER_SHA256},
+    require(sha(text) in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256},
             'unknown Map cannot use a predecessor')
     require(verify(root) is not None, 'after Map did not activate its reviewed edge')
     require((root/MODULE).read_bytes().decode('utf-8') == text, 'Map changed during reconstruction')
-    middle = optional_predecessor_source(text) if sha(text) == OPTIONAL_AFTER_SHA256 else text
+    middle = score_predecessor_source(text) if sha(text) == SCORE_AFTER_SHA256 else text
+    middle = frontier_predecessor_source(middle) if sha(middle) == FRONTIER_AFTER_SHA256 else middle
+    middle = support_predecessor_source(middle) if sha(middle) == SUPPORT_AFTER_SHA256 else middle
+    middle = optional_predecessor_source(middle) if sha(middle) == OPTIONAL_AFTER_SHA256 else middle
     return predecessor_source(middle, read_record(root))
 
 
@@ -374,15 +697,25 @@ def reviewed_text(root, path, text):
     require(str(path) == MODULE, 'wrong supplied Map path')
     physical = (Path(root)/MODULE).read_bytes()
     digest = hashlib.sha256(physical).hexdigest()
-    require(digest in {AFTER_SHA256, OPTIONAL_AFTER_SHA256},
+    require(digest in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256},
             'supplied after view needs the exact physical after Map')
-    expected_tokens = (OPTIONAL_AFTER_TOKEN_SHA256 if digest == OPTIONAL_AFTER_SHA256
+    expected_tokens = (SCORE_AFTER_TOKEN_SHA256 if digest == SCORE_AFTER_SHA256
+                       else FRONTIER_AFTER_TOKEN_SHA256 if digest == FRONTIER_AFTER_SHA256
+                       else SUPPORT_AFTER_TOKEN_SHA256 if digest == SUPPORT_AFTER_SHA256
+                       else OPTIONAL_AFTER_TOKEN_SHA256 if digest == OPTIONAL_AFTER_SHA256
                        else AFTER_TOKEN_SHA256)
     require(source.token_sha256(text) == expected_tokens,
             'unreviewed supplied Map source')
     require(verify(root) is not None, 'after Map did not activate its reviewed edge')
     require((Path(root)/MODULE).read_bytes() == physical,
             'Map changed during supplied-view verification')
-    middle = (optional_predecessor_source(physical.decode('utf-8'))
-              if digest == OPTIONAL_AFTER_SHA256 else physical.decode('utf-8'))
+    middle = physical.decode('utf-8')
+    if digest == SCORE_AFTER_SHA256:
+        middle = score_predecessor_source(middle)
+    if sha(middle) == FRONTIER_AFTER_SHA256:
+        middle = frontier_predecessor_source(middle)
+    if sha(middle) == SUPPORT_AFTER_SHA256:
+        middle = support_predecessor_source(middle)
+    if sha(middle) == OPTIONAL_AFTER_SHA256:
+        middle = optional_predecessor_source(middle)
     return predecessor_source(middle, read_record(root))

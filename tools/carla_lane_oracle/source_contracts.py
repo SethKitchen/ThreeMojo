@@ -52,11 +52,23 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def tokens(text):
+@lru_cache(maxsize=32)
+def _token_snapshot(text):
+    """Cache only lexical output for exact immutable text, never validation.
+
+    TokenInfo is an immutable named tuple; its fields are strings, integers,
+    and coordinate tuples. The bounded snapshot therefore has no mutable parts.
+    """
     try:
-        return list(tokenize.generate_tokens(io.StringIO(text).readline))
+        return tuple(tokenize.generate_tokens(io.StringIO(text).readline))
     except (tokenize.TokenError, IndentationError) as error:
         raise ValueError('invalid source tokens: ' + str(error)) from error
+
+
+def tokens(text):
+    # Preserve a fresh mutable outer list for every caller. Filesystem reads,
+    # production discovery and all proof comparisons still run on each call.
+    return list(_token_snapshot(text))
 
 
 @lru_cache(maxsize=128)

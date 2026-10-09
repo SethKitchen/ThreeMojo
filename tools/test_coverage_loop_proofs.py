@@ -1561,16 +1561,31 @@ class MapSuccessorLoopTests(unittest.TestCase):
                       2373: 2365, 2378: 2370, 2387: 2379, 2396: 2388}
         self.raw = (self.repo/self.name).read_bytes()
         self.digest = loops.sha256(self.raw)
-        self.assertIn(self.digest, (seed_count.BEFORE_SHA256, seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256))
+        self.assertIn(self.digest, (seed_count.BEFORE_SHA256, seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256, seed_count.SUPPORT_AFTER_SHA256, seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256))
         self.optional = self.digest == seed_count.OPTIONAL_AFTER_SHA256
+        self.support = self.digest == seed_count.SUPPORT_AFTER_SHA256
+        self.score = self.digest == seed_count.SCORE_AFTER_SHA256
+        self.frontier = self.digest == seed_count.FRONTIER_AFTER_SHA256
         if self.optional:
             self.lines = {1491: 1476, 2272: 2255, 2279: 2262, 2301: 2284,
                           2373: 2356, 2378: 2361, 2387: 2370, 2396: 2379}
+        if self.support:
+            self.lines = {1491: 1464, 2272: 2243, 2279: 2250, 2301: 2272,
+                          2373: 2344, 2378: 2349, 2387: 2358, 2396: 2367}
+        if self.frontier:
+            self.lines = {1491: 1463, 2272: 2242, 2279: 2249, 2301: 2271,
+                          2373: 2343, 2378: 2348, 2387: 2357, 2396: 2366}
+        if self.score:
+            self.lines = loops._MAP_SCORE_SUCCESSOR_LINES
         self.after = self.digest != seed_count.BEFORE_SHA256
 
     def assert_live_proofs(self, root):
         actual = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
         expected = set(self.lines.values() if self.after else self.lines)
+        if self.frontier:
+            expected.add(4055)
+        if self.score:
+            expected.add(4069)
         self.assertEqual(set(actual), expected)
         text = (root/self.name).read_text().splitlines()
         for rule in self.rules:
@@ -1592,7 +1607,7 @@ class MapSuccessorLoopTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         record = self.seed.read_record(self.repo)
-        names = {self.name, self.seed.MIGRATION}
+        names = {self.name, self.seed.MIGRATION, *self.seed.SCORE_TESTS}
         for key in ('unchanged_inputs', 'historical_records',
                     'unchanged_correctness_tests', 'after_correctness_tests'):
             names.update(record[key])
@@ -1605,13 +1620,21 @@ class MapSuccessorLoopTests(unittest.TestCase):
 
     def test_actual_physical_state_keeps_live_hashes_and_all_true_obligations(self):
         self.assertEqual({r[1] for r in self.rules}, set(self.lines))
-        self.assertEqual(loops._MAP_OPTIONAL_SUCCESSOR_LINES if self.optional else loops._MAP_SUCCESSOR_LINES, self.lines)
+        expected = (loops._MAP_SCORE_SUCCESSOR_LINES if self.score else
+                    loops._MAP_FRONTIER_SUCCESSOR_LINES if self.frontier else
+                    loops._MAP_SUPPORT_SUCCESSOR_LINES if self.support else
+                    loops._MAP_OPTIONAL_SUCCESSOR_LINES if self.optional else
+                    loops._MAP_SUCCESSOR_LINES)
+        self.assertEqual(expected, self.lines)
         self.assert_live_proofs(self.repo)
 
     def test_missing_future_fixture_cannot_activate_after_in_before_checkout(self):
         root = self.fixture()
-        (root/self.name).write_text(self.seed.optional_successor_source(self.repo) if self.optional
-                                   else self.seed.successor_source(self.repo))
+        (root/self.name).write_text(self.seed.score_successor_source(self.repo) if self.score else
+                                   self.seed.frontier_successor_source(self.repo) if self.frontier else
+                                   self.seed.support_successor_source(self.repo) if self.support else
+                                   self.seed.optional_successor_source(self.repo) if self.optional else
+                                   self.seed.successor_source(self.repo))
         if not self.after:
             # An infrastructure-only checkout cannot manufacture the future
             # count suite. Its actual old bytes must fail the immutable pin.
@@ -1645,8 +1668,11 @@ class MapSuccessorLoopTests(unittest.TestCase):
         root = self.fixture()
         # Use the source-only reconstruction to test rejection even before the
         # future fixture exists; only a physical after checkout admits it.
-        (root/self.name).write_text(self.seed.optional_successor_source(self.repo) if self.optional
-                                   else self.seed.successor_source(self.repo))
+        (root/self.name).write_text(self.seed.score_successor_source(self.repo) if self.score else
+                                   self.seed.frontier_successor_source(self.repo) if self.frontier else
+                                   self.seed.support_successor_source(self.repo) if self.support else
+                                   self.seed.optional_successor_source(self.repo) if self.optional else
+                                   self.seed.successor_source(self.repo))
         if self.after:
             self.assert_live_proofs(root)
         else:
@@ -1665,27 +1691,66 @@ class MapSuccessorLoopTests(unittest.TestCase):
         if self.after:
             self.assert_live_proofs(root)
 
-    def test_all_three_explicit_map_states_keep_eight_required_true_rows(self):
+    def test_all_six_explicit_map_states_keep_eight_required_true_rows(self):
         root = self.fixture()
         middle = self.seed.successor_source(self.repo)
         earliest = self.seed.predecessor_source(middle, self.seed.read_record(self.repo))
-        newest = self.seed.optional_successor_source(self.repo)
+        optional = self.seed.optional_successor_source(self.repo)
+        support = self.seed.support_successor_source(self.repo)
+        newest = self.seed.frontier_successor_source(self.repo)
         maps = [(earliest, {k:k for k in self.lines}),
                 (middle, loops._MAP_SUCCESSOR_LINES),
-                (newest, loops._MAP_OPTIONAL_SUCCESSOR_LINES)]
+                (optional, loops._MAP_OPTIONAL_SUCCESSOR_LINES),
+                (support, loops._MAP_SUPPORT_SUCCESSOR_LINES),
+                (newest, loops._MAP_FRONTIER_SUCCESSOR_LINES),
+                (self.seed.score_successor_source(self.repo), loops._MAP_SCORE_SUCCESSOR_LINES)]
         for text, correspondence in maps:
             (root/self.name).write_text(text)
             proof = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
-            self.assertEqual(set(proof), set(correspondence.values()))
+            expected = set(correspondence.values())
+            if loops.sha256(text.encode()) == self.seed.FRONTIER_AFTER_SHA256:
+                expected.add(4055)
+            if loops.sha256(text.encode()) == self.seed.SCORE_AFTER_SHA256:
+                expected.add(4069)
+            self.assertEqual(set(proof), expected)
             for rule in self.rules:
                 line = correspondence[rule[1]]
                 row = proof[line]
                 self.assertEqual((row['required'],row['impossible'],row['proof_id']),('T','F',rule[5]))
                 self.assertEqual(row['dependency_sha256'][self.name],loops.sha256(text.encode()))
                 self.assertIn(' in '+row['expression']+':',text.splitlines()[line-1])
-        (root/self.name).write_text(newest+'\n# unreviewed third edge\n')
+        (root/self.name).write_text(newest+'\n# unreviewed fifth edge\n')
         self.assertEqual(loops.reviewed_nonempty_loops(root,'extensions/carla/map'),{})
         self.assertEqual(loops.reviewed_nonempty_loops(root,'extensions/carla/rtree'),{})
+
+    def test_complete_consumers_accept_six_exact_states_and_reject_mutations(self):
+        from carla_lane_oracle import winner_sign_contracts as winner
+        from carla_lane_oracle import border_parser_contracts as border
+        middle = self.seed.successor_source(self.repo)
+        variants = (
+            self.seed.predecessor_source(middle, self.seed.read_record(self.repo)),
+            middle, self.seed.optional_successor_source(self.repo),
+            self.seed.support_successor_source(self.repo),
+            self.seed.frontier_successor_source(self.repo),
+            self.seed.score_successor_source(self.repo),
+        )
+        target = self.repo/self.name
+        read_bytes, read_text = Path.read_bytes, Path.read_text
+        for text in variants:
+            for consumer in (winner, border):
+                for unknown in (False, True):
+                    candidate = text + ('\n# unknown consumer source\n' if unknown else '')
+                    with self.subTest(consumer=consumer.__name__,
+                                      sha256=loops.sha256(text.encode()), unknown=unknown), \
+                         patch.object(Path, 'read_bytes', lambda p, *a, **k:
+                                      candidate.encode() if p == target else read_bytes(p, *a, **k)), \
+                         patch.object(Path, 'read_text', lambda p, *a, **k:
+                                      candidate if p == target else read_text(p, *a, **k)):
+                        if unknown:
+                            with self.assertRaises(ValueError):
+                                consumer.verify(self.repo)
+                        else:
+                            consumer.verify(self.repo)
 
     def test_current_lines_mask_only_the_false_loop_outcomes(self):
         proofs = self.assert_live_proofs(self.repo)
@@ -1881,9 +1946,17 @@ if mode == 'cli':
         print('unknown successor withheld all named Map and R-tree proofs')
         raise SystemExit(0)
     digest = hashlib.sha256((root/seed.MODULE).read_bytes()).hexdigest()
-    after = digest in {seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256}
-    mapping = loops._MAP_OPTIONAL_SUCCESSOR_LINES if digest == seed.OPTIONAL_AFTER_SHA256 else loops._MAP_SUCCESSOR_LINES
+    after = digest in {seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256}
+    mapping = (loops._MAP_SCORE_SUCCESSOR_LINES if digest == seed.SCORE_AFTER_SHA256 else
+               loops._MAP_FRONTIER_SUCCESSOR_LINES if digest == seed.FRONTIER_AFTER_SHA256 else
+               loops._MAP_SUPPORT_SUCCESSOR_LINES if digest == seed.SUPPORT_AFTER_SHA256 else
+               loops._MAP_OPTIONAL_SUCCESSOR_LINES if digest == seed.OPTIONAL_AFTER_SHA256 else
+               loops._MAP_SUCCESSOR_LINES)
     expected = set(mapping.values() if after else mapping)
+    if digest == seed.FRONTIER_AFTER_SHA256:
+        expected.add(4055)
+    if digest == seed.SCORE_AFTER_SHA256:
+        expected.add(4069)
     check(set(actual) == expected and set(tree) == {666}, 'clean CLI lost expected named proofs')
     for proof in [*actual.values(), *tree.values()]:
         check((proof['required'], proof['impossible']) == ('T', 'F'), 'reachable outcome weakened')
@@ -1933,6 +2006,205 @@ check(sys.path == original_path, 'verification changed sys.path')
             output.write(b'\n# unknown complete source\n')
         self.assertIn('withheld', self.clean_import_probe('cli', root=root, rejected=True))
 
+
+
+class ConstructionBoundaryLoopTests(unittest.TestCase):
+    """Final-only typed producer proof; prior envelopes remain independent."""
+
+    line = 4055
+    score = False
+
+    def setUp(self):
+        self.repo = Path(__file__).resolve().parents[1]
+        temporary = tempfile.TemporaryDirectory(prefix='construction-boundary-')
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.map = 'extensions/carla/map.mojo'
+        self.road = 'extensions/carla/road.mojo'
+        self.loft = 'extensions/humanoid/skeleton/loft.mojo'
+        from carla_lane_oracle import seed_count_contracts as seed
+        record = seed.read_record(self.repo)
+        names = {*loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256, self.loft, seed.MIGRATION, *seed.SCORE_TESTS}
+        for group in ('historical_records', 'unchanged_correctness_tests',
+                      'after_correctness_tests'):
+            names.update(record[group])
+        for name in names:
+            target = self.root/name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes((self.repo/name).read_bytes())
+
+        (self.root/self.map).write_text(seed.score_successor_source(self.repo) if self.score
+                                         else seed.frontier_successor_source(self.repo))
+
+    def proof(self):
+        return loops.construction_boundary_loops(self.root)
+
+    def test_exact_final_source_keeps_true_and_masks_only_false(self):
+        proof = self.proof()
+        self.assertEqual(set(proof), {self.line})
+        row = proof[self.line]
+        self.assertEqual((row['required'], row['impossible'], row['cardinality'],
+                          row['minimum_cardinality'], row['maximum_cardinality']),
+                         ('T', 'F', 1, 1, None))
+        self.assertEqual(row['proof_id'], 'construction-geometry-boundary-list')
+        for name, expected in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256.items():
+            self.assertEqual(row['dependency_sha256'][name],
+                             loops.file_sha256(self.root/name) if self.score and name == self.map else expected)
+        for name, expected in row['dependency_sha256'].items():
+            self.assertEqual(loops.file_sha256(self.root/name), expected)
+        self.assertEqual((self.root/self.map).read_text().splitlines()[self.line-1].strip(),
+                         'for s in boundaries:')
+        raw = f'B extensions/carla/map {self.line}\nL extensions/carla/map {self.line}\n'.encode()
+        envelope = {'sha256': 'test', 'receipt': {
+            'manifest_sha256': loops.sha256(raw),
+            'proofs': [{'module': 'extensions/carla/map', **row}]}}
+        masked = loops.masked_manifest(raw, envelope)
+        self.assertIn(f'R extensions/carla/map {self.line} T reviewed-nonempty-iterator 1'.encode(), masked)
+        self.assertIn(f'L extensions/carla/map {self.line}'.encode(), masked)
+
+    def test_geometry_guard_append_lifetime_receiver_and_types_are_bound(self):
+        cases = [
+            (self.road, 'if geometry_at < 0:', 'if geometry_at < -1:'),
+            (self.road, '        if geometry_at < 0:\n            raise Error("The road has no geometry at that s")\n', ''),
+            (self.road, '            result.append(record.s)',
+             '            if record.s > 0.0:\n                result.append(record.s)'),
+            (self.road, '        return result^',
+             '        result.clear()\n        return result^'),
+            (self.map, '            for s in boundaries:',
+             '            boundaries.clear()\n            for s in boundaries:'),
+            (self.map, 'var current_t = self._build_transform(current)',
+             'var current_t = self._build_transform(start)'),
+            (self.map, 'self._add_segment(current_t, next_t, current, next_w)',
+             'other._add_segment(current_t, next_t, current, next_w)'),
+            (self.map, 'var roads: List[Road]', 'var roads: List[OtherRoad]'),
+            (self.road, 'var info: InformationSet', 'var info: OtherInformationSet'),
+            ('extensions/carla/road_info.mojo', 'var geometries: List[RoadInfoGeometry]',
+             'var geometries: List[OtherGeometry]'),
+        ]
+        for name, before, after in cases:
+            path = self.root/name
+            original = path.read_text()
+            with self.subTest(name=name, before=before):
+                self.assertIn(before, original)
+                path.write_text(original.replace(before, after))
+                self.assertEqual(self.proof(), {})
+                path.write_text(original)
+        self.assertEqual(set(self.proof()), {self.line})
+
+    def test_new_map_call_alias_and_unresolved_receiver_reject(self):
+        path = self.root/'tests/new_boundary_call.mojo'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        for text in (
+            'from extensions.carla.map import Map\ndef f(mut road_map: Map):\n    road_map._add_segment(a, b, first, second)\n',
+            'from extensions.carla.map import Map as M\ndef f(mut road_map: M):\n    road_map._add_segment(a, b, first, second)\n',
+            'def f(mut unknown: Other):\n    unknown._add_segment(a, b, first, second)\n',
+            'alias insert = Map._add_segment\n',
+            'def f():\n    _add_segment(a, b, first, second)\n',
+            'def _add_segment(x: Int):\n    pass\ndef f():\n    var _add_segment = Map._add_segment\n',
+        ):
+            with self.subTest(text=text):
+                path.write_text(text)
+                self.assertEqual(self.proof(), {})
+        path.unlink()
+        self.assertEqual(set(self.proof()), {self.line})
+
+    def test_string_method_spellings_reject_but_comments_do_not(self):
+        path = self.root/'tests/string_boundary_lookup.mojo'
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('# _add_segment is an unrelated comment\ndef f():\n    pass\n')
+        self.assertEqual(set(self.proof()), {self.line})
+        for text in (
+            'def f(mut m: Map):\n    getattr(m, "_add_segment")(a, b, first, second)\n',
+            'alias member_name = "_add_segment"\n',
+        ):
+            with self.subTest(text=text):
+                path.write_text(text)
+                self.assertEqual(self.proof(), {})
+        path.unlink()
+        self.assertEqual(set(self.proof()), {self.line})
+
+    def test_unrelated_module_local_spelling_does_not_establish_or_veto(self):
+        # The real loft declaration is concrete List[_Ellipse]/LoftSample;
+        # modifying its independent body cannot affect the CARLA theorem.
+        path = self.root/self.loft
+        path.write_text(path.read_text()+'\n# unrelated local loft change\n')
+        extra = self.root/'tests/unrelated_boundary_name.mojo'
+        extra.parent.mkdir(parents=True, exist_ok=True)
+        extra.write_text('def _add_segment(x: Int):\n    pass\ndef f():\n    _add_segment(1)\n')
+        self.assertEqual(set(self.proof()), {self.line})
+        path.unlink()
+        self.assertEqual(set(self.proof()), {self.line})
+        road = self.root/self.road
+        road.write_text(road.read_text().replace('if geometry_at < 0:', 'if geometry_at < -1:'))
+        self.assertEqual(self.proof(), {})
+
+    def test_unknown_endpoint_dependency_import_and_std_shadow_reject(self):
+        for name in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256:
+            path = self.root/name
+            original = path.read_bytes()
+            with self.subTest(name=name):
+                path.write_bytes(original+b'\n# unknown source\n')
+                self.assertEqual(self.proof(), {})
+                path.write_bytes(original)
+        shadow = self.root/'std.mojo'
+        shadow.write_text('struct List: pass\n')
+        self.assertEqual(self.proof(), {})
+        shadow.unlink()
+        self.assertEqual(set(self.proof()), {self.line})
+
+    def test_final_source_data_guards_and_staged_callers_fail_closed(self):
+        from carla_lane_oracle import seed_count_contracts as seed
+        record = seed.read_record(self.repo)
+        for name in (seed.MIGRATION, *record['after_correctness_tests'],
+                     *(seed.SCORE_TESTS if self.score else ())):
+            path = self.root/name
+            original = path.read_bytes()
+            path.write_bytes(original+b'\n# unknown proof data\n')
+            self.assertEqual(self.proof(), {})
+            path.unlink()
+            self.assertEqual(self.proof(), {})
+            path.write_bytes(original)
+        temporary = tempfile.TemporaryDirectory(prefix='boundary-staged-source-')
+        self.addCleanup(temporary.cleanup)
+        stage = Path(temporary.name)
+        call = stage/'new.mojo'
+        call.write_text('def f(mut m: Map):\n    m._add_segment(a, b, first, second)\n')
+        self.assertEqual(set(self.proof()), {self.line})
+        self.assertEqual(loops.construction_boundary_loops(
+            self.root, include_roots=(stage,)), {})
+        call.unlink()
+        self.assertEqual(set(self.proof()), {self.line})
+
+    def test_all_earlier_endpoints_withhold_new_row(self):
+        from carla_lane_oracle import seed_count_contracts as seed
+        middle = seed.successor_source(self.repo)
+        for text in (seed.predecessor_source(middle, seed.read_record(self.repo)),
+                     middle, seed.optional_successor_source(self.repo),
+                     seed.support_successor_source(self.repo)):
+            (self.root/self.map).write_text(text)
+            self.assertEqual(self.proof(), {})
+
+
+class ScoreConstructionBoundaryLoopTests(ConstructionBoundaryLoopTests):
+    """Repeat every frozen constructor control on the fully verified new edge."""
+
+    line = 4069
+    score = True
+
+    def test_score_refusal_remains_measured_and_mutations_revoke(self):
+        text = (self.root/self.map).read_text()
+        lines = text.splitlines()
+        refusal = next(i for i, line in enumerate(lines, 1)
+                       if 'if not score.is_finite():' in line)
+        proofs = loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map')
+        self.assertNotIn(refusal, proofs)
+        raw = f'B extensions/carla/map {refusal}\n'.encode()
+        receipt = {'manifest_sha256': loops.sha256(raw), 'proofs': []}
+        envelope = {'sha256': loops.sha256(loops.canonical(receipt)), 'receipt': receipt}
+        self.assertIn(raw, loops.masked_manifest(raw, envelope))
+        (self.root/self.map).write_text(text.replace('if not score.is_finite():', 'if False:'))
+        self.assertEqual(self.proof(), {})
+        self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'), {})
 
 
 if __name__ == '__main__':

@@ -73,6 +73,26 @@ def inventory(root):
         text = path.read_text()
         if not any(name in text for name in NAMES):
             continue
+        if rel.as_posix() == 'extensions/carla/map.mojo':
+            if __package__:
+                from . import seed_count_contracts as seed_count
+            else:
+                import seed_count_contracts as seed_count
+            physical = path.read_bytes()
+            physical_digest = hashlib.sha256(physical).hexdigest()
+            supplied_tokens = source.token_sha256(text)
+            if (physical_digest == seed_count.SCORE_AFTER_SHA256
+                    or supplied_tokens == seed_count.SCORE_AFTER_TOKEN_SHA256):
+                require(physical_digest == seed_count.SCORE_AFTER_SHA256,
+                        'score-helper view needs the exact physical Map')
+                require(supplied_tokens == seed_count.SCORE_AFTER_TOKEN_SHA256,
+                        'unreviewed supplied score-helper source')
+                # Qualify the actual helper/caller and dependencies before
+                # mapping identifier ordinals to the exact preceding graph.
+                seed_count.verify_score(root)
+                require(path.read_bytes() == physical,
+                        'Map changed during score-helper inventory check')
+                text = seed_count.score_predecessor_source(physical.decode('utf-8'))
         entry = inventory_entry(text)
         if entry is not None:
             result[rel.as_posix()] = entry

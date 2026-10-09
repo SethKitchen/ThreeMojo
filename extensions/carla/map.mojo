@@ -1202,18 +1202,12 @@ def _seed_reference_domain(
     ) or not _endpoint_in_exact_range(origin):
         return False
     var d = _stored_difference(_Jet.variable(low, high), _Jet.constant(origin))
-    if not _seed_exact_interval(d.value) or not (
-        0.0 <= d.error and d.error < 1.0
-    ):
+    if not _seed_exact_interval(d.value) or not d.error < 1.0:
         return False
     if not isfinite(geometry.length) or geometry.length <= 0.0:
         return False
     var rounded = d.rounded_value()
-    if (
-        not rounded.is_finite()
-        or rounded.low <= 0.0
-        or rounded.high >= geometry.length
-    ):
+    if rounded.low <= 0.0 or rounded.high >= geometry.length:
         return False
     var k0 = geometry.curvature_start
     var rate = (geometry.curvature_end - k0) / geometry.length
@@ -1251,12 +1245,11 @@ def _winner_seed_room(
         or followup_steps < 0
         or winner_reference <= 0
         or target_reference <= 0
-        or len(winner.cells) > 16372
         or target_cells < 0
         or target_cells > 16372
     ):
         return False
-    var winner_followup = len(winner.cells) + 12
+    var winner_followup = min(len(winner.cells), 16373) + 12
     var target_followup = target_cells + 12
     var seed_nodes = proof_nodes + 85
     if (
@@ -1292,6 +1285,22 @@ def _winner_seed_room(
     var terms_left = work.policy.max_terms - work.terms
     terms_left -= winner_units * winner_reference
     return target_reference <= terms_left // 50
+
+
+def _winner_seed_update_score(
+    point: Array[Float64, 3],
+    incumbent: Array[Float64, 3],
+    query: Array[Float64, 3],
+    scale: Float64,
+) raises -> Tuple[Bool, Float64]:
+    # Borrowed points; the caller supplies a positive finite scale and an
+    # established FP environment. The second result is unusable on refusal.
+    if _wide_point_order(point, incumbent, query) < 0:
+        var score = _refinement_square[3](point, query, scale)
+        if not score.is_finite():
+            return (False, 0.0)
+        return (True, score.high)
+    return (False, 0.0)
 
 
 def _try_winner_seed(
@@ -1456,12 +1465,6 @@ def _try_winner_seed(
     var support = _minimizer_support(
         domain, center, original_s, original_s, band_low, band_high
     )
-    if (
-        not support.is_finite()
-        or support.low <= 0.0
-        or support.high < support.low
-    ):
-        return False
     # Eight complete dyadic levels give 255 proposals (possibly repeated
     # endpoints when the stored-word span is tiny). Integer quotient and
     # remainder interpolation cannot overflow for positive finite words.
@@ -1494,15 +1497,13 @@ def _try_winner_seed(
             var point = _checked_center(
                 road, section, lane, s, checked_terms, point_work
             )
-            if _wide_point_order(point, certificate.point, query) < 0:
-                var score = _refinement_square[3](
-                    point, query, certificate.scale
-                )
-                if not score.is_finite():
-                    continue
+            var update = _winner_seed_update_score(
+                point, certificate.point, query, certificate.scale
+            )
+            if update[0]:
                 certificate.s = s
                 certificate.point = point^
-                certificate.upper = score.high
+                certificate.upper = update[1]
                 improved = True
     return improved
 

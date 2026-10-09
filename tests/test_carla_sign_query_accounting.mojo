@@ -7,6 +7,7 @@ from extensions.carla.map import (
     Signal,
     Waypoint,
     _query_node_step_cost,
+    _try_winner_seed,
     _winner_seed_room,
 )
 from extensions.carla.curve_bounds import _reference_work
@@ -884,6 +885,263 @@ def test_optional_seed_room_refuses_direct_invalid_scalar_arguments() raises:
             work.policy.max_queue_entries, work_before.policy.max_queue_entries
         )
         assert_equal(work.policy.max_steps, work_before.policy.max_steps)
+
+
+def test_optional_seed_refuses_direct_invalid_interval_arguments() raises:
+    # Only helper arguments change: both certificates retain the real
+    # producer's finite positive scale, witness, and unresolved frontier.
+    # Each invalid call has a same-test all-false entry-guard control.
+    var road = _seed_road()
+    var target_road = _seed_road(2)
+    var price = _query_node_step_cost(1, True, True)
+    for invalid in range(17):
+        for valid in [True, False]:
+            var work = _MapQueryWork(MapQueryBudget())
+            var certificate = _produced_seed(road, 0.25, 0.3, work)
+            var target = _produced_seed(target_road, 0.25, 0.3, work)
+            assert_false(certificate.exact_witness)
+            assert_equal(certificate.s, 0.25)
+            assert_equal(len(certificate.cells), 1)
+            var before = certificate.copy()
+            var target_before = target.copy()
+            var entry_steps = work.steps
+            var low = Float64(0.25)
+            var high = Float64(0.3)
+            var target_low = Float64(0.25)
+            var target_high = Float64(0.3)
+            if not valid:
+                if invalid < 12:
+                    # Quiet NaN and both infinities at each scalar endpoint.
+                    var word = UInt64(0x7FF8000000000000)
+                    if invalid % 3 == 1:
+                        word = UInt64(0x7FF0000000000000)
+                    elif invalid % 3 == 2:
+                        word = UInt64(0xFFF0000000000000)
+                    var endpoint = bitcast[DType.float64](word)
+                    if invalid // 3 == 0:
+                        low = endpoint
+                    elif invalid // 3 == 1:
+                        high = endpoint
+                    elif invalid // 3 == 2:
+                        target_low = endpoint
+                    else:
+                        target_high = endpoint
+                elif invalid == 12:
+                    # Equality isolates high <= low with s still contained.
+                    high = low
+                elif invalid == 13:
+                    high = 0.2
+                elif invalid == 14:
+                    low = 0.26
+                elif invalid == 15:
+                    low = 0.2
+                    high = 0.24
+                else:
+                    target_high = 0.2
+            assert_false(
+                _try_winner_seed(
+                    road,
+                    0,
+                    0,
+                    low,
+                    high,
+                    target_road,
+                    0,
+                    target_low,
+                    target_high,
+                    Vector3(0, 1, 0),
+                    certificate,
+                    target.nodes,
+                    target.terms,
+                    len(target.cells),
+                    0,
+                    work,
+                )
+            )
+            _assert_optional_seed_debits(
+                before,
+                certificate,
+                target_before,
+                target,
+                entry_steps,
+                price,
+                87 if valid else 0,
+                2570 if valid else 0,
+                work,
+            )
+
+
+def test_sign_graph_refuses_rounded_same_section_overflow() raises:
+    var map = _graph_map(1)
+    # Keep an ordinary constructed tree, then supply finite defensive metadata.
+    # Rounded section subtraction admits this distance, but addition overflows.
+    map.roads[0].length = bitcast[DType.float64](UInt64(0x7FEFFFFFFFFFFFFF))
+    map.roads[0].sections[0].s = bitcast[DType.float64](
+        UInt64(0x7C5288F5635A6592)
+    )
+    var start = Waypoint(
+        RoadId(1),
+        SectionId(0),
+        LaneId(-1),
+        bitcast[DType.float64](UInt64(0x7FD14D4C7C789E87)),
+    )
+    var remaining = map.roads[0].section_length(0) - (
+        start.s - map.roads[0].sections[0].s
+    )
+    assert_equal(bitcast[DType.uint64](remaining), UInt64(0x7FE75959C1C3B0BC))
+    for valid in [True, False]:
+        var distance = bitcast[DType.float64](
+            UInt64(0x7FE75959C1C3B0BC) - UInt64(Int(valid))
+        )
+        assert_true(distance <= remaining)
+        var work = _MapBuildWork(MapBuildBudget())
+        if valid:
+            var result = map._next_with_build_work(start, distance, work)
+            assert_equal(len(result), 1)
+            assert_equal(
+                bitcast[DType.uint64](result[0].s), UInt64(0x7FEFFFFFFFFFFFFE)
+            )
+        else:
+            with assert_raises(contains="A step left the road"):
+                _ = map._next_with_build_work(start, distance, work)
+        assert_equal(work.steps, 7 if valid else 6)
+        assert_equal(work.terms, 0)
+        assert_false(work.exhausted)
+
+
+def test_optional_seed_refuses_deliberately_invalid_numerical_records() raises:
+    # Existing invalid-input contract only: a real producer supplies each
+    # baseline, then one field of a COPY is deliberately made invalid.
+    # These inputs do not claim producer or public-query reachability.
+    # Each pair crosses the entry decision (current1330 conditions 5/8/9).
+    # Infinities also affect later comparisons, masked by short-circuiting;
+    # this is not a unique-cause claim for those coupled predicates.
+    var road = _seed_road()
+    var target_road = _seed_road(2)
+    var price = _query_node_step_cost(1, True, True)
+    for invalid in range(9):
+        for valid in [True, False]:
+            var work = _MapQueryWork(MapQueryBudget())
+            var produced = _produced_seed(road, 0.25, 0.3, work)
+            var certificate = produced.copy()
+            var target = _produced_seed(target_road, 0.25, 0.3, work)
+            assert_false(produced.exact_witness)
+            assert_equal(produced.s, 0.25)
+            assert_true(produced.scale > 0.0)
+            assert_equal(len(produced.cells), 1)
+            if not valid:
+                var word = UInt64(0x7FF8000000000000)
+                if invalid < 6:
+                    # Station NaN/+Inf/-Inf; then scale NaN/+Inf/-Inf.
+                    if invalid % 3 == 1:
+                        word = UInt64(0x7FF0000000000000)
+                    elif invalid % 3 == 2:
+                        word = UInt64(0xFFF0000000000000)
+                elif invalid == 6:
+                    word = UInt64(0x0000000000000000)
+                elif invalid == 7:
+                    word = UInt64(0x8000000000000000)
+                else:
+                    word = UInt64(0xBFF0000000000000)
+                if invalid < 3:
+                    certificate.s = bitcast[DType.float64](word)
+                else:
+                    certificate.scale = bitcast[DType.float64](word)
+            var before = certificate.copy()
+            var target_before = target.copy()
+            var work_before = work
+            assert_false(
+                _attempt(
+                    road, target_road, 0.25, 0.3, certificate, target, 0, work
+                )
+            )
+            var nodes = 87 if valid else 0
+            var terms = 2570 if valid else 0
+            # The valid control returns False only AFTER downstream work;
+            # invalid records must return at the fixed 60-step entry debit.
+            assert_equal(work.steps, work_before.steps + 60 + nodes * price)
+            assert_equal(work.nodes, work_before.nodes + nodes)
+            assert_equal(work.terms, work_before.terms + terms)
+            assert_equal(work.candidates, work_before.candidates)
+            assert_equal(work.index_pops, work_before.index_pops)
+            assert_equal(
+                work.peak_queue_entries, work_before.peak_queue_entries
+            )
+            assert_equal(work.max_total_steps, work_before.max_total_steps)
+            assert_equal(work.exhausted, work_before.exhausted)
+            assert_equal(
+                work.policy.max_candidates, work_before.policy.max_candidates
+            )
+            assert_equal(work.policy.max_nodes, work_before.policy.max_nodes)
+            assert_equal(work.policy.max_terms, work_before.policy.max_terms)
+            assert_equal(
+                work.policy.max_index_pops, work_before.policy.max_index_pops
+            )
+            assert_equal(
+                work.policy.max_queue_entries,
+                work_before.policy.max_queue_entries,
+            )
+            assert_equal(work.policy.max_steps, work_before.policy.max_steps)
+            # Numeric equality cannot preserve NaN payloads or signed zero.
+            # Check every retained floating word before using the existing
+            # helper on copies with just the invalid fields normalized.
+            assert_equal(
+                bitcast[DType.uint64](certificate.s),
+                bitcast[DType.uint64](before.s),
+            )
+            assert_equal(
+                bitcast[DType.uint64](certificate.scale),
+                bitcast[DType.uint64](before.scale),
+            )
+            assert_equal(
+                bitcast[DType.uint64](certificate.lower),
+                bitcast[DType.uint64](before.lower),
+            )
+            assert_equal(
+                bitcast[DType.uint64](certificate.upper),
+                bitcast[DType.uint64](before.upper),
+            )
+            for i in range(3):
+                assert_equal(
+                    bitcast[DType.uint64](certificate.point[i]),
+                    bitcast[DType.uint64](before.point[i]),
+                )
+            assert_equal(len(certificate.cells), len(before.cells))
+            for i in range(len(before.cells)):
+                assert_equal(
+                    bitcast[DType.uint64](certificate.cells[i].low),
+                    bitcast[DType.uint64](before.cells[i].low),
+                )
+                assert_equal(
+                    bitcast[DType.uint64](certificate.cells[i].high),
+                    bitcast[DType.uint64](before.cells[i].high),
+                )
+                assert_equal(
+                    bitcast[DType.uint64](certificate.cells[i].lower),
+                    bitcast[DType.uint64](before.cells[i].lower),
+                )
+                assert_equal(
+                    bitcast[DType.uint64](certificate.cells[i].scale),
+                    bitcast[DType.uint64](before.cells[i].scale),
+                )
+            var normalized_before = before.copy()
+            var normalized_after = certificate.copy()
+            normalized_before.s = produced.s
+            normalized_after.s = produced.s
+            normalized_before.scale = produced.scale
+            normalized_after.scale = produced.scale
+            _same_certificate_except_work(produced, normalized_before, 0, 0)
+            _assert_optional_seed_debits(
+                normalized_before,
+                normalized_after,
+                target_before,
+                target,
+                work_before.steps,
+                price,
+                nodes,
+                terms,
+                work,
+            )
 
 
 def main() raises:
