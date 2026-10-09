@@ -81,6 +81,7 @@ from extensions.physics.shape import (
     _narrow_finite,
 )
 from math.bounds import Box3, Sphere
+from math.matrix3 import Matrix3
 from math.octree import Octree
 from math.quaternion import Quaternion
 from math.ray import Ray
@@ -470,17 +471,10 @@ struct PhysicsWorld(Movable):
                         "CCD capsule half height must be between 0 and"
                         " 10000 meters"
                     )
-            else:
-                var isotropic = inverse
-                for k in range(9):  # pragma: no branch
-                    isotropic.elements[k] = 0
-                isotropic.elements[0] = inverse.elements[0]
-                isotropic.elements[4] = inverse.elements[0]
-                isotropic.elements[8] = inverse.elements[0]
-                if inverse != isotropic or inverse.elements[0] <= 0:
-                    raise Error(
-                        "CCD requires positive isotropic sphere inertia"
-                    )
+            elif not _positive_definite(inverse):
+                raise Error(
+                    "CCD requires symmetric positive definite sphere inertia"
+                )
             if not (
                 isfinite(body.shape.radius)
                 and body.shape.radius >= 0.0001
@@ -543,9 +537,20 @@ struct PhysicsWorld(Movable):
             var w = _wide(body.angular_velocity)
             # A rotation-locked capsule has no spin energy to transfer.
             var spin = Float64(0)
-            var inertia = Float64(body.inverse_inertia().elements[0])
-            if inertia > 0:
-                spin = _wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
+            var inverse = body.inverse_inertia()
+            if _isotropic(inverse):
+                var inertia = Float64(inverse.elements[0])
+                if inertia > 0:
+                    spin = (
+                        _wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
+                    )
+            else:
+                # w^T I w = u^T M^-1 u with u = R^T w in the body frame.
+                var turn = rotation_matrix(body.rotation)
+                var u = _turn_in(turn, w)
+                spin = _wide_dot(u, _solve(inverse, u)) * Float64(
+                    body.inverse_mass()
+                )
             var speed = sqrt(_wide_dot(v, v) + spin)
             var push = _wide(body.push_velocity)
             var bound = _ccd_bound(body)
@@ -617,23 +622,31 @@ struct PhysicsWorld(Movable):
         var impacts = List[_CCDImpact]()
         var positions = List[Vector3]()
         var rotations = List[Quaternion]()
+        var spins = List[Vector3]()
         # Split correction remains the original pose-only correction. The
         # analytic sweep follows the physical, post-solve velocity from it.
         for i in range(len(self.bodies)):
             ref body = self.bodies[i]
             positions.append(body.position)
             rotations.append(body.rotation)
+            spins.append(body.angular_velocity)
             if not body.collides or body.kind() != DYNAMIC:
                 continue
             var result = self._ccd_sphere(i, h, impacts)
             positions[i] = result[0]
             rotations[i] = result[1]
+            spins[i] = self.bodies[i].angular_velocity
         self._integrate_positions(h)
         for i in range(len(self.bodies)):
             for impact in impacts:
                 if impact.body == i:
+                    # The impact path turns at a constant spin, so the spin
+                    # stays the one that made its pose. The integrator's
+                    # torque-free precession of an anisotropic tensor
+                    # resumes on the next step.
                     self.bodies[i].position = positions[i]
                     self.bodies[i].rotation = rotations[i]
+                    self.bodies[i].angular_velocity = spins[i]
                     break
             _ccd_coordinate(self.bodies[i].position)
             _ccd_rotation(self.bodies[i].rotation)
@@ -759,7 +772,8 @@ struct PhysicsWorld(Movable):
             var slip = velocity + _wide_cross(angular, arm)
             var tangent = slip - normal * _wide_dot(slip, normal)
             var speed = sqrt(_wide_dot(tangent, tangent))
-            if speed > 0:
+            var tensor = self.bodies[i].inverse_inertia()
+            if speed > 0 and _isotropic(tensor):
                 var impulse = min(
                     speed / (inverse_mass + radius * radius * inverse_inertia),
                     Float64(material.friction) * normal_impulse,
@@ -767,6 +781,28 @@ struct PhysicsWorld(Movable):
                 var friction = -tangent * (impulse / speed)
                 velocity += friction * inverse_mass
                 angular += _wide_cross(arm, friction) * inverse_inertia
+            elif speed > 0:
+                # W = R M R^T at the step's start orientation, the one
+                # the separation bound measured, so no impact in this step
+                # adds energy in that metric. Along the slip,
+                # K = 1/m + (r x t)^T W (r x t), which is positive.
+                var turn = rotation_matrix(self.bodies[i].rotation)
+                var along = tangent / speed
+                var lever = _wide_cross(arm, along)
+                var resist = inverse_mass + _wide_dot(
+                    lever,
+                    _turn_out(turn, _apply(tensor, _turn_in(turn, lever))),
+                )
+                var impulse = min(
+                    speed / resist,
+                    Float64(material.friction) * normal_impulse,
+                )
+                var friction = -along * impulse
+                velocity += friction * inverse_mass
+                angular += _turn_out(
+                    turn,
+                    _apply(tensor, _turn_in(turn, _wide_cross(arm, friction))),
+                )
             velocity = _ccd_close_normal_velocity(
                 velocity, normal, -restitution * approach
             )
@@ -1391,6 +1427,107 @@ def _ccd_coordinate(value: Vector3) raises:
         raise Error(
             "CCD coordinates must stay within one million meters of the origin"
         )
+
+
+def _isotropic(inverse: Matrix3) -> Bool:
+    # The tensor is its first diagonal element times the identity.
+    ref e = inverse.elements
+    for k in [1, 2, 3, 5, 6, 7]:  # pragma: no branch
+        if e[k] != 0:
+            return False
+    return e[4] == e[0] and e[8] == e[0]
+
+
+def _positive_definite(inverse: Matrix3) -> Bool:
+    # Exactly symmetric and positive definite by Sylvester's leading
+    # principal minors, in Float64. The body already refused a nonfinite
+    # entry, and Float64 products of finite Float32 entries stay finite.
+    ref e = inverse.elements
+    if e[1] != e[3] or e[2] != e[6] or e[5] != e[7]:
+        return False
+    var first = Float64(e[0])
+    var second = first * Float64(e[4]) - Float64(e[1]) * Float64(e[1])
+    var third = _determinant(inverse)
+    return first > 0 and second > 0 and third > 0
+
+
+def _determinant(m: Matrix3) -> Float64:
+    ref e = m.elements
+    return (
+        Float64(e[0])
+        * (Float64(e[4]) * Float64(e[8]) - Float64(e[7]) * Float64(e[5]))
+        - Float64(e[3])
+        * (Float64(e[1]) * Float64(e[8]) - Float64(e[7]) * Float64(e[2]))
+        + Float64(e[6])
+        * (Float64(e[1]) * Float64(e[5]) - Float64(e[4]) * Float64(e[2]))
+    )
+
+
+def _apply(m: Matrix3, v: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
+    # Column-major: element (row, column) is e[column * 3 + row].
+    ref e = m.elements
+    return SIMD[DType.float64, 4](
+        Float64(e[0]) * v[0] + Float64(e[3]) * v[1] + Float64(e[6]) * v[2],
+        Float64(e[1]) * v[0] + Float64(e[4]) * v[1] + Float64(e[7]) * v[2],
+        Float64(e[2]) * v[0] + Float64(e[5]) * v[1] + Float64(e[8]) * v[2],
+        0,
+    )
+
+
+def _turn_in(
+    turn: Matrix3, v: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    # R^T v: world to body.
+    ref e = turn.elements
+    return SIMD[DType.float64, 4](
+        Float64(e[0]) * v[0] + Float64(e[1]) * v[1] + Float64(e[2]) * v[2],
+        Float64(e[3]) * v[0] + Float64(e[4]) * v[1] + Float64(e[5]) * v[2],
+        Float64(e[6]) * v[0] + Float64(e[7]) * v[1] + Float64(e[8]) * v[2],
+        0,
+    )
+
+
+def _turn_out(
+    turn: Matrix3, v: SIMD[DType.float64, 4]
+) -> SIMD[DType.float64, 4]:
+    # R v: body to world.
+    return _apply(turn, v)
+
+
+def _solve(m: Matrix3, v: SIMD[DType.float64, 4]) -> SIMD[DType.float64, 4]:
+    # Cramer's rule for a validated positive definite tensor.
+    ref e = m.elements
+    var a = Float64(e[0])
+    var b = Float64(e[3])
+    var c = Float64(e[6])
+    var d = Float64(e[1])
+    var f = Float64(e[4])
+    var g = Float64(e[7])
+    var h = Float64(e[2])
+    var k = Float64(e[5])
+    var l = Float64(e[8])
+    var det = _determinant(m)
+    return SIMD[DType.float64, 4](
+        (
+            v[0] * (f * l - g * k)
+            - b * (v[1] * l - g * v[2])
+            + c * (v[1] * k - f * v[2])
+        )
+        / det,
+        (
+            a * (v[1] * l - g * v[2])
+            - v[0] * (d * l - g * h)
+            + c * (d * v[2] - v[1] * h)
+        )
+        / det,
+        (
+            a * (f * v[2] - v[1] * k)
+            - b * (d * v[2] - v[1] * h)
+            + v[0] * (d * k - f * h)
+        )
+        / det,
+        0,
+    )
 
 
 def _ccd_bound(body: RigidBody) -> Float64:

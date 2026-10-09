@@ -11,6 +11,7 @@ from extensions.physics.body import (
     STATIC,
     KINEMATIC,
     RigidBody,
+    rotation_matrix,
 )
 from extensions.physics.ccd import (
     CollisionDetection,
@@ -336,7 +337,7 @@ def test_support_and_finite_failures_are_atomic() raises:
             world.bodies[1].center_of_mass = Vector3(1, 0, 0)
         elif choice == 6:
             var inertia = world.bodies[1].inverse_inertia()
-            inertia.elements[4] *= 2
+            inertia.elements[1] = 1
             world.bodies[1].set_inverse_inertia(inertia)
         elif choice == 7:
             var inertia = Matrix3()
@@ -391,6 +392,135 @@ def test_energy_friction_and_spin_transfer() raises:
             if friction == 0:
                 assert_equal(v.x, 4)
                 assert_equal(w.y, 100)
+            else:
+                assert_true(final < initial)
+
+
+def _tensor(xx: Float32, yy: Float32, zz: Float32) -> Matrix3:
+    var tensor = Matrix3()
+    tensor.elements[0] = xx
+    tensor.elements[4] = yy
+    tensor.elements[8] = zz
+    return tensor
+
+
+def _turned(q: Quaternion, tensor: Matrix3) -> Matrix3:
+    # R M R^T: the tensor seen from a frame turned by q. Float32 rounding
+    # can leave a pair unequal, so each pair is set to its mean.
+    var turn = rotation_matrix(q)
+    var back = turn
+    back.transpose()
+    var out = turn * tensor * back
+    for pair in [(1, 3), (2, 6), (5, 7)]:
+        var mean = (out.elements[pair[0]] + out.elements[pair[1]]) / 2
+        out.elements[pair[0]] = mean
+        out.elements[pair[1]] = mean
+    return out
+
+
+def _spin_energy(body: RigidBody) -> Float64:
+    # w^T I w at the body's pose, with I the inverse of its inverse tensor.
+    var world = _turned(body.rotation, body.inverse_inertia())
+    world.invert()
+    var w = body.angular_velocity
+    return Float64(w.dot(world.transform(w)))
+
+
+def test_anisotropic_sphere_tensors_are_checked() raises:
+    # Each refused tensor fails one condition, and the step is atomic.
+    for choice in range(6):
+        var world = _world()
+        var tensor = _tensor(250, 250, 250)
+        if choice == 0:
+            tensor.elements[3] = 1
+        elif choice == 1:
+            tensor.elements[2] = 1
+        elif choice == 2:
+            tensor.elements[5] = 1
+        elif choice == 3:
+            tensor = _tensor(-250, 250, 250)
+        elif choice == 4:
+            tensor.elements[1] = 500
+            tensor.elements[3] = 500
+        else:
+            tensor = _tensor(250, 250, -250)
+        world.bodies[1].set_inverse_inertia(tensor)
+        var position = world.bodies[1].position
+        with assert_raises(contains="symmetric positive definite"):
+            world.step(Duration(0.01))
+        assert_true(world.bodies[1].position == position)
+        assert_equal(world.bodies[1].linear_velocity.z, -30)
+    # Symmetric positive definite tensors step, isotropic or not.
+    var turn = Quaternion(0.3, -0.2, 0.5, 0.8)
+    turn.normalize()
+    for tensor in [
+        _tensor(250, 500, 125),
+        _tensor(250, 250, 125),
+        _turned(turn, _tensor(250, 500, 125)),
+    ]:
+        var world = _world()
+        world.bodies[1].set_inverse_inertia(tensor)
+        world.step(Duration(0.01))
+        assert_almost_equal(world.bodies[1].position.z, 0.1, atol=1e-7)
+
+
+def test_anisotropic_friction_matches_the_slip_axis() raises:
+    # Only the tensor's entry about the slip's lever axis acts. With
+    # 250 there, the result is the isotropic reference: impulse 2,
+    # v_x = 5 and omega_y = 50. A quarter turn about z moves the local
+    # x entry onto the world y axis.
+    var quarter = Quaternion(0, 0, 0.7071067811865476, 0.7071067811865476)
+    quarter.normalize()
+    for pose in range(3):
+        var world = _world(0.1, 0.4, -30)
+        world.bodies[0].material = PhysicsMaterial(1, 0)
+        world.bodies[1].material = PhysicsMaterial(1, 0)
+        world.bodies[1].linear_velocity.x = 7
+        if pose == 0:
+            world.bodies[1].set_inverse_inertia(_tensor(500, 250, 125))
+        elif pose == 1:
+            world.bodies[1].set_inverse_inertia(_tensor(250, 250, 125))
+        else:
+            world.bodies[1].rotation = quarter
+            world.bodies[1].set_inverse_inertia(_tensor(250, 500, 125))
+        world.step(Duration(0.02))
+        var w = world.bodies[1].angular_velocity
+        assert_almost_equal(world.bodies[1].linear_velocity.x, 5, atol=1e-5)
+        assert_almost_equal(w.y, 50, atol=1e-4)
+        assert_almost_equal(w.x, 0, atol=1e-4)
+        assert_almost_equal(w.z, 0, atol=1e-4)
+
+
+def test_anisotropic_energy_friction_and_spin_transfer() raises:
+    # In the step's start metric, an impact never adds energy.
+    var turn = Quaternion(0.3, -0.2, 0.5, 0.8)
+    turn.normalize()
+    var tilt = Quaternion(-0.1, 0.4, 0.2, 0.9)
+    tilt.normalize()
+    for friction in [Float32(0), Float32(0.3), Float32(3)]:
+        for bounce in [Float32(0), Float32(0.5), Float32(1)]:
+            var world = _world(0.1, 0.3, -30, bounce)
+            world.bodies[0].material = PhysicsMaterial(friction, bounce)
+            world.bodies[1].material = PhysicsMaterial(friction, bounce)
+            world.bodies[1].linear_velocity.x = 4
+            world.bodies[1].angular_velocity = Vector3(30, 100, 20)
+            world.bodies[1].rotation = tilt
+            world.bodies[1].set_inverse_inertia(
+                _turned(turn, _tensor(250, 500, 125))
+            )
+            var start = world.bodies[1].copy()
+            var initial = 30.0 * 30 + 4 * 4 + _spin_energy(start)
+            world.step(Duration(0.02))
+            var v = world.bodies[1].linear_velocity
+            start.angular_velocity = world.bodies[1].angular_velocity
+            var final = Float64(v.dot(v)) + _spin_energy(start)
+            assert_true(final <= initial * 1.00001)
+            assert_almost_equal(v.z, 30 * bounce, atol=1e-5)
+            if friction == 0:
+                assert_equal(v.x, 4)
+                assert_true(
+                    world.bodies[1].angular_velocity == Vector3(30, 100, 20)
+                )
             else:
                 assert_true(final < initial)
 
