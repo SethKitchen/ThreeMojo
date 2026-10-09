@@ -37,7 +37,9 @@ This is not a three.js port. See Extensions.
 
 from extensions.humanoid.skeleton.head.hair.groom import HairGroom
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
 from std.math import exp, isfinite, log, max, min, pi, sqrt
+from std.sys import num_logical_cores
 
 # Lower bound for a product of projected direction magnitudes.
 comptime AZIMUTH_EPSILON = Float32(1e-4)
@@ -257,8 +259,70 @@ def _shade_groom_into(
     mut colors: List[Float32],
     optical_depths: List[Float32],
 ):
-    """Fill checked color storage with the shared strand-shading arithmetic."""
-    for strand in range(len(groom)):  # pragma: no branch
+    """Fill checked color storage with the shared strand-shading arithmetic.
+
+    Disjoint runs of strands shade in parallel. Each point has one writer,
+    and its arithmetic is the serial loop's, so the colors are the same.
+    """
+    var strands = len(groom)
+    if strands == 0:
+        return
+    # Each task gets at least one strand, because tasks <= strands.
+    var tasks = min(num_logical_cores(), strands)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _shade_task(
+                Pointer(to=groom).unsafe_origin_cast[ImmutAnyOrigin](),
+                look,
+                Pointer(to=lights).unsafe_origin_cast[ImmutAnyOrigin](),
+                camera,
+                ambient,
+                colors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                Pointer(to=optical_depths).unsafe_origin_cast[ImmutAnyOrigin](),
+                task * strands // tasks,
+                (task + 1) * strands // tasks,
+            )
+        )
+    group.wait()
+
+
+async def _shade_task(
+    groom: Pointer[HairGroom, ImmutAnyOrigin],
+    look: HairLook,
+    lights: Pointer[List[HairLight], ImmutAnyOrigin],
+    camera: Vector3,
+    ambient: Vector3,
+    colors: MutPointer[Float32, MutAnyOrigin],
+    optical_depths: Pointer[List[Float32], ImmutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    _shade_strands(
+        groom[],
+        look,
+        lights[],
+        camera,
+        ambient,
+        colors,
+        optical_depths[],
+        first,
+        past,
+    )
+
+
+def _shade_strands(
+    groom: HairGroom,
+    look: HairLook,
+    lights: List[HairLight],
+    camera: Vector3,
+    ambient: Vector3,
+    colors: MutPointer[Float32, MutAnyOrigin],
+    optical_depths: List[Float32],
+    first: Int,
+    past: Int,
+):
+    for strand in range(first, past):  # pragma: no branch
         var shade = groom.shades[strand]
         var base = look.color * shade
         var strand_look = look
@@ -296,9 +360,9 @@ def _shade_groom_into(
                 )
                 var lit = diffuse * shadow + specular * shadow
                 sum = sum + _times(lit, light.radiance)
-            colors[index * 3] = sum.x
-            colors[index * 3 + 1] = sum.y
-            colors[index * 3 + 2] = sum.z
+            colors[unsafe_offset=index * 3] = sum.x
+            colors[unsafe_offset=index * 3 + 1] = sum.y
+            colors[unsafe_offset=index * 3 + 2] = sum.z
 
 
 def shade_groom(

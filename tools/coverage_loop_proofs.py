@@ -373,10 +373,10 @@ REVIEWED_LOOP_RULES = {
     )),
     'extensions/humanoid/skeleton/head/hair/strands': ({
         'extensions/humanoid/skeleton/head/hair/strands.mojo':
-            'b38db045a18fbdbf5fc391a8b6795b03afb0b4e10bb0328e3da4e1b98a0f64a1',
+            '42e4799761c82ebc1f51ed87c5e77d67c018bd5d310670cecb74d220c236e880',
     }, (
-        (195, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
-        (201, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),
+        (225, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
+        (231, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),
     )),
 }
 
@@ -404,11 +404,11 @@ GUARDED_LOOP_SOURCE_SHA256 = {
     'extensions/humanoid/skeleton/head/hair/density.mojo':
         'cf1a58fa00938a2522e25fdf9b061ec53bec3e3bf08dbe99ed2eb942a37b8ab9',
     'extensions/humanoid/skeleton/head/hair/groom.mojo':
-        'd4f041e4f7686930d89c4dd504b79e3bca1231d038261d9ab30f4ff013c2c4f9',
+        'f083d89edf192cdc70acc758e5cf7bdd563fe883303eb9543d430348e22a888f',
     'extensions/humanoid/skeleton/head/hair/shading.mojo':
-        '9e799dccc63511086a7c065a6725c35fdf8796f4d336351787e139087ef01286',
+        'e260deca167471825887f30e23f20b6c30fd9f2679c39d25b605a9c5f989739f',
     'extensions/humanoid/skeleton/head/hair/strands.mojo':
-        'b38db045a18fbdbf5fc391a8b6795b03afb0b4e10bb0328e3da4e1b98a0f64a1',
+        '42e4799761c82ebc1f51ed87c5e77d67c018bd5d310670cecb74d220c236e880',
     'tests/test_carla_route_search.mojo':
         '50874817a790dbea31b01cfeff51615be4181474a01ccefb98e42caea9421e8b',
 }
@@ -432,8 +432,7 @@ GUARDED_LOOP_RULES = (
     ('extensions/carla/map', 2396, 'literal-range', 10, 'range(10)', 'target-ten-frontier-reservations', (), ()),
     ('extensions/humanoid/skeleton/head/hair/density', 100, 'reviewed-nonempty-range', 262144, 'range(count)', 'density-validated-positive-cube-count', (), ()),
     ('extensions/humanoid/skeleton/head/hair/density', 137, 'reviewed-nonempty-range', None, 'range(len(groom))', 'density-partitioned-nonempty-groom', ('extensions/humanoid/skeleton/head/hair/groom.mojo',), ()),
-    ('extensions/humanoid/skeleton/head/hair/strands', 180, 'reviewed-nonempty-range', None, 'range(len(self.groom.points))', 'hair-retained-nonempty-points', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
-    ('extensions/humanoid/skeleton/head/hair/strands', 191, 'reviewed-nonempty-range', None, 'range(len(self.groom))', 'hair-retained-nonempty-strands', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
+    ('extensions/humanoid/skeleton/head/hair/strands', 221, 'reviewed-nonempty-range', None, 'range(len(self.groom))', 'hair-retained-nonempty-strands', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
     ('extensions/carla/opendrive', 450, 'reviewed-nonempty-iterator', None, 'records', 'border-active-maintained-nonempty-callers', (), ('_active',)),
     ('extensions/carla/opendrive', 593, 'reviewed-nonempty-range', None, 'range(len(ids))', 'border-positive-record-count-keeps-ids', (), ()),
     ('extensions/carla/opendrive', 601, 'reviewed-nonempty-range', None, 'range(len(ids))', 'border-inner-scan-retains-positive-ids', (), ()),
@@ -460,8 +459,7 @@ _HAIR_RETAINED_CENSUS = (
     )),
 )
 HAIR_RETAINED_RULE_CENSUS = {
-    (180, 'hair-retained-nonempty-points'): _HAIR_RETAINED_CENSUS,
-    (191, 'hair-retained-nonempty-strands'): _HAIR_RETAINED_CENSUS,
+    (221, 'hair-retained-nonempty-strands'): _HAIR_RETAINED_CENSUS,
 }
 
 

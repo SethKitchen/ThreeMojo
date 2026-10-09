@@ -15,34 +15,42 @@ times five frames of each per-frame stage and reports the median:
 - `step+write`: one `HairSimulation.step` against a scalp collider, and
   `HairSimulation.write` back into the groom.
 - `shade after step`: the shading pass that follows a moved groom.
-- `guides-only step`: `HairSimulation(groom, guides_only=True).step`, which
-  steps the guides and lays each follower along its moved guide.
+- `guides-only step+write`: `HairSimulation(groom, guides_only=True).step`
+  and its `write`, the same work as `step+write` with the guides only.
+- `guides-only frame`: that step, its write and the shading pass, timed
+  together as one frame.
 
 Run it with `mojo run -I . bench/hair_cost_bench.mojo`.
 
 Hardware: AMD Ryzen 9 5900X (12 cores, 24 threads), 62 GiB, WSL 2 on
-Windows 11, Mojo 1.1.0 (`8189361e`). The stages run on one thread.
+Windows 11, Mojo 1.1.0 (`8189361e`). Shading and its self-shadow depths
+run on every logical core. Growth and the simulation step run on one
+thread.
 
 ## Results
 
-| Guides x followers | Strands | Points | Vertex bytes | Grow and upload | Shade | Step and write | Shade after step | Guides-only step |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| 250 x 2 | 708 | 4,713 | 192,240 | 85 ms | 1.39 ms | 2.26 ms | 1.39 ms | 0.80 ms |
-| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 230 ms | 9.76 ms | 16.1 ms | 9.76 ms | 4.05 ms |
-| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 334 ms | 20.5 ms | 33.9 ms | 20.5 ms | 7.08 ms |
-| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 303 ms | 2.89 ms | 4.80 ms | 2.89 ms | 4.04 ms |
+| Guides x followers | Strands | Points | Vertex bytes | Grow and upload | Shade | Step and write | Shade after step | Guides-only step and write | Guides-only frame |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 250 x 2 | 708 | 4,713 | 192,240 | 86 ms | 1.14 ms | 2.66 ms | 1.16 ms | 1.18 ms | 2.45 ms |
+| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 231 ms | 2.76 ms | 18.1 ms | 2.76 ms | 6.69 ms | 10.4 ms |
+| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 319 ms | 5.60 ms | 37.0 ms | 5.08 ms | 13.2 ms | 19.0 ms |
+| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 302 ms | 1.35 ms | 5.35 ms | 1.37 ms | 4.89 ms | 6.67 ms |
 
-Both per-frame stages scale linearly with the point count. The step costs
-about 0.49 microseconds a point, and shading about 0.30 microseconds a point.
+Before shading ran in parallel, one thread shaded the default groom in 20.5
+milliseconds.
+
+Both per-frame stages scale linearly with the point count. The full step
+costs about 0.5 microseconds a point on one thread.
 Shading after a step costs the same as shading a still groom. Growth is a
-one-time cost, and most of it is the guides: the groom without followers takes 303
-of the default groom's 334 milliseconds.
+one-time cost, and most of it is the guides: the groom without followers takes 302
+of the default groom's 319 milliseconds.
 
-The default groom's per-frame hair work is about 53 milliseconds on one
-thread. A 60 frames-per-second frame has 16.7 milliseconds for everything,
-so the full CPU path cannot meet that target with the default groom. With
-guides-only simulation the per-frame hair work is about 28 milliseconds,
-and shading is most of it.
+On one thread the default groom's per-frame hair work was about 53
+milliseconds. A 60 frames-per-second frame has 16.7 milliseconds for
+everything. With guides-only simulation and parallel shading, a measured
+frame of the default groom takes 19.0 milliseconds on this machine. That is
+still over the budget. The write, which turns every normal and depth, is
+now a large part of the guides-only step.
 
 ## Decisions
 
@@ -50,13 +58,14 @@ and shading is most of it.
   records each follower's guide and its offsets across the hair and up off
   it. The simulation steps the guides and lays each follower at those
   offsets in its moved guide's frame, as TressFX lays follow strands. For the
-  default groom the step falls from 33.9 to 7.1 milliseconds. The guides
-  move exactly as in the full step.
-- **Move shading off one CPU thread.** Shading is 20 milliseconds for the
-  default groom even with guides-only simulation. It is a per-point loop with
-  no dependency between strands, so it can run in parallel on the CPU or on
-  the GPU. The GPU path stays a separate decision with the rasterizer work
-  in #298 and the general compositor in
+  default groom the step and its write fall from 37.0 to 13.2
+  milliseconds. The guides move exactly as in the full step.
+- **Shade in parallel.** Shading and its self-shadow depths now run on
+  every logical core. Each task owns a disjoint run of strands or points,
+  and the colors and depths equal the serial arithmetic bit for bit. For
+  the default groom shading falls from 20.5 to about 5 milliseconds. A GPU path
+  stays a separate decision with the rasterizer work in #298 and the
+  general compositor in
   [#251](https://github.com/SethKitchen/ThreeMojo/issues/251).
 - **Keep growth as a load-time cost.** It runs once per groom.
 
