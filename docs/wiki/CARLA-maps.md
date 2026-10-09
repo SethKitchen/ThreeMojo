@@ -72,6 +72,15 @@ These queries are slower.
 They raise when their work budget cannot separate two candidates.
 See [cross-candidate certificates](CARLA-cross-candidate-certificates) and [map budgets](CARLA-map-budgets).
 
+The certified query uses these proofs:
+
+- [Lane point distance](CARLA-lane-point-distance): exact order of stored lane centers, and the on-road width test
+- [Lane seeding](CARLA-lane-seeding): bounded starting parameters for a SPIRAL search
+- [Fixed LINE heading bounds](CARLA-fixed-heading-bounds): the constant heading of a LINE segment
+- [Directed value bounds](CARLA-directed-value-bounds): tighter bounds on ideal expressions
+- [Sampled value bounds](CARLA-sampled-value-bounds): derivative-free bounds on sampled lane covers
+- [Rounded ARC certificates](CARLA-rounded-arc-certificates): stored-point minimum proofs on an ARC
+
 `LaneType` is a bit mask. A query takes a mask, such as `LANE_DRIVING | LANE_SHOULDER`, and keeps the lanes whose type shares a bit with it.
 
 `Road.nearest_lane` is the separate [fixed-s OpenDRIVE query](CARLA-fixed-s-nearest).
