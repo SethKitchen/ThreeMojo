@@ -38,6 +38,31 @@ var image = render_water(
 
 `False` holds the camera still. The next `False` leaves the ripple window empty. The pitch is -0.22 radians, so the headland matches the photograph. The page starts at -0.72 radians.
 
+## Animate it
+
+Use a `WaterScene` to draw more than one frame. The scene keeps the resources that do not change with time. It builds the ocean spectrum once. It builds the glare kernels on the first frame that needs them. It owns the ripple window and the clock.
+
+```mojo
+from extensions.water.frame import WaterScene
+
+var scene = WaterScene(
+    SpectrumResolution(64),
+    32,
+    128,
+    SpectrumResolution(64),
+    Duration(0.0, SECOND),
+)
+for frame in range(60):
+    scene.advance(Duration(1.0 / 30.0, SECOND), frame % 10 == 0)
+    var image = scene.draw(320, 180, FRAME, True, bed, Angle(-0.72, RADIAN))
+```
+
+`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. `draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
+
+`reset` returns the ripples and the clock to the start. It keeps the spectrum and the glare kernels. The buffers keep their sizes for the life of the scene.
+
+`render_water` is one scene step and one draw. A scene is the start of persistent scene water, [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300). It does not compose with a three.js scene yet. It has no GPU path. It does not establish a frame rate.
+
 ## Pictures
 
 `WaterView` names four pictures.
@@ -57,7 +82,7 @@ The caustic grid in the still is 64. The page uses 256.
 
 ## Frame
 
-`render_water` builds the spectrum, steps the ripple and draws the caustics. It then shades each pixel and grades the color. The shader clock is 0.9 times the frame clock. Dispersion repeats every 60 seconds of shader time.
+`render_water` builds a `WaterScene`, steps the ripple and draws the caustics. It then shades each pixel and grades the color. The shader clock is 0.9 times the frame clock. Dispersion repeats every 60 seconds of shader time.
 
 ## Sampling and light transport
 
