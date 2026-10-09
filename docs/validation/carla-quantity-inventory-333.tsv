@@ -1,0 +1,423 @@
+file	symbol	type	kind	group
+extensions/carla/camera_render.mojo	RgbCameraSettings.shutter_speed	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	RgbCameraSettings.exposure_speed_up	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	RgbCameraSettings.exposure_speed_down	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	RgbCameraSettings.motion_blur_max_distortion	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	RgbCameraSettings.motion_blur_min_object_screen_size	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	RgbCameraSettings.chromatic_aberration_offset	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	RgbCameraSettings.blur_radius	Float32	field	internal SI scalar
+extensions/carla/camera_render.mojo	metered_ev100 ->	Float32	return	internal SI scalar
+extensions/carla/camera_render.mojo	camera_exposure(metered)	Float32	param	internal SI scalar
+extensions/carla/cameras.mojo	compute_angle(distance)	Float32	param	runtime boundary
+extensions/carla/cameras.mojo	compute_distance ->	Float32	return	runtime boundary
+extensions/carla/cameras.mojo	WideAngleLens.focal_length	Float32	field	runtime boundary
+extensions/carla/cameras.mojo	WideAngleLens.fov_fade_size	Float32	field	runtime boundary
+extensions/carla/cameras.mojo	WideAngleLens.pixel_ray(x)	Float32	param	runtime boundary
+extensions/carla/cameras.mojo	WideAngleLens.pixel_ray(y)	Float32	param	runtime boundary
+extensions/carla/cameras.mojo	DVSConfig.positive_threshold	Float32	field	runtime boundary
+extensions/carla/cameras.mojo	DVSConfig.negative_threshold	Float32	field	runtime boundary
+extensions/carla/cameras.mojo	DVSConfig.sigma_positive_threshold	Float32	field	runtime boundary
+extensions/carla/cameras.mojo	DVSConfig.sigma_negative_threshold	Float32	field	runtime boundary
+extensions/carla/cameras.mojo	DVSCamera.simulate(elapsed_seconds)	Float64	param	runtime boundary
+extensions/carla/capture.mojo	SceneHit.distance	Float32	field	internal SI scalar
+extensions/carla/geo.mojo	GeoLocation.latitude_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	GeoLocation.longitude_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	GeoLocation.altitude_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	Ellipsoid.a_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	Ellipsoid.b_meters ->	Float64	return	geodesy and V2X
+extensions/carla/geo.mojo	Ellipsoid.from_b(b_meters)	Float64	param	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.offset_x_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.offset_y_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.offset_z_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.offset_cos_h	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.offset_sin_h	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.__init__(x_meters)	Float64	param	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.__init__(y_meters)	Float64	param	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.__init__(z_meters)	Float64	param	geodesy and V2X
+extensions/carla/geo.mojo	OffsetTransform.__init__(heading_radians)	Float64	param	geodesy and V2X
+extensions/carla/geo.mojo	UtmZone.central_meridian_degrees ->	Float64	return	geodesy and V2X
+extensions/carla/geo.mojo	TransverseMercatorParams.lat_0_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	TransverseMercatorParams.lon_0_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	TransverseMercatorParams.x_0_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	TransverseMercatorParams.y_0_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	LambertConformalConicParams.lat_0_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	LambertConformalConicParams.lat_1_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	LambertConformalConicParams.lat_2_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	LambertConformalConicParams.lon_0_degrees	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	LambertConformalConicParams.x_0_meters	Float64	field	geodesy and V2X
+extensions/carla/geo.mojo	LambertConformalConicParams.y_0_meters	Float64	field	geodesy and V2X
+extensions/carla/geometry.mojo	DirectedPoint.x	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.y	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.z	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.pitch	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.__init__(x)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.__init__(y)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.__init__(z)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	DirectedPoint.__init__(pitch)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.s	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.x	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.y	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.length	Float64	field	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.__init__(x)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.__init__(y)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.__init__(length)	Float64	param	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.end_s ->	Float64	return	pinned map geometry
+extensions/carla/geometry.mojo	RoadGeometry.pos_at(dist)	Float64	param	pinned map geometry
+extensions/carla/gnss.mojo	GnssDescription.latitude_stddev	Float32	field	geodesy and V2X
+extensions/carla/gnss.mojo	GnssDescription.latitude_bias	Float32	field	geodesy and V2X
+extensions/carla/gnss.mojo	GnssDescription.longitude_stddev	Float32	field	geodesy and V2X
+extensions/carla/gnss.mojo	GnssDescription.longitude_bias	Float32	field	geodesy and V2X
+extensions/carla/gnss.mojo	GnssDescription.altitude_stddev	Float32	field	geodesy and V2X
+extensions/carla/gnss.mojo	GnssDescription.altitude_bias	Float32	field	geodesy and V2X
+extensions/carla/imu.mojo	Accelerometer.previous_delta	Float32	field	internal SI scalar
+extensions/carla/lane_invasion.mojo	LaneInvasionEvent.timestamp	Float64	field	runtime boundary
+extensions/carla/lane_invasion.mojo	LaneInvasionEvent.__init__(timestamp)	Float64	param	runtime boundary
+extensions/carla/lane_invasion.mojo	LaneInvasionSensor.tick(timestamp)	Float64	param	runtime boundary
+extensions/carla/map.mojo	Waypoint.s	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.s	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.z_offset	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.height	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.width	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.h_offset	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.pitch	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.roll	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(z_offset)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(height)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(width)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(h_offset)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(pitch)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Signal.__init__(roll)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	RoadObject.s	Float64	field	pinned map geometry
+extensions/carla/map.mojo	RoadObject.z_offset	Float64	field	pinned map geometry
+extensions/carla/map.mojo	RoadObject.valid_length	Float64	field	pinned map geometry
+extensions/carla/map.mojo	RoadObject.length	Float64	field	pinned map geometry
+extensions/carla/map.mojo	RoadObject.width	Float64	field	pinned map geometry
+extensions/carla/map.mojo	RoadObject.pitch	Float64	field	pinned map geometry
+extensions/carla/map.mojo	RoadObject.roll	Float64	field	pinned map geometry
+extensions/carla/map.mojo	SignalSearchData.accumulated_s	Float64	field	pinned map geometry
+extensions/carla/map.mojo	SignalSearchData.__init__(accumulated_s)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Landmark.distance	Float64	field	pinned map geometry
+extensions/carla/map.mojo	Landmark.__init__(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	segment_distance_2d ->	Float64	return	pinned map geometry
+extensions/carla/map.mojo	Map.lane_width_meters ->	Float64	return	pinned map geometry
+extensions/carla/map.mojo	Map.next(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.previous(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.generate_waypoints(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.signals_in_distance(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.next_until_lane_end(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.previous_until_lane_start(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.landmarks_in_distance(distance)	Float64	param	pinned map geometry
+extensions/carla/map.mojo	Map.landmarks_of_type_in_distance(distance)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_section(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.lane(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_width(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_border(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_height(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_material(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_rule(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_visibility(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_access(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_speed(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_lane_speed(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark(width)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark(height)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark(type_width)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark_type_line(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark_type_line(t_offset)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark_type_line(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_mark_type_line(width)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_elevation_profile(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_section_offset(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_speed(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.create_road_speed(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_object_crosswalk(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_object_crosswalk(z_offset)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_object_crosswalk(pitch)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_object_crosswalk(roll)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_object_crosswalk(width)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_object_crosswalk(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_line(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_line(x)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_line(y)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_line(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_arc(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_arc(x)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_arc(y)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_arc(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_spiral(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_spiral(x)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_spiral(y)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_spiral(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_poly3(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_poly3(x)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_poly3(y)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_poly3(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_param_poly3(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_param_poly3(x)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_param_poly3(y)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_road_geometry_param_poly3(length)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(z_offset)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(height)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(width)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(h_offset)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(pitch)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal(roll)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_inertial(x)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_inertial(y)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_inertial(z)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_inertial(pitch)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_inertial(roll)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_road(s)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_road(z_offset)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_road(h_offset)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_road(pitch)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_position_road(roll)	Float64	param	pinned map geometry
+extensions/carla/map_builder.mojo	MapBuilder.add_signal_reference(s)	Float64	param	pinned map geometry
+extensions/carla/math.mojo	distance_squared_2d ->	Float32	return	internal SI scalar
+extensions/carla/math.mojo	squared_length_2d ->	Float32	return	internal SI scalar
+extensions/carla/math.mojo	length_2d ->	Float32	return	internal SI scalar
+extensions/carla/math.mojo	Vector3DInt.length ->	Float64	return	internal SI scalar
+extensions/carla/mesh_factory.mojo	OpendriveGenerationParameters.vertex_width_resolution	Float64	field	internal SI scalar
+extensions/carla/mesh_factory.mojo	RoadParameters.vertex_width_resolution	Float32	field	internal SI scalar
+extensions/carla/mesh_factory.mojo	MeshFactory.compute_edges_for_lanemark(s)	Float64	param	internal SI scalar
+extensions/carla/mesh_factory.mojo	MeshFactory.compute_edges_for_lanemark(width)	Float64	param	internal SI scalar
+extensions/carla/mesh_factory.mojo	MeshFactory.compute_edges_for_lanemark(extra_width)	Float32	param	internal SI scalar
+extensions/carla/navigation.mojo	Navigation.time_to_unblock	Float64	field	runtime boundary
+extensions/carla/navigation.mojo	Navigation.delta_seconds	Float64	field	runtime boundary
+extensions/carla/navigation_mesh.mojo	NavPolygon.size	Float64	field	internal SI scalar
+extensions/carla/navigation_mesh.mojo	NavPolygon.height_at ->	Float32	return	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannControllerSettings.speed_kp	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannControllerSettings.speed_ki	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannControllerSettings.speed_kd	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannControllerSettings.accel_kp	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannControllerSettings.accel_ki	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannControllerSettings.accel_kd	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.target_steer_speed	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.target_speed	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.target_acceleration	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.max_accel	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.speed_control_accel_delta	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.speed_control_accel_target	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.accel_control_pedal_delta	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.accel_control_pedal_target	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.delta_time	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.vehicle_speed	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.vehicle_acceleration	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.last_vehicle_speed	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_control.mojo	AckermannController.last_vehicle_acceleration	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_physics.mojo	evaluate_curve(x)	Float32	param	internal SI scalar
+extensions/carla/physics/vehicle_physics.mojo	WheelPhysicsControl.rollbar_scaling	Float32	field	internal SI scalar
+extensions/carla/physics/vehicle_physics.mojo	VehiclePhysicsControl.sleep_threshold	Float32	field	internal SI scalar
+extensions/carla/physics/walker.mojo	Walker.floor_height	Float32	field	internal SI scalar
+extensions/carla/physics/wheeled_vehicle.mojo	WheeledVehicle.shift_timer	Float32	field	internal SI scalar
+extensions/carla/physics/wheeled_vehicle.mojo	WheeledVehicle.rollover_timer	Float32	field	internal SI scalar
+extensions/carla/pointcloud.mojo	SemanticLidarDetection.cos_inc_angle	Float32	field	internal SI scalar
+extensions/carla/polynomial.mojo	CubicPolynomial.s	Float64	field	pinned map geometry
+extensions/carla/polynomial.mojo	CubicPolynomial.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/polynomial.mojo	CubicPolynomial.evaluate(x)	Float64	param	pinned map geometry
+extensions/carla/polynomial.mojo	CubicPolynomial.tangent(x)	Float64	param	pinned map geometry
+extensions/carla/radar.mojo	RadarDetection.velocity	Float32	field	internal SI scalar
+extensions/carla/recorder.mojo	Recorder.write_frame(delta_seconds)	Float64	param	serialized
+extensions/carla/recorder.mojo	Recorder.write_frame(visual_time)	Float64	param	serialized
+extensions/carla/recorder.mojo	Recorder.write_frame(platform_time)	Float64	param	serialized
+extensions/carla/recorder_packets.mojo	LogVector.x	Float64	field	serialized
+extensions/carla/recorder_packets.mojo	LogVector.y	Float64	field	serialized
+extensions/carla/recorder_packets.mojo	LogVector.z	Float64	field	serialized
+extensions/carla/recorder_packets.mojo	LogVector.distance ->	Float64	return	serialized
+extensions/carla/recorder_packets.mojo	RecorderFrame.elapsed	Float64	field	serialized
+extensions/carla/recorder_packets.mojo	RecorderFrames.set_frame(delta_seconds)	Float64	param	serialized
+extensions/carla/recorder_packets.mojo	RecordedTrafficLight.elapsed_time	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedWheel.steering_angle	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedAnimWalker.speed	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedAnimBiker.forward_speed	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedTrafficLightTime.green_time	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedTrafficLightTime.yellow_time	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedTrafficLightTime.red_time	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedWeather.sun_azimuth_angle	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedWeather.sun_altitude_angle	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	RecordedWeather.fog_distance	Float32	field	serialized
+extensions/carla/recorder_packets.mojo	time_packet(time)	Float64	param	serialized
+extensions/carla/recorder_physics.mojo	RecordedWheelPhysics.wheel_radius	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedWheelPhysics.wheel_width	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedWheelPhysics.slip_threshold	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedWheelPhysics.skid_threshold	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedWheelPhysics.max_steer_angle	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedWheelPhysics.rollbar_scaling	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedPhysicsControl.gear_change_time	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedPhysicsControl.chassis_width	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedPhysicsControl.chassis_height	Float32	field	serialized
+extensions/carla/recorder_physics.mojo	RecordedPhysicsControl.sleep_threshold	Float32	field	serialized
+extensions/carla/render_actors.mojo	body_style_of(height)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	body_geometry(length)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	body_geometry(width)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	body_geometry(height)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	cabin_geometry(length)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	cabin_geometry(width)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	cabin_geometry(height)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	wheel_inset(length)	Float32	param	internal SI scalar
+extensions/carla/render_actors.mojo	VehicleModel.height	Float32	field	internal SI scalar
+extensions/carla/render_actors.mojo	stride(speed)	Float32	param	internal SI scalar
+extensions/carla/render_light.mojo	shaft_share(depth)	Float32	param	internal SI scalar
+extensions/carla/render_post.mojo	ViewRays.view_point(depth)	Float32	param	internal SI scalar
+extensions/carla/render_post.mojo	ViewRays.world_point(depth)	Float32	param	internal SI scalar
+extensions/carla/render_post.mojo	ViewRays.distance(depth)	Float32	param	internal SI scalar
+extensions/carla/render_post.mojo	metered_luminance ->	Float32	return	internal SI scalar
+extensions/carla/render_post.mojo	LensSettings.x_size	Float32	field	internal SI scalar
+extensions/carla/render_post.mojo	LensSettings.y_size	Float32	field	internal SI scalar
+extensions/carla/render_sky.mojo	texel_solid_angle ->	Float32	return	internal SI scalar
+extensions/carla/render_weather.mojo	HeightFog.optical_depth ->	Float32	return	internal SI scalar
+extensions/carla/replayer.mojo	Replayer.current_time	Float64	field	serialized
+extensions/carla/replayer.mojo	Replayer.time_to_stop	Float64	field	serialized
+extensions/carla/replayer.mojo	Replayer.total_time	Float64	field	serialized
+extensions/carla/replayer.mojo	Replayer.time_factor	Float64	field	serialized
+extensions/carla/replayer.mojo	Replayer.visual_time	Float64	field	serialized
+extensions/carla/replayer_helper.mojo	lerp_angle ->	Float64	return	serialized
+extensions/carla/replayer_helper.mojo	set_walker_speed(speed)	Float32	param	serialized
+extensions/carla/road.mojo	Lane.distance	Float64	field	pinned map geometry
+extensions/carla/road.mojo	Lane.__init__(distance)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	LaneSection.s	Float64	field	pinned map geometry
+extensions/carla/road.mojo	LaneSection.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.length	Float64	field	pinned map geometry
+extensions/carla/road.mojo	Road.__init__(length)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.add_section(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.section_length ->	Float64	return	pinned map geometry
+extensions/carla/road.mojo	Road.upper_bound(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.sections_at(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_by_distance(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lanes_by_distance(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lanes_at(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.next_lane(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.prev_lane(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.elevation_on(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.directed_point(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.directed_point_no_lane_offset(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.nearest_lane(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_length ->	Float64	return	pinned map geometry
+extensions/carla/road.mojo	Road.lane_width(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_width ->	Float64	return	pinned map geometry
+extensions/carla/road.mojo	Road.lane_transform(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_corners(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_corners(extra_width)	Float32	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_edge_offsets(s)	Float64	param	pinned map geometry
+extensions/carla/road.mojo	Road.lane_edge_offsets(extra_width)	Float32	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoGeometry.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoGeometry.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoElevation.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoElevation.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneOffset.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneOffset.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneWidth.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneWidth.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneBorder.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneBorder.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneHeight.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneHeight.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneMaterial.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneMaterial.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneVisibility.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneVisibility.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneAccess.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneAccess.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneRule.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoLaneRule.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSpeed.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSpeed.speed	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSpeed.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSpeed.__init__(speed)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSpeed.from_opendrive(s)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSpeed.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkTypeLine.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkTypeLine.length	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkTypeLine.t_offset	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkTypeLine.width	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkTypeLine.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.width	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.height	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.type_width	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.__init__(s)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.__init__(width)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.__init__(height)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.__init__(type_width)	Float64	param	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoMarkRecord.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	CrosswalkPoint.z	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.z_offset	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.pitch	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.roll	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.width	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.length	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoCrosswalk.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSignal.s	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	RoadInfoSignal.distance ->	Float64	return	pinned map geometry
+extensions/carla/road_info.mojo	LaneMarking.width	Float64	field	pinned map geometry
+extensions/carla/road_info.mojo	LaneMarking.__init__(width)	Float64	param	pinned map geometry
+extensions/carla/sensor.mojo	normalized_depth ->	Float32	return	internal SI scalar
+extensions/carla/sensor_data.mojo	sensor_header(timestamp)	Float64	param	serialized
+extensions/carla/sensor_data.mojo	image_data(fov)	Float32	param	serialized
+extensions/carla/sensor_data.mojo	optical_flow_data(fov)	Float32	param	serialized
+extensions/carla/sensor_data.mojo	dvs_data(fov)	Float32	param	serialized
+extensions/carla/sensor_manager.mojo	SensorMeasurement.timestamp	Float64	field	runtime boundary
+extensions/carla/speed_limits.mojo	read_speed_number ->	Float64	return	internal SI scalar
+extensions/carla/town.mojo	roadside(s)	Float64	param	internal SI scalar
+extensions/carla/traffic_manager.mojo	ALSM.elapsed_last_actor_destruction	Float64	field	runtime boundary
+extensions/carla/traffic_manager.mojo	ALSM.current_time	Float64	field	runtime boundary
+extensions/carla/traffic_manager_collision.mojo	GeometryComparison.inter_geodesic_distance	Float64	field	internal SI scalar
+extensions/carla/traffic_manager_collision.mojo	GeometryComparison.inter_bbox_distance	Float64	field	internal SI scalar
+extensions/carla/traffic_manager_collision.mojo	CollisionLock.distance_to_lead_vehicle	Float64	field	internal SI scalar
+extensions/carla/traffic_manager_collision.mojo	CollisionLock.initial_lock_distance	Float64	field	internal SI scalar
+extensions/carla/traffic_manager_collision.mojo	polygon_distance ->	Float64	return	internal SI scalar
+extensions/carla/traffic_manager_map.mojo	distance_squared ->	Float32	return	internal SI scalar
+extensions/carla/traffic_manager_map.mojo	SimpleWaypoint.distance ->	Float32	return	internal SI scalar
+extensions/carla/traffic_manager_map.mojo	SimpleWaypoint.distance_squared ->	Float32	return	internal SI scalar
+extensions/carla/traffic_manager_map.mojo	CachedSimpleWaypoint.s	Float32	field	internal SI scalar
+extensions/carla/traffic_manager_pid.mojo	StateEntry.velocity_deviation	Float32	field	internal SI scalar
+extensions/carla/traffic_manager_planning.mojo	MotionPlanStage.calculate_base_offset ->	Float32	return	internal SI scalar
+extensions/carla/traffic_manager_planning.mojo	MotionPlanStage.collision_handling(max_target_velocity)	Float32	param	internal SI scalar
+extensions/carla/traffic_manager_planning.mojo	MotionPlanStage.get_landmark_target_velocity(max_target_velocity)	Float32	param	internal SI scalar
+extensions/carla/traffic_manager_planning.mojo	MotionPlanStage.get_landmark_target_velocity ->	Float32	return	internal SI scalar
+extensions/carla/traffic_manager_planning.mojo	MotionPlanStage.get_turn_target_velocity(max_target_velocity)	Float32	param	internal SI scalar
+extensions/carla/traffic_manager_planning.mojo	MotionPlanStage.get_turn_target_velocity ->	Float32	return	internal SI scalar
+extensions/carla/traffic_manager_state.mojo	large_vehicle_junction_offset_profile(max_offset_point)	Float32	param	internal SI scalar
+extensions/carla/transform.mojo	CarlaRotation.pitch	Float32	field	internal SI scalar
+extensions/carla/transform.mojo	CarlaRotation.yaw	Float32	field	internal SI scalar
+extensions/carla/transform.mojo	CarlaRotation.roll	Float32	field	internal SI scalar
+extensions/carla/v2x.mojo	PathLossModel.wavelength	Float64	field	geodesy and V2X
+extensions/carla/v2x.mojo	PathLossModel.winner(distance)	Float64	param	geodesy and V2X
+extensions/carla/v2x.mojo	PathLossModel.two_ray(distance)	Float64	param	geodesy and V2X
+extensions/carla/v2x.mojo	PathLossModel.two_ray_simple(distance)	Float64	param	geodesy and V2X
+extensions/carla/v2x.mojo	PathLossModel.loss(distance)	Float64	param	geodesy and V2X
+extensions/carla/v2x.mojo	speed_value(speed)	Float32	param	geodesy and V2X
+extensions/carla/v2x.mojo	round_half_away(x)	Float64	param	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.latitude_stddev	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.longitude_stddev	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.latitude_bias	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.longitude_bias	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.altitude_stddev	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.altitude_bias	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.velocity_stddev	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.yaw_rate_stddev	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CamNoise.yaw_rate_bias	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CaService.last_cam_timestamp	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CaService.last_low_cam_timestamp	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CaService.elapsed	Float64	field	geodesy and V2X
+extensions/carla/v2x.mojo	CaService.vehicle_speed	Float32	field	geodesy and V2X
+extensions/carla/v2x.mojo	CaService.last_cam_speed	Float32	field	geodesy and V2X
+extensions/carla/weather.mojo	WeatherParameters.__init__(sun_azimuth_degrees)	Float32	param	internal SI scalar
+extensions/carla/weather.mojo	WeatherParameters.__init__(sun_altitude_degrees)	Float32	param	internal SI scalar
+extensions/carla/weather.mojo	WeatherParameters.__init__(fog_distance_meters)	Float32	param	internal SI scalar
+extensions/carla/world.mojo	World.elapsed_seconds	Float64	field	runtime boundary
+extensions/carla/world.mojo	World.delta_seconds	Float64	field	runtime boundary
+extensions/carla/world.mojo	World.get_traffic_lights_from_waypoint(distance)	Float64	param	runtime boundary
+extensions/carla/world_snapshot.mojo	Timestamp.elapsed_seconds	Float64	field	runtime boundary
+extensions/carla/world_snapshot.mojo	Timestamp.delta_seconds	Float64	field	runtime boundary
+extensions/carla/world_snapshot.mojo	Timestamp.platform_timestamp	Float64	field	runtime boundary
+extensions/carla/world_snapshot.mojo	Timestamp.from_seconds(elapsed_seconds)	Float64	param	runtime boundary
+extensions/carla/world_snapshot.mojo	Timestamp.from_seconds(delta_seconds)	Float64	param	runtime boundary
+extensions/carla/world_snapshot.mojo	Timestamp.from_seconds(platform_timestamp)	Float64	param	runtime boundary

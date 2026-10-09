@@ -91,6 +91,7 @@ from std.math import (
     atan,
     atan2,
     cos,
+    isfinite,
     log,
     sin,
     sqrt,
@@ -102,6 +103,7 @@ from units.si import (
     SECOND,
     Angle,
     Duration,
+    Duration64,
     Length,
     METER,
 )
@@ -835,6 +837,13 @@ def _nanoseconds(seconds: Float64) -> Int:
     return Int(seconds * 1e9)
 
 
+# The latest frame time, about 291.5 years. CARLA interpolates an event's
+# time inside a tick in Float32 nanoseconds, which can overshoot the tick by
+# about 8 * 2**-24 of its length, and a stored event time goes to seconds and
+# back. Below 9.2e9 s every such time keeps wide headroom inside an `Int`.
+comptime _MAX_EVENT_SECONDS = Float64(9.2e9)
+
+
 struct DVSCamera(Copyable, Movable):
     """An event camera's memory between frames, `ADVSCamera`."""
 
@@ -879,23 +888,35 @@ struct DVSCamera(Copyable, Movable):
         self.current_time = 0
 
     def simulate(
-        mut self, image: Framebuffer, elapsed_seconds: Float64
+        mut self, image: Framebuffer, elapsed: Duration64
     ) raises -> List[DVSEvent]:
         """Compare a frame with the last one, `ADVSCamera::Simulation`.
 
         Args:
             image: The new RGB frame.
-            elapsed_seconds: The simulation time of the frame.
+            elapsed: The simulation time of the frame, kept in Float64.
 
         Returns:
             The events since the last frame, by time. The first frame only
             sets the reference and gives none.
 
         Raises:
-            Error: If the frame's size is not the camera's.
+            Error: If the frame's size is not the camera's, or the time is
+                not finite, is negative, or has too many nanoseconds for
+                an `Int`.
         """
         if image.width != self.width or image.height != self.height:
             raise Error("An event camera's frame must be its size")
+        var elapsed_seconds = elapsed.value
+        if not (
+            isfinite(elapsed_seconds)
+            and elapsed_seconds >= 0
+            and elapsed_seconds <= _MAX_EVENT_SECONDS
+        ):
+            raise Error(
+                "An event camera's time must be finite, nonnegative and at"
+                " most 9.2e9 seconds"
+            )
         self.last_image = List[Float32]()
         for y in range(self.height):  # pragma: no branch
             for x in range(self.width):  # pragma: no branch

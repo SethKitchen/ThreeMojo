@@ -27,7 +27,8 @@ from extensions.carla.map import Map
 from extensions.carla.road_info import LaneMarking
 from extensions.carla.transform import CarlaTransform
 from math.vector3 import Vector3
-from std.math import cos, sin
+from std.math import cos, isfinite, sin
+from units.si import Duration64
 
 # `10 * std::numeric_limits<float>::epsilon()`.
 comptime _THRESHOLD = Float32(10.0) * Float32(1.1920928955078125e-07)
@@ -119,7 +120,7 @@ struct LaneInvasionSensor(Copyable, Movable):
         mut self,
         map: Map,
         frame: Int,
-        timestamp: Float64,
+        timestamp: Duration64,
         transform: CarlaTransform,
     ) raises -> Optional[LaneInvasionEvent]:
         """Check one snapshot, `LaneInvasionCallback::Tick`.
@@ -127,15 +128,18 @@ struct LaneInvasionSensor(Copyable, Movable):
         Args:
             map: The world's map.
             frame: The snapshot's frame.
-            timestamp: The snapshot's elapsed seconds.
+            timestamp: The snapshot's elapsed time, kept in Float64.
             transform: The parent vehicle's pose in the snapshot.
 
         Returns:
             The event, or None.
 
         Raises:
-            Error: If a map query fails.
+            Error: If the time is not finite or is negative, or a map query
+                fails.
         """
+        if not (isfinite(timestamp.value) and timestamp.value >= 0):
+            raise Error("A lane invasion time must be finite and nonnegative")
         var next = box_corners(transform, self.box)
         if not self.has_corners:
             self.has_corners = True
@@ -157,4 +161,4 @@ struct LaneInvasionSensor(Copyable, Movable):
             crossed.extend(map.calculate_crossed_lanes(previous[i], next[i]))
         if len(crossed) == 0:
             return None
-        return LaneInvasionEvent(frame, timestamp, transform, crossed^)
+        return LaneInvasionEvent(frame, timestamp.value, transform, crossed^)

@@ -34,7 +34,8 @@ class CoverageInvariantContracts(unittest.TestCase):
     def test_live_scope_and_retained_historical_counts(self):
         record = invariant.verify(ROOT)
         result = winner.verify(ROOT)
-        expected = {border.BEFORE_SHA256: (13, 99), border.AFTER_SHA256: (14, 98)}
+        # Four reviewed #333 runtime boundary edges join each state.
+        expected = {border.BEFORE_SHA256: (17, 95), border.AFTER_SHA256: (18, 94)}
         parser_sha = hashlib.sha256((ROOT/border.MODULE).read_bytes()).hexdigest()
         self.assertIn(parser_sha, expected)
         self.assertEqual((result['reviewed_cleanup_successors'],

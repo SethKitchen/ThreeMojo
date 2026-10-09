@@ -21,7 +21,8 @@ class CoverageFollowupContracts(unittest.TestCase):
         step=record['sources']['extensions/carla/curve_sample_dispatch.mojo']
         self.assertEqual(step['before_sha256'],prior['sources']['extensions/carla/curve_sample_dispatch.mojo']['after_sha256'])
         result=winner.verify(ROOT)
-        expected = {border.BEFORE_SHA256: (13, 99), border.AFTER_SHA256: (14, 98)}
+        # Four reviewed #333 runtime boundary edges join each state.
+        expected = {border.BEFORE_SHA256: (17, 95), border.AFTER_SHA256: (18, 94)}
         parser_sha = hashlib.sha256((ROOT/border.MODULE).read_bytes()).hexdigest()
         self.assertIn(parser_sha, expected)
         self.assertEqual((result['reviewed_cleanup_successors'],result['canonical_dependencies_unchanged']),expected[parser_sha])
