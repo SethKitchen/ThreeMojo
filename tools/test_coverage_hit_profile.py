@@ -295,20 +295,36 @@ class PhaseObserverTests(unittest.TestCase):
                                       b'COVLINE:module:2:T\nCOVLINE:module:3:T\nCOVBRANCH:module:3:T\n'))
 
     def test_adapter_write_fault_preserves_actual_build_failure(self):
-        # Fault only the observer's low-level writes inside a fresh process.
+        # Fault only the verified sidecar. tempfile's cold directory probe also
+        # uses os.write and must retain its ordinary behavior without TMPDIR.
         driver = self.root/'fault.py'
-        driver.write_text('import pathlib, runpy, sys\nfrom unittest.mock import patch\n'
+        driver.write_text('import os, pathlib, runpy, sys, tempfile\n'
+                          'from unittest.mock import patch\n'
                           'sys.argv = sys.argv[1:]\n'
                           'sys.path.insert(0, str(pathlib.Path(sys.argv[0]).parent))\n'
-                          'with patch("os.write", side_effect=OSError("full")):\n'
+                          'identity = (int(os.environ["THREEMOJO_COVERAGE_PHASES_DEVICE"]),\n'
+                          '            int(os.environ["THREEMOJO_COVERAGE_PHASES_INODE"]))\n'
+                          'original_write = os.write\n'
+                          'def fail_sidecar(fd, data):\n'
+                          '    actual = os.fstat(fd)\n'
+                          '    if (actual.st_dev, actual.st_ino) == identity:\n'
+                          '        raise OSError("injected sidecar write failure")\n'
+                          '    return original_write(fd, data)\n'
+                          'tempfile.tempdir = None\n'
+                          'with patch("os.write", side_effect=fail_sidecar):\n'
                           '    runpy.run_path(sys.argv[0], run_name="__main__")\n')
         command = self.arguments()
-        environment = self.environment(command)
-        environment['TEST_BUILD_STATUS'] = '41'
-        result = subprocess.run([sys.executable, str(driver), *command[1:]],
-                                env=environment, capture_output=True, timeout=4)
-        self.assertEqual(result.returncode, 41, result.stderr)
-        self.assertEqual(len(self.sidecar.read_text().splitlines()), 1)
+        for temporary in (None, str(self.root)):
+            with self.subTest(TMPDIR=temporary):
+                environment = self.environment(command)
+                environment['TEST_BUILD_STATUS'] = '41'
+                environment.pop('TMPDIR', None)
+                if temporary is not None:
+                    environment['TMPDIR'] = temporary
+                result = subprocess.run([sys.executable, str(driver), *command[1:]],
+                                        env=environment, capture_output=True, timeout=4)
+                self.assertEqual(result.returncode, 41, result.stderr)
+                self.assertEqual(len(self.sidecar.read_text().splitlines()), 1)
 
     def test_silently_refused_hook_cannot_claim_complete_diagnostics(self):
         driver = self.root/'refuse.py'
