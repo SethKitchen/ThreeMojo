@@ -56,6 +56,7 @@ def fresh_guard(text):
             'fresh environment guard must be the first operation')
 
 
+@source.lexical_memo_scope()
 def verify(root):
     payload = (root/MIGRATION).read_bytes()
     require(hashlib.sha256(payload).hexdigest() == guard.WINNER_SIGN_MIGRATION_SHA256,

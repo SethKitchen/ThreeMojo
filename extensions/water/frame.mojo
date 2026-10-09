@@ -62,7 +62,9 @@ from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.tasks import TaskGroup
 from std.math import cos, exp, isfinite, pow, sin, sqrt, tan
+from std.sys import num_logical_cores
 from units.si import DEGREE, SECOND, Angle, Duration, Length
 
 # The page's ocean patch, water depth and root-mean-square slope.
@@ -153,6 +155,223 @@ struct _SurfaceHit(ImplicitlyCopyable):
     var x: Float32
     var z: Float32
     var height: Float32
+
+
+def _radiance_image(
+    look: CameraLook,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: List[Bool],
+) -> List[Float32]:
+    """Shade every pixel, or the pixels `shown` marks, into linear RGB.
+
+    Disjoint runs of rows shade in parallel. Each pixel has one writer and
+    the serial arithmetic, so the image is the serial one. An unmarked
+    pixel stays zero. An empty `shown` marks every pixel.
+    """
+    var hdr = List[Float32](length=width * height * 3, fill=0.0)
+    # Sky rows cost far less than water rows, so small runs of rows balance
+    # the threads. Each task gets at least one row, because tasks <= height.
+    var tasks = min(num_logical_cores() * 8, height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _radiance_task(
+                look,
+                aspect,
+                Pointer(to=surface).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=ripples).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=caustics).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=bed).unsafe_origin_cast[ImmutAnyOrigin](),
+                clock,
+                sun,
+                width,
+                height,
+                Pointer(to=shown).unsafe_origin_cast[ImmutAnyOrigin](),
+                hdr.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return hdr^
+
+
+async def _radiance_task(
+    look: CameraLook,
+    aspect: Float32,
+    surface: Pointer[SurfaceField, ImmutAnyOrigin],
+    ripples: Pointer[RippleField, ImmutAnyOrigin],
+    caustics: Pointer[CausticField, ImmutAnyOrigin],
+    bed: Pointer[PebbleBed, ImmutAnyOrigin],
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: Pointer[List[Bool], ImmutAnyOrigin],
+    hdr: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    _radiance_rows(
+        look,
+        aspect,
+        surface[],
+        ripples[],
+        caustics[],
+        bed[],
+        clock,
+        sun,
+        width,
+        height,
+        shown[],
+        hdr,
+        first,
+        past,
+    )
+
+
+def _radiance_rows(
+    look: CameraLook,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: List[Bool],
+    hdr: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Shade rows `first` up to `past` into `hdr`."""
+    var every = len(shown) == 0
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            if not every and not shown[y * width + x]:
+                continue
+            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
+            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+            var rgb = _lit_radiance(
+                look,
+                ndc_x,
+                ndc_y,
+                aspect,
+                surface,
+                ripples,
+                caustics,
+                bed,
+                clock,
+                2.0 / Float32(width),
+                2.0 / Float32(height),
+                sun,
+            )
+            var p = (y * width + x) * 3
+            hdr[unsafe_offset=p] = rgb.x
+            hdr[unsafe_offset=p + 1] = rgb.y
+            hdr[unsafe_offset=p + 2] = rgb.z
+
+
+def _graded_image(
+    hdr: List[Float32],
+    glare: List[Float32],
+    bloom: List[Float32],
+    width: Int,
+    height: Int,
+    clock: Duration,
+    view: WaterView,
+) -> List[Float32]:
+    """Grade every pixel, in parallel runs of rows, as `grade_pixel` does.
+
+    Each pixel has one writer and the serial arithmetic.
+    """
+    var graded = List[Float32](length=width * height * 3, fill=0.0)
+    # Sky rows cost far less than water rows, so small runs of rows balance
+    # the threads. Each task gets at least one row, because tasks <= height.
+    var tasks = min(num_logical_cores() * 8, height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _grade_task(
+                Pointer(to=hdr).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=glare).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=bloom).unsafe_origin_cast[ImmutAnyOrigin](),
+                width,
+                height,
+                clock,
+                view,
+                graded.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return graded^
+
+
+async def _grade_task(
+    hdr: Pointer[List[Float32], ImmutAnyOrigin],
+    glare: Pointer[List[Float32], ImmutAnyOrigin],
+    bloom: Pointer[List[Float32], ImmutAnyOrigin],
+    width: Int,
+    height: Int,
+    clock: Duration,
+    view: WaterView,
+    graded: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    _grade_rows(
+        hdr[], glare[], bloom[], width, height, clock, view, graded, first, past
+    )
+
+
+def _grade_rows(
+    hdr: List[Float32],
+    glare: List[Float32],
+    bloom: List[Float32],
+    width: Int,
+    height: Int,
+    clock: Duration,
+    view: WaterView,
+    graded: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Grade rows `first` up to `past` into `graded`."""
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var p = (y * width + x) * 3
+            var rgb = grade_pixel(
+                hdr[p],
+                hdr[p + 1],
+                hdr[p + 2],
+                glare[p],
+                glare[p + 1],
+                glare[p + 2],
+                bloom[p],
+                bloom[p + 1],
+                bloom[p + 2],
+                x,
+                y,
+                width,
+                height,
+                clock,
+                view,
+            )
+            graded[unsafe_offset=p] = rgb.x
+            graded[unsafe_offset=p + 1] = rgb.y
+            graded[unsafe_offset=p + 2] = rgb.z
 
 
 def _surface_hit(
@@ -1174,7 +1393,9 @@ struct WaterScene(Movable):
         var clock = self.clock
         var width = image.width
         var height = image.height
-        var drawn = 0
+        # The depth test writes as it goes, so it stays in pixel order.
+        # Only the pixels that pass are shaded, in parallel.
+        var shown = List[Bool](length=width * height, fill=False)
         for y in range(height):  # pragma: no branch
             for x in range(width):  # pragma: no branch
                 var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
@@ -1194,20 +1415,27 @@ struct WaterScene(Movable):
                     x, y, z
                 ):
                     continue
-                var rgb = _lit_radiance(
-                    look,
-                    ndc_x,
-                    ndc_y,
-                    aspect,
-                    surface,
-                    self._ripples,
-                    caustics,
-                    bed,
-                    clock,
-                    2.0 / Float32(width),
-                    2.0 / Float32(height),
-                    self.sun,
-                )
+                shown[y * width + x] = True
+        var hdr = _radiance_image(
+            look,
+            aspect,
+            surface,
+            self._ripples,
+            caustics,
+            bed,
+            clock,
+            self.sun,
+            width,
+            height,
+            shown,
+        )
+        var drawn = 0
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
+                if not shown[y * width + x]:
+                    continue
+                var p = (y * width + x) * 3
+                var rgb = Vector3(hdr[p], hdr[p + 1], hdr[p + 2])
                 var graded = grade_pixel(
                     rgb.x,
                     rgb.y,
@@ -1272,31 +1500,21 @@ struct WaterScene(Movable):
         var caustics = self._caustics(surface)
         if view == CAUSTICS:
             return _caustic_picture(width, height, caustics)
-        var hdr = List[Float32](length=width * height * 3, fill=0.0)
         var look = camera_look(clock, sway, pitch)
         var aspect = Float32(width) / Float32(height)
-        for y in range(height):  # pragma: no branch
-            for x in range(width):  # pragma: no branch
-                var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-                var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-                var rgb = _lit_radiance(
-                    look,
-                    ndc_x,
-                    ndc_y,
-                    aspect,
-                    surface,
-                    self._ripples,
-                    caustics,
-                    bed,
-                    clock,
-                    2.0 / Float32(width),
-                    2.0 / Float32(height),
-                    self.sun,
-                )
-                var p = (y * width + x) * 3
-                hdr[p] = rgb.x
-                hdr[p + 1] = rgb.y
-                hdr[p + 2] = rgb.z
+        var hdr = _radiance_image(
+            look,
+            aspect,
+            surface,
+            self._ripples,
+            caustics,
+            bed,
+            clock,
+            self.sun,
+            width,
+            height,
+            List[Bool](),
+        )
         var bright = _highlights(hdr, width, height, 2.5)
         var bloom = _blur(
             _blur(bright, width, height, True), width, height, False
@@ -1309,34 +1527,20 @@ struct WaterScene(Movable):
             for i in range(len(sparks)):  # pragma: no branch
                 sparks[i] *= 0.001
             glare = apply_glare(sparks, width, height, self._glare.value())
+        var graded = _graded_image(
+            hdr, glare, bloom, width, height, clock, view
+        )
         var image = Framebuffer(width, height, Color(0, 0, 0))
         for y in range(height):  # pragma: no branch
             for x in range(width):  # pragma: no branch
                 var p = (y * width + x) * 3
-                var graded = grade_pixel(
-                    hdr[p],
-                    hdr[p + 1],
-                    hdr[p + 2],
-                    glare[p],
-                    glare[p + 1],
-                    glare[p + 2],
-                    bloom[p],
-                    bloom[p + 1],
-                    bloom[p + 2],
-                    x,
-                    y,
-                    width,
-                    height,
-                    clock,
-                    view,
-                )
                 image.set_pixel(
                     x,
                     y,
                     FloatColor(
-                        clamp01(graded.x),
-                        clamp01(graded.y),
-                        clamp01(graded.z),
+                        clamp01(graded[p]),
+                        clamp01(graded[p + 1]),
+                        clamp01(graded[p + 2]),
                         1.0,
                     ).quantize(),
                 )
