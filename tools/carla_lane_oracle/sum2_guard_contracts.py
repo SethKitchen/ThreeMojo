@@ -162,6 +162,11 @@ def declaration_routing(text):
     complete class declarations/fields/aliases and enclosing lexical scopes
     remain. Reviewed caller suites have their own complete token contracts.
     """
+    return source_contracts._lexical_string(
+        _declaration_routing, (text,), (source_contracts.tokens,))
+
+
+def _declaration_routing(text):
     tokens = source_contracts.tokens(text)
     scopes, statement, rows, pending = [], [], [], None
     for token in tokens:
@@ -253,6 +258,12 @@ def function_span(text, name, expected_owner=None):
 
 
 def declaration(text, name, expected_owner=()):
+    return source_contracts._lexical_string(
+        _declaration, (text, name, expected_owner),
+        (function_span, source_contracts.tokens))
+
+
+def _declaration(text, name, expected_owner):
     return function_span(text, name, expected_owner)[0]
 
 
