@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Generate exact Fraction enclosures for the local binary-scaling helpers."""
+"""Generate exact Fraction enclosures for the local binary-scaling helpers.
+
+Output needs no compiler or formatter. Use --check for an exact, read-only
+replay of the saved fixture. Do not combine --check and --json.
+"""
 import argparse
 from fractions import Fraction
 from pathlib import Path
@@ -38,9 +42,12 @@ def exact_normal_or_zero(number):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--json', type=Path)
+    parser.add_argument('--check', action='store_true', help='verify without writing')
     args = parser.parse_args()
+    if args.check and args.json is not None:
+        parser.error('--check is read-only; do not combine it with --json')
     root = Path(__file__).resolve().parents[1]
     rng = random.Random(302594)
     cases = []
@@ -63,8 +70,18 @@ def main():
         cases.append(dict(bits=list(map(bits, (lo, hi, scale, *p, *q))),
                           exact_product=is_power and all(map(exact_normal_or_zero, product)),
                           exact_quotient=is_power and all(map(exact_normal_or_zero, quotient))))
-    header = (root / 'tests/test_carla_centered_bounds.mojo').read_text().split('from extensions')[0]
-    out = header + '''from extensions.carla.curve_interval import _Interval, _power_product_bound, _power_quotient_bound
+    out = '''# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Controls for precise ideal bounds and origin-local scalar quadrature."""
+
+from extensions.carla.curve_interval import (
+    _Interval,
+    _power_product_bound,
+    _power_quotient_bound,
+)
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true
 
@@ -73,11 +90,16 @@ def test_exact_fraction_power_scaling_corpus() raises:
     var cases: List[Tuple[Array[UInt64, 7], Bool, Bool]] = [
 '''
     for case in cases:
-        out += '        ([' + ', '.join(f'UInt64(0x{x:016X})' for x in case['bits']) + f'], {case["exact_product"]}, {case["exact_quotient"]}),\n'
+        out += '        (\n            [\n'
+        out += ''.join(f'                UInt64(0x{x:016X}),\n' for x in case['bits'])
+        out += (f'            ],\n            {case["exact_product"]},\n'
+                f'            {case["exact_quotient"]},\n        ),\n')
     out += '''    ]
     for i in range(len(cases)):
         ref row = cases[i]
-        var one = _Interval(bitcast[DType.float64](row[0][0]), bitcast[DType.float64](row[0][1]))
+        var one = _Interval(
+            bitcast[DType.float64](row[0][0]), bitcast[DType.float64](row[0][1])
+        )
         var two = _Interval.point(bitcast[DType.float64](row[0][2]))
         var product = _power_product_bound(one, two)
         var quotient = _power_quotient_bound(one, two)
@@ -100,10 +122,20 @@ def test_exact_fraction_power_scaling_corpus() raises:
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 '''
-    (root / 'tests/test_carla_power_fraction.mojo').write_text(out)
+    target = root / 'tests/test_carla_power_fraction.mojo'
+    expected = out.encode('utf-8')
+    if args.check:
+        try:
+            matches = target.read_bytes() == expected
+        except OSError as error:
+            raise SystemExit(f'Cannot check {target}: {error}')
+        if not matches:
+            raise SystemExit(f'{target} is stale; regenerate without --check')
+    else:
+        target.write_bytes(expected)
     if args.json:
         args.json.write_text(json.dumps(cases, indent=2) + '\n')
-    print('Generated', len(cases), 'independent Fraction cases')
+    print('Verified' if args.check else 'Generated', len(cases), 'independent Fraction cases')
 
 
 if __name__ == '__main__':

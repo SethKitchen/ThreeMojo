@@ -64,7 +64,13 @@ def kind(path):
         return 'portability'
     if path.startswith('assets/carla/tools/export/'):
         return 'export'
-    if path in {'tools/bench_examples.py', 'tools/compiler_metadata.py', 'tools/humanoid_fidelity.py'}:
+    # These generators have exact compiler-free replay gates in test-tools.
+    if path in {'tools/bench_examples.py', 'tools/compiler_metadata.py',
+                'tools/humanoid_fidelity.py',
+                'tools/generate_carla_lane_distance_controls.py',
+                'tools/generate_carla_power_controls.py',
+                'tools/generate_carla_directed_controls.py',
+                'tools/generate_carla_index_controls.py'}:
         return 'tools'
     if path.startswith('assets/'):
         return 'native'
