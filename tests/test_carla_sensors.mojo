@@ -1278,12 +1278,16 @@ def test_event_camera_cap_keeps_large_ticks_in_range() raises:
     var dvs = DVSCamera(_linear(gray(Color(1, 1, 1))), 1, 1, 0)
     _ = dvs.simulate(_frame([0]), Duration64(0.0))
     _ = dvs.simulate(_frame([1]), Duration64(cap))
+    assert_equal(dvs.current_time, 9200000000000000000)
     for event in dvs.simulate(_frame([0]), Duration64(cap)):
         assert_true(event.t >= 0 and event.t <= limit)
     for event in dvs.simulate(_frame([1]), Duration64(0.0)):
         assert_true(event.t >= 0 and event.t <= limit)
+    assert_equal(dvs.current_time, 0)
+    # The next Float64 above the cap is refused and changes nothing.
     with assert_raises(contains="time must be finite"):
-        _ = dvs.simulate(_frame([0]), Duration64(cap + 0.001))
+        _ = dvs.simulate(_frame([0]), Duration64(9200000000.000002))
+    assert_equal(dvs.current_time, 0)
 
 
 # --- V2X ---------------------------------------------------------------------------

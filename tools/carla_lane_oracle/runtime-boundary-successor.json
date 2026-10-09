@@ -29,7 +29,7 @@
     }
   },
   "correctness_tests": {
-    "tests/test_carla_sensors.mojo": "9355b707492acb411fd46532ad0583a61d7af3092d6f71c8b1dbecd7a74eebb0",
+    "tests/test_carla_sensors.mojo": "282a4b142c077bc901d941a3e14dafd8684c7468853b70478763c8e9f2939f2b",
     "tests/test_carla_sensors_world.mojo": "6889f58abeaecfa9233712335ae88f9fd9ff0048b1cb9909e7f30bb8b8dc56d7",
     "tests/test_carla_world_signals.mojo": "f81c31ffbfeeab1a2e4e32693bbf7ecf0694e31b250692864dccf6aa7338fdd5",
     "tests/compile_fail/carla_event_camera_time_rejects_float32_duration.mojo": "75a8da75c59855547f927b47cdc9d937a0c0e59b23953375e09fc1b5b078b4e8",

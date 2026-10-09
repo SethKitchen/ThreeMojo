@@ -17,7 +17,7 @@ else:
     import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/runtime-boundary-successor.json'
-MIGRATION_SHA256 = '2305b91328478912659ed19f053f6962ff7b4ac69587a73a8d8464c336944476'
+MIGRATION_SHA256 = '992854b1191bd365fca3e5e8d3a7fc751ac2eb3196b33684e04ebad833baab00'
 MODULES = ('extensions/carla/cameras.mojo', 'extensions/carla/lane_invasion.mojo',
            'extensions/carla/sensor_manager.mojo', 'extensions/carla/world.mojo')
 FIXTURES = tuple(f'tests/compile_fail/carla_{name}.mojo' for name in (
