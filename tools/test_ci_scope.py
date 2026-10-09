@@ -41,6 +41,25 @@ def selected(changed, *, sources=None, old=None):
 
 
 class RoutingTests(unittest.TestCase):
+    def test_humanoid_snapshot_adapter_runs_python_tools_and_its_docs(self):
+        paths = {'tools/humanoid_fidelity.py': False, 'tools/test_humanoid_fidelity.py': False}
+        value = selected(paths)
+        self.assertFalse(value['full'])
+        self.assertEqual({name for name, flag in value['flags'].items() if flag}, {'tools', 'lint'})
+        self.assertTrue(all(not files for files in value['files'].values()))
+        value = selected({**paths, 'docs/wiki/Humanoid-fidelity.md': False})
+        self.assertFalse(value['full'])
+        self.assertEqual({name for name, flag in value['flags'].items() if flag}, {'tools', 'lint', 'docs'})
+        self.assertTrue(all(not files for files in value['files'].values()))
+
+    def test_humanoid_adapter_exception_does_not_hide_native_or_unknown_changes(self):
+        for path in ('tools/anatomy_validity.py', 'tools/humanoid_fidelity_new.py',
+                     'tools/humanoid_fidelity.py.extra', 'Makefile'):
+            with self.subTest(path=path):
+                self.assertTrue(selected({'tools/humanoid_fidelity.py': False, path: False})['full'])
+        self.assertEqual(selected({'core/used.mojo': False}),
+                         selected({'core/used.mojo': False, 'tools/humanoid_fidelity.py': False}))
+
     def test_pr690_and_controller_changes_only_run_tools(self):
         paths = ['tools/test_build_tools.py', 'tools/test_compiler_metadata.py',
                  'tools/test_coverage_lifecycle.py', 'tools/ci_scope.py',
