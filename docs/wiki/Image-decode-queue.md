@@ -91,6 +91,19 @@ A bounded handshake proves that a later job can finish while the first job waits
 The loader suites compare pixels, mip chains, color spaces, source order,
 and cache state across worker counts.
 
+`tests/test_image_queue_stop.mojo` checks monotonic stop claims, signed-limit
+claims, real worker failures, ordered errors, and fresh retry state.
+A public failure-path control owns source pixels until its last decode call.
+Its destructor records zero active callback bodies and two finished bodies.
+The test checks one destruction and an owned-pixel read before destruction.
+The existing catch-stop controls separately check work after the queue stops.
+
+One deterministic control has 12 inputs and two completed decode callbacks.
+The stop avoids the other ten callbacks in that control.
+These counts measure avoided callback work. They do not measure elapsed speedup.
+See the [qualification report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/image-decode-668-reconstruction.md)
+for the fresh checks and separately labeled historical coverage.
+
 
 ## Measurements
 

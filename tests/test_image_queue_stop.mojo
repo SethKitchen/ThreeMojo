@@ -267,6 +267,87 @@ def test_all_failures_decode_no_more_than_the_worker_limit() raises:
                 assert_equal(retry[index].pixels[0], UInt8(index))
 
 
+@fieldwise_init
+struct _LifetimeSource[origin: Origin[mut=True]](TextureDecodeSource):
+    # Active, finished, destroyed, active at destruction, finished at
+    # destruction, first callback started, failure announced, owned-byte reads.
+    var counters: MutPointer[Int64, Self.origin]
+    var pixels: List[UInt8]
+
+    def __deinit__(deinit self):
+        self.counters[unsafe_offset=3] = Atomic[Int64].fetch_add(
+            self.counters, 0
+        )
+        self.counters[unsafe_offset=4] = Atomic[Int64].fetch_add(
+            self.counters.unsafe_offset(1), 0
+        )
+        _ = Atomic[Int64].fetch_add(self.counters.unsafe_offset(2), 1)
+
+    def decode(self, index: Int) raises -> Texture:
+        _ = Atomic[Int64].fetch_add(self.counters, 1)
+        if index == 0:
+            _ = Atomic[Int64].fetch_add(self.counters.unsafe_offset(5), 1)
+            var until = perf_counter_ns() + 1_000_000_000
+            while (
+                Atomic[Int64].fetch_add(self.counters.unsafe_offset(6), 0) == 0
+                and perf_counter_ns() < until
+            ):
+                pass
+            assert_equal(
+                Atomic[Int64].fetch_add(self.counters.unsafe_offset(6), 0), 1
+            )
+            assert_equal(
+                Atomic[Int64].fetch_add(self.counters.unsafe_offset(2), 0), 0
+            )
+            assert_equal(self.pixels[0], UInt8(71))
+            _ = Atomic[Int64].fetch_add(self.counters.unsafe_offset(7), 1)
+        else:
+            var until = perf_counter_ns() + 1_000_000_000
+            while (
+                Atomic[Int64].fetch_add(self.counters.unsafe_offset(5), 0) == 0
+                and perf_counter_ns() < until
+            ):
+                pass
+            _ = Atomic[Int64].fetch_add(self.counters.unsafe_offset(6), 1)
+        var pixels = self.pixels.copy()
+        _ = Atomic[Int64].fetch_add(self.counters, -1)
+        _ = Atomic[Int64].fetch_add(self.counters.unsafe_offset(1), 1)
+        if index == 1:
+            raise Error("owned source failure")
+        return Texture(1, 1, pixels^)
+
+
+def _decode_with_last_source_use[
+    origin: Origin[mut=True]
+](counters: MutPointer[Int64, origin]) raises:
+    var pixels = List[UInt8](length=4, fill=UInt8(71))
+    var source = _LifetimeSource(counters, pixels^)
+    # Do not retain source after this call. Its destructor must run when the
+    # public failure unwinds this helper, after every claimed callback joins.
+    _ = decode_textures(source, 2, 2)
+
+
+def test_owned_source_is_destroyed_after_failed_workers_join() raises:
+    if parallelism_level() <= 1:
+        return
+    var counters = List[Int64](length=8, fill=0)
+    var failed = False
+    try:
+        _decode_with_last_source_use(counters.unsafe_ptr())
+    except e:
+        failed = True
+        assert_equal(String(e), "owned source failure")
+    assert_true(failed)
+    assert_equal(counters[0], Int64(0))
+    assert_equal(counters[1], Int64(2))
+    assert_equal(counters[2], Int64(1))
+    assert_equal(counters[3], Int64(0))
+    assert_equal(counters[4], Int64(2))
+    assert_equal(counters[5], Int64(1))
+    assert_equal(counters[6], Int64(1))
+    assert_equal(counters[7], Int64(1))
+
+
 def main() raises:
     print("IMAGE_QUEUE_STOP_RUNTIME_THREADS", parallelism_level())
     TestSuite.discover_tests[__functions_in_module()]().run()
