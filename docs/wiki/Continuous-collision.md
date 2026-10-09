@@ -1,6 +1,6 @@
 # Sphere and static-mesh continuous collision
 
-Use `SPHERE_MESH_CCD` to prevent a supported sphere from passing through a static triangle during a step. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior.
+Use `SPHERE_MESH_CCD` to prevent a supported sphere or rotation-locked capsule from passing through a static triangle during a step. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior.
 
 ```mojo
 from extensions.physics.ccd import SPHERE_MESH_CCD
@@ -13,11 +13,15 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be either a dynamic sphere or a motionless static triangle mesh. Each sphere must have zero shape offset and zero mass-center offset. Its inverse inertia must be positive and isotropic. The sphere can spin. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
+An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be positive and isotropic, and the sphere can spin.
 
-A sphere's reachable region must not overlap another sphere's reachable region, including the contact margin. The bound uses the sphere's total translational and rotational energy after the force update. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
+A capsule's inverse inertia must be zero in every element, and its angular velocity and angular push must be zero. A capsule then only translates, as a character or walker body does. Its half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
 
-The mode refuses colliding boxes, convex hulls, capsules, kinematic bodies, static primitives, offset spheres and interacting moving bodies. General convex, capsule, rotating-offset and moving-pair CCD remain unsupported. This feature does not turn a box chassis or a capsule walker into a continuous collider.
+A body's reachable region must not overlap another moving body's reachable region, including the contact margin. A capsule's region uses a bounding sphere around its actual world-space segment. The radius includes an outward-rounded length of the Float32-rotated half axis. The same bound selects swept mesh candidates. This includes stretch from accepted near-unit rotations and rotation roundoff.
+
+The bound uses the sphere's total translational and rotational energy after the force update. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
+
+The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic bodies, static primitives, offset spheres and interacting moving bodies. General convex, rotating-capsule, rotating-offset and moving-pair CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.
 
@@ -35,13 +39,15 @@ Forces, gravity and damping update velocity once per step. The swept path is pie
 
 The sweep tests the triangle face, its three edge cylinders and its three vertex spheres. It uses the earliest approaching front-side contact. After an impact, it applies a normal impulse and a Coulomb-limited tangential impulse. It then sweeps the remaining time with the changed velocity. More than one impact can occur in a step.
 
+A capsule's sweep adds two features to the two cap spheres. The segment can reach a triangle edge, and a triangle vertex can reach the segment's cylinder. The segment's interior reaches the face itself only when the segment is parallel to it. Then the whole segment reaches the plane at once, and a cap over the face or an edge crossing reports that time. Because the capsule cannot rotate, its friction impulse changes only its velocity.
+
 The normal response cannot add kinetic energy for restitution between zero and one. Tangential response dissipates slip energy. These statements apply to the ideal static, isotropic impulse calculation. Stored state still rounds to Float32. External forces and the existing split-overlap correction are separate operations.
 
 The sphere's orientation advances separately over each time segment. It uses the existing normalized-quaternion rule and the angular velocity for that segment. This is an approximate rotation integrator, not an exact angular trajectory.
 
 Initial front-side overlaps keep the existing contact solver and pose-only split correction. Stationary and slow front-side contacts keep the previous speculative-contact path. A negative-depth contact is deferred to the sweep when its closing travel exceeds the existing contact margin. This prevents a fast sphere from bouncing before it reaches the surface. The margin is not enlarged.
 
-CCD rejects initial backface contacts, including a sphere that already overlaps the back of the face. It does not catch a sphere that starts behind a triangle and crosses toward its front during that segment. This one-sided rule also applies to edge and vertex candidates.
+CCD rejects initial backface contacts, including a sphere that already overlaps the back of the face. It does not catch a sphere that starts behind a triangle and crosses toward its front during that segment. This one-sided rule also applies to edge and vertex candidates. A capsule is behind the face only when both segment endpoints start behind it. Reversing the endpoints does not change admission. A segment that starts partly in front keeps the existing overlap and split-correction response.
 
 The opt-in mode corrects the tunneling example in [issue 292](https://github.com/SethKitchen/ThreeMojo/issues/292), recorded against the port at `af6c253`. The test uses radius 0.1 m, initial z 0.15 m, velocity -30 m/s and step 0.01 s. The sphere now stops at z = 0.1 m on a plastic horizontal mesh. Discrete mode still reaches z = -0.15 m. This is a correction to the port's own solver. It does not claim an identical CARLA trajectory.
 
@@ -85,7 +91,13 @@ The algorithm is an analytic piecewise-linear sweep with Float64 intermediates. 
 
 The coordinate-to-radius limit bounds each component's final Float32 rounding by approximately radius / 256. The three-component Euclidean rounding bound is less than 0.007 radius. This is a storage bound, not an overall trajectory-accuracy guarantee. Use a local origin and a smaller coordinate range for tighter accuracy. The original Float32 inputs cannot recover geometry that was already rounded away.
 
-The approach test uses a 32-epsilon bound on the sum of absolute dot-product terms. It ignores a normal approach whose sign is unresolved at that arithmetic scale. This avoids repeated zero-time impacts from projection roundoff. The bound is relative to the operands. It is not a fixed skin, a larger collision margin or a fixed minimum collision speed. Exact tangency produces no impulse.
+The approach test uses a 32-epsilon bound on the sum of absolute dot-product terms. It ignores a normal approach whose sign is unresolved at that arithmetic scale.
+
+Before response, the world rebuilds the shape from its retained impact position. It checks for an initial contact on the selected triangle with the incoming direction. If this contact exists, its normal controls the response. This lookup does not move the body, search future times, or add an impact.
+
+After friction, the response reconstructs the velocity component with the largest normal component. This keeps the restitution target within dot-product roundoff when an almost axial impact cancels most of the incoming speed. The remaining dot-product error then scales with the final operands. This avoids repeated zero-time impacts from projection roundoff.
+
+The bound is relative to the operands. It is not a fixed skin, a larger collision margin or a fixed minimum collision speed. Exact tangency produces no impulse.
 
 Very thin triangles, excessive travel, coarse world coordinates and unsupported shapes raise errors. The mode does not promise collision detection outside these limits. Select application-specific tolerances and validate the intended geometry and motion before engineering use.
 
@@ -93,7 +105,7 @@ Very thin triangles, excessive travel, coarse world coordinates and unsupported 
 
 Triangle ties retain triangle insertion order. Equal feature times retain face order, then edge and vertex order. Spheres are processed in body insertion order. Their independent swept events are stably sorted by time, with body order breaking equal times. Initial discrete-solver reports precede swept reports. Each report still supplies equal and opposite normal-impulse events.
 
-`contact_count` includes initial contact points and each swept impact. `events` is replaced after a successful step. The mode does not promise bitwise equality across compiler versions or architectures.
+`contact_count` includes initial contact points and each swept impact. `events` is replaced after a successful step. The mode does not promise bitwise equality across compiler versions, architectures or floating-point contraction modes. A rounded edge-to-cap tangency can add a small later impulse and change the capsule impact count.
 
 `ccd_max_impacts` defaults to 16 per sphere per step. Valid limits are 1 through 1024. The loop does not discard remaining time, freeze a body or continue through a surface after exhaustion. It raises an error.
 
