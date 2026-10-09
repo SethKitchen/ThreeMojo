@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import re
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -292,6 +293,21 @@ class CoverageStagingTests(unittest.TestCase):
 
 
 class CoverageIoTests(unittest.TestCase):
+    def test_kill_accepts_unreaped_group_only_where_macos_reports_eperm(self):
+        import errno
+        import coverage_io
+        process = coverage_io._CaptureProcess(['true'], None, None, None)
+        process.child, process.active = SimpleNamespace(pid=12345), True
+        denied = PermissionError(errno.EPERM, 'Operation not permitted')
+        with patch('coverage_io.os.killpg', side_effect=denied) as killpg:
+            with patch('coverage_io.sys.platform', 'darwin'):
+                process._kill()
+            with patch('coverage_io.sys.platform', 'linux'), \
+                    self.assertRaises(PermissionError) as raised:
+                process._kill()
+        self.assertIs(raised.exception, denied)
+        self.assertEqual(killpg.call_count, 2)
+
     def test_capture_keeps_each_record_once_and_replay_keeps_order(self):
         self.check_capture_and_replay()
 

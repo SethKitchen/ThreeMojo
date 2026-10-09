@@ -71,6 +71,11 @@ def read_command(command, timeout=TIMEOUT, limit=MAX_OUTPUT):
                     os.killpg(child.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
+                except PermissionError:
+                    # macOS reports EPERM, not ESRCH, when every process in
+                    # the owned group has exited but the leader is not reaped.
+                    if sys.platform != 'darwin':
+                        raise
                 try:
                     child.wait(timeout=1.0)
                 except subprocess.TimeoutExpired:

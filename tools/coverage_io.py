@@ -90,6 +90,11 @@ class _CaptureProcess:
                 os.killpg(self.child.pid, signal.SIGKILL)
             except ProcessLookupError:
                 pass
+            except PermissionError:
+                # macOS reports EPERM, not ESRCH, when every process left in
+                # the owned group has exited but the leader is not reaped.
+                if sys.platform != 'darwin':
+                    raise
 
     def cancel(self, status):
         with self.lock:
