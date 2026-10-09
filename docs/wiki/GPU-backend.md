@@ -217,4 +217,4 @@ The coverage tool excludes this module. A kernel has no `stderr` for the probes 
 
 ## Performance
 
-`make bench` compares the two backends on one triangle. The numbers include allocation and the copy back. On an Apple M4 Max, the CPU wins at every size, from 56 times at 320 by 240 to 2 times at 3840 by 2160. A one-shot `render_triangles` allocates and copies every buffer the kernel binds, which costs about 17 ms before a pixel is drawn. See [Benchmarks](Benchmarks#other-benches).
+`make bench` compares the two backends on one triangle. The numbers include allocation and the copy back. On an Apple M4 Max, the CPU wins at every size, from 56 times at 320 by 240 to 2 times at 3840 by 2160. A one-shot `render_triangles` allocates and copies every buffer the kernel binds, which costs about 17 ms before a pixel is drawn. See [Benchmarks](Benchmarks#other-cpu-benches).

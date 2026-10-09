@@ -3,8 +3,10 @@
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 """Generate binary-Float64 point controls with independent Fraction arithmetic.
 
-Run from any directory. Run `mojo format` on the generated Mojo test afterward.
+Run from any directory. Output needs no compiler or formatter.
+Use --check for an exact, read-only replay of the saved fixture.
 The optional --json path retains labels and exact input bits for review.
+Do not combine --check and --json.
 """
 import argparse
 from fractions import Fraction
@@ -41,9 +43,12 @@ def upper_radius_bits(square):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument('--json', type=Path)
+    parser.add_argument('--check', action='store_true', help='verify without writing')
     args = parser.parse_args()
+    if args.check and args.json is not None:
+        parser.error('--check is read-only; do not combine it with --json')
     root = Path(__file__).resolve().parents[1]
     random_source = random.Random(594302)
     rows = []
@@ -79,10 +84,19 @@ def main():
         add([x] * 3, [x ^ (1 << 63)] * 3, [1 << 63, 0, 0], x, f'carry_tie_{index}')
     if args.json:
         args.json.write_text(json.dumps(rows, indent=2) + '\n')
-    header = (root / 'tests/test_carla_curve_distance.mojo').read_text().split('from extensions')[0]
-    output = header + '''from extensions.carla.curve_distance import (
-    _wide_point_order, _exact_point_order, _wide_plan_contains,
-    _exact_plan_width, _wide_distance_upper,
+    output = '''# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+from extensions.carla.curve_distance import (
+    _wide_point_order,
+    _exact_point_order,
+)
+from extensions.carla.lane_distance import (
+    _wide_plan_contains,
+    _exact_plan_width,
+    _wide_distance_upper,
 )
 from std.memory import bitcast
 from std.testing import TestSuite, assert_equal, assert_true
@@ -92,9 +106,12 @@ def test_fraction_bit_corpus() raises:
     var cases: List[Tuple[Array[UInt64, 10], Int, Int, UInt64]] = [
 '''
     for row in rows:
-        literals = ', '.join(f'UInt64(0x{raw:016X})' for raw in row['bits'])
-        output += (f'        ([{literals}], {row["order"]}, {row["width_sign"]}, '
-                   f'UInt64(0x{row["upper_radius_bits"]:016X})),\n')
+        output += '        (\n            [\n'
+        output += ''.join(f'                UInt64(0x{raw:016X}),\n' for raw in row['bits'])
+        output += (f'            ],\n            {row["order"]},\n'
+                   f'            {row["width_sign"]},\n'
+                   f'            UInt64(0x{row["upper_radius_bits"]:016X}),\n'
+                   '        ),\n')
     output += '''    ]
     for i in range(len(cases)):
         ref row = cases[i]
@@ -110,14 +127,26 @@ def test_fraction_bit_corpus() raises:
         assert_equal(_exact_point_order(a, b, q), row[1])
         assert_equal(_wide_plan_contains(a, q, width), row[2] < 0)
         assert_equal(_exact_plan_width(a, q, width), row[2])
-        assert_true(_wide_distance_upper(a, q) >= bitcast[DType.float64](row[3]))
+        assert_true(
+            _wide_distance_upper(a, q) >= bitcast[DType.float64](row[3])
+        )
 
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 '''
-    (root / 'tests/test_carla_lane_distance_fraction.mojo').write_text(output)
-    print(f'Generated {len(rows)} independent Fraction cases')
+    target = root / 'tests/test_carla_lane_distance_fraction.mojo'
+    expected = output.encode('utf-8')
+    if args.check:
+        try:
+            matches = target.read_bytes() == expected
+        except OSError as error:
+            raise SystemExit(f'Cannot check {target}: {error}')
+        if not matches:
+            raise SystemExit(f'{target} is stale; regenerate without --check')
+    else:
+        target.write_bytes(expected)
+    print('Verified' if args.check else 'Generated', len(rows), 'independent Fraction cases')
 
 
 if __name__ == '__main__':

@@ -116,9 +116,14 @@ and all six tensor entries in kilogram-meter-squared units.
 A missing
 property remains `null`. It is not replaced by a guessed density.
 
-The snapshot retains the complete schema-version-1 anatomy validity report
-from #289. It does not consume raw probe rows or recompute anatomy. Keep
-that report's accounting proxy names, scope and unsupported uses. The reader
+The snapshot retains the complete schema-version-1 or schema-version-2 anatomy
+validity report. Both versions use the same sampled-property contract.
+Version 2 also retains its diagnostic frames and versioned pair inventory.
+The snapshot's own schema version remains 1.
+
+It does not consume raw probe
+rows or recompute anatomy. Keep the report's accounting proxy names, scope
+and unsupported uses. The reader
 checks its typed envelope, axis directions and exact tensor convention. A
 supplied part mesh is not automatically a mesh of a report's sampled region.
 The caller must establish that correspondence separately.
