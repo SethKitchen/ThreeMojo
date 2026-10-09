@@ -663,6 +663,86 @@ def repaired_density_loops(root, *, include_roots=()):
     } for line, kind, minimum, maximum, expression, proof_id in DENSITY_REPAIRED_RULES}
 
 
+# Separate producer theorem: every Float32 radius passes through the pinned
+# min/max graph in cap_steps, yielding Int 2..64 under the bound Mojo SDK.
+# The consumer adds one without overflow and never changes steps. Thus its
+# range(1, steps + 1) is nonempty for every possible private caller input.
+# Unlike an input-guard theorem, this needs no restricted caller census.
+# Bind the complete producer/consumer and maintained exceptional-value control;
+# fail closed on source changes or local/staged stdlib shadows. The receipt
+# separately binds the exact compiler/SDK and still requires a runtime True hit.
+STRAND_CAP_SOURCES = {
+    'objects/__init__.mojo':
+        '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+    'renderers/__init__.mojo':
+        '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+    'renderers/renderer.mojo':
+        '920a1f2583e41c460646f1f2f257bdeee709094d6140ac94e59195fc17310a12',
+    'objects/line_segments2.mojo':
+        '5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79',
+    'tests/test_small_loop_witnesses.mojo':
+        '8f768e04ecaebdb132cf359819be03cb039d5a546b823674c22ac06a1b790362',
+}
+
+
+def _strand_cap_resolver_unshadowed(root):
+    """Refuse alternate packages/modules at the producer's resolver surfaces."""
+    root = Path(root)
+    allowed = {'objects', 'renderers', 'objects/line_segments2.mojo',
+               'objects/line_segments2.mojo.cov-origin'}
+
+    def unreadable(error):
+        raise error
+
+    try:
+        for directory, folders, files in os.walk(root, onerror=unreadable):
+            base = Path(directory)
+            folders[:] = [name for name in folders
+                          if name not in cache_key.SKIP
+                          and (base / name).relative_to(root) != Path('coverage/build')]
+            for name in (*folders, *files):
+                path = base / name
+                relative = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    return False
+                folded = name.casefold()
+                if (base.relative_to(root).as_posix() in {'objects', 'renderers'}
+                        and folded.startswith('__init__.')
+                        and name not in {'__init__.mojo', '__init__.mojo.cov-origin'}):
+                    return False
+                if any(folded == stem or folded.startswith(stem + '.')
+                       for stem in ('objects', 'renderers', 'line_segments2')):
+                    if relative not in allowed:
+                        return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def strand_cap_loops(root, *, include_roots=()):
+    """Bind the nonempty strand-cap loop without suppressing its True edge."""
+    try:
+        actual = {name: file_sha256(relative_source(root, name))
+                  for name in STRAND_CAP_SOURCES}
+        if actual != STRAND_CAP_SOURCES:
+            return {}
+        if not all(
+                _density_stdlib_unshadowed(path)
+                and _strand_cap_resolver_unshadowed(path)
+                for path in (root, *include_roots)):
+            return {}
+    except (OSError, ValueError):
+        return {}
+    return {3757: {
+        'line': 3757, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
+        'minimum_cardinality': 2, 'maximum_cardinality': 64,
+        'required': 'T', 'impossible': 'F',
+        'expression': 'range(1, steps + 1)',
+        'proof_id': 'strand-cap-bounded-count-2-to-64',
+        'dependency_sha256': actual,
+    }}
+
+
 def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
     """Verify fixed historical bindings without admitting arbitrary successors."""
     actual = {}
@@ -964,6 +1044,8 @@ def construction_boundary_loops(root, *, include_roots=()):
 def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
     result = _historical_reviewed_nonempty_loops(root, module)
+    if module == 'renderers/renderer':
+        result.update(strand_cap_loops(root, include_roots=include_roots))
     if module == 'extensions/carla/map':
         result.update(construction_boundary_loops(root, include_roots=include_roots))
     if module + '.mojo' == DENSITY_SOURCE:
