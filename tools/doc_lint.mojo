@@ -353,6 +353,7 @@ comptime _SPACE = UInt8(32)
 comptime _NEWLINE = UInt8(10)
 comptime _QUOTE = 1
 comptime _ITEM = 2
+comptime _HTML_RAW = 1
 comptime _HTML_COMMENT = 2
 comptime _HTML_BLOCK = 6
 comptime _HTML_TAG = 7
@@ -618,6 +619,13 @@ def _html_start(bytes: Span[UInt8, _], at: Int) raises -> Int:
         return 0
     if _starts(bytes, start, "<!--"):
         return _HTML_COMMENT
+    var lower = String(_text_of(bytes, start, len(bytes)).lower())
+    var low = lower.as_bytes()
+    for raw in ["<pre", "<script", "<style", "<textarea"]:
+        if _starts(low, 0, raw):
+            var after = len(raw.as_bytes())
+            if after >= len(low) or low[after] == _SPACE or low[after] == 62:
+                return _HTML_RAW
     var name = start + 1
     if name < len(bytes) and bytes[name] == 47:
         name += 1
@@ -687,6 +695,245 @@ def _html_start(bytes: Span[UInt8, _], at: Int) raises -> Int:
         if bytes[i] == 60 or bytes[i] == 62:
             return 0
     return _HTML_TAG
+
+
+def _raw_closes(bytes: Span[UInt8, _], at: Int) raises -> Bool:
+    """Return True if the line holds a raw-text block's closing tag."""
+    var lower = String(_text_of(bytes, at, len(bytes)).lower())
+    var low = lower.as_bytes()
+    for close in ["</pre>", "</script>", "</style>", "</textarea>"]:
+        if _has(low, 0, close):
+            return True
+    return False
+
+
+def _utf8(code: Int, mut out: List[UInt8]):
+    """Append a code point as UTF-8; an invalid one becomes U+FFFD."""
+    var c = code
+    if c <= 0 or c > 0x10FFFF or (c >= 0xD800 and c <= 0xDFFF):
+        c = 0xFFFD
+    if c < 0x80:
+        out.append(UInt8(c))
+    elif c < 0x800:
+        out.append(UInt8(0xC0 | (c >> 6)))
+        out.append(UInt8(0x80 | (c & 0x3F)))
+    elif c < 0x10000:
+        out.append(UInt8(0xE0 | (c >> 12)))
+        out.append(UInt8(0x80 | ((c >> 6) & 0x3F)))
+        out.append(UInt8(0x80 | (c & 0x3F)))
+    else:
+        out.append(UInt8(0xF0 | (c >> 18)))
+        out.append(UInt8(0x80 | ((c >> 12) & 0x3F)))
+        out.append(UInt8(0x80 | ((c >> 6) & 0x3F)))
+        out.append(UInt8(0x80 | (c & 0x3F)))
+
+
+def _named_entity(name: String) -> Int:
+    """Return the code point of a named character reference, or -1.
+
+    This is the common subset of HTML's table. An unknown name stays
+    literal text, as CommonMark leaves it.
+    """
+    var names: List[String] = [
+        "amp",
+        "lt",
+        "gt",
+        "quot",
+        "apos",
+        "nbsp",
+        "copy",
+        "reg",
+        "trade",
+        "mdash",
+        "ndash",
+        "hellip",
+        "lsquo",
+        "rsquo",
+        "ldquo",
+        "rdquo",
+        "times",
+        "divide",
+        "middot",
+        "deg",
+        "plusmn",
+        "micro",
+        "larr",
+        "rarr",
+        "uarr",
+        "darr",
+        "harr",
+        "le",
+        "ge",
+        "ne",
+        "asymp",
+        "minus",
+        "laquo",
+        "raquo",
+        "sect",
+        "para",
+        "bull",
+        "euro",
+        "pound",
+        "yen",
+        "cent",
+        "frac12",
+        "frac14",
+        "frac34",
+        "sup2",
+        "sup3",
+        "alpha",
+        "beta",
+        "gamma",
+        "delta",
+        "pi",
+        "sigma",
+        "theta",
+        "lambda",
+        "mu",
+        "omega",
+        "infin",
+        "radic",
+        "sum",
+        "prod",
+        "check",
+        "cross",
+    ]
+    var codes: List[Int] = [
+        38,
+        60,
+        62,
+        34,
+        39,
+        160,
+        169,
+        174,
+        8482,
+        8212,
+        8211,
+        8230,
+        8216,
+        8217,
+        8220,
+        8221,
+        215,
+        247,
+        183,
+        176,
+        177,
+        181,
+        8592,
+        8594,
+        8593,
+        8595,
+        8596,
+        8804,
+        8805,
+        8800,
+        8776,
+        8722,
+        171,
+        187,
+        167,
+        182,
+        8226,
+        8364,
+        163,
+        165,
+        162,
+        189,
+        188,
+        190,
+        178,
+        179,
+        945,
+        946,
+        947,
+        948,
+        960,
+        963,
+        952,
+        955,
+        956,
+        969,
+        8734,
+        8730,
+        8721,
+        8719,
+        10003,
+        10007,
+    ]
+    for k in range(len(names)):
+        if names[k] == name:
+            return codes[k]
+    return -1
+
+
+def _entity(
+    bytes: Span[UInt8, _], at: Int, end: Int, mut out: List[UInt8]
+) raises -> Int:
+    """Decode a character reference at `at` into `out`.
+
+    Returns how many bytes it used, or 0 if there is no valid reference.
+    """
+    if at + 2 >= end or bytes[at] != 38:
+        return 0
+    var i = at + 1
+    if bytes[i] == 35:
+        i += 1
+        var hex = i < end and (bytes[i] == 120 or bytes[i] == 88)
+        if hex:
+            i += 1
+        var start = i
+        var code = 0
+        while i < end and i - start < (6 if hex else 7):
+            var digit = _hex(bytes[i])
+            if not hex and (bytes[i] < 48 or bytes[i] > 57):
+                digit = -1
+            if digit < 0:
+                break
+            code = code * (16 if hex else 10) + digit
+            i += 1
+        if i == start or i >= end or bytes[i] != 59:
+            return 0
+        _utf8(code, out)
+        return i + 1 - at
+    var start = i
+    while (
+        i < end
+        and i - start < 32
+        and (_is_alpha(bytes[i]) or (bytes[i] >= 48 and bytes[i] <= 57))
+    ):
+        i += 1
+    if i == start or i >= end or bytes[i] != 59:
+        return 0
+    var code = _named_entity(_text_of(bytes, start, i))
+    if code < 0:
+        return 0
+    _utf8(code, out)
+    return i + 1 - at
+
+
+def _unescape(text: String) raises -> String:
+    """Return a link destination with its escapes and references decoded."""
+    var bytes = text.as_bytes()
+    var out = List[UInt8]()
+    var i = 0
+    while i < len(bytes):
+        if (
+            bytes[i] == 92
+            and i + 1 < len(bytes)
+            and _is_punctuation(bytes[i + 1])
+        ):
+            out.append(bytes[i + 1])
+            i += 2
+            continue
+        var used = _entity(bytes, i, len(bytes), out)
+        if used > 0:
+            i += used
+            continue
+        out.append(bytes[i])
+        i += 1
+    return String(from_utf8=Span(out))
 
 
 def _cells(bytes: Span[UInt8, _], at: Int) -> List[Tuple[Int, Int]]:
@@ -895,7 +1142,8 @@ def _links(
             var line = 0
             while line + 1 < len(offsets) and offsets[line + 1] <= i:
                 line += 1
-            out.append(Link(_text_of(bytes, found[0], found[1]), lines[line]))
+            var target = _unescape(_text_of(bytes, found[0], found[1]))
+            out.append(Link(target^, lines[line]))
             # A link cannot contain another link.
             for k in range(len(openers)):
                 if not openers[k][1]:
@@ -921,6 +1169,18 @@ def _rendered(heading: String) raises -> String:
             literal.append(True)
             i += 2
             continue
+        if byte == 38:
+            var used = _entity(bytes, i, len(bytes), chars)
+            if used > 0:
+                while len(literal) < len(chars):
+                    literal.append(True)
+                i += used
+                continue
+        if byte == 60:
+            var after = _html_end(bytes, i, len(bytes))
+            if after >= 0:
+                i = after
+                continue
         if byte == _TICK:
             var after = _code_end(bytes, i, len(bytes))
             if after >= 0:
@@ -1167,7 +1427,10 @@ struct Document(Movable):
             self._fence = (UInt8(0), 0, 0)
         if self._html[0] != 0:
             if matched >= self._html[1]:
-                if self._html[0] == _HTML_COMMENT:
+                if self._html[0] == _HTML_RAW:
+                    if _raw_closes(bytes, at):
+                        self._html = (0, 0)
+                elif self._html[0] == _HTML_COMMENT:
                     if _has(bytes, at, "-->"):
                         self._html = (0, 0)
                 elif _blank(bytes, at):
@@ -1247,7 +1510,10 @@ struct Document(Movable):
         var html = _html_start(bytes, at)
         if html != 0 and (html != _HTML_TAG or len(self._paragraph) == 0):
             self._flush()
-            if html != _HTML_COMMENT or not _has(bytes, at + 4, "-->"):
+            var closed = (
+                html == _HTML_COMMENT and _has(bytes, at + 4, "-->")
+            ) or (html == _HTML_RAW and _raw_closes(bytes, at))
+            if not closed:
                 self._html = (html, len(self._kinds))
             return
         if len(self._paragraph) == 0 and _spaces(bytes, at) >= 4:

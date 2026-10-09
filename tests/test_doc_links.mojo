@@ -219,6 +219,34 @@ def test_review_container_cases_28_to_33() raises:
     )
 
 
+def test_review_cases_34_to_40() raises:
+    # The second packet: references, inline HTML, escapes, raw HTML.
+    _case("34", "# A &amp; B\n[valid](#a--b)\n", [])
+    _case("35", "# <em>Title</em>\n[valid](#title)\n", [])
+    _case("36", "[bad](M&#105;ssing)\n", [_missing(1, "Missing")])
+    _case("37", "[bad](Missing\\_Page)\n", [_missing(1, "Missing_Page")])
+    _case(
+        "38",
+        "<pre>\n[hidden](CodeOnlyMissing)\n</pre>\n[real](RealMissing)\n",
+        [_missing(4, "RealMissing")],
+    )
+    _case(
+        "39",
+        "<pre>\n\n[hidden](CodeOnlyMissing)\n</pre>\n[real](RealMissing)\n",
+        [_missing(5, "RealMissing")],
+    )
+    _case("40", "[valid](Target#se&#99;tion)\n", [], ["Target", "# Section\n"])
+    # A hexadecimal reference, an unknown name and a one-line raw block.
+    _case(
+        "41",
+        (
+            "# X &#x41; &bogus; Y\n[ok](#x-a-bogus-y)\n\n"
+            "<script>[a](Nope)</script>\n[real](RealMissing)\n"
+        ),
+        [_missing(5, "RealMissing")],
+    )
+
+
 def test_wiki_pages_readme_and_html_blocks() raises:
     var pages: List[String] = [
         "Model-files",
