@@ -26,6 +26,10 @@ from extensions.water.filter import anisotropic_step
 from extensions.water.frame import (
     CameraLook,
     WaterScene,
+    _grade_rows,
+    _graded_image,
+    _radiance_image,
+    _radiance_rows,
     camera_look,
     floor_f,
     grade_pixel,
@@ -1514,6 +1518,84 @@ def test_composition_refuses_stale_or_missing_attached_camera_atomically() raise
         for i in range(len(depth)):
             assert_equal(image.depth[i], depth[i])
         _assert_same_scene_state(water, control)
+
+
+def test_parallel_water_rows_equal_one_serial_pass() raises:
+    # Disjoint runs of rows shade in parallel with the serial arithmetic.
+    var water = _scene(Duration(5.0, SECOND))
+    water.advance(Duration(1.0 / 60.0, SECOND), True)
+    var bed = _stones()
+    var surface = water._surface()
+    var caustics = water._caustics(surface)
+    var look = camera_look(water.clock, True, Angle(-0.22, RADIAN))
+    var width = 23
+    var height = 37
+    var aspect = Float32(width) / Float32(height)
+    var shown = List[Bool](length=width * height, fill=False)
+    for i in range(0, width * height, 3):
+        shown[i] = True
+    for masked in [False, True]:
+        var mask = shown.copy() if masked else List[Bool]()
+        var parallel = _radiance_image(
+            look,
+            aspect,
+            surface,
+            water._ripples,
+            caustics,
+            bed,
+            water.clock,
+            water.sun,
+            width,
+            height,
+            mask,
+        )
+        var serial = List[Float32](length=width * height * 3, fill=0.0)
+        _radiance_rows(
+            look,
+            aspect,
+            surface,
+            water._ripples,
+            caustics,
+            bed,
+            water.clock,
+            water.sun,
+            width,
+            height,
+            mask,
+            serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            0,
+            height,
+        )
+        for i in range(len(serial)):
+            assert_equal(parallel[i], serial[i])
+        # An unmarked pixel stays zero.
+        if masked:
+            assert_equal(parallel[3], 0.0)
+            assert_true(parallel[0] != 0.0)
+    # Grading runs in parallel too, with the serial arithmetic.
+    var hdr = List[Float32](length=width * height * 3, fill=0.0)
+    var glow = List[Float32](length=width * height * 3, fill=0.0)
+    for i in range(len(hdr)):
+        hdr[i] = Float32(i % 17) * 0.3
+        glow[i] = Float32(i % 5) * 0.01
+    var parallel = _graded_image(
+        hdr, glow, glow, width, height, water.clock, FRAME
+    )
+    var serial = List[Float32](length=width * height * 3, fill=-1.0)
+    _grade_rows(
+        hdr,
+        glow,
+        glow,
+        width,
+        height,
+        water.clock,
+        FRAME,
+        serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        0,
+        height,
+    )
+    for i in range(len(serial)):
+        assert_equal(parallel[i], serial[i])
 
 
 def main() raises:
