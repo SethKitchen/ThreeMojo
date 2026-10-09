@@ -19,6 +19,8 @@ import subprocess
 import sys
 import time
 
+from coverage_process_group import kill_owned_group
+
 MAX_OUTPUT = 8192
 MAX_BINARY = 512 * 1024 * 1024
 TIMEOUT = 10.0
@@ -67,15 +69,7 @@ def read_command(command, timeout=TIMEOUT, limit=MAX_OUTPUT):
             if not reaped:
                 # No poll/wait has reaped this PID on an early return, so its
                 # owned group cannot be confused with a reused PID/group.
-                try:
-                    os.killpg(child.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                except PermissionError:
-                    # macOS reports EPERM, not ESRCH, when every process in
-                    # the owned group has exited but the leader is not reaped.
-                    if sys.platform != 'darwin':
-                        raise
+                kill_owned_group(child)
                 try:
                     child.wait(timeout=1.0)
                 except subprocess.TimeoutExpired:

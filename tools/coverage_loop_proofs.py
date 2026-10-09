@@ -39,7 +39,7 @@ TOOL_INPUTS = (
     'coverage/report.mojo', 'coverage/report_cli.mojo', 'coverage/mcdc.mojo',
     'tools/coverage_loop_proofs.py', 'tools/coverage_io.py',
     'tools/cache_key.py', 'tools/native_test_support.py',
-    'tools/coverage_toolchain_identity.py',
+    'tools/coverage_toolchain_identity.py', 'tools/coverage_process_group.py',
     'tools/coverage_hit_aot.py', 'tools/coverage_hit_cache.c',
     'tools/coverage_write_interposer.c', 'tools/test_environment.py',
     'tools/run_suite.py', 'Makefile',

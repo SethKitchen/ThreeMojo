@@ -17,6 +17,7 @@ import tempfile
 import threading
 import time
 
+from coverage_process_group import kill_owned_group
 from test_environment import isolated_environment
 import coverage_loop_proofs
 
@@ -85,16 +86,9 @@ class _CaptureProcess:
         self.handlers = {}
 
     def _kill(self):
-        if self.active:
-            try:
-                os.killpg(self.child.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            except PermissionError:
-                # macOS reports EPERM, not ESRCH, when every process left in
-                # the owned group has exited but the leader is not reaped.
-                if sys.platform != 'darwin':
-                    raise
+        if self.active and kill_owned_group(self.child):
+            # Reaped: the PID may be reused, so never signal it again.
+            self.active = False
 
     def cancel(self, status):
         with self.lock:
