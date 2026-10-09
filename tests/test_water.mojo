@@ -5,6 +5,15 @@
 
 """Clearwater's spectrum, ripples, caustics, glare and graded frame."""
 
+from cameras.orthographic_camera import OrthographicCamera
+from cameras.perspective_camera import PerspectiveCamera
+from core.assets import Assets
+from core.object3d import Object3D
+from core.scene import Scene
+from geometries.sphere import sphere
+from materials.material import BASIC, Material
+from objects.mesh import Mesh
+from renderers.renderer import Renderer
 from extensions.water.caustics import (
     _splat,
     CausticField,
@@ -89,8 +98,8 @@ from extensions.water.view import (
     require_view,
 )
 from math.vector3 import Vector3
-from std.math import inf, nan, sqrt
-from render.framebuffer import Framebuffer
+from std.math import cos, inf, nan, sin, sqrt
+from render.framebuffer import Color, Framebuffer
 from render.png import SRGB, DecodedImage
 from std.testing import (
     TestSuite,
@@ -100,7 +109,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import RADIAN, SECOND, Angle, Duration, Length
+from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 
 
 def test_resolution_and_view() raises:
@@ -975,6 +984,149 @@ def test_water_scene_refuses_bad_steps_and_pictures() raises:
         _ = scene.draw(2, 0, FRAME, False, stones, pitch)
     with assert_raises():
         _ = scene.draw(2, 2, WaterView(8), False, stones, pitch)
+
+
+def _page_camera(width: Int, height: Int) raises -> PerspectiveCamera:
+    # Clearwater's still camera: 1.55 m up, 64 degrees, pitched down 0.72.
+    var camera = PerspectiveCamera(
+        Angle(64.0, DEGREE),
+        Float32(width) / Float32(height),
+        Length(0.01, METER),
+        Length(1000.0, METER),
+    )
+    var pitch = Float32(-0.72)
+    camera.place(
+        Vector3(0, 1.55, 0), Vector3(0, 1.55 + sin(pitch), -cos(pitch))
+    )
+    return camera^
+
+
+def test_composed_water_matches_the_page_camera() raises:
+    # With Clearwater's own camera and an empty depth buffer, composition
+    # draws the LINEAR picture wherever a ray reaches the water.
+    var stones = _stones()
+    var scene = _scene(Duration(5.0, SECOND))
+    var picture = scene.draw(6, 4, LINEAR, False, stones, Angle(-0.72, RADIAN))
+    var image = Framebuffer(6, 4, Color(0, 0, 0))
+    var drawn = scene.compose(
+        image, _page_camera(6, 4), Length(0.0, METER), stones
+    )
+    assert_equal(drawn, 24)
+    for y in range(4):
+        for x in range(6):
+            var a = image.get_pixel(x, y)
+            var b = picture.get_pixel(x, y)
+            assert_true(abs(Int(a.r) - Int(b.r)) <= 2)
+            assert_true(abs(Int(a.g) - Int(b.g)) <= 2)
+            assert_true(abs(Int(a.b) - Int(b.b)) <= 2)
+            assert_true(image.depth_at(x, y) < 1.0)
+
+
+def test_composed_water_respects_the_scene_depth() raises:
+    # A white ball floats above the water in a rendered scene. Water fills
+    # the rest of the view below the horizon; the ball and the sky stay.
+    var width = 16
+    var height = 12
+    var assets = Assets()
+    var world = Scene()
+    var node = world.add(Object3D())
+    world.node(node).set_position(0, 0.6, -2.5)
+    var paint = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    world.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.35, METER), 12, 8)),
+            paint,
+            node,
+        )
+    )
+    world.update()
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(width) / Float32(height),
+        Length(0.05, METER),
+        Length(200.0, METER),
+    )
+    camera.place(Vector3(0, 1.2, 0), Vector3(0, 0.4, -3))
+    var renderer = Renderer(width, height)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(world, assets, camera)
+    var before = image.depth.copy()
+    var ball = camera.screen_matrix(width, height).transform_point(
+        Vector3(0, 0.6, -2.5)
+    )
+    var bx = Int(ball.x)
+    var by = Int(ball.y)
+    assert_equal(image.get_pixel(bx, by).r, 255)
+    var water = _scene(Duration(5.0, SECOND))
+    var drawn = water.compose(image, camera, Length(0.0, METER), _stones())
+    assert_true(drawn > 0)
+    # The ball is nearer than the water behind it, so it keeps its pixel.
+    var kept = image.get_pixel(bx, by)
+    assert_equal(kept.r, 255)
+    assert_equal(kept.g, 255)
+    assert_equal(image.depth_at(bx, by), before[by * width + bx])
+    # The top row looks above the horizon and stays clear.
+    for x in range(width):
+        assert_equal(image.get_pixel(x, 0).r, 0)
+    # The bottom row looks down at the water, which is drawn with depth.
+    for x in range(width):
+        assert_true(image.depth_at(x, height - 1) < 1.0)
+    # Every water pixel holds a depth no farther than before.
+    for i in range(width * height):
+        assert_true(image.depth[i] <= before[i])
+
+
+def test_composition_refuses_unsupported_cameras() raises:
+    var stones = _stones()
+    var water = _scene(Duration(1.0, SECOND))
+    var image = Framebuffer(4, 4, Color(0, 0, 0))
+    var below = _page_camera(4, 4)
+    below.place(Vector3(0, -0.5, 0), Vector3(0, -1, -1))
+    with assert_raises(contains="above the water"):
+        _ = water.compose(image, below, Length(0.0, METER), stones)
+    var level = _page_camera(4, 4)
+    with assert_raises(contains="above the water"):
+        _ = water.compose(image, level, Length(2.0, METER), stones)
+    var flat = OrthographicCamera(
+        Length(-1.0, METER),
+        Length(1.0, METER),
+        Length(1.0, METER),
+        Length(-1.0, METER),
+        Length(0.1, METER),
+        Length(10.0, METER),
+    )
+    flat.place(Vector3(0, 2, 0), Vector3(0, 0, -1))
+    with assert_raises(contains="centered perspective"):
+        _ = water.compose(image, flat, Length(0.0, METER), stones)
+    # A shifted projection is refused, horizontally or vertically.
+    for slot in [8, 9]:
+        var shifted = _page_camera(4, 4)
+        var matrix = shifted.projection_matrix()
+        matrix.elements[slot] = 0.1
+        shifted.projection_override = matrix
+        with assert_raises(contains="centered perspective"):
+            _ = water.compose(image, shifted, Length(0.0, METER), stones)
+
+
+def test_composition_skips_water_outside_the_depth_range() raises:
+    # Water nearer than the near plane, or past the far plane, is not drawn.
+    var stones = _stones()
+    var water = _scene(Duration(1.0, SECOND))
+    for near_far in [
+        (Float32(50.0), Float32(100.0)),
+        (Float32(0.01), Float32(0.5)),
+    ]:
+        var camera = PerspectiveCamera(
+            Angle(64.0, DEGREE),
+            1.0,
+            Length(near_far[0], METER),
+            Length(near_far[1], METER),
+        )
+        camera.place(Vector3(0, 1.55, 0), Vector3(0, 0.5, -1))
+        var image = Framebuffer(4, 4, Color(0, 0, 0))
+        assert_equal(
+            water.compose(image, camera, Length(0.0, METER), stones), 0
+        )
 
 
 def main() raises:

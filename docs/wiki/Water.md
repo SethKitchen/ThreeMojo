@@ -61,7 +61,24 @@ for frame in range(60):
 
 `reset` returns the ripples and the clock to the start. It keeps the spectrum and the glare kernels. The buffers keep their sizes for the life of the scene.
 
-`render_water` is one scene step and one draw. A scene is the start of persistent scene water, [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300). It does not compose with a three.js scene yet. It has no GPU path. It does not establish a frame rate.
+`render_water` is one scene step and one draw.
+
+## Compose it with a scene
+
+Use `compose` to put the water into a picture that the renderer made. Pass the rendered framebuffer, the camera that rendered it and the height of the still water.
+
+```mojo
+var image = renderer.render(scene, assets, camera)
+var shown = water.compose(image, camera, Length(0.0, METER), bed)
+```
+
+Each pixel casts the camera's own ray. A ray that reaches the water shades it as the `LINEAR` picture does. Its depth is then tested against the framebuffer.
+
+Geometry nearer than the water keeps its pixel. Water nearer than the geometry replaces the pixel and writes its depth. A ray at or above the horizon leaves the pixel alone. `compose` returns how many pixels show water.
+
+The water is an endless plane at the given height. It repeats the ocean patch. The camera must be a centered perspective camera above the water. Water nearer than the near plane or past the far plane is not drawn. With the page's camera, `compose` gives the `LINEAR` picture below the horizon.
+
+The water keeps Clearwater's sun. It does not take the scene's lights. It shades the pebble bed under the surface, not the scene's geometry under the water. It has no GPU path, and it does not establish a frame rate. See [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300).
 
 ## Pictures
 
