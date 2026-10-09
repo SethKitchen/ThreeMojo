@@ -52,7 +52,9 @@ from materials.material import (
     line_material,
 )
 from math.vector3 import Vector3
-from std.math import isfinite, max
+from render.tasks import TaskGroup
+from std.math import isfinite, max, min
+from std.sys import num_logical_cores
 from objects.line_segments2 import LineSegments2, STRAND_LINE_COVERAGE
 
 
@@ -173,17 +175,45 @@ struct HairStrands(Movable):
                 raise Error("The stored hair geometry belongs to another owner")
 
     def _shadow_depths(mut self, lights: List[HairLight]) raises:
-        """Fill the retained point-major optical-depth workspace."""
-        var depth_count = len(self.groom.points) * len(lights)
+        """Fill the retained point-major optical-depth workspace.
+
+        `shade` rebuilt the density first, which refuses a nonfinite point,
+        and the retained groom is never empty. So the checks that
+        `optical_depth` repeats for each point reduce to each light's
+        direction and one validation, in the serial loop's order. Then
+        disjoint runs of points march in parallel.
+        """
+        var count = len(self.groom.points)
+        var depth_count = count * len(lights)
         if len(self._optical_depths) != depth_count:
             self._optical_depths = List[Float32](length=depth_count, fill=0)
-        for point in range(len(self.groom.points)):
-            for light in range(len(lights)):
-                self._optical_depths[
-                    point * len(lights) + light
-                ] = self.density.optical_depth(
-                    self.groom.points[point], lights[light].direction
+        for light in range(len(lights)):
+            var d = lights[light].direction
+            if not isfinite(d.x) or not isfinite(d.y) or not isfinite(d.z):
+                raise Error("Hair optical depth needs a finite light direction")
+            if light == 0:
+                self.density.validate()
+        if depth_count == 0:
+            return
+        # Each task gets at least one point, because tasks <= count.
+        var tasks = min(num_logical_cores(), count)
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _depth_task(
+                    Pointer(to=self.density).unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=self.groom.points).unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    Pointer(to=lights).unsafe_origin_cast[ImmutAnyOrigin](),
+                    self._optical_depths.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    task * count // tasks,
+                    (task + 1) * count // tasks,
                 )
+            )
+        group.wait()
 
     def _upload(mut self, mut assets: Assets) raises:
         """Write current positions and colors into the retained CPU buffer."""
@@ -214,6 +244,44 @@ struct HairStrands(Movable):
             )
             assets.geometries.replace(self.geometry, geometry^)
             self._installed = True
+
+
+async def _depth_task(
+    density: Pointer[HairDensity, MutAnyOrigin],
+    points: Pointer[List[Vector3], MutAnyOrigin],
+    lights: Pointer[List[HairLight], ImmutAnyOrigin],
+    depths: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    # One writer per point: each task owns a disjoint run of points.
+    var count = len(lights[])
+    for point in range(first, past):  # pragma: no branch
+        for light in range(count):  # pragma: no branch
+            depths[unsafe_offset=point * count + light] = _march(
+                density[], points[][point], lights[][light].direction
+            )
+
+
+def _march(density: HairDensity, point: Vector3, direction: Vector3) -> Float32:
+    # `HairDensity.optical_depth` after its checks, which `_shadow_depths`
+    # has already run in the same order. A test holds the two equal.
+    if not density.populated or density._slot(point) < 0:
+        return 0
+    var length = direction.length()
+    if not isfinite(length) or length == 0:
+        return 0
+    var step = direction * (density.cell * 0.5 / length)
+    var p = point + step * 2.5
+    var total = Float32(0)
+    # The caller validated the volume, so its resolution is positive.
+    for _ in range(density.resolution * 4):  # pragma: no branch
+        var slot = density._slot(p)
+        if slot < 0:
+            break
+        total += density.coefficients[slot] * density.cell * 0.5
+        p = p + step
+    return total
 
 
 def add_strands(
