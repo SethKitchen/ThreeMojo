@@ -371,7 +371,7 @@ def shade_groom(
     lights: List[HairLight],
     camera: Vector3,
     ambient: Vector3,
-) -> List[Float32]:
+) raises -> List[Float32]:
     """Return every point's color, linear, three floats a point.
 
     Args:
@@ -383,9 +383,13 @@ def shade_groom(
 
     Returns:
         Three floats per point, using the groom's scalp-depth proxy.
+
+    Raises:
+        Error: If the strand starts do not partition the points, or a
+            shading field does not match the groom.
     """
     var colors = List[Float32](length=len(groom.points) * 3, fill=0)
-    _shade_groom_into(
+    shade_groom_into(
         groom, look, lights, camera, ambient, colors, List[Float32]()
     )
     return colors^
@@ -417,10 +421,22 @@ def shade_groom_into(
             per light, or empty to use the scalp-depth proxy.
 
     Raises:
-        Error: If either array has the wrong size, a shading field is
-            missing, or an optical depth is negative or not finite.
+        Error: If the strand starts do not partition the points, either
+            array has the wrong size, a shading field is missing, or an
+            optical depth is negative or not finite.
     """
     var count = len(groom.points)
+    # Parallel tasks write disjoint runs of points only when the starts
+    # begin at zero, never decrease and end at the point count. An empty
+    # strand, with two equal starts, is legitimate.
+    var starts = len(groom.starts)
+    if starts == 0 or groom.starts[0] != 0:
+        raise Error("Hair strand starts must partition the points")
+    if groom.starts[starts - 1] != count:
+        raise Error("Hair strand starts must partition the points")
+    for strand in range(1, starts):
+        if groom.starts[strand] < groom.starts[strand - 1]:
+            raise Error("Hair strand starts must partition the points")
     if len(colors) != count * 3:
         raise Error("Hair color storage needs three floats per point")
     if (

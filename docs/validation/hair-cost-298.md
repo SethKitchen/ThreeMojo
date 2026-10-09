@@ -20,6 +20,10 @@ times five frames of each per-frame stage and reports the median:
 - `guides-only frame`: that step, its write and the shading pass, timed
   together as one frame.
 
+Each of the three simulations starts from the same grown pose. The bench
+restores the points, normals and depths that a write changes before it
+builds the next simulation.
+
 Run it with `mojo run -I . bench/hair_cost_bench.mojo`.
 
 Hardware: AMD Ryzen 9 5900X (12 cores, 24 threads), 62 GiB, WSL 2 on
@@ -31,10 +35,10 @@ thread.
 
 | Guides x followers | Strands | Points | Vertex bytes | Grow and upload | Shade | Step and write | Shade after step | Guides-only step and write | Guides-only frame |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 250 x 2 | 708 | 4,713 | 192,240 | 86 ms | 1.14 ms | 2.66 ms | 1.16 ms | 1.18 ms | 2.45 ms |
-| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 231 ms | 2.76 ms | 18.1 ms | 2.76 ms | 6.69 ms | 10.4 ms |
-| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 319 ms | 5.60 ms | 37.0 ms | 5.08 ms | 13.2 ms | 19.0 ms |
-| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 302 ms | 1.35 ms | 5.35 ms | 1.37 ms | 4.89 ms | 6.67 ms |
+| 250 x 2 | 708 | 4,713 | 192,240 | 86 ms | 1.03 ms | 2.41 ms | 1.08 ms | 1.17 ms | 2.31 ms |
+| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 227 ms | 2.57 ms | 16.9 ms | 2.70 ms | 6.73 ms | 9.96 ms |
+| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 319 ms | 4.98 ms | 34.9 ms | 4.69 ms | 13.3 ms | 19.1 ms |
+| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 299 ms | 1.36 ms | 5.07 ms | 1.42 ms | 4.90 ms | 6.43 ms |
 
 Before shading ran in parallel, one thread shaded the default groom in 20.5
 milliseconds.
@@ -42,13 +46,13 @@ milliseconds.
 Both per-frame stages scale linearly with the point count. The full step
 costs about 0.5 microseconds a point on one thread.
 Shading after a step costs the same as shading a still groom. Growth is a
-one-time cost, and most of it is the guides: the groom without followers takes 302
+one-time cost, and most of it is the guides: the groom without followers takes 299
 of the default groom's 319 milliseconds.
 
-On one thread the default groom's per-frame hair work was about 53
+On one thread the default groom's per-frame hair work was about 55
 milliseconds. A 60 frames-per-second frame has 16.7 milliseconds for
 everything. With guides-only simulation and parallel shading, a measured
-frame of the default groom takes 19.0 milliseconds on this machine. That is
+frame of the default groom takes 19.1 milliseconds on this machine. That is
 still over the budget. The write, which turns every normal and depth, is
 now a large part of the guides-only step.
 
@@ -58,7 +62,7 @@ now a large part of the guides-only step.
   records each follower's guide and its offsets across the hair and up off
   it. The simulation steps the guides and lays each follower at those
   offsets in its moved guide's frame, as TressFX lays follow strands. For the
-  default groom the step and its write fall from 37.0 to 13.2
+  default groom the step and its write fall from 34.9 to 13.3
   milliseconds. The guides move exactly as in the full step.
 - **Shade in parallel.** Shading and its self-shadow depths now run on
   every logical core. Each task owns a disjoint run of strands or points,

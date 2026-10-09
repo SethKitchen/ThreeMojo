@@ -406,7 +406,7 @@ GUARDED_LOOP_SOURCE_SHA256 = {
     'extensions/humanoid/skeleton/head/hair/groom.mojo':
         'f083d89edf192cdc70acc758e5cf7bdd563fe883303eb9543d430348e22a888f',
     'extensions/humanoid/skeleton/head/hair/shading.mojo':
-        'e260deca167471825887f30e23f20b6c30fd9f2679c39d25b605a9c5f989739f',
+        'eba4c66a1203e4dc67845ad874e50fa68653e1adb0c9c973cb2a29205d826ba9',
     'extensions/humanoid/skeleton/head/hair/strands.mojo':
         '42e4799761c82ebc1f51ed87c5e77d67c018bd5d310670cecb74d220c236e880',
     'tests/test_carla_route_search.mojo':

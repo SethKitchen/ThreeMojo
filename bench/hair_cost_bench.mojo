@@ -87,6 +87,11 @@ def _measure(guides: Int, followers: Int) raises:
         low - Vector3(0.1, 0.1, 0.1),
         high + Vector3(0.1, 0.1, 0.1),
     )
+    # Each simulation starts from the same grown pose: a write changes
+    # the points, normals and depths, and the next run restores them.
+    var points_at_rest = hair.groom.points.copy()
+    var normals_at_rest = hair.groom.normals.copy()
+    var depths_at_rest = hair.groom.depths.copy()
     var guided = HairSimulation(hair.groom, guides_only=True)
     var guided_times = List[Int]()
     for _ in range(FRAMES):
@@ -94,13 +99,20 @@ def _measure(guides: Int, followers: Int) raises:
         guided.step(collider, HairWind(Vector3(1, 0, 0), 0.5))
         guided.write(hair.groom)
         guided_times.append(Int(perf_counter_ns() - start))
+    hair.groom.points = points_at_rest.copy()
+    hair.groom.normals = normals_at_rest.copy()
+    hair.groom.depths = depths_at_rest.copy()
+    var framed = HairSimulation(hair.groom, guides_only=True)
     var frame_times = List[Int]()
     for _ in range(FRAMES):
         start = perf_counter_ns()
-        guided.step(collider, HairWind(Vector3(1, 0, 0), 0.5))
-        guided.write(hair.groom)
+        framed.step(collider, HairWind(Vector3(1, 0, 0), 0.5))
+        framed.write(hair.groom)
         hair.shade(assets, lights, eye, ambient)
         frame_times.append(Int(perf_counter_ns() - start))
+    hair.groom.points = points_at_rest.copy()
+    hair.groom.normals = normals_at_rest.copy()
+    hair.groom.depths = depths_at_rest.copy()
     var motion = HairSimulation(hair.groom)
     var step_times = List[Int]()
     var dynamic_shade_times = List[Int]()
