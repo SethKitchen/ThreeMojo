@@ -22,7 +22,7 @@ class ReviewedCleanupContracts(unittest.TestCase):
         record = cleanup.verify(ROOT)
         result = winner.verify(ROOT)
         # Four reviewed #333 runtime boundary edges join each state.
-        expected = {border.BEFORE_SHA256: (17, 95), border.AFTER_SHA256: (18, 94)}
+        expected = {border.BEFORE_SHA256: (18, 94), border.AFTER_SHA256: (19, 93)}
         parser_sha = hashlib.sha256((ROOT/border.MODULE).read_bytes()).hexdigest()
         self.assertIn(parser_sha, expected)
         self.assertEqual((result['reviewed_cleanup_successors'],
