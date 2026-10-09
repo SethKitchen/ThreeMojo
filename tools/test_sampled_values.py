@@ -33,6 +33,7 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         migration = 'tools/carla_lane_oracle/winner-sign-query-migration.json'
         shutil.copyfile(ROOT/migration, self.root/migration)
         from tools.carla_lane_oracle.source_contracts import GROUP_PATHS
+        from tools.carla_lane_oracle import seed_count_contracts as seed_count
         from tools.carla_lane_oracle.reviewed_cleanup_contracts import PROTECTED_INPUTS
         paths = set(GROUP_PATHS['canonical_accumulation']) | set(PROTECTED_INPUTS)
         paths.update(json.loads(guard_pin.read_text())['protected_inventory'])
@@ -42,7 +43,12 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         for name in paths:
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT/name, target)
+            if name == seed_count.MODULE:
+                # Isolated graph mutations use the verified historical fixture;
+                # the live successor binds these dependencies byte-for-byte.
+                target.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
+            else:
+                shutil.copyfile(ROOT/name, target)
 
     def change(self, name, before, after):
         path = self.root/'extensions/carla'/name
@@ -63,6 +69,61 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         result = m.verify(self.root)
         self.assertEqual(result['copied_functions'], 8)
         self.assertEqual(result['dispatch_functions'], 6)
+
+    def live_successor_fixture(self):
+        from tools.carla_lane_oracle import seed_count_contracts as seed_count
+        record = seed_count.read_record(ROOT)
+        paths = {seed_count.MODULE, seed_count.MIGRATION}
+        for group in ('unchanged_inputs', 'historical_records',
+                      'unchanged_correctness_tests', 'after_correctness_tests'):
+            paths.update(record[group])
+        physical = (ROOT/seed_count.MODULE).read_bytes().decode('utf-8')
+        score_tests = ()
+        if seed_count.sha(physical) == seed_count.SCORE_AFTER_SHA256:
+            # Only the fully verified physical score endpoint can add its
+            # separate numerical fixture. Historical mutation setup stays fixed.
+            seed_count.verify_score(ROOT)
+            self.assertEqual((ROOT/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
+            score_tests = tuple(seed_count.SCORE_TESTS)
+            paths.update(score_tests)
+        for name in paths:
+            target = self.root/name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT/name, target)
+        return score_tests
+
+    def test_live_source_correspondence_and_missing_successor_dependency(self):
+        score_tests = self.live_successor_fixture()
+        result = m.verify(self.root)
+        self.assertEqual(result['copied_functions'], 8)
+        self.assertEqual(result['dispatch_functions'], 6)
+        self.test_optimized_python_keeps_checks()
+        # This source belongs to the real Map import closure, not to the
+        # partial historical graph fixture. Its absence must revoke admission.
+        for name in ('tools/carla_lane_oracle/seed-count-successor.json',
+                     'extensions/carla/map_search.mojo', *score_tests):
+            with self.subTest(missing=name):
+                path = self.root/name
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaisesRegex(m.CheckError, 'canonical_accumulation'):
+                        m.verify(self.root)
+                    self.rejected()
+                finally:
+                    path.write_bytes(original)
+
+        for name in score_tests:
+            with self.subTest(changed=name):
+                path = self.root/name
+                original = path.read_bytes()
+                path.write_bytes(original + b'\n# Changed numerical fixture.\n')
+                try:
+                    with self.assertRaisesRegex(m.CheckError, 'canonical_accumulation'):
+                        m.verify(self.root)
+                    self.rejected()
+                finally:
+                    path.write_bytes(original)
 
     def test_optimized_python_keeps_checks(self):
         result = subprocess.run([sys.executable, '-O', '-B', str(SCRIPT),

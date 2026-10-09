@@ -474,6 +474,31 @@ _MAP_SUCCESSOR_LINES = {
 }
 
 
+# The optional-guard edge deletes exactly nine more physical lines. These
+# independently retained nonempty loops keep their original proof IDs and T.
+_MAP_OPTIONAL_SUCCESSOR_LINES = {1491: 1476, 2272: 2255, 2279: 2262, 2301: 2284, 2373: 2356, 2378: 2361, 2387: 2370, 2396: 2379}
+
+
+# The separate support and frontier edges retain these same eight theorems.
+# Only exact reviewed endpoints activate their physical-line correspondence.
+_MAP_SUPPORT_SUCCESSOR_LINES = {
+    1491: 1464, 2272: 2243, 2279: 2250, 2301: 2272,
+    2373: 2344, 2378: 2349, 2387: 2358, 2396: 2367,
+}
+_MAP_FRONTIER_SUCCESSOR_LINES = {
+    1491: 1463, 2272: 2242, 2279: 2249, 2301: 2271,
+    2373: 2343, 2378: 2348, 2387: 2357, 2396: 2366,
+}
+
+
+# The finite-score extraction adds 16 lines before the dyadic loop and a net
+# 14 before all later rows. Refusal remains an ordinary measured branch.
+_MAP_SCORE_SUCCESSOR_LINES = {
+    1491: 1479, 2272: 2256, 2279: 2263, 2301: 2285,
+    2373: 2357, 2378: 2362, 2387: 2371, 2396: 2380,
+}
+
+
 # A separate exact source pair for the HairDensity boundary correction.
 # Historical hashes/rules stay unchanged. The four retained hair theorems were
 # reviewed again: rebuild still validates its positive cube and owned partition;
@@ -658,7 +683,10 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
                     or expected != GUARDED_LOOP_SOURCE_SHA256[name]):
                 return None
             from carla_lane_oracle import seed_count_contracts as seed_count
-            if digest != seed_count.AFTER_SHA256:
+            if digest not in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
+                                      seed_count.SUPPORT_AFTER_SHA256,
+                                      seed_count.FRONTIER_AFTER_SHA256,
+                                      seed_count.SCORE_AFTER_SHA256}:
                 return None
             predecessor = seed_count.historical_source(root).encode('utf-8')
             if sha256(predecessor) != expected or path.read_bytes() != raw:
@@ -715,7 +743,15 @@ def guarded_loop_proof(root, rule, *, include_roots=()):
             return None
         if (module == 'extensions/carla/map'
                 and actual_bindings[module + '.mojo'] != bindings[module + '.mojo']):
-            line = _MAP_SUCCESSOR_LINES.get(line)
+            from carla_lane_oracle import seed_count_contracts as seed_count
+            mapping = {
+                seed_count.AFTER_SHA256: _MAP_SUCCESSOR_LINES,
+                seed_count.OPTIONAL_AFTER_SHA256: _MAP_OPTIONAL_SUCCESSOR_LINES,
+                seed_count.SUPPORT_AFTER_SHA256: _MAP_SUPPORT_SUCCESSOR_LINES,
+                seed_count.FRONTIER_AFTER_SHA256: _MAP_FRONTIER_SUCCESSOR_LINES,
+                seed_count.SCORE_AFTER_SHA256: _MAP_SCORE_SUCCESSOR_LINES,
+            }[actual_bindings[module + '.mojo']]
+            line = mapping.get(line)
             if line is None:
                 return None
         if (module + '.mojo' == DENSITY_SOURCE
@@ -762,9 +798,174 @@ def guarded_loop_proof(root, rule, *, include_roots=()):
     }
 
 
+# Independently reviewed final-only construction theorem. Successful same-owner
+# _build_transform calls dominate all three Map._add_segment calls. Concrete
+# Road.lane_transform rejects geometry_at < 0; info_index(empty) returns -1.
+# Road._lane_record_boundaries appends each geometry to a fresh owned List
+# unconditionally, and the consumer never mutates it. Thus 4055 retains T and
+# cannot take the zero-iteration F edge. No numeric/ordering premise is used.
+# Complete reviewed imports/types, guards, callers and list lifetime are pinned;
+# this does not change or project any earlier proof envelope.
+CONSTRUCTION_BOUNDARY_SOURCE_SHA256 = {'extensions/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'extensions/carla/__init__.mojo': '13bda95e7b80d111a65052af5508e95af88c7a17871fcf33f3eaf5dc75fd1a2d',
+ 'extensions/carla/curve_bounds.mojo': 'a57a5fa078fc6f36389a0abdce1eaa483a1cb7b7325688689a5602e8680ca3fb',
+ 'extensions/carla/curve_distance.mojo': '46176387129dd37a5887f3aeec7c96bbb386e4980063cb96f09619832cb09a79',
+ 'extensions/carla/curve_frozen_arc.mojo': 'fe4a9b4bca0cd23dc2a128fbcb9ff3b4604a870dc0b2b4ff4f8deeb766d2db50',
+ 'extensions/carla/curve_interval.mojo': 'ff6bf0d35b357047c609ea7cb6dbcbe535446cf4e315d9eac5f6c341ddbf1040',
+ 'extensions/carla/curve_minimizer_support.mojo': 'bdf79d12f2b3b784574fbd95e2e773ddeb29eb9586cf826c2b6142646341292e',
+ 'extensions/carla/curve_rounded_arc.mojo': '7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745',
+ 'extensions/carla/curve_rounded_line.mojo': '6741ad9d7434c08070de3c959cb49ac42939ac633d1dcd48c9f5cdfdaa719aed',
+ 'extensions/carla/curve_sample_dispatch.mojo': '91ede65bbc39ac57ca54239513b462d3c71e90cacd085b8bafb2bff514767a86',
+ 'extensions/carla/curve_sum2.mojo': '2f732d49a891c9b603ccf05fb74779ea79422d74b4c33723ffe40f99e6c54a67',
+ 'extensions/carla/curve_trig.mojo': '3715caa64a81433a615f82e1eea4aa50e6e719e7450316fccc9d318f6994c909',
+ 'extensions/carla/geo.mojo': '2b09610f1933d26281a7e018a1474bcb4a59daa63e01ef24528f342cc834a8a5',
+ 'extensions/carla/geometry.mojo': 'eb55cc639bb840e2cef06cdb6ad5b76a5b2af880c74813590585ec180092a45c',
+ 'extensions/carla/lane_box_cover.mojo': '1ed9978fb4ef7eef3a45c7503dbf5cced03ab1917f6fbf721c785e5a63cce251',
+ 'extensions/carla/lane_distance.mojo': '9d0aacab9fccb0a34f8d5c3a5edca1a1fd7ebcded961fc579ec6a44f3880497d',
+ 'extensions/carla/lane_geometry.mojo': '8e0917249d8c41233bcb801fac6455d614ed46a7fd8e7505c14259c2a5c81d91',
+ 'extensions/carla/lane_refinement.mojo': 'd6bb8cb266fa350491f71e92295e70bcbfc2566b34db02400b3a6cb5bb5a93ad',
+ 'extensions/carla/lane_value_bounds.mojo': '08978a7aa665aca4b82d41e1ff8b99451c647c0f8e7d6ee010fc6a6143f7959c',
+ 'extensions/carla/map.mojo': '37dcfb47476001ba8633a2c9dbb78b2d5f83bc069a0c4551d32ca6fdbb4c60bf',
+ 'extensions/carla/map_search.mojo': '53c5a1369203b2f57c915f4cacfe2935360bd6f4a676934f1a5dc67df69956a3',
+ 'extensions/carla/map_validation.mojo': 'c8457abae67e989ae6de1131e3d30c8f101a0ae6fee9ec4f0afabc0f67be7bef',
+ 'extensions/carla/math.mojo': 'e02aa0a1d41c17403120ebe1bd4672c2d5a41bb81aac66f1abb7e9a1cb42d147',
+ 'extensions/carla/polynomial.mojo': 'ccbb296800e9b493b0617506b05e51d7ed6ee8ea594b9460bb6c7ff359a0d354',
+ 'extensions/carla/road.mojo': 'd9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0',
+ 'extensions/carla/road_info.mojo': '60460851e8884dd89271357a07fa8e127979d68a43c7f4e5962907d1634e12cb',
+ 'extensions/carla/rtree.mojo': 'be63ea929c25e0a55600d19568e5f8a117e2f712850ea3da0d977c39b002d460',
+ 'extensions/carla/speed_limits.mojo': '1e95ebc085e03a44e4daaef20a94b724dedc4240a2099227e82be54d32b045f6',
+ 'extensions/carla/spiral_domain_proof.mojo': '89a8760eee14ff17c682ac69657eb62391e5dfd7e6e1e11fa8a931f8595e9252',
+ 'extensions/carla/spiral_grouped_lane.mojo': '5da09d64a7e3c44139ddc59d0a636ff124470a48834fc81bb05c677c7147694b',
+ 'extensions/carla/spiral_grouped_roundoff_proof.mojo': 'ab0016a54e8a0d2d2dc8235e5954c111f1738ce08868d1c6fc30d454811d7a57',
+ 'extensions/carla/spiral_moment_proof.mojo': 'f42f436b6e616e39bc2cda70491abf2e441aa40d5d8d1aa7f7ecffe3d0b0d5ac',
+ 'extensions/carla/spiral_moment_table.mojo': '1c5a3a21216eaecb42b3947ccb5ec0479d8a120c714d79ebe25f11da5f1096c8',
+ 'extensions/carla/spiral_moment_table_data.mojo': '63b07b8aa1567ad3e1c8b09a71e5619073e5255b4dc6f733d4ef6bf6b7088c8c',
+ 'extensions/carla/spiral_roundoff_proof.mojo': '66903c0cfba3315c46e8f48c9af0b3c118db4194236a7e4fe3e893a986c90b0c',
+ 'extensions/carla/transform.mojo': 'c74c11819f95870d45cf37e7aa013fd72bc9673a4088c3e657efaa6b22999e56',
+ 'loaders/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'loaders/js_number.mojo': '286770b03443ffd560185d6b543a50d9938d5cf6d548cf615b6ebe41d1ef5101',
+ 'loaders/xml.mojo': '560daaf80b836fe72069a3100747c38096674219980662d3587e72ed2a480458',
+ 'math/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'math/bounds.mojo': '1078b7303170bc239ea0aed1d844ebe4e386636198e7b993ab554d9653583c1c',
+ 'math/box_extent.mojo': '7ddcdc6d53201a1cbe491cc4a54534231e8ce86ccaf76332bd4f85aee5f8b3f7',
+ 'math/euler.mojo': '8ada9d383b6ca2fa3b8082e40a069e70943bfa78497c6fa9668f050799a424f3',
+ 'math/matrix3.mojo': '39cce8a87f30062b530b3573a669005d17f09fbec2939dba1857bed19c604b19',
+ 'math/matrix4.mojo': '2e1cfe2cbe4394a2242e162bbe4c7ef20ab746386ff6224358a6d3de611ad28e',
+ 'math/matrix_determinant.mojo': 'c5b25179893fd2903dbda5de68914a50e662e3428107ef2c3424ef42cafcde19',
+ 'math/matrix_inverse.mojo': '34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee',
+ 'math/norm.mojo': '5275636f99048885fcc308bfa92fde3d52c5a8eefb48f616f59f8f31a0b5cbb1',
+ 'math/quaternion.mojo': '328aac299f3591af2fec898b924d64190a53d8558a118289c5633f56f9a13d26',
+ 'math/random.mojo': 'f8a00ee7d03897a7c35f2f23d157fb65ce2c2b3fde5e4c91f21e7a764fab1655',
+ 'math/remainder.mojo': 'b7575b2fde7a212433498422a121c66b12a85e7109614093bb783ad1cc043e58',
+ 'math/scaled_products.mojo': 'b504f18cff7df27bff4fbf92fbed7aa4868518f1b1507ea1331540d7e6f0afbb',
+ 'math/segment.mojo': 'f8f42b8b4a0be8ac7aca2e9070b114d7f207ece2ea228ace1e5bef101b6bc1db',
+ 'math/smoothstep.mojo': '816816e8897adc10c742ea22e2193b9273635040bc0c6ffbc7c1c9d8594be20b',
+ 'math/triangle.mojo': '365317ef7f1a1bd04adc3442430cc874f26691ea0f9c51243578de304e3f3ee3',
+ 'math/triangle_normal.mojo': '8e2d7c30411e44b3eb3fd8151b86a2da5f1a285d2a6e169a3b54b786284b3caa',
+ 'math/utils.mojo': '8e2279cec8879b18969fc9c02ac9cc22fe20e14fdd57360e2a6805822ed80947',
+ 'math/vector2.mojo': '6bc3b252c04e5fe6a562a09e85e69d49bff738aa354cf5856a5613fb89af36e5',
+ 'math/vector3.mojo': '4ce87f711940cd7920bd7ffb76d8e34f8a9fe6bf4dff1562b12d9cea3cb735bf',
+ 'units/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+ 'units/quantity.mojo': 'bb77541cdb757cd63b59ac01134c6a6ebce88863bee69c84ff77b8c03aff6223',
+ 'units/si.mojo': '4225e1be95a48a234e38169cef21289e3f9e6f00760be01456d8f826b497979e'}
+CONSTRUCTION_BOUNDARY_LINE = 4055
+
+
+def _construction_boundary_callers(root):
+    """Resolve Map references, not a repository-wide same-name count.
+
+    Every member reference outside the pinned Map is unvalidated. Bare calls
+    can instead resolve to a unique module-level function (e.g. humanoid loft's
+    List[_Ellipse]/LoftSample function). Imports, aliases, method declarations,
+    unknown spellings/syntax and unresolved names fail closed. The local
+    declaration cannot replace the concrete Map method or establish its proof.
+    """
+    from carla_lane_oracle import source_contracts, sum2_guard_contracts
+    for path in cache_key.input_paths(Path(root)):
+        if path.suffix != '.mojo' or path.as_posix() == 'extensions/carla/map.mojo':
+            continue
+        text = relative_source(root, path.as_posix()).read_text()
+        if '_add_segment' not in text:
+            continue
+        tokens = [token for token in source_contracts.tokens(text)
+                  if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                        tokenize.ENDMARKER)]
+        # Conservative safety condition, not a reflective-call resolver.
+        # Unresolved string-based spellings cannot establish a static caller.
+        if any(token.type == tokenize.STRING and '_add_segment' in token.string
+               for token in tokens):
+            return False
+        refs = [index for index, token in enumerate(tokens)
+                if token.type == tokenize.NAME and token.string == '_add_segment']
+        if not refs:  # Ordinary comments do not resolve a callable.
+            continue
+        # Exact lexical owner excludes a method or nested/conditional binding.
+        sum2_guard_contracts.declaration(text, '_add_segment', ())
+        declarations = 0
+        for index in refs:
+            previous = tokens[index - 1].string if index else ''
+            following = tokens[index + 1].string if index + 1 < len(tokens) else ''
+            if previous == 'def':
+                declarations += 1
+            elif previous == '.' or following != '(':
+                return False
+        if declarations != 1:
+            return False
+    return True
+
+
+def construction_boundary_loops(root, *, include_roots=()):
+    """Admit only the exact final endpoint and the reviewed typed call graph."""
+    try:
+        actual = {name: file_sha256(relative_source(root, name))
+                  for name in CONSTRUCTION_BOUNDARY_SOURCE_SHA256}
+        from carla_lane_oracle import seed_count_contracts
+        # Preserve the immutable frontier table and verify the complete new
+        # source/data edge before admitting its identical constructor theorem.
+        expected = dict(CONSTRUCTION_BOUNDARY_SOURCE_SHA256)
+        score = actual[seed_count_contracts.MODULE] == seed_count_contracts.SCORE_AFTER_SHA256
+        line = CONSTRUCTION_BOUNDARY_LINE
+        if score:
+            expected[seed_count_contracts.MODULE] = seed_count_contracts.SCORE_AFTER_SHA256
+            line = 4069
+        if actual != expected:
+            return {}
+        if seed_count_contracts.dependency_inventory(root) != set(actual):
+            return {}
+        # Preserve the final endpoint's independently bound source/data edge.
+        if score:
+            seed_count_contracts.verify_score(root)
+            actual.update(seed_count_contracts.SCORE_TESTS)
+        else:
+            seed_count_contracts.verify_frontier(root)
+        record = seed_count_contracts.read_record(root)
+        actual[seed_count_contracts.MIGRATION] = seed_count_contracts.MIGRATION_SHA256
+        for group in ('historical_records', 'unchanged_correctness_tests',
+                      'after_correctness_tests'):
+            actual.update(record[group])
+        # Include generated-source roots when validating a receipt, and forbid
+        # local std shadows changing List/Int semantics at either resolution root.
+        for location in (root, *include_roots):
+            if (not _density_stdlib_unshadowed(location)
+                    or not _construction_boundary_callers(location)):
+                return {}
+    except (OSError, ValueError, ImportError, UnicodeError):
+        return {}
+    return {line: {
+        'line': line,
+        'kind': 'reviewed-nonempty-iterator', 'cardinality': 1,
+        'minimum_cardinality': 1, 'maximum_cardinality': None,
+        'required': 'T', 'impossible': 'F', 'expression': 'boundaries',
+        'proof_id': 'construction-geometry-boundary-list',
+        'dependency_sha256': actual,
+    }}
+
+
 def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
     result = _historical_reviewed_nonempty_loops(root, module)
+    if module == 'extensions/carla/map':
+        result.update(construction_boundary_loops(root, include_roots=include_roots))
     if module + '.mojo' == DENSITY_SOURCE:
         result.update(repaired_density_loops(root, include_roots=include_roots))
     for rule in GUARDED_LOOP_RULES:

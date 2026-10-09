@@ -12,17 +12,17 @@ checker never executes Mojo and cannot qualify native code generation.
 """
 import ast
 import copy
-try:
+if __package__:
+    from . import sum2_guard_contracts as guards
+else:
     import sum2_guard_contracts as guards
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import sum2_guard_contracts as guards
 import json
 from pathlib import Path
 
-try:
+if __package__:
+    from .ideal_projection import verify_projection
+else:
     from ideal_projection import verify_projection
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle.ideal_projection import verify_projection
 
 # Initial accepted arithmetic checkpoint. The guarded and final format/doc
 # source bindings are preserved in sum2-correspondence-migration.json.
@@ -280,20 +280,20 @@ def verify_binding(tree, name, allowed_definition=None, allowed_import=None):
 
 def verify(root):
     # Lazy import avoids a checker-module cycle; no source is executed.
-    try:
+    if __package__:
+        from . import check_sampled_values as c
+    else:
         import check_sampled_values as c
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import check_sampled_values as c
     names = ('curve_sum2', 'lane_geometry', 'curve_bounds', 'spiral_roundoff_proof')
     texts = {name: (root / ('extensions/carla/' + name + '.mojo')).read_text()
              for name in names}
     guard_result = guards.verify(root)
     # Validate actual selector producers before restoring the exact historical
     # eligibility helper for the retained complete-function comparison.
-    try:
+    if __package__:
+        from . import selection_finiteness_contracts as selection
+    else:
         import selection_finiteness_contracts as selection
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import selection_finiteness_contracts as selection
     texts['spiral_roundoff_proof'] = selection.predecessor_text(
         root, 'extensions/carla/spiral_roundoff_proof.mojo')
 

@@ -40,8 +40,12 @@ class SeedCountSuccessorTests(unittest.TestCase):
         self.assertEqual(edge['before_sha256'], seed.BEFORE_SHA256)
         self.assertEqual(edge['after_sha256'], seed.AFTER_SHA256)
         actual = seed.sha((ROOT/MAP).read_bytes().decode())
-        self.assertIn(actual, {seed.BEFORE_SHA256, seed.AFTER_SHA256})
-        self.assertEqual(seed.verify(ROOT), None if actual == seed.BEFORE_SHA256 else edge)
+        self.assertIn(actual, {seed.BEFORE_SHA256, seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256})
+        expected = (seed.verify_score(ROOT) if actual == seed.SCORE_AFTER_SHA256
+                    else seed.verify_frontier(ROOT) if actual == seed.FRONTIER_AFTER_SHA256
+                    else seed.verify_support(ROOT) if actual == seed.SUPPORT_AFTER_SHA256
+                    else seed.verify_optional(ROOT) if actual == seed.OPTIONAL_AFTER_SHA256 else edge)
+        self.assertEqual(seed.verify(ROOT), None if actual == seed.BEFORE_SHA256 else expected)
         self.assertEqual(seed.historical_source(ROOT), self.before)
 
     def test_three_spans_reconstruct_every_historical_byte(self):
@@ -101,7 +105,7 @@ class SeedCountSuccessorTests(unittest.TestCase):
                 if actual_after:
                     self.assertEqual(seed.reviewed_text(ROOT, MAP, text), self.before)
                 else:
-                    with self.assertRaisesRegex(ValueError, 'exact physical after Map'):
+                    with self.assertRaisesRegex(ValueError, 'exact physical after Map|unreviewed supplied Map source'):
                         seed.reviewed_text(ROOT, MAP, text)
 
     def test_supplied_semantic_indentation_and_wrong_module_views_reject(self):
@@ -400,3 +404,800 @@ class SeedCountSuccessorTests(unittest.TestCase):
             with self.subTest(operation=old,index=index):
                 self.reject_premise(path,'_minimizer_support',(),old,new,index)
         self.reject_premise(path,'_ordered_finite',(),'value.low <= value.high','True')
+
+
+class OptionalSeedGuardSuccessorTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.record = seed.read_record(ROOT)
+        cls.middle = seed.successor_source(ROOT)
+        cls.after = seed.optional_successor_source(ROOT)
+        cls.before = seed.predecessor_source(cls.middle, cls.record)
+
+    @contextmanager
+    def live(self, changes=None):
+        values = {MAP: self.after.encode(), **(changes or {})}
+        read_bytes, read_text = Path.read_bytes, Path.read_text
+        def payload(path):
+            return values.get(path.relative_to(ROOT).as_posix()) if path.is_relative_to(ROOT) else None
+        with patch.object(Path, 'read_bytes', lambda p,*a,**k:
+                          payload(p) if payload(p) is not None else read_bytes(p,*a,**k)), patch.object(
+                Path, 'read_text', lambda p,*a,**k:
+                payload(p).decode('utf-8') if payload(p) is not None else read_text(p,*a,**k)):
+            yield
+
+    def test_separate_exact_edge_preserves_old_record_and_all_test_pins(self):
+        self.assertEqual(seed.sha(self.middle), seed.AFTER_SHA256)
+        self.assertEqual(seed.sha(self.after), seed.OPTIONAL_AFTER_SHA256)
+        self.assertEqual(seed.optional_predecessor_source(self.after), self.middle)
+        self.assertEqual(len(self.middle.splitlines())-len(self.after.splitlines()), 9)
+        self.assertEqual(seed.read_record(ROOT), self.record)
+        with self.live():
+            edge = seed.verify(ROOT)
+            self.assertEqual(edge['before_sha256'], seed.BEFORE_SHA256)
+            self.assertEqual(edge['after_sha256'], seed.OPTIONAL_AFTER_SHA256)
+            self.assertEqual(edge['edges'][0], seed.verify_source(self.middle, self.record))
+            self.assertEqual(edge['edges'][1]['before_sha256'], edge['edges'][0]['after_sha256'])
+            self.assertEqual(seed.historical_source(ROOT), self.before)
+            self.assertEqual(seed.reviewed_text(ROOT, MAP, self.after), self.before)
+            seed.verify_premises(ROOT, self.record, after=True, optional=True)
+        for group in ('historical_records','unchanged_correctness_tests','after_correctness_tests'):
+            for name, digest in self.record[group].items():
+                self.assertEqual(hashlib.sha256((ROOT/name).read_bytes()).hexdigest(), digest)
+
+    def test_unknown_duplicate_reordered_or_mixed_edge_cannot_project(self):
+        for value in (self.after+'\n', self.after.replace('\n','\r\n'), self.middle,
+                      self.after.replace('var original_s = certificate.s', 'var original_s = low', 1)):
+            with self.subTest(value=seed.sha(value)), self.assertRaises(ValueError):
+                seed.optional_predecessor_source(value)
+        edits = seed.OPTIONAL_EDITS
+        for changed in (edits[:-1], (*edits,edits[-1]), tuple(reversed(edits))):
+            with patch.object(seed, 'OPTIONAL_EDITS', changed), self.assertRaises(ValueError):
+                seed.optional_predecessor_source(self.after)
+        for physical, supplied in ((self.middle,self.after),(self.after,self.middle)):
+            with self.live({MAP:physical.encode()}), self.assertRaises(ValueError):
+                seed.reviewed_text(ROOT,MAP,supplied)
+
+    def reject_premise(self, path, name, owner, old, new, occurrence=0):
+        import textwrap
+        text = self.after if path == MAP else (ROOT/path).read_bytes().decode('utf-8')
+        part, first, last = seed._function_span(text,name,owner)
+        self.assertGreater(part.count(old), occurrence, (path,name,old))
+        at = -1
+        for _ in range(occurrence+1): at=part.find(old,at+1)
+        changed=part[:at]+part[at:].replace(old,new,1)
+        lines=text.splitlines(keepends=True)
+        lines[first:last]=[textwrap.indent(changed,'    '*len(owner)) if owner else changed]
+        with self.live({path:''.join(lines).encode()}), self.assertRaisesRegex(
+                ValueError,'live theorem premise|live optional-guard premise|owning-storage'):
+            seed.verify_premises(ROOT,self.record,after=True,optional=True)
+
+    def test_local_term_and_complete_step_reservation_premises_are_bound(self):
+        cases = [
+            ('extensions/carla/map_search.mojo','term_cap',('_MapQueryWork',),
+             '2000000 - existing, self.policy.max_terms - self.terms','2000000 - existing, self.policy.max_terms'),
+            (MAP,'_winner_seed_room',(),'winner_reference > winner_terms // winner_units','False'),
+            (MAP,'_winner_seed_room',(),'var winner_units = proof_nodes + 255 + 50','var winner_units = proof_nodes + 254 + 50'),
+            (MAP,'_winner_seed_room',(),'var seed_nodes = proof_nodes + 85','var seed_nodes = proof_nodes + 1'),
+            (MAP,'_winner_seed_room',(),'var winner_followup = len(winner.cells) + 12','var winner_followup = len(winner.cells)'),
+            (MAP,'_winner_seed_room',(),'if followup_steps > steps_left:','if False:'),
+            (MAP,'_winner_seed_room',(),'seed_nodes + winner_followup > steps_left // winner_cost','False'),
+            (MAP,'_query_node_step_cost',(),'var fixed = 26 if goal else 20','var fixed = 0'),
+            (MAP,'_query_node_step_cost',(),'return 100 * lanes + fixed','return 0'),
+            (MAP,'_try_winner_seed',(),'        2,\n        followup_steps,','        0,\n        followup_steps,'),
+            (MAP,'_try_winner_seed',(),'var original_s = certificate.s','work._step(10000)\n    var original_s = certificate.s'),
+            (MAP,'_try_winner_seed',(),'work.charge(1, reference, node_cost)','work.charge(1, reference, node_cost + 1)'),
+            ('extensions/carla/map_search.mojo','charge',('_MapQueryWork',),'self._step_product(nodes, step_cost)','self._step_product(nodes + 1, step_cost)'),
+            ('extensions/carla/map_search.mojo','_step_product',('_MapQueryWork',),'self._step(one * two)','self._step(one * two + 1)'),
+            ('extensions/carla/map_search.mojo','validate',('MapQueryBudget',),'or self.max_terms < 0','or False'),
+        ]
+        for case in cases:
+            with self.subTest(case=case[:2],operation=case[3]):self.reject_premise(*case)
+
+    def test_actual_midpoint_admission_graph_progress_and_fp_are_bound(self):
+        cases = [
+            (MAP,'_seed_reference_domain',(),'_require_sum2_environment()','pass'),
+            (MAP,'_seed_reference_domain',(),'_Interval(low, high)','_Interval.point(low)'),
+            (MAP,'_try_winner_seed',(),'_require_sum2_environment()','pass'),
+            (MAP,'_try_winner_seed',(),'or low <= 0.0','or False'),
+            (MAP,'_try_winner_seed',(),'or certificate.s < low','or False'),
+            (MAP,'_try_winner_seed',(),'or certificate.s > high','or False'),
+            (MAP,'_try_winner_seed',(),'var original_s = certificate.s','var original_s = high * 2.0'),
+            (MAP,'_try_winner_seed',(),'band_low + 0.5 * (original_s - band_low)','band_low + 2.0 * (original_s - band_low)'),
+            (MAP,'_try_winner_seed',(),'original_s + 0.5 * (band_high - original_s)','original_s - 0.5 * (band_high - original_s)'),
+            (MAP,'_try_winner_seed',(),'narrowed_low >= narrowed_high','False'),
+            (MAP,'_try_winner_seed',(),'narrowed_low == band_low and narrowed_high == band_high','False'),
+            (MAP,'_try_winner_seed',(),'band_low = narrowed_low','band_low = low - 1.0'),
+            (MAP,'_try_winner_seed',(),'work._step(12)','work._step(11)'),
+            (MAP,'_try_winner_seed',(),'        3,\n            followup_steps,','        2,\n            followup_steps,'),
+            ('extensions/carla/curve_interval.mojo','_endpoint_in_exact_range',(),'0x26F0000000000000','0x0000000000000001'),
+            ('extensions/carla/curve_sum2.mojo','_sum2_supported_environment',(),'one_slot.unsafe_load[volatile=True]()','one_slot.unsafe_load[volatile=False]()'),
+            ('extensions/carla/curve_sum2.mojo','_sum2_update',(),'var high = total + term','var high = total'),
+        ]
+        for case in cases:
+            with self.subTest(case=case[:2],operation=case[3]):self.reject_premise(*case)
+
+    def test_new_edge_rechecks_all_prior_dependencies_records_and_test_bytes(self):
+        for group in ('historical_records','unchanged_inputs','unchanged_correctness_tests','after_correctness_tests'):
+            for name in self.record[group]:
+                with self.subTest(group=group,path=name), self.live({name:(ROOT/name).read_bytes()+b'\n# changed\n'}):
+                    with self.assertRaisesRegex(ValueError,name):seed.verify_optional(ROOT)
+        read=Path.read_bytes; count=0
+        def changed(path,*a,**k):
+            nonlocal count
+            if path == ROOT/MAP:
+                count += 1
+                return (self.after if count == 1 else self.middle).encode()
+            return read(path,*a,**k)
+        with patch.object(Path,'read_bytes',changed), self.assertRaises(ValueError):
+            seed.verify_optional(ROOT)
+
+    def test_unchanged_consumer_routes_and_ordered_observables(self):
+        import cache_key_contracts as cache
+        self.assertEqual(cache.inventory_entry(self.middle), cache.inventory_entry(self.after))
+        self.assertEqual(seed.guard.declaration_routing(self.middle),seed.guard.declaration_routing(self.after))
+        for name in ('_try_winner_seed',):
+            self.assertEqual(seed.guard._winner_seed_live_observables(seed.declaration(self.middle,name)),
+                             seed.guard._winner_seed_live_observables(seed.declaration(self.after,name)))
+        with self.live():
+            import winner_sign_contracts as winner
+            import border_parser_contracts as border
+            import curve_support_dispatch_contracts as dispatch
+            for group in ('canonical_accumulation','support','optional_runtime'):
+                seed.source.verify_group(ROOT,group)
+            seed.guard.verify(ROOT)
+            cache.verify(ROOT)
+            dispatch.verify_premises(ROOT)
+            winner.verify(ROOT)
+            border.verify(ROOT)
+
+
+class SupportSeedGuardSuccessorTests(unittest.TestCase):
+    """The new source relation and current-source premises, not native coverage."""
+    @classmethod
+    def setUpClass(cls):
+        cls.record = seed.read_record(ROOT)
+        cls.count = seed.successor_source(ROOT)
+        cls.optional = seed.optional_successor_source(ROOT)
+        cls.after = seed.support_successor_source(ROOT)
+        cls.before = seed.predecessor_source(cls.count, cls.record)
+
+    @contextmanager
+    def live(self, changes=None):
+        values = {MAP:self.after.encode(), **(changes or {})}
+        read_bytes, read_text = Path.read_bytes, Path.read_text
+        def payload(path):
+            return values.get(path.relative_to(ROOT).as_posix()) if path.is_relative_to(ROOT) else None
+        with patch.object(Path,'read_bytes',lambda p,*a,**k:
+                          payload(p) if payload(p) is not None else read_bytes(p,*a,**k)), patch.object(
+                Path,'read_text',lambda p,*a,**k:
+                payload(p).decode('utf-8') if payload(p) is not None else read_text(p,*a,**k)):
+            yield
+
+    def test_distinct_edge_reconstructs_every_published_endpoint(self):
+        self.assertEqual(seed.sha(self.after),seed.SUPPORT_AFTER_SHA256)
+        self.assertEqual(seed.source.token_sha256(self.after),seed.SUPPORT_AFTER_TOKEN_SHA256)
+        self.assertEqual(seed.support_predecessor_source(self.after),self.optional)
+        self.assertEqual(seed.optional_predecessor_source(self.optional),self.count)
+        self.assertEqual(seed.predecessor_source(self.count,self.record),self.before)
+        self.assertEqual(len(self.optional.splitlines())-len(self.after.splitlines()),12)
+        self.assertEqual(seed.read_record(ROOT),self.record)
+        with self.live():
+            edge=seed.verify(ROOT)
+            self.assertEqual(edge,seed.verify_support(ROOT))
+            self.assertEqual(edge['after_sha256'],seed.SUPPORT_AFTER_SHA256)
+            self.assertEqual([x['after_sha256'] for x in edge['edges']],
+                             [seed.AFTER_SHA256,seed.OPTIONAL_AFTER_SHA256,seed.SUPPORT_AFTER_SHA256])
+            for one,two in zip(edge['edges'],edge['edges'][1:]):
+                self.assertEqual(one['after_sha256'],two['before_sha256'])
+                self.assertEqual(one['after_token_sha256'],two['before_token_sha256'])
+            self.assertEqual(seed.historical_source(ROOT),self.before)
+            for text in (self.after,self.after+'\n# supplied commentary\n'):
+                self.assertEqual(seed.reviewed_text(ROOT,MAP,text),self.before)
+            seed.verify_premises(ROOT,self.record,after=True,optional=True,support=True)
+        # Each named old endpoint remains independently admissible as itself.
+        for text,check in ((self.count,seed.verify),(self.optional,seed.verify_optional)):
+            with self.live({MAP:text.encode()}):
+                self.assertEqual(check(ROOT)['after_sha256'],seed.sha(text))
+        for group in ('historical_records','unchanged_correctness_tests','after_correctness_tests'):
+            for path,digest in self.record[group].items():
+                self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),digest)
+
+    def test_exact_inventory_and_each_bidirectional_span_are_required(self):
+        edits=seed.SUPPORT_EDITS
+        for changed in (edits[:-1],(*edits,edits[-1]),tuple(reversed(edits))):
+            with patch.object(seed,'SUPPORT_EDITS',changed),self.assertRaises(ValueError):
+                seed.support_predecessor_source(self.after)
+        for index in range(len(edits)):
+            for side in (1,2):
+                changed=list(edits); entry=list(edits[index]);entry[side]+='\n# changed inverse span\n'
+                changed[index]=tuple(entry)
+                with self.subTest(index=index,side=side),patch.object(seed,'SUPPORT_EDITS',tuple(changed)):
+                    with self.assertRaises(ValueError):seed.support_predecessor_source(self.after)
+        text=self.optional
+        for _,before,after in edits:
+            self.assertEqual(text.count(before),1)
+            text=text.replace(before,after,1)
+        self.assertEqual(text,self.after)
+        for text in (self.count,self.optional,self.before,self.after+'\n',self.after.replace('\n','\r\n')):
+            with self.subTest(digest=seed.sha(text)),self.assertRaises(ValueError):
+                seed.support_predecessor_source(text)
+
+    def test_mixed_physical_and_supplied_endpoints_never_project(self):
+        states=(self.before,self.count,self.optional,self.after)
+        for physical in states:
+            for supplied in states:
+                if physical==supplied:continue
+                with self.subTest(physical=seed.sha(physical),supplied=seed.sha(supplied)),self.live({MAP:physical.encode()}):
+                    with self.assertRaises(ValueError):seed.reviewed_text(ROOT,MAP,supplied)
+        for physical in (self.after+'\n# changed physical source\n',self.after.replace('\n','\r\n')):
+            with self.live({MAP:physical.encode()}):
+                for call in (lambda:seed.verify(ROOT),lambda:seed.historical_source(ROOT),
+                             lambda:seed.reviewed_text(ROOT,MAP,self.after)):
+                    with self.assertRaises(ValueError):call()
+
+    def reject_premise(self,path,name,owner,old,new,occurrence=0):
+        import textwrap
+        text=self.after if path==MAP else (ROOT/path).read_bytes().decode()
+        part,first,last=seed._function_span(text,name,owner)
+        self.assertGreater(part.count(old),occurrence,(path,name,old))
+        at=-1
+        for _ in range(occurrence+1):at=part.find(old,at+1)
+        changed=part[:at]+part[at:].replace(old,new,1)
+        lines=text.splitlines(keepends=True)
+        lines[first:last]=[textwrap.indent(changed,'    '*len(owner)) if owner else changed]
+        with self.live({path:''.join(lines).encode()}),self.assertRaisesRegex(
+                ValueError,'live theorem premise|live optional-guard premise|live support-guard premise|owning-storage'):
+            # Directly inspect the mutant physical declarations. Inversion and
+            # whole-file hashes cannot mask the missing actual-source check.
+            seed.verify_premises(ROOT,self.record,after=True,optional=True,support=True,
+                                 frontier=getattr(self,'frontier',False))
+
+    def test_zero_error_producer_nonnegative_roundoff_and_bounded_rounding(self):
+        cases=[
+            (MAP,'_seed_reference_domain',(),'_require_sum2_environment()','pass'),
+            (MAP,'_seed_reference_domain',(),'_Interval(low, high)','_Interval.point(low)'),
+            (MAP,'_seed_reference_domain',(),'not _endpoint_in_exact_range(origin)','False'),
+            (MAP,'_seed_reference_domain',(),'_Jet.constant(origin)','_Jet.constant(origin + 1.0)'),
+            (MAP,'_seed_reference_domain',(),'not _seed_exact_interval(d.value)','False'),
+            (MAP,'_seed_reference_domain',(),'not d.error < 1.0','False'),
+            (MAP,'_seed_reference_domain',(),'rounded.low <= 0.0','False'),
+            (MAP,'_seed_reference_domain',(),'rounded.high >= geometry.length','False'),
+            (MAP,'_seed_exact_interval',(),'not value.is_finite()','False'),
+            (MAP,'_seed_exact_interval',(),'value.high < value.low','False'),
+            (INTERVAL,'_endpoint_in_exact_range',(),'0x58F0000000000000','0x7FEFFFFFFFFFFFFF'),
+            (INTERVAL,'constant',('_JetExpression',),'zero, zero, 0.0','zero, zero, -1.0'),
+            (INTERVAL,'variable',('_JetExpression',),'        0.0,','        -1.0,'),
+            (INTERVAL,'__add__',('_JetExpression',),'_next_up(self.error + other.error)','-1.0'),
+            (INTERVAL,'__add__',('_JetExpression',),'_next_up(inherited + _roundoff(magnitude))','-1.0'),
+            (INTERVAL,'_stored_difference',(),'result.error = 0.0','result.error = -1.0'),
+            (INTERVAL,'_roundoff',(),'return _next_up(bitcast[DType.float64](UInt64(1)))','return -1.0'),
+            (INTERVAL,'rounded_value',('_JetExpression',),'_Interval(-self.error, self.error)','_Interval(-1e308, 1e308)'),
+        ]
+        for case in cases:
+            with self.subTest(path=case[0],name=case[1],operation=case[3]):self.reject_premise(*case)
+
+    def test_retained_band_midpoints_progress_and_original_witness(self):
+        cases=[
+            ('_require_sum2_environment()','pass'),
+            ('or not isfinite(low)','or False'),('or not isfinite(high)','or False'),
+            ('or low <= 0.0','or False'),('or high <= low','or False'),
+            ('or not isfinite(certificate.s)','or False'),
+            ('or certificate.s < low','or False'),('or certificate.s > high','or False'),
+            ('var original_s = certificate.s','var original_s = high * 2.0'),
+            ('band_low + 0.5 * (original_s - band_low)','band_low + 2.0 * (original_s - band_low)'),
+            ('original_s + 0.5 * (band_high - original_s)','original_s - 0.5 * (band_high - original_s)'),
+            ('narrowed_low >= narrowed_high','False'),
+            ('narrowed_low == band_low and narrowed_high == band_high','False'),
+            ('band_low = narrowed_low','band_low = 0.0'),
+            ('domain, center, original_s, original_s, band_low, band_high',
+             'domain, center, original_s, original_s, low * -1.0, band_high'),
+            ('if not score.is_finite():','if False:'),
+        ]
+        for old,new in cases:
+            with self.subTest(operation=old):self.reject_premise(MAP,'_try_winner_seed',(),old,new)
+
+    def test_support_early_returns_signs_radii_and_all_clips(self):
+        path='extensions/carla/curve_minimizer_support.mojo'
+        cases=[
+            ('var result = _Interval(low, high)','var result = _Interval(0.0, high)',0),
+            ('return _Interval(low, high)','return _Interval(0.0, high)',0),
+            ('return result','return _Interval(0.0, high)',0),
+            ('return result','return _Interval(0.0, high)',1),
+            ('or domain.error < 0.0','or False',0),
+            ('if derivative.low > 0.0:','if derivative.low >= 0.0:',0),
+            ('elif derivative.high < 0.0:','elif derivative.high > 0.0:',0),
+            ('if smooth and domain.second.low > 0.0:','if smooth:',0),
+            ('var positive = (-a + root_a) / m','var positive = (a - root_a) / m',0),
+            ('positive = four_error / (root_a + a)','positive = -four_error / (root_a + a)',0),
+            ('var negative = (b + root_b) / m','var negative = (-b - root_b) / m',0),
+            ('negative = four_error / (root_b - b)','negative = -four_error / (root_b - b)',0),
+            ('if _ordered_finite(positive):','if True:',0),
+            ('if _ordered_finite(negative):','if True:',0),
+        ]
+        for i in range(2):
+            cases += [('if _ordered_finite(radius):','if True:',i),
+                      ('result.high = min(result.high, limit.high)','result.high = limit.high',i),
+                      ('result.low = max(result.low, limit.low)','result.low = limit.low',i)]
+        for old,new,i in cases:
+            with self.subTest(operation=old,occurrence=i):self.reject_premise(path,'_minimizer_support',(),old,new,i)
+        self.reject_premise(path,'_ordered_finite',(),'value.low <= value.high','True')
+
+    def test_complete_interval_radius_dependencies_are_live(self):
+        cases=[('contains','return self.low <= value and value <= self.high','return False'),
+               ('whole','return Self(-inf[DType.float64](), inf[DType.float64]())','return Self(-1.0, -1.0)'),
+               ('rounded','return Self.whole()','return Self(-1.0, -1.0)'),
+               ('__neg__','return Self(-self.high, -self.low)','return Self(self.low, self.high)'),
+               ('__sub__','return self + (-other)','return self + other'),
+               ('__truediv__','if other.contains(0.0):','if False:'),
+               ('square','var low = max(0.0, _next_down(min(a, b)))','var low = -1.0'),
+               ('sqrt','if self.low < 0.0:','if False:')]
+        for name,old,new in cases:
+            with self.subTest(name=name):self.reject_premise(INTERVAL,name,('_Interval',),old,new)
+
+    def test_new_edge_checks_all_pinned_dependencies_records_and_native_tests(self):
+        for group in ('historical_records','unchanged_inputs','unchanged_correctness_tests','after_correctness_tests'):
+            for path in self.record[group]:
+                with self.subTest(group=group,path=path),self.live({path:(ROOT/path).read_bytes()+b'\n# changed\n'}):
+                    with self.assertRaisesRegex(ValueError,path):seed.verify_support(ROOT)
+        read=Path.read_bytes;count=0
+        def changed(path,*a,**k):
+            nonlocal count
+            if path==ROOT/MAP:
+                count+=1
+                return (self.after if count==1 else self.optional).encode()
+            return read(path,*a,**k)
+        with patch.object(Path,'read_bytes',changed),self.assertRaises(ValueError):seed.verify_support(ROOT)
+
+    def test_exact_runtime_routes_and_debits_are_unchanged(self):
+        import cache_key_contracts as cache
+        self.assertEqual(cache.inventory_entry(self.optional),cache.inventory_entry(self.after))
+        self.assertEqual(seed.guard.declaration_routing(self.optional),seed.guard.declaration_routing(self.after))
+        self.assertEqual(seed.guard._winner_seed_live_observables(seed.declaration(self.optional,'_try_winner_seed')),
+                         seed.guard._winner_seed_live_observables(seed.declaration(self.after,'_try_winner_seed')))
+        # The new edge must not absorb the score refusal or any debit change.
+        self.assertIn('if not score.is_finite():\n                    continue',self.after)
+        for before,after in ((self.optional,self.after),(self.count,self.after)):
+            for token in ('work._step(60)','work._step(12)','work.charge(1, reference, node_cost)',
+                          'work.charge(0, point_work, node_cost)'):
+                self.assertEqual(before.count(token),after.count(token))
+
+    def test_bounded_rounding_and_clipping_do_not_assume_generic_monotonicity(self):
+        import math
+        import struct
+        maximum=struct.unpack('>d',bytes.fromhex('58f0000000000000'))[0]
+        self.assertEqual(maximum.hex(),'0x1.0000000000000p+400')
+        expanded=math.nextafter(maximum+math.nextafter(1.0,0.0),math.inf)
+        self.assertTrue(math.isfinite(expanded))
+        self.assertEqual(expanded.hex(),'0x1.0000000000001p+400')
+        largest=float.fromhex('0x1.fffffffffffffp+1023')
+        self.assertEqual(largest+largest,math.inf)
+        self.assertEqual(min(largest,largest+largest),largest)
+
+    def test_max_point_counterexample_does_not_claim_lane_reachability(self):
+        # Arithmetic control only: no fabricated certificate or coverage hit.
+        # Actual checked centers stay Float64; the full SPIRAL admission and
+        # materialization path for these points is deliberately not asserted.
+        from fractions import Fraction
+        import math
+        maximum=float.fromhex('0x1.fffffffffffffp+1023')
+        old_axis=float.fromhex('0x1.7ffffffffffffp+1023')
+        scale=float.fromhex('0x1p+1023')
+        old=(Fraction(old_axis)+1)**2+Fraction(old_axis)**2
+        new=(Fraction(maximum)+1)**2
+        self.assertLess(new,old)
+        self.assertGreaterEqual(old_axis,scale)
+        self.assertLess(old_axis,2*Fraction(scale))
+        self.assertTrue(math.isfinite(math.nextafter(old_axis+1.0,math.inf)))
+        self.assertEqual(math.nextafter(maximum+1.0,math.inf),math.inf)
+
+
+class FrontierReservationSuccessorTests(unittest.TestCase):
+    """Result/exception/ledger equivalence, without fictional producer frontiers."""
+    frontier=True
+    live=SupportSeedGuardSuccessorTests.live
+    reject_premise=SupportSeedGuardSuccessorTests.reject_premise
+
+    @classmethod
+    def setUpClass(cls):
+        cls.record=seed.read_record(ROOT)
+        cls.support=seed.support_successor_source(ROOT)
+        cls.optional=seed.optional_successor_source(ROOT)
+        cls.count=seed.successor_source(ROOT)
+        cls.before=seed.predecessor_source(cls.count,cls.record)
+        cls.after=seed.frontier_successor_source(ROOT)
+
+    def test_separate_frontier_edge_retains_all_four_predecessors(self):
+        self.assertEqual(seed.sha(self.after),seed.FRONTIER_AFTER_SHA256)
+        self.assertEqual(seed.frontier_predecessor_source(self.after),self.support)
+        self.assertEqual(len(self.support.splitlines())-len(self.after.splitlines()),1)
+        with self.live():
+            edge=seed.verify(ROOT)
+            self.assertEqual(edge,seed.verify_frontier(ROOT))
+            self.assertEqual([x['after_sha256'] for x in edge['edges']],
+                             [seed.AFTER_SHA256,seed.OPTIONAL_AFTER_SHA256,
+                              seed.SUPPORT_AFTER_SHA256,seed.FRONTIER_AFTER_SHA256])
+            self.assertEqual(seed.historical_source(ROOT),self.before)
+            self.assertEqual(seed.reviewed_text(ROOT,MAP,self.after+'\n# supplied comment\n'),self.before)
+            seed.verify_premises(ROOT,self.record,after=True,optional=True,support=True,frontier=True)
+        for text in (self.count,self.optional,self.support):
+            with self.live({MAP:text.encode()}):
+                self.assertEqual(seed.verify(ROOT)['after_sha256'],seed.sha(text))
+        for group in ('historical_records','unchanged_correctness_tests','after_correctness_tests'):
+            for path,digest in self.record[group].items():
+                self.assertEqual(hashlib.sha256((ROOT/path).read_bytes()).hexdigest(),digest)
+
+    def test_exact_inverse_inventory_spans_and_physical_views(self):
+        edits=seed.FRONTIER_EDITS
+        for changed in (edits[:-1],(*edits,edits[-1]),tuple(reversed(edits))):
+            with patch.object(seed,'FRONTIER_EDITS',changed),self.assertRaises(ValueError):
+                seed.frontier_predecessor_source(self.after)
+        for index in range(len(edits)):
+            for side in (1,2):
+                changed=list(edits);entry=list(edits[index]);entry[side]+='\n# changed inverse\n';changed[index]=tuple(entry)
+                with self.subTest(index=index,side=side),patch.object(seed,'FRONTIER_EDITS',tuple(changed)),self.assertRaises(ValueError):
+                    seed.frontier_predecessor_source(self.after)
+        for text in (self.before,self.count,self.optional,self.support,self.after+'\n',self.after.replace('\n','\r\n')):
+            with self.subTest(digest=seed.sha(text)),self.assertRaises(ValueError):seed.frontier_predecessor_source(text)
+        for physical,supplied in ((self.support,self.after),(self.after,self.support),
+                                  (self.optional,self.after),(self.after,self.optional),
+                                  (self.after+'\n',self.after),(self.after.replace('\n','\r\n'),self.after)):
+            with self.live({MAP:physical.encode()}),self.assertRaises(ValueError):seed.reviewed_text(ROOT,MAP,supplied)
+
+    def test_saturation_threshold_first_headroom_and_target_checks_are_live(self):
+        cases=[
+            ('min(len(winner.cells), 16373) + 12','len(winner.cells) + 12'),
+            ('min(len(winner.cells), 16373) + 12','min(len(winner.cells), 16372) + 12'),
+            ('min(len(winner.cells), 16373) + 12','min(len(winner.cells), 16373) + 11'),
+            ('winner_followup > winner_cap - winner.nodes','winner_followup >= winner_cap - winner.nodes'),
+            ('winner_followup > winner_cap - winner.nodes','False'),
+            ('or target_cells < 0','or False'),('or target_cells > 16372','or False'),
+            ('var target_followup = target_cells + 12','var target_followup = target_cells + 11'),
+            ('var seed_nodes = proof_nodes + 85','var seed_nodes = proof_nodes + 84'),
+            ('proof_nodes < 0','False'),('or proof_nodes > 5','or False'),
+            ('or followup_steps < 0','or False'),('or winner_reference <= 0','or False'),
+            ('or target_reference <= 0','or False'),
+        ]
+        for old,new in cases:
+            with self.subTest(operation=old,replacement=new):self.reject_premise(MAP,'_winner_seed_room',(),old,new)
+
+    def test_validation_exception_order_and_node_cap_bound_are_live(self):
+        for old,new in (
+            ('work.validate()','pass'),
+            ('var winner_cap = work.node_cap(winner.nodes, winner_cost)','var winner_cap = 16385'),
+            ('var target_cap = work.node_cap(target_nodes, target_cost)','var target_cap = 16384'),
+            ('var winner_terms = work.term_cap(winner.terms) - winner.terms','var winner_terms = 2000000'),
+            ('var target_terms = work.term_cap(target_terms_used) - target_terms_used','var target_terms = 2000000'),
+        ):
+            with self.subTest(operation=old):self.reject_premise(MAP,'_winner_seed_room',(),old,new)
+        path='extensions/carla/map_search.mojo'
+        for old,new in (('self.validate()','pass'),('existing < 0','False'),('existing > 16384','existing > 16385'),
+                        ('step_cost < 1','step_cost < 0'),('16384 - existing','16385 - existing'),
+                        ('self.policy.max_nodes - self.nodes','self.policy.max_nodes'),
+                        ('min(self.max_total_steps, self.policy.max_steps) - self.steps','self.policy.max_steps')):
+            with self.subTest(operation=old):self.reject_premise(path,'node_cap',('_MapQueryWork',),old,new)
+        for old,new in (('self.policy.validate()','pass'),('or self.nodes > self.policy.max_nodes','or False'),
+                        ('or self.steps > self.max_total_steps','or False')):
+            with self.subTest(operation=old):self.reject_premise(path,'validate',('_MapQueryWork',),old,new)
+        # Reordering the pre-guard cap calls can change which exception wins.
+        old='var winner_cap = work.node_cap(winner.nodes, winner_cost)\n    var target_cap = work.node_cap(target_nodes, target_cost)'
+        new='var target_cap = work.node_cap(target_nodes, target_cost)\n    var winner_cap = work.node_cap(winner.nodes, winner_cost)'
+        self.reject_premise(MAP,'_winner_seed_room',(),old,new)
+
+    def test_integer_boundary_partition_preserves_refusal_without_overflow(self):
+        # Closed-form admission control only. These are not LaneCertificates,
+        # native observations, or a claim that a producer emits these lengths.
+        limit=(1<<63)-1
+        lengths=(0,1,16371,16372,16373,16374,16384,16385,limit-12,limit)
+        for length in lengths:
+            reservation=min(length,16373)+12
+            self.assertLessEqual(reservation,16385)
+            self.assertGreaterEqual(reservation,12)
+            if length<=16372:self.assertEqual(reservation,length+12)
+            else:self.assertEqual(reservation,16385)
+            for available in range(16385):
+                old=length>16372 or length+12>available
+                new=reservation>available
+                if old!=new:self.fail((length,available,reservation))
+        for existing in (0,1,16372,16384):
+            for nodes_left in (0,1,16384,limit):
+                for steps_left in (0,1,16384,limit):
+                    for cost in (1,82,176,limit):
+                        cap=existing+min(16384-existing,nodes_left,steps_left//cost)
+                        self.assertGreaterEqual(cap-existing,0)
+                        self.assertLessEqual(cap-existing,16384)
+
+    def test_frontier_edge_rechecks_every_bound_dependency_record_and_test(self):
+        for group in ('historical_records','unchanged_inputs','unchanged_correctness_tests','after_correctness_tests'):
+            for path in self.record[group]:
+                with self.subTest(group=group,path=path),self.live({path:(ROOT/path).read_bytes()+b'\n# changed\n'}):
+                    with self.assertRaisesRegex(ValueError,path):seed.verify_frontier(ROOT)
+        read=Path.read_bytes;count=0
+        def changed(path,*a,**k):
+            nonlocal count
+            if path==ROOT/MAP:
+                count+=1
+                return (self.after if count==1 else self.support).encode()
+            return read(path,*a,**k)
+        with patch.object(Path,'read_bytes',changed),self.assertRaises(ValueError):seed.verify_frontier(ROOT)
+
+    def test_frontier_runtime_inventory_and_support_score_debits_stay_fixed(self):
+        import cache_key_contracts as cache
+        self.assertEqual(cache.inventory_entry(self.support),cache.inventory_entry(self.after))
+        self.assertEqual(seed.guard.declaration_routing(self.support),seed.guard.declaration_routing(self.after))
+        self.assertEqual(seed.declaration(self.support,'_try_winner_seed'),seed.declaration(self.after,'_try_winner_seed'))
+        self.assertEqual(seed.declaration(self.support,'_seed_reference_domain'),seed.declaration(self.after,'_seed_reference_domain'))
+        self.assertIn('if not score.is_finite():\n                    continue',self.after)
+
+
+class FiniteWinnerScoreSuccessorTests(unittest.TestCase):
+    """Exact extraction graph and independently live helper/caller controls."""
+    @classmethod
+    def setUpClass(cls):
+        cls.record = seed.read_record(ROOT)
+        cls.after = seed.score_successor_source(ROOT)
+        cls.frontier = seed.frontier_successor_source(ROOT)
+        cls.before = seed.predecessor_source(seed.successor_source(ROOT), cls.record)
+
+    live = SeedCountSuccessorTests.live_after
+
+    def test_distinct_fifth_edge_and_all_inverse_bytes(self):
+        self.assertEqual(seed.score_predecessor_source(self.after), self.frontier)
+        self.assertEqual(seed.sha(self.after), seed.SCORE_AFTER_SHA256)
+        with self.live():
+            edge = seed.verify(ROOT)
+            self.assertEqual(edge, seed.verify_score(ROOT))
+            self.assertEqual([e['after_sha256'] for e in edge['edges']],
+                             [seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256,
+                              seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256,
+                              seed.SCORE_AFTER_SHA256])
+            self.assertEqual(seed.historical_source(ROOT), self.before)
+            self.assertEqual(seed.reviewed_text(ROOT, MAP, self.after+'\n# view\n'), self.before)
+        self.assertEqual(seed.score_live_observables(self.after),
+                         seed.guard._winner_seed_live_observables(
+                             seed.declaration(self.frontier, '_try_winner_seed')))
+
+    def test_exact_edit_inventory_and_source_views(self):
+        edits = seed.SCORE_EDITS
+        for changed in (edits[:-1], (*edits, edits[-1]), tuple(reversed(edits))):
+            with patch.object(seed, 'SCORE_EDITS', changed), self.assertRaises(ValueError):
+                seed.score_predecessor_source(self.after)
+        for index in range(len(edits)):
+            for side in (1, 2):
+                changed = list(edits); entry = list(edits[index])
+                entry[side] += '\n# changed\n'; changed[index] = tuple(entry)
+                with patch.object(seed, 'SCORE_EDITS', tuple(changed)), self.assertRaises(ValueError):
+                    seed.score_predecessor_source(self.after)
+        for physical, supplied in ((self.frontier, self.after), (self.after, self.frontier),
+                                  (self.after+'\n', self.after),
+                                  (self.after.replace('\n', '\r\n'), self.after)):
+            with self.live({MAP: physical.encode()}), self.assertRaises(ValueError):
+                seed.reviewed_text(ROOT, MAP, supplied)
+        with self.live(), self.assertRaises(ValueError):
+            seed.reviewed_text(ROOT, 'extensions/carla/lane_search.mojo', self.after)
+
+    def test_live_graph_rejects_mutations_before_upper_normalization(self):
+        cases = {
+            '_winner_seed_update_score': (
+                ('< 0:', '<= 0:'), ('< 0:', '> 0:'),
+                ('if not score.is_finite():', 'if score.is_finite():'),
+                ('return (False, 0.0)', 'return (True, 0.0)'),
+                ('return (True, score.high)', 'return (True, score.low)'),
+                ('point, query, scale)', 'incumbent, query, scale)'),
+                ('    if _wide_point_order', '    _require_sum2_environment()\n    if _wide_point_order'),
+            ),
+            '_try_winner_seed': (
+                ('point, certificate.point, query, certificate.scale',
+                 'certificate.point, point, query, certificate.scale'),
+                ('if update[0]:', 'if not update[0]:'),
+                ('certificate.upper = update[1]', 'certificate.upper = update[0]'),
+                ('certificate.upper = update[1]', 'pass'),
+                ('certificate.point = point^', 'certificate.point = point'),
+                ('certificate.s = s\n                certificate.point = point^',
+                 'certificate.point = point^\n                certificate.s = s'),
+                ('                certificate.upper = update[1]',
+                 '            certificate.upper = update[1]'),
+                ('work.charge(0, point_work, node_cost)', 'work.charge(0, 0, node_cost)'),
+                ('certificate.terms += point_work', 'certificate.terms += 0'),
+                ('    _require_sum2_environment()\n', ''),
+                ('                improved = True', '                improved = True\n            continue'),
+                ('    return improved', '    return True'),
+            ),
+        }
+        for name, mutations in cases.items():
+            original = seed.declaration(self.after, name)
+            for old, new in mutations:
+                self.assertIn(old, original)
+                changed = self.after.replace(original, original.replace(old, new, 1), 1)
+                with self.subTest(name=name, old=old, new=new):
+                    # This is independent of the complete-file endpoint gate.
+                    with self.assertRaises(ValueError): seed.verify_score_live(changed)
+                    with self.assertRaises(ValueError): seed.score_live_observables(changed)
+                    with self.live({MAP: changed.encode()}), self.assertRaises(ValueError):
+                        seed.verify(ROOT)
+
+    def test_only_reviewed_production_caller_can_supply_fp_precondition(self):
+        path = ROOT/'extensions/carla/map_search.mojo'
+        read = Path.read_text
+        for extra in (
+            'from extensions.carla.map import _winner_seed_update_score\n',
+            'from extensions.carla.map import _winner_seed_update_score as unchecked\n',
+            'def bypass():\n    _winner_seed_update_score(point, point, query, scale)\n',
+            'import extensions.carla.map as seed_map\ndef bypass():\n    seed_map._winner_seed_update_score(point, point, query, scale)\n',
+        ):
+            with self.subTest(extra=extra), patch.object(Path, 'read_text', lambda p,*a,**k:
+                    extra if p == path else read(p,*a,**k)):
+                with self.assertRaisesRegex(ValueError, 'caller inventory'):
+                    seed.verify_score_caller_inventory(ROOT)
+        with patch.object(Path, 'read_text', lambda p,*a,**k:
+                '# _winner_seed_update_score is not a call\n' if p == path else read(p,*a,**k)):
+            seed.verify_score_caller_inventory(ROOT)
+
+    def test_numerical_fixture_is_bound_without_changing_old_pins(self):
+        for path in seed.SCORE_TESTS:
+            with self.live({path: (ROOT/path).read_bytes()+b'\n# changed\n'}):
+                with self.assertRaisesRegex(ValueError, path): seed.verify_score(ROOT)
+
+    def test_wrong_owner_duplicate_extra_declarations_and_imports(self):
+        helper = seed.declaration(self.after, '_winner_seed_update_score')
+        wrong_owner = 'struct WrongOwner:\n' + ''.join('    '+line+'\n' for line in helper.splitlines())
+        for text in (self.after+helper, self.after.replace(helper, wrong_owner)):
+            with self.assertRaises(ValueError): seed.verify_score_live(text)
+        for text in (self.after+'\ndef extra():\n    pass\n',
+                     self.after+'\nfrom std.math import sin\n'):
+            with self.live({MAP: text.encode()}), self.assertRaises(ValueError): seed.verify(ROOT)
+
+    def test_changed_dependencies_records_tests_and_reads_fail_closed(self):
+        for group in ('historical_records', 'unchanged_inputs',
+                      'unchanged_correctness_tests', 'after_correctness_tests'):
+            for path in self.record[group]:
+                with self.subTest(path=path), self.live({path: (ROOT/path).read_bytes()+b'\n# changed\n'}):
+                    with self.assertRaisesRegex(ValueError, path): seed.verify_score(ROOT)
+        read = Path.read_bytes; count = 0
+        def changed(path, *args, **kwargs):
+            nonlocal count
+            if path == ROOT/MAP:
+                count += 1
+                return (self.after if count == 1 else self.frontier).encode()
+            return read(path, *args, **kwargs)
+        with patch.object(Path, 'read_bytes', changed), self.assertRaises(ValueError):
+            seed.verify_score(ROOT)
+
+
+class ExactTextLexicalCacheTests(unittest.TestCase):
+    def setUp(self):
+        seed.source._token_snapshot.cache_clear()
+        self.addCleanup(seed.source._token_snapshot.cache_clear)
+
+    def test_reuse_is_pure_and_each_outer_list_is_independent(self):
+        source = seed.source
+        text = 'var value = 1\n'
+        parse = source.tokenize.generate_tokens
+        with patch.object(source.tokenize, 'generate_tokens', wraps=parse) as calls:
+            first = source.tokens(text)
+            expected = list(first)
+            first.clear()
+            second = source.tokens(text)
+            self.assertEqual(second, expected)
+            self.assertIsNot(first, second)
+            self.assertEqual(calls.call_count, 1)
+        token = second[0]
+        with self.assertRaises(AttributeError): token.string = 'changed'
+        with self.assertRaises(TypeError): token.start[0] = 5
+        self.assertEqual(source.tokens(text), expected)
+
+    def test_tokens_equal_uncached_reference_including_positions_and_comments(self):
+        import io
+        examples = (
+            '@no_inline\ndef sample(value: Float64) raises:\n    # Comment.\n    return (value + 1.0)\n',
+            'var text = "literal # text"\nvar values = [\n    1, 2,\n]\n',
+            'struct Outer:\n    def inner():\n        pass\n',
+        )
+        for text in examples:
+            expected = list(seed.source.tokenize.generate_tokens(io.StringIO(text).readline))
+            for _ in range(2):
+                self.assertEqual(seed.source.tokens(text), expected)
+
+    def test_changed_exact_text_and_same_path_are_observed(self):
+        import tempfile
+        source = seed.source
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'sample.mojo'
+            path.write_text('var value = 1\n')
+            first = source.tokens(path.read_text())
+            path.write_text('var value = 2\n')
+            second = source.tokens(path.read_text())
+            self.assertNotEqual(first, second)
+            path.write_text('var value = 1\n# New comment.\n')
+            self.assertNotEqual(first, source.tokens(path.read_text()))
+        self.assertEqual(source._token_snapshot.cache_info().misses, 3)
+
+    def test_bounded_eviction_reparses_old_text(self):
+        source = seed.source
+        maximum = source._token_snapshot.cache_info().maxsize
+        self.assertEqual(maximum, 32)
+        first = source.tokens('var value = 0\n')
+        for i in range(1, maximum + 1):
+            source.tokens('var value = '+str(i)+'\n')
+        info = source._token_snapshot.cache_info()
+        self.assertEqual(info.currsize, maximum)
+        self.assertEqual(info.misses, maximum + 1)
+        self.assertEqual(source.tokens('var value = 0\n'), first)
+        self.assertEqual(source._token_snapshot.cache_info().misses, maximum + 2)
+
+    def test_invalid_text_rejection_remains_live(self):
+        for _ in range(2):
+            with self.assertRaisesRegex(ValueError, 'invalid source tokens'):
+                seed.source.tokens('var value = (\n')
+        self.assertEqual(seed.source._token_snapshot.cache_info().currsize, 0)
+
+    def test_warm_cache_does_not_skip_new_files_or_changed_callers(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root/seed.MODULE
+            path.parent.mkdir(parents=True)
+            path.write_text('def _winner_seed_update_score():\n    pass\n_winner_seed_update_score()\n')
+            seed.verify_score_caller_inventory(root)
+            extra = root/'new_namespace'/'__init__.mojo'
+            extra.parent.mkdir()
+            extra.write_text('from extensions.carla.map import _winner_seed_update_score\n')
+            with self.assertRaisesRegex(ValueError, 'caller inventory'):
+                seed.verify_score_caller_inventory(root)
+            extra.write_text('# No actual helper use.\n')
+            seed.verify_score_caller_inventory(root)
+            path.write_text(path.read_text()+'_winner_seed_update_score()\n')
+            with self.assertRaisesRegex(ValueError, 'caller inventory'):
+                seed.verify_score_caller_inventory(root)
+
+
+class ExactTextSpanCacheTests(unittest.TestCase):
+    def setUp(self):
+        seed._function_span_snapshot.cache_clear()
+        self.addCleanup(seed._function_span_snapshot.cache_clear)
+
+    def test_cached_spans_preserve_owners_and_return_fresh_mutable_wrappers(self):
+        text = 'def first():\n    pass\n\nstruct Owner:\n    def second():\n        pass\n'
+        expected = seed._function_spans(text)
+        first = seed._function_spans(text)
+        first[((), 'first')].clear()
+        first.clear()
+        self.assertEqual(seed._function_spans(text), expected)
+        self.assertEqual(set(expected), {((), 'first'), ((('struct', 'Owner'),), 'second')})
+        snapshot = seed._function_span_snapshot(text)
+        with self.assertRaises(TypeError): snapshot[0][1][0][0] = 'changed'
+        self.assertEqual(seed._function_span_snapshot.cache_info().misses, 1)
+
+    def test_changed_text_same_file_and_wrong_owner_are_not_hidden(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory)/'sample.mojo'
+            path.write_text('def first():\n    pass\n')
+            original = seed.declaration(path.read_text(), 'first')
+            path.write_text('def first():\n    return True\n')
+            self.assertNotEqual(seed.declaration(path.read_text(), 'first'), original)
+            path.write_text('struct Owner:\n    def first():\n        pass\n')
+            with self.assertRaisesRegex(ValueError, 'scoped declaration'):
+                seed.declaration(path.read_text(), 'first')
+            seed.declaration(path.read_text(), 'first', ('Owner',))
+
+    def test_bounded_eviction_reparses_exact_text(self):
+        maximum = seed._function_span_snapshot.cache_info().maxsize
+        self.assertEqual(maximum, 32)
+        text = 'def first():\n    return 0\n'
+        expected = seed._function_spans(text)
+        for i in range(1, maximum + 1):
+            seed._function_spans('def first():\n    return '+str(i)+'\n')
+        self.assertEqual(seed._function_span_snapshot.cache_info().currsize, maximum)
+        before = seed._function_span_snapshot.cache_info().misses
+        self.assertEqual(seed._function_spans(text), expected)
+        self.assertEqual(seed._function_span_snapshot.cache_info().misses, before + 1)
+
+    def test_invalid_span_failures_are_not_cached(self):
+        for _ in range(2):
+            with self.assertRaises(ValueError): seed._function_spans('def first():\n')
+        self.assertEqual(seed._function_span_snapshot.cache_info().currsize, 0)
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -51,10 +51,10 @@ def predecessor_pins(root, filename):
     """Verify active bytes, reverse every admitted edit, verify historical bytes."""
     filename = str(filename).split('/')[-1]
     record = read_record(root)['pin_files'][filename]
-    try:
+    if __package__:
+        from . import coverage_followup_contracts as followup
+    else:
         import coverage_followup_contracts as followup
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import coverage_followup_contracts as followup
     payload = followup.predecessor_pins(root, filename)
     require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],
             'unreviewed runtime pin successor: ' + filename if filename == 'runtime-source-pins.json' else 'unreviewed guarded pin successor: ' + filename)
@@ -81,17 +81,17 @@ def verify(root):
     for path, item in record['sources'].items():
         matches = source.token_sha256((root/path).read_text()) == item['after_token_sha256']
         if not matches:
-            try:
+            if __package__:
+                from . import coverage_followup_contracts as followup
+            else:
                 import coverage_followup_contracts as followup
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import coverage_followup_contracts as followup
             matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'])
         require(matches, 'complete successor changed: ' + path)
     curve.verify(root)
     grouped.verify(root)
-    try:
+    if __package__:
+        from . import lane_control_contracts as lane
+    else:
         import lane_control_contracts as lane
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import lane_control_contracts as lane
     lane.verify(root)
     return record

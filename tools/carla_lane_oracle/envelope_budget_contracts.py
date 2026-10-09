@@ -1,10 +1,11 @@
 """Bind the exact no-counter-alias span between envelope budget admissions."""
 from pathlib import Path
-try:
+if __package__:
+    from . import source_contracts
+    from . import sum2_guard_contracts
+else:
     import source_contracts
     import sum2_guard_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts, sum2_guard_contracts
 MODULE='extensions/carla/curve_bounds.mojo'
 EXPECTED='9bc62290a6bdeca43c4d695a0f0ce6592d69f49386d83ce7342b667c73680fce'
 

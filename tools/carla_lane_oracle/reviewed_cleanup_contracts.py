@@ -96,10 +96,10 @@ def ordered(text, fragments, label):
 def verify_premises(root):
     # Import here so the enclosing guard can call this verifier without a
     # module initialization cycle. Its lexical parser checks actual owners.
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     line = (root/SOURCE_PATHS[0]).read_text()
     arc = (root/SOURCE_PATHS[1]).read_text()
     junction = (root/SOURCE_PATHS[2]).read_text()
@@ -159,10 +159,10 @@ TRIG_WORD_SHA256 = 'f2337e89e88234a7a275e1be6398d672abd05210e5b37098e2e3bd39212c
 
 
 def _stored_word_sha256(text, arrays, scalars):
-    try:
+    if __package__:
+        from . import spiral_moments as moments
+    else:
         import spiral_moments as moments
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import spiral_moments as moments
     declarations = moments.ideal_projection.module_statements(text)
     canonical = {}
     for name in sorted(set(arrays) | scalars):

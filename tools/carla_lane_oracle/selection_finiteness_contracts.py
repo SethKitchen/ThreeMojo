@@ -1,9 +1,9 @@
 """Bind local ordered/nonnegative-error selection producers and exact constants."""
 from pathlib import Path
-try:
+if __package__:
+    from . import source_contracts
+else:
     import source_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts
 EXPECTED={
 'extensions/carla/spiral_grouped_roundoff_proof.mojo':'a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a782722733a86b7',
 'extensions/carla/spiral_roundoff_proof.mojo':'634c4f0f448b472301a42ad6065655f60cf78121f12bafa64085a1e67108fc0f'}
@@ -11,11 +11,12 @@ INTERVAL='e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'
 
 def _scalar(text,name):
     # Lazy imports avoid a cycle with maintained migration verifiers.
-    try:
+    if __package__:
+        from . import spiral_moments as moments
+        from . import ideal_projection
+    else:
         import spiral_moments as moments
         import ideal_projection
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import spiral_moments as moments, ideal_projection
     statements=ideal_projection.module_statements(text)
     matches=[s for s in statements if s[:2]==[('NAME','comptime'),('NAME',name)]]
     if len(matches)!=1:raise ValueError('Missing or ambiguous selector constant')
@@ -39,10 +40,10 @@ def _producer_text(root, path):
     text = (root/path).read_text()
     if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
             and source_contracts.token_sha256(text) != EXPECTED[path]):
-        try:
+        if __package__:
+            from . import grouped_y_finiteness_contracts as grouped_y
+        else:
             import grouped_y_finiteness_contracts as grouped_y
-        except ModuleNotFoundError:
-            from tools.carla_lane_oracle import grouped_y_finiteness_contracts as grouped_y
         text = grouped_y.predecessor_text(root, path)
     return text
 
@@ -56,10 +57,10 @@ def predecessor_text(root, path):
     """Verify both actual producers before reconstructing one legacy module."""
     import hashlib
     import json
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     root=Path(root)
     verify(root)
     payload=(root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes()

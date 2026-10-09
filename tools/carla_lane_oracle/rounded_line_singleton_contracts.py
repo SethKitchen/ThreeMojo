@@ -7,12 +7,12 @@ independent approval must compose this proposal into aggregate tooling.
 """
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
 
 MIGRATION = 'tools/carla_lane_oracle/rounded-line-singleton-migration.json'
 MIGRATION_SHA256 = 'e4a0eb6c9e527dd66b2b803ee69754334feecc9bea33ce001cdf584d3a693506'
@@ -37,10 +37,10 @@ def _reviewed_text(root, path, record):
     text = (root/path).read_text()
     if path != 'extensions/carla/curve_rounded_line.mojo' or guard.significant(text) == guard.significant(record['modules'][path]['source']):
         return text
-    try:
+    if __package__:
+        from . import rounded_line_selector_contracts as successor
+    else:
         import rounded_line_selector_contracts as successor
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import rounded_line_selector_contracts as successor
     # Validate the actual complete selector/context/name graph before restoring
     # its exact immediate predecessor. The successor calls read_record only.
     current = successor.verify_premises(root)
@@ -49,10 +49,10 @@ def _reviewed_text(root, path, record):
 
 
 def _verify_dependency(path, text, expected):
-    try:
+    if __package__:
+        from . import reviewed_cleanup_contracts as words
+    else:
         import reviewed_cleanup_contracts as words
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import reviewed_cleanup_contracts as words
     words.verify_dependency(path, text, expected)
 
 

@@ -46,10 +46,10 @@ def verify_runtime_pin_successor(root, prior_digest):
     record = read_record(root)
     require(prior_digest == record['runtime_pins_before_sha256'],
             'runtime pin predecessor differs from accepted cleanup')
-    try:
+    if __package__:
+        from . import coverage_invariant_contracts as invariant
+    else:
         import coverage_invariant_contracts as invariant
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
     payload = invariant.predecessor_pins(root, source.PINS)
     require(hashlib.sha256(payload).hexdigest() == record['runtime_pins_after_sha256'],
             'unreviewed runtime pin successor')
@@ -72,10 +72,10 @@ def verify_runtime_pin_successor(root, prior_digest):
 def verify_premises(root):
     # This scoped check deliberately does not inspect the complete-file hash.
     # Mutation controls invoke it directly to test producer and Box obligations.
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     record = read_record(root)
     for item in record['function_sources']:
         actual = guard.declaration((root/item['path']).read_text(),
@@ -91,20 +91,20 @@ def verify_premises(root):
 def verify(root):
     record = read_record(root)
     verify_runtime_pin_successor(root, record['runtime_pins_before_sha256'])
-    try:
+    if __package__:
+        from . import coverage_invariant_contracts as invariant
+    else:
         import coverage_invariant_contracts as invariant
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
     guard_payload = invariant.predecessor_pins(root, 'sum2-guard-pins.json')
     require(hashlib.sha256(guard_payload).hexdigest() ==
             record['guard_pins_unchanged_sha256'], 'guard pin lineage changed')
     require(source.token_sha256((root/SOURCE_PATH).read_text()) ==
             record['source_successor']['after_token_sha256'],
             'complete frozen ARC successor changed')
-    try:
+    if __package__:
+        from . import reviewed_cleanup_contracts as cleanup
+    else:
         import reviewed_cleanup_contracts as cleanup
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
     for path, expected in record['premise_dependencies'].items():
         cleanup.verify_dependency(path, (root/path).read_text(), expected['token_sha256'])
     verify_premises(root)
