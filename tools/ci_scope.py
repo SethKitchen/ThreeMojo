@@ -64,7 +64,7 @@ def kind(path):
         return 'portability'
     if path.startswith('assets/carla/tools/export/'):
         return 'export'
-    if path in {'tools/bench_examples.py', 'tools/compiler_metadata.py'}:
+    if path in {'tools/bench_examples.py', 'tools/compiler_metadata.py', 'tools/humanoid_fidelity.py'}:
         return 'tools'
     if path.startswith('assets/'):
         return 'native'
