@@ -708,7 +708,6 @@ WIKI_REMOTE := https://github.com/SethKitchen/ThreeMojo.wiki.git
 docs-check:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) tools/doc_lint.mojo $(DOCS)); \
 	[ $$rc -eq 0 ] || exit 1
-	@python3 tools/check_wiki_links.py $(DOCS)
 
 # Replaces every page in the wiki with the copies in docs/wiki/. GitHub
 # creates the wiki repository when its first page is saved in the browser, so

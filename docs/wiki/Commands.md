@@ -20,7 +20,7 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 | `make coverage-report` | Report on the captures. Fails on any gap, and on a suite with no capture. |
 | `make compile-fail` | Assert that every file in `tests/compile_fail/` fails to compile. |
 | `make docstrings` | Audit every public symbol for `Args`, `Returns` and `Raises`. Not part of `check`. |
-| `make docs-check` | Check the documentation against the writing rules, and check its wiki links. |
+| `make docs-check` | Check the documentation against the writing rules. |
 | `make wiki-publish` | Copy `docs/wiki/` to the GitHub wiki. |
 | `make example` | Render `out/triangle.png`. |
 | `make animation` | Render every animated example into `out/`. |

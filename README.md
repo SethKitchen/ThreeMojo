@@ -128,7 +128,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 <details>
 <summary>Implemented: 11</summary>
 
-- [x] [Wiki link check](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation#check-the-rules): `make docs-check` refuses wiki links to pages or headings that do not exist [#687](https://github.com/SethKitchen/ThreeMojo/issues/687)
+- [x] [Wiki link check](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation#check-the-rules): `make test-tools` refuses wiki links to pages or headings that do not exist [#687](https://github.com/SethKitchen/ThreeMojo/issues/687)
 
 - [x] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion, pinned upstream inputs and exact production reproduction [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
 
