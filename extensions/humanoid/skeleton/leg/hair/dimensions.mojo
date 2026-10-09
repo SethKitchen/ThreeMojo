@@ -20,11 +20,10 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
     DistanceField,
-    empty_bounds,
+    blend_six_shafts,
+    bounds_of_six_shafts,
     field_gradient,
     mix_point,
-    sd_segment,
-    smin,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
 from extensions.humanoid.skeleton.leg.skin.dimensions import SkinField
@@ -130,20 +129,22 @@ struct HairField(DistanceField, ImplicitlyCopyable):
         self.b3 = _tip(self.a3, d3, length)
         self.b4 = _tip(self.a4, d4, length)
         self.b5 = _tip(self.a5, d5, length)
-        var box = empty_bounds()
-        box.include_sphere(self.a0, self.radius)
-        box.include_sphere(self.a1, self.radius)
-        box.include_sphere(self.a2, self.radius)
-        box.include_sphere(self.a3, self.radius)
-        box.include_sphere(self.a4, self.radius)
-        box.include_sphere(self.a5, self.radius)
-        box.include_sphere(self.b0, self.radius)
-        box.include_sphere(self.b1, self.radius)
-        box.include_sphere(self.b2, self.radius)
-        box.include_sphere(self.b3, self.radius)
-        box.include_sphere(self.b4, self.radius)
-        box.include_sphere(self.b5, self.radius)
-        var padded = box.padded(0.006 + self.radius)
+        var padded = bounds_of_six_shafts(
+            self.a0,
+            self.b0,
+            self.a1,
+            self.b1,
+            self.a2,
+            self.b2,
+            self.a3,
+            self.b3,
+            self.a4,
+            self.b4,
+            self.a5,
+            self.b5,
+            self.radius,
+            0.006 + self.radius,
+        )
         self.low = padded.low
         self.high = padded.high
 
@@ -152,30 +153,21 @@ struct HairField(DistanceField, ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        var d = sd_segment(point, self.a0, self.b0, self.radius, self.radius)
-        d = smin(
-            d,
-            sd_segment(point, self.a1, self.b1, self.radius, self.radius),
-            self.k,
-        )
-        d = smin(
-            d,
-            sd_segment(point, self.a2, self.b2, self.radius, self.radius),
-            self.k,
-        )
-        d = smin(
-            d,
-            sd_segment(point, self.a3, self.b3, self.radius, self.radius),
-            self.k,
-        )
-        d = smin(
-            d,
-            sd_segment(point, self.a4, self.b4, self.radius, self.radius),
-            self.k,
-        )
-        return smin(
-            d,
-            sd_segment(point, self.a5, self.b5, self.radius, self.radius),
+        return blend_six_shafts(
+            point,
+            self.a0,
+            self.b0,
+            self.a1,
+            self.b1,
+            self.a2,
+            self.b2,
+            self.a3,
+            self.b3,
+            self.a4,
+            self.b4,
+            self.a5,
+            self.b5,
+            self.radius,
             self.k,
         )
 

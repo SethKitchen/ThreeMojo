@@ -32,6 +32,7 @@ from extensions.humanoid.skeleton.field import (
     field_gradient,
     flip_x,
     mix_point,
+    tapered_tube,
     tube_chain_bounds,
     tube_chain_distance,
 )
@@ -346,7 +347,7 @@ def _chain(
             0.0047 * S,
         )
     if part == COMMON_ILIAC_ARTERY:
-        return _straight(at.bifurcation, at.division, 0.0026 * S, 0.0025 * S)
+        return tapered_tube(at.bifurcation, at.division, 0.0026 * S, 0.0025 * S)
     if part == EXTERNAL_ILIAC_ARTERY:
         return TubeChain(
             at.division,
@@ -506,20 +507,4 @@ def _chain(
         0.0021 * S,
         0.0019 * S,
         0.0018 * S,
-    )
-
-
-def _straight(a: Vector3, b: Vector3, ra: Float32, rb: Float32) -> TubeChain:
-    """Return a straight tube from `a` to `b`."""
-    return TubeChain(
-        a,
-        mix_point(a, b, 0.25),
-        mix_point(a, b, 0.50),
-        mix_point(a, b, 0.75),
-        b,
-        ra,
-        ra + (rb - ra) * 0.25,
-        ra + (rb - ra) * 0.50,
-        ra + (rb - ra) * 0.75,
-        rb,
     )

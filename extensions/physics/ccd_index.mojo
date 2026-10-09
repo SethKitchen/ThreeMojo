@@ -10,6 +10,7 @@ Each triangle occurs once. Median splits bound depth by ceil(log2(T)); escape
 links bound a query to at most 2*T-1 node visits, without a traversal stack.
 """
 
+from extensions.physics.bvh import median_order, split_axis
 from extensions.physics.shape import _wide
 from math.bounds import Box3
 from math.triangle import Triangle
@@ -75,40 +76,6 @@ struct _Builder(Movable):
         self.buffer = self.order.copy()
         self._build(0, count)
 
-    def _key(self, i: Int, axis: Int) -> Float64:
-        var box = self.boxes[i]
-        if axis == 0:
-            return Float64(box.min.x) + Float64(box.max.x)
-        if axis == 1:
-            return Float64(box.min.y) + Float64(box.max.y)
-        return Float64(box.min.z) + Float64(box.max.z)
-
-    def _sort(mut self, start: Int, end: Int, axis: Int):
-        var width = 1
-        while width < end - start:
-            # The surrounding condition proves start < end.
-            for low in range(start, end, 2 * width):  # pragma: no branch
-                var mid = min(low + width, end)
-                var high = min(low + 2 * width, end)
-                var left = low
-                var right = mid
-                # A run has at least one entry: low < end and width >= 1.
-                for k in range(low, high):  # pragma: no branch
-                    if right < high and (
-                        left >= mid
-                        or self._key(self.order[right], axis)
-                        < self._key(self.order[left], axis)
-                    ):
-                        self.buffer[k] = self.order[right]
-                        right += 1
-                    else:
-                        self.buffer[k] = self.order[left]
-                        left += 1
-                # A run has at least one entry: low < end and width >= 1.
-                for k in range(low, high):  # pragma: no branch
-                    self.order[k] = self.buffer[k]
-            width *= 2
-
     def _build(mut self, start: Int, end: Int):
         var box = self.boxes[self.order[start]]
         for i in range(start + 1, end):
@@ -119,15 +86,9 @@ struct _Builder(Movable):
         if end - start == 1:
             self.nodes[node].entry = self.order[start]
         else:
-            var dx = Float64(box.max.x) - Float64(box.min.x)
-            var dy = Float64(box.max.y) - Float64(box.min.y)
-            var dz = Float64(box.max.z) - Float64(box.min.z)
-            var axis = 0
-            if dy > dx:
-                axis = 1
-            if dz > max(dx, dy):
-                axis = 2
-            self._sort(start, end, axis)
+            median_order(
+                self.boxes, self.order, self.buffer, start, end, split_axis(box)
+            )
             var middle = start + (end - start) // 2
             self._build(start, middle)
             self._build(middle, end)

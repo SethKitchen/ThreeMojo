@@ -28,6 +28,7 @@ from extensions.animals.parts import JAW
 from extensions.sdf.sculpt import ell_y
 from extensions.animals.kit import (
     EyeSpec,
+    add_orbit_lid_and_socket,
     eye_frame_of,
     is_limb,
     mirrored_blob,
@@ -453,32 +454,7 @@ def cheetah_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
         # The lids: a thin shell hugging the eyeball, cut open along an
         # almond aperture, in a soft orbit hollow.
         var ef = eye_frame_of(eye, HEAD_O, s)
-        _ = ell_y(
-            m,
-            "orbit",
-            h,
-            ef.at(-0.002 * s, -0.0005, 0.019),
-            ef.y,
-            V3(0.018, 0.0125, 0.009),
-            lateral=ef.x,
-            k=0.008,
-            carve=True,
-        )
-        _ = m.sphere("eyelid", h, ef.c, eye.r + eye.lid, k=0.005)
-        _ = m.lens(
-            "eyesocket",
-            h,
-            ef.c + ef.y * eye.off,
-            ef.x,
-            ef.y,
-            ef.z,
-            eye.big_r,
-            eye.d,
-            -0.002,
-            0.024,
-            k=0.0022,
-            carve=True,
-        )
+        add_orbit_lid_and_socket(m, h, ef, eye, s)
         _ = m.sphere(
             "nostril",
             h,
