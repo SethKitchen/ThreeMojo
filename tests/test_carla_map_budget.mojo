@@ -5,7 +5,7 @@
 
 """Pre-admission and sufficient-budget controls for spatial map work."""
 
-from extensions.carla.geometry import ARC, RoadGeometry, with_arc
+from extensions.carla.geometry import ARC, LINE, RoadGeometry, with_arc
 from extensions.carla.map import Controller, Junction, Map, Signal
 from extensions.carla.map_builder import (
     MapBuilder,

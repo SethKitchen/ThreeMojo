@@ -12,7 +12,7 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "29231ead5f80dff254be102cf3344ecf9b4583a7374d2220c0f0c8f331563b1f",
+    "source_sha256": "c6a4a571d665b93671af465c129cdb563720eb7bb85c0f5ba2c5ec26fd362f33",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
