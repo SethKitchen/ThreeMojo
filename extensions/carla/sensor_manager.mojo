@@ -165,6 +165,7 @@ from units.si import (
     SECOND,
     Angle,
     Duration,
+    Duration64,
 )
 
 
@@ -704,7 +705,7 @@ struct SensorManager(Movable):
                 var image = render_camera(rays, _image_kind(k), pose, geometry)
                 if k == DVS_SENSOR:
                     m.events = s.dvs.value().simulate(
-                        image, world.elapsed_seconds
+                        image, Duration64(world.elapsed_seconds)
                     )
                     if len(m.events) == 0:
                         return
@@ -788,7 +789,7 @@ struct SensorManager(Movable):
             var event = s.lane.value().tick(
                 world.map,
                 world.frame,
-                world.elapsed_seconds,
+                Duration64(world.elapsed_seconds),
                 world.get_transform(parent),
             )
             if not Bool(event):

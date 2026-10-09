@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "7d6a85ed41134dc9342d32d4efdd216184a52bc04c0c6b1420a2bb64f5558460",
+    "source_sha256": "4f71cb66ed434624cce7c347c74e881c0d998dc6e619e95e7883ce3adadc5109",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "6982cfa53be163bc305f1884193a3940b0907274a02ede55758efed7e7a093a6"
+    "binary_sha256": "d84f8951347d88698a8b23c287bbcc78590ce274f3bbecde8a80e644be67b31f"
   },
   "source_file_sha256": {
     "extensions/anatomy/soft_tissue.mojo": "3af2496ae83428e477d5e8ec2eb364a88a3a5435235faeb88f776dbfdaed3238",

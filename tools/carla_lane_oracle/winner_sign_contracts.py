@@ -153,6 +153,14 @@ def verify(root):
         require(border.MODULE not in successors, 'duplicate border parser edge')
         successors[border.MODULE] = border_edge
 
+    if __package__:
+        from . import runtime_boundary_contracts as boundary
+    else:
+        import runtime_boundary_contracts as boundary
+    for path, edge in boundary.verify(root).items():
+        require(path not in successors, 'duplicate runtime boundary edge')
+        successors[path] = edge
+
     for path, expected in record['canonical_source_unchanged'].items():
         if path in successors:
             require(expected == successors[path]['before_sha256'],

@@ -170,6 +170,7 @@ from units.si import (
     RADIAN,
     Duration,
     Length,
+    Length64,
     METER,
     SECOND,
     Velocity,
@@ -2032,23 +2033,30 @@ struct World(Movable):
         return None
 
     def get_traffic_lights_from_waypoint(
-        self, waypoint: Waypoint, distance: Float64
+        self, waypoint: Waypoint, distance: Length64
     ) raises -> List[ActorId]:
         """Return the lights ahead of a waypoint,
         `GetTrafficLightsFromWaypoint`.
 
         Args:
             waypoint: The start.
-            distance: How far ahead, in meters.
+            distance: How far ahead, kept in Float64.
 
         Returns:
             Each light once, in the order the landmarks come.
 
         Raises:
-            Error: If the lane is not in the map.
+            Error: If the distance is not finite or is negative, or the lane
+                is not in the map.
         """
+        if not (isfinite(distance.value) and distance.value >= 0):
+            raise Error(
+                "A light search distance must be finite and nonnegative"
+            )
         var out = List[ActorId]()
-        for landmark in self.map.landmarks_in_distance(waypoint, distance):
+        for landmark in self.map.landmarks_in_distance(
+            waypoint, distance.value
+        ):
             ref signal = self.map.signal(landmark.reference.signal_id)
             if not is_traffic_light(signal.type):
                 continue
