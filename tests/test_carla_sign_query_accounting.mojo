@@ -6,9 +6,18 @@ from extensions.carla.map import (
     Map,
     Signal,
     Waypoint,
+    _query_node_step_cost,
+    _winner_seed_room,
 )
+from extensions.carla.curve_bounds import _reference_work
+from extensions.carla.math import distance_segment_to_point
 from extensions.carla.map_builder import _check_signals_on_roads_with_work
-from extensions.carla.map_search import MapBuildBudget, _MapBuildWork
+from extensions.carla.map_search import (
+    MapBuildBudget,
+    MapQueryBudget,
+    _MapBuildWork,
+    _MapQueryWork,
+)
 from extensions.carla.polynomial import CubicPolynomial
 from extensions.carla.road import Lane, LaneKey, LaneSection, Road
 from extensions.carla.road_info import (
@@ -19,6 +28,7 @@ from extensions.carla.road_info import (
     RoadInfoLaneWidth,
     SectionId,
     SignalId,
+    info_index,
 )
 from math.vector3 import Vector3
 from std.memory import bitcast
@@ -30,6 +40,13 @@ from std.testing import (
     assert_true,
 )
 from tests.test_carla_cross_candidate_certificates import _road
+from tests.test_carla_winner_seed_recovery import (
+    _assert_optional_seed_debits,
+    _attempt,
+    _produced_seed,
+    _same_certificate_except_work,
+    _seed_road,
+)
 
 
 def _one_lane_many_equal_sections(count: Int, lane_id: Int = -1) raises -> Map:
@@ -247,6 +264,89 @@ def test_sign_query_rejects_invalid_policy_mask_and_segment() raises:
         )
     assert_equal(work.steps, 5)
     assert_false(work.exhausted)
+
+
+def test_optional_seed_missing_geometry_keeps_real_certificates() raises:
+    for missing_owner in range(3):
+        var road = _seed_road()
+        var target_road = _seed_road(2)
+        var work = _MapQueryWork(MapQueryBudget())
+        var certificate = _produced_seed(road, 0.25, 0.3, work)
+        var target = _produced_seed(target_road, 0.25, 0.3, work)
+        assert_false(certificate.exact_witness)
+        assert_false(target.exact_witness)
+        assert_equal(certificate.s, 0.25)
+        assert_equal(certificate.point, target.point)
+        assert_equal(len(certificate.cells), 1)
+        assert_equal(len(target.cells), 1)
+        var before = certificate.copy()
+        var target_before = target.copy()
+        var entry_steps = work.steps
+        # Deliberately make one road's metadata incomplete only after the
+        # real producer returns. This tests defensive eligibility, not a
+        # reachable state of an immutable, normally constructed Map.
+        if missing_owner == 0:
+            road.info.geometries.clear()
+        elif missing_owner == 1:
+            target_road.info.geometries.clear()
+        assert_equal(
+            info_index(road.info.geometries, 0.25),
+            -1 if missing_owner == 0 else 0,
+        )
+        assert_equal(
+            info_index(target_road.info.geometries, 0.25),
+            -1 if missing_owner == 1 else 0,
+        )
+        assert_false(
+            _attempt(road, target_road, 0.25, 0.3, certificate, target, 0, work)
+        )
+        # The intact control visits the all-false eligibility decision in
+        # this same test and performs the established 255 proposal path.
+        var nodes = 87 if missing_owner == 2 else 0
+        var terms = 2570 if missing_owner == 2 else 0
+        _assert_optional_seed_debits(
+            before,
+            certificate,
+            target_before,
+            target,
+            entry_steps,
+            _query_node_step_cost(1, True, True),
+            nodes,
+            terms,
+            work,
+        )
+
+
+def test_sign_query_rejects_negative_selected_index_with_retained_work() raises:
+    var map = _one_lane_many_equal_sections(64)
+    var query = Vector3(2, 0, 0)
+    var expected = map.closest_waypoint_on_road(query)
+    assert_true(Bool(expected))
+    assert_equal(len(map._carla_segments), 1)
+    assert_equal(len(map._carla_tree._tree.start_values), 1)
+    assert_equal(map._carla_tree._tree.start_values[0], 0)
+    # Preserve the actual constructed geometry, tree, filter and segments.
+    # Only the selected scalar metadata is deliberately malformed.
+    map._carla_tree._tree.start_values[0] = -1
+    var rejected = _MapBuildWork(MapBuildBudget())
+    with assert_raises(contains="invalid segment"):
+        _ = map._closest_lane_with_build_work(query, LANE_DRIVING, rejected)
+    assert_equal(rejected.steps, 5)
+    assert_equal(rejected.segments, 0)
+    assert_equal(rejected.records, 0)
+    assert_equal(rejected.terms, 0)
+    assert_false(rejected.exhausted)
+    # Restore the scalar and exercise the all-false index decision in the
+    # same test. Refusal must not damage the tree or query behavior.
+    map._carla_tree._tree.start_values[0] = 0
+    var accepted = _MapBuildWork(MapBuildBudget())
+    _same_waypoint(
+        map._closest_lane_with_build_work(query, LANE_DRIVING, accepted),
+        expected,
+    )
+    assert_equal(accepted.steps, 136)
+    assert_equal(accepted.terms, 0)
+    assert_false(accepted.exhausted)
 
 
 def test_static_sign_loop_still_reserves_its_query() raises:
@@ -619,6 +719,171 @@ def test_sign_graph_tiny_leaf_has_exact_three_step_admission() raises:
         assert_true(short.exhausted)
         with assert_raises(contains="already exhausted"):
             _ = map._next_with_build_work(start, distance, short)
+
+
+def test_sign_query_refuses_each_mismatched_owner_label() raises:
+    for road_mismatch in [True, False]:
+        var map = _one_lane_many_equal_sections(3)
+        if road_mismatch:
+            map._carla_segments[0].second.road_id = RoadId(2)
+        else:
+            map._carla_segments[0].second.lane_id = LaneId(-2)
+        var work = _MapBuildWork(MapBuildBudget())
+        with assert_raises(contains="one finite lane section"):
+            _ = map._closest_lane_with_build_work(
+                Vector3(2, 0, 0), LANE_DRIVING, work
+            )
+        assert_equal(work.steps, 5)
+        assert_false(work.exhausted)
+
+
+def test_sign_graph_refuses_a_nonfinite_section_origin() raises:
+    var map = _graph_map(1)
+    map.roads[0].sections[0].s = bitcast[DType.float64](
+        UInt64(0x7FF8000000000000)
+    )
+    var start = Waypoint(RoadId(1), SectionId(0), LaneId(-1), 1.0)
+    var work = _MapBuildWork(MapBuildBudget())
+    with assert_raises(contains="invalid length"):
+        _ = map._next_with_build_work(start, 1.0, work)
+    assert_true(work.steps >= 2)
+    assert_false(work.exhausted)
+
+
+def test_sign_query_keeps_a_positive_sub_epsilon_projection() raises:
+    var map = _one_lane_many_equal_sections(1)
+    var start = map._carla_segments[0].start
+    var query = Vector3(start.x + Float32(1e-16), start.y, start.z)
+    var delta = distance_segment_to_point(
+        query, start, map._carla_segments[0].end
+    )[0].value
+    assert_true(delta > 0.0)
+    assert_true(Float64(delta) <= EPSILON)
+    var expected = map.closest_waypoint_on_road(query)
+    var work = _MapBuildWork(MapBuildBudget())
+    var actual = map._closest_lane_with_build_work(query, LANE_DRIVING, work)
+    _same_waypoint(actual, expected)
+    assert_equal(actual.value().s, map._carla_segments[0].first.s)
+    assert_false(work.exhausted)
+
+
+def test_sign_query_refuses_nan_projection_from_finite_long_segment() raises:
+    # The ordinary straight-road producer keeps one finite stored segment.
+    # Its Float32 squared length overflows, while projecting its own start
+    # gives t == 0 and therefore the legacy projection computes 0 * inf.
+    var road = _road()
+    road.length = 1e20
+    road.info.geometries[0].geometry.length = 1e20
+    var roads = List[Road]()
+    roads.append(road^)
+    var map = Map(roads^, List[Junction](), List[Signal](), List[Controller]())
+    assert_equal(len(map._carla_segments), 1)
+    var query = map._carla_segments[0].start
+    var delta = distance_segment_to_point(
+        query, query, map._carla_segments[0].end
+    )[0].value
+    assert_true(delta != delta)
+    var work = _MapBuildWork(MapBuildBudget())
+    with assert_raises(contains="A step needs a positive distance"):
+        _ = map._closest_lane_with_build_work(query, LANE_DRIVING, work)
+    assert_true(work.steps > 5)
+    assert_false(work.exhausted)
+
+
+def test_optional_seed_room_refuses_direct_invalid_scalar_arguments() raises:
+    # These are defensive helper-boundary calls, not states reached by the
+    # maintained caller. Both certificates come from the real producer;
+    # no certificate field or retained frontier is changed for this test.
+    var road = _seed_road()
+    var target_road = _seed_road(2)
+    var work = _MapQueryWork(MapQueryBudget())
+    var certificate = _produced_seed(road, 0.25, 0.3, work)
+    var target = _produced_seed(target_road, 0.25, 0.3, work)
+    var before = certificate.copy()
+    var target_before = target.copy()
+    var work_before = work
+    var winner_cost = _query_node_step_cost(
+        len(road.sections[0].lanes), True, True
+    )
+    var target_cost = _query_node_step_cost(
+        len(target_road.sections[0].lanes), True, True
+    )
+    var winner_reference = _reference_work(road, 0.25, 0.3)
+    var target_reference = _reference_work(target_road, 0.25, 0.3)
+    assert_false(certificate.exact_witness)
+    assert_false(target.exact_witness)
+    assert_equal(len(certificate.cells), 1)
+    assert_equal(len(target.cells), 1)
+    assert_true(winner_reference > 0)
+    assert_true(target_reference > 0)
+    for invalid in range(5):
+        # Each accepting call is the same-test all-false guard control.
+        # For the upper proof limit, use its valid endpoint of five.
+        var proof_nodes = 5 if invalid == 1 else 0
+        assert_true(
+            _winner_seed_room(
+                work,
+                certificate,
+                target.nodes,
+                target.terms,
+                len(target.cells),
+                winner_cost,
+                target_cost,
+                winner_reference,
+                target_reference,
+                proof_nodes,
+                0,
+            )
+        )
+        var target_cells = len(target.cells)
+        var followup_steps = 0
+        if invalid == 0:
+            proof_nodes = -1
+        elif invalid == 1:
+            proof_nodes = 6
+        elif invalid == 2:
+            followup_steps = -1
+        elif invalid == 3:
+            target_cells = -1
+        else:
+            target_cells = 16373
+        assert_false(
+            _winner_seed_room(
+                work,
+                certificate,
+                target.nodes,
+                target.terms,
+                target_cells,
+                winner_cost,
+                target_cost,
+                winner_reference,
+                target_reference,
+                proof_nodes,
+                followup_steps,
+            )
+        )
+        _same_certificate_except_work(before, certificate, 0, 0)
+        _same_certificate_except_work(target_before, target, 0, 0)
+        assert_equal(work.candidates, work_before.candidates)
+        assert_equal(work.nodes, work_before.nodes)
+        assert_equal(work.terms, work_before.terms)
+        assert_equal(work.index_pops, work_before.index_pops)
+        assert_equal(work.peak_queue_entries, work_before.peak_queue_entries)
+        assert_equal(work.steps, work_before.steps)
+        assert_equal(work.max_total_steps, work_before.max_total_steps)
+        assert_equal(work.exhausted, work_before.exhausted)
+        assert_equal(
+            work.policy.max_candidates, work_before.policy.max_candidates
+        )
+        assert_equal(work.policy.max_nodes, work_before.policy.max_nodes)
+        assert_equal(work.policy.max_terms, work_before.policy.max_terms)
+        assert_equal(
+            work.policy.max_index_pops, work_before.policy.max_index_pops
+        )
+        assert_equal(
+            work.policy.max_queue_entries, work_before.policy.max_queue_entries
+        )
+        assert_equal(work.policy.max_steps, work_before.policy.max_steps)
 
 
 def main() raises:

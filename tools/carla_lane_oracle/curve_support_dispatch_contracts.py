@@ -8,10 +8,10 @@ A composed integration must migrate runtime and guarded-caller pins separately.
 import hashlib
 import json
 
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/curve-support-dispatch-migration.json'
 MIGRATION_SHA256 = '1a6d7794bf0869a1e717685e556d8400e075ab97917ce8d855da6bd61c3ee19f'
@@ -45,10 +45,10 @@ def reviewed_source(root, path, expected):
         return text
     require(path == 'extensions/carla/curve_sample_dispatch.mojo',
             'unreviewed source successor: ' + path)
-    try:
+    if __package__:
+        from . import raw_cut_inverse_contracts as raw
+    else:
         import raw_cut_inverse_contracts as raw
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw
     record = raw.verify(root)
     require(record['before_token_sha256'] == expected, 'raw predecessor edge mismatch')
     return record['before_source']
@@ -56,10 +56,10 @@ def reviewed_source(root, path, expected):
 def verify_premises(root):
     # Deliberately independent of complete-module successor digest checks.
     # Bind operation graphs, local guards, full caller bodies, and declarations.
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     record = read_record(root)
     for path, item in record['sources'].items():
         require(guard.significant(reviewed_source(root,path,item['after_token_sha256'])) ==
@@ -68,14 +68,27 @@ def verify_premises(root):
         require(guard.significant((root/path).read_text()) ==
                 guard.significant(item['source']), 'interval/environment premise changed: ' + path)
     for item in record['premise_functions']:
-        actual = guard.declaration((root/item['path']).read_text(), item['name'], tuple(item['owner']))
+        text = (root/item['path']).read_text()
+        actual = guard.declaration(text, item['name'], tuple(item['owner']))
         matched = guard.significant(actual) == guard.significant(item['source'])
+        if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
+                'extensions/carla/map.mojo', '_try_winner_seed', ()):
+            try:
+                if __package__:
+                    from . import seed_count_contracts as seed_count
+                else:
+                    import seed_count_contracts as seed_count
+                predecessor = seed_count.reviewed_text(root, item['path'], text)
+                actual = guard.declaration(predecessor, item['name'], ())
+                matched = guard.significant(actual) == guard.significant(item['source'])
+            except (ValueError, OSError) as error:
+                require(False, 'reviewed Map caller premise changed: ' + str(error))
         if not matched and item['path'] == 'extensions/carla/lane_refinement.mojo':
             try:
-                try:
+                if __package__:
+                    from . import lane_control_contracts as lane
+                else:
                     import lane_control_contracts as lane
-                except ModuleNotFoundError:
-                    from tools.carla_lane_oracle import lane_control_contracts as lane
                 matched = lane.accepts_predecessor(root, item['path'], item['name'],
                                                   tuple(item['owner']), item['source'])
             except RuntimeError as error:

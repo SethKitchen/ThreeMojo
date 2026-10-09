@@ -189,6 +189,8 @@ Unprepared box queries classify finite and nonzero components from their stored 
 This avoids wide regularity sums without changing slab or point arithmetic.
 The [throughput report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ray-query-550.md) records the complete baseline/candidate matrix and pending aggregate checks.
 
+`bench/ray_query_bench.mojo` and `bench/ray_query_consumers.mojo` run those queries.
+
 ## Sphere hit-point filter
 
 Sphere hit-point queries first use a wide quadratic filter. It uses the

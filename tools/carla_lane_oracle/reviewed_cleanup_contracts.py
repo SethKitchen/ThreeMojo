@@ -10,24 +10,24 @@ import hashlib
 import json
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import frozen_arc_producer_contracts as frozen
+    from . import coverage_invariant_contracts as invariant
+else:
     import source_contracts as source
     import frozen_arc_producer_contracts as frozen
     import coverage_invariant_contracts as invariant
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
-    from tools.carla_lane_oracle import coverage_invariant_contracts as invariant
-try:
+if __package__:
+    from . import cache_key_contracts as cache_key
+else:
     import cache_key_contracts as cache_key
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import cache_key_contracts as cache_key
 
 
-try:
+if __package__:
+    from . import accepted_successor_contracts as accepted
+else:
     import accepted_successor_contracts as accepted
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import accepted_successor_contracts as accepted
 
 MIGRATION = 'tools/carla_lane_oracle/reviewed-cleanup-migration.json'
 MIGRATION_SHA256 = '01753344fe01d885eb3bbaf253815bca01816c57c09b6e7cc1c3a233808b42a9'
@@ -96,10 +96,10 @@ def ordered(text, fragments, label):
 def verify_premises(root):
     # Import here so the enclosing guard can call this verifier without a
     # module initialization cycle. Its lexical parser checks actual owners.
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     line = (root/SOURCE_PATHS[0]).read_text()
     arc = (root/SOURCE_PATHS[1]).read_text()
     junction = (root/SOURCE_PATHS[2]).read_text()
@@ -159,10 +159,10 @@ TRIG_WORD_SHA256 = 'f2337e89e88234a7a275e1be6398d672abd05210e5b37098e2e3bd39212c
 
 
 def _stored_word_sha256(text, arrays, scalars):
-    try:
+    if __package__:
+        from . import spiral_moments as moments
+    else:
         import spiral_moments as moments
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import spiral_moments as moments
     declarations = moments.ideal_projection.module_statements(text)
     canonical = {}
     for name in sorted(set(arrays) | scalars):

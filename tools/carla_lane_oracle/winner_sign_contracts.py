@@ -9,21 +9,21 @@ import hashlib
 import json
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+    from . import reviewed_cleanup_contracts as cleanup
+    from . import frozen_arc_producer_contracts as frozen
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import reviewed_cleanup_contracts as cleanup
     import frozen_arc_producer_contracts as frozen
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
-    from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
-    from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
 
-try:
+if __package__:
+    from . import accepted_successor_contracts as accepted
+else:
     import accepted_successor_contracts as accepted
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import accepted_successor_contracts as accepted
 
 MIGRATION = 'tools/carla_lane_oracle/winner-sign-query-migration.json'
 
@@ -65,10 +65,26 @@ def verify(root):
     previous = root/'tools/carla_lane_oracle/default-query-restoration-migration.json'
     require(hashlib.sha256(previous.read_bytes()).hexdigest() ==
             record['prior_default_restoration_sha256'], 'historical restoration changed')
-    text = (root/'extensions/carla/map.mojo').read_text()
-    require(hashlib.sha256(text.encode()).hexdigest() ==
-            record['raw_successors']['extensions/carla/map.mojo'][-1]['after'],
-            'unreviewed complete Map source')
+    text = (root/'extensions/carla/map.mojo').read_bytes().decode('utf-8')
+    live_map = text
+    live_map_sha256 = hashlib.sha256(text.encode()).hexdigest()
+    historical_map_sha256 = record['raw_successors']['extensions/carla/map.mojo'][-1]['after']
+    map_count_edge = None
+    if live_map_sha256 != historical_map_sha256:
+        if __package__:
+            from . import seed_count_contracts as seed_count
+        else:
+            import seed_count_contracts as seed_count
+        require(live_map_sha256 in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256},
+                'unreviewed complete Map source')
+        map_count_edge = seed_count.verify(root)
+        require(map_count_edge is not None
+                and map_count_edge['before_sha256'] == historical_map_sha256
+                and map_count_edge['after_sha256'] == live_map_sha256,
+                'Map count edge does not extend the historical winner source')
+        text = seed_count.historical_source(root)
+    require(hashlib.sha256(text.encode()).hexdigest() == historical_map_sha256,
+            'unreviewed historical Map reconstruction')
     for group in ('canonical_accumulation', 'support', 'optional_runtime'):
         source.verify_group(root, group)
     guard.verify(root)
@@ -79,10 +95,10 @@ def verify(root):
     additional = cleanup.invariant.verify(root)['sources']
     require(not (set(successors) & set(additional)), 'duplicate invariant successor')
     successors.update(additional)
-    try:
+    if __package__:
+        from . import coverage_followup_contracts as followup
+    else:
         import coverage_followup_contracts as followup
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import coverage_followup_contracts as followup
     for path, transition in followup.verify(root)['sources'].items():
         if path in successors:
             require(successors[path]['after_sha256'] == transition['before_sha256'],
@@ -105,26 +121,18 @@ def verify(root):
         else:
             successors[path] = transition
 
-    try:
+    if __package__:
+        from . import speed_parser_contracts as parser
+    else:
         import speed_parser_contracts as parser
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import speed_parser_contracts as parser
     parser_edge = parser.verify(root)
     require(parser_edge['path'] not in successors, 'duplicate speed parser edge')
     successors[parser_edge['path']] = parser_edge
 
-    try:
-        import border_width_contracts as borders
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import border_width_contracts as borders
-    border_edge = borders.verify(root)
-    require(border_edge['path'] not in successors, 'duplicate border-width edge')
-    successors[border_edge['path']] = border_edge
-
-    try:
+    if __package__:
+        from . import cache_key_contracts as cache_key
+    else:
         import cache_key_contracts as cache_key
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import cache_key_contracts as cache_key
     key_edge = cache_key.verify(root)
     path = cache_key.MODULE
     require(path in successors and successors[path]['after_sha256'] == key_edge['before_sha256'],
@@ -133,6 +141,15 @@ def verify(root):
     key_successor['after_sha256'] = key_edge['after_sha256']
     key_successor['after_token_sha256'] = cache_key.AFTER_TOKEN_SHA256
     successors[path] = key_successor
+
+    if __package__:
+        from . import border_parser_contracts as border
+    else:
+        import border_parser_contracts as border
+    border_edge = border.verify(root)
+    if border_edge is not None:
+        require(border.MODULE not in successors, 'duplicate border parser edge')
+        successors[border.MODULE] = border_edge
 
     for path, expected in record['canonical_source_unchanged'].items():
         if path in successors:
@@ -149,9 +166,9 @@ def verify(root):
         require(guard.significant(actual) == guard.significant(expected),
                 'complete seed helper changed: '+name)
         if name in record['fresh_guard_helpers']:
-            fresh_guard(actual)
-    seed = guard.declaration(text, '_try_winner_seed', ())
-    room = guard.declaration(text, '_winner_seed_room', ())
+            fresh_guard(guard.declaration(live_map, name, ()))
+    seed = guard.declaration(live_map, '_try_winner_seed', ())
+    room = guard.declaration(live_map, '_winner_seed_room', ())
     contains(seed, 'work._step(60)', 'fixed admission must be prepaid')
     contains(seed, 'work._step(12)', 'local-band retry must be separately prepaid')
     contains(seed, 'for level in range(8):', 'dyadic proposal depth changed')
@@ -167,11 +184,12 @@ def verify(root):
              'complete regular/tiny term reserve changed')
     contains(room, 'return target_reference <= terms_left // 50',
              'competitor term reserve changed')
-    selector = guard.declaration(text, '_closest_lane_certificate_with_work', ('Map',))
+    selector = guard.declaration(live_map, '_closest_lane_certificate_with_work', ('Map',))
     require('Exact lane witnesses have inconsistent dominance' not in selector,
             'reviewed redundant exact guard reappeared')
     return {'status': 'PASS', 'source_bound_helpers': 4,
             'fresh_environment_entries': 2, 'changed_map_dependency_groups': 3,
             'canonical_dependencies_unchanged': len(record['canonical_source_unchanged']) - len(successors),
             'reviewed_cleanup_successors': len(successors),
+            'map_count_successor': map_count_edge, 'map_source_sha256': live_map_sha256,
             'native_qualification_claimed': False}

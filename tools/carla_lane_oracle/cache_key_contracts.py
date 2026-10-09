@@ -13,10 +13,10 @@ import json
 from pathlib import Path
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MODULE = 'extensions/carla/lane_refinement.mojo'
 MIGRATION = 'tools/carla_lane_oracle/cache-key-migration.json'
@@ -47,10 +47,10 @@ def sha(text):
 
 @lru_cache(maxsize=128)
 def inventory_entry(text):
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     if not any(name in text for name in NAMES):
         return None
     names = [t.string for t in source.tokens(text) if t.type == tokenize.NAME]
@@ -61,10 +61,10 @@ def inventory_entry(text):
 def inventory(root):
     # Reuse the established production boundary, including nested namespaces
     # and __init__ re-exports. Do not normalize identifier ordinals.
-    try:
+    if __package__:
+        from . import sum2_guard_contracts as guard
+    else:
         import sum2_guard_contracts as guard
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import sum2_guard_contracts as guard
     result = {}
     for path in sorted(guard.production_mojo_paths(root)):
         rel = path.relative_to(root)

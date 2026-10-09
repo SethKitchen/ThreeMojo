@@ -15,18 +15,18 @@ from pathlib import Path
 import textwrap
 import tokenize
 
-try:
+if __package__:
+    from . import (
+        ideal_projection, source_contracts, reviewed_cleanup_contracts,
+    )
+else:
     import ideal_projection
     import source_contracts
     import reviewed_cleanup_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import (
-        ideal_projection, source_contracts, reviewed_cleanup_contracts,
-    )
-try:
+if __package__:
+    from . import cache_key_contracts as cache_key
+else:
     import cache_key_contracts as cache_key
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import cache_key_contracts as cache_key
 
 
 PINS = Path('tools/carla_lane_oracle/sum2-guard-pins.json')
@@ -124,7 +124,8 @@ def production_mojo_paths(root):
                 pending.append(path)
 
 
-def protected_inventory(root, *, verified_lane_predecessor=None):
+def protected_inventory(root, *, verified_lane_predecessor=None,
+                        verified_map_predecessor=None):
     result = {}
     for path in sorted(production_mojo_paths(root)):
         relative = path.relative_to(root)
@@ -135,6 +136,8 @@ def protected_inventory(root, *, verified_lane_predecessor=None):
         text = path.read_text()
         if relative.as_posix() == cache_key.MODULE and verified_lane_predecessor is not None:
             text = verified_lane_predecessor
+        if relative.as_posix() == 'extensions/carla/map.mojo' and verified_map_predecessor is not None:
+            text = verified_map_predecessor
         digest = protected_source_digest(text)
         if digest is not None:
             result[relative.as_posix()] = digest
@@ -253,6 +256,32 @@ def declaration(text, name, expected_owner=()):
     return function_span(text, name, expected_owner)[0]
 
 
+def _winner_seed_live_observables(text):
+    """Read the actual first operation and ordered, scoped debit statements."""
+    rows, statement, depth = [], [], 0
+    for token in source_contracts.tokens(text):
+        if token.type == tokenize.INDENT:
+            depth += 1
+        elif token.type == tokenize.DEDENT:
+            depth -= 1
+        elif token.type == tokenize.NEWLINE:
+            if statement:
+                rows.append((depth, tuple(statement)))
+            statement = []
+        elif token.type not in (tokenize.COMMENT, tokenize.NL, tokenize.ENDMARKER):
+            statement.append((token.type, token.string))
+    first = next((row for row in rows if row[0] == 1), None)
+    debits = []
+    for row in rows:
+        words = tuple(word for kind, word in row[1])
+        if words[:3] in (('work', '.', '_step'), ('work', '.', 'charge'),
+                         ('certificate', '.', 'nodes'), ('certificate', '.', 'terms'),
+                         ('certificate', '.', 's'), ('certificate', '.', 'point'),
+                         ('certificate', '.', 'upper')):
+            debits.append(row)
+    return first, debits
+
+
 def verify(root):
     pins = json.loads((root / PINS).read_text(), object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
@@ -279,6 +308,7 @@ def verify(root):
             'Sum2 complete guard/helper token graph changed')
     count = 0
     verified_lane_predecessor = None
+    verified_map_predecessor = None
     for module, names in CALLERS.items():
         record = pins['callers'][module]
         require(set(record) == {'routing', 'functions'} and set(record['functions']) == set(names),
@@ -292,6 +322,23 @@ def verify(root):
                 raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                  + module + ' (' + str(error) + ')') from error
             verified_lane_predecessor = text
+        if module == 'map':
+            live_seed = declaration(text, '_try_winner_seed', ())
+            recorded_seed = record['functions']['_try_winner_seed']
+            if significant(live_seed) != significant(recorded_seed):
+                try:
+                    if __package__:
+                        from . import seed_count_contracts as seed_count
+                    else:
+                        import seed_count_contracts as seed_count
+                    text = seed_count.reviewed_text(root, path, text)
+                except (ValueError, OSError) as error:
+                    raise ValueError('Sum2 complete guarded caller changed or routing changed: '
+                                     + module + ' (' + str(error) + ')') from error
+                require(_winner_seed_live_observables(live_seed) ==
+                        _winner_seed_live_observables(recorded_seed),
+                        'Sum2 live winner-seed fresh guard or debit statements changed')
+                verified_map_predecessor = text
         require(declaration_routing(text) == record['routing'],
                 'Sum2 guard import/declaration routing changed: ' + module)
         spans = []
@@ -316,7 +363,8 @@ def verify(root):
             if token.type == tokenize.NAME and token.string in PROTECTED:
                 require(any(start <= index < end for start, end in spans + import_spans),
                         'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
-    require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor) == pins['protected_inventory'],
+    require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor,
+                                verified_map_predecessor=verified_map_predecessor) == pins['protected_inventory'],
             'global protected-helper use/import inventory changed')
     reviewed_cleanup_contracts.verify(root)
     return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,

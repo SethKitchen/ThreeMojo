@@ -9,6 +9,14 @@ Keep the [asset credits](CARLA-assets#credit-the-assets) with shared images.
 
 To render the stills, run `mojo run -I . examples/carla_town.mojo out/carla_town.png`. Each view is also written alone, at 800 by 600: `out/carla_town_clear_noon.png`, `out/carla_town_wet_sunset.png`, `out/carla_town_rain.png` and `out/carla_town_night.png`.
 
+`examples/carla_towns.mojo` draws CARLA's Town10HD in the same four weathers.
+
+![Town10HD at clear noon, a wet sunset, hard rain and a clear night](out/carla_towns.png)
+
+Each of those views is also written alone: `out/carla_towns_clear_noon.png`, `out/carla_towns_wet_sunset.png`, `out/carla_towns_rain.png` and `out/carla_towns_night.png`.
+The town package must be in the asset cache.
+See [CARLA assets](CARLA-assets).
+
 The look comes from ThreeMojo's renderer and well-known techniques: physical materials, cascaded sun shadows, a sky model, height fog, screen-space reflections, bloom and tone mapping. The sizes, colors and gains are this port's own choices. See [CARLA world](CARLA-world) for the world and its weather data.
 
 ## Modules

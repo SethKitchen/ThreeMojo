@@ -3,10 +3,10 @@
 """One exact parser grammar/correctness successor, never arbitrary repinning."""
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 MIGRATION = 'tools/carla_lane_oracle/speed-parser-successor.json'
 MIGRATION_SHA256 = '47e949673fb8740816c06d455654c7e7ae43f65ce7d7568a201e83ae16c49364'
 MODULE = 'extensions/carla/speed_limits.mojo'

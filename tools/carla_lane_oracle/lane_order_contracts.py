@@ -5,16 +5,16 @@ import json
 from pathlib import Path
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
-try:
+if __package__:
+    from . import cache_key_contracts as cache_key
+else:
     import cache_key_contracts as cache_key
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import cache_key_contracts as cache_key
 
 
 RECORD_SHA256 = 'e0aece69b861bc11a197cae17803e3273cdbd0cfed7ed0ca577ca6c3b4d217b1'

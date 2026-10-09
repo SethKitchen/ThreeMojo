@@ -1290,8 +1290,6 @@ def _winner_seed_room(
     if target_reference > target_terms // 50:
         return False
     var terms_left = work.policy.max_terms - work.terms
-    if winner_reference > terms_left // winner_units:
-        return False
     terms_left -= winner_units * winner_reference
     return target_reference <= terms_left // 50
 
@@ -1411,17 +1409,12 @@ def _try_winner_seed(
     work.charge(1, reference, node_cost)
     certificate.nodes += 1
     certificate.terms += reference
-    var center_reference = _reference_work(road, original_s, original_s)
-    if center_reference <= 0 or center_reference > reference:
-        return False
     var center = _expansion_distance_jet(
         road, section, lane, original_s, location, certificate.scale
     )
     if not center.first.is_finite():
         return False
     if not domain.first.is_finite() or not domain.second.is_finite():
-        if min(work.max_total_steps, work.policy.max_steps) - work.steps < 12:
-            return False
         # Separate admission preserves the two-setup smooth-root path.
         # Charge every retry before its midpoint/containment/progress work.
         work._step(12)
@@ -1447,20 +1440,12 @@ def _try_winner_seed(
             certificate.terms += reference
             var narrowed_low = band_low + 0.5 * (original_s - band_low)
             var narrowed_high = original_s + 0.5 * (band_high - original_s)
-            if (
-                not isfinite(narrowed_low)
-                or not isfinite(narrowed_high)
-                or narrowed_low > original_s
-                or narrowed_high < original_s
-                or narrowed_low >= narrowed_high
-                or (narrowed_low == band_low and narrowed_high == band_high)
+            if narrowed_low >= narrowed_high or (
+                narrowed_low == band_low and narrowed_high == band_high
             ):
                 return False
             band_low = narrowed_low
             band_high = narrowed_high
-            var retry_reference = _reference_work(road, band_low, band_high)
-            if retry_reference <= 0 or retry_reference > reference:
-                return False
             domain = _scaled_point_distance_jet(
                 _lane_jet(road, section, lane, band_low, band_high),
                 location,
@@ -1503,8 +1488,6 @@ def _try_winner_seed(
             # Debit actual quadrature before entering the unchanged compiled
             # scalar wrapper. Failed evaluations retain both ledgers.
             var point_work = _reference_work(road, s, s)
-            if point_work <= 0 or point_work > reference:
-                return improved
             work.charge(0, point_work, node_cost)
             certificate.terms += point_work
             var checked_terms = 0

@@ -178,5 +178,20 @@ def test_refusals() raises:
         _ = read_ies("assets/ies/missing.ies")
 
 
+def test_numeric_fields_use_whole_string_number() raises:
+    var head = String("TILT=NONE\n1 1 1 1 1 1 1 ")
+    var tail = String(" 0 0\n1 1 1\n0\n0\n5\n")
+    for token in ["+.", "1..0", "1e2e3", "0f"]:
+        with assert_raises(contains="is not a number"):
+            _ = parse_ies(head + token + tail)
+    # Number supports decimal and unsigned radix spellings.
+    for token in ["+.5e1", "5.", "0x5", "0o5", "0b101"]:
+        var lamp = parse_ies(head + token + tail)
+        assert_equal(lamp.width, 5)
+    # An empty numeric line remains Number("") == 0.
+    var empty = parse_ies(head + "0" + " 0 0\n1 1 1\n\n0\n5\n")
+    assert_equal(empty.ver_angles[0], 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

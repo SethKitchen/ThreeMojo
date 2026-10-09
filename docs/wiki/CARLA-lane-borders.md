@@ -32,15 +32,18 @@ If a lane has both `<width>` and `<border>` records, the reader uses the widths,
 `load_opendrive` raises for a lane section that:
 
 - puts border-only lanes in the same group as lanes with widths (ASAM rule `exclusive_width_border`)
-- uses border-only lanes on a road with a nonzero `<laneOffset>` (ASAM rule `exclusive_offset_border`). A `<laneOffset>` with all-zero coefficients is allowed.
+- uses border-only lanes on a road with a nonzero `<laneOffset>` (ASAM rule `exclusive_offset_border`). A `<laneOffset>` with all-zero coefficients is allowed as a compatibility extension; ASAM forbids the element even when all coefficients are zero.
 - has a border-only lane whose first border starts after the section's start
 - has a border-only lane whose inner lane has no borders
 - has a zero length and border-only lanes
-- has a border that crosses its inner border, which makes a negative width (ASAM rule `overlap_with_inner_lanes`). The reader checks the least value of each width cubic on its piece, at the ends and at the cubic's critical points. It allows one nanometer of rounding where two borders meet.
+- has a border that crosses its inner border, which makes a negative width (ASAM rule `overlap_with_inner_lanes`). The reader checks the least value of each width cubic on its piece, at the ends and at the cubic's critical points. It allows one nanometer of rounding where two borders meet. The derivative solver retains small roots and uses exponent-tagged product sums for the discriminant. It refuses nonfinite coefficients or an evaluation outside the numeric range.
 
 ## Limits
+
+- The reader accepts out-of-order border records and records before the section start for compatibility. ASAM requires ordered records with nonnegative offsets. These accepted cases are not claims of ASAM validity.
 
 - The width pieces are cubics in double precision. A Taylor shift of a border record far from its start can round the coefficients. The reference evaluation in CARLA has the same kind of rounding.
 - The reader does not compare borders with a lane height, superelevation or crossfall record.
 
 Source: `extensions/carla/opendrive.mojo`, `_border_widths`. Tests: `tests/test_carla_lane_borders.mojo`. Issue: [#577](https://github.com/SethKitchen/ThreeMojo/issues/577).
+

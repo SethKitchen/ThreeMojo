@@ -1054,6 +1054,59 @@
         "assets/exr_codecs/three180-results.json": "4d58472e0053f6b28d389df749c69466c7b03ad0e89f086f9bfb95e8611b2fe8",
         "assets/exr_codecs/three186-results.json": "e45086f1b9517cc770f47dc98e28280b4492d1d3a028b6dc11822b0807483bd7"
       }
+    },
+    {
+      "family": "node_gather",
+      "generator": "assets/node_gather/generate.mjs",
+      "generator_sha256": "38c07206a493055eaa401d255a8dbdf26b8a583f6fe8910d7970b731a8194424",
+      "three_version": "0.186.0",
+      "version_evidence": "The generator requires three 0.186.0 and revision 186. assets/node_gather/provenance.json records the package source hashes and generation runtime. See assets/node_gather/README.md.",
+      "cwd": ".",
+      "commands": [
+        "REF=$(mktemp -d)",
+        "npm pack three@0.186.0 --registry=https://registry.npmjs.org --ignore-scripts --pack-destination \"$REF\"",
+        "printf '%s  %s\\n' '61eeff9d7616005c9a481c796f52287d81fbbbc0d55eaca5565322924252c1aa' \"$REF/three-0.186.0.tgz\" | sha256sum --check -",
+        "tar xzf \"$REF/three-0.186.0.tgz\" -C \"$REF\"",
+        "node assets/node_gather/generate.mjs \"$REF/package\""
+      ],
+      "notes": [
+        "Use Node 24.19.0 and V8 13.6.233.17-node.51 on Linux x64. Keep the package outside the source tree.",
+        "Explicit FrontSide shadowSide serialization. No serialized fields or nodes are removed.",
+        "These fixtures cover serialization and reader refusal only. They do not establish GPU gather execution, ordering, or rendered parity."
+      ],
+      "artifacts": {
+        "assets/node_gather/material.json": "625e25badc9e0275c8e08c59b863e4d672c0c7dfc4df1447574737bf314cdcea",
+        "assets/node_gather/node.json": "dcdbe6366dbb808a91148e11bbb64a9e6865b7835c074cf89f245aa319b24831",
+        "assets/node_gather/object.json": "46f240b4ccd1315036b29782e4682467a03c096061886b20ae86a40008c3e8e2",
+        "assets/node_gather/provenance.json": "ebd7b9e3740ce263d2992a90074aca387d5faf627d8b64e171c00cea1ee8a8e3"
+      }
+    },
+    {
+      "family": "node_gather/default_null",
+      "generator": "assets/node_gather/default_null/generate.mjs",
+      "generator_sha256": "7977b893d234853357320ff76ac9b7d08ecd09121dd6fe8fc2c35cd326671fd2",
+      "three_version": "0.186.0",
+      "version_evidence": "The generator requires three 0.186.0 and revision 186. assets/node_gather/default_null/provenance.json records the package source hashes and generation runtime. See assets/node_gather/README.md.",
+      "cwd": ".",
+      "commands": [
+        "REF=$(mktemp -d)",
+        "npm pack three@0.186.0 --registry=https://registry.npmjs.org --ignore-scripts --pack-destination \"$REF\"",
+        "printf '%s  %s\\n' '61eeff9d7616005c9a481c796f52287d81fbbbc0d55eaca5565322924252c1aa' \"$REF/three-0.186.0.tgz\" | sha256sum --check -",
+        "tar xzf \"$REF/three-0.186.0.tgz\" -C \"$REF\"",
+        "node assets/node_gather/default_null/generate.mjs \"$REF/package\""
+      ],
+      "notes": [
+        "Use Node 24.19.0 and V8 13.6.233.17-node.51 on Linux x64. Keep the package outside the source tree.",
+        "Raw default-null shadowSide serialization. Check generated outputs against assets/node_gather/default_null/initial-hashes.json.",
+        "These fixtures cover serialization and reader refusal only. They do not establish GPU gather execution, ordering, or rendered parity."
+      ],
+      "artifacts": {
+        "assets/node_gather/default_null/initial-hashes.json": "4d5684669b4dfde4c63eaf5b146b4d39aef17f08d1758abc5f2664f51ca11f15",
+        "assets/node_gather/default_null/material.json": "1a83ec0d132d67c2f96c629715370eea754139b62ecd64ec9c9253a914a6281d",
+        "assets/node_gather/default_null/node.json": "dcdbe6366dbb808a91148e11bbb64a9e6865b7835c074cf89f245aa319b24831",
+        "assets/node_gather/default_null/object.json": "c02e34fd18d8f97f0486cc71316d9b3b56b3a42663962badd8c8c2c20d282e8a",
+        "assets/node_gather/default_null/provenance.json": "ebd7b9e3740ce263d2992a90074aca387d5faf627d8b64e171c00cea1ee8a8e3"
+      }
     }
   ]
 }

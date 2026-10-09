@@ -3,10 +3,10 @@
 """Explicit current-graph checks before reversible historical projection."""
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+else:
     import source_contracts as source
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
 
 MIGRATION = 'tools/carla_lane_oracle/accepted-successor-migration.json'
 MIGRATION_SHA256 = 'bb3a7b5e08a0a5400679f410da2c4574b45924294133df2f180f71fd74064d91'
@@ -57,14 +57,14 @@ def verify_current(root):
                 'unreviewed complete successor: ' + path)
         require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
                 == item['before_sha256'], 'historical module changed: ' + path)
-    try:
+    if __package__:
+        from . import rounded_line_selector_contracts as line
+        from . import distance_validation_contracts as distance
+        from . import grouped_y_finiteness_contracts as grouped
+    else:
         import rounded_line_selector_contracts as line
         import distance_validation_contracts as distance
         import grouped_y_finiteness_contracts as grouped
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import rounded_line_selector_contracts as line
-        from tools.carla_lane_oracle import distance_validation_contracts as distance
-        from tools.carla_lane_oracle import grouped_y_finiteness_contracts as grouped
     try:
         line.verify(root)
         distance.verify(root)

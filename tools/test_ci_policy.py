@@ -15,8 +15,8 @@ WORKFLOW = Path(__file__).resolve().parents[1] / '.github/workflows/ci.yml'
 GUARD = ("github.event_name != 'pull_request' || "
          "(github.event.pull_request.draft == false && "
          "github.event.pull_request.base.ref == 'main')")
-WIKI_GUARD = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-CHECK_JOBS = {'lint', 'cpu', 'cpu-macos', 'coverage-capture', 'coverage', 'gpu-host'}
+WIKI_GUARD = "always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.required.result == 'success'"
+CHECK_JOBS = {'lint', 'lint-macos', 'cpu', 'cpu-macos', 'coverage-capture', 'coverage', 'gpu-host'}
 
 
 def jobs_of(text):
@@ -47,30 +47,35 @@ class CiPolicyTests(unittest.TestCase):
         self.text = WORKFLOW.read_text()
         self.jobs = jobs_of(self.text)
 
-    def test_linux_cpu_tools_include_the_portability_contract(self):
-        commands = re.findall(r'^          (make .+)$', self.jobs['lint'], re.MULTILINE)
-        self.assertEqual(commands, [
-            'make -B fmt-check test-tools test-coverage-tool test-portability AFFECTED="$AFFECTED"',
-            'make -B lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu '
-            '--target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1 AFFECTED="$AFFECTED"',
-            'make -B compile-fail docs-check AFFECTED="$AFFECTED"',
-        ])
+    def test_lint_tools_and_native_gates_have_explicit_conditions(self):
+        for name in ('lint', 'lint-macos'):
+            job = self.jobs[name]
+            for flag, target in [('tools', 'test-tools'), ('coverage_tools', 'test-coverage-tool'),
+                                 ('portability', 'test-portability'), ('docs', 'docs-check')]:
+                self.assertRegex(job, "if: needs.scope.outputs.run_" + flag +
+                                 " == 'true'\n        run: python3 tools/ci_scope.py run -- " + target)
+            self.assertIn("if: needs.scope.outputs.run_native == 'true'", job)
+            self.assertNotIn('Install Xvfb', job)
+        self.assertIn('run -- fmt-check', self.jobs['lint'])
+        self.assertIn('run -- compile-fail', self.jobs['lint'])
+        self.assertIn('run -- lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu '
+                      '--target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1', self.jobs['lint'])
 
-    def test_macos_cpu_tools_include_the_portability_contract(self):
-        job = self.jobs['cpu-macos']
-        lint = re.search(r'^          - part: lint\n            target: (.+)$', job, re.MULTILINE)
-        self.assertIsNotNone(lint)
-        self.assertIn('test-portability', lint.group(1).split())
-        self.assertIn('test-coverage-tool', lint.group(1).split())
-        self.assertIn('run: make -B ${{ matrix.target }} JOBS=1 AFFECTED="$AFFECTED"', job)
+    def test_macos_lint_preserves_name_and_serializes_compilers(self):
+        job = self.jobs['lint-macos']
+        self.assertIn('name: check-cpu (macOS, Apple Silicon) lint', job)
+        self.assertIn('run -- lint-cpu JOBS=1', job)
+        self.assertIn('run -- test-coverage-tool JOBS=1', job)
+        self.assertIn('run -- test-portability JOBS=1', job)
+        self.assertNotIn('part: lint', self.jobs['cpu-macos'])
 
     def test_only_macos_cpu_checks_serialize_outer_compilers(self):
         job = self.jobs['cpu-macos']
         self.assertRegex(job, r'(?m)^    runs-on: macos-latest$')
         self.assertRegex(job, r'(?m)^    timeout-minutes: 150$')
-        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
-            'make -B ${{ matrix.target }} JOBS=1 AFFECTED="$AFFECTED"',
+            'python3 tools/ci_scope.py run -- ${{ matrix.target }} JOBS=1',
         ])
         # The GPU compile job has its own existing JOBS=1 contract.
         for name in ('lint', 'cpu', 'coverage-capture', 'coverage'):
@@ -81,11 +86,11 @@ class CiPolicyTests(unittest.TestCase):
         job = self.jobs['cpu']
         self.assertRegex(job, r'(?m)^    timeout-minutes: 120$')
         self.assertIn('shard: [1, 2, 3]', job)
-        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
-            'make -B test-cpu SHARD=${{ matrix.shard }}/3 '
+            'python3 tools/ci_scope.py run -- test-cpu SHARD=${{ matrix.shard }}/3 '
             'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
-            '--target-cpu=x86-64-v3" AFFECTED="$AFFECTED"',
+            '--target-cpu=x86-64-v3"',
         ])
         self.assertNotRegex(job, r'\bJOBS\s*=')
 
@@ -121,9 +126,9 @@ class CiPolicyTests(unittest.TestCase):
             if name != 'cpu':
                 self.assertNotIn('compiler_metadata.py', other)
         # The existing exact-command test also pins original flags/shards.
-        self.assertIn('run: make -B test-cpu SHARD=${{ matrix.shard }}/3 '
+        self.assertIn('run: python3 tools/ci_scope.py run -- test-cpu SHARD=${{ matrix.shard }}/3 '
                       'MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu '
-                      '--target-cpu=x86-64-v3" AFFECTED="$AFFECTED"', job)
+                      '--target-cpu=x86-64-v3"', job)
 
     def test_compiler_metadata_artifact_is_bounded_scoped_and_uploaded_early(self):
         job = self.jobs['cpu']
@@ -142,31 +147,53 @@ class CiPolicyTests(unittest.TestCase):
             if name != 'cpu':
                 self.assertNotIn('compiler-metadata.json', other)
 
-    def test_draft_pull_requests_skip_every_check_job(self):
-        self.assertTrue(CHECK_JOBS <= self.jobs.keys())
-        # A future check job must opt out of draft PRs too. Only the wiki
-        # is separate, with its existing main-push-only condition.
-        for name, job in self.jobs.items():
-            if name != 'wiki':
-                with self.subTest(job=name):
-                    self.assertFalse(allows(guard_of(job), 'pull_request', True))
+    def test_only_planner_admits_ready_direct_main_pr_push_and_manual_events(self):
+        guard = guard_of(self.jobs['scope'])
+        self.assertEqual(guard, GUARD)
+        self.assertFalse(allows(guard, 'pull_request', True))
+        self.assertFalse(allows(guard, 'pull_request', False, 'feature/parent'))
+        for event, draft in [('pull_request', False), ('push', None), ('workflow_dispatch', None)]:
+            self.assertTrue(allows(guard, event, draft))
+        self.assertEqual(guard_of(self.jobs['required']), 'always() && (' + GUARD + ')')
 
-    def test_ready_main_and_manual_runs_keep_every_check_job(self):
-        for name in CHECK_JOBS:
-            for event, draft in [('pull_request', False), ('push', None), ('workflow_dispatch', None)]:
-                with self.subTest(job=name, event=event):
-                    self.assertTrue(allows(guard_of(self.jobs[name]), event, draft))
+    def test_every_work_job_requires_successful_planning_and_an_applicability_flag(self):
+        from ci_scope import JOBS
+        self.assertEqual(set(JOBS), CHECK_JOBS)
+        self.assertEqual(set(self.jobs), CHECK_JOBS | {'scope', 'required', 'wiki'})
+        for name, flag in JOBS.items():
+            self.assertEqual(guard_of(self.jobs[name]), "needs.scope.outputs.run_" + flag + " == 'true'")
+            self.assertRegex(self.jobs[name], r'(?m)^    needs: (scope|\[scope, coverage-capture\])$')
 
-    def test_native_stack_layers_require_a_direct_main_target(self):
-        # Native stacks match the workflow branch filter against their
-        # ultimate base. The job guard must still reject an intermediate
-        # PR's actual base, even when its stack targets main.
-        for name in CHECK_JOBS:
-            with self.subTest(job=name):
-                self.assertFalse(allows(guard_of(self.jobs[name]),
-                                        'pull_request', False, 'feature/parent'))
-                self.assertTrue(allows(guard_of(self.jobs[name]),
-                                       'pull_request', False, 'main'))
+    def test_scope_uses_immutable_baselines_and_manual_full_audit(self):
+        job = self.jobs['scope']
+        self.assertIn('PR_BASE: ${{ github.event.pull_request.base.sha }}', job)
+        self.assertIn('PUSH_BASE: ${{ github.event.before }}', job)
+        self.assertIn('python3 tools/ci_scope.py plan --base "$PR_BASE"', job)
+        self.assertIn('python3 tools/ci_scope.py plan --base "$PUSH_BASE"', job)
+        self.assertIn('python3 tools/ci_scope.py plan --full', job)
+        self.assertNotIn('origin/main', self.text)
+
+    def test_full_inventory_uses_hash_bound_artifact_not_large_environment_value(self):
+        self.assertIn('path: .cache/ci-selection.json', self.jobs['scope'])
+        self.assertIn('if-no-files-found: error', self.jobs['scope'])
+        self.assertIn('include-hidden-files: true', self.jobs['scope'])
+        for name in CHECK_JOBS | {'required'}:
+            job = self.jobs[name]
+            self.assertIn('name: ci-selection', job)
+            self.assertIn('uses: actions/download-artifact@v4', job)
+            self.assertIn('CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}', job)
+        self.assertNotIn('CI_SELECTION:', self.text)
+
+    def test_required_check_has_all_results_and_no_ignored_failures(self):
+        job = self.jobs['required']
+        self.assertIn('needs: [scope, lint, cpu, lint-macos, cpu-macos, coverage-capture, coverage, gpu-host]', job)
+        self.assertIn('CI_NEEDS: ${{ toJSON(needs) }}', job)
+        self.assertIn('run: python3 tools/ci_scope.py aggregate', job)
+        self.assertNotIn('continue-on-error:', self.text)
+
+    def test_newer_runs_cancel_only_same_pr_or_ref(self):
+        self.assertIn('group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}', self.text)
+        self.assertIn('cancel-in-progress: true', self.text)
 
     def test_ready_for_review_retains_the_default_pr_events(self):
         event = re.search(r'^  pull_request:\n((?:    .*\n)+)', self.text, re.MULTILINE)
@@ -190,12 +217,12 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_gpu_job_compiles_before_running_only_host_suites(self):
         job = self.jobs['gpu-host']
-        commands = re.findall(r'^        run: (make .+)$', job, re.MULTILINE)
+        commands = re.findall(r'^        run: (python3 tools/ci_scope.py run -- .+)$', job, re.MULTILINE)
         self.assertEqual(commands, [
-            'make -B compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
-            'make -B test-gpu-host',
+            'python3 tools/ci_scope.py run -- compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"',
+            'python3 tools/ci_scope.py run -- test-gpu-host',
             # Metal kernel AIR, checked without a GPU (modular/modular#7238).
-            'make check-gpu-air',
+            'python3 tools/ci_scope.py run -- check-gpu-air',
         ])
         self.assertNotIn('continue-on-error:', job)
         self.assertNotRegex(job, r'(?m)^      -?\s*if:')
@@ -209,14 +236,14 @@ class CiPolicyTests(unittest.TestCase):
 
     def test_wiki_remains_main_push_only(self):
         self.assertEqual(guard_of(self.jobs['wiki']), WIKI_GUARD)
-        self.assertIn('needs: [lint, cpu, cpu-macos, coverage, gpu-host]', self.jobs['wiki'])
+        self.assertIn('needs: required', self.jobs['wiki'])
 
     def test_coverage_keeps_all_shards_and_its_report_dependency(self):
-        self.assertIn('needs: coverage-capture', self.jobs['coverage'])
+        self.assertIn('needs: [scope, coverage-capture]', self.jobs['coverage'])
         self.assertIn('shard: [1, 2, 3, 4, 5, 6, 7, 8]', self.jobs['coverage-capture'])
         # The group count in the command matches the matrix.
         self.assertIn('SHARD=${{ matrix.shard }}/8 ', self.jobs['coverage-capture'])
-        self.assertIn('make -B coverage-report AFFECTED="$AFFECTED"', self.jobs['coverage'])
+        self.assertIn('python3 tools/ci_scope.py run -- coverage-report', self.jobs['coverage'])
 
 
 if __name__ == '__main__':

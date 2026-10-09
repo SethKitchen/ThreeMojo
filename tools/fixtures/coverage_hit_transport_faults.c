@@ -67,10 +67,11 @@ enum outcome { FULL, INTERRUPTED, SHORT, ZERO, IO_ERROR };
 static const char *device_text, *inode_text, *fault;
 static pid_t fake_pid;
 static int private_open, opened_flags, private_flags, closes, aborts;
-static unsigned fstats, fcntls, polls;
+static unsigned fstats, fcntls, polls, pids;
+static int close_errno;
 static int poll_result, poll_error;
 static short poll_events;
-static void (*child_handler)(void);
+static void (*prepare_handler)(void), (*parent_handler)(void), (*child_handler)(void);
 static jmp_buf fatal;
 static int fatal_armed;
 static enum outcome outcomes[MAX_CALLS];
@@ -108,7 +109,7 @@ static char *fake_getenv(const char *name) {
     return (char *)inode_text;
 }
 
-static pid_t fake_getpid(void) { return fake_pid; }
+static pid_t fake_getpid(void) { ++pids; return fake_pid; }
 
 static int fake_open(const char *path, int flags, ...) {
     assert(!strcmp(path, "/proc/self/fd/2"));
@@ -127,6 +128,7 @@ static int fake_close(int descriptor) {
     assert(private_open);
     private_open = 0;
     ++closes;
+    if (close_errno) errno = close_errno;
     return 0;
 }
 
@@ -176,8 +178,10 @@ static int fake_poll(struct pollfd *descriptors, nfds_t count, int timeout) {
 }
 
 static int fake_atfork(void (*prepare)(void), void (*parent)(void), void (*child)(void)) {
-    assert(!prepare && !parent && child);
+    assert(prepare && parent && child);
     if (fault_is("atfork")) return ENOMEM;
+    prepare_handler = prepare;
+    parent_handler = parent;
     child_handler = child;
     return 0;
 }
@@ -214,9 +218,11 @@ static void fake_abort(void) {
 static void reset(void) {
     memset(slots, 0, sizeof(slots));
     owner = 0; pipe_device = 0; pipe_inode = 0; enabled = 0; probe_sink = -1;
+    atomic_store(&forks_in_flight, 0);
     device_text = "17"; inode_text = "23"; fault = "none"; fake_pid = 1001;
     private_open = opened_flags = private_flags = closes = aborts = 0;
-    fstats = fcntls = polls = 0; child_handler = NULL; fatal_armed = 0;
+    fstats = fcntls = polls = pids = 0; close_errno = 0;
+    prepare_handler = parent_handler = child_handler = NULL; fatal_armed = 0;
     poll_result = 1; poll_error = 0; poll_events = POLLOUT;
     planned = calls = 0; captured_size = 0; expect_uncached_write = 0;
     memset(attempts, 0, sizeof(attempts));
@@ -226,7 +232,8 @@ static void reset(void) {
 static void initialize(void) {
     errno = ENOENT;
     initialize_hit_cache();
-    assert(errno == ENOENT && enabled && probe_sink == PRIVATE_FD && child_handler);
+    assert(errno == ENOENT && enabled && probe_sink == PRIVATE_FD &&
+           prepare_handler && parent_handler && child_handler);
     assert(opened_flags == (O_WRONLY | O_NONBLOCK | O_CLOEXEC));
     assert(private_flags == O_WRONLY);
 }
@@ -392,11 +399,125 @@ static void ownership_cases(void) {
     assert(closes == 1 && !private_open); ++assertions_run;
 }
 
+__attribute__((noinline)) static void expect_callback_abort(void (*callback)(void)) {
+    fatal_armed = 1;
+    if (setjmp(fatal) == 0) {
+        callback();
+        assert(!"Expected callback abort did not occur");
+    }
+    fatal_armed = 0;
+    assert(aborts == 1);
+}
+
+static void fork_transition_cases(void) {
+    const char *a = "COVLINE:fork:1\n", *b = "COVLINE:fork:2\n";
+    const char *vector = "COVEVAL2:fork:3:T:TT;\n";
+
+    /* The ordinary path still writes every vector and does no PID lookup. */
+    reset(); initialize(); unsigned initial_pids = pids;
+    hit_text(a); hit_text(a); evaluation_text(vector); evaluation_text(vector);
+    assert(pids == initial_pids && calls == 3);
+    assert(attempts[0].descriptor == PRIVATE_FD && attempts[1].descriptor == PRIVATE_FD);
+    ++assertions_run;
+
+    /* Earlier/later parent callbacks retain private routing and caching. */
+    reset(); initialize(); hit_text(a); initial_pids = pids;
+    errno = EBUSY; prepare_handler();
+    assert(errno == EBUSY && atomic_load(&forks_in_flight) == 1);
+    hit_text(a); evaluation_text(vector);
+    assert(calls == 2 && pids == initial_pids + 2 && attempts[1].descriptor == PRIVATE_FD);
+    errno = EAGAIN; parent_handler();
+    assert(errno == EAGAIN && atomic_load(&forks_in_flight) == 0);
+    initial_pids = pids; hit_text(a);
+    assert(calls == 2 && pids == initial_pids);
+    ++assertions_run;
+
+    /* A child callback registered earlier than ours sees no inherited hits. */
+    reset(); initialize(); hit_text(a); prepare_handler(); fake_pid = 1002;
+    hit_text(a); hit_text(a); hit_text(b); evaluation_text(vector);
+    assert(calls == 5 && private_open && enabled);
+    for (unsigned i = 1; i < calls; ++i) assert(attempts[i].descriptor == 2);
+    assert(!cached((const unsigned char *)b, strlen(b)));
+    close_errno = EINTR; errno = ENOENT; child_handler();
+    assert(errno == ENOENT && !enabled && probe_sink == -1 && !private_open && closes == 1);
+    initial_pids = pids; hit_text(a); evaluation_text(vector);
+    assert(pids == initial_pids && calls == 7 && attempts[6].descriptor == 2);
+    ++assertions_run;
+
+    /* Out-of-order parent completions cannot clear another outstanding fork. */
+    reset(); initialize(); hit_text(a); prepare_handler(); prepare_handler();
+    assert(atomic_load(&forks_in_flight) == 2);
+    parent_handler(); assert(atomic_load(&forks_in_flight) == 1);
+    initial_pids = pids; hit_text(a); assert(pids == initial_pids + 1 && calls == 1);
+    parent_handler(); assert(atomic_load(&forks_in_flight) == 0);
+    initial_pids = pids; hit_text(a); assert(pids == initial_pids && calls == 1);
+    ++assertions_run;
+
+    /* A child of the still-pending fork inherits a positive count. */
+    reset(); initialize(); hit_text(a); prepare_handler(); prepare_handler(); parent_handler();
+    fake_pid = 1002; hit_text(a); evaluation_text(vector);
+    assert(calls == 3 && attempts[1].descriptor == 2 && attempts[2].descriptor == 2);
+    child_handler(); assert(!enabled && closes == 1);
+    ++assertions_run;
+
+    /* A nested failure in an earlier child callback leaves its outer guard. */
+    reset(); initialize(); hit_text(a); prepare_handler(); fake_pid = 1002;
+    prepare_handler(); errno = EAGAIN; parent_handler();
+    assert(errno == EAGAIN && atomic_load(&forks_in_flight) == 1);
+    hit_text(a); assert(calls == 2 && attempts[1].descriptor == 2);
+    child_handler(); assert(!enabled && closes == 1);
+    ++assertions_run;
+
+    /* A nested successful fork also stays raw before either child hook. */
+    reset(); initialize(); hit_text(a); prepare_handler(); fake_pid = 1002;
+    prepare_handler(); fake_pid = 1003; hit_text(a); evaluation_text(vector);
+    assert(atomic_load(&forks_in_flight) == 2 && calls == 3);
+    assert(attempts[1].descriptor == 2 && attempts[2].descriptor == 2);
+    child_handler(); assert(!enabled && closes == 1);
+    ++assertions_run;
+
+    /* Failed fork returns through the parent handler without changing errno. */
+    reset(); initialize(); hit_text(a); prepare_handler(); errno = ENOMEM; parent_handler();
+    assert(errno == ENOMEM && atomic_load(&forks_in_flight) == 0);
+    initial_pids = pids; hit_text(a); assert(calls == 1 && pids == initial_pids);
+    ++assertions_run;
+
+    /* Overflow never publishes zero, and underflow never wraps. */
+    reset(); initialize(); atomic_store(&forks_in_flight, UINT_MAX);
+    expect_callback_abort(prepare_handler);
+    assert(atomic_load(&forks_in_flight) == UINT_MAX);
+    ++assertions_run;
+    reset(); initialize(); expect_callback_abort(parent_handler);
+    assert(atomic_load(&forks_in_flight) == 0);
+    ++assertions_run;
+}
+
+static void *overlap_worker(void *argument) {
+    int expected_errno = *(int *)argument;
+    for (unsigned i = 0; i < 10000; ++i) {
+        errno = expected_errno; before_fork();
+        assert(errno == expected_errno);
+        after_parent_fork(); assert(errno == expected_errno);
+    }
+    return NULL;
+}
+
+static void concurrent_transition_case(void) {
+    reset(); initialize();
+    pthread_t workers[4]; int codes[4] = {ENOENT, EAGAIN, ENOMEM, EBUSY};
+    for (unsigned i = 0; i < 4; ++i) assert(!pthread_create(&workers[i], NULL, overlap_worker, &codes[i]));
+    for (unsigned i = 0; i < 4; ++i) assert(!pthread_join(workers[i], NULL));
+    assert(atomic_load(&forks_in_flight) == 0);
+    ++assertions_run;
+}
+
 int main(void) {
     startup_cases();
     write_cases();
     order_collision_and_poll_cases();
     ownership_cases();
+    fork_transition_cases();
+    concurrent_transition_case();
     printf("PASS %u deterministic transport cases\n", assertions_run);
     return 0;
 }

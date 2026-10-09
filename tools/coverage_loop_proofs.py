@@ -381,7 +381,298 @@ REVIEWED_LOOP_RULES = {
 }
 
 
-def reviewed_nonempty_loops(root, module):
+# Each additional row is a separately source-reviewed local/caller theorem.
+# Complete source bindings are fixed review inputs, never refreshed at runtime.
+# A mismatch withholds that row; all original reachable probes remain mandatory.
+GUARDED_LOOP_SOURCE_SHA256 = {
+    'extensions/carla/agents_route.mojo':
+        '416a86c052dc86cf709bfd33bec5b15ef360c07f6f5cb53aa42a3e9968d33199',
+    'extensions/carla/curve_rounded_arc.mojo':
+        '7bc84049fed26cb7b14b4fa4603ee36d55cdeb7055c62df50cf10d6a2ce90745',
+    'extensions/carla/curve_rounded_line.mojo':
+        '6741ad9d7434c08070de3c959cb49ac42939ac633d1dcd48c9f5cdfdaa719aed',
+    'extensions/carla/junction_bounds.mojo':
+        'c933e03b6bde0bede8fb0745e9c1ef075d9699fde72b74795368943381d1aa74',
+    'extensions/carla/lane_refinement.mojo':
+        'd6bb8cb266fa350491f71e92295e70bcbfc2566b34db02400b3a6cb5bb5a93ad',
+    'extensions/carla/map.mojo':
+        '52dd32213d64275be94ba714bc9b6a57c28f5ba1303525ef1a1aac20b4743c07',
+    'extensions/carla/opendrive.mojo':
+        '9ff9b750af2c1c1a92fe3f3dfe1e49566e9d6f8c39a3576e0d4cf542bc8cdc28',
+    'extensions/carla/road.mojo':
+        'd9b6f60ae0b0b2fe38ef8dbe797a759f3de5e72dc8fb97bff15ca5dfff251db0',
+    'extensions/humanoid/skeleton/head/hair/density.mojo':
+        'cf1a58fa00938a2522e25fdf9b061ec53bec3e3bf08dbe99ed2eb942a37b8ab9',
+    'extensions/humanoid/skeleton/head/hair/groom.mojo':
+        'd4f041e4f7686930d89c4dd504b79e3bca1231d038261d9ab30f4ff013c2c4f9',
+    'extensions/humanoid/skeleton/head/hair/shading.mojo':
+        '9e799dccc63511086a7c065a6725c35fdf8796f4d336351787e139087ef01286',
+    'extensions/humanoid/skeleton/head/hair/strands.mojo':
+        'b38db045a18fbdbf5fc391a8b6795b03afb0b4e10bb0328e3da4e1b98a0f64a1',
+    'tests/test_carla_route_search.mojo':
+        '50874817a790dbea31b01cfeff51615be4181474a01ccefb98e42caea9421e8b',
+}
+
+# module, line, kind, maximum, expression, proof ID, extra inputs, caller names
+GUARDED_LOOP_RULES = (
+    ('extensions/carla/curve_rounded_line', 93, 'reviewed-nonempty-range', None, 'range(len(lanes))', 'rounded-line-validated-lane-list', ('extensions/carla/road.mojo',), ()),
+    ('extensions/carla/curve_rounded_arc', 228, 'reviewed-nonempty-range', None, 'range(len(lanes))', 'rounded-arc-validated-lane-list', ('extensions/carla/road.mojo',), ()),
+    ('extensions/carla/lane_refinement', 145, 'reviewed-nonempty-iterator', None, 'road.sections[section].lanes', 'axis-search-validated-lane-list', ('extensions/carla/road.mojo',), ()),
+    ('extensions/carla/lane_refinement', 726, 'reviewed-nonempty-iterator', None, 'two.cells', 'dominance-explicit-nonempty-cells', (), ()),
+    ('extensions/carla/lane_refinement', 1289, 'reviewed-nonempty-iterator', None, 'certificate.cells', 'resumption-explicit-nonempty-cells', (), ()),
+    ('extensions/carla/lane_refinement', 1314, 'reviewed-nonempty-iterator', None, 'certificate.cells', 'resumption-transaction-retains-cells', (), ()),
+    ('extensions/carla/junction_bounds', 706, 'reviewed-nonempty-range', None, 'range(len(breaks) - 1)', 'junction-retained-two-endpoint-breaks', (), ()),
+    ('extensions/carla/map', 1491, 'reviewed-nonempty-range', 128, 'range(1 << level)', 'winner-eight-positive-dyadic-cardinalities', (), ()),
+    ('extensions/carla/map', 2272, 'reviewed-nonempty-iterator', None, 'certificates', 'query-retained-certificate-list', (), ()),
+    ('extensions/carla/map', 2279, 'reviewed-nonempty-range', None, 'range(len(indices))', 'query-nonempty-winner-rescan', (), ()),
+    ('extensions/carla/map', 2301, 'reviewed-nonempty-range', None, 'range(len(indices))', 'query-nonempty-competitor-rescan', (), ()),
+    ('extensions/carla/map', 2373, 'reviewed-nonempty-iterator', 12, 'metadata', 'winner-fixed-twelve-metadata-elements', (), ()),
+    ('extensions/carla/map', 2378, 'reviewed-nonempty-iterator', None, 'certificates', 'query-nonempty-prefix-certificates', (), ()),
+    ('extensions/carla/map', 2387, 'literal-range', 4, 'range(4)', 'winner-four-frontier-reservations', (), ()),
+    ('extensions/carla/map', 2396, 'literal-range', 10, 'range(10)', 'target-ten-frontier-reservations', (), ()),
+    ('extensions/humanoid/skeleton/head/hair/density', 100, 'reviewed-nonempty-range', 262144, 'range(count)', 'density-validated-positive-cube-count', (), ()),
+    ('extensions/humanoid/skeleton/head/hair/density', 137, 'reviewed-nonempty-range', None, 'range(len(groom))', 'density-partitioned-nonempty-groom', ('extensions/humanoid/skeleton/head/hair/groom.mojo',), ()),
+    ('extensions/humanoid/skeleton/head/hair/strands', 180, 'reviewed-nonempty-range', None, 'range(len(self.groom.points))', 'hair-retained-nonempty-points', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
+    ('extensions/humanoid/skeleton/head/hair/strands', 191, 'reviewed-nonempty-range', None, 'range(len(self.groom))', 'hair-retained-nonempty-strands', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
+    ('extensions/carla/opendrive', 450, 'reviewed-nonempty-iterator', None, 'records', 'border-active-maintained-nonempty-callers', (), ('_active',)),
+    ('extensions/carla/opendrive', 593, 'reviewed-nonempty-range', None, 'range(len(ids))', 'border-positive-record-count-keeps-ids', (), ()),
+    ('extensions/carla/opendrive', 601, 'reviewed-nonempty-range', None, 'range(len(ids))', 'border-inner-scan-retains-positive-ids', (), ()),
+    ('extensions/carla/opendrive', 615, 'reviewed-nonempty-iterator', None, 'borders[i]', 'border-outer-list-explicitly-nonempty', (), ()),
+    ('extensions/carla/opendrive', 617, 'reviewed-nonempty-iterator', None, 'inner', 'border-inner-owned-nonempty-list', (), ()),
+    ('extensions/carla/opendrive', 621, 'reviewed-nonempty-iterator', None, 'cuts', 'border-cuts-retain-initial-section-start', (), ()),
+    ('extensions/carla/opendrive', 787, 'literal-list', 4, '["a", "b", "c", "d"]', 'border-four-offset-coefficients', (), ()),
+)
+
+
+# These two retained-state theorems have separate producer dependencies and
+# caller/write censuses. Do not relax the generic callers-equal-bindings rule.
+# Construction keeps an independent positive partition. Each shade rechecks
+# starts equality and current point count; immutable groom borrows preserve it.
+# The CARLA paths are unrelated name collisions, conservatively bound in full.
+_HAIR_RETAINED_CENSUS = (
+    (('_shadow_depths', '_upload'), (
+        'extensions/humanoid/skeleton/head/hair/strands.mojo',
+    )),
+    (('_topology',), (
+        'extensions/humanoid/skeleton/head/hair/strands.mojo',
+        'extensions/carla/agents_route.mojo',
+        'tests/test_carla_route_search.mojo',
+    )),
+)
+HAIR_RETAINED_RULE_CENSUS = {
+    (180, 'hair-retained-nonempty-points'): _HAIR_RETAINED_CENSUS,
+    (191, 'hair-retained-nonempty-strands'): _HAIR_RETAINED_CENSUS,
+}
+
+
+# Historical table hashes remain review inputs. Only this exact successor may
+# project Map to its predecessor, after checking the live dependency closure,
+# premises and count-control fixture. Receipts always retain the live hash.
+_MAP_SUCCESSOR_LINES = {
+    1491: 1485, 2272: 2264, 2279: 2271, 2301: 2293,
+    2373: 2365, 2378: 2370, 2387: 2379, 2396: 2388,
+}
+
+
+# The optional-guard edge deletes exactly nine more physical lines. These
+# independently retained nonempty loops keep their original proof IDs and T.
+_MAP_OPTIONAL_SUCCESSOR_LINES = {1491: 1476, 2272: 2255, 2279: 2262, 2301: 2284, 2373: 2356, 2378: 2361, 2387: 2370, 2396: 2379}
+
+
+# A separate exact source pair for the HairDensity boundary correction.
+# Historical hashes/rules stay unchanged. The four retained hair theorems were
+# reviewed again: rebuild still validates its positive cube and owned partition;
+# the checked helper only returns positive Int or raises; query validation is
+# read-only. Neither correction changes groom ownership, successful shading
+# borrows, topology checks, or the retained caller/write census above.
+DENSITY_SOURCE = 'extensions/humanoid/skeleton/head/hair/density.mojo'
+DENSITY_BEFORE_SHA256 = 'cf1a58fa00938a2522e25fdf9b061ec53bec3e3bf08dbe99ed2eb942a37b8ab9'
+DENSITY_AFTER_SHA256 = '2d5595ac114901265ea9e13d905f81529dfccb9cd8ddf05185313b5aada07929'
+_DENSITY_SUCCESSOR_LINES = {100: 101, 137: 138}
+
+# This fixed inverse exists only to preserve historical test fixtures on either
+# physical source state. Admission always checks complete hashes; it never
+# projects an arbitrary changed module or refreshes either binding.
+_DENSITY_SOURCE_EDITS = (
+    ('''from std.math import ceil, floor, isfinite, max, min
+''',
+     '''from std.math import ceil, floor, isfinite, max, min
+from std.sys import size_of
+'''),
+    ('''                # Finite cubic volume and resolution at most 64 bound
+                # segment length below 2^50 and sample count at most 211.
+                var samples = max(1, Int(ceil(length / (cell * 0.5))))''',
+     '''                # Check the rounded count before its Float32-to-Int cast.
+                # Every accepted count is positive, without an artificial cap.
+                var samples = _checked_density_samples(length / (cell * 0.5))'''),
+    ('''            Error: If the point or direction is not finite.
+''',
+     '''            Error: If the point or direction is not finite, or the current
+                resolution or diameter is outside its domain.
+'''),
+    ('''            raise Error("Hair optical depth needs a finite light direction")
+''',
+     '''            raise Error("Hair optical depth needs a finite light direction")
+        self.validate()
+'''),
+    ('',
+     '''
+
+def _checked_density_samples(ratio: Float32) raises -> Int:
+    """Round a sample ratio up, with at least one representable sample.
+
+    Args:
+        ratio: The segment length divided by the half-cell step.
+
+    Returns:
+        At least one sample, preserving the minimum for finite small values.
+
+    Raises:
+        Error: If the rounded count is nonfinite or exceeds signed Int.
+    """
+    comptime assert size_of[Int]() == 4 or size_of[Int]() == 8
+    var rounded = ceil(ratio)
+    if not isfinite(rounded):
+        raise Error("Hair density sample count is not representable")
+    if rounded <= 1:
+        return 1
+    # Int.MIN is exactly -2^(width-1) on the supported signed Int widths.
+    # Convert that exact power before negation; never negate Int.MIN as Int.
+    # Float32(Int.MAX) rounds up to the excluded limit and is not inclusive.
+    var exclusive_limit = -Float32(Int.MIN)
+    if rounded >= exclusive_limit:
+        raise Error("Hair density sample count is not representable")
+    return Int(rounded)
+'''),
+)
+
+
+def reviewed_density_source(root, *, successor=False):
+    """Return one exact reviewed side, rejecting all unknown live sources."""
+    path = relative_source(root, DENSITY_SOURCE)
+    raw = path.read_bytes()
+    current = sha256(raw)
+    wanted = DENSITY_AFTER_SHA256 if successor else DENSITY_BEFORE_SHA256
+    if current not in {DENSITY_BEFORE_SHA256, DENSITY_AFTER_SHA256}:
+        raise ValueError('Unreviewed HairDensity source')
+    text = raw.decode('utf-8')
+    if current != wanted:
+        for before, after in (_DENSITY_SOURCE_EDITS if successor
+                              else reversed(_DENSITY_SOURCE_EDITS)):
+            if not before:
+                if successor:
+                    text += after
+                elif text.endswith(after):
+                    text = text[:-len(after)]
+                else:
+                    raise ValueError('Missing reviewed HairDensity helper')
+            else:
+                old, new = (before, after) if successor else (after, before)
+                if text.count(old) != 1:
+                    raise ValueError('Ambiguous reviewed HairDensity edit')
+                text = text.replace(old, new, 1)
+    if sha256(text.encode('utf-8')) != wanted or path.read_bytes() != raw:
+        raise ValueError('HairDensity paired source identity mismatch')
+    return text
+
+
+# These theorems apply ONLY to the repaired source. They do not assert the
+# old numeric-envelope argument or a maximum of 247 for arbitrary helper input.
+# For signed 32/64-bit Int, -Float32(Int.MIN) is exactly 2^(width-1). The helper
+# classifies the actual ceil result, returns 1 for every finite value <=1,
+# refuses values >= that exclusive limit, then converts only (1, limit).
+# Thus its return is positive without a global FP-state assumption.
+# Query validation dominates resolution*4, so that separate count is 16..256.
+# The unchanged reporter protocol serializes nonemptiness as cardinality 1;
+# minimum_cardinality retains the tighter reviewed fact in the bound receipt.
+DENSITY_REPAIRED_RULES = (
+    (149, 'reviewed-nonempty-range', 1, None, 'range(samples)',
+     'density-checked-representable-positive-samples'),
+    (223, 'reviewed-nonempty-range', 16, 256, 'range(self.resolution * 4)',
+     'density-query-validated-positive-step-count'),
+)
+
+
+def _density_stdlib_unshadowed(root):
+    """Refuse unreviewed project std resolver surfaces, including packages.
+
+    SDK payloads are bound separately. The project's standard virtualenv and
+    non-input caches are not include roots and must not veto the real SDK.
+    A project directory symlink could hide an additional resolver surface;
+    conservatively refuse it instead of following it outside the checked tree.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return False
+
+    def unreadable(error):
+        raise error
+
+    try:
+        for directory, folders, files in os.walk(root, onerror=unreadable):
+            base = Path(directory)
+            # Refuse alternate/unknown suffixes as well as .mojo, .mojoc and
+            # .mojopkg. This includes Mojo's alternate source-file suffix.
+            if any(name.casefold() == 'std' or name.casefold().startswith('std.')
+                   for name in (*folders, *files)):
+                return False
+            folders[:] = [name for name in folders if name not in cache_key.SKIP
+                          and (base / name).relative_to(root) != Path('coverage/build')]
+            if any((base / name).is_symlink() for name in folders):
+                return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def repaired_density_loops(root, *, include_roots=()):
+    """Admit local repaired loops, never their unsafe historical counterparts."""
+    try:
+        if file_sha256(relative_source(root, DENSITY_SOURCE)) != DENSITY_AFTER_SHA256:
+            return {}
+    except (OSError, ValueError):
+        return {}
+    if not all(_density_stdlib_unshadowed(path) for path in (root, *include_roots)):
+        return {}
+    return {line: {
+        'line': line, 'kind': kind, 'cardinality': 1,
+        'minimum_cardinality': minimum,
+        'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',
+        'expression': expression, 'proof_id': proof_id,
+        'dependency_sha256': {DENSITY_SOURCE: DENSITY_AFTER_SHA256},
+    } for line, kind, minimum, maximum, expression, proof_id in DENSITY_REPAIRED_RULES}
+
+
+def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
+    """Verify fixed historical bindings without admitting arbitrary successors."""
+    actual = {}
+    for name, expected in bindings.items():
+        path = relative_source(root, name)
+        raw = path.read_bytes()
+        digest = sha256(raw)
+        if (name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256
+                and digest == DENSITY_AFTER_SHA256):
+            # Explicit paired admission for the four re-reviewed hair rows.
+            if not all(_density_stdlib_unshadowed(path)
+                       for path in (root, *include_roots)):
+                return None
+            actual[name] = digest
+            continue
+        if digest != expected:
+            if (name != 'extensions/carla/map.mojo'
+                    or expected != GUARDED_LOOP_SOURCE_SHA256[name]):
+                return None
+            from carla_lane_oracle import seed_count_contracts as seed_count
+            if digest not in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256}:
+                return None
+            predecessor = seed_count.historical_source(root).encode('utf-8')
+            if sha256(predecessor) != expected or path.read_bytes() != raw:
+                return None
+        actual[name] = digest
+    return actual
+
+
+def _historical_reviewed_nonempty_loops(root, module):
     """Return only named source-reviewed nonempty iterator proofs.
 
     A mismatch retains both outcomes. Constants require a new source review;
@@ -403,17 +694,98 @@ def reviewed_nonempty_loops(root, module):
             }
             if callers != set(bindings):
                 return {}
-        if any(file_sha256(relative_source(root, name)) != expected
-               for name, expected in bindings.items()):
+        actual = _reviewed_dependency_hashes(root, bindings)
+        if actual is None:
             return {}
-    except (OSError, ValueError):
+    except (OSError, ValueError, ImportError):
         return {}
     return {line: {
         'line': line, 'kind': kind, 'cardinality': minimum,
         'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',
         'expression': expression, 'proof_id': proof_id,
-        'dependency_sha256': dict(bindings),
+        'dependency_sha256': actual,
     } for line, kind, minimum, maximum, expression, proof_id in sites}
+
+
+def guarded_loop_proof(root, rule, *, include_roots=()):
+    """Verify one explicit theorem without enabling its sibling rules."""
+    module, line, kind, maximum, expression, proof_id, extras, callers = rule
+    bindings = {
+        name: GUARDED_LOOP_SOURCE_SHA256[name]
+        for name in (module + '.mojo', *extras)
+    }
+    try:
+        actual_bindings = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots)
+        if actual_bindings is None:
+            return None
+        if (module == 'extensions/carla/map'
+                and actual_bindings[module + '.mojo'] != bindings[module + '.mojo']):
+            from carla_lane_oracle import seed_count_contracts as seed_count
+            mapping = (_MAP_OPTIONAL_SUCCESSOR_LINES
+                       if actual_bindings[module + '.mojo'] == seed_count.OPTIONAL_AFTER_SHA256
+                       else _MAP_SUCCESSOR_LINES)
+            line = mapping.get(line)
+            if line is None:
+                return None
+        if (module + '.mojo' == DENSITY_SOURCE
+                and actual_bindings[DENSITY_SOURCE] == DENSITY_AFTER_SHA256):
+            line = _DENSITY_SUCCESSOR_LINES.get(line)
+            if line is None:
+                return None
+        if callers:
+            # A private helper's local precondition is backed by the complete
+            # maintained caller census. New calls or aliases fail closed.
+            pattern = r'\b(?:' + '|'.join(re.escape(name) for name in callers) + r')\b'
+            actual = {
+                path.as_posix() for path in cache_key.input_paths(Path(root))
+                if path.suffix == '.mojo'
+                and re.search(pattern,
+                              relative_source(root, path.as_posix()).read_text())
+            }
+            if actual != set(bindings):
+                return None
+        if module == 'extensions/humanoid/skeleton/head/hair/strands':
+            census = HAIR_RETAINED_RULE_CENSUS.get((line, proof_id))
+            if not census:
+                return None
+            for names, expected in census:
+                if not expected or not set(expected).issubset(bindings):
+                    return None
+                pattern = r'\b(?:' + '|'.join(re.escape(name) for name in names) + r')\b'
+                actual = {
+                    path.as_posix() for path in cache_key.input_paths(Path(root))
+                    if path.suffix == '.mojo'
+                    and re.search(pattern,
+                                  relative_source(root, path.as_posix()).read_text())
+                }
+                if actual != set(expected):
+                    return None
+    except (OSError, ValueError, ImportError):
+        return None
+    cardinality = maximum if kind in {'literal-range', 'literal-list'} else 1
+    return {
+        'line': line, 'kind': kind, 'cardinality': cardinality,
+        'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',
+        'expression': expression, 'proof_id': proof_id,
+        'dependency_sha256': actual_bindings,
+    }
+
+
+def reviewed_nonempty_loops(root, module, *, include_roots=()):
+    """Keep historical rules and independently admit each new exact theorem."""
+    result = _historical_reviewed_nonempty_loops(root, module)
+    if module + '.mojo' == DENSITY_SOURCE:
+        result.update(repaired_density_loops(root, include_roots=include_roots))
+    for rule in GUARDED_LOOP_RULES:
+        if rule[0] != module:
+            continue
+        proof = guarded_loop_proof(root, rule, include_roots=include_roots)
+        if proof is None:
+            continue
+        if proof['line'] in result:
+            raise ValueError('Conflicting reviewed loop proof: ' + module)
+        result[proof['line']] = proof
+    return result
 
 
 def _counts(records):
@@ -631,7 +1003,7 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
         if name not in inputs:
             raise ValueError('Missing instrumented module: ' + module)
         candidates = constant_loops(original.read_text(encoding='utf-8'))
-        reviewed = reviewed_nonempty_loops(root, module)
+        reviewed = reviewed_nonempty_loops(root, module, include_roots=(build,))
         if candidates.keys() & reviewed.keys():
             raise ValueError('Conflicting reviewed loop proof: ' + module)
         candidates.update(reviewed)

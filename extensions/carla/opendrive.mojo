@@ -63,7 +63,14 @@ from extensions.carla.road_info import (
     lane_type_of,
 )
 from loaders.xml import NO_ELEMENT, XmlDocument, parse_xml
-from std.math import sqrt
+from math.scaled_products import (
+    _Scaled,
+    _at_exponent,
+    _split,
+    _sum_products,
+    _two_sum,
+)
+from std.math import copysign, isfinite, sqrt
 from std.pathlib import Path
 
 comptime _INT32_MIN = -2147483648
@@ -440,31 +447,88 @@ def _active(records: List[_Cubic], s: Float64) -> _Cubic:
     # section.
     var found = records[0]
     # Every caller's list holds at least one record.
-    for record in records:  # pragma: no branch
+    for record in records:
         if record.start <= s:
             found = record
     return found
 
 
-def _lowest(cubic: _Cubic, length: Float64) -> Float64:
+def _border_ratio(
+    numerator: _Scaled[DType.float64], denominator: _Scaled[DType.float64]
+) -> Float64:
+    # The caller supplies a nonzero denominator. Keep its exponent until
+    # the final division; an infinite result is outside any finite piece.
+    return _at_exponent(
+        _split(
+            numerator.fraction / denominator.fraction,
+            numerator.exponent - denominator.exponent,
+        ),
+        0,
+    )
+
+
+def _lowest(cubic: _Cubic, length: Float64) raises -> Float64:
     # The cubic's least value on [0, length]: at an end or where its
     # derivative b + 2 c x + 3 d x^2 is zero.
-    var lowest = min(cubic.value(0.0), cubic.value(length))
-    var q = 3.0 * cubic.d
-    var p = 2.0 * cubic.c
+    if (
+        not isfinite(cubic.a)
+        or not isfinite(cubic.b)
+        or not isfinite(cubic.c)
+        or not isfinite(cubic.d)
+        or not isfinite(length)
+    ):
+        raise Error(
+            "OpenDRIVE <border> width needs finite coefficients and length"
+        )
+    if length < 0.0:
+        raise Error("OpenDRIVE <border> width needs a nonnegative length")
+    var last = cubic.value(length)
+    if not isfinite(last):
+        raise Error("OpenDRIVE <border> width exceeds the numeric range")
+    var lowest = min(cubic.a, last)
     var roots = List[Float64]()
-    if q == 0.0:
-        if p != 0.0:
-            roots.append(-cubic.b / p)
+    if cubic.d == 0.0:
+        if cubic.c != 0.0:
+            roots.append(
+                _border_ratio(
+                    _split(-cubic.b),
+                    _sum_products[DType.float64, 1]([cubic.c], [2.0], [1.0]),
+                )
+            )
     else:
-        var discriminant = p * p - 4.0 * q * cubic.b
-        if discriminant >= 0.0:
-            var root = sqrt(discriminant)
-            roots.append((-p - root) / (2.0 * q))
-            roots.append((-p + root) / (2.0 * q))
+        # c^2 - 3 d b has the exact sign of the finite stored coefficients.
+        # Exponent-tagged products avoid overflow, underflow and a false
+        # zero when nearly equal products cancel.
+        var discriminant = _sum_products[DType.float64, 2](
+            [cubic.c, cubic.d], [cubic.c, cubic.b], [1.0, -3.0]
+        )
+        if discriminant.fraction >= 0.0:
+            var divisor = _sum_products[DType.float64, 1](
+                [cubic.d], [3.0], [1.0]
+            )
+            if discriminant.fraction == 0.0:
+                roots.append(_border_ratio(_split(-cubic.c), divisor))
+            else:
+                var fraction = discriminant.fraction
+                var exponent = discriminant.exponent
+                if exponent % 2 != 0:
+                    fraction *= 2.0
+                    exponent -= 1
+                var root = _split(sqrt(fraction), exponent // 2)
+                root.fraction = -copysign(root.fraction, cubic.c)
+                var numerator = _two_sum(_split(-cubic.c), root)[0]
+                # One root uses the same-sign sum; the other uses the
+                # product of the roots. Neither subtracts near equals.
+                roots.append(_border_ratio(numerator, divisor))
+                roots.append(_border_ratio(_split(cubic.b), numerator))
     for x in roots:
         if x > 0.0 and x < length:
-            lowest = min(lowest, cubic.value(x))
+            var value = cubic.value(x)
+            if not isfinite(value):
+                raise Error(
+                    "OpenDRIVE <border> width exceeds the numeric range"
+                )
+            lowest = min(lowest, value)
     return lowest
 
 
@@ -526,7 +590,7 @@ def _border_widths(
     if end <= s:
         raise Error("OpenDRIVE <border> lanes need a lane section of length")
     # At least one lane has borders here, so the lists are not empty.
-    for i in range(len(ids)):  # pragma: no branch
+    for i in range(len(ids)):
         var id = ids[i]
         if len(borders[i]) == 0:
             continue
@@ -534,7 +598,7 @@ def _border_widths(
         var inner: List[_Cubic] = [_Cubic(0, s, 0.0, 0.0, 0.0, 0.0)]
         if abs(id) > 1:
             var found = -1
-            for j in range(len(ids)):  # pragma: no branch
+            for j in range(len(ids)):
                 if ids[j] == id - Int(side) and len(borders[j]) > 0:
                     found = j
             if found < 0:
@@ -548,18 +612,19 @@ def _border_widths(
         # record starts inside the section.
         var cuts: List[Float64] = [s]
         # Both border lists and the cut list hold at least one entry.
-        for record in borders[i]:  # pragma: no branch
+        for record in borders[i]:
             cuts.append(record.start)
-        for record in inner:  # pragma: no branch
+        for record in inner:
             cuts.append(record.start)
         sort(cuts)
         var starts = List[Float64]()
-        for cut in cuts:  # pragma: no branch
+        for cut in cuts:
             if cut >= s and cut < end:
                 if len(starts) == 0 or starts[len(starts) - 1] != cut:
                     starts.append(cut)
-        # The section's start is in [s, end), so starts holds it.
-        for k in range(len(starts)):  # pragma: no branch
+        # Finite, ordered bounds retain the section's start. A nonfinite
+        # endpoint can leave this list empty before builder validation.
+        for k in range(len(starts)):
             var outer = _active(borders[i], starts[k]).at(starts[k])
             var under = _active(inner, starts[k]).at(starts[k])
             var width = _Cubic(
@@ -719,7 +784,7 @@ def _lanes(doc: _Doc, mut builder: MapBuilder) raises:
         for lanes in doc.children(road, "lanes"):
             var offset_free = True
             for offset in doc.children(lanes, "laneOffset"):
-                for term in ["a", "b", "c", "d"]:  # pragma: no branch
+                for term in ["a", "b", "c", "d"]:
                     if doc.double(offset, term) != 0.0:
                         offset_free = False
             var sections = doc.children(lanes, "laneSection")

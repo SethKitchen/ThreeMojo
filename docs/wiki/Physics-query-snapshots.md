@@ -101,3 +101,6 @@ Tight mathematical half-ray bounds alone cannot preserve every existing answer. 
 An experimental index refit must retain entry count and owner mapping. Insertion, removal, remapping, or active-set changes require rebuild. Large motion can leave a refitted tree slow even when its candidate set is correct. Compare query node visits and elapsed time with a fresh rebuild before reuse. Empty rebuilds clear all entries. No experiment changes the contact sweep or solver.
 
 See the [measurement report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/owned-physics-snapshots-633.md) for build amortization, retained memory, the small-world policy, dynamic-only sweep control, and refit degradation.
+
+`bench/physics_snapshot_bench.mojo` times a large capture and query.
+`bench/physics_snapshot_small_bench.mojo` times a small one.

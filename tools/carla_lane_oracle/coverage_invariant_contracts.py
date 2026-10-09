@@ -8,14 +8,14 @@ not supply runtime hits, waive required outcomes, or establish a native pass.
 """
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import curve_support_dispatch_contracts as curve
+    from . import grouped_table_contracts as grouped
+else:
     import source_contracts as source
     import curve_support_dispatch_contracts as curve
     import grouped_table_contracts as grouped
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import curve_support_dispatch_contracts as curve
-    from tools.carla_lane_oracle import grouped_table_contracts as grouped
 MIGRATION = 'tools/carla_lane_oracle/coverage-invariant-migration.json'
 MIGRATION_SHA256 = '56a72d9bccbf9e7b8a6b51db2b9944ef4bbf55d9bcc7311f7f9615be3b3b36ac'
 SOURCE_PATHS = (*curve.SOURCE_PATHS, grouped.MODULE,
@@ -51,10 +51,10 @@ def predecessor_pins(root, filename):
     """Verify active bytes, reverse every admitted edit, verify historical bytes."""
     filename = str(filename).split('/')[-1]
     record = read_record(root)['pin_files'][filename]
-    try:
+    if __package__:
+        from . import coverage_followup_contracts as followup
+    else:
         import coverage_followup_contracts as followup
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import coverage_followup_contracts as followup
     payload = followup.predecessor_pins(root, filename)
     require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],
             'unreviewed runtime pin successor: ' + filename if filename == 'runtime-source-pins.json' else 'unreviewed guarded pin successor: ' + filename)
@@ -81,17 +81,17 @@ def verify(root):
     for path, item in record['sources'].items():
         matches = source.token_sha256((root/path).read_text()) == item['after_token_sha256']
         if not matches:
-            try:
+            if __package__:
+                from . import coverage_followup_contracts as followup
+            else:
                 import coverage_followup_contracts as followup
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import coverage_followup_contracts as followup
             matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'])
         require(matches, 'complete successor changed: ' + path)
     curve.verify(root)
     grouped.verify(root)
-    try:
+    if __package__:
+        from . import lane_control_contracts as lane
+    else:
         import lane_control_contracts as lane
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import lane_control_contracts as lane
     lane.verify(root)
     return record

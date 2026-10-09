@@ -1,0 +1,125 @@
+{
+  "uuid": "4c9f7ea7-47b8-4abf-86ff-fe1eb9b0ad50",
+  "type": "TextureNode",
+  "metadata": {
+    "version": 4.7,
+    "type": "Node",
+    "generator": "Node.toJSON"
+  },
+  "inputNodes": {
+    "groupNode": "d008d5cb-fbab-4c54-aa17-d61a8d42bc29",
+    "gatherNode": "94e860dd-ef20-43cd-8e3f-7783a127c7a1",
+    "referenceNode": "dc5a14d7-979e-4024-9691-bf4f897b37c8"
+  },
+  "value": "747967c4-4fbc-414c-ae63-dd33013a22ca",
+  "valueType": null,
+  "nodeType": null,
+  "precision": null,
+  "sampler": true,
+  "updateMatrix": true,
+  "updateType": "none",
+  "textures": [
+    {
+      "uuid": "747967c4-4fbc-414c-ae63-dd33013a22ca",
+      "name": "",
+      "image": "78b17acd-832c-41e3-92ce-8eb655fca587",
+      "mapping": 300,
+      "channel": 0,
+      "repeat": [
+        1,
+        1
+      ],
+      "offset": [
+        0,
+        0
+      ],
+      "center": [
+        0,
+        0
+      ],
+      "rotation": 0,
+      "wrap": [
+        1001,
+        1001
+      ],
+      "format": 1023,
+      "internalFormat": null,
+      "type": 1009,
+      "normalized": false,
+      "colorSpace": "",
+      "minFilter": 1003,
+      "magFilter": 1003,
+      "anisotropy": 1,
+      "flipY": false,
+      "generateMipmaps": false,
+      "premultiplyAlpha": false,
+      "unpackAlignment": 1
+    }
+  ],
+  "images": [
+    {
+      "uuid": "78b17acd-832c-41e3-92ce-8eb655fca587",
+      "url": {
+        "data": [
+          32,
+          0,
+          0,
+          255,
+          64,
+          0,
+          0,
+          255,
+          96,
+          0,
+          0,
+          255,
+          128,
+          0,
+          0,
+          255
+        ],
+        "width": 2,
+        "height": 2,
+        "type": "Uint8Array"
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "uuid": "d008d5cb-fbab-4c54-aa17-d61a8d42bc29",
+      "type": "UniformGroupNode",
+      "name": "object",
+      "version": 0,
+      "shared": false
+    },
+    {
+      "uuid": "94e860dd-ef20-43cd-8e3f-7783a127c7a1",
+      "type": "VarNode",
+      "inputNodes": {
+        "node": "988228ac-238b-47df-b25c-75cdf5f31b6f"
+      }
+    },
+    {
+      "uuid": "988228ac-238b-47df-b25c-75cdf5f31b6f",
+      "type": "ConstNode",
+      "value": 0,
+      "valueType": "float",
+      "nodeType": "int",
+      "precision": null
+    },
+    {
+      "uuid": "dc5a14d7-979e-4024-9691-bf4f897b37c8",
+      "type": "TextureNode",
+      "inputNodes": {
+        "groupNode": "d008d5cb-fbab-4c54-aa17-d61a8d42bc29"
+      },
+      "value": "747967c4-4fbc-414c-ae63-dd33013a22ca",
+      "valueType": null,
+      "nodeType": null,
+      "precision": null,
+      "sampler": true,
+      "updateMatrix": true,
+      "updateType": "none"
+    }
+  ]
+}

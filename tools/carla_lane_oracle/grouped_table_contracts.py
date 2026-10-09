@@ -4,10 +4,10 @@ import hashlib
 import math
 import struct
 
-try:
+if __package__:
+    from .source_contracts import token_sha256
+else:
     from source_contracts import token_sha256
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle.source_contracts import token_sha256
 
 TOKEN_SHA256='3fcfc637a40c4e322b5747f27f8d77163c3f47a49d1092b37c20744cafecba40'
 MODULE='extensions/carla/spiral_grouped_roundoff_proof.mojo'
@@ -18,10 +18,10 @@ def verify_text(module, geometry):
     # every use/write of local arrays, environment guard and error/work graph.
     if token_sha256(module)!=TOKEN_SHA256:
         raise ValueError('Reviewed grouped consumer graph changed')
-    try:
+    if __package__:
+        from .spiral_moments import parse_array
+    else:
         from spiral_moments import parse_array
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle.spiral_moments import parse_array
     arrays={}
     for name in ('_GL_NODES','_GL_WEIGHTS'):
         words = parse_array(geometry, name, 5)
@@ -37,9 +37,9 @@ def verify(root):
     root=Path(root)
     text=(root/MODULE).read_text()
     if token_sha256(text)!=TOKEN_SHA256:
-        try:
+        if __package__:
+            from . import selection_finiteness_contracts as selection
+        else:
             import selection_finiteness_contracts as selection
-        except ModuleNotFoundError:
-            from tools.carla_lane_oracle import selection_finiteness_contracts as selection
         text=selection.predecessor_text(root,MODULE)
     return verify_text(text,(root/'extensions/carla/geometry.mojo').read_text())

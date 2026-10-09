@@ -35,6 +35,7 @@ a number that is not one, where three.js reads `NaN`, and a table whose
 largest number is not above zero, which three.js divides by zero.
 """
 
+from loaders.js_number import js_string_to_number
 from render.srgb import LINEAR
 from render.texture import (
     BILINEAR,
@@ -86,11 +87,7 @@ def _number(text: String) raises -> Float64:
     Raises:
         Error: If it is not a finite number.
     """
-    var value: Float64
-    try:
-        value = Float64(text)
-    except:
-        raise Error("3DL: `" + text + "` is not a number")
+    var value = js_string_to_number(text)
     if not isfinite(value):
         raise Error("3DL: `" + text + "` is not a number")
     return value

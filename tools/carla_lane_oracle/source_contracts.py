@@ -118,12 +118,22 @@ def verify_group(root, group):
         text = (root / path).read_text(encoding='utf-8')
         checked = text
         if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:
-            try:
+            if __package__:
+                from . import cache_key_contracts as cache_key
+            else:
                 import cache_key_contracts as cache_key
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import cache_key_contracts as cache_key
             try:
                 checked = cache_key.predecessor_source(root)
+            except (ValueError, OSError) as error:
+                raise ValueError('runtime source dependency changed [' + group + ']: ' + path
+                                 + ' (' + str(error) + ')') from error
+        elif path == PREFIX + 'map.mojo' and token_sha256(text) != pins['groups'][group][path]:
+            if __package__:
+                from . import seed_count_contracts as seed_count
+            else:
+                import seed_count_contracts as seed_count
+            try:
+                checked = seed_count.reviewed_text(root, path, text)
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error

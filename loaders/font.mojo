@@ -57,12 +57,13 @@ is skipped. three.js keeps it, and its `getPoints` then drops the repeated
 point, so the shape is the same.
 """
 
+from loaders.js_number import js_string_to_number
 from loaders.json import NO_NODE, OBJECT, STRING, JsonDocument, parse_json
 from math.path import Shape
 from math.shape_path import ShapePath
 from math.vector2 import Vector2
 from std.collections import Dict
-from std.math import isfinite
+from std.math import isfinite, isnan
 from std.pathlib import Path
 from units.si import Length, METER
 
@@ -199,7 +200,7 @@ struct Glyph(Copyable, Movable):
 
 
 def _token_number(tokens: List[String], at: Int) raises -> Float32:
-    """Return one number of an outline as a finite `Float32`.
+    """Read one whole outline token as Number and a finite `Float32`.
 
     Raises:
         Error: If there is no token at `at`, or it is not a number, or it
@@ -207,10 +208,8 @@ def _token_number(tokens: List[String], at: Int) raises -> Float32:
     """
     if at >= len(tokens):
         raise Error("a command has too few numbers")
-    var wide: Float64
-    try:
-        wide = Float64(tokens[at])
-    except:
+    var wide = js_string_to_number(tokens[at])
+    if isnan(wide):
         raise Error("'" + tokens[at] + "' is not a number")
     var narrow = Float32(wide)
     if not isfinite(narrow):

@@ -14,6 +14,7 @@ from extensions.carla.map import Map, Waypoint
 from extensions.carla.opendrive import _Cubic, _lowest, load_opendrive
 from extensions.carla.road_info import LaneId, RoadId, SectionId
 from math.vector3 import Vector3
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -244,6 +245,102 @@ def test_lowest_value_of_a_cubic_on_an_interval() raises:
     assert_equal(_lowest(_Cubic(0, 0.0, 0.0, -3.0, 0.0, 1.0), 2.0), -2.0)
     # x^3 + x is increasing: its derivative 3 x^2 + 1 has no real root.
     assert_equal(_lowest(_Cubic(0, 0.0, 0.0, 1.0, 0.0, 1.0), 2.0), 0.0)
+
+
+def test_tiny_cubic_term_does_not_hide_crossing_borders() raises:
+    # Width 0.9 - 2x + x^2 + 1e-20 x^3 is negative at x = 1.
+    # The subtractive quadratic formula rounds its small derivative root
+    # to zero and incorrectly accepts this lane from its positive ends.
+    for term in [1.0e-20, -1.0e-20, 1.0e-320]:
+        assert_almost_equal(
+            _lowest(_Cubic(0, 0.0, 0.9, -2.0, 1.0, term), 10.0), -0.1
+        )
+        with assert_raises(contains="crosses its inner border"):
+            _ = load_opendrive(
+                _road(
+                    _section(
+                        0, "", _lane(-1, _border(0, -0.9, 2.0, -1.0, -term))
+                    )
+                )
+            )
+    # A nearby valid lane must retain its width rather than be refused.
+    var valid = load_opendrive(
+        _road(_section(0, "", _lane(-1, _border(0, -1.1, 2.0, -1.0, -1.0e-20))))
+    )
+    assert_almost_equal(_width_at(valid, -1, 1), 0.1)
+
+
+def test_border_minimum_preserves_large_and_small_discriminants() raises:
+    # Uniform scales overflow or underflow the old squared discriminant.
+    # The normalized polynomial has the same critical point near x = 1.
+    for scale in [1.0e200, 1.0e-200]:
+        assert_almost_equal(
+            _lowest(
+                _Cubic(
+                    0, 0.0, 0.9 * scale, -2.0 * scale, scale, 1.0e-20 * scale
+                ),
+                10.0,
+            )
+            / scale,
+            -0.1,
+        )
+    # The linear derivative must not overflow while forming 2c.
+    assert_almost_equal(
+        _lowest(_Cubic(0, 0.0, 0.9e308, -1.7e308, 1.0e308, 0.0), 1.0) / 1.0e308,
+        0.1775,
+    )
+
+
+def test_border_minimum_repeated_and_boundary_roots() raises:
+    # (x - 1)^3 has an exactly repeated derivative root at x = 1.
+    assert_equal(_lowest(_Cubic(0, 0.0, -1.0, 3.0, -3.0, 1.0), 2.0), -1.0)
+    # x^3 has a repeated root at zero, with a zero stable numerator.
+    assert_equal(_lowest(_Cubic(0, 0.0, 0.0, 0.0, 0.0, 1.0), 2.0), 0.0)
+    # A zero constant derivative term gives one endpoint and one inner root.
+    assert_equal(_lowest(_Cubic(0, 0.0, 0.0, 0.0, -3.0, 1.0), 3.0), -4.0)
+    assert_equal(_lowest(_Cubic(0, 0.0, 0.0, 0.0, -3.0, 1.0), 2.0), -4.0)
+    # The exact discriminant is positive although its direct products round
+    # to the same value: 1 - 3 * Float64(1/3) = 2^-54.
+    assert_equal(_lowest(_Cubic(0, 0.0, 0.0, 1.0 / 3.0, -1.0, 1.0), 1.0), 0.0)
+    assert_equal(_lowest(_Cubic(0, 0.0, 2.0, 0.0, 0.0, 0.0), 0.0), 2.0)
+
+
+def test_border_minimum_refuses_nonfinite_and_overflowed_values() raises:
+    for value in [
+        inf[DType.float64](),
+        -inf[DType.float64](),
+        nan[DType.float64](),
+    ]:
+        with assert_raises(contains="finite coefficients and length"):
+            _ = _lowest(_Cubic(0, 0.0, value, 0.0, 0.0, 0.0), 1.0)
+        with assert_raises(contains="finite coefficients and length"):
+            _ = _lowest(_Cubic(0, 0.0, 1.0, value, 0.0, 0.0), 1.0)
+        with assert_raises(contains="finite coefficients and length"):
+            _ = _lowest(_Cubic(0, 0.0, 1.0, 0.0, value, 0.0), 1.0)
+        with assert_raises(contains="finite coefficients and length"):
+            _ = _lowest(_Cubic(0, 0.0, 1.0, 0.0, 0.0, value), 1.0)
+        with assert_raises(contains="finite coefficients and length"):
+            _ = _lowest(_Cubic(0, 0.0, 1.0, 0.0, 0.0, 0.0), value)
+    with assert_raises(contains="nonnegative length"):
+        _ = _lowest(_Cubic(0, 0.0, 1.0, 0.0, 0.0, 0.0), -1.0)
+    with assert_raises(contains="exceeds the numeric range"):
+        _ = _lowest(_Cubic(0, 0.0, 0.0, 1.0e308, 1.0e308, 0.0), 2.0)
+    # Finite endpoint evaluations do not mask an overflowing inner maximum.
+    with assert_raises(contains="exceeds the numeric range"):
+        _ = _lowest(_Cubic(0, 0.0, 0.0, 1.79e308, 1.0e308, -1.0e308), 1.7)
+
+
+def test_nonfinite_road_length_refuses_border_map() raises:
+    var source = _road(_section(0, "", _lane(-1, _border(0, -3.0))))
+    var ordinary = load_opendrive(source)
+    assert_almost_equal(_width_at(ordinary, -1, 5), 3.0)
+    # Keep the finite section and plan-view geometry. The parser can form
+    # no width interval before the public builder rejects the road length.
+    source = source.replace('length="10" junction', 'length="nan" junction')
+    with assert_raises(
+        contains="Spatial map road has an invalid finite domain"
+    ):
+        _ = load_opendrive(source)
 
 
 def main() raises:

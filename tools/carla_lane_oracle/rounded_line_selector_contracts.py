@@ -3,14 +3,14 @@
 """Explicit pure-selector successor; no reachability or coverage waiver."""
 import hashlib
 import json
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+    from . import rounded_line_singleton_contracts as prior
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import rounded_line_singleton_contracts as prior
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
-    from tools.carla_lane_oracle import rounded_line_singleton_contracts as prior
 
 MIGRATION = 'tools/carla_lane_oracle/rounded-line-selector-migration.json'
 MIGRATION_SHA256 = 'ccb63b640653126b098185b188e33a036b140919a3c48b1ecb1b1541571ef4c4'
@@ -38,10 +38,10 @@ def verify_premises(root):
         if name != path:
             actual = (root/name).read_text()
             if guard.significant(actual) != guard.significant(item['source']):
-                try:
+                if __package__:
+                    from . import reviewed_cleanup_contracts as words
+                else:
                     import reviewed_cleanup_contracts as words
-                except ModuleNotFoundError:
-                    from tools.carla_lane_oracle import reviewed_cleanup_contracts as words
                 words.verify_dependency(name, actual, item['token_sha256'])
     for name, expected in old['import_scopes'].items():
         actual=(root/name).read_text().split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]

@@ -305,25 +305,34 @@ def measure(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> dic
 
 
 def fmt_s(value: float | None) -> str:
+    """Round a displayed duration so sub-tenth noise does not look exact."""
     if value is None:
         return "—"
+    magnitude = abs(value)
+    if magnitude >= 10:
+        return f"{value:.1f}"
+    if magnitude >= 0.1:
+        return f"{value:.2f}"
     return f"{value:.3f}"
 
 
 def fmt_mib(kib: int | None) -> str:
     if kib is None:
         return "—"
-    return f"{kib / 1024:.1f}"
+    return f"{kib / 1024:.0f}"
+
+
+def fmt_ratio(value: float) -> str:
+    if value >= 10:
+        return f"{value:.0f}"
+    if value >= 1:
+        return f"{value:.1f}"
+    return f"{value:.2f}"
 
 
 # Lower is better. A 10% gap is a tie. A 30% gap is a large win.
 TIE_RATIO = 0.10
 WIN_LOT_RATIO = 0.30
-CELL_STYLE = {
-    "win_lot": ("#14532d", "#ffffff"),
-    "win_little": ("#86efac", "#14532d"),
-    "tie": ("#fde047", "#422006"),
-}
 
 
 def good_seconds(metric: dict | None) -> float | None:
@@ -331,15 +340,6 @@ def good_seconds(metric: dict | None) -> float | None:
         return None
     value = metric.get("seconds")
     return value if isinstance(value, (int, float)) else None
-
-
-def good_mib(metric: dict | None) -> float | None:
-    if not metric or not metric.get("ok"):
-        return None
-    kib = metric.get("rss_kib")
-    if not isinstance(kib, (int, float)):
-        return None
-    return kib / 1024.0
 
 
 def compare_pair(left: float | None, right: float | None) -> tuple[str, str]:
@@ -364,21 +364,60 @@ def compare_pair(left: float | None, right: float | None) -> tuple[str, str]:
     return "tie", "tie"
 
 
-def paint(text: str, kind: str) -> str:
-    if kind == "plain" or kind not in CELL_STYLE:
-        return text
-    bg, fg = CELL_STYLE[kind]
-    body = f"<strong>{text}</strong>" if kind.startswith("win") else text
-    return (
-        f'<span style="background-color:{bg};color:{fg};padding:0 0.4em">{body}</span>'
-    )
-
-
-def painted_pair(
-    left_text: str, right_text: str, left: float | None, right: float | None
-) -> tuple[str, str]:
+def winner_name(
+    left: float | None, right: float | None, left_label: str, right_label: str
+) -> str:
+    """Name the faster side. A gap under 10% is a tie."""
     kind_l, kind_r = compare_pair(left, right)
-    return paint(left_text, kind_l), paint(right_text, kind_r)
+    if kind_l == "tie":
+        return "tie"
+    if kind_l.startswith("win"):
+        return left_label
+    if kind_r.startswith("win"):
+        return right_label
+    return "—"
+
+
+def median(values: list[float]) -> float | None:
+    if not values:
+        return None
+    ordered = sorted(values)
+    mid = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[mid]
+    return (ordered[mid - 1] + ordered[mid]) / 2
+
+
+def _tally(pairs: list[tuple[float, float]]) -> dict:
+    """Count wins for the left value. Lower is better. Also keep right/left."""
+    mojo = mojo_lot = other = other_lot = ties = 0
+    ratios: list[float] = []
+    for left, right in pairs:
+        if left <= 0:
+            continue
+        ratios.append(right / left)
+        kind_l, kind_r = compare_pair(left, right)
+        if kind_l == "win_lot":
+            mojo += 1
+            mojo_lot += 1
+        elif kind_l == "win_little":
+            mojo += 1
+        elif kind_r == "win_lot":
+            other += 1
+            other_lot += 1
+        elif kind_r == "win_little":
+            other += 1
+        else:
+            ties += 1
+    return {
+        "mojo": mojo,
+        "mojo_lot": mojo_lot,
+        "other": other,
+        "other_lot": other_lot,
+        "ties": ties,
+        "ratio": median(ratios),
+        "count": mojo + other + ties,
+    }
 
 
 def ensure_dirs() -> None:
@@ -600,18 +639,6 @@ def refused_reason(output: str) -> str:
     return "refused"
 
 
-def js_cells(result: dict | None) -> tuple[str, str, str, float | None, int | None]:
-    if not result or not result.get("ok"):
-        return "unavailable", "—", "—", None, None
-    return (
-        fmt_s(result["seconds"]),
-        fmt_s(result.get("frames_seconds")),
-        fmt_mib(result.get("rss_kib")),
-        good_seconds(result),
-        good_mib(result),
-    )
-
-
 def measurement_label(row: dict) -> str:
     """Show a recorded row date without upgrading legacy aggregate metadata."""
     date = row.get("measured_on")
@@ -659,147 +686,360 @@ def merge_measurements(previous: dict, fresh: dict) -> dict:
     return merged
 
 
-def example_table(rows: list[dict], webgl_ok: bool) -> str:
+def _draw_cells(row: dict, webgl_ok: bool) -> tuple[str, str, str, str, str, str]:
+    """Return compile, three draw cells, the winner and Mojo RSS."""
+    tm = row["threemojo"]
+    flat = row.get("threejs_flat") or row.get("threejs") or {}
+    web = row.get("threejs_webgl") or {}
+    tm_ok = bool(tm["compile"].get("ok") and tm["run"].get("ok"))
+    compile_s = fmt_s(tm["compile"].get("seconds")) if tm["compile"].get("ok") else "failed"
+    tm_frames = tm["run"].get("frames_seconds") if tm_ok else None
+    flat_frames = flat.get("frames_seconds") if flat.get("ok") else None
+    web_frames = web.get("frames_seconds") if web.get("ok") else None
+    if webgl_ok and web.get("ok") and web_frames is not None:
+        rival_frames = web_frames
+        rival_label = "WebGL"
+    elif flat.get("ok") and flat_frames is not None:
+        rival_frames = flat_frames
+        rival_label = "cpu-flat"
+    else:
+        rival_frames = None
+        rival_label = "WebGL"
+    winner = winner_name(tm_frames, rival_frames, "Mojo", rival_label)
+    rss = fmt_mib(tm["run"].get("rss_kib")) if tm_ok else "—"
+    return (
+        compile_s,
+        fmt_s(tm_frames),
+        fmt_s(flat_frames) if flat.get("ok") else "unavailable",
+        fmt_s(web_frames) if web.get("ok") else "unavailable",
+        winner,
+        rss,
+    )
+
+
+def example_table(rows: list[dict], webgl_ok: bool, legacy_date: str | None = None) -> str:
     lines = [
-        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | cpu-flat run (s) | webgl run (s) | ThreeMojo frames (s) | cpu-flat frames (s) | webgl frames (s) | ThreeMojo RSS (MiB) | cpu-flat RSS (MiB) | webgl RSS (MiB) | Measured |",
-        "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
+        "| Example | Size | Frames | Compile (s) | Mojo draw (s) | cpu-flat draw (s) | WebGL draw (s) | Draw winner | Mojo RSS (MiB) | Measured |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
-        tm = row["threemojo"]
-        flat = row.get("threejs_flat") or row.get("threejs") or {}
-        web = row.get("threejs_webgl") or {}
-        tm_run_ok = tm["compile"].get("ok") and tm["run"].get("ok")
-        tm_run = fmt_s(tm["run"]["seconds"]) if tm_run_ok else (
-            "compile failed" if not tm["compile"].get("ok") else "run failed"
-        )
-        tm_rss = fmt_mib(tm["run"].get("rss_kib")) if tm_run_ok else "—"
-        flat_run, flat_frames, flat_rss, flat_seconds, flat_mib = js_cells(flat)
-        web_run, web_frames, web_rss, web_seconds, web_mib = js_cells(web)
-        pair_seconds = web_seconds if webgl_ok and web.get("ok") else flat_seconds
-        pair_mib = web_mib if webgl_ok and web.get("ok") else flat_mib
-        pair_run = web_run if webgl_ok and web.get("ok") else flat_run
-        pair_rss = web_rss if webgl_ok and web.get("ok") else flat_rss
-        run_l, run_r = painted_pair(
-            tm_run,
-            pair_run,
-            good_seconds(tm["run"]) if tm_run_ok else None,
-            pair_seconds,
-        )
-        pair_frames_cell = web_frames if webgl_ok and web.get("ok") else flat_frames
-        pair_frames = (
-            (web if webgl_ok and web.get("ok") else flat).get("frames_seconds")
-        )
-        tm_frames = tm["run"].get("frames_seconds") if tm_run_ok else None
-        frames_l, frames_r = painted_pair(
-            fmt_s(tm_frames) if tm_frames is not None else "—",
-            pair_frames_cell,
-            tm_frames,
-            pair_frames,
-        )
-        if webgl_ok and web.get("ok"):
-            web_frames = frames_r
-        else:
-            flat_frames = frames_r
-        rss_l, rss_r = painted_pair(
-            tm_rss,
-            pair_rss,
-            good_mib(tm["run"]) if tm_run_ok else None,
-            pair_mib,
-        )
-        if webgl_ok and web.get("ok"):
-            shown_web_run, shown_web_rss = run_r, rss_r
-            shown_flat_run, shown_flat_rss = flat_run, flat_rss
-        else:
-            shown_flat_run, shown_flat_rss = run_r, rss_r
-            shown_web_run, shown_web_rss = web_run, web_rss
+        compile_s, mojo_draw, flat_draw, web_draw, winner, rss = _draw_cells(row, webgl_ok)
+        recorded = measurement_label(row)
+        if recorded == "unknown" and isinstance(legacy_date, str):
+            recorded = measurement_label(
+                {"measured_on": legacy_date, "measurement_date_source": "legacy aggregate"}
+            )
         lines.append(
-            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {fr} | {wr} | {tf} | {ff} | {wf} | {m} | {fm} | {wm} | {recorded} |".format(
+            "| `{name}` | {w}×{h} | {frames} | {compile_s} | {mojo_draw} | {flat_draw} | {web_draw} | {winner} | {rss} | {recorded} |".format(
                 name=row["name"],
                 w=row["width"],
                 h=row["height"],
                 frames=row["frames"],
-                c=fmt_s(tm["compile"]["seconds"]),
-                r=run_l,
-                tf=frames_l,
-                fr=shown_flat_run,
-                ff=flat_frames,
-                wr=shown_web_run,
-                wf=web_frames,
-                m=rss_l,
-                fm=shown_flat_rss,
-                wm=shown_web_rss,
-                recorded=measurement_label(row),
+                compile_s=compile_s,
+                mojo_draw=mojo_draw,
+                flat_draw=flat_draw,
+                web_draw=web_draw,
+                winner=winner,
+                rss=rss,
+                recorded=recorded,
             )
         )
     lines.append("")
     lines.append("A legacy date is from an older aggregate file; its per-row measurement date is unknown.")
-    lines.append(
-        "The `cpu-flat` columns fill the same triangles with each material's flat color and a depth test."
-    )
-    lines.append(
-        "That fill does no lighting, no textures, no sRGB and no transparency, and it writes no file."
-    )
+    lines.append("")
+    lines.append("Draw time is the frame loop inside the process.")
+    lines.append("A gap under 10% is a tie.")
+    lines.append("cpu-flat is a flat color fill with a depth test.")
     if webgl_ok:
-        lines.append(
-            "The `webgl` columns are three.js drawing with WebGL 2 through `webgl-node`."
-        )
+        lines.append("WebGL is the three.js draw used for the language comparison.")
     else:
-        lines.append(
-            "The `webgl` columns are unavailable. The context did not load."
-        )
-    lines.append(
-        "A frames column times the draw loop inside the process. It leaves out starting the process, building the scene and writing a file."
-    )
+        lines.append("WebGL did not run, so the draw winner uses cpu-flat.")
     return "\n".join(lines)
 
 
-def pair_cells(compile_result: dict | None, run_result: dict | None) -> tuple[str, str, str]:
-    if compile_result is None:
-        return "not installed", "—", "—"
-    compile_s = fmt_s(compile_result["seconds"])
-    if not compile_result.get("ok"):
-        return compile_s, "refused", "—"
-    if run_result is None:
-        return compile_s, "—", "—"
-    if not run_result.get("ok"):
-        return compile_s, "run failed", "—"
-    return compile_s, fmt_s(run_result["seconds"]), fmt_mib(run_result["rss_kib"])
+def _both_ran(left: dict | None, right: dict | None) -> bool:
+    if not left or not right or "compile" not in right:
+        return False
+    left_ok = left.get("compile", {}).get("ok") and (left.get("run") or {}).get("ok")
+    right_ok = right.get("compile", {}).get("ok") and (right.get("run") or {}).get("ok")
+    return bool(left_ok and right_ok)
 
 
 def mojo10_row(name: str, left: dict | None, right: dict | None) -> str:
-    if left:
-        c11, r11, m11 = pair_cells(left["compile"], left.get("run"))
-        left_c = good_seconds(left["compile"])
-        left_r = good_seconds(left.get("run"))
-        left_m = good_mib(left.get("run"))
-    else:
-        c11, r11, m11 = "—", "—", "—"
-        left_c = left_r = left_m = None
-    if right and "compile" in right:
-        c10, r10, m10 = pair_cells(right["compile"], right.get("run"))
-        right_c = good_seconds(right["compile"])
-        right_r = good_seconds(right.get("run"))
-        right_m = good_mib(right.get("run"))
-    elif right is None:
-        c10, r10, m10 = "not installed", "—", "—"
-        right_c = right_r = right_m = None
-    else:
-        c10, r10, m10 = pair_cells(right, None)
-        right_c = right_r = right_m = None
-    c11, c10 = painted_pair(c11, c10, left_c, right_c)
-    r11, r10 = painted_pair(r11, r10, left_r, right_r)
-    m11, m10 = painted_pair(m11, m10, left_m, right_m)
-    return f"| `{name}` | {c11} | {c10} | {r11} | {r10} | {m11} | {m10} |"
+    left_c = good_seconds((left or {}).get("compile"))
+    right_c = good_seconds((right or {}).get("compile"))
+    left_r = good_seconds((left or {}).get("run"))
+    right_r = good_seconds((right or {}).get("run"))
+    return (
+        f"| `{name}` | {fmt_s(left_c)} | {fmt_s(right_c)} | "
+        f"{winner_name(left_c, right_c, '1.1', '1.0')} | "
+        f"{fmt_s(left_r)} | {fmt_s(right_r)} | "
+        f"{winner_name(left_r, right_r, '1.1', '1.0')} |"
+    )
 
 
 def mojo10_table(probe11: dict, probe10: dict | None, examples: list[dict]) -> str:
     lines = [
-        "| Program | 1.1 compile (s) | 1.0 compile (s) | 1.1 run (s) | 1.0 run (s) | 1.1 RSS (MiB) | 1.0 RSS (MiB) |",
+        "| Program | 1.1 compile (s) | 1.0 compile (s) | Compile winner | 1.1 run (s) | 1.0 run (s) | Run winner |",
         "|---|---|---|---|---|---|---|",
-        mojo10_row("probe", probe11, probe10),
     ]
+    ran = 0
+    refused = 0
+    if _both_ran(probe11, probe10):
+        lines.append(mojo10_row("probe", probe11, probe10))
+        ran += 1
+    elif probe10 is None:
+        lines.append("| `probe` | — | not installed | — | — | — | — |")
+    else:
+        refused += 1
     for row in examples:
-        lines.append(mojo10_row(row["name"], row["threemojo"], row.get("mojo10")))
+        if _both_ran(row.get("threemojo"), row.get("mojo10")):
+            lines.append(mojo10_row(row["name"], row["threemojo"], row.get("mojo10")))
+            ran += 1
+        elif row.get("mojo10"):
+            refused += 1
+    lines.append("")
+    lines.append(f"Programs in this table: {ran}.")
+    lines.append(f"Refused catalog rows: {refused}.")
+    lines.append("A refused compile is not a faster compile.")
+    lines.append("Those rows stay out of this table.")
+    return "\n".join(lines)
+
+
+def _frame_pairs(rows: list[dict], key: str) -> list[tuple[float, float]]:
+    pairs = []
+    for row in rows:
+        tm = row["threemojo"]["run"]
+        other = row.get(key) or {}
+        left = tm.get("frames_seconds") if tm.get("ok") else None
+        right = other.get("frames_seconds") if other.get("ok") else None
+        if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+            pairs.append((float(left), float(right)))
+    return pairs
+
+
+def _seconds(metric: dict | None) -> float | None:
+    value = good_seconds(metric)
+    return float(value) if isinstance(value, (int, float)) else None
+
+
+def score_report(payload: dict, platform_key: str) -> str:
+    """State who wins, in short sentences, without a colored cell per number."""
+    rows = payload.get("examples") or []
+    title = PLATFORMS.get(platform_key, platform_key)
+    lines = [f"### {title}", ""]
+    webgl_ok = bool(payload.get("threejs_webgl"))
+    language_key = "threejs_webgl" if webgl_ok else "threejs_flat"
+    language_name = "WebGL" if webgl_ok else "cpu-flat"
+    language = _tally(_frame_pairs(rows, language_key))
+    if not webgl_ok:
+        lines.append("WebGL did not run on this host.")
+        lines.append("cpu-flat is a flat color fill, so the comparison is the CPU fill.")
+        lines.append("")
+    if language["count"] == 0:
+        lines.append("This file has no ThreeMojo draw times.")
+        lines.append("The draw winner stays blank until the next measurement.")
+    else:
+        lines.append(
+            f"{language_name} is the draw comparison on this host."
+        )
+        if language["mojo"]:
+            lines.append(
+                f"ThreeMojo wins {language['mojo']} draws, {language['mojo_lot']} of them by 30% or more."
+            )
+        if language["other"]:
+            lines.append(
+                f"{language_name} wins {language['other']} draws, {language['other_lot']} of them by 30% or more."
+            )
+        if language["ties"] == 1:
+            lines.append("1 draw is within 10% and counts as a tie.")
+        elif language["ties"]:
+            lines.append(f"{language['ties']} draws are within 10% and count as ties.")
+        if language["ratio"] is not None:
+            lines.append(
+                f"The median {language_name} draw takes {fmt_ratio(language['ratio'])} times the ThreeMojo draw."
+            )
+        if not webgl_ok:
+            lines.append("The flat fill does less work than the ThreeMojo frame.")
+    lines.append("")
+    flat = _tally(_frame_pairs(rows, "threejs_flat"))
+    if flat["count"] and language_key != "threejs_flat":
+        lines.append("cpu-flat is a flat color fill. It is not the same work.")
+        if flat["ratio"] is not None:
+            lines.append(
+                f"The median cpu-flat draw takes {fmt_ratio(flat['ratio'])} times the ThreeMojo draw."
+            )
+        lines.append("")
+    mojo_rss = []
+    web_rss = []
+    mojo_lower = 0
+    rss_compared = 0
+    mojo_run = []
+    web_run = []
+    compiles = []
+    for row in rows:
+        tm = row["threemojo"]
+        if tm["compile"].get("ok"):
+            seconds = _seconds(tm["compile"])
+            if seconds is not None:
+                compiles.append(seconds)
+        if tm["run"].get("ok"):
+            seconds = _seconds(tm["run"])
+            if seconds is not None:
+                mojo_run.append(seconds)
+            kib = tm["run"].get("rss_kib")
+            if isinstance(kib, (int, float)):
+                mojo_rss.append(kib / 1024.0)
+        rival = row.get(language_key) or {}
+        if rival.get("ok") and tm["run"].get("ok"):
+            left = tm["run"].get("rss_kib")
+            right = rival.get("rss_kib")
+            if isinstance(left, (int, float)) and isinstance(right, (int, float)):
+                rss_compared += 1
+                if left < right:
+                    mojo_lower += 1
+            rival_seconds = _seconds(rival)
+            if rival_seconds is not None:
+                web_run.append(rival_seconds)
+            if isinstance(right, (int, float)):
+                web_rss.append(right / 1024.0)
+    if rss_compared:
+        lines.append(
+            f"ThreeMojo uses less memory on {mojo_lower} of {rss_compared} examples."
+        )
+    mojo_med = median(mojo_rss)
+    web_med = median(web_rss)
+    if mojo_med is not None and web_med is not None:
+        lines.append(
+            f"The median resident set is {mojo_med:.0f} MiB for ThreeMojo and {web_med:.0f} MiB for {language_name}."
+        )
+    elif mojo_med is not None:
+        lines.append(f"The median ThreeMojo resident set is {mojo_med:.0f} MiB.")
+    lines.append("")
+    lines.append("Whole-process time includes startup and writing the image.")
+    if median(mojo_run) is not None:
+        lines.append(f"The median ThreeMojo process takes {fmt_s(median(mojo_run))} s.")
+    if median(web_run) is not None:
+        lines.append(
+            f"The median {language_name} process takes {fmt_s(median(web_run))} s."
+        )
+    baselines = payload.get("baselines") or {}
+    mojo_base = _seconds(baselines.get("mojo"))
+    node_base = _seconds(baselines.get("node"))
+    if mojo_base is not None:
+        lines.append(f"A Mojo program that does nothing takes {fmt_s(mojo_base)} s.")
+    if node_base is not None:
+        lines.append(f"A Node process that does nothing takes {fmt_s(node_base)} s.")
+    if median(compiles) is not None:
+        lines.append(f"The median Mojo 1.1 compile takes {fmt_s(median(compiles))} s.")
+    lines.append("")
+    version_pairs_c = []
+    version_pairs_r = []
+    refused = 0
+    probe10 = (payload.get("probe") or {}).get("v10")
+    probe11 = (payload.get("probe") or {}).get("v11")
+    shared = []
+    if probe11 or probe10:
+        shared.append((probe11, probe10))
+    for row in rows:
+        if row.get("mojo10"):
+            shared.append((row.get("threemojo"), row.get("mojo10")))
+    if not any(item[1] for item in shared):
+        lines.append("Mojo 1.0 is not installed on this host.")
+    else:
+        for left, right in shared:
+            if _both_ran(left, right):
+                version_pairs_c.append(
+                    (good_seconds(left["compile"]), good_seconds(right["compile"]))
+                )
+                version_pairs_r.append(
+                    (good_seconds(left["run"]), good_seconds(right["run"]))
+                )
+            elif right:
+                refused += 1
+        compile_tally = _tally(version_pairs_c)
+        run_tally = _tally(version_pairs_r)
+        lines.append(
+            f"Mojo 1.0 runs {compile_tally['count']} programs."
+        )
+        lines.append(f"Refused programs: {refused}.")
+        lines.append("A refused compile is not a faster compile.")
+        if compile_tally["count"]:
+            if compile_tally["mojo"]:
+                lines.append(
+                    f"On those programs, Mojo 1.1 compiles faster on {compile_tally['mojo']} of {compile_tally['count']}."
+                )
+            if compile_tally["other"]:
+                lines.append(
+                    f"Mojo 1.0 compiles faster on {compile_tally['other']} of {compile_tally['count']}."
+                )
+            if compile_tally["ties"] == 1:
+                lines.append("1 compile is within 10%.")
+            elif compile_tally["ties"]:
+                lines.append(f"{compile_tally['ties']} compiles are within 10%.")
+            lines.append("")
+            if run_tally["mojo"]:
+                lines.append(
+                    f"Mojo 1.1 runs faster on {run_tally['mojo']} of {run_tally['count']}."
+                )
+            if run_tally["other"]:
+                lines.append(
+                    f"Mojo 1.0 runs faster on {run_tally['other']} of {run_tally['count']}."
+                )
+            if run_tally["ties"] == 1:
+                lines.append("1 run is within 10%.")
+            elif run_tally["ties"]:
+                lines.append(f"{run_tally['ties']} runs are within 10%.")
+    measured = len(rows)
+    lines.append("")
+    lines.append(f"The catalog lists {len(CATALOG)} examples.")
+    lines.append(f"This host measures {measured} of them.")
+    return "\n".join(lines)
+
+
+def cross_report() -> str:
+    """Compare the two saved hosts by median ratio. Dates stay visible."""
+    paths = {key: results_path(key) for key in PLATFORMS}
+    if not all(path.is_file() for path in paths.values()):
+        return "One host has no results file. The machine comparison waits for that file."
+    loaded = {
+        key: json.loads(path.read_text(encoding="utf-8")) for key, path in paths.items()
+    }
+    linux_rows = {row["name"]: row for row in loaded["linux"].get("examples", [])}
+    mac_rows = {row["name"]: row for row in loaded["macos"].get("examples", [])}
+    run_ratios = []
+    compile_ratios = []
+    for name, linux in linux_rows.items():
+        mac = mac_rows.get(name)
+        if not mac:
+            continue
+        linux_run = _seconds(linux["threemojo"]["run"])
+        mac_run = _seconds(mac["threemojo"]["run"])
+        if linux_run and mac_run:
+            run_ratios.append(linux_run / mac_run)
+        linux_compile = _seconds(linux["threemojo"]["compile"])
+        mac_compile = _seconds(mac["threemojo"]["compile"])
+        if linux_compile and mac_compile:
+            compile_ratios.append(linux_compile / mac_compile)
+    run_med = median(run_ratios)
+    compile_med = median(compile_ratios)
+    linux_date = loaded["linux"].get("generated_at", "unknown")
+    mac_date = loaded["macos"].get("generated_at", "unknown")
+    lines = []
+    if run_med is not None:
+        lines.append(
+            f"For these saved runs, the median Linux/macOS whole-process time ratio is {fmt_ratio(run_med)}."
+        )
+    if compile_med is not None:
+        lines.append(
+            f"The median Linux/macOS compile-time ratio is {fmt_ratio(compile_med)}."
+        )
+    lines.append("Each ratio is Linux time divided by macOS time.")
+    lines.append("")
+    lines.append(f"The Linux date is {linux_date}. The macOS date is {mac_date}.")
+    lines.append("The source and software can differ between these snapshots.")
+    lines.append("These ratios do not isolate hardware speed.")
+    lines.append(f"The comparison uses {len(run_ratios)} shared examples.")
     return "\n".join(lines)
 
 
@@ -910,23 +1150,29 @@ def write_wiki(payload: dict, platform_key: str) -> None:
             + (
                 "`cpu-flat` and `webgl`"
                 if payload.get("threejs_webgl")
-                else "`cpu-flat` (`webgl` did not load)"
+                else "`cpu-flat` (`webgl` did not run)"
             ),
         ]
         + baseline_lines(payload)
     )
     text = WIKI.read_text(encoding="utf-8")
     text = replace_span(text, f"HOST:{platform_key}", host_md)
+    text = replace_span(text, f"SCORE:{platform_key}", score_report(payload, platform_key))
+    text = replace_span(text, "CROSS", cross_report())
     text = replace_span(
         text,
         f"EXAMPLES:{platform_key}",
-        example_table(payload["examples"], bool(payload.get("threejs_webgl"))),
+        example_table(
+            payload["examples"],
+            bool(payload.get("threejs_webgl")),
+            payload.get("generated_at"),
+        ),
     )
     text = replace_span(
         text,
         f"MOJO10:{platform_key}",
         mojo10_table(
-            payload["probe"]["v11"],
+            payload["probe"].get("v11") or {},
             payload["probe"].get("v10"),
             payload["examples"],
         ),
@@ -949,6 +1195,11 @@ def parse_args() -> argparse.Namespace:
         "--skip-threejs",
         action="store_true",
         help="Skip the three.js runner",
+    )
+    parser.add_argument(
+        "--skip-webgl",
+        action="store_true",
+        help="Time cpu-flat only. Use this when the host has no GPU.",
     )
     parser.add_argument(
         "--skip-mojo10",
@@ -981,7 +1232,11 @@ def parse_args() -> argparse.Namespace:
 
 
 def emit_tables(payload: dict, write_wiki_page: bool, platform_key: str) -> None:
-    print(example_table(payload["examples"], bool(payload.get("threejs_webgl"))))
+    print(example_table(
+        payload["examples"],
+        bool(payload.get("threejs_webgl")),
+        payload.get("generated_at"),
+    ))
     print()
     print(
         mojo10_table(
@@ -1123,7 +1378,7 @@ def main() -> int:
         web = skipped
         if not args.skip_threejs:
             flat = bench_threejs(name, "cpu-flat")
-            web = bench_threejs(name, "webgl")
+            web = skipped if args.skip_webgl else bench_threejs(name, "webgl")
             if web.get("ok"):
                 payload["threejs_webgl"] = True
             print(
@@ -1181,6 +1436,9 @@ def main() -> int:
                 "threejs_webgl": web,
                 "mojo10": mojo10_example,
             }
+        )
+        results.write_text(
+            json.dumps(slim_payload(payload), indent=2) + "\n", encoding="utf-8"
         )
 
     slim = slim_payload(payload)
