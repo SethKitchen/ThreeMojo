@@ -8,11 +8,14 @@ They do not prove helper mathematics, runtime execution, termination or cost.
 No checker updates pins automatically. Repository-controlled pins are reviewed
 inputs, never an independent proof when changed together with production.
 """
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 import hashlib
 import io
 import json
 from pathlib import Path
+from threading import get_ident
 import tokenize
 
 PINS = Path('tools/carla_lane_oracle/runtime-source-pins.json')
@@ -45,6 +48,76 @@ GROUP_PATHS = {
 QUALIFIER_FILES = ('curve_bounds.mojo', 'curve_trig.mojo',
                    'curve_interval.mojo', 'lane_value_bounds.mojo')
 QUALIFIERS = {'var', 'mut', 'out', 'ref', 'comptime', 'raises'}
+
+
+# Only immutable lexical strings belong here. This scope never stores roots,
+# paths, source reads, inventories, dependency graphs or verification results.
+_LEXICAL_MEMO_LIMIT = 256
+_lexical_memo = ContextVar('lane_oracle_lexical_memo', default=None)
+
+
+class _LexicalMemo:
+    def __init__(self):
+        self.entries = {}
+        self.thread = get_ident()
+        self.active = True
+
+
+def _active_lexical_memo():
+    memo = _lexical_memo.get()
+    if memo is not None and memo.active and memo.thread == get_ident():
+        return memo
+    return None
+
+
+@contextmanager
+def lexical_memo_scope():
+    """Reuse pure lexical strings during one complete verification.
+
+    Args:
+        None. Nested entries borrow the current invocation's bounded memo.
+    Returns:
+        A context manager that drops every entry on outermost exit.
+    Raises:
+        Propagates the verification's exceptions without caching them.
+    """
+    if _active_lexical_memo() is not None:
+        yield
+        return
+    memo = _LexicalMemo()
+    token = _lexical_memo.set(memo)
+    try:
+        yield
+    finally:
+        # A copied context can outlive this invocation. Invalidate its shared
+        # state too, rather than let it revive or refill an expired memo.
+        memo.active = False
+        memo.entries.clear()
+        _lexical_memo.reset(token)
+
+
+def _lexical_string(function, arguments, dependencies=()):
+    """Memoize exact immutable arguments and a string result inside the scope."""
+    scope = _active_lexical_memo()
+    # Preserve non-tuple owners and other unusual inputs by evaluating them
+    # normally. Never retain a mutable object as part of an allegedly exact key.
+    if scope is None or not all(
+            type(value) is str or value is None or
+            (type(value) is tuple and all(type(part) is str for part in value))
+            for value in arguments):
+        return function(*arguments)
+    memo = scope.entries
+    key = (function, dependencies, arguments)
+    if key in memo:
+        return memo[key]
+    result = function(*arguments)
+    # Exceptions never create entries. Only a complete immutable output may be
+    # reused; mutable wrappers returned by other helpers must remain fresh.
+    if type(result) is str:
+        if len(memo) >= _LEXICAL_MEMO_LIMIT:
+            del memo[next(iter(memo))]
+        memo[key] = result
+    return result
 
 
 def require(condition, message):
