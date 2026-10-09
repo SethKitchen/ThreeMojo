@@ -1,9 +1,9 @@
 """Exact graph for the reviewed private Y-finiteness lemma. No arbitrary projection."""
 from pathlib import Path
-try:
+if __package__:
+    from . import source_contracts
+else:
     import source_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts
 EXPECTED = {'extensions/carla/spiral_grouped_roundoff_proof.mojo': 'cd92ac2f02c75fc420920fe3a73b4ddd28a4e5cf0d97785b4ae4eb0f54f2cbd7', 'extensions/carla/curve_interval.mojo': 'e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11', 'extensions/carla/curve_trig.mojo': '523d5700201b957152eaa79ae6cce9ca8cb9a2a0098d5b105584667360a6de7f', 'extensions/carla/geometry.mojo': 'a1979bd37d0ea725f452e0a0a269c7aaef3cda485b291e8fe79b49b35850adcb', 'extensions/carla/curve_sum2.mojo': '3fbcbb7f6ba0b9120500698665f0419acf6618d8bd34b7e18b9d10896282383d'}
 
 def verify_text(modules):
@@ -11,10 +11,10 @@ def verify_text(modules):
         raise ValueError('Wrong Y-finiteness dependency set')
     for name, digest in EXPECTED.items():
         if source_contracts.token_sha256(modules[name]) != digest:
-            try:
+            if __package__:
+                from . import reviewed_cleanup_contracts as words
+            else:
                 import reviewed_cleanup_contracts as words
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import reviewed_cleanup_contracts as words
             try:
                 words.verify_dependency(name, modules[name], digest)
             except ValueError as error:

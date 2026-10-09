@@ -1,9 +1,9 @@
 """Exact bounded representation checks; not capture/proof authentication."""
 from pathlib import Path
-try:
+if __package__:
+    from . import source_contracts
+else:
     import source_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts
 MODULE='extensions/carla/spiral_domain_proof.mojo'
 EXPECTED='7263f3e46da6496d3b3a6054870b4238d9f4767c07e90161065c5c87e6d18813'
 INTERVAL='e2e87c519ed45fb4ec77d9a54aad08406461b17805287874c9b05ddb6bf49b11'

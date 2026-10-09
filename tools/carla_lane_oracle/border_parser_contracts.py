@@ -11,14 +11,14 @@ import hashlib
 import json
 from pathlib import Path
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+    from . import speed_parser_contracts as speed
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import speed_parser_contracts as speed
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
-    from tools.carla_lane_oracle import speed_parser_contracts as speed
 
 MODULE = 'extensions/carla/opendrive.mojo'
 MIGRATION = 'tools/carla_lane_oracle/border-parser-successor.json'
@@ -151,11 +151,14 @@ def verify(root):
         for path, expected in record[group].items():
             actual = hashlib.sha256((root/path).read_bytes()).hexdigest()
             if group == 'unchanged_inputs' and path == 'extensions/carla/map.mojo' and actual != expected:
-                try:
+                if __package__:
+                    from . import seed_count_contracts as seed_count
+                else:
                     import seed_count_contracts as seed_count
-                except ModuleNotFoundError:
-                    from tools.carla_lane_oracle import seed_count_contracts as seed_count
-                require(expected == seed_count.BEFORE_SHA256 and actual == seed_count.AFTER_SHA256,
+                require(expected == seed_count.BEFORE_SHA256
+                        and actual in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
+                                      seed_count.SUPPORT_AFTER_SHA256,
+                                      seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256},
                         'unreviewed Map consumer variant')
                 map_edge = seed_count.verify(root)
                 require(map_edge is not None and map_edge['before_sha256'] == expected

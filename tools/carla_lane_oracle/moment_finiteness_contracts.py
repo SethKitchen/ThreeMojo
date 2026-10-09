@@ -1,10 +1,10 @@
 """Source-bound finite-intermediate proof for the dynamic moment producer."""
 from pathlib import Path
 
-try:
+if __package__:
+    from . import source_contracts
+else:
     import source_contracts
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts
 
 MODULE='extensions/carla/spiral_moment_proof.mojo'
 INTERVAL='extensions/carla/curve_interval.mojo'
@@ -17,10 +17,10 @@ def verify_text(module, interval, geometry, trig):
     if source_contracts.token_sha256(interval)!=EXPECTED_INTERVAL:
         raise ValueError('Directed interval arithmetic dependency changed')
     # Lazy import avoids a cycle through the maintained migration checkers.
-    try:
+    if __package__:
+        from . import spiral_moments
+    else:
         import spiral_moments
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import spiral_moments
     for name,size,text,low,high,strict in [('_GL_NODES',5,geometry,-1,1,True),('_GL_WEIGHTS',5,geometry,0,1,False),('_COS_COEFFICIENTS',11,trig,-1,1,False),('_SIN_COEFFICIENTS',11,trig,-1,1,False)]:
         # Parse the complete actual top-level declaration, never a matching
         # prefix in a string/conditional/concatenation. Decode exact stored
