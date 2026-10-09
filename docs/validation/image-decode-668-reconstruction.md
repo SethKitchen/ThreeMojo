@@ -64,7 +64,21 @@ Only the new stop test needed canonical whitespace formatting. It is rerun
 on the final formatted source. Production and all original consumer test
 bytes remain identical to their successful focused captures.
 
-## Remaining gates
+## Qualification on main
+
+The change merged with #594 at `7c4f5c0e`. The full main run 37773325369
+on that commit passed lint, the three Linux CPU shards and both macOS
+suites. All eight coverage captures completed.
+
+`loaders/image_batch` reached 100% lines, branches and MC/DC in that run's
+aggregate report. The aggregate coverage job failed only in CARLA and hair
+modules that this change does not touch.
+
+The bounded-work test is the failed-batch work measurement. When every
+callback fails, it observes at most the effective worker count in decode
+attempts, for each tested worker setting and input count.
+
+## Earlier gates
 
 The draft batch must still pass complete checks, coverage and platform CI.
 The separate texture-ownership change needs its pointer adapters composed
