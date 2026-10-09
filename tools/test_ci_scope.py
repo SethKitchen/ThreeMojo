@@ -41,6 +41,39 @@ def selected(changed, *, sources=None, old=None):
 
 
 class RoutingTests(unittest.TestCase):
+    def test_carla_asset_packaging_tools_select_python_and_documentation_checks(self):
+        paths = {'assets/carla/tools/carla_assets.py': False,
+                 'assets/carla/tools/test_carla_assets.py': False}
+        for changed in (paths, {**paths, 'docs/wiki/CARLA-assets.md': False}):
+            with self.subTest(changed=changed):
+                value = selected(changed)
+                self.assertFalse(value['full'])
+                expected = {'tools', 'lint'} | ({'docs'} if len(changed) == 3 else set())
+                self.assertEqual({name for name, flag in value['flags'].items() if flag}, expected)
+                self.assertTrue(all(not files for files in value['files'].values()))
+
+    def test_carla_packaging_exceptions_preserve_native_export_and_unknown_routing(self):
+        known = {'assets/carla/tools/carla_assets.py': False,
+                 'assets/carla/tools/test_carla_assets.py': False}
+        sources = dict(SOURCES)
+        sources['core/asset_user.mojo'] = '# "assets/carla/"\n'
+        sources['tests/test_assets.mojo'] = 'from core.asset_user import something\n'
+        for path in ('assets/carla/manifest.json', 'assets/carla/fixture.bin',
+                     'assets/carla/tools/new_tool.py', 'assets/carla/tools/carla_assets.py.extra'):
+            with self.subTest(path=path):
+                self.assertEqual(ci_scope.kind(path), 'native')
+                single = selected({path: False}, sources=sources)
+                mixed = selected({**known, path: False}, sources=sources)
+                self.assertTrue(mixed['flags']['native'])
+                self.assertTrue(mixed['flags']['cpu'])
+                self.assertTrue(mixed['flags']['coverage'])
+                self.assertEqual(single, mixed)
+        self.assertTrue(selected({**known, 'assets/carla/tools/export/build_towns.py': False})['flags']['export'])
+        for path in ('Makefile', 'tools/unknown.py'):
+            self.assertTrue(selected({**known, path: False})['full'])
+        self.assertEqual(selected({'core/used.mojo': False}),
+                         selected({**known, 'core/used.mojo': False}))
+
     def test_humanoid_snapshot_adapter_runs_python_tools_and_its_docs(self):
         paths = {'tools/humanoid_fidelity.py': False, 'tools/test_humanoid_fidelity.py': False}
         value = selected(paths)

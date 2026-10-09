@@ -17,6 +17,7 @@ Commands:
     python3 assets/carla/tools/carla_assets.py fetch [ID ...] [--pin | --offline]
     python3 assets/carla/tools/carla_assets.py verify [ID ...] [--strict]
     python3 assets/carla/tools/carla_assets.py credits [--all] [--output FILE]
+    python3 assets/carla/tools/carla_assets.py stage-render --output NEW_DIRECTORY RENDER_FILE [RENDER_FILE ...]
 
 Rules the fetch keeps:
 
@@ -42,13 +43,16 @@ Rules the fetch keeps:
 """
 
 import argparse
+from contextlib import ExitStack
 import hashlib
+import io
 import json
 import math
 import os
 from pathlib import Path, PurePosixPath
 import re
 import shutil
+import stat
 import struct
 import sys
 import tempfile
@@ -94,6 +98,10 @@ class ManifestError(ValueError):
 
 class FetchError(RuntimeError):
     """A file could not be fetched or did not match its sum."""
+
+
+class StageError(RuntimeError):
+    """A rendered distribution could not be staged safely."""
 
 
 def _is_sum(value):
@@ -522,6 +530,102 @@ def credits(manifest, everything=False):
     return '\n'.join(lines) + '\n'
 
 
+def _stage_source(path):
+    """Open a regular, non-symlink input without following a replaced link."""
+    before = path.lstat()
+    if not stat.S_ISREG(before.st_mode):
+        raise StageError(f'{path}: expected a regular file, not a directory or symlink')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        if not os.path.samestat(before, os.fstat(fd)):
+            raise StageError(f'{path}: input changed while opening it')
+        return os.fdopen(fd, 'rb')
+    except BaseException:
+        os.close(fd)
+        raise
+
+
+def _stage_write(directory, name, source):
+    """Create one output exclusively, without following a racing symlink."""
+    fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                 0o666, dir_fd=directory)
+    try:
+        with os.fdopen(fd, 'wb', closefd=False) as target:
+            shutil.copyfileobj(source, target)
+    finally:
+        os.close(fd)
+
+
+def stage_render(manifest_path, output, render_files):
+    """Copy named renders and one manifest snapshot into a new directory.
+
+    Args:
+        manifest_path: The manifest that corresponds to these renders.
+        output: A directory that must not already exist.
+        render_files: Explicit regular, non-symlink files to copy by basename.
+    Returns:
+        None. The new directory contains exact render and manifest bytes plus
+        the full attribution catalog generated from that manifest snapshot.
+    Raises:
+        StageError: Inputs collide, change identity, or staging is incomplete.
+        ManifestError: The selected manifest does not keep its rules.
+        OSError: An input cannot be read or an output cannot be created.
+        ValueError: The selected manifest is not UTF-8 JSON.
+    """
+    output = Path(output)
+    if output.exists() or output.is_symlink():
+        raise StageError(f'{output}: output already exists')
+    with ExitStack() as inputs:
+        manifest_file = inputs.enter_context(_stage_source(Path(manifest_path)))
+        manifest_bytes = manifest_file.read()
+        manifest = json.loads(manifest_bytes.decode('utf-8'))
+        check_manifest(manifest)
+        attribution = credits(manifest, everything=True).encode('utf-8')
+        sources = []
+        names = {'manifest.json', 'attribution.md'}
+        identities = set()
+        for value in render_files:
+            path = Path(value)
+            name = path.name.casefold()
+            if name in names:
+                raise StageError(f'{path}: duplicate or reserved output basename')
+            names.add(name)
+            source = inputs.enter_context(_stage_source(path))
+            info = os.fstat(source.fileno())
+            identity = (info.st_dev, info.st_ino)
+            if identity in identities:
+                raise StageError(f'{path}: duplicate input file')
+            identities.add(identity)
+            sources.append((path.name, source))
+        if not sources:
+            raise StageError('at least one render file is required')
+        # No output exists until every input and output name has been checked.
+        # mkdir and O_EXCL refuse a destination that appears after preflight.
+        output.mkdir()
+        identity = None
+        directory = None
+        try:
+            identity = output.lstat()
+            directory = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+            if not os.path.samestat(identity, os.fstat(directory)):
+                raise StageError(f'{output}: output changed while opening it')
+            for name, source in sources:
+                _stage_write(directory, name, source)
+            _stage_write(directory, 'manifest.json', io.BytesIO(manifest_bytes))
+            _stage_write(directory, 'ATTRIBUTION.md', io.BytesIO(attribution))
+            if not os.path.samestat(output.lstat(), identity):
+                raise StageError(f'{output}: output changed while staging it')
+        except BaseException as error:
+            # An inode check followed by unlink is not atomic: another process
+            # could replace the checked name before deletion. Retain all output
+            # on failure rather than risk deleting files this call did not make.
+            raise StageError(f'{error}; staging incomplete; retained output at '
+                             f'{output.absolute()} for manual inspection') from error
+        finally:
+            if directory is not None:
+                os.close(directory)
+
+
 def status(manifest, cache):
     """Return one line per entry: its id, kind, license and whether the
     cache holds it."""
@@ -554,7 +658,17 @@ def main(argv=None):
     teller = commands.add_parser('credits', help='print the attribution list')
     teller.add_argument('--all', action='store_true', help='also credit the CC0 entries')
     teller.add_argument('--output', type=Path)
+    stager = commands.add_parser('stage-render', help='copy named renders and credits into a new directory')
+    stager.add_argument('--output', type=Path, required=True)
+    stager.add_argument('render_files', type=Path, nargs='+')
     args = parser.parse_args(argv)
+    if args.command == 'stage-render':
+        try:
+            stage_render(args.manifest, args.output, args.render_files)
+        except (OSError, ValueError, StageError) as error:
+            print(f'stage-render: {error}', file=sys.stderr)
+            return 1
+        return 0
     manifest = load_manifest(args.manifest)
     if args.command == 'check':
         print(f'{args.manifest}: {len(manifest["entries"])} entries, '
