@@ -20,6 +20,20 @@ The former unbounded-error index stopping rule is not used.
 The integrated [index admission layer](CARLA-index-admission) uses the corrected
 R-tree contract from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
 
+## What a certificate covers
+
+A certificate bounds the stored evaluator, not every position that the map can report.
+The stored evaluator uses the polynomial sine and cosine in `curve_trig.mojo` and the stored Gauss-Legendre spiral.
+`geometry.mojo` and `Map.compute_transform` use the host libm `sin` and `cos`.
+The two evaluators can disagree in the last bits of a coordinate.
+So a certified waypoint is nearest under the stored evaluator.
+It is not certified against the position that `compute_transform` reports for it.
+
+The spiral moment oracle, `tools/carla_lane_oracle/spiral_moments.py`, reproduces the stored coefficient table in exact arithmetic.
+It checks that table's transcription, not the clothoid itself.
+No bound on the stored spiral's error against the exact clothoid exists.
+The [CARLA page](CARLA) reports the retained fixture agreement with a fine numerical integral.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.
