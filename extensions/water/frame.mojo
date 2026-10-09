@@ -11,8 +11,9 @@ the page adds while time is running.
 """
 
 from extensions.water.caustics import CausticField, render_caustics
+from extensions.water.field import ComplexField, fft2
 from extensions.water.filter import anisotropic_step
-from extensions.water.glare import apply_glare, glare_kernels
+from extensions.water.glare import GlareKernels, apply_glare, glare_kernels
 from extensions.water.pebbles import PebbleBed
 from extensions.water.optics import (
     Refracted,
@@ -39,13 +40,14 @@ from extensions.water.ripple import (
     sample_ripple,
     step_ripple,
 )
+from extensions.water.spectrum import build_spectrum, evolve_spectrum
 from extensions.water.surface import (
     SurfaceField,
+    resolve_surface,
     sample_surface,
     sample_surface_filtered,
     shader_time,
     slope_variance,
-    water_surface,
 )
 from extensions.water.view import (
     CAUSTICS,
@@ -57,8 +59,13 @@ from extensions.water.view import (
 )
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from std.math import cos, exp, pow, sin, sqrt, tan
+from std.math import cos, exp, isfinite, pow, sin, sqrt, tan
 from units.si import DEGREE, SECOND, Angle, Duration, Length
+
+# The page's ocean patch, water depth and root-mean-square slope.
+comptime _PATCH_METERS = Float32(4.6)
+comptime _DEPTH_METERS = Float32(1.6)
+comptime _TARGET_SLOPE = Float32(0.078)
 
 # Clearwater biases the caustic lookup one mip level to smooth concentrated light.
 comptime CAUSTIC_LOD_BIAS = Float32(1.0)
@@ -814,6 +821,212 @@ def _fract_time(clock: Duration) -> Float32:
     return t - floor_f(t)
 
 
+struct WaterScene(Movable):
+    """Persistent Clearwater water: the resources and state of many frames.
+
+    The scene builds the time-independent ocean spectrum once, and the
+    glare kernels on the first frame that needs them. It owns the ripple
+    window and the simulation clock. `advance` steps the simulation and
+    `draw` makes a picture, so drawing never changes the simulation.
+    """
+
+    var ocean: SpectrumResolution
+    """The spectrum and ripple grid side."""
+    var caustic_grid: Int
+    """Ray-grid cells on one side of the caustic pass."""
+    var caustic_resolution: Int
+    """Caustic texels on one side."""
+    var glare_resolution: SpectrumResolution
+    """The diffraction FFT size."""
+    var start: Duration
+    """The clock that `reset` restores."""
+    var clock: Duration
+    """Seconds since the start of the simulation."""
+    var steps: Int
+    """How many times `advance` has stepped the ripples since a reset."""
+    var _spectrum: ComplexField
+    var _ripples: RippleField
+    var _glare: Optional[GlareKernels]
+
+    def __init__(
+        out self,
+        ocean: SpectrumResolution,
+        caustic_grid: Int,
+        caustic_resolution: Int,
+        glare_resolution: SpectrumResolution,
+        start: Duration,
+    ) raises:
+        """Build the spectrum and a calm ripple window at `start`.
+
+        Args:
+            ocean: Spectrum resolution. 256 matches the page.
+            caustic_grid: Ray-grid cells on one side.
+            caustic_resolution: Caustic texels on one side.
+            glare_resolution: Diffraction FFT size.
+            start: The clock of the first frame.
+
+        Raises:
+            Error: If a resolution is not valid.
+        """
+        self.ocean = ocean
+        self.caustic_grid = caustic_grid
+        self.caustic_resolution = caustic_resolution
+        self.glare_resolution = glare_resolution
+        self.start = start
+        self.clock = start
+        self.steps = 0
+        self._spectrum = build_spectrum(
+            ocean, Length(_PATCH_METERS), _TARGET_SLOPE
+        )
+        self._ripples = RippleField(ocean, clearwater_ripple_size())
+        self._glare = None
+
+    def reset(mut self) raises:
+        """Return the simulation to its start: calm ripples, `start` clock.
+
+        The spectrum and any glare kernels stay; they do not depend on time.
+
+        Raises:
+            Error: If the ripple window cannot be allocated.
+        """
+        self._ripples = RippleField(self.ocean, clearwater_ripple_size())
+        self.clock = self.start
+        self.steps = 0
+
+    def advance(mut self, dt: Duration, drop: Bool) raises:
+        """Step the ripple equation once, then move the clock by `dt`.
+
+        Args:
+            dt: The simulated time this step covers. It must be finite and
+                nonnegative.
+            drop: True taps the middle of the ripple window this step.
+
+        Raises:
+            Error: If `dt` is not finite or is negative.
+        """
+        if not (isfinite(dt.value) and dt.value >= 0):
+            raise Error("A water time step must be finite and nonnegative")
+        var strength = Float32(0.07) if drop else Float32(0.0)
+        step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
+        self.clock = Duration(self.clock.value + dt.value, SECOND)
+        self.steps += 1
+
+    def draw(
+        mut self,
+        width: Int,
+        height: Int,
+        view: WaterView,
+        sway: Bool,
+        bed: PebbleBed,
+        pitch: Angle,
+    ) raises -> Framebuffer:
+        """Draw the scene at its clock without changing the simulation.
+
+        Args:
+            width: Image width in pixels. It must be positive.
+            height: Image height in pixels. It must be positive.
+            view: Which picture. See `WaterView`.
+            sway: True adds the idle camera bob.
+            bed: The pebble photograph.
+            pitch: Camera pitch. The page starts at -0.72 radians.
+
+        Returns:
+            A framebuffer of display-ready pixels. `CAUSTICS` is the raw
+            texture scaled by 0.25, without the tone curve.
+
+        Raises:
+            Error: If a size or the view is not valid.
+        """
+        if width <= 0 or height <= 0:
+            raise Error("Water image dimensions must be positive")
+        require_view(view)
+        var clock = self.clock
+        var evolved = evolve_spectrum(
+            self._spectrum, Length(_PATCH_METERS), shader_time(clock)
+        )
+        var surface = SurfaceField(
+            Length(_PATCH_METERS), resolve_surface(fft2(evolved, 1.0))
+        )
+        var sun = sun_direction()
+        var caustics = render_caustics(
+            surface,
+            sun,
+            Length(_DEPTH_METERS),
+            self.caustic_grid,
+            self.caustic_resolution,
+        )
+        if view == CAUSTICS:
+            return _caustic_picture(width, height, caustics)
+        var hdr = List[Float32](length=width * height * 3, fill=0.0)
+        var look = camera_look(clock, sway, pitch)
+        var aspect = Float32(width) / Float32(height)
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
+                var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
+                var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+                var rgb = water_radiance(
+                    look,
+                    ndc_x,
+                    ndc_y,
+                    aspect,
+                    surface,
+                    self._ripples,
+                    caustics,
+                    bed,
+                    clock,
+                    2.0 / Float32(width),
+                    2.0 / Float32(height),
+                )
+                var p = (y * width + x) * 3
+                hdr[p] = rgb.x
+                hdr[p + 1] = rgb.y
+                hdr[p + 2] = rgb.z
+        var bright = _highlights(hdr, width, height, 2.5)
+        var bloom = _blur(
+            _blur(bright, width, height, True), width, height, False
+        )
+        var glare = List[Float32](length=width * height * 3, fill=0.0)
+        if view == FRAME or view == GLARE:
+            if not self._glare:
+                self._glare = glare_kernels(self.glare_resolution)
+            var sparks = _highlights(hdr, width, height, 14.0)
+            for i in range(len(sparks)):  # pragma: no branch
+                sparks[i] *= 0.001
+            glare = apply_glare(sparks, width, height, self._glare.value())
+        var image = Framebuffer(width, height, Color(0, 0, 0))
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
+                var p = (y * width + x) * 3
+                var graded = grade_pixel(
+                    hdr[p],
+                    hdr[p + 1],
+                    hdr[p + 2],
+                    glare[p],
+                    glare[p + 1],
+                    glare[p + 2],
+                    bloom[p],
+                    bloom[p + 1],
+                    bloom[p + 2],
+                    x,
+                    y,
+                    width,
+                    height,
+                    clock,
+                    view,
+                )
+                image.set_pixel(
+                    x,
+                    y,
+                    FloatColor(
+                        clamp01(graded.x),
+                        clamp01(graded.y),
+                        clamp01(graded.z),
+                        1.0,
+                    ).quantize(),
+                )
+        return image^
+
+
 def render_water(
     width: Int,
     height: Int,
@@ -829,6 +1042,9 @@ def render_water(
     pitch: Angle,
 ) raises -> Framebuffer:
     """Draw one Clearwater picture.
+
+    This builds a `WaterScene` at `clock`, steps its ripples once and draws
+    it. Use a `WaterScene` directly to keep the resources across frames.
 
     Args:
         width: Image width in pixels. It must be positive.
@@ -854,82 +1070,11 @@ def render_water(
     if width <= 0 or height <= 0:
         raise Error("Water image dimensions must be positive")
     require_view(view)
-    var patch = Length(4.6)
-    var depth = Length(1.6)
-    var surface = water_surface(ocean, patch, shader_time(clock), 0.078)
-    var ripples = RippleField(ocean, clearwater_ripple_size())
-    var strength = Float32(0.0)
-    if drop:
-        strength = 0.07
-    step_ripple(ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
-    var sun = sun_direction()
-    var caustics = render_caustics(
-        surface, sun, depth, caustic_grid, caustic_resolution
+    var scene = WaterScene(
+        ocean, caustic_grid, caustic_resolution, glare_resolution, clock
     )
-    if view == CAUSTICS:
-        return _caustic_picture(width, height, caustics)
-    var hdr = List[Float32](length=width * height * 3, fill=0.0)
-    var look = camera_look(clock, sway, pitch)
-    var aspect = Float32(width) / Float32(height)
-    for y in range(height):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-            var rgb = water_radiance(
-                look,
-                ndc_x,
-                ndc_y,
-                aspect,
-                surface,
-                ripples,
-                caustics,
-                bed,
-                clock,
-                2.0 / Float32(width),
-                2.0 / Float32(height),
-            )
-            var p = (y * width + x) * 3
-            hdr[p] = rgb.x
-            hdr[p + 1] = rgb.y
-            hdr[p + 2] = rgb.z
-    var bright = _highlights(hdr, width, height, 2.5)
-    var bloom = _blur(_blur(bright, width, height, True), width, height, False)
-    var glare = List[Float32](length=width * height * 3, fill=0.0)
-    if view == FRAME or view == GLARE:
-        var kernels = glare_kernels(glare_resolution)
-        var sparks = _highlights(hdr, width, height, 14.0)
-        for i in range(len(sparks)):  # pragma: no branch
-            sparks[i] *= 0.001
-        glare = apply_glare(sparks, width, height, kernels)
-    var image = Framebuffer(width, height, Color(0, 0, 0))
-    for y in range(height):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            var p = (y * width + x) * 3
-            var graded = grade_pixel(
-                hdr[p],
-                hdr[p + 1],
-                hdr[p + 2],
-                glare[p],
-                glare[p + 1],
-                glare[p + 2],
-                bloom[p],
-                bloom[p + 1],
-                bloom[p + 2],
-                x,
-                y,
-                width,
-                height,
-                clock,
-                view,
-            )
-            image.set_pixel(
-                x,
-                y,
-                FloatColor(
-                    clamp01(graded.x), clamp01(graded.y), clamp01(graded.z), 1.0
-                ).quantize(),
-            )
-    return image^
+    scene.advance(Duration(0.0, SECOND), drop)
+    return scene.draw(width, height, view, sway, bed, pitch)
 
 
 def _caustic_picture(
