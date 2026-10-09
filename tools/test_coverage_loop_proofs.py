@@ -380,6 +380,73 @@ class ProofBindingTests(unittest.TestCase):
         with gzip.open(capture, 'rb') as stream:
             self.assertEqual(stream.read(), b'COVLINE:module:2:T\n')
 
+    def test_phase_sidecar_cannot_replace_capture_or_success_receipt(self):
+        capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
+        sidecar = self.hits/'test_fixture.phases.jsonl'
+        sidecar.write_text('{"schema":"coverage-exec-phases-v1",'
+                           '"phase":"adapter_finish","status":0,"diagnostics_complete":true}\n')
+        with self.assertRaises(FileNotFoundError):
+            loops.verify_captures([capture], self.envelope)
+        # The CLI's report input inventory cannot discover a diagnostic file.
+        with patch.object(sys, 'argv', ['coverage_io.py', 'report', '--capture-dir',
+                                      str(self.hits), '--', 'reporter']), \
+                patch.object(coverage_io, 'report') as reporter, \
+                contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            coverage_io.main()
+        reporter.assert_not_called()
+        capture.write_bytes(b'capture')
+        output.write_text('PASS\n')
+        loops.capture_receipt_path(capture).write_bytes(sidecar.read_bytes())
+        with self.assertRaisesRegex(ValueError, 'Malformed coverage capture receipt'):
+            loops.verify_captures([capture], self.envelope)
+        self.bind(capture, output)
+        loops.capture_receipt_path(sidecar).write_bytes(loops.capture_receipt_path(capture).read_bytes())
+        with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+            loops.verify_captures([sidecar], self.envelope)
+
+    def test_phase_sidecar_does_not_change_report_inputs_or_obligations(self):
+        capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
+        capture.write_bytes(b'capture')
+        output.write_text('PASS\n')
+        self.bind(capture, output)
+        sidecar = self.hits/'test_fixture.phases.jsonl'
+        original = (self.build/'manifest.txt').read_bytes()
+        masked = loops.masked_manifest(original, self.envelope)
+        for data in ('{"phase":"adapter_finish","status":0}\n', 'partial diagnostic'):
+            sidecar.write_text(data)
+            self.assertEqual(self.verify(), self.envelope)
+            self.assertEqual(loops.masked_manifest(original, self.envelope), masked)
+            loops.verify_captures([capture], self.envelope)
+            with patch.object(sys, 'argv', ['coverage_io.py', 'report', '--capture-dir',
+                                          str(self.hits), '--', 'reporter']), \
+                    patch.object(coverage_io, 'report', return_value=0) as reporter:
+                self.assertEqual(coverage_io.main(), 0)
+            reporter.assert_called_once_with(['reporter'], [capture])
+        self.assertEqual((self.build/'manifest.txt').read_bytes(), original)
+
+    def test_observer_helpers_require_fresh_generation_and_capture_proofs(self):
+        capture, output = self.hits/'test_fixture.txt.gz', self.hits/'test_fixture.out'
+        capture.write_bytes(b'capture')
+        output.write_text('PASS\n')
+        for name in ('tools/coverage_io.py', 'tools/coverage_hit_aot.py'):
+            with self.subTest(helper=name):
+                self.bind(capture, output)
+                old = self.envelope
+                path = self.root/name
+                path.write_bytes(path.read_bytes() + b'\n# new phase diagnostics\n')
+                with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+                    self.verify()
+                with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+                    loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+                self.regenerate()
+                self.envelope = loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+                self.assertNotEqual(self.envelope['sha256'], old['sha256'])
+                self.assertEqual(self.envelope['receipt']['root_inputs'][name], loops.file_sha256(path))
+                with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+                    loops.verify_captures([capture], self.envelope)
+                self.bind(capture, output)
+                loops.verify_captures([capture], self.envelope)
+
     def test_failed_replacement_capture_cannot_reuse_old_success_receipt(self):
         capture, output = self.hits / 'test_fixture.txt.gz', self.hits / 'test_fixture.out'
         capture.write_bytes(b'old capture')

@@ -5,6 +5,8 @@
 import contextlib
 import errno
 import io
+import gzip
+import json
 import os
 from pathlib import Path
 import signal
@@ -16,6 +18,7 @@ import unittest
 from unittest.mock import Mock, call, patch
 
 import coverage_io
+import coverage_hit_aot
 
 
 WORKER = '''import os, pathlib, signal, subprocess, sys, time
@@ -716,6 +719,156 @@ time.sleep(30)
         self.assertIn('tools/coverage_io.py group --seconds $(COV_BUDGET) --', recipe)
         self.assertNotIn('alarm shift', recipe)
         self.assertEqual(recipe.count('tools/coverage_io.py capture'), 1)
+
+
+class PhaseSidecarTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory(prefix='phase sidecar ')
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name)
+        self.output = self.root/'test_fixture.out'
+        self.errors = self.root/'test_fixture.txt.gz'
+        self.sidecar = self.root/'test_fixture.phases.jsonl'
+        self.adapter = self.root/'coverage_hit_aot.py'
+        self.adapter.write_text('import sys\nprint("PASS")\n'
+                                'sys.stderr.write("COVLINE:module:2:T\\n")\n'
+                                'raise SystemExit(17)\n')
+        self.command = [sys.executable, str(self.adapter), '--profile', 'aot']
+
+    def prepare(self, **changes):
+        environment = dict(os.environ, **changes)
+        phases = coverage_io._prepare_phases(self.command, self.output,
+                                             {'sha256': 'a' * 64}, environment)
+        return phases, environment
+
+    def test_stale_file_and_symlink_are_replaced_without_touching_target(self):
+        target = self.root/'unrelated'
+        target.write_text('keep')
+        for symlink in (False, True):
+            self.sidecar.unlink(missing_ok=True)
+            if symlink:
+                self.sidecar.symlink_to(target)
+            else:
+                self.sidecar.write_text('old success')
+            phases, environment = self.prepare()
+            self.assertIsNotNone(phases)
+            self.assertFalse(self.sidecar.is_symlink())
+            self.assertEqual(target.read_text(), 'keep')
+            header = json.loads(self.sidecar.read_text())
+            self.assertEqual(header['proof_sha256'], 'a' * 64)
+            self.assertEqual(header['schema'], coverage_hit_aot.PHASE_SCHEMA)
+            self.assertEqual(header['suite'], 'test_fixture')
+            self.assertEqual(len(header['command_sha256']), 64)
+            self.assertEqual(environment[coverage_io.PHASE_ENV], str(self.sidecar))
+            self.assertEqual(phases[1:], (self.sidecar.stat().st_dev, self.sidecar.stat().st_ino))
+
+    def test_parent_environment_is_unchanged_and_raw_cannot_borrow_destination(self):
+        ambient = {key: 'do not forward' for key in coverage_io.PHASE_KEYS}
+        with patch.dict(os.environ, ambient):
+            original = dict(os.environ)
+            _, child = self.prepare()
+            self.assertEqual(dict(os.environ), original)
+            self.assertNotEqual(child[coverage_io.PHASE_ENV], original[coverage_io.PHASE_ENV])
+            raw = dict(original)
+            self.assertIsNone(coverage_io._prepare_phases(
+                ['python3', 'coverage_hit_aot.py', '--profile', 'raw'], self.output, None, raw))
+            self.assertTrue(all(key not in raw for key in coverage_io.PHASE_KEYS))
+            self.assertFalse(self.sidecar.exists(), 'raw replacement must invalidate old diagnostics')
+            self.assertEqual(dict(os.environ), original)
+
+    def test_setup_failure_preserves_capture_failure_and_exact_probe_bytes(self):
+        for failure in ('open', 'replace', 'write'):
+            with self.subTest(failure=failure), contextlib.ExitStack() as scope:
+                self.sidecar.write_text('old adapter_finish status=0')
+                output = scope.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                if failure == 'open':
+                    scope.enter_context(patch.object(coverage_io.tempfile, 'mkstemp', side_effect=OSError('full')))
+                elif failure == 'replace':
+                    scope.enter_context(patch.object(coverage_io.os, 'replace', side_effect=OSError('full')))
+                else:
+                    real_fdopen = os.fdopen
+                    @contextlib.contextmanager
+                    def bad_stream(fd, *args):
+                        with real_fdopen(fd, *args):
+                            yield Mock(write=Mock(side_effect=OSError('full')))
+                    scope.enter_context(patch.object(coverage_io.os, 'fdopen', side_effect=bad_stream))
+                self.assertEqual(coverage_io.capture(self.command, self.output, self.errors), 17)
+                self.assertEqual(self.output.read_bytes(), b'PASS\n')
+                self.assertEqual(gzip.decompress(self.errors.read_bytes()), b'COVLINE:module:2:T\n')
+                self.assertIn('phase diagnostics unavailable (OSError)', output.getvalue())
+                self.assertFalse(self.sidecar.exists())
+                self.assertEqual(list(self.root.glob('test_fixture.phases.jsonl.*')), [])
+
+    def test_failed_fdopen_closes_untransferred_descriptor_without_changing_status(self):
+        descriptors = []
+
+        def fail(descriptor, *_args):
+            descriptors.append(descriptor)
+            raise OSError('fdopen failed before transfer')
+
+        with patch.object(coverage_io.os, 'fdopen', side_effect=fail), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(coverage_io.capture(self.command, self.output, self.errors), 17)
+        phases, _ = self.prepare()
+        with patch.object(coverage_io.os, 'fdopen', side_effect=fail), \
+                contextlib.redirect_stdout(io.StringIO()):
+            coverage_io._finish_phases(phases)
+        self.assertEqual(len(descriptors), 2)
+        for descriptor in descriptors:
+            with self.assertRaises(OSError) as raised:
+                os.fstat(descriptor)
+            self.assertEqual(raised.exception.errno, errno.EBADF)
+
+    def test_missing_finish_is_explicit_and_diagnostic_read_failure_is_nonfatal(self):
+        phases, _ = self.prepare()
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            coverage_io._finish_phases(phases)
+        self.assertIn('phase diagnostics incomplete', output.getvalue())
+        with patch.object(coverage_io.os, 'open', side_effect=OSError('unreadable')), \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            coverage_io._finish_phases(phases)
+        self.assertIn('phase diagnostics incomplete (OSError)', output.getvalue())
+
+    def test_adapter_rejects_wrong_inode_symlink_and_nonregular_destinations(self):
+        for kind in ('inode', 'symlink', 'fifo'):
+            with self.subTest(kind=kind):
+                phases, environment = self.prepare()
+                before = self.sidecar.read_bytes()
+                if kind == 'inode':
+                    environment[coverage_io.PHASE_ENV + '_INODE'] = '-1'
+                else:
+                    self.sidecar.unlink()
+                    if kind == 'symlink':
+                        target = self.root/'target'
+                        target.write_bytes(before)
+                        self.sidecar.symlink_to(target)
+                    else:
+                        os.mkfifo(self.sidecar)
+                        info = self.sidecar.stat()
+                        environment[coverage_io.PHASE_ENV + '_INODE'] = str(info.st_ino)
+                with patch.dict(os.environ, environment, clear=True):
+                    observer = coverage_hit_aot._PhaseObserver(
+                        self.root/'test_fixture.mojo', ['mojo', 'run', str(self.root/'test_fixture.mojo')])
+                self.assertIsNone(observer.descriptor)
+                if kind != 'fifo':
+                    self.assertEqual(self.sidecar.read_bytes(), before)
+                self.sidecar.unlink()
+
+    def test_expired_capture_does_not_launch_and_leaves_only_advisory_header(self):
+        with patch.dict(os.environ, {coverage_io.DEADLINE_ENV: repr(time.monotonic() - 1)}), \
+                patch.object(coverage_io.subprocess, 'Popen') as popen, \
+                contextlib.redirect_stdout(io.StringIO()) as output:
+            self.assertEqual(coverage_io.capture(self.command, self.output, self.errors), 124)
+        popen.assert_not_called()
+        self.assertEqual(len(self.sidecar.read_text().splitlines()), 1)
+        self.assertIn('phase diagnostics incomplete', output.getvalue())
+
+    def test_setup_failure_does_not_mask_probe_parser_failure(self):
+        self.adapter.write_text('import sys\nsys.stderr.write("COVBRANCH:m:1:invalid\\n")\n')
+        with patch.object(coverage_io.tempfile, 'mkstemp', side_effect=OSError('full')), \
+                contextlib.redirect_stdout(io.StringIO()), \
+                self.assertRaisesRegex(ValueError, 'Malformed branch outcome'):
+            coverage_io.capture(self.command, self.output, self.errors)
 
 
 if __name__ == '__main__':

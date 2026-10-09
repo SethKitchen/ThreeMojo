@@ -5,12 +5,15 @@
 import argparse
 from collections import deque
 import gzip
+import hashlib
+import json
 import errno
 import math
 import os
 from pathlib import Path
 import shutil
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -37,6 +40,100 @@ RECORD_CACHE_CAPACITY = 4096
 CACHE_WINDOW_RECORDS = 1024
 CACHE_BYPASS_RECORDS = 16384
 DEADLINE_ENV = 'THREEMOJO_COVERAGE_DEADLINE'
+
+
+# Advisory only: these files never enter the coverage reducer or receipts.
+PHASE_ENV = 'THREEMOJO_COVERAGE_PHASES'
+PHASE_KEYS = (PHASE_ENV, PHASE_ENV + '_DEVICE', PHASE_ENV + '_INODE')
+PHASE_SCHEMA = 'coverage-exec-phases-v1'
+PHASE_MAX_BYTES = 128 * 1024
+
+
+def _prepare_phases(command, out_path, proof, environment):
+    # Do not forward ambient diagnostic destinations, including on raw runs.
+    for key in PHASE_KEYS:
+        environment.pop(key, None)
+    path = Path(out_path).with_suffix('.phases.jsonl').absolute()
+    temporary = None
+    descriptor = None
+    try:
+        # Invalidate old completion before any step that can fail.
+        path.unlink(missing_ok=True)
+        if not (len(command) > 3 and Path(command[1]).name == 'coverage_hit_aot.py'
+                and command[2] == '--profile' and command[3] in ('aot', 'aot-hits')):
+            return None
+        header = {'schema': PHASE_SCHEMA, 'suite': Path(out_path).stem,
+                  'phase': 'capture_header',
+                  'proof_sha256': proof['sha256'] if proof is not None else None,
+                  'command_sha256': hashlib.sha256(json.dumps(list(command)).encode()).hexdigest(),
+                  'semantics': 'launch requests only; missing finish means incomplete'}
+        descriptor, temporary = tempfile.mkstemp(prefix=path.name + '.', dir=path.parent)
+        with os.fdopen(descriptor, 'wb') as stream:
+            descriptor = None
+            data = (json.dumps(header) + '\n').encode()
+            if stream.write(data) != len(data):
+                raise OSError('short phase header write')
+            identity = os.fstat(stream.fileno())
+        # Replace stale files or symlinks; never append to a previous attempt.
+        os.replace(temporary, path)
+        environment.update({PHASE_ENV: str(path),
+                            PHASE_ENV + '_DEVICE': str(identity.st_dev),
+                            PHASE_ENV + '_INODE': str(identity.st_ino)})
+        return path, identity.st_dev, identity.st_ino
+    except Exception as error:
+        try:
+            print(f'Coverage {Path(out_path).stem}: phase diagnostics unavailable '
+                  f'({type(error).__name__}); ignore any existing phase file', flush=True)
+        except Exception:
+            pass
+        return None
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary is not None:
+            try:
+                Path(temporary).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def _finish_phases(phases):
+    if phases is None:
+        return
+    path, device, inode = phases
+    descriptor = None
+    try:
+        # Nonblocking and no-follow also make a replaced FIFO/symlink harmless.
+        descriptor = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_NOFOLLOW)
+        with os.fdopen(descriptor, 'rb') as stream:
+            descriptor = None
+            actual = os.fstat(stream.fileno())
+            if not stat.S_ISREG(actual.st_mode) or (actual.st_dev, actual.st_ino) != (device, inode):
+                raise ValueError('phase file identity changed')
+            data = stream.read(PHASE_MAX_BYTES + 1)
+        if len(data) > PHASE_MAX_BYTES or not data.endswith(b'\n'):
+            raise ValueError('phase file is incomplete')
+        last = json.loads(data.splitlines()[-1])
+        if (last.get('schema') != PHASE_SCHEMA or last.get('phase') != 'adapter_finish'
+                or last.get('diagnostics_complete') is not True):
+            raise ValueError('no complete adapter finish')
+    except Exception as error:
+        # Keep this on the supervisor's progress stream, never the probe stream.
+        try:
+            print(f'Coverage {path.stem}: phase diagnostics incomplete '
+                  f'({type(error).__name__}); last launch request is advisory', flush=True)
+        except Exception:
+            pass
+
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
 
 
 def shared_deadline():
@@ -359,8 +456,10 @@ def capture(command, out_path, err_path, *, progress_interval=60, loop_proof=Non
     progress('start')
     monitor = threading.Thread(target=heartbeat, daemon=True)
     monitor.start()
+    phases = None
     try:
         with isolated_environment() as environment, open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
+            phases = _prepare_phases(command, out_path, proof, environment)
             with _CaptureProcess(command, output, environment, deadline) as process:
                 try:
                     reducer = Reducer(errors.write)
@@ -393,6 +492,7 @@ def capture(command, out_path, err_path, *, progress_interval=60, loop_proof=Non
         progress('aborted')
         raise
     finally:
+        _finish_phases(phases)
         stopped.set()
         monitor.join()
 
