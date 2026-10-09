@@ -13,7 +13,7 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be positive and isotropic, and the sphere can spin. 
+An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be positive and isotropic, and the sphere can spin.
 
 A capsule's inverse inertia must be zero in every element, and its angular velocity and angular push must be zero. A capsule then only translates, as a character or walker body does. Its half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
 
@@ -91,7 +91,13 @@ The algorithm is an analytic piecewise-linear sweep with Float64 intermediates. 
 
 The coordinate-to-radius limit bounds each component's final Float32 rounding by approximately radius / 256. The three-component Euclidean rounding bound is less than 0.007 radius. This is a storage bound, not an overall trajectory-accuracy guarantee. Use a local origin and a smaller coordinate range for tighter accuracy. The original Float32 inputs cannot recover geometry that was already rounded away.
 
-The approach test uses a 32-epsilon bound on the sum of absolute dot-product terms. It ignores a normal approach whose sign is unresolved at that arithmetic scale. This avoids repeated zero-time impacts from projection roundoff. The bound is relative to the operands. It is not a fixed skin, a larger collision margin or a fixed minimum collision speed. Exact tangency produces no impulse.
+The approach test uses a 32-epsilon bound on the sum of absolute dot-product terms. It ignores a normal approach whose sign is unresolved at that arithmetic scale.
+
+Before response, the world rebuilds the shape from its retained impact position. It checks for an initial contact on the selected triangle with the incoming direction. If this contact exists, its normal controls the response. This lookup does not move the body, search future times, or add an impact.
+
+After friction, the response reconstructs the velocity component with the largest normal component. This keeps the restitution target within dot-product roundoff when an almost axial impact cancels most of the incoming speed. The remaining dot-product error then scales with the final operands. This avoids repeated zero-time impacts from projection roundoff.
+
+The bound is relative to the operands. It is not a fixed skin, a larger collision margin or a fixed minimum collision speed. Exact tangency produces no impulse.
 
 Very thin triangles, excessive travel, coarse world coordinates and unsupported shapes raise errors. The mode does not promise collision detection outside these limits. Select application-specific tolerances and validate the intended geometry and motion before engineering use.
 

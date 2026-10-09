@@ -8,11 +8,19 @@
 from extensions.physics.body import DYNAMIC, STATIC, RigidBody
 from extensions.physics.ccd import (
     SPHERE_MESH_CCD,
+    _approaches,
     _sweep_capsule_triangle,
+    _initial_capsule_contact,
+    _initial_triangle_contact,
     _sweep_triangle,
 )
 from extensions.physics.shape import PhysicsMaterial, Shape, _wide, _wide_dot
-from extensions.physics.world import PhysicsWorld, _CCDImpact, _ccd_bound
+from extensions.physics.world import (
+    PhysicsWorld,
+    _CCDImpact,
+    _ccd_bound,
+    _ccd_close_normal_velocity,
+)
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -379,6 +387,327 @@ def test_capsule_late_failure_preserves_full_step_state() raises:
     with assert_raises(contains="impact limit exhausted"):
         brute.step(Duration(0.01))
     _assert_world(indexed, brute)
+
+
+def _near_axis_vertex_world(
+    restitution: Float32, friction: Float32, brute: Bool
+) raises -> PhysicsWorld:
+    var body = _capsule(
+        Vector3(0, 0, 0.5), Vector3(0, 0, -80), radius=0.3, half_height=0.5
+    )
+    # This stored quaternion is inside the public unit-norm tolerance.
+    # The old response spent a second impact at the same vertex and time
+    # in both native contraction modes, after removing 80 m/s of speed.
+    body.rotation = Quaternion(0.7071069478988647, 0, 0, 0.7071065306663513)
+    body.material = PhysicsMaterial(friction, restitution)
+    var world = _world(
+        body^,
+        Triangle(Vector3(0, 0, 0), Vector3(1, -1, -1), Vector3(1, 1, -1)),
+        brute,
+    )
+    world.bodies[0].material = PhysicsMaterial(friction, restitution)
+    world.ccd_max_impacts = 1
+    return world^
+
+
+def test_plastic_vertex_projection_keeps_one_impact_budget() raises:
+    var indexed = _near_axis_vertex_world(0, 0, False)
+    var brute = _near_axis_vertex_world(0, 0, True)
+    _step_pair(indexed, brute, 0.01)
+    _assert_tree(indexed)
+    assert_equal(indexed.contact_count, 1)
+    assert_almost_equal(indexed.bodies[1].position.x, 0, atol=2e-6)
+    assert_almost_equal(indexed.bodies[1].position.z, 0.3, atol=2e-6)
+
+
+def test_normal_velocity_closure_keeps_other_components() raises:
+    for axis in range(3):
+        for direction in [Float64(-1), Float64(1)]:
+            for tilted in [False, True]:
+                var normal = SIMD[DType.float64, 4](0)
+                normal[axis] = direction
+                if tilted:
+                    normal[axis] = direction * 0.9999999999998888
+                    normal[(axis + 1) % 3] = -4.715337518511873e-7
+                var before = SIMD[DType.float64, 4](0)
+                before[axis] = -80 * direction
+                before[(axis + 1) % 3] = 3
+                before[(axis + 2) % 3] = -2
+                for restitution in [Float64(0), Float64(1)]:
+                    var approach = _wide_dot(before, normal)
+                    var target = -restitution * approach
+                    var projected = before - normal * (
+                        (1 + restitution) * approach
+                    )
+                    var closed = _ccd_close_normal_velocity(
+                        projected, normal, target
+                    )
+                    # These are Cartesian components. For an oblique
+                    # normal, the closure can change tangential velocity
+                    # by roundoff; the axis-aligned control below is exact.
+                    assert_equal(
+                        closed[(axis + 1) % 3], projected[(axis + 1) % 3]
+                    )
+                    assert_equal(
+                        closed[(axis + 2) % 3], projected[(axis + 2) % 3]
+                    )
+                    var scale = abs(target)
+                    for k in range(3):
+                        scale += abs(closed[k] * normal[k])
+                    # The existing approach predicate allows 64 Float64
+                    # unit roundoffs. Dominant-component closure uses fewer
+                    # operations, including the final recomputed dot.
+                    assert_true(
+                        abs(_wide_dot(closed, normal) - target)
+                        <= scale * 7.105427357601002e-15
+                    )
+                    assert_true(not _approaches(closed, normal))
+                    if not tilted:
+                        assert_equal(closed[axis], 80 * restitution * direction)
+                        assert_equal(
+                            closed[(axis + 1) % 3], before[(axis + 1) % 3]
+                        )
+                        assert_equal(
+                            closed[(axis + 2) % 3], before[(axis + 2) % 3]
+                        )
+                    # Retain the established CCD energy ceiling.
+                    assert_true(
+                        _wide_dot(closed, closed)
+                        <= _wide_dot(before, before) * 1.000001
+                    )
+
+
+def test_near_axis_vertex_response_keeps_material_and_energy_contracts() raises:
+    for friction in [Float32(0), Float32(0.3), Float32(3)]:
+        for restitution in [Float32(0), Float32(0.5), Float32(1)]:
+            var indexed = _near_axis_vertex_world(restitution, friction, False)
+            var brute = _near_axis_vertex_world(restitution, friction, True)
+            _step_pair(indexed, brute, 0.01)
+            _assert_tree(indexed)
+            assert_equal(indexed.contact_count, 1)
+            var velocity = _wide(indexed.bodies[1].linear_velocity)
+            assert_true(_wide_dot(velocity, velocity) <= 6400 * 1.000001)
+            assert_true(indexed.bodies[1].angular_velocity == Vector3(0, 0, 0))
+            assert_almost_equal(
+                indexed.bodies[1].position.z, 0.3 + 0.6 * restitution, atol=2e-6
+            )
+            assert_almost_equal(
+                indexed.bodies[1].linear_velocity.z, 80 * restitution, atol=1e-5
+            )
+            # The event still reports the normal collision impulse. The
+            # closure corrects only its floating-point velocity residual.
+            assert_almost_equal(
+                indexed.events[0].normal_impulse.z,
+                80 * (1 + restitution),
+                atol=1e-5,
+            )
+
+
+def test_oblique_sphere_response_keeps_tangent_and_spin_energy() raises:
+    for friction in [Float32(0), Float32(0.01), Float32(0.3), Float32(3)]:
+        for restitution in [Float32(0), Float32(0.5), Float32(1)]:
+            var body = RigidBody(
+                DYNAMIC,
+                Shape.sphere(Length(0.3)),
+                Mass(1),
+                Vector3(0.18, 0, 0.64),
+                Quaternion.identity(),
+            )
+            body.linear_velocity = Vector3(0, 0, -80)
+            body.angular_velocity = Vector3(0, 100, 0)
+            body.material = PhysicsMaterial(friction, restitution)
+            var inertia = 1 / Float64(body.inverse_inertia().elements[0])
+            var initial_energy = 6400 + inertia * 10000
+            var triangle = Triangle(
+                Vector3(0, 0, 0), Vector3(1, -1, -1), Vector3(1, 1, -1)
+            )
+            var indexed = _world(body.copy(), triangle)
+            var brute = _world(body^, triangle, True)
+            indexed.bodies[0].material = PhysicsMaterial(friction, restitution)
+            brute.bodies[0].material = PhysicsMaterial(friction, restitution)
+            indexed.ccd_max_impacts = 1
+            brute.ccd_max_impacts = 1
+            _step_pair(indexed, brute, 0.01)
+            _assert_tree(indexed)
+            assert_equal(indexed.contact_count, 1)
+            var velocity = _wide(indexed.bodies[1].linear_velocity)
+            var angular = _wide(indexed.bodies[1].angular_velocity)
+            var final_energy = _wide_dot(
+                velocity, velocity
+            ) + inertia * _wide_dot(angular, angular)
+            assert_true(final_energy <= initial_energy * 1.000001)
+            # The ideal vertex normal is (0.6, 0, 0.8), so the incoming
+            # normal speed is 64 m/s and the tangent speed is 48 m/s.
+            assert_almost_equal(
+                _wide_dot(velocity, _v(0.6, 0, 0.8)),
+                Float64(64 * restitution),
+                atol=1e-5,
+            )
+            assert_almost_equal(
+                _wide_dot(
+                    _wide(indexed.events[0].normal_impulse), _v(0.6, 0, 0.8)
+                ),
+                Float64(64 * (1 + restitution)),
+                atol=1e-5,
+            )
+            if friction == 0:
+                assert_almost_equal(
+                    _wide_dot(velocity, _v(0.8, 0, -0.6)),
+                    Float64(48),
+                    atol=1e-5,
+                )
+                assert_true(
+                    indexed.bodies[1].angular_velocity == Vector3(0, 100, 0)
+                )
+            else:
+                assert_true(final_energy < initial_energy)
+                assert_true(indexed.bodies[1].angular_velocity.y > 100)
+                if friction == Float32(0.01):
+                    # Positive Coulomb-limited sliding, before the larger
+                    # friction values stop the contact's tangential slip.
+                    var limit = (
+                        Float64(friction) * 64 * (1 + Float64(restitution))
+                    )
+                    assert_almost_equal(
+                        _wide_dot(velocity, _v(0.8, 0, -0.6)),
+                        48 - limit,
+                        atol=1e-5,
+                    )
+
+
+def test_retained_vertex_normals_keep_one_impact_across_nearby_rotations() raises:
+    # The accepted Float32 neighbors change endpoint reconstruction and
+    # contraction roundoff. Each horizontal-nearby cylinder has one vertex
+    # impact, with no cap handoff during this short remaining motion.
+    for i in range(-4, 5):
+        for j in range(-4, 5):
+            for radius in [
+                Float32(0.1),
+                Float32(0.125),
+                Float32(0.2),
+                Float32(0.3),
+            ]:
+                var body = _capsule(
+                    Vector3(0, 0, 0.5),
+                    Vector3(0, 0, -80),
+                    half_height=0.5,
+                    radius=radius,
+                )
+                body.rotation = Quaternion(
+                    Float32(0.7071067690849304)
+                    + Float32(i) * Float32(0.000000059604644775390625),
+                    0,
+                    0,
+                    Float32(0.7071067690849304)
+                    + Float32(j) * Float32(0.000000059604644775390625),
+                )
+                var triangle = Triangle(
+                    Vector3(0, 0, 0), Vector3(1, -1, -1), Vector3(1, 1, -1)
+                )
+                var indexed = _world(body.copy(), triangle)
+                var brute = _world(body^, triangle, True)
+                indexed.ccd_max_impacts = 1
+                brute.ccd_max_impacts = 1
+                _step_pair(indexed, brute, 0.01)
+                _assert_tree(indexed)
+                assert_equal(indexed.contact_count, 1)
+                assert_almost_equal(
+                    indexed.bodies[1].position.z, radius, atol=2e-6
+                )
+                var velocity = _wide(indexed.bodies[1].linear_velocity)
+                assert_true(_wide_dot(velocity, velocity) <= 6400 * 1.000001)
+
+
+def test_initial_contact_lookup_preserves_present_front_features() raises:
+    var floor = _floor_triangle(1)
+    var incoming = _v(0, 0, -0.5)
+    for z in [Float64(-0.125), Float64(0.125), Float64(0.625)]:
+        var expected = Float64(0) if z == 0.125 else Float64(2)
+        var sphere = _initial_triangle_contact(
+            _v(0, 0, z), incoming, 0.125, floor
+        )
+        var capsule = _initial_capsule_contact(
+            _v(0, -0.5, z), _v(0, 0.5, z), incoming, 0.125, floor
+        )
+        assert_equal(sphere.fraction, expected)
+        assert_equal(capsule.fraction, expected)
+        if expected == 0:
+            assert_equal(sphere.normal[2], 1)
+            assert_equal(capsule.normal[2], 1)
+    # No motion and separating motion are not approaching contacts.
+    for direction in [_v(0, 0, 0), _v(0, 0, 0.5)]:
+        assert_equal(
+            _initial_triangle_contact(
+                _v(0, 0, 0.125), direction, 0.125, floor
+            ).fraction,
+            2,
+        )
+        assert_equal(
+            _initial_capsule_contact(
+                _v(0, -0.5, 0.125), _v(0, 0.5, 0.125), direction, 0.125, floor
+            ).fraction,
+            2,
+        )
+    # A valid partially front-side interior contact remains admissible.
+    var edge = Triangle(Vector3(0, -1, 0), Vector3(0, 1, 0), Vector3(-2, 0, 0))
+    var partial = _initial_capsule_contact(
+        _v(0.1, 0, 0.5), _v(0.9, 0, -0.1), _v(0, 0, -1), 0.5, edge
+    )
+    assert_equal(partial.fraction, 0)
+    assert_almost_equal(partial.normal[0], 0.6, atol=1e-12)
+    assert_almost_equal(partial.normal[2], 0.8, atol=1e-12)
+    # Initial-only lookup cannot replace a later feature by moving ahead.
+    assert_equal(
+        _sweep_triangle(_v(0, 0, 0.625), incoming, 0.125, floor).fraction, 1
+    )
+    assert_equal(
+        _sweep_capsule_triangle(
+            _v(0, -0.5, 0.625), _v(0, 0.5, 0.625), incoming, 0.125, floor
+        ).fraction,
+        1,
+    )
+
+
+def test_retained_contact_at_step_endpoint_keeps_response() raises:
+    # Dyadic values put the impact exactly at h, with no remaining time.
+    for capsule in [False, True]:
+        var height = Float32(0.5) if capsule else Float32(0)
+        var body = _capsule(
+            Vector3(0, 0, 0.625 + height),
+            Vector3(0, 0, -1),
+            radius=0.125,
+            half_height=height,
+        )
+        if not capsule:
+            body = RigidBody(
+                DYNAMIC,
+                Shape.sphere(Length(0.125)),
+                Mass(1),
+                Vector3(0, 0, 0.625),
+                Quaternion.identity(),
+            )
+            body.linear_velocity = Vector3(0, 0, -1)
+        body.material = PhysicsMaterial(0, 1)
+        var triangle = _floor_triangle(1)
+        var indexed = _world(body.copy(), triangle)
+        var brute = _world(body.copy(), triangle, True)
+        var traced = _world(body^, triangle)
+        indexed.bodies[0].material = PhysicsMaterial(0, 1)
+        brute.bodies[0].material = PhysicsMaterial(0, 1)
+        traced.bodies[0].material = PhysicsMaterial(0, 1)
+        indexed.ccd_max_impacts = 1
+        brute.ccd_max_impacts = 1
+        traced.ccd_max_impacts = 1
+        traced._validate_ccd()
+        var impacts = List[_CCDImpact]()
+        _ = traced._ccd_sphere(1, 0.5, impacts)
+        assert_equal(len(impacts), 1)
+        assert_equal(impacts[0].time, 0.5)
+        _step_pair(indexed, brute, 0.5)
+        _assert_tree(indexed)
+        assert_equal(indexed.contact_count, 1)
+        assert_equal(indexed.bodies[1].position.z, 0.125 + height)
+        assert_equal(indexed.bodies[1].linear_velocity.z, 1)
 
 
 def main() raises:

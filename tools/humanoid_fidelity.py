@@ -181,14 +181,30 @@ def _report(report):
 
     This validates structure and coordinate semantics, not anatomy or numerical
     convergence. The report itself remains the authority for those results.
+    Versions 1 and 2 share the sampled-property contract. Version 2 also keeps
+    its diagnostic frames and versioned pair inventory as separate evidence.
     """
-    if not isinstance(report, dict) or type(report.get('schema_version')) is not int or report['schema_version'] != 1:
+    if not isinstance(report, dict) or type(report.get('schema_version')) is not int or report['schema_version'] not in (1, 2):
         raise ValueError('a complete versioned canonical validity report is required')
     mappings = ('gate', 'build_provenance', 'source_file_sha256', 'spec', 'frame',
                 'tensor_convention', 'controls', 'segments', 'composition',
                 'diagnostics', 'diagnostic_limits', 'accounting', 'provenance_inventory')
+    if report['schema_version'] == 2:
+        mappings += ('diagnostic_frames', 'pair_inventory')
     if not all(isinstance(report.get(key), dict) for key in mappings):
         raise ValueError('use the complete typed canonical validity report, not raw probe rows')
+    if report['schema_version'] == 2:
+        inventory = report['pair_inventory']
+        if type(inventory.get('schema_version')) is not int or inventory['schema_version'] != 1:
+            raise ValueError('unsupported canonical report pair inventory schema')
+        if (not isinstance(inventory.get('classes'), dict)
+                or not all(isinstance(inventory.get(key), list) for key in
+                           ('components', 'pairs', 'additional_checked_diagnostics',
+                            'positive_volume_attachment_allowances', 'unknowns', 'excluded_domains'))):
+            raise ValueError('a canonical report must retain its typed pair inventory')
+        frame = _label(inventory.get('frame_id'), 'pair inventory frame')
+        if report['diagnostic_frames'].get(frame) != report['frame']:
+            raise ValueError('pair inventory frame must retain the canonical report coordinate frame')
     if not all(isinstance(report.get(key), list) for key in ('follow_ups', 'geometry_findings')):
         raise ValueError('canonical validity report arrays are missing')
     for key in ('result_label', 'report_logic_sha256', 'inventory_sha256'):
@@ -339,7 +355,7 @@ def make_snapshot(canonical_inputs, source_revision, parts, report, origin_m=(0,
     """Copy canonical inputs, explicit part meshes/properties and a complete report.
 
     The report is retained verbatim as JSON with no recalculation or narrowing.
-    Empty report data is refused; use the complete schema-version-1 #289 report.
+    Empty report data is refused; use a complete schema-version-1 or -2 report.
     Snapshot packaging does not assert that supplied meshes match that report.
     """
     _report(report)

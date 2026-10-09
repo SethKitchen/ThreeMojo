@@ -43,6 +43,9 @@ from extensions.physics.ccd import (
     DISCRETE,
     SPHERE_MESH_CCD,
     _sweep_capsule_triangle,
+    _SweepHit,
+    _initial_capsule_contact,
+    _initial_triangle_contact,
     _sweep_triangle,
     _sweep_domain,
 )
@@ -716,6 +719,25 @@ struct PhysicsWorld(Movable):
             if count == self.ccd_max_impacts:
                 raise Error("CCD impact limit exhausted; step rolled back")
             at += travel * fraction
+            # Rebuild the shape from the retained center. The original
+            # sweep's translated closest point can round differently.
+            # Inspect only an initial contact on the winning triangle;
+            # incoming travel remains a direction even at the step's end.
+            var retained: _SweepHit
+            if capsule:
+                retained = _initial_capsule_contact(
+                    at - half_axis,
+                    at + half_axis,
+                    travel,
+                    radius,
+                    self._triangles[triangle],
+                )
+            else:
+                retained = _initial_triangle_contact(
+                    at, travel, radius, self._triangles[triangle]
+                )
+            if retained.fraction == 0:
+                normal = retained.normal
             rotation = _ccd_rotate(
                 rotation, angular + push_angular, remaining * fraction
             )
@@ -745,6 +767,9 @@ struct PhysicsWorld(Movable):
                 var friction = -tangent * (impulse / speed)
                 velocity += friction * inverse_mass
                 angular += _wide_cross(arm, friction) * inverse_inertia
+            velocity = _ccd_close_normal_velocity(
+                velocity, normal, -restitution * approach
+            )
             impacts.append(
                 _CCDImpact(
                     Float64(h) - remaining,
@@ -1311,6 +1336,30 @@ def _polyhedron_hit(
     if not entered or enter > leave:
         return None
     return RaycastHit(BodyId(i), ray.at(enter), normal, enter, material)
+
+
+def _ccd_close_normal_velocity(
+    var velocity: SIMD[DType.float64, 4],
+    normal: SIMD[DType.float64, 4],
+    target: Float64,
+) -> SIMD[DType.float64, 4]:
+    # The sweep normal is a rounded unit vector. Solve its dominant
+    # component after friction so the restitution target survives the
+    # cancellation of a nearly axial incoming velocity. In exact
+    # arithmetic a unit normal makes this closure a no-op. Its residual
+    # scales with the final dot-product operands, as _approaches requires.
+    var axis = 0
+    if abs(normal[1]) > abs(normal[axis]):
+        axis = 1
+    if abs(normal[2]) > abs(normal[axis]):
+        axis = 2
+    var first = (axis + 1) % 3
+    var second = (axis + 2) % 3
+    var other = (
+        velocity[first] * normal[first] + velocity[second] * normal[second]
+    )
+    velocity[axis] = (target - other) / normal[axis]
+    return velocity
 
 
 def _ccd_narrow(value: SIMD[DType.float64, 4]) raises -> Vector3:

@@ -79,6 +79,7 @@ class _CaptureProcess:
         self.environment, self.deadline = environment, deadline
         self.child = None
         self.active = False
+        self.group_signal_complete = False
         self.cleanup_error = None
         self.killing = False
         self.cancelled_status = None
@@ -101,9 +102,13 @@ class _CaptureProcess:
     def _kill_owned(self):
         if self.cleanup_error is not None:
             raise self.cleanup_error
-        if self.active:
+        if self.active and not self.group_signal_complete:
             try:
                 kill_owned_group(self.child, reap=self._reap)
+                # The group dispatch succeeded or the group is confirmed absent.
+                # Keep ownership until reaping, but do not signal again while
+                # those processes exit. A failed dispatch never sets this flag.
+                self.group_signal_complete = True
             except BaseException as error:
                 # Reaped/uncertain ownership must stay disarmed even when
                 # the helper's later probe fails or a signal interrupts it.

@@ -1,6 +1,6 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""Synthetic immutable-part, tensor, stale-bake and unsupported-path tests."""
+"""Immutable parts, source-bound report integration and unsupported paths."""
 from copy import deepcopy
 import json
 import math
@@ -52,6 +52,108 @@ def snapshot():
             'inertia_kg_m2': [3, 4, 5, 0.2, 0.3, 0.4],
             'tensor_reference': 'center-of-mass', 'source_report_record': 'synthetic-control'},
     }], report(), origin_label='synthetic origin')
+
+
+class CurrentAnatomyReportTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # Use the actual producer artifact, not a synthetic v1 report relabeled
+        # as v2. test_anatomy_report_binding checks its current source binding.
+        path = Path(__file__).resolve().parents[1]/'docs/validation/anatomy-template-report.json'
+        cls.evidence = json.loads(path.read_text())
+
+    def test_current_producer_sampled_properties_are_copied_without_recalculation(self):
+        self.assertEqual(self.evidence['schema_version'], 2)
+        before = canonical_bytes(self.evidence)
+        for segment, entry in self.evidence['segments'].items():
+            for index, row in enumerate(entry['grids']):
+                with self.subTest(segment=segment, index=index):
+                    copied = report_properties(self.evidence, segment, index)
+                    for key in ('mass_kg', 'center_m', 'inertia_kg_m2', 'regions', 'step_m'):
+                        self.assertEqual(copied[key], row[key])
+                    self.assertEqual(copied['frame'], Frame.Y_UP.value)
+                    self.assertEqual(copied['origin_label'], self.evidence['frame']['origin'])
+                    self.assertEqual(copied['source_report_frame'], self.evidence['frame'])
+                    self.assertEqual(copied['tensor_reference'], 'center-of-mass')
+                    self.assertEqual(copied['source_report_record'], f'segments/{segment}/grids/{index}')
+                    copied['regions']['dermis']['mass_kg'] = -1
+                    copied['center_m'][0] = 999
+        self.assertEqual(canonical_bytes(self.evidence), before)
+
+    def test_current_report_snapshot_retains_all_evidence_and_unsupported_mappings(self):
+        part = snapshot()['parts'][0]
+        # This supplied triangle has no claimed correspondence to a sampled
+        # region. Attaching the report must not invent physical properties.
+        part['physical_properties'] = None
+        held = make_snapshot(self.evidence['spec'], 'current-producer-control', [part],
+                             self.evidence, origin_label='synthetic origin')
+        self.assertEqual(held['schema_version'], 1)
+        self.assertEqual(held['canonical_validity_report'], self.evidence)
+        self.assertIsNot(held['canonical_validity_report'], self.evidence)
+        self.assertIsNot(held['canonical_validity_report']['pair_inventory'], self.evidence['pair_inventory'])
+        self.assertFalse(held['engineering_validated'])
+        self.assertIsNone(held['parts'][0]['physical_properties'])
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'canonical.json'
+            key = write_snapshot(path, held)
+            self.assertEqual(read_snapshot(path, key), held)
+            asset = Path(tmp)/'visual.glb'
+            asset.write_bytes(b'synthetic visual bytes')
+            recipe = {'source': 'current-producer-control'}
+            manifest = visual_derivative(held, asset, recipe)
+            self.assertFalse(manifest['engineering_use'])
+            self.assertEqual(set(manifest['mappings'].values()), {'unsupported'})
+            manifest['mappings']['dental'] = 'supported'
+            with self.assertRaisesRegex(ValueError, 'stale or altered'):
+                validate_derivative(manifest, held, asset, recipe)
+
+    def test_unknown_or_untyped_report_versions_are_refused(self):
+        for source in (report(), self.evidence):
+            for version in (None, -1, 0, 3, True, 1.0, 2.0, '2', [], {}):
+                with self.subTest(source=source['schema_version'], version=version):
+                    broken = {**source, 'schema_version': version}
+                    with self.assertRaisesRegex(ValueError, 'versioned canonical validity report'):
+                        report_properties(broken, 'thigh', 0)
+
+    def test_current_report_requires_its_complete_common_envelope(self):
+        for key in ('gate', 'build_provenance', 'source_file_sha256', 'spec', 'frame',
+                    'tensor_convention', 'controls', 'segments', 'composition', 'diagnostics',
+                    'diagnostic_limits', 'accounting', 'provenance_inventory', 'follow_ups',
+                    'geometry_findings', 'result_label', 'report_logic_sha256', 'inventory_sha256'):
+            with self.subTest(key=key):
+                broken = dict(self.evidence)
+                del broken[key]
+                with self.assertRaises(ValueError):
+                    report_properties(broken, 'thigh', 0)
+        for key, value in (
+                ('gate', {'engineering_validated': True}),
+                ('frame', {**self.evidence['frame'], 'y': 'distal'}),
+                ('tensor_convention', {**self.evidence['tensor_convention'], 'reference': 'origin'})):
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                report_properties({**self.evidence, key: value}, 'thigh', 0)
+
+    def test_version_two_requires_its_diagnostic_envelope(self):
+        for key in ('diagnostic_frames', 'pair_inventory'):
+            for value in (None, [], {}):
+                with self.subTest(key=key, value=value), self.assertRaises(ValueError):
+                    report_properties({**self.evidence, key: value}, 'thigh', 0)
+            broken = dict(self.evidence)
+            del broken[key]
+            with self.assertRaises(ValueError):
+                report_properties(broken, 'thigh', 0)
+        inventory = self.evidence['pair_inventory']
+        for version in (None, True, 1.0, 0, 2, '1'):
+            broken = {**self.evidence, 'pair_inventory': {**inventory, 'schema_version': version}}
+            with self.subTest(version=version), self.assertRaisesRegex(ValueError, 'inventory schema'):
+                report_properties(broken, 'thigh', 0)
+        for key in ('classes', 'components', 'pairs', 'additional_checked_diagnostics',
+                    'positive_volume_attachment_allowances', 'unknowns', 'excluded_domains', 'frame_id'):
+            broken = {**self.evidence, 'pair_inventory': {**inventory, key: None}}
+            with self.subTest(key=key), self.assertRaises(ValueError):
+                report_properties(broken, 'thigh', 0)
+        broken = {**self.evidence, 'pair_inventory': {**inventory, 'frame_id': 'unknown'}}
+        with self.assertRaisesRegex(ValueError, 'coordinate frame'):
+            report_properties(broken, 'thigh', 0)
 
 
 class FidelityTest(unittest.TestCase):
