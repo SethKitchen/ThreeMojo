@@ -6,7 +6,7 @@
 """Shared texture bytes keep mutation and lifetime semantics explicit."""
 
 from math.vector2 import Vector2
-from render.srgb import SRGB
+from render.srgb import LINEAR, SRGB
 from render.texture import (
     BILINEAR,
     CLAMP,

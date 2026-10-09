@@ -135,8 +135,8 @@ from lights.projector_light import projector_light
 from lights.sun_light import SunLight
 from math.spherical_harmonics3 import SphericalHarmonics3
 from render.pmrem import pmrem_from_cube
-from lights.lighting import Lighting
-from lights.ltc import load_ltc_tables
+from lights.lighting import PERSPECTIVE_VIEW, Lighting
+from lights.ltc import LTC_FLOATS, load_ltc_tables
 from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
 from render.tonemap import (
     ACES_FILMIC_TONE_MAPPING,
