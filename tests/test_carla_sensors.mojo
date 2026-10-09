@@ -1209,6 +1209,24 @@ def test_event_camera_settings() raises:
         _ = dvs.simulate(Framebuffer(2, 2, Color(0, 0, 0)), Duration64(0))
 
 
+def _same_events(a: List[DVSEvent], b: List[DVSEvent]) raises:
+    assert_equal(len(a), len(b))
+    for i in range(len(a)):
+        assert_true(a[i] == b[i])
+
+
+def _refuse_all(mut dvs: DVSCamera) raises:
+    # Nonfinite, negative and too-large times are refused before use.
+    for bad in [
+        inf[DType.float64](),
+        nan[DType.float64](),
+        -1.0,
+        9223372036.854773,
+    ]:
+        with assert_raises(contains="time must be finite"):
+            _ = dvs.simulate(_frame([200]), Duration64(bad))
+
+
 def test_event_camera_time_keeps_float64_and_is_checked() raises:
     # A microsecond tick a million seconds in keeps its Float64 digits.
     var dvs = DVSCamera(_linear(30), 1, 1, 0)
@@ -1217,11 +1235,43 @@ def test_event_camera_time_keeps_float64_and_is_checked() raises:
     assert_equal(len(up), 3)
     assert_equal(up[0].t, 1000000000000000 + 300)
     assert_equal(up[2].t, 1000000000000000 + 900)
-    # Nonfinite, negative and too-large times are refused before use.
-    for bad in [inf[DType.float64](), nan[DType.float64](), -1.0, 9.3e9]:
-        with assert_raises(contains="time must be finite"):
-            _ = dvs.simulate(_frame([100]), Duration64(bad))
-    _ = dvs.simulate(_frame([100]), Duration64(9.2e9))
+
+
+def test_event_camera_refusals_leave_its_state_unchanged() raises:
+    # Before the first frame and after it, a refused time changes nothing:
+    # the camera then continues exactly as an untouched control does.
+    var control = DVSCamera(_linear(30), 1, 1, 0)
+    var refused = DVSCamera(_linear(30), 1, 1, 0)
+    _refuse_all(refused)
+    _same_events(
+        refused.simulate(_frame([100]), Duration64(1.0)),
+        control.simulate(_frame([100]), Duration64(1.0)),
+    )
+    _refuse_all(refused)
+    _same_events(
+        refused.simulate(_frame([200]), Duration64(1.1)),
+        control.simulate(_frame([200]), Duration64(1.1)),
+    )
+    assert_equal(refused.current_time, control.current_time)
+
+
+def test_event_camera_accepts_the_largest_safe_time() raises:
+    # 9223372036.85477 s is the largest Float64 time whose nanoseconds stay
+    # within 2**63 - 4096; the next Float64 above it is refused.
+    var cap = 9223372036.85477
+    var dvs = DVSCamera(_linear(30), 1, 1, 0)
+    _ = dvs.simulate(_frame([100]), Duration64(cap - 1.0))
+    var up = dvs.simulate(_frame([200]), Duration64(cap))
+    assert_equal(len(up), 3)
+    assert_true(up[0].t > Int((cap - 1.0) * 1e9))
+    assert_true(up[2].t <= Int(cap * 1e9))
+    assert_equal(dvs.current_time, 9223372036854770688)
+    # A later frame at the cap reads the stored event times back safely.
+    var down = dvs.simulate(_frame([100]), Duration64(cap))
+    for event in down:
+        assert_true(event.t <= Int(cap * 1e9))
+    with assert_raises(contains="time must be finite"):
+        _ = dvs.simulate(_frame([100]), Duration64(9223372036.854773))
 
 
 # --- V2X ---------------------------------------------------------------------------

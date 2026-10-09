@@ -868,6 +868,17 @@ def test_landmark_queries() raises:
     assert_equal(
         len(world.get_traffic_lights_from_waypoint(end, Length64(5))), 0
     )
+    # Light 2001 stands at s = 45, 35 m ahead of the start. The search
+    # includes it at exactly 35 m and not 1e-12 m short of it, a pair that
+    # rounds to the same Float32.
+    var short = 35.0 - 1.0e-12
+    assert_equal(Float32(short), Float32(35.0))
+    var at = world.get_traffic_lights_from_waypoint(start, Length64(35.0))
+    assert_equal(len(at), 1)
+    assert_equal(at[0], L2001)
+    assert_equal(
+        len(world.get_traffic_lights_from_waypoint(start, Length64(short))), 0
+    )
     for bad in [inf[DType.float64](), nan[DType.float64](), -1.0]:
         with assert_raises(contains="light search distance"):
             _ = world.get_traffic_lights_from_waypoint(start, Length64(bad))

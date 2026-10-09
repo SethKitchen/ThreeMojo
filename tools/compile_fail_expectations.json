@@ -5141,6 +5141,120 @@
     ],
     "notes": []
   },
+  "tests/compile_fail/carla_event_camera_time_rejects_float32_duration.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'simulate': value passed to 'elapsed' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_event_camera_time_rejects_length.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 40,
+        "message": "invalid call to 'simulate': value passed to 'elapsed' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_event_camera_time_rejects_raw_float64.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 39,
+        "message": "invalid call to 'simulate': value passed to 'elapsed' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_lane_invasion_time_rejects_float32_duration.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 37,
+        "message": "invalid call to 'tick': value passed to 'timestamp' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_lane_invasion_time_rejects_length.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 37,
+        "message": "invalid call to 'tick': value passed to 'timestamp' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_lane_invasion_time_rejects_raw_float64.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 36,
+        "message": "invalid call to 'tick': value passed to 'timestamp' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_light_search_distance_rejects_duration.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 65,
+        "message": "invalid call to 'get_traffic_lights_from_waypoint': value passed to 'distance' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(0)' but the second value is 'Int(1)'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_light_search_distance_rejects_float32_length.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 61,
+        "message": "invalid call to 'get_traffic_lights_from_waypoint': value passed to 'distance' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0)]' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_light_search_distance_rejects_raw_float64.mojo": {
+    "errors": [
+      {
+        "line": 13,
+        "column": 62,
+        "message": "invalid call to 'get_traffic_lights_from_waypoint': value passed to 'distance' cannot be converted from 'Float64' to 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]'"
+      }
+    ],
+    "notes": [
+      "function declared here"
+    ]
+  },
   "tests/compile_fail/carla_speed_adapter_rejects_length.mojo": {
     "errors": [
       {

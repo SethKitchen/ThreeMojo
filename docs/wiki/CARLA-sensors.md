@@ -164,7 +164,7 @@ A ground-truth camera casts one ray through the center of each pixel.
 
 The event camera compares the log intensity of each pixel with the last frame. Each crossing of the threshold gives an event with a time inside the tick.
 
-`DVSCamera.simulate` takes the frame time as a `Duration64`, so a short tick late in a run keeps its Float64 digits. The time must be finite, nonnegative and at most 9.2e9 seconds. A larger time has too many nanoseconds for an event's `Int` time.
+`DVSCamera.simulate` takes the frame time as a `Duration64`, so a short tick late in a run keeps its Float64 digits. The time must be finite and nonnegative. Its nanoseconds must not exceed 2^63 - 4096, about 292 years, so that each event time fits in an `Int`. The interpolation inside a tick still uses `Float32` nanoseconds, as CARLA does.
 
 ### Wide-angle lens
 

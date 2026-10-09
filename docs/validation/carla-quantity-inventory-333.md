@@ -1,7 +1,9 @@
 # CARLA quantity boundary inventory (#333)
 
-This inventory lists the public CARLA APIs that still expose a dimensional
-value as a raw `Float32` or `Float64`. It sorts them into groups, and each
+This is a preliminary candidate scan of the public CARLA APIs that still
+expose a dimensional value as a raw `Float32` or `Float64`. It is not yet a
+reviewed classification of each symbol, so the issue's inventory item stays
+open. It sorts them into groups, and each
 group has its own migration rule. Issue
 [#333](https://github.com/SethKitchen/ThreeMojo/issues/333) tracks the work.
 
@@ -11,9 +13,11 @@ A script scanned every public struct field, function parameter and return in
 `extensions/carla/` at `main` `01c7c8e8`. It kept the names that suggest a
 dimension, such as distance, width, time, speed, angle, `s`, `x` or a unit
 suffix. A private name, one with a leading underscore, is not public. The
-scan found 422 entries. The scan is a name filter, so it also lists some
+scan found 422 candidates. It is a name filter, so it also lists some
 dimensionless values, such as PID gains and the DVS log-intensity
-thresholds. The groups below classify those.
+thresholds. [`carla-quantity-inventory-333.tsv`](carla-quantity-inventory-333.tsv)
+holds every candidate: its file, symbol, raw type, kind and group. The group
+comes from the file alone; a per-symbol review can move a candidate.
 
 The precision-preserving contract exists already. `units.si` defines
 `Length64`, `Duration64` and the other `Float64` quantities. A `Float64`
@@ -31,7 +35,10 @@ that cannot mix with it.
 ## Runtime time and distance boundaries
 
 These are the boundaries that a user calls with a time or a distance
-during a run. They migrate first, because they need no proof successor.
+during a run. They migrate first, because they are outside the pinned map
+geometry. They still need a proof successor: the lane oracle's
+`border-parser-successor.json` and `winner-sign-query-migration.json` pin
+almost every file in `extensions/carla/` as an unchanged live consumer.
 
 | Boundary | State |
 |---|---|
@@ -46,10 +53,16 @@ during a run. They migrate first, because they need no proof successor.
 | `ALSM.current_time`, `ALSM.elapsed_last_actor_destruction` | Internal traffic manager state |
 
 Each migrated boundary refuses a nonfinite or negative value with an error.
-The event camera also refuses a time above 9.2e9 seconds. Above that time
-the nanosecond count does not fit in an `Int`. The tests feed a
-microsecond tick one million seconds into a run, and the Float64 digits
-survive in the event times and the lane invasion timestamp.
+The event camera also refuses a time whose nanoseconds exceed 2^63 - 4096,
+about 292 years. A stored event time goes to seconds and back, and the
+result must still fit in an `Int`. The tests feed a microsecond tick one
+million seconds into a run, and the input digits survive in the event
+times and the lane invasion timestamp. This keeps the input precision. It
+does not make the event interpolation exact: CARLA's camera narrows the
+tick's nanoseconds to `Float32`, and the port does the same.
+
+Nine compile-fail fixtures check that each boundary refuses a raw
+`Float64`, the wrong dimension and the `Float32` quantity.
 
 ## Pinned OpenDRIVE and map geometry
 
@@ -101,8 +114,6 @@ field for the arithmetic. `WeatherParameters`, `RgbCameraSettings`,
 
 - The pinned map group, together with the conditioned cubic evaluation.
 - Typed constructors for the user-supplied configuration records.
-- Compile-fail fixtures for the newly typed boundaries. Each one adds an
-  entry to `tools/compile_fail_expectations.json`. That file is a shared
-  build input, so the fixtures go in one shared-input change.
+- A reviewed classification of each candidate in the scan.
 - The traffic manager's `ActorId` input audit, which the issue lists as
   separate work.

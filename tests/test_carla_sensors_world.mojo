@@ -396,19 +396,40 @@ def test_lane_invasion_crosses_the_center_mark() raises:
     _near(e.transform.location, 11.5, -0.5, 0)
 
 
+def _refuse_lane(mut sensor: LaneInvasionSensor, world: World) raises:
+    # A refused time is checked before the corners or frame change.
+    for bad in [inf[DType.float64](), nan[DType.float64](), -0.5]:
+        with assert_raises(contains="lane invasion time"):
+            _ = sensor.tick(world.map, 9, Duration64(bad), _pose(11.5, -0.5, 0))
+
+
 def test_lane_invasion_time_keeps_float64_and_is_checked() raises:
     var world = _world()
     var car = _car(world, 10, 1.75)
-    var sensor = LaneInvasionSensor(world.get_bounding_box(car))
+    var box = world.get_bounding_box(car)
+    var control = LaneInvasionSensor(box)
+    var refused = LaneInvasionSensor(box)
+    # Before the first snapshot and after it, refusals change nothing.
+    _refuse_lane(refused, world)
+    assert_false(refused.has_corners)
     var start = 123456789.000001
-    _ = sensor.tick(world.map, 1, Duration64(start), _pose(10, 1.75, 0))
-    var event = sensor.tick(
+    _ = control.tick(world.map, 1, Duration64(start), _pose(10, 1.75, 0))
+    _ = refused.tick(world.map, 1, Duration64(start), _pose(10, 1.75, 0))
+    _refuse_lane(refused, world)
+    assert_equal(refused.frame, control.frame)
+    var expected = control.tick(
         world.map, 2, Duration64(start + 1.0e-6), _pose(11.5, -0.5, 0)
     )
+    var event = refused.tick(
+        world.map, 2, Duration64(start + 1.0e-6), _pose(11.5, -0.5, 0)
+    )
+    # The event keeps the time's Float64 digits.
     assert_equal(event.value().timestamp, start + 1.0e-6)
-    for bad in [inf[DType.float64](), nan[DType.float64](), -0.5]:
-        with assert_raises(contains="lane invasion time"):
-            _ = sensor.tick(world.map, 3, Duration64(bad), _pose(10, 1.75, 0))
+    assert_equal(event.value().timestamp, expected.value().timestamp)
+    assert_equal(
+        len(event.value().crossed_lane_markings),
+        len(expected.value().crossed_lane_markings),
+    )
 
 
 # --- obstacles ----------------------------------------------------------------------
