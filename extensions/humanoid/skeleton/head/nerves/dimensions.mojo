@@ -26,15 +26,13 @@ authored in template centimeters. They are not a cited fascicle table.
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.skeleton.head.frame import HeadMuscleDimensions
 from extensions.humanoid.skeleton.torso.bones.dimensions import (
-    TorsoFrame,
-    template_points,
+    append_template_tube,
 )
 from extensions.humanoid.skeleton.torso.sweep import (
     Dome,
     Sweep,
     SweepField,
     floats,
-    spline_points,
     tube,
 )
 from math.vector3 import Vector3
@@ -154,72 +152,52 @@ def head_nerve_field(
         sweeps.append(tube(run, f.cm(0.6), f.cm(0.55)))
     # fmt: off
     elif part == VAGUS_NERVE:
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             2.1, 67.4, -0.9, 2.7, 63.0, 0.4, 2.8, 58.0, 1.0,
             2.4, 53.0, 1.0, 2.0, 48.6, 0.8,
         ), 0.16, 0.14)
     elif part == PHRENIC_NERVE:
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             3.2, 61.0, -1.4, 3.5, 58.0, -0.9, 3.8, 53.0, -0.3,
             3.4, 48.6, 0.6,
         ), 0.1, 0.1)
     elif part == CERVICAL_PLEXUS:
         # From behind the middle of the sternocleidomastoid.
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             3.4, 61.5, -1.8, 5.3, 60.5, -0.9, 6.0, 64.5, -0.6,
             6.5, 69.0, -0.5,
         ), 0.12, 0.08)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.3, 60.5, -0.9, 5.4, 65.0, -3.2, 5.0, 70.5, -5.0,
         ), 0.1, 0.07)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.3, 60.5, -0.9, 4.6, 59.6, 2.6, 2.0, 59.0, 4.8,
         ), 0.1, 0.07)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.3, 60.5, -0.9, 5.4, 55.5, 0.4, 6.6, 51.2, 1.0,
         ), 0.1, 0.07)
     else:
         # Out of the skull under the ear, and forward through the
         # parotid to the temple, the cheek and the jaw.
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             4.9, 69.0, -1.4, 5.8, 68.4, 0.6,
         ), 0.14, 0.13)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.8, 68.4, 0.6, 6.6, 71.5, 2.2, 6.6, 74.0, 4.0,
         ), 0.09, 0.06)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.8, 68.4, 0.6, 5.5, 69.6, 4.2, 4.6, 70.2, 6.4,
         ), 0.09, 0.06)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.8, 68.4, 0.6, 5.4, 67.2, 3.6, 4.2, 66.2, 6.4,
         ), 0.09, 0.06)
-        _nerve(sweeps, f, floats(
+        append_template_tube(sweeps, f, floats(
             5.8, 68.4, 0.6, 5.6, 64.8, 1.8, 4.6, 62.6, 4.6,
         ), 0.09, 0.06)
     # fmt: on
     return SweepField(
         sweeps^, List[Dome](), placed, f.cm(0.1), f.cm(0.02), f.cm(0.3)
     )
-
-
-def _nerve(
-    mut sweeps: List[Sweep],
-    f: TorsoFrame,
-    coords: List[Float32],
-    first: Float32,
-    last: Float32,
-):
-    """Append a tube along a spline through template points.
-
-    Args:
-        sweeps: The field's sweeps, appended to.
-        f: The torso's frame.
-        coords: Template points as flat triples.
-        first: The radius at the first point, in template cm.
-        last: The radius at the last point, in template cm.
-    """
-    var run = template_points(f, coords)
-    sweeps.append(tube(spline_points(run, 3), f.cm(first), f.cm(last)))
 
 
 def head_nerve_distance(

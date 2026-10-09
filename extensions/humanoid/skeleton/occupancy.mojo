@@ -235,6 +235,42 @@ def in_shaft_span(
     return True
 
 
+def shaft_occupancy(
+    distance: Float32,
+    radius: Float32,
+    y: Float32,
+    shaft_low: Float32,
+    shaft_high: Float32,
+    shell_fraction: Float32,
+    distal: Float32,
+    proximal: Float32,
+) -> BoneOccupancy:
+    """Return the tissue at one sample of a long bone.
+
+    Args:
+        distance: Signed distance to the bone surface, in meters.
+        radius: Mid-shaft radius used to scale the cortical shell.
+        y: Sample height, in meters.
+        shaft_low: Distal shaft station.
+        shaft_high: Proximal shaft station.
+        shell_fraction: Cortical thickness as a fraction of `radius`.
+        distal: Distal metaphysis as a fraction of the shaft span.
+        proximal: Proximal metaphysis as a fraction of the shaft span.
+
+    Returns:
+        `EMPTY` outside, else the cortical shell, marrow, or trabecular
+        bone.
+    """
+    if distance >= 0:
+        return EMPTY
+    var thickness = shell_fraction * radius
+    if distance > -thickness:
+        return CORTICAL_FILL
+    if in_shaft_span(y, shaft_low, shaft_high, distal, proximal):
+        return MARROW
+    return TRABECULAR_FILL
+
+
 def sample_bone_mass[
     F: DistanceField, //, classify: def(F, Vector3) thin -> BoneOccupancy
 ](

@@ -733,6 +733,54 @@ def bounds_of_six_shafts(
     return box.padded(pad)
 
 
+def surface_root[
+    field_type: DistanceField
+](
+    skin: field_type, inside: Vector3, outward: Vector3, stature: Float32
+) -> Vector3:
+    """Return where an outward ray leaves a skin field.
+
+    Args:
+        skin: The skin to project onto.
+        inside: A point under the skin, in meters.
+        outward: The ray direction. It is normalized here.
+        stature: Standing height, in meters. The ray is `0.16` of it.
+
+    Returns:
+        The first point of the ray that is outside the skin.
+    """
+    var direction = outward
+    direction.normalize()
+    var low = inside
+    var high = inside + direction * (0.16 * stature)
+    for _ in range(18):  # pragma: no branch
+        var middle = (low + high) * Float32(0.5)
+        if skin.distance(middle) < 0:
+            low = middle
+        else:
+            high = middle
+    return high
+
+
+def enlarge_tube_chain(chain: TubeChain, least: Float32) -> TubeChain:
+    """Return `chain` with each radius held at least to `least`.
+
+    Args:
+        chain: Five stations.
+        least: The smallest radius to keep, in meters.
+
+    Returns:
+        A copy whose radii are at least `least`.
+    """
+    var out = chain
+    out.r0 = max(out.r0, least)
+    out.r1 = max(out.r1, least)
+    out.r2 = max(out.r2, least)
+    out.r3 = max(out.r3, least)
+    out.r4 = max(out.r4, least)
+    return out
+
+
 def _frustum_volume(
     a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
 ) -> Float32:

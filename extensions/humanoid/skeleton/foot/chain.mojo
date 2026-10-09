@@ -17,6 +17,7 @@ from extensions.humanoid.skeleton.field import (
     empty_bounds,
     sd_segment,
     smin,
+    enlarge_tube_chain,
     tube_chain_bounds,
     tube_chain_distance,
     tube_chain_volume,
@@ -347,10 +348,10 @@ def enlarge_tube_set(set: TubeSet, least: Float32) -> TubeSet:
     """
     return TubeSet(
         set.count,
-        _enlarge_chain(set.c0, least),
-        _enlarge_chain(set.c1, least),
-        _enlarge_chain(set.c2, least),
-        _enlarge_chain(set.c3, least),
+        enlarge_tube_chain(set.c0, least),
+        enlarge_tube_chain(set.c1, least),
+        enlarge_tube_chain(set.c2, least),
+        enlarge_tube_chain(set.c3, least),
     )
 
 
@@ -374,14 +375,3 @@ def _frustum(a: Vector3, b: Vector3, ra: Float32, rb: Float32) -> Float32:
     """Return the volume of one circular conical frustum."""
     var length = (b - a).length()
     return pi * length * (ra * ra + ra * rb + rb * rb) / Float32(3)
-
-
-def _enlarge_chain(chain: TubeChain, least: Float32) -> TubeChain:
-    """Return `chain` with each radius held at least to `least`."""
-    var out = chain
-    out.r0 = max(out.r0, least)
-    out.r1 = max(out.r1, least)
-    out.r2 = max(out.r2, least)
-    out.r3 = max(out.r3, least)
-    out.r4 = max(out.r4, least)
-    return out

@@ -1154,6 +1154,26 @@ def template_points(f: TorsoFrame, coords: List[Float32]) -> List[Vector3]:
     return out^
 
 
+def append_template_tube(
+    mut sweeps: List[Sweep],
+    frame: TorsoFrame,
+    coords: List[Float32],
+    first: Float32,
+    last: Float32,
+):
+    """Append a tube along a spline through template points.
+
+    Args:
+        sweeps: The field's sweeps, appended to.
+        frame: The torso's frame.
+        coords: Template points as flat triples.
+        first: The radius at the first point, in template cm.
+        last: The radius at the last point, in template cm.
+    """
+    var run = template_points(frame, coords)
+    sweeps.append(tube(spline_points(run, 3), frame.cm(first), frame.cm(last)))
+
+
 def torso_cm(dimensions: TorsoDimensions, value: Float32) -> Float32:
     """Return a template length in meters for this torso.
 

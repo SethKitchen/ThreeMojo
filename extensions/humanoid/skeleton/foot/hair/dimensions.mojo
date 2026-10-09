@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.field import (
     bounds_of_six_shafts,
     field_gradient,
     mix_point,
+    surface_root,
 )
 from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     FootMuscleDimensions,
@@ -238,7 +239,7 @@ def _root(
     skin: SkinField, inside: Vector3, outward: Vector3, S: Float32
 ) -> Vector3:
     """Project one hair root from an interior point onto the skin."""
-    return _surface_root(skin, inside, outward, S)
+    return surface_root(skin, inside, outward, S)
 
 
 def _tip(root: Vector3, outward: Vector3, length: Float32) -> Vector3:
@@ -250,20 +251,3 @@ def _tip(root: Vector3, outward: Vector3, length: Float32) -> Vector3:
     )
     direction.normalize()
     return root + direction * length
-
-
-def _surface_root(
-    skin: SkinField, inside: Vector3, outward: Vector3, S: Float32
-) -> Vector3:
-    """Return where an outward ray leaves the anatomy-derived skin."""
-    var direction = outward
-    direction.normalize()
-    var low = inside
-    var high = inside + direction * (0.16 * S)
-    for _ in range(18):  # pragma: no branch
-        var middle = (low + high) * Float32(0.5)
-        if skin.distance(middle) < 0:
-            low = middle
-        else:
-            high = middle
-    return high

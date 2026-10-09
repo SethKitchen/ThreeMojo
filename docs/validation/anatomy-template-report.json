@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "a0c7f0bd3be29601e58afb1b6e8d30d1c210521a087329bfd30b0841408a9164",
+    "source_sha256": "2e36763fd8c9c61454787b9e6e40e5a0e6962a33132a8bcf8aef93e38f73a9ee",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "90f8508bb2cc5388df27475153577247fd7f6162a10325277debafaa59652e5b"
+    "binary_sha256": "53aff41451fa6dd8df31915b4291a98d791cb424bcb78132704ada96a282ab07"
   },
   "source_file_sha256": {
     "extensions/anatomy/soft_tissue.mojo": "3af2496ae83428e477d5e8ec2eb364a88a3a5435235faeb88f776dbfdaed3238",
@@ -39,18 +39,18 @@
     "extensions/humanoid/skeleton/head/ligaments/dimensions.mojo": "91f3ff00cd323a949fdaec570edc7d8203f363973e7454691fa2bf0462a48957",
     "extensions/humanoid/skeleton/leg/assembly.mojo": "634f34f4aeb12ba601c67d0757309055e2e4f42f0d266a6e28b0d574170a66ea",
     "extensions/humanoid/skeleton/leg/femur/dimensions.mojo": "b45a19a8db52730f781ab7090fcb4f90325b9955d71ec949d3a5bd3ae8cfb538",
-    "extensions/humanoid/skeleton/leg/femur/mass.mojo": "e860110f78b7417d2a57be4d10f02659661d690f85401c2bcdcf29b013b11d72",
+    "extensions/humanoid/skeleton/leg/femur/mass.mojo": "0061500a720eb5bacf0bcdd4804e42fc3f9d34d5ba7448b80ebd1993397e1619",
     "extensions/humanoid/skeleton/leg/fibula/dimensions.mojo": "2510dec677ccc768348d78f98bf4d7cc94fe33e6248596e21fe5045c2dba62db",
-    "extensions/humanoid/skeleton/leg/fibula/mass.mojo": "1c483409a8f1fbc9ddc6213be0d46273b8d365589f272ba9e0012183c36236a3",
+    "extensions/humanoid/skeleton/leg/fibula/mass.mojo": "6e67769f02802b91acf2ad86727831e2deabf04f9f7f9208d5eb1951d6f2aee0",
     "extensions/humanoid/skeleton/leg/knee/dimensions.mojo": "b54568988ad3624f2a848920455eebe43e41c6816a9cae7858047c7ddf774977",
-    "extensions/humanoid/skeleton/leg/lymph/dimensions.mojo": "2f12dd049231fec2b150a51c768fa48819145091e00dbfaa25d4ab6e201fabcd",
+    "extensions/humanoid/skeleton/leg/lymph/dimensions.mojo": "82345f0e9825b9aeedbca0ec48647e646e6f7820180cb856dd67bc9d2eb8f774",
     "extensions/humanoid/skeleton/leg/muscles/dimensions.mojo": "799aa64fd7fbb05e95698a429b3c62fb74933417057769bd65115374f0f85cbc",
     "extensions/humanoid/skeleton/leg/nerves/dimensions.mojo": "1ce726959104eb4731bd205315fdd2b7d2019207bc517bd040e543a9e2c81f87",
     "extensions/humanoid/skeleton/leg/patella/dimensions.mojo": "0ff13ee04349990b58ee3b37f9b928ad36a9ffcf6237d6032f8d7de2aedd17ff",
     "extensions/humanoid/skeleton/leg/patella/mass.mojo": "ed53c9de204f382bb575584f8aefee5c0039a06fda5e35e3c865192fd2ff2e33",
     "extensions/humanoid/skeleton/leg/skin/dimensions.mojo": "2bea123a1c5577d6167f9f17ef576df4b738c3ba175d854830141777f9d62d4c",
     "extensions/humanoid/skeleton/leg/tibia/dimensions.mojo": "85d9ffbc97e4568e142446f15b604626f8466aa71c049c25b9f12331c0379805",
-    "extensions/humanoid/skeleton/leg/tibia/mass.mojo": "d18bacad628db89cefe62b24dcf52d328e212d2eecd8d1cf8e6e79bb3c71ed36",
+    "extensions/humanoid/skeleton/leg/tibia/mass.mojo": "205481981d33210b5f6b060f4ef9654d32fa286e85eacf127e93e29e856c6104",
     "extensions/humanoid/skeleton/leg/vessels/dimensions.mojo": "e8b7ebb3877bc5b516fa6b884e2ea2e30fec2860cf497d285677856d906f73e7",
     "extensions/humanoid/skeleton/limb/inertia.mojo": "7e9a22544b173a1eaa4b37471d42ce34d53c90996d3ce3c17410b8f905a81d09",
     "extensions/humanoid/skeleton/limb/regions.mojo": "866f8f763a463a4eb53208a8bd14ce2f3481488409cda5da4ceaf658bb33d593",
@@ -58,7 +58,7 @@
     "extensions/humanoid/skeleton/loft.mojo": "fc5468dc5334781781ca905c2cb211d5a7d79dd66752a98f0849a1a58905219e",
     "extensions/humanoid/skeleton/morph.mojo": "fc078cbc0475bf57f9f038ed58269be78adfc03083bff67e344f03d5542a30e0",
     "extensions/humanoid/skeleton/pelvis/bones/dimensions.mojo": "dd3f908676ae3948f78423030e8ac01551b5706e897e183675e67c42313a97f5",
-    "extensions/humanoid/skeleton/torso/bones/dimensions.mojo": "1a5b3831f60be5c17f4136d8a26912f683afaa5dea1be91b879a3f7894b0e426",
+    "extensions/humanoid/skeleton/torso/bones/dimensions.mojo": "abc0c0851161335244bdfd0df78bd177ec3980a6e4c41d046b8b1d298a11c550",
     "extensions/humanoid/skeleton/torso/ligaments/dimensions.mojo": "f777a693e54b73b83861cf641e600a7745a5fc9a654dbdf270e4de7718605ba2",
     "extensions/humanoid/skeleton/torso/sweep.mojo": "30b8d75082c062a4a45925f2d884da28cb08410c7f43bb03a99b5e77bd096410",
     "extensions/humanoid/spec.mojo": "994d707324d994e1054b49bbb2181463727e7efb560ba66af9412ba1ec927224"

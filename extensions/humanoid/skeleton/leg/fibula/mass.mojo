@@ -16,15 +16,11 @@ trabecular bone inside a cortical shell.
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.occupancy import (
-    CORTICAL_FILL,
     DEFAULT_STEP,
-    EMPTY,
-    MARROW,
-    TRABECULAR_FILL,
     BoneMass,
     BoneOccupancy,
     sample_bone_mass,
-    in_shaft_span,
+    shaft_occupancy,
 )
 from extensions.anatomy.tissue import (
     BoneTissue,
@@ -135,14 +131,13 @@ def fibula_field_occupancy(field: FibulaField, point: Vector3) -> BoneOccupancy:
 
 def _occupancy(field: FibulaField, point: Vector3) -> BoneOccupancy:
     """Return what fills `point` in `field`."""
-    var d = field.distance(point)
-    if d >= 0:
-        return EMPTY
-    var thickness = SHELL_FRACTION * field.r2
-    if d > -thickness:
-        return CORTICAL_FILL
-    if in_shaft_span(
-        point.y, field.s0.y, field.s4.y, DISTAL_METAPHYSIS, PROXIMAL_METAPHYSIS
-    ):
-        return MARROW
-    return TRABECULAR_FILL
+    return shaft_occupancy(
+        field.distance(point),
+        field.r2,
+        point.y,
+        field.s0.y,
+        field.s4.y,
+        SHELL_FRACTION,
+        DISTAL_METAPHYSIS,
+        PROXIMAL_METAPHYSIS,
+    )
