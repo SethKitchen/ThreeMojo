@@ -7,10 +7,10 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 ## Scope
 
-This draft compares the stored Float64 lane centers without narrowing them.
+The certified lane query compares the stored Float64 lane centers without narrowing them.
 It supports finite coordinates and finite widths.
-It does not certify the global minimum of a curve.
-The global lane work remains held in [#594](https://github.com/SethKitchen/ThreeMojo/pull/594).
+This comparison alone does not certify the global minimum of a curve.
+[Stored-point distance ordering](CARLA-point-distance) describes the shared exact arithmetic.
 
 ## Point order
 
@@ -47,7 +47,7 @@ The exact axis specialization verifies inverse seeds and stored-point brackets.
 Other affine projections do not bypass the general proof.
 [Candidate admission](CARLA-index-admission) uses the separate corrected R-tree bound
 from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
-Border-only lanes and total work budgets remain separate open issues.
+[Lane borders](CARLA-lane-borders) and [map budgets](CARLA-map-budgets) cover border-only lanes and work limits.
 
 ## Controls
 

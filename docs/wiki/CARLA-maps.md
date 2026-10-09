@@ -64,7 +64,22 @@ Right and left are as the lane's traffic sees them. A lane that runs against s f
 
 `closest_waypoint_on_road` and `waypoint` are CARLA's queries. They search CARLA's own segment partition, so they are fast and match CARLA. They also keep CARLA's approximation: the step to the point's foot treats distance along the segment chord as road s.
 
-`certified_closest_waypoint_on_road` and `certified_waypoint` minimize the distance to the lane center with a proof. Use them when you need the exact nearest center. They are slower. They raise when their work budget cannot separate two candidates. See [cross-candidate certificates](CARLA-cross-candidate-certificates) and [map budgets](CARLA-map-budgets).
+`certified_closest_waypoint_on_road` and `certified_waypoint` prove lane selection with bounds on the stored Float64 lane centers.
+A returned station can be an approximate witness within the search accuracy limit.
+The certificate records whether it proves an exact minimizing witness.
+
+These queries are slower.
+They raise when their work budget cannot separate two candidates.
+See [cross-candidate certificates](CARLA-cross-candidate-certificates) and [map budgets](CARLA-map-budgets).
+
+The certified query uses these proofs:
+
+- [Lane point distance](CARLA-lane-point-distance): exact order of stored lane centers, and the on-road width test
+- [Lane seeding](CARLA-lane-seeding): bounded starting parameters for a SPIRAL search
+- [Fixed LINE heading bounds](CARLA-fixed-heading-bounds): the constant heading of a LINE segment
+- [Directed value bounds](CARLA-directed-value-bounds): tighter bounds on ideal expressions
+- [Sampled value bounds](CARLA-sampled-value-bounds): derivative-free bounds on sampled lane covers
+- [Rounded ARC certificates](CARLA-rounded-arc-certificates): stored-point minimum proofs on an ARC
 
 `LaneType` is a bit mask. A query takes a mask, such as `LANE_DRIVING | LANE_SHOULDER`, and keeps the lanes whose type shares a bit with it.
 

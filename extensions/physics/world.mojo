@@ -42,6 +42,10 @@ from extensions.physics.ccd import (
     CollisionDetection,
     DISCRETE,
     SPHERE_MESH_CCD,
+    _sweep_capsule_triangle,
+    _SweepHit,
+    _initial_capsule_contact,
+    _initial_triangle_contact,
     _sweep_triangle,
     _sweep_domain,
 )
@@ -432,32 +436,58 @@ struct PhysicsWorld(Movable):
                 ) or body.angular_velocity != Vector3(0, 0, 0):
                     raise Error("CCD requires motionless static meshes")
                 continue
-            if body.kind() != DYNAMIC or body.shape.kind != SPHERE:
+            if body.kind() != DYNAMIC or (
+                body.shape.kind != SPHERE and body.shape.kind != CAPSULE
+            ):
                 raise Error(
-                    "CCD supports dynamic spheres against static meshes only"
+                    "CCD supports dynamic spheres and rotation-locked"
+                    " capsules against static meshes only"
                 )
             if body.shape_position != Vector3(
                 0, 0, 0
             ) or body.center_of_mass != Vector3(0, 0, 0):
                 raise Error(
-                    "CCD requires a sphere centered on its body and mass"
+                    "CCD requires a shape centered on its body and mass"
                 )
             var inverse = body.inverse_inertia()
-            var isotropic = inverse
-            for k in range(9):  # pragma: no branch
-                isotropic.elements[k] = 0
-            isotropic.elements[0] = inverse.elements[0]
-            isotropic.elements[4] = inverse.elements[0]
-            isotropic.elements[8] = inverse.elements[0]
-            if inverse != isotropic or inverse.elements[0] <= 0:
-                raise Error("CCD requires positive isotropic sphere inertia")
+            if body.shape.kind == CAPSULE:
+                # A capsule only translates: every inverse inertia element,
+                # its spin and its spin push are zero. Its sweep is then the
+                # exact translation of its segment.
+                for k in range(9):  # pragma: no branch
+                    if inverse.elements[k] != 0:
+                        raise Error("CCD requires a rotation-locked capsule")
+                if body.angular_velocity != Vector3(
+                    0, 0, 0
+                ) or body.push_angular != Vector3(0, 0, 0):
+                    raise Error("CCD requires a rotation-locked capsule")
+                if not (
+                    isfinite(body.shape.half_height)
+                    and body.shape.half_height >= 0
+                    and body.shape.half_height <= 10000
+                ):
+                    raise Error(
+                        "CCD capsule half height must be between 0 and"
+                        " 10000 meters"
+                    )
+            else:
+                var isotropic = inverse
+                for k in range(9):  # pragma: no branch
+                    isotropic.elements[k] = 0
+                isotropic.elements[0] = inverse.elements[0]
+                isotropic.elements[4] = inverse.elements[0]
+                isotropic.elements[8] = inverse.elements[0]
+                if inverse != isotropic or inverse.elements[0] <= 0:
+                    raise Error(
+                        "CCD requires positive isotropic sphere inertia"
+                    )
             if not (
                 isfinite(body.shape.radius)
                 and body.shape.radius >= 0.0001
                 and body.shape.radius <= 10000
             ):
                 raise Error(
-                    "CCD sphere radius must be between 0.0001 and 10000 meters"
+                    "CCD radius must be between 0.0001 and 10000 meters"
                 )
             _ccd_position(body.position, body.shape.radius)
         # Never cache body flags, materials, radius or live solver state.
@@ -511,17 +541,18 @@ struct PhysicsWorld(Movable):
                 continue
             var v = _wide(body.linear_velocity)
             var w = _wide(body.angular_velocity)
-            var speed = sqrt(
-                _wide_dot(v, v)
-                + _wide_dot(w, w)
-                * Float64(body.inverse_mass())
-                / Float64(body.inverse_inertia().elements[0])
-            )
+            # A rotation-locked capsule has no spin energy to transfer.
+            var spin = Float64(0)
+            var inertia = Float64(body.inverse_inertia().elements[0])
+            if inertia > 0:
+                spin = _wide_dot(w, w) * Float64(body.inverse_mass()) / inertia
+            var speed = sqrt(_wide_dot(v, v) + spin)
             var push = _wide(body.push_velocity)
-            reach[i] = Float64(body.shape.radius) + Float64(h) * (
+            var bound = _ccd_bound(body)
+            reach[i] = bound + Float64(h) * (
                 speed + sqrt(_wide_dot(push, push))
             )
-            if reach[i] > Float64(body.shape.radius) * 1048576:
+            if reach[i] > bound * 1048576:
                 raise Error(
                     "CCD travel exceeds the radius-relative precision bound"
                 )
@@ -540,7 +571,7 @@ struct PhysicsWorld(Movable):
                     _ = _sweep_domain(
                         _wide(body.position),
                         SIMD[DType.float64, 4](0),
-                        Float64(body.shape.radius),
+                        bound,
                         reach[i] + Float64(self.margin),
                         self._triangles[t],
                     )
@@ -631,6 +662,16 @@ struct PhysicsWorld(Movable):
         var velocity = _wide(self.bodies[i].linear_velocity)
         var angular = _wide(self.bodies[i].angular_velocity)
         var radius = Float64(self.bodies[i].shape.radius)
+        # A capsule's half axis in the world. Its rotation does not change.
+        var half_axis = SIMD[DType.float64, 4](0)
+        var capsule = self.bodies[i].shape.kind == CAPSULE
+        if capsule:
+            half_axis = _wide(
+                self.bodies[i]
+                .shape_world_rotation()
+                .rotate(Vector3(0, 0, self.bodies[i].shape.half_height))
+            )
+        var bound = _ccd_bound(self.bodies[i])
         var remaining = Float64(h)
         var count = 0
         var indexed = (
@@ -644,7 +685,7 @@ struct PhysicsWorld(Movable):
             var travel = velocity * remaining
             var candidate_count = len(self._triangles)
             if indexed:
-                _ = self._ccd_index.query(at, travel, radius, candidates)
+                _ = self._ccd_index.query(at, travel, bound, candidates)
                 candidate_count = len(candidates)
             for k in range(candidate_count):
                 var t = candidates[k] if indexed else k
@@ -653,6 +694,14 @@ struct PhysicsWorld(Movable):
                 var hit = _sweep_triangle(
                     at, travel, radius, self._triangles[t]
                 )
+                if capsule:
+                    hit = _sweep_capsule_triangle(
+                        at - half_axis,
+                        at + half_axis,
+                        travel,
+                        radius,
+                        self._triangles[t],
+                    )
                 # Tree traversal order cannot choose an equal-time owner.
                 # The miss sentinel (2, triangle -1) must never become a hit.
                 if hit.fraction < fraction or (
@@ -670,6 +719,25 @@ struct PhysicsWorld(Movable):
             if count == self.ccd_max_impacts:
                 raise Error("CCD impact limit exhausted; step rolled back")
             at += travel * fraction
+            # Rebuild the shape from the retained center. The original
+            # sweep's translated closest point can round differently.
+            # Inspect only an initial contact on the winning triangle;
+            # incoming travel remains a direction even at the step's end.
+            var retained: _SweepHit
+            if capsule:
+                retained = _initial_capsule_contact(
+                    at - half_axis,
+                    at + half_axis,
+                    travel,
+                    radius,
+                    self._triangles[triangle],
+                )
+            else:
+                retained = _initial_triangle_contact(
+                    at, travel, radius, self._triangles[triangle]
+                )
+            if retained.fraction == 0:
+                normal = retained.normal
             rotation = _ccd_rotate(
                 rotation, angular + push_angular, remaining * fraction
             )
@@ -699,6 +767,9 @@ struct PhysicsWorld(Movable):
                 var friction = -tangent * (impulse / speed)
                 velocity += friction * inverse_mass
                 angular += _wide_cross(arm, friction) * inverse_inertia
+            velocity = _ccd_close_normal_velocity(
+                velocity, normal, -restitution * approach
+            )
             impacts.append(
                 _CCDImpact(
                     Float64(h) - remaining,
@@ -825,8 +896,12 @@ struct PhysicsWorld(Movable):
                     _wide(triangle.b) - _wide(triangle.a),
                     _wide(triangle.c) - _wide(triangle.a),
                 )
+                # A sphere's two endpoints are equal. A capsule is behind
+                # only when both of its endpoints are, as in mesh_contacts.
                 if (
                     _wide_dot(_wide(shape.start) - _wide(triangle.a), normal)
+                    < 0
+                    and _wide_dot(_wide(shape.end) - _wide(triangle.a), normal)
                     < 0
                 ):
                     continue
@@ -1263,6 +1338,30 @@ def _polyhedron_hit(
     return RaycastHit(BodyId(i), ray.at(enter), normal, enter, material)
 
 
+def _ccd_close_normal_velocity(
+    var velocity: SIMD[DType.float64, 4],
+    normal: SIMD[DType.float64, 4],
+    target: Float64,
+) -> SIMD[DType.float64, 4]:
+    # The sweep normal is a rounded unit vector. Solve its dominant
+    # component after friction so the restitution target survives the
+    # cancellation of a nearly axial incoming velocity. In exact
+    # arithmetic a unit normal makes this closure a no-op. Its residual
+    # scales with the final dot-product operands, as _approaches requires.
+    var axis = 0
+    if abs(normal[1]) > abs(normal[axis]):
+        axis = 1
+    if abs(normal[2]) > abs(normal[axis]):
+        axis = 2
+    var first = (axis + 1) % 3
+    var second = (axis + 2) % 3
+    var other = (
+        velocity[first] * normal[first] + velocity[second] * normal[second]
+    )
+    velocity[axis] = (target - other) / normal[axis]
+    return velocity
+
+
 def _ccd_narrow(value: SIMD[DType.float64, 4]) raises -> Vector3:
     return Vector3(
         _narrow_finite(value[0]),
@@ -1292,6 +1391,22 @@ def _ccd_coordinate(value: Vector3) raises:
         raise Error(
             "CCD coordinates must stay within one million meters of the origin"
         )
+
+
+def _ccd_bound(body: RigidBody) -> Float64:
+    # The radius of a sphere around the body's center that holds its shape.
+    # A capsule uses its world half axis, because a quaternion within the
+    # unit tolerance can lengthen the axis past its nominal half height.
+    var bound = Float64(body.shape.radius)
+    if body.shape.kind != CAPSULE:
+        return bound
+    var half = _wide(
+        body.shape_world_rotation().rotate(
+            Vector3(0, 0, body.shape.half_height)
+        )
+    )
+    # Round outward: the sum, the root and the addition each round.
+    return (bound + sqrt(_wide_dot(half, half))) * 1.000000000000001
 
 
 def _ccd_rotation(value: Quaternion) raises:

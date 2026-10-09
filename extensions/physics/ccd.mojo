@@ -3,7 +3,8 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Analytic sphere sweeps against the front of static triangles.
+"""Analytic sphere and rotation-locked capsule sweeps against the front of
+static triangles.
 
 This module uses Float64 intermediates, not exact predicates. The world
 opts in through a typed mode and checks its narrower supported domain.
@@ -19,7 +20,7 @@ from std.math import sqrt
 
 @fieldwise_init
 struct CollisionDetection(Equatable, ImplicitlyCopyable, Writable):
-    """Select discrete contacts or the supported sphere/static-mesh sweep."""
+    """Select discrete contacts or the supported sphere/capsule mesh sweep."""
 
     var value: Int
 
@@ -58,6 +59,16 @@ def _root(
     travel: SIMD[DType.float64, 4],
     radius: Float64,
 ) -> Float64:
+    return _contact_root[False](offset, travel, radius)
+
+
+def _contact_root[
+    initial_only: Bool
+](
+    offset: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    radius: Float64,
+) -> Float64:
     # Enter a sphere or the perpendicular section of an edge cylinder.
     var a = _wide_dot(travel, travel)
     var b = _wide_dot(offset, travel)
@@ -66,15 +77,19 @@ def _root(
     var c = _wide_dot(offset, offset) - radius * radius
     if c <= 0:
         return 0
-    # Resolve the closest point before squaring its distance. Expanding
-    # b*b-a*c loses the complete radius term on long, nearly axial paths.
-    var closest = offset - travel * (b / a)
-    var height = radius * radius - _wide_dot(closest, closest)
-    if height <= 0:
-        # A tangent has no inward velocity and needs no impulse.
+
+    comptime if initial_only:
         return 2
-    # Conjugate form also avoids cancellation near the start of the path.
-    return c / (-b + sqrt(a) * sqrt(height))
+    else:
+        # Resolve the closest point before squaring its distance. Expanding
+        # b*b-a*c loses the complete radius term on long, nearly axial paths.
+        var closest = offset - travel * (b / a)
+        var height = radius * radius - _wide_dot(closest, closest)
+        if height <= 0:
+            # A tangent has no inward velocity and needs no impulse.
+            return 2
+        # Conjugate form also avoids cancellation near the start of the path.
+        return c / (-b + sqrt(a) * sqrt(height))
 
 
 def _choose(
@@ -141,6 +156,20 @@ def _sweep_triangle(
     var best = _SweepHit(2, SIMD[DType.float64, 4](0))
     if not _sweep_domain(start, travel, radius, radius, triangle):
         return best
+    return _triangle_geometry[False](start, travel, radius, triangle)
+
+
+def _triangle_geometry[
+    initial_only: Bool
+](
+    start: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    radius: Float64,
+    triangle: Triangle,
+) -> _SweepHit:
+    # The initial-only lookup is internal to a previously validated hit.
+    # It uses incoming travel only as a direction, with no future search.
+    var best = _SweepHit(2, SIMD[DType.float64, 4](0))
     var a = _wide(triangle.a)
     var b = _wide(triangle.b)
     var c = _wide(triangle.c)
@@ -155,7 +184,13 @@ def _sweep_triangle(
         return best
     var speed = _wide_dot(travel, normal)
     if _approaches(travel, normal):
-        var fraction = max((radius - height) / speed, Float64(0))
+        var fraction = Float64(2)
+
+        comptime if initial_only:
+            if height <= radius:
+                fraction = 0
+        else:
+            fraction = max((radius - height) / speed, Float64(0))
         if fraction <= 1:
             var at = start + travel * fraction
             var point = at - normal * _wide_dot(at - a, normal)
@@ -176,7 +211,7 @@ def _sweep_triangle(
         var offset = start - p
         var along = _wide_dot(offset, edge) / square
         var delta = _wide_dot(travel, edge) / square
-        var fraction = _root(
+        var fraction = _contact_root[initial_only](
             offset - edge * along, travel - edge * delta, radius
         )
         var coordinate = along + fraction * delta
@@ -191,6 +226,169 @@ def _sweep_triangle(
                 best,
             )
         best = _choose(
-            start, travel, p, normal, a, _root(start - p, travel, radius), best
+            start,
+            travel,
+            p,
+            normal,
+            a,
+            _contact_root[initial_only](start - p, travel, radius),
+            best,
         )
+    return best
+
+
+def _segment_parameters(
+    start: SIMD[DType.float64, 4],
+    axis: SIMD[DType.float64, 4],
+    point: SIMD[DType.float64, 4],
+    edge: SIMD[DType.float64, 4],
+    denominator: Float64,
+) -> Tuple[Float64, Float64]:
+    # Closest points of two nonparallel lines, start + u axis and
+    # point + w edge. The denominator is |axis x edge|^2, which is not zero.
+    var offset = start - point
+    var aa = _wide_dot(axis, axis)
+    var ae = _wide_dot(axis, edge)
+    var ee = _wide_dot(edge, edge)
+    var ao = _wide_dot(axis, offset)
+    var eo = _wide_dot(edge, offset)
+    return (
+        (ae * eo - ee * ao) / denominator,
+        (aa * eo - ae * ao) / denominator,
+    )
+
+
+def _sweep_capsule_triangle(
+    start: SIMD[DType.float64, 4],
+    end: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    radius: Float64,
+    triangle: Triangle,
+) raises -> _SweepHit:
+    return _capsule_geometry[False](start, end, travel, radius, triangle)
+
+
+def _initial_triangle_contact(
+    start: SIMD[DType.float64, 4],
+    incoming: SIMD[DType.float64, 4],
+    radius: Float64,
+    triangle: Triangle,
+) -> _SweepHit:
+    return _triangle_geometry[True](start, incoming, radius, triangle)
+
+
+def _initial_capsule_contact(
+    start: SIMD[DType.float64, 4],
+    end: SIMD[DType.float64, 4],
+    incoming: SIMD[DType.float64, 4],
+    radius: Float64,
+    triangle: Triangle,
+) raises -> _SweepHit:
+    return _capsule_geometry[True](start, end, incoming, radius, triangle)
+
+
+def _capsule_geometry[
+    initial_only: Bool
+](
+    start: SIMD[DType.float64, 4],
+    end: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    radius: Float64,
+    triangle: Triangle,
+) raises -> _SweepHit:
+    # A capsule that only translates is the sphere of radius swept along
+    # its segment. Its first contact with the front of a triangle is a cap
+    # sphere on the triangle, the segment on an edge, or a vertex on the
+    # segment's cylinder. The segment's interior reaches the face itself
+    # only when it is parallel to it, and then all of it reaches the plane
+    # at once: a cap over the face or an edge crossing reports that time.
+    var best: _SweepHit
+    var cap: _SweepHit
+
+    comptime if initial_only:
+        best = _triangle_geometry[True](start, travel, radius, triangle)
+        cap = _triangle_geometry[True](end, travel, radius, triangle)
+    else:
+        best = _sweep_triangle(start, travel, radius, triangle)
+        cap = _sweep_triangle(end, travel, radius, triangle)
+    if cap.fraction < best.fraction:
+        best = cap
+    var axis = end - start
+    var length_sq = _wide_dot(axis, axis)
+    if length_sq == 0:
+        return best
+
+    comptime if not initial_only:
+        var middle = start + axis * 0.5
+        if not _sweep_domain(
+            middle, travel, radius, radius + 0.5 * sqrt(length_sq), triangle
+        ):
+            return best
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var normal = _wide_cross(b - a, c - a)
+    var length = sqrt(_wide_dot(normal, normal))
+    if length == 0:
+        return best
+    normal /= length
+    if _wide_dot(start - a, normal) < 0 and _wide_dot(end - a, normal) < 0:
+        # The mesh remains one-sided. A capsule wholly behind the face
+        # never reaches its front, as each cap sweep already reports.
+        return best
+    var vertices = [a, b, c]
+    for i in range(3):  # pragma: no branch
+        var p = vertices[i]
+        var edge = vertices[(i + 1) % 3] - p
+        # The segment's interior on this edge. Parallel lines meet first
+        # at a cap or a vertex, which the other features cover.
+        var cross = _wide_cross(axis, edge)
+        var cross_sq = _wide_dot(cross, cross)
+        if cross_sq > 0:
+            var unit = cross / sqrt(cross_sq)
+            var gap = _wide_dot(start - p, unit)
+            var rate = _wide_dot(travel, unit)
+            var fraction = Float64(2)
+            if abs(gap) <= radius:
+                fraction = 0
+            else:
+                comptime if not initial_only:
+                    if gap * rate < 0:
+                        var target = radius if gap > 0 else -radius
+                        fraction = (target - gap) / rate
+            if fraction <= 1:
+                var at = start + travel * fraction
+                var params = _segment_parameters(at, axis, p, edge, cross_sq)
+                if (
+                    min(params[0], params[1]) >= 0
+                    and max(params[0], params[1]) <= 1
+                ):
+                    best = _choose(
+                        start + axis * params[0],
+                        travel,
+                        p + edge * params[1],
+                        normal,
+                        a,
+                        fraction,
+                        best,
+                    )
+        # This vertex on the segment's cylinder. In the capsule's frame the
+        # vertex moves by -travel.
+        var offset = p - start
+        var along = _wide_dot(offset, axis) / length_sq
+        var delta = -_wide_dot(travel, axis) / length_sq
+        var fraction = _contact_root[initial_only](
+            offset - axis * along, -travel - axis * delta, radius
+        )
+        var coordinate = along + fraction * delta
+        if coordinate >= 0 and coordinate <= 1:
+            best = _choose(
+                start + axis * coordinate,
+                travel,
+                p,
+                normal,
+                a,
+                fraction,
+                best,
+            )
     return best

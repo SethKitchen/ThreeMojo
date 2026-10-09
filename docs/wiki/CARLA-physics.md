@@ -203,7 +203,7 @@ A contact can have a gap of up to 2 cm. The solver lets the bodies close the gap
 ## Differences from CARLA
 
 - The physics engine is the port's own. The tire, spring, engine and walker models are the ones described above.
-- The shared world has an opt-in [sphere/static-mesh continuous mode](Continuous-collision). It refuses unsupported shapes and interacting moving bodies. Vehicle chassis and capsule walkers remain outside this mode. Discrete mode is unchanged.
+- The shared world has an opt-in [sphere/static-mesh continuous mode](Continuous-collision). It refuses unsupported shapes and interacting moving bodies. Vehicle chassis remain outside this mode. A capsule walker is supported only with its rotation locked. Discrete mode is unchanged.
 - The moving-support tire correction changes replay from the port at `af6c253`. A car and platform moving together at 10 m/s previously produced about −20000 N of braking with zero relative motion. The corrected force is zero when aerodynamic forces are disabled. This is a correction to the port's model. It does not claim identical CARLA trajectories.
 - `SPHERECAST` and `SHAPECAST` wheels cast a ray, as `RAYCAST` wheels do.
 - `lateral_slip_graph`, `suspension_smoothing`, `sleep_threshold` and `sleep_slope_limit` are kept for CARLA's API, and the model does not read them. Bodies do not sleep.

@@ -20,6 +20,26 @@ The former unbounded-error index stopping rule is not used.
 The integrated [index admission layer](CARLA-index-admission) uses the corrected
 R-tree contract from [#589](https://github.com/SethKitchen/ThreeMojo/issues/589).
 
+## What a certificate covers
+
+A certificate bounds distance to the stored Float64 canonical lane-center evaluator.
+This evaluator uses the polynomial trigonometry in `curve_trig.mojo` and compensated sums of stored Gauss-Legendre spiral terms.
+It does not bound error against ideal OpenDRIVE geometry.
+
+`Map.compute_transform` uses the same canonical lane center, then narrows its position to Float32.
+The certificate does not establish a nearest-point result for those narrowed positions.
+The separate `RoadGeometry` and road-reference point APIs retain their libm-based evaluator.
+
+A returned station can be an approximate witness within the search accuracy limit.
+The certificate records whether it proves an exact minimizing witness.
+Bounds must still prove lane selection.
+For an approximate witness, strict waypoint classification must also agree over every retained possible-minimizer cell.
+
+The spiral moment oracle, `tools/carla_lane_oracle/spiral_moments.py`, reproduces the stored coefficient table in exact arithmetic.
+It checks that table's transcription, not the clothoid itself.
+This repository has no general error bound for the stored spiral against the exact clothoid.
+The [CARLA page](CARLA) reports the retained fixture agreement with a fine numerical integral.
+
 ## Candidate certificate
 
 A certificate contains a stored incumbent point and its road parameter.

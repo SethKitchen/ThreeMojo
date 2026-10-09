@@ -52,6 +52,10 @@ from loaders.draco_attributes import (
     DracoPrediction,
     DracoTransform,
     Octahedron,
+    _cross,
+    _int_sqrt,
+    _rotate,
+    _rotation_count,
     product32,
 )
 from loaders.draco_buffer import draco_require, to_int32, truncated_divide
@@ -477,24 +481,6 @@ def _positive(o: Octahedron, x: Int) -> Int:
     if x < 0:
         return x + o.max_quantized
     return x
-
-
-def _rotation_count(s: Int, t: Int) -> Int:
-    """Draco's `GetRotationCount`, for a pair not in the bottom left."""
-    if s == 0:
-        return 3 if t > 0 else 1
-    if s > 0:
-        return 2 if t >= 0 else 1
-    return 3
-
-
-def _rotate(s: Int, t: Int, count: Int) -> Tuple[Int, Int]:
-    """Draco's `RotatePoint`, by a quarter turn `count` times."""
-    if count == 1:
-        return (t, -s)
-    if count == 2:
-        return (-s, -t)
-    return (-t, s)
 
 
 def _parallelogram(
@@ -949,15 +935,6 @@ def _dot(a: List[Int], b: List[Int]) -> Int:
     return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 
 
-def _cross(u: List[Int], v: List[Int]) -> List[Int]:
-    """The cross product of two three-component vectors."""
-    return [
-        u[1] * v[2] - u[2] * v[1],
-        u[2] * v[0] - u[0] * v[2],
-        u[0] * v[1] - u[1] * v[0],
-    ]
-
-
 def _abs_sum(v: List[Int]) -> Int:
     """Draco's `VectorD::AbsSum`, which stops at the largest integer."""
     var sum = 0
@@ -967,22 +944,6 @@ def _abs_sum(v: List[Int]) -> Int:
             return _INT64_MAX
         sum += next
     return sum
-
-
-def _int_sqrt(number: UInt64) -> Int:
-    """Draco's `IntSqrt`: the integer square root by Newton's method."""
-    if number == 0:
-        return 0
-    var act = number
-    var root = UInt64(1)
-    while act >= 2:
-        root *= 2
-        act //= 4
-    while True:
-        root = (root + number // root) // 2
-        if root * root <= number:
-            break
-    return Int(root)
 
 
 def encode_integers(
