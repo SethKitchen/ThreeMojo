@@ -116,3 +116,9 @@ Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 
 This extension draws a CPU still. It is not a shared scene-water object or a validated fluid solver. The picture does not establish a real-time frame rate, buoyancy, or engineering fluid accuracy.
+
+## Cost
+
+`draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test in pixel order first. It then shades only the pixels that pass, in parallel.
+
+On an AMD Ryzen 9 5900X, a 1920 x 1080 `draw` takes about 1.7 seconds. On one thread it took about 18 seconds. One `advance` takes about 12 milliseconds. The CPU path therefore cannot reach 60 frames per second at that size. See [the water cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-cost-300.md) and `bench/water_bench.mojo`.
