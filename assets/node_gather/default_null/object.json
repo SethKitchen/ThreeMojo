@@ -1,0 +1,293 @@
+{
+  "metadata": {
+    "version": 4.7,
+    "type": "Object",
+    "generator": "Object3D.toJSON"
+  },
+  "geometries": [
+    {
+      "uuid": "045f6c4a-9fc4-4879-beaf-1897d17603e2",
+      "type": "PlaneGeometry",
+      "name": "",
+      "width": 1,
+      "height": 1,
+      "widthSegments": 1,
+      "heightSegments": 1
+    }
+  ],
+  "materials": [
+    {
+      "uuid": "bc07cde6-f7a5-4267-b630-caffe9d95491",
+      "type": "MeshBasicNodeMaterial",
+      "blending": 1,
+      "side": 0,
+      "shadowSide": null,
+      "vertexColors": false,
+      "opacity": 1,
+      "transparent": false,
+      "blendSrc": 204,
+      "blendDst": 205,
+      "blendEquation": 100,
+      "blendSrcAlpha": null,
+      "blendDstAlpha": null,
+      "blendEquationAlpha": null,
+      "blendColor": 0,
+      "blendAlpha": 0,
+      "depthFunc": 3,
+      "depthTest": true,
+      "depthWrite": true,
+      "colorWrite": true,
+      "clipIntersection": false,
+      "clipShadows": false,
+      "stencilWriteMask": 255,
+      "stencilFunc": 519,
+      "stencilRef": 0,
+      "stencilFuncMask": 255,
+      "stencilFail": 7680,
+      "stencilZFail": 7680,
+      "stencilZPass": 7680,
+      "stencilWrite": false,
+      "polygonOffset": false,
+      "polygonOffsetFactor": 0,
+      "polygonOffsetUnits": 0,
+      "dithering": false,
+      "alphaTest": 0,
+      "alphaHash": false,
+      "alphaToCoverage": false,
+      "premultipliedAlpha": false,
+      "forceSinglePass": false,
+      "allowOverride": true,
+      "visible": true,
+      "toneMapped": true,
+      "name": "",
+      "color": 16777215,
+      "envMapRotation": [
+        0,
+        0,
+        0,
+        "XYZ"
+      ],
+      "reflectivity": 1,
+      "refractionRatio": 0.98,
+      "wireframe": false,
+      "wireframeLinewidth": 1,
+      "wireframeLinecap": "round",
+      "wireframeLinejoin": "round",
+      "fog": true,
+      "inputNodes": {
+        "colorNode": "4c9f7ea7-47b8-4abf-86ff-fe1eb9b0ad50"
+      }
+    }
+  ],
+  "textures": [
+    {
+      "uuid": "747967c4-4fbc-414c-ae63-dd33013a22ca",
+      "name": "",
+      "image": "78b17acd-832c-41e3-92ce-8eb655fca587",
+      "mapping": 300,
+      "channel": 0,
+      "repeat": [
+        1,
+        1
+      ],
+      "offset": [
+        0,
+        0
+      ],
+      "center": [
+        0,
+        0
+      ],
+      "rotation": 0,
+      "wrap": [
+        1001,
+        1001
+      ],
+      "format": 1023,
+      "internalFormat": null,
+      "type": 1009,
+      "normalized": false,
+      "colorSpace": "",
+      "minFilter": 1003,
+      "magFilter": 1003,
+      "anisotropy": 1,
+      "flipY": false,
+      "generateMipmaps": false,
+      "premultiplyAlpha": false,
+      "unpackAlignment": 1
+    }
+  ],
+  "images": [
+    {
+      "uuid": "78b17acd-832c-41e3-92ce-8eb655fca587",
+      "url": {
+        "data": [
+          32,
+          0,
+          0,
+          255,
+          64,
+          0,
+          0,
+          255,
+          96,
+          0,
+          0,
+          255,
+          128,
+          0,
+          0,
+          255
+        ],
+        "width": 2,
+        "height": 2,
+        "type": "Uint8Array"
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "uuid": "4c9f7ea7-47b8-4abf-86ff-fe1eb9b0ad50",
+      "type": "TextureNode",
+      "inputNodes": {
+        "groupNode": "d008d5cb-fbab-4c54-aa17-d61a8d42bc29",
+        "gatherNode": "94e860dd-ef20-43cd-8e3f-7783a127c7a1",
+        "referenceNode": "dc5a14d7-979e-4024-9691-bf4f897b37c8"
+      },
+      "value": "747967c4-4fbc-414c-ae63-dd33013a22ca",
+      "valueType": null,
+      "nodeType": null,
+      "precision": null,
+      "sampler": true,
+      "updateMatrix": true,
+      "updateType": "none"
+    },
+    {
+      "uuid": "d008d5cb-fbab-4c54-aa17-d61a8d42bc29",
+      "type": "UniformGroupNode",
+      "name": "object",
+      "version": 0,
+      "shared": false
+    },
+    {
+      "uuid": "94e860dd-ef20-43cd-8e3f-7783a127c7a1",
+      "type": "VarNode",
+      "inputNodes": {
+        "node": "988228ac-238b-47df-b25c-75cdf5f31b6f"
+      }
+    },
+    {
+      "uuid": "988228ac-238b-47df-b25c-75cdf5f31b6f",
+      "type": "ConstNode",
+      "value": 0,
+      "valueType": "float",
+      "nodeType": "int",
+      "precision": null
+    },
+    {
+      "uuid": "dc5a14d7-979e-4024-9691-bf4f897b37c8",
+      "type": "TextureNode",
+      "inputNodes": {
+        "groupNode": "d008d5cb-fbab-4c54-aa17-d61a8d42bc29"
+      },
+      "value": "747967c4-4fbc-414c-ae63-dd33013a22ca",
+      "valueType": null,
+      "nodeType": null,
+      "precision": null,
+      "sampler": true,
+      "updateMatrix": true,
+      "updateType": "none"
+    }
+  ],
+  "object": {
+    "uuid": "40406bb4-ab1c-4467-9af0-6cd2bde644c6",
+    "type": "Scene",
+    "name": "",
+    "castShadow": false,
+    "receiveShadow": false,
+    "visible": true,
+    "frustumCulled": true,
+    "renderOrder": 0,
+    "static": false,
+    "matrixAutoUpdate": true,
+    "layers": 1,
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1
+    ],
+    "up": [
+      0,
+      1,
+      0
+    ],
+    "children": [
+      {
+        "uuid": "08a875b2-d311-4d96-a253-57f0251e695a",
+        "type": "Mesh",
+        "name": "",
+        "castShadow": false,
+        "receiveShadow": false,
+        "visible": true,
+        "frustumCulled": true,
+        "renderOrder": 0,
+        "static": false,
+        "matrixAutoUpdate": true,
+        "layers": 1,
+        "matrix": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1
+        ],
+        "up": [
+          0,
+          1,
+          0
+        ],
+        "geometry": "045f6c4a-9fc4-4879-beaf-1897d17603e2",
+        "material": "bc07cde6-f7a5-4267-b630-caffe9d95491"
+      }
+    ],
+    "backgroundBlurriness": 0,
+    "backgroundIntensity": 1,
+    "backgroundRotation": [
+      0,
+      0,
+      0,
+      "XYZ"
+    ],
+    "environmentIntensity": 1,
+    "environmentRotation": [
+      0,
+      0,
+      0,
+      "XYZ"
+    ]
+  }
+}

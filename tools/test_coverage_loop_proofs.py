@@ -205,6 +205,42 @@ class ProofBindingTests(unittest.TestCase):
         loops.bind_capture(capture, output, current, self.command(current),
                            root=self.root, build=self.build)
 
+    def test_receipt_rederivation_checks_custom_stage_std_package_surfaces(self):
+        # Compiler-free origin fixture: demonstrate the actual receipt path
+        # rejects an extra package even though it is outside input_paths.
+        external = tempfile.TemporaryDirectory(prefix='external-density-stage-')
+        self.addCleanup(external.cleanup)
+        stage = Path(external.name)/'custom-stage'
+        self.build.rename(stage)
+        self.build = stage
+        self.hits = stage/'hits'
+        self.receipt = stage/'loop-proofs.json'
+        repo = Path(__file__).resolve().parents[1]
+        name = loops.DENSITY_SOURCE
+        module = name.removesuffix('.mojo')
+        original = self.root/name
+        staged = self.build/name
+        original.parent.mkdir(parents=True, exist_ok=True)
+        staged.parent.mkdir(parents=True, exist_ok=True)
+        original.write_text(loops.reviewed_density_source(repo, successor=True))
+        staged.write_text('compiler-free modeled instrumented density\n')
+        (self.build/'module.mojo').write_bytes(self.source.read_bytes())
+        (self.build/'module.mojo.cov-origin').unlink()
+        (self.build/'manifest.txt').write_text('B '+module+' 149\nB '+module+' 223\n')
+        loops.begin_generation(self.root, self.build, 'Mojo fixture', '-Werror', sources=[name])
+        model_generation(self.root, self.build, names=(name,))
+        envelope = loops.seal(self.root, self.build, 'Mojo fixture', '-Werror')
+        self.assertEqual({p['line'] for p in envelope['receipt']['proofs']}, {149, 223})
+        for relative in ('std.mojoc', 'tests/std.mojopkg', 'extensions/deep/std.🔥'):
+            path = self.build/relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b'unreviewed package or alternate source')
+            self.assertNotIn(Path(relative), set(cache_key.input_paths(self.build)))
+            with self.assertRaisesRegex(ValueError, 'Stale or modified'):
+                self.verify()
+            path.unlink()
+            self.assertEqual(self.verify()['sha256'], envelope['sha256'])
+
     def test_sealed_manifest_retains_potential_and_required_totals(self):
         actual = self.verify()
         counts = actual['receipt']['denominator']
@@ -658,6 +694,8 @@ class GuardedLoopTests(unittest.TestCase):
                 with patch.object(sys, 'path', [directory, *sys.path]):
                     import border_parser_contracts as border
                 content = border.successor_source(self.repo).encode()
+            elif relative == loops.DENSITY_SOURCE:
+                content = loops.reviewed_density_source(self.repo).encode('utf-8')
             elif relative == 'extensions/carla/map.mojo':
                 # Preserve historical premise mutants on either physical live
                 # state, using the fully verified inverse only for after.
@@ -1275,6 +1313,238 @@ class NativeCheckerBoundaryTests(unittest.TestCase):
                 for path in root.glob('*.pid'):
                     with contextlib.suppress(ProcessLookupError):
                         os.kill(int(path.read_text()), signal.SIGKILL)
+
+
+class DensityBoundaryLoopTests(unittest.TestCase):
+    """Keep historical obligations and admit only the exact local repair."""
+
+    def setUp(self):
+        GuardedLoopTests.setUp(self)
+        self.density = loops.DENSITY_SOURCE.removesuffix('.mojo')
+        self.strands = 'extensions/humanoid/skeleton/head/hair/strands'
+        self.path = self.root / loops.DENSITY_SOURCE
+        self.before = self.path.read_text()
+        self.after = loops.reviewed_density_source(self.repo, successor=True)
+        self.hair_rules = [rule for rule in loops.GUARDED_LOOP_RULES
+                           if rule[0] in {self.density, self.strands}]
+
+    def assert_paired_rows(self, successor):
+        text = self.after if successor else self.before
+        self.path.write_text(text)
+        digest = loops.DENSITY_AFTER_SHA256 if successor else loops.DENSITY_BEFORE_SHA256
+        density = loops.reviewed_nonempty_loops(self.root, self.density)
+        expected = {101, 138, 149, 223} if successor else {100, 137}
+        self.assertEqual(set(density), expected)
+        for rule in self.hair_rules:
+            proof = loops.guarded_loop_proof(self.root, rule)
+            self.assertIsNotNone(proof)
+            line = loops._DENSITY_SUCCESSOR_LINES[rule[1]] if successor and rule[0] == self.density else rule[1]
+            self.assertEqual((proof['line'], proof['required'], proof['impossible']), (line, 'T', 'F'))
+            self.assertEqual(proof['proof_id'], rule[5])
+            self.assertEqual(proof['dependency_sha256'][loops.DENSITY_SOURCE], digest)
+            header = (self.root / (rule[0]+'.mojo')).read_text().splitlines()[line-1]
+            self.assertIn(' in '+proof['expression']+':', header)
+        strands = loops.reviewed_nonempty_loops(self.root, self.strands)
+        self.assertEqual(set(strands), {180, 191, 195, 201})
+        if successor:
+            self.assertEqual((density[149]['cardinality'], density[149]['maximum_cardinality']), (1, None))
+            self.assertEqual((density[223]['cardinality'], density[223]['minimum_cardinality'], density[223]['maximum_cardinality']), (1, 16, 256))
+            for line in (149, 223):
+                self.assertEqual((density[line]['required'], density[line]['impossible']), ('T', 'F'))
+                self.assertIn(' in '+density[line]['expression']+':', text.splitlines()[line-1])
+        else:
+            self.assertNotIn(148, density)
+            self.assertNotIn(220, density)
+            self.assertEqual(loops.repaired_density_loops(self.root), {})
+        return density
+
+    def test_exact_before_after_pair_preserves_four_old_rows_and_live_hashes(self):
+        for successor in (False, True):
+            with self.subTest(successor=successor):
+                self.assert_paired_rows(successor)
+                self.assertEqual(loops.reviewed_density_source(self.root), self.before)
+                self.assertEqual(loops.reviewed_density_source(self.root, successor=True), self.after)
+        self.assertEqual(loops.GUARDED_LOOP_SOURCE_SHA256[loops.DENSITY_SOURCE], loops.DENSITY_BEFORE_SHA256)
+        self.assertEqual(len(self.hair_rules), 4)
+
+    def test_original_masks_keep_true_and_unrelated_entries_on_both_sources(self):
+        # Manifest-only controls, not manufactured native capture evidence.
+        for successor in (False, True):
+            density = self.assert_paired_rows(successor)
+            lines = sorted(set(density) | ({149, 223} if successor else {148, 220}))
+            raw = ''.join('B '+self.density+' '+str(line)+'\n' for line in lines)
+            unrelated = ('L '+self.density+' 25\nB '+self.density+' 26\n'
+                         'C '+self.density+' 27 0\nM '+self.density+' 27 1\n')
+            raw = (raw+unrelated).encode()
+            proofs = [dict(proof, module=self.density) for proof in density.values()]
+            envelope = {'sha256': 'manifest-only-model', 'receipt': {
+                'manifest_sha256': loops.sha256(raw), 'proofs': proofs}}
+            masked = loops.masked_manifest(raw, envelope).decode()
+            self.assertTrue(masked.endswith(unrelated))
+            for line, proof in density.items():
+                self.assertEqual(proof['cardinality'], 1)
+                self.assertIn('R '+self.density+' '+str(line)+' T '+proof['kind']+' 1\n', masked)
+            if not successor:
+                for line in (148, 220):
+                    self.assertIn('B '+self.density+' '+str(line)+'\n', masked)
+            # The original manifest is unchanged; no true probe is manufactured.
+            self.assertEqual(envelope['receipt']['manifest_sha256'], loops.sha256(raw))
+
+    def test_exact_checked_conversion_and_query_premise_mutations_revoke(self):
+        cases = (
+            ('var rounded = ceil(ratio)', 'var rounded = ratio'),
+            ('if not isfinite(rounded):', 'if False:'),
+            ('if rounded <= 1:', 'if rounded < 0:'),
+            ('        return 1\n', '        return 0\n'),
+            ('var exclusive_limit = -Float32(Int.MIN)', 'var exclusive_limit = Float32(Int.MAX)'),
+            ('if rounded >= exclusive_limit:', 'if rounded > exclusive_limit:'),
+            ('if rounded >= exclusive_limit:', 'if False:'),
+            ('var rounded = ceil(ratio)', 'var premature = Int(ratio)\n    var rounded = ceil(ratio)'),
+            ('return Int(rounded)', 'return Int(ratio)'),
+            ('size_of[Int]() == 4 or size_of[Int]() == 8', 'size_of[Int]() >= 4'),
+            ('var samples = _checked_density_samples(length / (cell * 0.5))', 'var samples = Int(ceil(length / (cell * 0.5)))'),
+            ('var samples = _checked_density_samples(length / (cell * 0.5))', 'var samples = 0'),
+            ('for sample in range(samples):', 'for sample in range(samples - 1):'),
+            ('for _ in range(self.resolution * 4):', 'for _ in range(self.resolution * 0):'),
+            ('comptime MIN_HAIR_DENSITY_RESOLUTION = 4', 'comptime MIN_HAIR_DENSITY_RESOLUTION = 0'),
+            ('comptime MAX_HAIR_DENSITY_RESOLUTION = 64', 'comptime MAX_HAIR_DENSITY_RESOLUTION = Int.MAX'),
+            ('        self.validate()\n        if not self.populated', '        if not self.populated'),
+            ('        self.validate()\n        if not self.populated', '        self.validate()\n        self.resolution = 0\n        if not self.populated'),
+            ('        self.validate()\n        if not self.populated', '        self.validate()\n        unknown_alias(self)\n        if not self.populated'),
+            ('        var total = Float32(0)\n', '        self.validate()\n        var total = Float32(0)\n'),
+        )
+        for before, after in cases:
+            with self.subTest(premise=before, replacement=after):
+                self.assertEqual(self.after.count(before), 1)
+                self.path.write_text(self.after.replace(before, after, 1))
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, self.density), {})
+                for rule in self.hair_rules:
+                    self.assertIsNone(loops.guarded_loop_proof(self.root, rule))
+                with self.assertRaisesRegex(ValueError, 'Unreviewed'):
+                    loops.reviewed_density_source(self.root)
+                self.assert_paired_rows(True)
+        # Relocation past the header is different from merely deleting a call.
+        late = self.after.replace('        self.validate()\n        if not self.populated', '        if not self.populated', 1)
+        late = late.replace('            var slot = self._slot(p)\n', '            self.validate()\n            var slot = self._slot(p)\n')
+        self.path.write_text(late)
+        self.assertEqual(loops.reviewed_nonempty_loops(self.root, self.density), {})
+        for name in ('range', 'Int', 'Float32', 'ceil', 'isfinite', 'size_of'):
+            self.path.write_text(self.after+'\nfrom unreviewed import '+name+'\n')
+            self.assertEqual(loops.reviewed_nonempty_loops(self.root, self.density), {})
+        self.assert_paired_rows(True)
+
+    def test_missing_or_changed_dependencies_revoke_rebound_old_hair_rows(self):
+        self.assert_paired_rows(True)
+        for rule in self.hair_rules:
+            for name in (rule[0]+'.mojo', *rule[6]):
+                path = self.root/name
+                original = path.read_bytes()
+                with self.subTest(proof=rule[5], dependency=name):
+                    path.write_bytes(original+b'\n# unreviewed dependency change\n')
+                    self.assertIsNone(loops.guarded_loop_proof(self.root, rule))
+                    path.unlink()
+                    self.assertIsNone(loops.guarded_loop_proof(self.root, rule))
+                    path.write_bytes(original)
+                    self.assertIsNotNone(loops.guarded_loop_proof(self.root, rule))
+        original = self.path.read_bytes()
+        self.path.unlink()
+        self.assertEqual(loops.repaired_density_loops(self.root), {})
+        self.path.write_bytes(original)
+        self.assert_paired_rows(True)
+
+    def test_new_retained_state_caller_revokes_successor_strands_only(self):
+        self.assert_paired_rows(True)
+        path = self.root/'unreviewed.mojo'
+        for text in ('def f(hair):\n    hair._shadow_depths([])\n',
+                     'def f(hair):\n    return hair._upload\n',
+                     'def f(mut hair):\n    hair._topology.clear()\n'):
+            path.write_text(text)
+            for rule in self.hair_rules:
+                proof = loops.guarded_loop_proof(self.root, rule)
+                if rule[0] == self.strands:
+                    self.assertIsNone(proof)
+                else:
+                    self.assertIsNotNone(proof)
+            self.assertEqual(set(loops.repaired_density_loops(self.root)), {149, 223})
+        path.unlink()
+        self.assert_paired_rows(True)
+
+    def test_project_std_surfaces_revoke_only_repaired_and_successor_admissions(self):
+        external = tempfile.TemporaryDirectory(prefix='density-external-include-root-')
+        self.addCleanup(external.cleanup)
+        stage = Path(external.name)/'custom-stage'
+        stage.mkdir()
+        roots = (stage,)
+        for destination in (self.root, stage):
+            for prefix in ('', 'tests', 'extensions/deep/module'):
+                for leaf in ('std', 'std.mojo', 'std.mojoc', 'std.mojopkg', 'std.🔥', 'std.future', 'STD.MOJO'):
+                    self.path.write_text(self.after)
+                    shadow = destination/prefix/leaf
+                    shadow.parent.mkdir(parents=True, exist_ok=True)
+                    if leaf == 'std':
+                        shadow.mkdir()
+                    else:
+                        shadow.write_text('unreviewed resolver surface')
+                    with self.subTest(root=str(destination), name=str(shadow)):
+                        self.assertEqual(loops.reviewed_nonempty_loops(self.root, self.density, include_roots=roots), {})
+                        self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, self.strands, include_roots=roots)), {195, 201})
+                        # Old bindings are retained; this guard is specific to
+                        # the newly reviewed source, not a historical repin.
+                        self.path.write_text(self.before)
+                        for rule in self.hair_rules:
+                            self.assertIsNotNone(loops.guarded_loop_proof(self.root, rule, include_roots=roots))
+                    if leaf == 'std':
+                        shadow.rmdir()
+                    else:
+                        shadow.unlink()
+                    self.assert_paired_rows(True)
+                    self.assertEqual(set(loops.repaired_density_loops(self.root, include_roots=roots)), {149, 223})
+
+    def test_std_symlinks_and_hidden_project_directory_surfaces_fail_closed(self):
+        self.assert_paired_rows(True)
+        outside = tempfile.TemporaryDirectory(prefix='density-std-symlink-target-')
+        self.addCleanup(outside.cleanup)
+        target = Path(outside.name)
+        (target/'std.mojoc').write_text('unreviewed package')
+        for relative, destination in (('std', target), ('tests/std.mojo', target/'missing.mojo'),
+                                      ('tests/std.mojoc', target/'std.mojoc'),
+                                      ('project_alias', target)):
+            link = self.root/relative
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(destination, target_is_directory=destination.is_dir())
+            self.assertEqual(loops.repaired_density_loops(self.root), {})
+            for rule in self.hair_rules:
+                self.assertIsNone(loops.guarded_loop_proof(self.root, rule))
+            link.unlink()
+            self.assert_paired_rows(True)
+        for folder in ('.venv', '.cache'):
+            # Established non-input locations may contain the actual SDK or
+            # compiler cache. They are not project include-root candidates.
+            link = self.root/folder
+            link.symlink_to(target, target_is_directory=True)
+            self.assertEqual(set(loops.repaired_density_loops(self.root)), {149, 223})
+            link.unlink()
+        self.assertEqual(loops.repaired_density_loops(self.root, include_roots=(self.root/'absent',)), {})
+        with patch.object(loops.os, 'walk', side_effect=PermissionError('unreadable resolver surface')):
+            self.assertEqual(loops.repaired_density_loops(self.root), {})
+        self.assert_paired_rows(True)
+
+    def test_supported_integer_limits_are_exact_binary32_powers(self):
+        import math
+        import struct
+        for width in (32, 64):
+            limit = 1 << (width-1)
+            bits = (width+126) << 23
+            decoded = struct.unpack('!f', struct.pack('!I', bits))[0]
+            below = struct.unpack('!f', struct.pack('!I', bits-1))[0]
+            maximum = limit-1
+            self.assertEqual(decoded, limit)
+            self.assertEqual(int(below), maximum-(maximum >> 24))
+            self.assertLess(below, limit)
+            self.assertEqual(math.ceil(below), below)
+            self.assertGreater(decoded, maximum)
+        self.assertNotIn('247', self.after)
+        self.assertNotIn('Int(1) << 63', self.after)
 
 
 class MapSuccessorLoopTests(unittest.TestCase):

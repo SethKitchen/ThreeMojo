@@ -474,13 +474,185 @@ _MAP_SUCCESSOR_LINES = {
 }
 
 
-def _reviewed_dependency_hashes(root, bindings):
+# A separate exact source pair for the HairDensity boundary correction.
+# Historical hashes/rules stay unchanged. The four retained hair theorems were
+# reviewed again: rebuild still validates its positive cube and owned partition;
+# the checked helper only returns positive Int or raises; query validation is
+# read-only. Neither correction changes groom ownership, successful shading
+# borrows, topology checks, or the retained caller/write census above.
+DENSITY_SOURCE = 'extensions/humanoid/skeleton/head/hair/density.mojo'
+DENSITY_BEFORE_SHA256 = 'cf1a58fa00938a2522e25fdf9b061ec53bec3e3bf08dbe99ed2eb942a37b8ab9'
+DENSITY_AFTER_SHA256 = '2d5595ac114901265ea9e13d905f81529dfccb9cd8ddf05185313b5aada07929'
+_DENSITY_SUCCESSOR_LINES = {100: 101, 137: 138}
+
+# This fixed inverse exists only to preserve historical test fixtures on either
+# physical source state. Admission always checks complete hashes; it never
+# projects an arbitrary changed module or refreshes either binding.
+_DENSITY_SOURCE_EDITS = (
+    ('''from std.math import ceil, floor, isfinite, max, min
+''',
+     '''from std.math import ceil, floor, isfinite, max, min
+from std.sys import size_of
+'''),
+    ('''                # Finite cubic volume and resolution at most 64 bound
+                # segment length below 2^50 and sample count at most 211.
+                var samples = max(1, Int(ceil(length / (cell * 0.5))))''',
+     '''                # Check the rounded count before its Float32-to-Int cast.
+                # Every accepted count is positive, without an artificial cap.
+                var samples = _checked_density_samples(length / (cell * 0.5))'''),
+    ('''            Error: If the point or direction is not finite.
+''',
+     '''            Error: If the point or direction is not finite, or the current
+                resolution or diameter is outside its domain.
+'''),
+    ('''            raise Error("Hair optical depth needs a finite light direction")
+''',
+     '''            raise Error("Hair optical depth needs a finite light direction")
+        self.validate()
+'''),
+    ('',
+     '''
+
+def _checked_density_samples(ratio: Float32) raises -> Int:
+    """Round a sample ratio up, with at least one representable sample.
+
+    Args:
+        ratio: The segment length divided by the half-cell step.
+
+    Returns:
+        At least one sample, preserving the minimum for finite small values.
+
+    Raises:
+        Error: If the rounded count is nonfinite or exceeds signed Int.
+    """
+    comptime assert size_of[Int]() == 4 or size_of[Int]() == 8
+    var rounded = ceil(ratio)
+    if not isfinite(rounded):
+        raise Error("Hair density sample count is not representable")
+    if rounded <= 1:
+        return 1
+    # Int.MIN is exactly -2^(width-1) on the supported signed Int widths.
+    # Convert that exact power before negation; never negate Int.MIN as Int.
+    # Float32(Int.MAX) rounds up to the excluded limit and is not inclusive.
+    var exclusive_limit = -Float32(Int.MIN)
+    if rounded >= exclusive_limit:
+        raise Error("Hair density sample count is not representable")
+    return Int(rounded)
+'''),
+)
+
+
+def reviewed_density_source(root, *, successor=False):
+    """Return one exact reviewed side, rejecting all unknown live sources."""
+    path = relative_source(root, DENSITY_SOURCE)
+    raw = path.read_bytes()
+    current = sha256(raw)
+    wanted = DENSITY_AFTER_SHA256 if successor else DENSITY_BEFORE_SHA256
+    if current not in {DENSITY_BEFORE_SHA256, DENSITY_AFTER_SHA256}:
+        raise ValueError('Unreviewed HairDensity source')
+    text = raw.decode('utf-8')
+    if current != wanted:
+        for before, after in (_DENSITY_SOURCE_EDITS if successor
+                              else reversed(_DENSITY_SOURCE_EDITS)):
+            if not before:
+                if successor:
+                    text += after
+                elif text.endswith(after):
+                    text = text[:-len(after)]
+                else:
+                    raise ValueError('Missing reviewed HairDensity helper')
+            else:
+                old, new = (before, after) if successor else (after, before)
+                if text.count(old) != 1:
+                    raise ValueError('Ambiguous reviewed HairDensity edit')
+                text = text.replace(old, new, 1)
+    if sha256(text.encode('utf-8')) != wanted or path.read_bytes() != raw:
+        raise ValueError('HairDensity paired source identity mismatch')
+    return text
+
+
+# These theorems apply ONLY to the repaired source. They do not assert the
+# old numeric-envelope argument or a maximum of 247 for arbitrary helper input.
+# For signed 32/64-bit Int, -Float32(Int.MIN) is exactly 2^(width-1). The helper
+# classifies the actual ceil result, returns 1 for every finite value <=1,
+# refuses values >= that exclusive limit, then converts only (1, limit).
+# Thus its return is positive without a global FP-state assumption.
+# Query validation dominates resolution*4, so that separate count is 16..256.
+# The unchanged reporter protocol serializes nonemptiness as cardinality 1;
+# minimum_cardinality retains the tighter reviewed fact in the bound receipt.
+DENSITY_REPAIRED_RULES = (
+    (149, 'reviewed-nonempty-range', 1, None, 'range(samples)',
+     'density-checked-representable-positive-samples'),
+    (223, 'reviewed-nonempty-range', 16, 256, 'range(self.resolution * 4)',
+     'density-query-validated-positive-step-count'),
+)
+
+
+def _density_stdlib_unshadowed(root):
+    """Refuse unreviewed project std resolver surfaces, including packages.
+
+    SDK payloads are bound separately. The project's standard virtualenv and
+    non-input caches are not include roots and must not veto the real SDK.
+    A project directory symlink could hide an additional resolver surface;
+    conservatively refuse it instead of following it outside the checked tree.
+    """
+    root = Path(root)
+    if not root.is_dir():
+        return False
+
+    def unreadable(error):
+        raise error
+
+    try:
+        for directory, folders, files in os.walk(root, onerror=unreadable):
+            base = Path(directory)
+            # Refuse alternate/unknown suffixes as well as .mojo, .mojoc and
+            # .mojopkg. This includes Mojo's alternate source-file suffix.
+            if any(name.casefold() == 'std' or name.casefold().startswith('std.')
+                   for name in (*folders, *files)):
+                return False
+            folders[:] = [name for name in folders if name not in cache_key.SKIP
+                          and (base / name).relative_to(root) != Path('coverage/build')]
+            if any((base / name).is_symlink() for name in folders):
+                return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def repaired_density_loops(root, *, include_roots=()):
+    """Admit local repaired loops, never their unsafe historical counterparts."""
+    try:
+        if file_sha256(relative_source(root, DENSITY_SOURCE)) != DENSITY_AFTER_SHA256:
+            return {}
+    except (OSError, ValueError):
+        return {}
+    if not all(_density_stdlib_unshadowed(path) for path in (root, *include_roots)):
+        return {}
+    return {line: {
+        'line': line, 'kind': kind, 'cardinality': 1,
+        'minimum_cardinality': minimum,
+        'maximum_cardinality': maximum, 'required': 'T', 'impossible': 'F',
+        'expression': expression, 'proof_id': proof_id,
+        'dependency_sha256': {DENSITY_SOURCE: DENSITY_AFTER_SHA256},
+    } for line, kind, minimum, maximum, expression, proof_id in DENSITY_REPAIRED_RULES}
+
+
+def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
     """Verify fixed historical bindings without admitting arbitrary successors."""
     actual = {}
     for name, expected in bindings.items():
         path = relative_source(root, name)
         raw = path.read_bytes()
         digest = sha256(raw)
+        if (name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256
+                and digest == DENSITY_AFTER_SHA256):
+            # Explicit paired admission for the four re-reviewed hair rows.
+            if not all(_density_stdlib_unshadowed(path)
+                       for path in (root, *include_roots)):
+                return None
+            actual[name] = digest
+            continue
         if digest != expected:
             if (name != 'extensions/carla/map.mojo'
                     or expected != GUARDED_LOOP_SOURCE_SHA256[name]):
@@ -530,7 +702,7 @@ def _historical_reviewed_nonempty_loops(root, module):
     } for line, kind, minimum, maximum, expression, proof_id in sites}
 
 
-def guarded_loop_proof(root, rule):
+def guarded_loop_proof(root, rule, *, include_roots=()):
     """Verify one explicit theorem without enabling its sibling rules."""
     module, line, kind, maximum, expression, proof_id, extras, callers = rule
     bindings = {
@@ -538,12 +710,17 @@ def guarded_loop_proof(root, rule):
         for name in (module + '.mojo', *extras)
     }
     try:
-        actual_bindings = _reviewed_dependency_hashes(root, bindings)
+        actual_bindings = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots)
         if actual_bindings is None:
             return None
         if (module == 'extensions/carla/map'
                 and actual_bindings[module + '.mojo'] != bindings[module + '.mojo']):
             line = _MAP_SUCCESSOR_LINES.get(line)
+            if line is None:
+                return None
+        if (module + '.mojo' == DENSITY_SOURCE
+                and actual_bindings[DENSITY_SOURCE] == DENSITY_AFTER_SHA256):
+            line = _DENSITY_SUCCESSOR_LINES.get(line)
             if line is None:
                 return None
         if callers:
@@ -585,13 +762,15 @@ def guarded_loop_proof(root, rule):
     }
 
 
-def reviewed_nonempty_loops(root, module):
+def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
     result = _historical_reviewed_nonempty_loops(root, module)
+    if module + '.mojo' == DENSITY_SOURCE:
+        result.update(repaired_density_loops(root, include_roots=include_roots))
     for rule in GUARDED_LOOP_RULES:
         if rule[0] != module:
             continue
-        proof = guarded_loop_proof(root, rule)
+        proof = guarded_loop_proof(root, rule, include_roots=include_roots)
         if proof is None:
             continue
         if proof['line'] in result:
@@ -815,7 +994,7 @@ def build_receipt(root, build, compiler, flags, *, mojo=None, capture_cache=None
         if name not in inputs:
             raise ValueError('Missing instrumented module: ' + module)
         candidates = constant_loops(original.read_text(encoding='utf-8'))
-        reviewed = reviewed_nonempty_loops(root, module)
+        reviewed = reviewed_nonempty_loops(root, module, include_roots=(build,))
         if candidates.keys() & reviewed.keys():
             raise ValueError('Conflicting reviewed loop proof: ' + module)
         candidates.update(reviewed)

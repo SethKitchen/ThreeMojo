@@ -779,8 +779,13 @@ The loader refuses these things:
 - A `Node` with no class of its own. three.js writes each TSL function, such as `positionWorld`, `normalWorld` or `cameraPosition`, as a `Node` with no body. three.js's own loader cannot build these nodes again.
 - A custom attribute whose type the caller did not declare with `set_attribute`. three.js does not write the type of an attribute.
 - A material property that has no output here, such as `clearcoatNode`.
-- A texture node with a bias, a comparison, a depth, a gradient or an offset. A cube node with a level.
+- A texture node with a bias, a comparison, a depth, a gradient, a gather or an offset. A cube node with a level.
 - A uuid that no node has, and nodes that read each other in a cycle.
+
+A reachable `gatherNode` input is refused by name, even if its child is missing
+or unsupported. Gather reads one channel from neighboring texels. It cannot
+be replaced by an ordinary RGBA sample. Unused nodes in the library remain
+unbuilt; an unreachable gather input does not cause refusal.
 
 ## Shaders from three.js's examples
 

@@ -22,11 +22,14 @@ from exporters.gltf import encode_base64
 from exporters.object_json import object_to_json, object_uuid
 from geometries.box import box
 from lights.light import ambient_light, directional_light
+from loaders.json import parse_json
 from loaders.object_loader import (
+    _Loader,
     ObjectModel,
     bind_mode_name,
     bind_mode_of,
     line_type_names,
+    read_material_json,
     read_object_json,
     stencil_op_code,
     stencil_op_of,
@@ -44,6 +47,7 @@ from materials.material import (
     Material,
     MaterialId,
     PointSize,
+    Side,
     line_dashed_material,
     points_material,
     sprite_material,
@@ -664,6 +668,61 @@ def test_the_material_flags_are_written_and_read() raises:
         _ = _material('"type":"MeshBasicMaterial","shadowSide":7')
     with assert_raises(contains="blend color"):
         _ = _material('"type":"MeshBasicMaterial","blendAlpha":3')
+
+
+def _shadow_material(fields: String, route: Int, side: Int) raises -> Material:
+    """Read shadow flags directly, as a material, or in an object document."""
+    var body = '"type":"MeshBasicMaterial","side":' + String(side) + fields
+    if route == 0:
+        var loader = _Loader(parse_json("{" + body + "}"), "")
+        var material = Material(WHITE, kind=BASIC, side=Side(side))
+        loader.flags(loader.document.root(), material)
+        return material
+    if route == 1:
+        var assets = Assets()
+        var id = read_material_json('{"uuid":"m",' + body + "}", assets)
+        return assets.materials.get(id)
+    return _material(body)
+
+
+def test_null_shadow_side_keeps_the_absent_side_fallback() raises:
+    """A null shadowSide keeps the existing fallback for all three sides."""
+    for route in range(3):
+        for side in range(3):
+            for fields in ["", ',"shadowSide":null']:
+                var material = _shadow_material(fields, route, side)
+                assert_false(Bool(material.shadow_side))
+                assert_equal(material.shadow_face(), Side(side))
+            for shadow in range(3):
+                var material = _shadow_material(
+                    ',"shadowSide":' + String(shadow), route, side
+                )
+                assert_true(Bool(material.shadow_side))
+                assert_equal(material.shadow_side.value(), Side(shadow))
+                assert_equal(material.shadow_face(), Side(shadow))
+
+
+def test_null_shadow_side_does_not_relax_other_values() raises:
+    """Only null is added; invalid shadow types and sides still fail."""
+    for route in range(3):
+        for value in ['"0"', "true", "false", "[]", "{}"]:
+            with assert_raises(contains="expected a number"):
+                _ = _shadow_material(',"shadowSide":' + value, route, 0)
+        for value in ["0.5", "9000000000000001"]:
+            with assert_raises(contains="expected a whole number"):
+                _ = _shadow_material(',"shadowSide":' + value, route, 0)
+        for value in ["-1", "3", "7"]:
+            with assert_raises(contains="shadow side"):
+                _ = _shadow_material(',"shadowSide":' + value, route, 0)
+        with assert_raises(contains="expected a number"):
+            _ = _shadow_material(
+                ',"shadowSide":null,"blendAlpha":null', route, 0
+            )
+    for route in range(1, 3):
+        with assert_raises(contains="expected a number"):
+            _ = _shadow_material(
+                ',"depthFunc":null,"shadowSide":null', route, 0
+            )
 
 
 def test_three_js_defaults_are_read() raises:

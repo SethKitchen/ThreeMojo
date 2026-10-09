@@ -41,6 +41,7 @@ number, and a file that ends early. An empty line is zero, as
 `Number("")` is in JavaScript.
 """
 
+from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
 from render.texture import BILINEAR, IGNORED, Texture, float_texture
@@ -130,13 +131,7 @@ def _js_number(text: String) raises -> Float64:
     Raises:
         Error: If it is not a finite number, where JavaScript gives NaN.
     """
-    if text.byte_length() == 0:
-        return 0
-    var value: Float64
-    try:
-        value = Float64(text)
-    except:
-        raise Error("IES: `" + text + "` is not a number")
+    var value = js_string_to_number(text)
     if not isfinite(value):
         raise Error("IES: `" + text + "` is not a number")
     return value
