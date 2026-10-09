@@ -123,12 +123,12 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Project tools
 
-- [ ] [Decode failure early stop](https://github.com/SethKitchen/ThreeMojo/wiki/Image-decode-queue#ordering-and-failure): monotonic stop, joined claimed work and ordered errors are implemented; final batch qualification remains open [#668](https://github.com/SethKitchen/ThreeMojo/issues/668)
-
 - [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 <details>
-<summary>Implemented: 10</summary>
+<summary>Implemented: 11</summary>
+
+- [x] [Decode failure early stop](https://github.com/SethKitchen/ThreeMojo/wiki/Image-decode-queue#ordering-and-failure): monotonic stop, joined claimed work and ordered errors, qualified on main [#668](https://github.com/SethKitchen/ThreeMojo/issues/668)
 
 - [x] [Converted face and hair input contract](https://github.com/SethKitchen/ThreeMojo/wiki/Converted-assets): bounded ingestion, pinned upstream inputs and exact production reproduction [#303](https://github.com/SethKitchen/ThreeMojo/issues/303)
 
@@ -512,6 +512,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
+- [x] [CARLA lane borders](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-borders): border-only OpenDRIVE lanes get width records from their borders, with ASAM's precedence and refusal rules [#577](https://github.com/SethKitchen/ThreeMojo/issues/577)
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)
 - [x] [Geometric CARLA lane orientation](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-orientation): heading and pitch from all five supported offset-plus-width centerline derivatives [#485](https://github.com/SethKitchen/ThreeMojo/issues/485)
 - [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): exact wide stored-center ordering and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)

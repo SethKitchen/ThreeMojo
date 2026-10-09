@@ -3,12 +3,12 @@ import hashlib
 import json
 from pathlib import Path
 
-try:
+if __package__:
+    from .sum2_guard_contracts import declaration
+    from .source_contracts import token_sha256
+else:
     from sum2_guard_contracts import declaration
     from source_contracts import token_sha256
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle.sum2_guard_contracts import declaration
-    from tools.carla_lane_oracle.source_contracts import token_sha256
 
 RECORD_SHA256 = '73d95d594e740205bad4cd900288a68d9f82897474fdc33e4d6043a156790170'
 PREDECESSOR_SHA256 = '33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315'
@@ -33,10 +33,10 @@ def verify(root):
             == record['after_sha256'], 'lane-control successor record changed')
     current = (root / record['module']).read_text()
     if token_sha256(current) != token_sha256(record['after_source']):
-        try:
+        if __package__:
+            from . import lane_order_contracts as order
+        else:
             import lane_order_contracts as order
-        except ModuleNotFoundError:
-            from tools.carla_lane_oracle import lane_order_contracts as order
         current = order.predecessor_source(root)
 
     require(token_sha256(current) == token_sha256(record['after_source']),

@@ -327,15 +327,22 @@ def verify(root):
             recorded_seed = record['functions']['_try_winner_seed']
             if significant(live_seed) != significant(recorded_seed):
                 try:
-                    try:
+                    if __package__:
+                        from . import seed_count_contracts as seed_count
+                    else:
                         import seed_count_contracts as seed_count
-                    except ModuleNotFoundError:
-                        from tools.carla_lane_oracle import seed_count_contracts as seed_count
                     text = seed_count.reviewed_text(root, path, text)
                 except (ValueError, OSError) as error:
                     raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                      + module + ' (' + str(error) + ')') from error
-                require(_winner_seed_live_observables(live_seed) ==
+                # Read and validate the physical extraction before normalizing
+                # its upper RHS. Historical reconstruction alone is insufficient.
+                live_map = (root/path).read_bytes().decode('utf-8')
+                live_observables = (
+                    seed_count.score_live_observables(live_map)
+                    if seed_count.sha(live_map) == seed_count.SCORE_AFTER_SHA256
+                    else _winner_seed_live_observables(live_seed))
+                require(live_observables ==
                         _winner_seed_live_observables(recorded_seed),
                         'Sum2 live winner-seed fresh guard or debit statements changed')
                 verified_map_predecessor = text

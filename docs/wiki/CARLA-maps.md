@@ -228,8 +228,8 @@ accuracy error. It does not return an unproved waypoint or off-road result.
 
 The [lane correction controls](CARLA-lane-correction-controls) explain the
 intentional pose, minimum, index and mesh changes. This work is still held
-for final qualification. Border-only lane support in issue #577 remains
-separate work. Global construction and continuous-query work use typed
+for final qualification. Border-only lanes get width records from their
+borders; see [CARLA lane borders](CARLA-lane-borders). Global construction and continuous-query work use typed
 `MapBuildBudget` and `MapQueryBudget` policies, with explicit exhaustion and
 pre-admission of nested lookup, ordering and refinement work. See
 [spatial map resource budgets](CARLA-map-budgets) for defaults, logical work

@@ -9,21 +9,21 @@ import hashlib
 import json
 import tokenize
 
-try:
+if __package__:
+    from . import source_contracts as source
+    from . import sum2_guard_contracts as guard
+    from . import reviewed_cleanup_contracts as cleanup
+    from . import frozen_arc_producer_contracts as frozen
+else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import reviewed_cleanup_contracts as cleanup
     import frozen_arc_producer_contracts as frozen
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import source_contracts as source
-    from tools.carla_lane_oracle import sum2_guard_contracts as guard
-    from tools.carla_lane_oracle import reviewed_cleanup_contracts as cleanup
-    from tools.carla_lane_oracle import frozen_arc_producer_contracts as frozen
 
-try:
+if __package__:
+    from . import accepted_successor_contracts as accepted
+else:
     import accepted_successor_contracts as accepted
-except ModuleNotFoundError:
-    from tools.carla_lane_oracle import accepted_successor_contracts as accepted
 
 MIGRATION = 'tools/carla_lane_oracle/winner-sign-query-migration.json'
 
@@ -71,11 +71,13 @@ def verify(root):
     historical_map_sha256 = record['raw_successors']['extensions/carla/map.mojo'][-1]['after']
     map_count_edge = None
     if live_map_sha256 != historical_map_sha256:
-        try:
+        if __package__:
+            from . import seed_count_contracts as seed_count
+        else:
             import seed_count_contracts as seed_count
-        except ModuleNotFoundError:
-            from tools.carla_lane_oracle import seed_count_contracts as seed_count
-        require(live_map_sha256 == seed_count.AFTER_SHA256,
+        require(live_map_sha256 in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
+                                      seed_count.SUPPORT_AFTER_SHA256,
+                                      seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256},
                 'unreviewed complete Map source')
         map_count_edge = seed_count.verify(root)
         require(map_count_edge is not None
@@ -95,10 +97,10 @@ def verify(root):
     additional = cleanup.invariant.verify(root)['sources']
     require(not (set(successors) & set(additional)), 'duplicate invariant successor')
     successors.update(additional)
-    try:
+    if __package__:
+        from . import coverage_followup_contracts as followup
+    else:
         import coverage_followup_contracts as followup
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import coverage_followup_contracts as followup
     for path, transition in followup.verify(root)['sources'].items():
         if path in successors:
             require(successors[path]['after_sha256'] == transition['before_sha256'],
@@ -121,18 +123,18 @@ def verify(root):
         else:
             successors[path] = transition
 
-    try:
+    if __package__:
+        from . import speed_parser_contracts as parser
+    else:
         import speed_parser_contracts as parser
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import speed_parser_contracts as parser
     parser_edge = parser.verify(root)
     require(parser_edge['path'] not in successors, 'duplicate speed parser edge')
     successors[parser_edge['path']] = parser_edge
 
-    try:
+    if __package__:
+        from . import cache_key_contracts as cache_key
+    else:
         import cache_key_contracts as cache_key
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import cache_key_contracts as cache_key
     key_edge = cache_key.verify(root)
     path = cache_key.MODULE
     require(path in successors and successors[path]['after_sha256'] == key_edge['before_sha256'],
@@ -142,10 +144,10 @@ def verify(root):
     key_successor['after_token_sha256'] = cache_key.AFTER_TOKEN_SHA256
     successors[path] = key_successor
 
-    try:
+    if __package__:
+        from . import border_parser_contracts as border
+    else:
         import border_parser_contracts as border
-    except ModuleNotFoundError:
-        from tools.carla_lane_oracle import border_parser_contracts as border
     border_edge = border.verify(root)
     if border_edge is not None:
         require(border.MODULE not in successors, 'duplicate border parser edge')
@@ -172,12 +174,18 @@ def verify(root):
     contains(seed, 'work._step(60)', 'fixed admission must be prepaid')
     contains(seed, 'work._step(12)', 'local-band retry must be separately prepaid')
     contains(seed, 'for level in range(8):', 'dyadic proposal depth changed')
-    contains(seed, 'if _wide_point_order(point, certificate.point, query) < 0:',
-             'only strict exact point improvement can replace the incumbent')
+    if map_count_edge is not None and live_map_sha256 == seed_count.SCORE_AFTER_SHA256:
+        seed_count.verify_score_live(live_map)
+    else:
+        contains(seed, 'if _wide_point_order(point, certificate.point, query) < 0:',
+                 'only strict exact point improvement can replace the incumbent')
     contains(seed, 'work.charge(0, point_work, node_cost)',
              'scalar proposal work must be charged')
-    contains(room, 'var winner_followup = len(winner.cells) + 12',
-             'winner continuation reserve changed')
+    winner_followup = 'var winner_followup = len(winner.cells) + 12'
+    if map_count_edge is not None and live_map_sha256 in {
+            seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256}:
+        winner_followup = 'var winner_followup = min(len(winner.cells), 16373) + 12'
+    contains(room, winner_followup, 'winner continuation reserve changed')
     contains(room, 'var target_followup = target_cells + 12',
              'competitor continuation reserve changed')
     contains(room, 'var winner_units = proof_nodes + 255 + 50',
@@ -187,7 +195,11 @@ def verify(root):
     selector = guard.declaration(live_map, '_closest_lane_certificate_with_work', ('Map',))
     require('Exact lane witnesses have inconsistent dominance' not in selector,
             'reviewed redundant exact guard reappeared')
+    # source_bound_helpers counts the four immutable historical seed helpers.
+    # Report the separately bound numerical extraction without rewriting that count.
     return {'status': 'PASS', 'source_bound_helpers': 4,
+            'numerical_score_helpers': int(map_count_edge is not None and
+                                          live_map_sha256 == seed_count.SCORE_AFTER_SHA256),
             'fresh_environment_entries': 2, 'changed_map_dependency_groups': 3,
             'canonical_dependencies_unchanged': len(record['canonical_source_unchanged']) - len(successors),
             'reviewed_cleanup_successors': len(successors),

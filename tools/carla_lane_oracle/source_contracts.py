@@ -52,11 +52,23 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def tokens(text):
+@lru_cache(maxsize=32)
+def _token_snapshot(text):
+    """Cache only lexical output for exact immutable text, never validation.
+
+    TokenInfo is an immutable named tuple; its fields are strings, integers,
+    and coordinate tuples. The bounded snapshot therefore has no mutable parts.
+    """
     try:
-        return list(tokenize.generate_tokens(io.StringIO(text).readline))
+        return tuple(tokenize.generate_tokens(io.StringIO(text).readline))
     except (tokenize.TokenError, IndentationError) as error:
         raise ValueError('invalid source tokens: ' + str(error)) from error
+
+
+def tokens(text):
+    # Preserve a fresh mutable outer list for every caller. Filesystem reads,
+    # production discovery and all proof comparisons still run on each call.
+    return list(_token_snapshot(text))
 
 
 @lru_cache(maxsize=128)
@@ -118,20 +130,20 @@ def verify_group(root, group):
         text = (root / path).read_text(encoding='utf-8')
         checked = text
         if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:
-            try:
+            if __package__:
+                from . import cache_key_contracts as cache_key
+            else:
                 import cache_key_contracts as cache_key
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import cache_key_contracts as cache_key
             try:
                 checked = cache_key.predecessor_source(root)
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error
         elif path == PREFIX + 'map.mojo' and token_sha256(text) != pins['groups'][group][path]:
-            try:
+            if __package__:
+                from . import seed_count_contracts as seed_count
+            else:
                 import seed_count_contracts as seed_count
-            except ModuleNotFoundError:
-                from tools.carla_lane_oracle import seed_count_contracts as seed_count
             try:
                 checked = seed_count.reviewed_text(root, path, text)
             except (ValueError, OSError) as error:
