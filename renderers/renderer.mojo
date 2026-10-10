@@ -4060,22 +4060,27 @@ def _emit_wide_line(
     for task in range(tasks):  # pragma: no branch
         if failures[task]:
             raise Error(failures[task])
+    # A draw shares one surface per facing. Each run made its own, at
+    # most one a facing, from its first corner that faced that way. Keep
+    # the earliest run's for each facing, in the order one run makes
+    # them, and let every corner name the kept one. A run whose every
+    # segment was cut away holds none.
+    var kept = List[Int](length=2 * tasks, fill=-1)
+    for task in range(tasks):  # pragma: no branch
+        for own in range(len(outputs[task].surfaces)):  # pragma: no branch
+            kept[2 * task + own] = _adopt(corners, outputs[task], own)
     # Place each run's corners in parallel, as `_emit_jobs` does: one
-    # copy each, with each corner's surface moved past the earlier runs'.
+    # copy each, with each corner's surface renamed to the kept one.
     var starts = List[Int](length=tasks, fill=len(corners))
-    var shifts = List[Int](length=tasks, fill=len(corners.surfaces))
     for task in range(1, tasks):  # pragma: no branch
         starts[task] = starts[task - 1] + len(outputs[task - 1])
-        shifts[task] = shifts[task - 1] + len(outputs[task - 1].surfaces)
     corners.corners.resize(
         unsafe_uninit_length=starts[tasks - 1] + len(outputs[tasks - 1])
     )
-    for task in range(tasks):  # pragma: no branch
-        corners.surfaces.extend(outputs[task].surfaces.copy())
     var copies = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         copies.create_task(
-            _place_corners(
+            _place_renamed(
                 outputs[task]
                 .corners.unsafe_ptr()
                 .unsafe_origin_cast[MutAnyOrigin](),
@@ -4083,14 +4088,13 @@ def _emit_wide_line(
                 .unsafe_offset(starts[task])
                 .unsafe_origin_cast[MutAnyOrigin](),
                 len(outputs[task]),
-                shifts[task],
+                kept[2 * task],
+                kept[2 * task + 1],
             )
         )
     copies.wait()
     # The copies read the runs through pointers the compiler cannot see.
     _ = len(outputs)
-    # What is appended next starts a surface of its own.
-    corners.new_surface()
 
 
 # A run holds at least this many segments, so a short line stays serial.
@@ -5199,6 +5203,58 @@ async def _place_corners(
     var index = 0
     while index < count:
         destination[unsafe_offset=index].surface += shift
+        index += 1
+
+
+def _adopt(mut corners: _Slim, run: _Slim, own: Int) -> Int:
+    """Return the surface that stands for a run's surface `own`.
+
+    The run is a part of the current draw that was built in a list of its
+    own. When the draw has no surface yet for that facing, the run's
+    surface becomes it, as `_Slim.append` makes one.
+
+    Args:
+        corners: The frame's list, which the draw is appended to.
+        run: The part of the draw.
+        own: A surface of the run, by its index there.
+
+    Returns:
+        The surface of `corners` that the run's corners name.
+    """
+    var turned = own == run.back_surface
+    var surface = corners.back_surface if turned else corners.front_surface
+    if surface < 0:
+        surface = len(corners.surfaces)
+        corners.surfaces.append(run.surfaces[own])
+        if turned:
+            corners.back_surface = surface
+        else:
+            corners.front_surface = surface
+    return surface
+
+
+async def _place_renamed(
+    source: MutPointer[Corner, MutAnyOrigin],
+    destination: MutPointer[Corner, MutAnyOrigin],
+    count: Int,
+    first: Int,
+    second: Int,
+):
+    """Copy one run's corners into their place, renaming its surfaces.
+
+    Args:
+        source: The run's own corners.
+        destination: Where its corners go in the frame's list.
+        count: How many corners it holds.
+        first: The frame's surface that the run's surface 0 becomes.
+        second: The frame's surface that the run's surface 1 becomes.
+    """
+    unsafe_memcpy(dest=destination, src=source, count=count)
+    # A run whose every segment was cut away holds none.
+    var index = 0
+    while index < count:
+        var own = destination[unsafe_offset=index].surface
+        destination[unsafe_offset=index].surface = first if own == 0 else second
         index += 1
 
 

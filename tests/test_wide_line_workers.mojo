@@ -20,7 +20,7 @@ from objects.line_segments2 import (
 )
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import RasterVertex
-from renderers.renderer import Renderer, WIDE_RUN_SEGMENTS
+from renderers.renderer import Frame, Renderer, WIDE_RUN_SEGMENTS
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import Length, METER
 
@@ -37,7 +37,9 @@ def _camera() raises -> OrthographicCamera:
     return camera^
 
 
-def _points(long_last: Bool = False) -> List[Vector3]:
+def _points(
+    long_last: Bool = False, hidden_first: Bool = False
+) -> List[Vector3]:
     # Short zig-zag segments over the view, some off its edges.
     var points = List[Vector3]()
     for s in range(SEGMENTS):
@@ -48,17 +50,41 @@ def _points(long_last: Bool = False) -> List[Vector3]:
     if long_last:
         # The last run ends with one long segment.
         points[2 * SEGMENTS - 1] = Vector3(100.0, 100.0, 0)
+    if hidden_first:
+        # The first run's segments are all behind the camera, so that run
+        # draws nothing and a later run makes the line's surface.
+        for s in range(2 * WIDE_RUN_SEGMENTS):
+            points[s] = Vector3(points[s].x, points[s].y, 10.0)
     return points^
 
 
 def _scene(
-    coverage: LineCoverage, dash: Float32, long_last: Bool = False
+    coverage: LineCoverage,
+    dash: Float32,
+    long_last: Bool = False,
+    hidden_first: Bool = False,
 ) raises -> Tuple[Scene, Assets]:
     var scene = Scene()
     var assets = Assets()
     var node = scene.add(Object3D())
+    # A short dashed line of its own material comes first, so the long
+    # line's surfaces do not start at zero and each run's are renumbered.
+    var lead = assets.geometries.add(
+        line_segments_geometry([Vector3(-0.9, 0.8, 0), Vector3(0.9, 0.7, 0.2)])
+    )
+    var lead_style = line_material(
+        Color(40, 200, 120),
+        LineWidth(pixels=5),
+        dash_size=Length(0.07, METER),
+        gap_size=Length(0.05, METER),
+        blending=OPAQUE,
+    )
+    # A surface field the long line does not share.
+    lead_style.alpha_test = 0.25
+    var lead_material = assets.materials.add(lead_style^)
+    scene.add_wide_line(LineSegments2(lead, lead_material, node))
     var geometry = assets.geometries.add(
-        line_segments_geometry(_points(long_last))
+        line_segments_geometry(_points(long_last, hidden_first))
     )
     var opacity = Float32(0.65) if coverage == STRAND_LINE_COVERAGE else 1.0
     var material = assets.materials.add(
@@ -84,11 +110,35 @@ def _render(scene: Scene, assets: Assets, workers: Int) raises -> Framebuffer:
     return renderer.render(scene, assets, _camera())
 
 
-def _corners(
-    scene: Scene, assets: Assets, workers: Int
-) raises -> List[RasterVertex]:
+def _frame(scene: Scene, assets: Assets, workers: Int) raises -> Frame:
     var renderer = Renderer(SIZE, SIZE, workers=workers)
-    return renderer.prepare_frame(scene, assets, _camera()).whole_corners()
+    return renderer.prepare_frame(scene, assets, _camera())
+
+
+def _same_surfaces(one: Frame, many: Frame) raises:
+    # The slim lists themselves: each corner names the same surface, and
+    # each surface holds the same draw state.
+    assert_equal(len(one.corners), len(many.corners))
+    for i in range(len(one.corners)):
+        assert_equal(one.corners[i].surface, many.corners[i].surface)
+    assert_equal(len(one.surfaces), len(many.surfaces))
+    var tests = List[Float32]()
+    for i in range(len(one.surfaces)):
+        ref a = one.surfaces[i]
+        ref b = many.surfaces[i]
+        assert_true(a.blend == b.blend)
+        assert_true(a.kind == b.kind)
+        assert_true(a.texture == b.texture)
+        assert_equal(a.alpha_test, b.alpha_test)
+        assert_equal(a.dash_size, b.dash_size)
+        assert_equal(a.gap_size, b.gap_size)
+        assert_equal(a.fog, b.fog)
+        assert_equal(a.flip_sided, b.flip_sided)
+        assert_equal(a.receives_shadow, b.receives_shadow)
+        if a.alpha_test not in tests:
+            tests.append(a.alpha_test)
+    # The lead line's surface and the long line's are both there.
+    assert_equal(len(tests), 2)
 
 
 def _same_corners(one: List[RasterVertex], many: List[RasterVertex]) raises:
@@ -109,20 +159,36 @@ def _same_corners(one: List[RasterVertex], many: List[RasterVertex]) raises:
         assert_equal(a.u, b.u)
         assert_equal(a.v, b.v)
         assert_true(a.world == b.world)
+        assert_true(a.normal == b.normal)
+        assert_equal(a.emissive.r, b.emissive.r)
+        assert_equal(a.emissive.g, b.emissive.g)
+        assert_equal(a.emissive.b, b.emissive.b)
+        assert_equal(a.view_depth, b.view_depth)
+        assert_equal(a.line_distance, b.line_distance)
+        # Joined from the surface: the draw state each corner reads.
+        assert_true(a.blend == b.blend)
+        assert_true(a.kind == b.kind)
+        assert_equal(a.dash_size, b.dash_size)
+        assert_equal(a.gap_size, b.gap_size)
 
 
 def test_many_workers_draw_what_one_draws() raises:
-    # Solid, dashed and strand coverage, each with three runs and a tail.
-    var cases: List[Tuple[LineCoverage, Float32]] = [
-        (SOLID_LINE_COVERAGE, Float32(0)),
-        (SOLID_LINE_COVERAGE, Float32(0.02)),
-        (STRAND_LINE_COVERAGE, Float32(0)),
+    # Solid, dashed and strand coverage, each with three runs and a tail,
+    # after a line with a surface of its own.
+    # The last case cuts away every segment of the first run.
+    var cases: List[Tuple[LineCoverage, Float32, Bool]] = [
+        (SOLID_LINE_COVERAGE, Float32(0), False),
+        (SOLID_LINE_COVERAGE, Float32(0.02), False),
+        (STRAND_LINE_COVERAGE, Float32(0), False),
+        (SOLID_LINE_COVERAGE, Float32(0), True),
     ]
     for choice in cases:
-        var parts = _scene(choice[0], choice[1])
-        var serial = _corners(parts[0], parts[1], 1)
-        assert_true(len(serial) > 0)
-        _same_corners(serial, _corners(parts[0], parts[1], 8))
+        var parts = _scene(choice[0], choice[1], hidden_first=choice[2])
+        var serial = _frame(parts[0], parts[1], 1)
+        var parallel = _frame(parts[0], parts[1], 8)
+        assert_true(len(serial.corners) > 0)
+        _same_surfaces(serial, parallel)
+        _same_corners(serial.whole_corners(), parallel.whole_corners())
         var one = _render(parts[0], parts[1], 1)
         var many = _render(parts[0], parts[1], 8)
         var drawn = 0

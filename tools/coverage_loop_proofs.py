@@ -677,7 +677,7 @@ STRAND_CAP_SOURCES = {
     'renderers/__init__.mojo':
         '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
     'renderers/renderer.mojo':
-        '40a82d7ec8c82ce33c1fdcca4e2ab012eefa1338599864c2f372b1f85ea6bb73',
+        '7e4421e2baa21f7bf1681c3374c02875370b41cd78cba1ef476a007da8be1cf2',
     'objects/line_segments2.mojo':
         '5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79',
     'tests/test_small_loop_witnesses.mojo':
