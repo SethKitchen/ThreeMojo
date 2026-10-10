@@ -247,7 +247,9 @@ def _sample_blend_jet(rate: _Jet, one: Float64, two: Float64) -> _Jet:
     result.first = _intersect_ideal_bounds(result.first, ideal.first)
     result.second = _intersect_ideal_bounds(result.second, ideal.second)
     var coupled_error = _stored_blend_error(rate, one, two)
-    if isfinite(coupled_error) and coupled_error >= 0.0:
+    # The concrete producer returns a nonnegative allowance or infinity.
+    # Keep the finite fallback; a finite negative result is not produced.
+    if isfinite(coupled_error):
         result.error = min(result.error, coupled_error)
     return result
 
