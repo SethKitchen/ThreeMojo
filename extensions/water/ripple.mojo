@@ -8,6 +8,8 @@
 One step is the ripple shader: a damped average of the four neighbors, an
 optional cosine drop, and a fade at the border of the window. The normal
 pass stores height, both slopes and the Laplacian the caustic term reads.
+`sample_ripple` reads the normal texture through `RippleTexels`, so the
+same arithmetic runs on a `RippleField` and on a copy in device memory.
 """
 
 from extensions.water.resolution import require_resolution, SpectrumResolution
@@ -24,7 +26,55 @@ def clearwater_ripple_size() -> Length:
     return Length(7.0)
 
 
-struct RippleField(Movable):
+trait RippleTexels:
+    """Read access to a ripple window's normal texture."""
+
+    def ripple_side(self) -> Int:
+        """Return the texels on one side of the window.
+
+        Returns:
+            The side length.
+        """
+        ...
+
+    def ripple_size(self) -> Float32:
+        """Return the window length, in meters.
+
+        Returns:
+            The world length of one side.
+        """
+        ...
+
+    def ripple_center_x(self) -> Float32:
+        """Return the world x of the window center, in meters.
+
+        Returns:
+            The center x.
+        """
+        ...
+
+    def ripple_center_z(self) -> Float32:
+        """Return the world z of the window center, in meters.
+
+        Returns:
+            The center z.
+        """
+        ...
+
+    def ripple_normal(self, index: Int) -> Float32:
+        """Return one float of the normal texture.
+
+        Args:
+            index: `(y * side + x) * 4 + channel`. Channel 0 is height,
+                1 and 2 are the slopes, and 3 is the Laplacian.
+
+        Returns:
+            The stored float.
+        """
+        ...
+
+
+struct RippleField(Movable, RippleTexels):
     """One ripple window: height, velocity and the normal texture."""
 
     var n: Int
@@ -59,6 +109,50 @@ struct RippleField(Movable):
 
     def _at(self, x: Int, y: Int) -> Int:
         return y * self.n + x
+
+    def ripple_side(self) -> Int:
+        """Return the texels on one side of the window.
+
+        Returns:
+            The side length.
+        """
+        return self.n
+
+    def ripple_size(self) -> Float32:
+        """Return the window length, in meters.
+
+        Returns:
+            The world length of one side.
+        """
+        return self.size
+
+    def ripple_center_x(self) -> Float32:
+        """Return the world x of the window center, in meters.
+
+        Returns:
+            The center x.
+        """
+        return self.center_x
+
+    def ripple_center_z(self) -> Float32:
+        """Return the world z of the window center, in meters.
+
+        Returns:
+            The center z.
+        """
+        return self.center_z
+
+    def ripple_normal(self, index: Int) -> Float32:
+        """Return one float of the normal texture.
+
+        Args:
+            index: `(y * side + x) * 4 + channel`. Channel 0 is height,
+                1 and 2 are the slopes, and 3 is the Laplacian.
+
+        Returns:
+            The stored float.
+        """
+        return self.normal[index]
 
 
 def _clamp_index(i: Int, n: Int) -> Int:
@@ -231,8 +325,13 @@ def _write_normals(mut field: RippleField):
             field.normal[i + 3] = lap
 
 
-def sample_ripple(field: RippleField, x: Float32, z: Float32) -> RippleSample:
+def sample_ripple[
+    R: RippleTexels
+](field: R, x: Float32, z: Float32) -> RippleSample:
     """Sample height, slopes and Laplacian at one world position.
+
+    Parameters:
+        R: The ripple storage.
 
     Args:
         field: A window after at least one step. A calm window is zero.
@@ -243,11 +342,11 @@ def sample_ripple(field: RippleField, x: Float32, z: Float32) -> RippleSample:
         Height, `∂h/∂x`, `∂h/∂z` and Laplacian. Outside the window every
         channel is zero.
     """
-    var u = (x - field.center_x) / field.size + 0.5
-    var v = (z - field.center_z) / field.size + 0.5
+    var u = (x - field.ripple_center_x()) / field.ripple_size() + 0.5
+    var v = (z - field.ripple_center_z()) / field.ripple_size() + 0.5
     if u < 0.0 or v < 0.0 or u > 1.0 or v > 1.0:
         return RippleSample(0.0, 0.0, 0.0, 0.0)
-    var n = field.n
+    var n = field.ripple_side()
     var px = u * Float32(n) - 0.5
     var py = v * Float32(n) - 0.5
     var x0 = Int(floor(px))
@@ -261,8 +360,10 @@ def sample_ripple(field: RippleField, x: Float32, z: Float32) -> RippleSample:
     return _blend_normal(field, x0, y0, x1, y1, fx, fy)
 
 
-def _blend_normal(
-    field: RippleField,
+def _blend_normal[
+    R: RippleTexels
+](
+    field: R,
     x0: Int,
     y0: Int,
     x1: Int,
@@ -270,7 +371,7 @@ def _blend_normal(
     fx: Float32,
     fy: Float32,
 ) -> RippleSample:
-    var n = field.n
+    var n = field.ripple_side()
     var w00 = (1.0 - fx) * (1.0 - fy)
     var w10 = fx * (1.0 - fy)
     var w01 = (1.0 - fx) * fy
@@ -298,7 +399,7 @@ def _blend_normal(
     return RippleSample(h, sx, sz, lap)
 
 
-def _normal_at(
-    field: RippleField, n: Int, x: Int, y: Int, channel: Int
-) -> Float32:
-    return field.normal[(y * n + x) * 4 + channel]
+def _normal_at[
+    R: RippleTexels
+](field: R, n: Int, x: Int, y: Int, channel: Int) -> Float32:
+    return field.ripple_normal((y * n + x) * 4 + channel)

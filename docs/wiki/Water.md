@@ -115,6 +115,16 @@ Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear
 
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 
+## Shader storage
+
+`lit_radiance` shades one view ray. It reads every texture through four traits: `SurfaceTexels`, `RippleTexels`, `CausticTexels` and `PebbleTexels`. The water fields implement them, so `draw` and `compose` call it directly.
+
+A `WaterPack` copies one frame's textures into flat float arrays, with a table of mip levels for each. Its views implement the same traits, and their address space is a parameter. A GPU kernel can read the same arrays in device memory and call `lit_radiance`. A view does not keep its pack alive. Use the pack after the last read through a view.
+
+The CPU and a device shade with the same arithmetic. The sky azimuth uses `atan2_float32` from `math/arc_tangent.mojo`, because a GPU has no libm. The field of view uses the stored bits of the host's `tan(32°)`.
+
+`hash12` rounds each step to Float32 once, so a fused multiply-add cannot change the hash. The CPU hash is unchanged. The sine of a large angle removes whole turns in Float64 first, because a GPU sine is accurate near zero only. A compiler can fuse a multiply and an add differently for each storage type, so the last bits of a pixel can differ.
+
 This extension draws a CPU still. It is not a shared scene-water object or a validated fluid solver. The picture does not establish a real-time frame rate, buoyancy, or engineering fluid accuracy.
 
 ## Cost
