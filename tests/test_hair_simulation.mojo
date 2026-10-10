@@ -332,5 +332,52 @@ def test_guides_only_accepts_later_guides_and_single_points() raises:
     assert_true(moved.now[1] == moved.now[0])
 
 
+def _many(count: Int) raises -> HairGroom:
+    """Return `count` bent hanging guides, each with one follower."""
+    var groom = HairGroom()
+    for s in range(count):  # pragma: no branch
+        var x = Float32(s) * 0.003 - 0.1
+        var guide = _hanging(x, s % 2 == 0)
+        _strand(groom, guide.points)
+        var points = List[Vector3]()
+        for k in range(8):  # pragma: no branch
+            points.append(guide.points[k] + Vector3(0, 0, 0.002))
+        var normals = List[Vector3](length=8, fill=Vector3(0, 1, 0))
+        var depths = List[Float32](length=8, fill=0)
+        var offsets = List[Float32](length=8, fill=0.002)
+        groom.add_follower(points, normals, depths, 1, 2 * s, offsets, offsets)
+    return groom^
+
+
+def test_parallel_passes_equal_one_serial_pass() raises:
+    # Enough strands to give every logical core a run of them.
+    var groom = _many(48)
+    var strands = len(groom)
+    var collider = _collider()
+    var wind = HairWind(Vector3(1, 0, 0.3), 1)
+    for guides_only in [False, True]:
+        var parallel = HairSimulation(groom, guides_only=guides_only)
+        var serial = HairSimulation(groom, guides_only=guides_only)
+        for _ in range(3):  # pragma: no branch
+            parallel.step(collider, wind)
+            serial._step_strands(collider, wind, 0, strands)
+            if guides_only:
+                serial._lay_strands(0, strands)
+            serial.frame += 1
+        assert_true(parallel.now == serial.now)
+        assert_true(parallel.previous == serial.previous)
+        var written = _many(48)
+        parallel.write(written)
+        var expected = _many(48)
+        for index in range(len(serial.now)):  # pragma: no branch
+            expected.points[index] = serial.now[index]
+        serial._write_strands(expected, 0, strands)
+        assert_true(written.points == expected.points)
+        assert_true(written.normals == expected.normals)
+        assert_equal(written.depths, expected.depths)
+        # The hair did move, so the comparison is not of rest poses.
+        assert_true(written.points != groom.points)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
