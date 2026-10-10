@@ -141,6 +141,7 @@ The [acceleration report](https://github.com/SethKitchen/ThreeMojo/blob/main/doc
 
 `bench/physics_ccd_bench.mojo` times the steps.
 `bench/physics_ccd_index_bench.mojo` times the triangle index.
+`bench/physics_ccd_walker_bench.mojo` times rotation-locked capsule walkers and spinning anisotropic spheres on a terrain. See [the walker report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ccd-walker-728.md).
 
 Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
 
