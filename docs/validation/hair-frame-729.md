@@ -1,6 +1,6 @@
 # A 1080p strand-hair frame by stage (#729)
 
-This report measures one 1920 x 1080 frame of the default groom, as [issue 729](https://github.com/SethKitchen/ThreeMojo/issues/729) asks, split from [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298). A frame takes about 0.79 seconds on the CPU, about 47 times the 16.667 millisecond budget. Building and drawing the strand triangles takes almost all of it. The GPU path did not finish three frames at 240 x 135 within this machine's one-minute GPU limit, and no 1080p GPU run was attempted. Issue 729 stays open: it asks for post-warm-up 1080p samples on both rasterizers.
+This report measures one 1920 x 1080 frame of the default groom, as [issue 729](https://github.com/SethKitchen/ThreeMojo/issues/729) asks, split from [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298). A frame takes about 0.79 seconds on the CPU, about 47 times the 16.667 millisecond budget. Building and drawing the strand triangles takes almost all of it. The GPU path did not finish three frames at 240 x 135 within this machine's one-minute GPU limit, and no 1080p GPU run was attempted. The owner closed issue 729 on this evidence: the CPU breakdown at 1080p, and the GPU result that shows the device rasterizer cannot draw strand hair at an interactive rate. GPU strand rasterization stays with [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298).
 
 ## Method
 
@@ -60,5 +60,5 @@ The run was stopped at 60 seconds, during the third frame, so there are no post-
 ## Decisions
 
 - **Drawing the strands is the bottleneck.** The hair stages take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds after #732.
-- **The GPU rasterizer does not suit strand hair.** Its per-pixel walk over every primitive, and the per-draw upload, cost seconds at a small size. A 1080p GPU frame needs tiled binning or a strand-specific path first. Issue 729 stays open for that evidence.
+- **The GPU rasterizer does not suit strand hair.** Its per-pixel walk over every primitive, and the per-draw upload, cost seconds at a small size. A 1080p GPU frame needs tiled binning or a strand-specific path first. That work belongs to issue 298.
 - **No 1080p, 60 frames-per-second claim is made.** These numbers describe this machine.
