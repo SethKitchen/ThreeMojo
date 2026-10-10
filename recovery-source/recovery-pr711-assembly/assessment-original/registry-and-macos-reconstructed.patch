@@ -1,0 +1,58 @@
+--- a/tools/native_test_support.py
++++ b/tools/native_test_support.py
+@@ -22,6 +22,7 @@
+ 
+ FIXTURES = {
+     'tests/test_carla_sum2_environment.mojo': ('tools/fixtures/carla_sum2_fp_state.c',),
++    'tests/test_carla_full_audit_domains.mojo': ('tools/fixtures/carla_sum2_fp_state.c',),
+ }
+ C_FLAGS = ('-std=c11', '-O2', '-fPIC', '-Wall', '-Wextra', '-Werror')
+ 
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -311,10 +311,12 @@
+       fail-fast: false
+       matrix:
+         include:
+-          - part: suites 1/2
+-            target: test-cpu SHARD=1/2
+-          - part: suites 2/2
+-            target: test-cpu SHARD=2/2
++          - part: suites 1/3
++            target: test-cpu SHARD=1/3
++          - part: suites 2/3
++            target: test-cpu SHARD=2/3
++          - part: suites 3/3
++            target: test-cpu SHARD=3/3
+ 
+     steps:
+       - uses: actions/checkout@v4
+--- a/tools/test_ci_policy.py
++++ b/tools/test_ci_policy.py
+@@ -81,6 +81,26 @@
+         for name in ('lint', 'cpu', 'coverage-capture', 'coverage'):
+             with self.subTest(job=name):
+                 self.assertNotRegex(self.jobs[name], r'\bJOBS\s*=')
++
++    def test_macos_cpu_partitions_all_suites_across_three_jobs(self):
++        job = self.jobs['cpu-macos']
++        matrix = re.search(r'^      matrix:\n(.*?)^    steps:', job,
++                           re.MULTILINE | re.DOTALL)
++        self.assertIsNotNone(matrix)
++        self.assertEqual(re.findall(r'^        ([\w-]+):', matrix.group(1),
++                                    re.MULTILINE), ['include'])
++        entries = re.findall(
++            r'^          - part: (.+)\n            target: (.+)$',
++            job, re.MULTILINE,
++        )
++        self.assertEqual(entries, [
++            ('suites 1/3', 'test-cpu SHARD=1/3'),
++            ('suites 2/3', 'test-cpu SHARD=2/3'),
++            ('suites 3/3', 'test-cpu SHARD=3/3'),
++        ])
++        self.assertIn('fail-fast: false', job)
++        self.assertRegex(job, r'(?m)^    timeout-minutes: 150$')
++        self.assertIn('run -- ${{ matrix.target }} JOBS=1', job)
+ 
+     def test_linux_cpu_compilers_use_one_thread_without_changing_the_suites(self):
+         job = self.jobs['cpu']

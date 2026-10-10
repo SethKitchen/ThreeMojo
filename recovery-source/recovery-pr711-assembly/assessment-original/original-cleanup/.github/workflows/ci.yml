@@ -1,0 +1,579 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+# Runs checks on main pushes, manual runs and pull requests ready for review.
+# Draft pull-request events start no runner jobs until the PR is marked ready.
+#
+# GitHub's hosted runners have no accelerator. The gpu-host job installs MAX,
+# compiles every GPU entry point for sm_80, and runs the host-only suites.
+# Compilation catches device-suite type errors without opening a device.
+# Device execution and CPU/GPU parity still need a machine with a GPU;
+# `make check-gpu` is absent here because it would skip that hardware work.
+#
+# Every make runs with `-B`, which forces each recipe regardless of the build
+# cache. A cache hit from a previous commit is precisely what CI must not
+# honor.
+
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    # Native stacks match this filter on their ultimate base. Each job
+    # also checks the direct PR base, so intermediate layers stay idle.
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# Pull requests and main pushes use directed input selection. A manual run
+# is the explicit full audit. The scope job records exact inventories; the
+# final check rejects failed, cancelled, missing or unexpectedly skipped jobs.
+env:
+  MODULAR_TELEMETRY_ENABLED: "false"
+
+jobs:
+  scope:
+    name: select affected checks
+    if: github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      selection: ${{ steps.plan.outputs.selection }}
+      run_lint: ${{ steps.plan.outputs.lint }}
+      run_tools: ${{ steps.plan.outputs.tools }}
+      run_native: ${{ steps.plan.outputs.native }}
+      run_cpu: ${{ steps.plan.outputs.cpu }}
+      run_coverage: ${{ steps.plan.outputs.coverage }}
+      run_gpu: ${{ steps.plan.outputs.gpu }}
+      run_docs: ${{ steps.plan.outputs.docs }}
+      run_coverage_tools: ${{ steps.plan.outputs.coverage_tools }}
+      run_portability: ${{ steps.plan.outputs.portability }}
+      run_export: ${{ steps.plan.outputs.export }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Select relevant checks
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+        run: |
+          if [ "$EVENT" = workflow_dispatch ]; then
+            python3 tools/ci_scope.py plan --full
+          elif [ "$EVENT" = pull_request ]; then
+            python3 tools/ci_scope.py plan --base "$PR_BASE"
+          else
+            python3 tools/ci_scope.py plan --base "$PUSH_BASE"
+          fi
+      - name: Preserve exact check selection
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/ci-selection.json
+          include-hidden-files: true
+          if-no-files-found: error
+          overwrite: true
+          retention-days: 1
+
+  # A check waits for its slowest job, and a job's time is almost all
+  # compilation on a four-core runner. So the suites are split over runners
+  # that work at once, `make ... SHARD=i/n`, each group balanced by the
+  # source its suites import; see tools/shard.py. Everything that is not a
+  # suite runs whole, in the lint job. The splits are sized so that no group
+  # outlasts the lint job by much.
+  lint:
+    needs: scope
+    if: needs.scope.outputs.run_lint == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: lint (standard library only)
+    runs-on: ubuntu-latest
+    # A hang detector, not a speed target: lint alone once ran an hour.
+    timeout-minutes: 120
+
+    steps:
+      # The whole history, so that the merge base with the base branch exists.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Python interpreter
+        run: |
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+
+      - name: Install Mojo only for selected native checks
+        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
+        run: |
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      - name: Python tooling regressions
+        if: needs.scope.outputs.run_tools == 'true'
+        run: python3 tools/ci_scope.py run -- test-tools
+
+      - name: lint
+        if: needs.scope.outputs.run_native == 'true'
+        run: |
+          python3 tools/ci_scope.py run -- fmt-check
+          python3 tools/ci_scope.py run -- lint-cpu LINT_CPU_BUILD_FLAGS="--target-triple=x86_64-unknown-linux-gnu --target-cpu=x86-64-v3" LINT_CPU_PROGRESS=1
+          python3 tools/ci_scope.py run -- compile-fail
+
+      - name: Coverage protocol and proof regressions
+        if: needs.scope.outputs.run_coverage_tools == 'true'
+        run: python3 tools/ci_scope.py run -- test-coverage-tool
+
+      - name: Portability contracts
+        if: needs.scope.outputs.run_portability == 'true'
+        run: python3 tools/ci_scope.py run -- test-portability
+
+      - name: Documentation
+        if: needs.scope.outputs.run_docs == 'true'
+        run: python3 tools/ci_scope.py run -- docs-check
+
+      # Only the offline CARLA exporter fixture needs these two packages.
+      # Keep its exact wheels in a separate environment from Mojo/MAX.
+      - name: Test CARLA far-asset baking
+        if: needs.scope.outputs.run_export == 'true'
+        run: |
+          uv venv .venv-carla-export --python .venv/bin/python
+          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
+
+  cpu:
+    needs: scope
+    if: needs.scope.outputs.run_cpu == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: test-cpu ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      - name: Compiler identity and effective target
+        run: .venv/bin/python tools/compiler_metadata.py > compiler-metadata.json
+
+      - name: Preserve compiler metadata before CPU compilation
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-metadata-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: compiler-metadata.json
+          if-no-files-found: error
+          retention-days: 1
+
+      # The native window's suite starts its own X server. Xvfb draws in
+      # memory, so the runner needs no display.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: test-cpu
+        env:
+          THREEMOJO_COMPILER_TELEMETRY: "1"
+        # Keep suite parallelism and compiler threads; use one portable CPU target.
+        run: python3 tools/ci_scope.py run -- test-cpu SHARD=${{ matrix.shard }}/3 MOJOFLAGS="-I . --num-threads 1 --target-triple=x86_64-unknown-linux-gnu --target-cpu=x86-64-v3"
+
+  # The same check on Apple Silicon. Months of work on Linux alone let three
+  # suites break on a Mac without a sign: a pseudo-terminal there holds far
+  # less, Xlib lives in another folder under another name, and Apple's libm
+  # rounds a cosine differently from glibc.
+  #
+  # `macos-latest` is a standard runner, which GitHub runs free for a public
+  # repository. A larger one (`-large`, `-xlarge`) is billed even here, so
+  # these jobs must not move to one. A free account runs five macOS jobs at
+  # once, so the Mac takes three: lint, and the suites in two groups.
+  lint-macos:
+    needs: scope
+    if: needs.scope.outputs.run_lint == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: check-cpu (macOS, Apple Silicon) lint
+    runs-on: macos-latest
+    # A hang detector, not a speed target: lint alone once ran an hour.
+    timeout-minutes: 150
+
+    steps:
+      # The whole history, so that the merge base with the base branch exists.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Python interpreter
+        run: |
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+
+      - name: Install Mojo only for selected native checks
+        if: needs.scope.outputs.run_native == 'true' || needs.scope.outputs.run_docs == 'true' || needs.scope.outputs.run_coverage_tools == 'true' || needs.scope.outputs.run_portability == 'true'
+        run: |
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      - name: Python tooling regressions
+        if: needs.scope.outputs.run_tools == 'true'
+        run: python3 tools/ci_scope.py run -- test-tools
+
+      - name: lint
+        if: needs.scope.outputs.run_native == 'true'
+        run: |
+          python3 tools/ci_scope.py run -- fmt-check JOBS=1
+          python3 tools/ci_scope.py run -- lint-cpu JOBS=1
+          python3 tools/ci_scope.py run -- compile-fail JOBS=1
+
+      - name: Coverage protocol and proof regressions
+        if: needs.scope.outputs.run_coverage_tools == 'true'
+        run: python3 tools/ci_scope.py run -- test-coverage-tool JOBS=1
+
+      - name: Portability contracts
+        if: needs.scope.outputs.run_portability == 'true'
+        run: python3 tools/ci_scope.py run -- test-portability JOBS=1
+
+      - name: Documentation
+        if: needs.scope.outputs.run_docs == 'true'
+        run: python3 tools/ci_scope.py run -- docs-check
+
+      # Only the offline CARLA exporter fixture needs these two packages.
+      # Keep its exact wheels in a separate environment from Mojo/MAX.
+      - name: Test CARLA far-asset baking
+        if: needs.scope.outputs.run_export == 'true'
+        run: |
+          uv venv .venv-carla-export --python .venv/bin/python
+          uv pip install --python .venv-carla-export/bin/python --only-binary :all: "numpy==2.3.5" "Pillow==12.3.0"
+          .venv-carla-export/bin/python -m unittest discover -s assets/carla/tools/export -p 'test_build_towns.py'
+
+  cpu-macos:
+    needs: scope
+    if: needs.scope.outputs.run_cpu == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: check-cpu (macOS, Apple Silicon) ${{ matrix.part }}
+    runs-on: macos-latest
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - part: suites 1/3
+            target: test-cpu SHARD=1/3
+          - part: suites 2/3
+            target: test-cpu SHARD=2/3
+          - part: suites 3/3
+            target: test-cpu SHARD=3/3
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Python interpreter
+        run: |
+          # Use upstream CPython without distro hooks or loader overrides.
+          uv python install --no-bin 3.12.14
+          PYTHON="$(uv python find --managed-python --no-project 3.12.14)"
+          echo "$(dirname "$PYTHON")" >> "$GITHUB_PATH"
+          # uv venv installs an import hook; proof-bearing environments cannot.
+          "$PYTHON" -m venv --without-pip --prompt ThreeMojo .venv
+          uv pip install --python .venv/bin/python "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # Homebrew's X server brings Xvfb and the Xlib the window loads.
+      - name: Install Xvfb
+        run: brew install xorg-server
+
+      # Serialize outer compiler processes to limit oversubscription while
+      # preserving every check and the per-test time limit.
+      - name: check-cpu
+        run: python3 tools/ci_scope.py run -- ${{ matrix.target }} JOBS=1
+
+
+  # Coverage runs beside the suites rather than after them, and is split the
+  # same way: each runner instruments the tree and captures its group of
+  # suites, and the `coverage` job gathers every capture and reports. The
+  # report gates on line, branch, condition and MC/DC, and on a capture from
+  # every suite.
+  #
+  # COV_BUDGET is raised well above its local default of one second per
+  # suite, which was tuned on a fast many-core machine to catch the
+  # instrumenter sending the compiler superlinear. A four-core hosted runner
+  # exceeds that while behaving perfectly. Here it is only a hang detector:
+  # 300, 900, 3600 and 6000 each became the ceiling as the library grew,
+  # with every suite still progressing, and a genuine hang blows through
+  # any of them. The groups are balanced by each suite's measured capture
+  # time in tools/coverage_costs.json. With the animals, six groups came
+  # to about 5600 seconds each, and one hosted runner took a quarter
+  # longer than another on the same group. Eight groups bring most to
+  # about 4600 seconds; the longest single suites set the rest. 9000
+  # leaves room for that spread inside the 170-minute job timeout.
+  coverage-capture:
+    needs: scope
+    if: needs.scope.outputs.run_coverage == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: coverage capture ${{ matrix.shard }}/8
+    runs-on: ubuntu-latest
+    # Same immutable Python/native-compiler image for every shard and report.
+    # Exact content identities remain mandatory; runner-image drift is not accepted.
+    container: python:3.12.14-bookworm@sha256:dbbe4ceb97851e2e5fa83798b239811f871cb743b259ba3563737349f6bcfaa0
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 170
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          python3 -m venv --prompt ThreeMojo .venv
+          .venv/bin/python -m pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # The native window's suite runs under coverage too.
+      - name: Install Xvfb
+        run: apt-get update && apt-get install -y --no-install-recommends xvfb libx11-6
+
+      # Linux-only private probe profile; raw/JIT remains available locally.
+      # Keep the full suite inventory and the original group deadline.
+      - name: capture
+        run: |
+          python3 tools/ci_scope.py run -- coverage-instrument
+          python3 tools/ci_scope.py run -- coverage-capture SHARD=${{ matrix.shard }}/8 COV_BUDGET=9000 COV_PROFILE=aot-hits
+
+      # Compressed as captured, so a group's streams are megabytes, not the
+      # gigabytes the raw probes would be. Nothing to upload when no measured
+      # module is affected.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-hits-${{ matrix.shard }}
+          path: coverage/build/hits/
+          if-no-files-found: ignore
+          retention-days: 1
+
+      # Failed captures retain their partial streams and stdout for diagnosis.
+      # These are not successful coverage inputs for the report job.
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: coverage-diagnostics-${{ matrix.shard }}
+          path: coverage/build/hits/
+          if-no-files-found: ignore
+          retention-days: 1
+
+  coverage:
+    needs: [scope, coverage-capture]
+    if: needs.scope.outputs.run_coverage == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: coverage
+    runs-on: ubuntu-latest
+    # Same immutable Python/native-compiler image for every shard and report.
+    # Exact content identities remain mandatory; runner-image drift is not accepted.
+    container: python:3.12.14-bookworm@sha256:dbbe4ceb97851e2e5fa83798b239811f871cb743b259ba3563737349f6bcfaa0
+    defaults:
+      run:
+        shell: bash
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          python3 -m venv --prompt ThreeMojo .venv
+          .venv/bin/python -m pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # The same tree the groups instrumented, then every group's captures
+      # in it, then the report.
+      - name: instrument
+        run: python3 tools/ci_scope.py run -- coverage-instrument
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-hits-*
+          path: coverage/build/hits/
+          merge-multiple: true
+
+      - name: report
+        run: python3 tools/ci_scope.py run -- coverage-report
+
+  # Compile the GPU entry points, including the device suite and benchmark,
+  # with an explicit target so no physical accelerator is needed. Then run
+  # the host-only layout suites. This does not check device execution or
+  # CPU/GPU parity. Both steps need the pinned MAX package.
+  gpu-host:
+    needs: scope
+    if: needs.scope.outputs.run_gpu == 'true'
+    env:
+      CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+    name: test-gpu-host (MAX, no GPU)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain and MAX
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0" "max==26.6.0"
+          .venv/bin/mojo --version
+
+      - name: compile-gpu (sm_80, no execution)
+        run: python3 tools/ci_scope.py run -- compile-gpu JOBS=1 MOJOFLAGS="-I . --target-accelerator=sm_80"
+
+      - name: test-gpu-host
+        run: python3 tools/ci_scope.py run -- test-gpu-host
+
+      - name: check-gpu-air (Metal AIR, no GPU)
+        run: python3 tools/ci_scope.py run -- check-gpu-air
+
+  required:
+    name: check required
+    if: always() && (github.event_name != 'pull_request' || (github.event.pull_request.draft == false && github.event.pull_request.base.ref == 'main'))
+    needs: [scope, lint, cpu, lint-macos, cpu-macos, coverage-capture, coverage, gpu-host]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore exact check selection
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-selection
+          path: .cache/
+      - name: Require every applicable check
+        env:
+          CI_SELECTION_SHA256: ${{ needs.scope.outputs.selection }}
+          CI_NEEDS: ${{ toJSON(needs) }}
+        run: python3 tools/ci_scope.py aggregate
+
+  # The wiki is generated from docs/wiki/ so the two cannot drift. GitHub
+  # creates the wiki repository when its first page is saved in the browser;
+  # until then this job warns and does nothing, so a missing wiki does not
+  # fail a push that passed every check.
+  wiki:
+    name: publish wiki
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.required.result == 'success'
+    needs: required
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Copy docs/wiki to the GitHub wiki
+        run: |
+          if ! git clone --depth 1 "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.wiki.git" wiki; then
+            echo "::warning::The wiki repository does not exist yet. Save its first page in the browser once; docs/wiki/ is published on the next push."
+            exit 0
+          fi
+          rm -f wiki/*.md
+          cp docs/wiki/*.md wiki/
+          mkdir -p wiki/out
+          cp -f out/*.png wiki/out/ 2>/dev/null || true
+          cd wiki
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Wiki already up to date."
+            exit 0
+          fi
+          git commit -m "Publish docs/wiki from ${{ github.sha }}"
+          git push
