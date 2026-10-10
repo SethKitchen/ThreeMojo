@@ -1392,89 +1392,68 @@ struct WaterScene(Movable):
         bed: PebbleBed,
     ) raises -> Int:
         # Both public paths resolve exactly one view before any image writes.
-        ref p = projection.elements
-        if p[11] != -1.0 or p[8] != 0.0 or p[9] != 0.0:
-            raise Error("Water composition needs a centered perspective camera")
-        var world = view
-        world.invert()
-        ref w = world.elements
-        var above = w[13] - water_level.value
-        if not (above > 0.0):
-            raise Error("The camera must be above the water")
-        # Scale the basis so the fixed Clearwater field of view in `_ray`
-        # reproduces this camera's projection exactly.
-        var tan_f = _TAN_HALF_FOV
-        var aspect = Float32(image.width) / Float32(image.height)
-        var sx = (1.0 / p[0]) / (aspect * tan_f)
-        var sy = (1.0 / p[5]) / tan_f
-        var look = CameraLook(
-            -w[8],
-            -w[9],
-            -w[10],
-            w[0] * sx,
-            w[1] * sx,
-            w[2] * sx,
-            w[4] * sy,
-            w[5] * sy,
-            w[6] * sy,
-            w[12],
-            above,
-            w[14],
-        )
-        var clip = projection
-        clip.multiply(view)
+        var plan = _compose_plan(image, projection, view, water_level)
         var surface = self._surface()
         var caustics = self._caustics(surface)
-        var clock = self.clock
-        var width = image.width
-        var height = image.height
+        var shown = self._compose_depth(image, plan, surface)
+        var hdr = _radiance_image(
+            plan.look,
+            plan.aspect,
+            surface,
+            self._ripples,
+            caustics,
+            bed,
+            self.clock,
+            self.sun,
+            image.width,
+            image.height,
+            shown,
+        )
+        return self._compose_write(image, hdr, shown)
+
+    def _compose_depth(
+        self, mut image: Framebuffer, plan: _ComposePlan, surface: SurfaceField
+    ) raises -> List[Bool]:
         # The depth test writes as it goes, so it stays in pixel order.
         # Only the pixels that pass are shaded, in parallel.
+        var width = image.width
+        var height = image.height
+        var look = plan.look
         var shown = List[Bool](length=width * height, fill=False)
         for y in range(height):  # pragma: no branch
             for x in range(width):  # pragma: no branch
                 var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
                 var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-                if _ray(look, ndc_x, ndc_y, aspect).y > -0.0015:
+                if _ray(look, ndc_x, ndc_y, plan.aspect).y > -0.0015:
                     continue
                 var hit = _surface_hit(
-                    look, ndc_x, ndc_y, aspect, surface, self._ripples
+                    look, ndc_x, ndc_y, plan.aspect, surface, self._ripples
                 )
-                var point = Vector3(
-                    w[12] + hit.direction.x * hit.distance,
-                    w[13] + hit.direction.y * hit.distance,
-                    w[14] + hit.direction.z * hit.distance,
-                )
-                var z = clip.transform_point(point).z
+                var point = plan.eye + hit.direction * hit.distance
+                var z = plan.clip.transform_point(point).z
                 if not (z >= -1.0 and z <= 1.0) or not image.test_depth(
                     x, y, z
                 ):
                     continue
                 shown[y * width + x] = True
-        var hdr = _radiance_image(
-            look,
-            aspect,
-            surface,
-            self._ripples,
-            caustics,
-            bed,
-            clock,
-            self.sun,
-            width,
-            height,
-            shown,
-        )
+        return shown^
+
+    def _compose_write(
+        self, mut image: Framebuffer, hdr: List[Float32], shown: List[Bool]
+    ) raises -> Int:
+        # Grade and write each shown pixel, as `draw` grades `LINEAR`.
+        var width = image.width
+        var height = image.height
         var drawn = 0
         for y in range(height):  # pragma: no branch
             for x in range(width):  # pragma: no branch
                 if not shown[y * width + x]:
                     continue
                 var p = (y * width + x) * 3
-                var rgb = Vector3(hdr[p], hdr[p + 1], hdr[p + 2])
                 var graded = grade_pixel(
-                    rgb.x,
-                    rgb.y,
-                    rgb.z,
+                    hdr[p],
+                    hdr[p + 1],
+                    hdr[p + 2],
                     0.0,
                     0.0,
                     0.0,
@@ -1485,7 +1464,7 @@ struct WaterScene(Movable):
                     y,
                     width,
                     height,
-                    clock,
+                    self.clock,
                     LINEAR,
                 )
                 image.set_pixel(
@@ -1550,6 +1529,13 @@ struct WaterScene(Movable):
             height,
             List[Bool](),
         )
+        return self._finish(hdr, width, height, view)
+
+    def _finish(
+        mut self, hdr: List[Float32], width: Int, height: Int, view: WaterView
+    ) raises -> Framebuffer:
+        # Bloom, glare and the tone curve over a frame of linear radiance.
+        var clock = self.clock
         var bright = _highlights(hdr, width, height, 2.5)
         var bloom = _blur(
             _blur(bright, width, height, True), width, height, False
@@ -1580,6 +1566,53 @@ struct WaterScene(Movable):
                     ).quantize(),
                 )
         return image^
+
+
+@fieldwise_init
+struct _ComposePlan(ImplicitlyCopyable):
+    # The scene camera as a Clearwater look, its world position, the
+    # projection-view matrix for depth, and the image aspect.
+    var look: CameraLook
+    var eye: Vector3
+    var clip: Matrix4
+    var aspect: Float32
+
+
+def _compose_plan(
+    image: Framebuffer, projection: Matrix4, view: Matrix4, water_level: Length
+) raises -> _ComposePlan:
+    ref p = projection.elements
+    if p[11] != -1.0 or p[8] != 0.0 or p[9] != 0.0:
+        raise Error("Water composition needs a centered perspective camera")
+    var world = view
+    world.invert()
+    ref w = world.elements
+    var above = w[13] - water_level.value
+    if not (above > 0.0):
+        raise Error("The camera must be above the water")
+    # Scale the basis so the fixed Clearwater field of view in `_ray`
+    # reproduces this camera's projection exactly.
+    var tan_f = _TAN_HALF_FOV
+    var aspect = Float32(image.width) / Float32(image.height)
+    var sx = (1.0 / p[0]) / (aspect * tan_f)
+    var sy = (1.0 / p[5]) / tan_f
+    var look = CameraLook(
+        -w[8],
+        -w[9],
+        -w[10],
+        w[0] * sx,
+        w[1] * sx,
+        w[2] * sx,
+        w[4] * sy,
+        w[5] * sy,
+        w[6] * sy,
+        w[12],
+        above,
+        w[14],
+    )
+    var clip = projection
+    clip.multiply(view)
+    return _ComposePlan(look, Vector3(w[12], w[13], w[14]), clip, aspect)
 
 
 def render_water(

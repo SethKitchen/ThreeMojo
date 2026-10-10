@@ -64,7 +64,7 @@ FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 # imports `max.gpu.host`, and what imports it inherits the dependency. Leaving
 # them in the default lists meant CPU-only development could not be checked
 # without MAX, and the claim could rot without anything noticing.
-GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo
+GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo extensions/water/gpu.mojo
 # The suites that import render/gpu.mojo but open no device: they flatten
 # vertices, state tables, textures and lights on the host and read the
 # layout back. They need MAX installed and no GPU, so CI runs them with
@@ -74,8 +74,8 @@ GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo
 # assertions among two hundred device failures were not seen.
 GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
                     tests/test_gpu_volume_packing.mojo
-GPU_TESTS        := tests/test_gpu.mojo $(GPU_HOST_TESTS)
-GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo
+GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS)
+GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
 CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
