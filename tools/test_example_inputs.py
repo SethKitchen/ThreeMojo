@@ -19,7 +19,9 @@ class ExampleInputsTests(unittest.TestCase):
             'examples/cube.mojo': 'from core.mesh import draw\n',
             'examples/person.mojo': 'from extensions.person import draw\n',
             'core/__init__.mojo': '',
-            'core/mesh.mojo': 'import colors\n_ = "assets/brick/"\n',
+            # Mojo resolves imports from the example's directory and the
+            # root, not beside core/mesh.mojo, so this import is absolute.
+            'core/mesh.mojo': 'import core.colors\n_ = "assets/brick/"\n',
             'core/colors.mojo': '',
             'extensions/__init__.mojo': '',
             'extensions/person.mojo': 'from core.mesh import draw\n',

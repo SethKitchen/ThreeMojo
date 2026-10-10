@@ -12,7 +12,10 @@ With FILE..., prints the FILEs that the change can affect, in their order:
 
 - A `.mojo` file is affected when it changed, or when it imports an affected
   file, directly or through other files. Imports resolve as Mojo 1.1 resolves
-  them: a module beside the importer first, then the repo root.
+  them: a module beside the compiled entry point first, then the repo root
+  (`-I .`). An imported module does not search its own directory. A module
+  can be compiled from any entry point, so each import keeps every file it
+  can reach from a directory that holds a file defining `main`.
 - A file under `assets/` affects each `.mojo` file whose source quotes a path
   that the asset's path starts with, as `"assets/draco/"` does.
 - A changed test or test helper also selects the library it exercises and
@@ -48,6 +51,8 @@ SKIP_DIRS = {".git", ".venv", ".cache", "out", "coverage/build", "node_modules"}
 FROM_IMPORT = re.compile(r"^\s*from\s+([A-Za-z_][\w.]*)\s+import\s+(.*)$")
 PLAIN_IMPORT = re.compile(r"^\s*import\s+(.*)$")
 QUOTED_ASSET = re.compile(r'"(assets/[^"]*)"')
+# A file Mojo can compile on its own defines `main` at the top level.
+ENTRY_POINT = re.compile(r"^(?:def|fn)\s+main\s*\(", re.MULTILINE)
 
 ALL = "ALL"
 
@@ -149,24 +154,68 @@ def imported_names(source):
     return names
 
 
-def resolve(name, importer, known):
+def entry_directories(sources):
+    """Return the sorted directories that hold a file defining `main`.
+
+    `sources` maps each relative path to its text. Mojo searches the
+    directory of the file it compiles before `-I .`.
+    """
+    return sorted({os.path.dirname(path) for path, source in sources.items()
+                   if ENTRY_POINT.search(source)})
+
+
+def _search(parts, base, known):
+    """Return the files a dotted name reaches under one search root: the
+    package `__init__.mojo` files on the way, and the module if it is
+    there."""
+    prefix = base + "/" if base else ""
+    reached = []
+    for count in range(1, len(parts) + 1):
+        package = prefix + "/".join(parts[:count]) + "/__init__.mojo"
+        if package in known:
+            reached.append(package)
+    module = prefix + "/".join(parts) + ".mojo"
+    if module in known:
+        reached.append(module)
+    return reached
+
+
+def resolve(name, importer, known, entries=None):
     """Return the files a dotted name reaches from an importer: the module
-    and the package `__init__.mojo` files on the way to it."""
+    and the package `__init__.mojo` files on the way to it.
+
+    Mojo searches the compiled entry point's directory and the repo root
+    (`-I .`), never the importer's own directory. `entries` lists the
+    directories the entry point can be in. Without `entries`, the importer
+    is the entry point.
+
+    The result keeps what the name reaches under every one of those roots.
+    A module in the entry directory hides a root module, a package there
+    hides a root package, and a module under a plain directory in both
+    roots is ambiguous. Each of these can change when either root changes,
+    so a selection that uses this result can only grow.
+    """
     parts = name.split(".")
-    importer_dir = os.path.dirname(importer)
-    for base in ([importer_dir] if importer_dir else []) + [""]:
-        prefix = base + "/" if base else ""
-        reached = []
-        for count in range(1, len(parts) + 1):
-            package = prefix + "/".join(parts[:count]) + "/__init__.mojo"
-            if package in known:
-                reached.append(package)
-        module = prefix + "/".join(parts) + ".mojo"
-        if module in known:
-            return reached + [module]
-        if reached and reached[-1] == prefix + "/".join(parts) + "/__init__.mojo":
-            return reached
-    return []
+    if entries is None:
+        entries = [os.path.dirname(importer)]
+    found = []
+    for base in list(entries) + [""]:
+        found.extend(path for path in _search(parts, base, known)
+                     if path not in found)
+    return found
+
+
+def resolver(known, entries):
+    """Return `resolve` for one file set and entry directories, as a
+    function of the name alone that remembers each answer."""
+    answers = {}
+
+    def lookup(name):
+        if name not in answers:
+            answers[name] = resolve(name, "", known, entries)
+        return answers[name]
+
+    return lookup
 
 
 def reachable(seeds, edges):
@@ -204,18 +253,20 @@ def affected_set(changed, reasons=None):
 
     files = mojo_files()
     known = set(files) | {p for p in changed if p.endswith(".mojo")}
-    importers, imports = {}, {}
+    importers, imports, sources = {}, {}, {}
     seeds = {p for p in changed if p.endswith(".mojo")}
     assets = [p for p in changed if p.startswith("assets/")]
     for path in files:
         try:
             with open(os.path.join(ROOT, path), encoding="utf-8") as handle:
-                source = handle.read()
+                sources[path] = handle.read()
         except (OSError, UnicodeError):
             explain(reasons, "a source file could not be read: " + path)
             return ALL
+    lookup = resolver(known, entry_directories(sources))
+    for path, source in sources.items():
         for name in imported_names(source):
-            for target in resolve(name, path, known):
+            for target in lookup(name):
                 if target != path:
                     importers.setdefault(target, set()).add(path)
                     imports.setdefault(path, set()).add(target)
