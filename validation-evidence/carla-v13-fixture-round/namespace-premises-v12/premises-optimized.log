@@ -1,0 +1,11 @@
+test_each_actual_namespace_premise (__main__.NamespacePremises.test_each_actual_namespace_premise) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+NAMESPACE-PREMISES {"cases": [{"actual": true, "expected": true, "path": "owned_negative_namespace/__init__.mojo"}, {"actual": true, "expected": true, "path": "owned_negative_namespace/nested_alpha/quiet.mojo"}, {"actual": true, "expected": true, "path": "owned_negative_namespace/tools/quiet.mojo"}, {"actual": false, "expected": false, "path": "owned_negative_namespace/tests/quiet.mojo"}], "probe_sha256": "0d81206309910579e8aa2ca2047b1944aba53eff5b0abc9725f856fc1eb030c4", "protected": ["extensions", "loaders", "math", "std", "tests", "units"], "record_sha256": "36198962f9fba313b4da6d74651586e3d1da95a9904e63388aa3014cdada09c5", "scope": "Independent source-census and actual resolver premises only"}
+ok
+
+----------------------------------------------------------------------
+Ran 1 test in 5.627s
+
+OK

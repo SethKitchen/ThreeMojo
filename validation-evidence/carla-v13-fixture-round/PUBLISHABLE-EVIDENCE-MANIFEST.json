@@ -1,0 +1,272 @@
+{
+  "files": [
+    {
+      "bytes": 1613,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/RESULT.json",
+      "path": "owned-input-corrected-method-v12/RESULT.json",
+      "sha256": "9184fc9898c5959a555e43e0a157d0c4250191e6702bd90d53eac89a0268dd5e"
+    },
+    {
+      "bytes": 419029,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/SOURCE-SEAL.json",
+      "path": "owned-input-corrected-method-v12/SOURCE-SEAL.json",
+      "sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/SDK-BEFORE.json",
+      "path": "owned-input-corrected-method-v12/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/SDK-AFTER.json",
+      "path": "owned-input-corrected-method-v12/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/WINDOW-START.json",
+      "path": "owned-input-corrected-method-v12/WINDOW-START.json",
+      "sha256": "eb39dc0876a26d77df0deb13883027cc119cae189c469d352f447b936e30558b"
+    },
+    {
+      "bytes": 765,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/FAILURE.json",
+      "path": "owned-input-corrected-method-v12/FAILURE.json",
+      "sha256": "886129fcabfcef93e4f97306db41c91809a3e92c9d9e4422aa39de9bd0b906dc"
+    },
+    {
+      "bytes": 689,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/corrected-method-normal-START.json",
+      "path": "owned-input-corrected-method-v12/corrected-method-normal-START.json",
+      "sha256": "8785eaf731c75ac7e5fee249961b00993659b3ec08cfab06cd08f8e015b0dea9"
+    },
+    {
+      "bytes": 933,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/corrected-method-normal-RESULT.json",
+      "path": "owned-input-corrected-method-v12/corrected-method-normal-RESULT.json",
+      "sha256": "3f9b068ab7178d6ca69ca070f7309f5cbdc8dbfa436e424f149d329bd4f3aef8"
+    },
+    {
+      "bytes": 2980,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v12/corrected-method-normal.log",
+      "path": "owned-input-corrected-method-v12/corrected-method-normal.log",
+      "sha256": "54d0c8b911be3930e24048afc7d2a6ea3a455a7b9dc9dbef3be934303f8f97d9"
+    },
+    {
+      "bytes": 1388,
+      "kind": "actual-execution-plan",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/reproduce/owned-input-corrected-method-v12.json",
+      "path": "reproduce/owned-input-corrected-method-v12.json",
+      "sha256": "75ba4f94c678592004eb1665001346babc1a4ed27aa877e80a1bee0b01a8d1f5"
+    },
+    {
+      "bytes": 2353,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/RESULT.json",
+      "path": "namespace-premises-v12/RESULT.json",
+      "sha256": "336a32f86728d144833a6699f8bdd37fbca4cca831bcfca08c99f77b68e10424"
+    },
+    {
+      "bytes": 419029,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/SOURCE-SEAL.json",
+      "path": "namespace-premises-v12/SOURCE-SEAL.json",
+      "sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/SDK-BEFORE.json",
+      "path": "namespace-premises-v12/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/SDK-AFTER.json",
+      "path": "namespace-premises-v12/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/WINDOW-START.json",
+      "path": "namespace-premises-v12/WINDOW-START.json",
+      "sha256": "d466c30c5bdec8084e9a8062552ae6548e5245f6e999b6273cbeadf6eef7ce7e"
+    },
+    {
+      "bytes": 534,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/premises-normal-START.json",
+      "path": "namespace-premises-v12/premises-normal-START.json",
+      "sha256": "f5ab74b4d57c72b491fe7eba92df8f644c40e88b85467fc9d2d7f35a183a064e"
+    },
+    {
+      "bytes": 846,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/premises-normal-RESULT.json",
+      "path": "namespace-premises-v12/premises-normal-RESULT.json",
+      "sha256": "ecab8cf5f1433e7c3da8a49cfe18e9ee9960e844e75578e6a840ce215505b2b6"
+    },
+    {
+      "bytes": 1434,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/premises-normal.log",
+      "path": "namespace-premises-v12/premises-normal.log",
+      "sha256": "e61bc56bda1d5d82c3881d8aaa3dca1a94c4154d4d8921d2c090dc2b90d4026a"
+    },
+    {
+      "bytes": 549,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/premises-optimized-START.json",
+      "path": "namespace-premises-v12/premises-optimized-START.json",
+      "sha256": "ed10f0ec6827dbabd8ecb94fa2613e426184390edd88bf76de5e3affb927fe05"
+    },
+    {
+      "bytes": 862,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/premises-optimized-RESULT.json",
+      "path": "namespace-premises-v12/premises-optimized-RESULT.json",
+      "sha256": "549b933940d433267166faf07db090a01b949211553c840685e0b0804fc2599c"
+    },
+    {
+      "bytes": 1434,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/namespace-premises-v12/premises-optimized.log",
+      "path": "namespace-premises-v12/premises-optimized.log",
+      "sha256": "791c3aacdd5caee1bbf763d32deeb2c07cf1bb53b09e9dc30c2cbfc5c1d3ae87"
+    },
+    {
+      "bytes": 931,
+      "kind": "actual-execution-plan",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/reproduce/namespace-premises-v12.json",
+      "path": "reproduce/namespace-premises-v12.json",
+      "sha256": "705d31cc6b53bffbc5c20e24eeda76acb81dde0d652ca4ee12c21d86e9910060"
+    },
+    {
+      "bytes": 2801,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/RESULT.json",
+      "path": "owned-input-corrected-method-v13/RESULT.json",
+      "sha256": "d13b0bf587ffe476ba4baa9192525bbe83810cc1d6a34ab7f671a032f7af190b"
+    },
+    {
+      "bytes": 419029,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/SOURCE-SEAL.json",
+      "path": "owned-input-corrected-method-v13/SOURCE-SEAL.json",
+      "sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/SDK-BEFORE.json",
+      "path": "owned-input-corrected-method-v13/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/SDK-AFTER.json",
+      "path": "owned-input-corrected-method-v13/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "actual-window-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/WINDOW-START.json",
+      "path": "owned-input-corrected-method-v13/WINDOW-START.json",
+      "sha256": "1ecb3ff3a33aa5999e76f76314a0273231a8ee0ff927006312ed2ae3399a8a2b"
+    },
+    {
+      "bytes": 691,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/corrected-method-normal-START.json",
+      "path": "owned-input-corrected-method-v13/corrected-method-normal-START.json",
+      "sha256": "9284c5eff8bb6fabc03718842f12ff5c1aab29bdec6d6ff2ba1d7baa0303f4c0"
+    },
+    {
+      "bytes": 1004,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/corrected-method-normal-RESULT.json",
+      "path": "owned-input-corrected-method-v13/corrected-method-normal-RESULT.json",
+      "sha256": "bf0aa15610e1985818c00610209a85012b8a656614fb828fe214a330c2ff04fb"
+    },
+    {
+      "bytes": 847,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/corrected-method-normal.log",
+      "path": "owned-input-corrected-method-v13/corrected-method-normal.log",
+      "sha256": "6bae084ca071b84dbb585eb37b954cf16a01e540acfb330bfd2d79cf327ab2ba"
+    },
+    {
+      "bytes": 704,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/corrected-method-optimized-START.json",
+      "path": "owned-input-corrected-method-v13/corrected-method-optimized-START.json",
+      "sha256": "42268182d41ade10db961d209443f4ea5cf042656cdd507271261e3b283b3899"
+    },
+    {
+      "bytes": 1017,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/corrected-method-optimized-RESULT.json",
+      "path": "owned-input-corrected-method-v13/corrected-method-optimized-RESULT.json",
+      "sha256": "2a806175095f08c74ef6713c4cc765f4b8010211541877f45c17afe8a48239fd"
+    },
+    {
+      "bytes": 847,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/owned-input-corrected-method-v13/corrected-method-optimized.log",
+      "path": "owned-input-corrected-method-v13/corrected-method-optimized.log",
+      "sha256": "e04bc58bf4c720b8e4fb8dc759a6cf850f665daea1cd7e68474337a0b6741b7f"
+    },
+    {
+      "bytes": 1388,
+      "kind": "actual-execution-plan",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/reproduce/owned-input-corrected-method-v13.json",
+      "path": "reproduce/owned-input-corrected-method-v13.json",
+      "sha256": "93f0fb0f43f2b91c21445a22e86443ffccbbdf8a3256fd949815228d5dfef4a1"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1860,
+      "kind": "executed-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/reproduce/probe_namespace_premises_v12.py",
+      "path": "reproduce/probe_namespace_premises_v12.py",
+      "sha256": "0d81206309910579e8aa2ca2047b1944aba53eff5b0abc9725f856fc1eb030c4"
+    },
+    {
+      "bytes": 497,
+      "kind": "executed-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/reproduce/V13-REPAIR-GATE-BINDING.json",
+      "path": "reproduce/V13-REPAIR-GATE-BINDING.json",
+      "sha256": "6f4d13b7c17e3f4e72ac585eb990b4df4a44cbd04cbe314cd3982a0bb52b1d00"
+    },
+    {
+      "bytes": 2960,
+      "kind": "factual-separately-scoped-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-fixture-round-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "5387391134c3e58a7cfa612e58c45fc9a94c6ce490074ca894327467016b9d59"
+    }
+  ],
+  "schema": 1,
+  "scope": "One failed v12 fixture-classification test, two independent namespace-premise tests, and two corrected-method tests. Results retain separate source seals. Ongoing remaining21optimized controls, broader preflight and full qualification are excluded."
+}

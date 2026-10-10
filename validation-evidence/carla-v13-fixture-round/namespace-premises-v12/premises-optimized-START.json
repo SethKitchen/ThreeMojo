@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-O",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_namespace_premises_v12.py"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12",
+  "label": "premises-optimized",
+  "pgid": 10,
+  "pid": 10,
+  "single_cpu": 0,
+  "source_seal_sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T23:10:28.194897+00:00"
+}

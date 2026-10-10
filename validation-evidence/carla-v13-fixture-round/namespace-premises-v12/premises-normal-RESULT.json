@@ -1,0 +1,25 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_namespace_premises_v12.py"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12",
+  "expected_tests": 1,
+  "label": "premises-normal",
+  "leader_reaped": true,
+  "log_sha256": "e61bc56bda1d5d82c3881d8aaa3dca1a94c4154d4d8921d2c090dc2b90d4026a",
+  "pgid": 9,
+  "pid": 9,
+  "remaining_owned_descendants": [],
+  "returncode": 0,
+  "seconds": 6.012644171001739,
+  "single_cpu": 0,
+  "skipped_test_count": 0,
+  "source_seal_sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T23:10:21.212381+00:00",
+  "test_count": 1,
+  "timed_out": false
+}

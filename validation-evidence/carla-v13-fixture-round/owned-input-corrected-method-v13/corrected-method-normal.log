@@ -1,0 +1,10 @@
+test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v13/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v13/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+
+----------------------------------------------------------------------
+Ran 1 test in 14.488s
+
+OK

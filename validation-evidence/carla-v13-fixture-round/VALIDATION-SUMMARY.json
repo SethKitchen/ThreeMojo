@@ -1,0 +1,45 @@
+{
+  "classification": "The immutable93-path resolver union protects extensions,loaders,math,std,tests,units. Tools is not protected. V12 incorrectly expected tools refusal; v13 covers tools positively and tests negatively, without changing production admission.",
+  "classification_correction": "Earlier v11 failure-summary prose grouped tests/tools as protected. The actual record protects tests but not tools. This correction supersedes that interpretation only; every original failure receipt remains unchanged.",
+  "corrected_method_scope": "Actual recombined method passes normal/-O after source-bound review; other94 methods retain their prior bytes/AST. Earlier failed receipts remain explicit, and earlier21normal successes are not relabeled as v13 results.",
+  "evidence_policy": "Original receipts/logs copied byte-for-byte. No reconstructed results, internal review notes or private coordination. No robust performance, complete matrix, native coverage, report, CI or issue-completion claim.",
+  "phases": {
+    "namespace-premises-v12": {
+      "executed_tests": 2,
+      "result_sha256": "336a32f86728d144833a6699f8bdd37fbca4cca831bcfca08c99f77b68e10424",
+      "sequence_completed": true,
+      "source_seal_sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87",
+      "stage_seconds": {
+        "premises-normal": 6.012644171001739,
+        "premises-optimized": 6.5225665049983945
+      }
+    },
+    "owned-input-corrected-method-v12": {
+      "executed_tests": 1,
+      "result_sha256": "9184fc9898c5959a555e43e0a157d0c4250191e6702bd90d53eac89a0268dd5e",
+      "sequence_completed": false,
+      "source_seal_sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87",
+      "stage_seconds": {
+        "corrected-method-normal": 18.657284442000673
+      }
+    },
+    "owned-input-corrected-method-v13": {
+      "executed_tests": 2,
+      "result_sha256": "d13b0bf587ffe476ba4baa9192525bbe83810cc1d6a34ab7f671a032f7af190b",
+      "sequence_completed": true,
+      "source_seal_sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1",
+      "stage_seconds": {
+        "corrected-method-normal": 15.026226882000628,
+        "corrected-method-optimized": 16.038738308001484
+      }
+    }
+  },
+  "premise_scope": "Separate restored baseline and individual initializer,neutral,tools positive/tests negative cases use actual source census and resolver in normal/-O. These are topology premises, not complete source-admission qualification.",
+  "production_change": false,
+  "schema": 1,
+  "scope": "One failed v12 fixture-classification test, two independent namespace-premise tests, and two corrected-method tests. Results retain separate source seals. Ongoing remaining21optimized controls, broader preflight and full qualification are excluded.",
+  "source_checkpoints": {
+    "v12": "8f7eef5678dbdce9e9e75c36c981d2b8a727d2a6",
+    "v13": "2981582ed174483ea3b64a2c0ce6a09d22470aa0"
+  }
+}

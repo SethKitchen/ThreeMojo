@@ -1,0 +1,31 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12",
+  "seal": "CANDIDATE-V12-SOURCE-SEAL.json",
+  "phase": "namespace-premises-v12",
+  "window_seconds": 600,
+  "pause_request_file": "native-lane-v12.pause",
+  "scope": "Actual immutable-record protected-set and independent positive/negative resolver premises; no complete admission or coverage claim.",
+  "stages": [
+    {
+      "label": "premises-normal",
+      "seconds": 180,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_namespace_premises_v12.py"
+      ]
+    },
+    {
+      "label": "premises-optimized",
+      "seconds": 180,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_namespace_premises_v12.py"
+      ]
+    }
+  ]
+}

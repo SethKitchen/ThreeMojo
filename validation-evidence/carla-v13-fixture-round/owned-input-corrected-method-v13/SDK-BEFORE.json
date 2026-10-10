@@ -1,0 +1,40 @@
+{
+  "distributions": {
+    "mojo-compiler": {
+      "metadata_sha256": "cd5895e694f7190b1f5fdff7349b6eab27727e733268c67e70a3a32aa6839eff",
+      "version": "1.1.0"
+    },
+    "mojo-compiler-mojo-libs": {
+      "metadata_sha256": "f7d456a441d723757946d4a8f4962d2280cad8964b9d03c6cad29a0322dddb2b",
+      "version": "1.1.0"
+    }
+  },
+  "interpreter": {
+    "capabilities": {
+      "byteorder": "little",
+      "cache_tag": "cpython-312",
+      "implementation": "cpython",
+      "maxsize": 9223372036854775807,
+      "soabi": "cpython-312-x86_64-linux-gnu",
+      "version": "3.12.14 (main, Sep 29 2026, 15:01:18) [Clang 22.1.3 ]"
+    },
+    "sha256": "5ebcd7993f0e40cb4b16e15d2c4c3c343ecad419966299b8e8f6f9e6a36bf779"
+  },
+  "kind": "mojo-wheel-python-entry-v1",
+  "launcher_body_sha256": "04c1bb8fa7d9325cb6aaad7db2790f8bae0532858b210aa77be1345341788fe4",
+  "payload": {
+    "modular/bin/lld": "39792c8f8aedb7b8a2f0e482e2371800b8b1e021a33494d354c1eb00d5358e32",
+    "modular/bin/modular-crashpad-handler": "c9caa79c6fee2f1e72f24b8aac582c5f60a70437a4d54b9c0f3273f9fcdb692c",
+    "modular/bin/mojo": "be444a046291b9e120394a7bc2836192fd2c82c9d5bd1c2960b79a9f4859466e",
+    "modular/lib/libAsyncRTRuntimeGlobals.so": "32c4578cfa3bd49264fd0ef221038e33a795c2457ef383b1d0a88b63dd95211a",
+    "modular/lib/libKGENCompilerRTShared.so": "d5b37799796f1a29554baee953686d01cd467badd6e33131b751cf94e1276d74",
+    "modular/lib/libMSupportGlobals.so": "3095c31589c65d166efd0938bf0e06dbe991719714a2d7fadc747f779d0bb4f7",
+    "modular/lib/mojo/std.mojoc": "6dd60988aca3d036845f3d72ceb53315a9a2f2cbe35a36c4b8d5811b9cba3fb6",
+    "mojo/_entrypoints.py": "d8bfda439a4feb9e53c44efb198370f17d70c8807ebbf1ff9e6561c8f283d176",
+    "mojo/_package_root.py": "7bf02fda2ec1c79525066f91dc564e8479b2d0fb89be67ca103b85f4afceeb59",
+    "mojo/importer.py": "cd89fa51732a9c321349afbb448900ef16396dc100be56b997dfc37b4d670481",
+    "mojo/notebook.py": "fc2a10fa60403ceb6556067b4de7fceffd518f07b8809808c7c79ec5f007f8e3",
+    "mojo/paths.py": "b522b8f285fe71a20f0da8833c48153b9a7ed5e279da0465b0785e819b541d35",
+    "mojo/run.py": "cf4a52f5675de36f45c3b6e9aafa065f708520316cd70084b6710d2ecf891cdc"
+  }
+}

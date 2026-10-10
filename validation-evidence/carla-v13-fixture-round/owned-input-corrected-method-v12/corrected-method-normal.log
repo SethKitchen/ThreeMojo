@@ -1,0 +1,29 @@
+test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+
+  test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image) (protected_namespace='tools') ... FAIL
+
+======================================================================
+FAIL: test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image) (protected_namespace='tools')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py", line 2831, in test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image
+    cache.verify(self.root)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/cache_key_contracts.py", line 187, in verify
+    current, _inputs = full_audit._cache_lane_inputs(root, current, _input_owner)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1102, in _cache_lane_inputs
+    record = verify(root, _expected_lane_raw=raw, _capture=_pending)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1200, in verify
+    _capture._publish(root, snapshots, authority_raw, known, production, entries,
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py", line 2818, in publication
+    self.fail('protected nested namespace must refuse before publication')
+AssertionError: protected nested namespace must refuse before publication
+
+----------------------------------------------------------------------
+Ran 1 test in 17.979s
+
+FAILED (failures=1)

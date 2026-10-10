@@ -1,0 +1,44 @@
+{
+  "elapsed_seconds": 21.721415964002517,
+  "failure": "RuntimeError('Stage failed: corrected-method-normal')",
+  "finished": "2026-10-10T23:08:08.508564+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "Fresh corrected positive namespace fixture and explicit protected-directory refusal, normal and optimized; all production bytes unchanged. This focused method does not replace full qualification.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": false,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v12",
+      "label": "corrected-method-normal",
+      "leader_reaped": true,
+      "log_sha256": "54d0c8b911be3930e24048afc7d2a6ea3a455a7b9dc9dbef3be934303f8f97d9",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 18.657284442000673,
+      "single_cpu": 0,
+      "source_seal_sha256": "581cca3083ad273a70b6ba0d0a32d618ef514a79aa5c1bc89a157670088a0a87",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-10T23:07:48.378851+00:00",
+      "timed_out": false
+    }
+  ]
+}

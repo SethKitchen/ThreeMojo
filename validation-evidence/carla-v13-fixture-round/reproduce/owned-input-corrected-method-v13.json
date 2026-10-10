@@ -1,0 +1,49 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v13",
+  "seal": "CANDIDATE-V13-SOURCE-SEAL.json",
+  "pause_request_file": "native-lane-v13.pause",
+  "phase": "owned-input-corrected-method-v13",
+  "window_seconds": 3900,
+  "scope": "Fresh corrected positive namespace fixture and explicit protected-directory refusal, normal and optimized; all production bytes unchanged. This focused method does not replace full qualification.",
+  "stages": [
+    {
+      "label": "corrected-method-normal",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image",
+        "-v"
+      ]
+    },
+    {
+      "label": "corrected-method-optimized",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image",
+        "-v"
+      ]
+    }
+  ]
+}
