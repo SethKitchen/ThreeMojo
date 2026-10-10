@@ -1,0 +1,41 @@
+{
+  "commit": "15759631d496469d23227ca64e9641b1290f83b2",
+  "results": [
+    {
+      "fixture": "from_tab_after_as.mojo",
+      "dependency": "pkg/bound.mojo",
+      "dependency_bound": false,
+      "digest_changed": false
+    },
+    {
+      "fixture": "from_tab_before_as.mojo",
+      "dependency": "pkg/bound.mojo",
+      "dependency_bound": false,
+      "digest_changed": false
+    },
+    {
+      "fixture": "plain_tab_after_as.mojo",
+      "dependency": "helper.mojo",
+      "dependency_bound": false,
+      "digest_changed": false
+    },
+    {
+      "fixture": "plain_tab_before_as.mojo",
+      "dependency": "helper.mojo",
+      "dependency_bound": false,
+      "digest_changed": false
+    },
+    {
+      "fixture": "from_control.mojo",
+      "dependency": "pkg/bound.mojo",
+      "dependency_bound": true,
+      "digest_changed": true
+    },
+    {
+      "fixture": "plain_control.mojo",
+      "dependency": "helper.mojo",
+      "dependency_bound": true,
+      "digest_changed": true
+    }
+  ]
+}

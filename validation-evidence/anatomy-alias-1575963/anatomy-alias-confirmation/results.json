@@ -1,0 +1,174 @@
+[
+  {
+    "label": "version",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "--version"
+    ],
+    "timeout_seconds": 10,
+    "exit_code": 0,
+    "elapsed_seconds": 0.052802281999902334
+  },
+  {
+    "label": "plain_control.build",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "plain_control.mojo",
+      "-o",
+      "plain_control.bin"
+    ],
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "elapsed_seconds": 2.810291424000752
+  },
+  {
+    "label": "plain_control.run",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_control.bin"
+    ],
+    "timeout_seconds": 5,
+    "exit_code": 0,
+    "elapsed_seconds": 0.009896134997688932
+  },
+  {
+    "label": "plain_tab_before_as.build",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "plain_tab_before_as.mojo",
+      "-o",
+      "plain_tab_before_as.bin"
+    ],
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "elapsed_seconds": 2.8576129829998536
+  },
+  {
+    "label": "plain_tab_before_as.run",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_before_as.bin"
+    ],
+    "timeout_seconds": 5,
+    "exit_code": 0,
+    "elapsed_seconds": 0.008721430000150576
+  },
+  {
+    "label": "plain_tab_after_as.build",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "plain_tab_after_as.mojo",
+      "-o",
+      "plain_tab_after_as.bin"
+    ],
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "elapsed_seconds": 2.509160047000478
+  },
+  {
+    "label": "plain_tab_after_as.run",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_after_as.bin"
+    ],
+    "timeout_seconds": 5,
+    "exit_code": 0,
+    "elapsed_seconds": 0.00918897600058699
+  },
+  {
+    "label": "from_control.build",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "from_control.mojo",
+      "-o",
+      "from_control.bin"
+    ],
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "elapsed_seconds": 2.6895909040031256
+  },
+  {
+    "label": "from_control.run",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_control.bin"
+    ],
+    "timeout_seconds": 5,
+    "exit_code": 0,
+    "elapsed_seconds": 0.008568877001380315
+  },
+  {
+    "label": "from_tab_before_as.build",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "from_tab_before_as.mojo",
+      "-o",
+      "from_tab_before_as.bin"
+    ],
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "elapsed_seconds": 2.6676188409983297
+  },
+  {
+    "label": "from_tab_before_as.run",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_before_as.bin"
+    ],
+    "timeout_seconds": 5,
+    "exit_code": 0,
+    "elapsed_seconds": 0.010056917999463622
+  },
+  {
+    "label": "from_tab_after_as.build",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "from_tab_after_as.mojo",
+      "-o",
+      "from_tab_after_as.bin"
+    ],
+    "timeout_seconds": 60,
+    "exit_code": 0,
+    "elapsed_seconds": 2.4619826800008013
+  },
+  {
+    "label": "from_tab_after_as.run",
+    "command": [
+      "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_after_as.bin"
+    ],
+    "timeout_seconds": 5,
+    "exit_code": 0,
+    "elapsed_seconds": 0.009592616002919385
+  }
+]

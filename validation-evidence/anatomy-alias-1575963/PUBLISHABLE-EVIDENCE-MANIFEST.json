@@ -1,0 +1,231 @@
+{
+  "schema": 1,
+  "issue": 702,
+  "reviewed_commit": "15759631d496469d23227ca64e9641b1290f83b2",
+  "toolchain": "Mojo 1.1.0 (8189361e)",
+  "summary": "Six native compiler-valid fixtures pass; four tab-alias variants omit mutated inputs from the reviewed binding, while two space controls bind them.",
+  "files": [
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/README.txt",
+      "path": "anatomy-alias-confirmation/README.txt",
+      "sha256": "0f0663209ef2015fb108fe1de9de6ee0da4e5ec9315ccecc8da001092b0204d6",
+      "bytes": 1372
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/run.py",
+      "path": "anatomy-alias-confirmation/run.py",
+      "sha256": "808cfed62afc5ea84f4a38e8ebb1af7c19b9f6416f20e14b0a0eca1d54a1ab64",
+      "bytes": 2916
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/check_binding.py",
+      "path": "anatomy-alias-confirmation/check_binding.py",
+      "sha256": "4abe2949ddec2d248aaf374726b0143f24441e7a83e29aad516454e6cabcd96d",
+      "bytes": 1062
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/results.json",
+      "path": "anatomy-alias-confirmation/results.json",
+      "sha256": "9094bafc8c542958ec09455e04e8d326d4ea41313f8020f0ecf5df5e7529a66e",
+      "bytes": 4232
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/source-bytes.json",
+      "path": "anatomy-alias-confirmation/source-bytes.json",
+      "sha256": "30666caf73014519a04c4fa8c864deba830b1d60ef0f774a9c5e1558ae63bc63",
+      "bytes": 2117
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/sdk-identity-receipt.json",
+      "path": "anatomy-alias-confirmation/sdk-identity-receipt.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "bytes": 2165
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/version.stdout",
+      "path": "anatomy-alias-confirmation/version.stdout",
+      "sha256": "14e7312b5750ffb048f37d53ef2b122cd2b52e2d948ddf767efdf3d01b0c7c6d",
+      "bytes": 22
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/version.stderr",
+      "path": "anatomy-alias-confirmation/version.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/binding-mutation-results.json",
+      "path": "anatomy-alias-confirmation/binding-mutation-results.json",
+      "sha256": "25f8d78337c44816d5bb9cefebf4ca1349c71a3c29f68a611b813b1940c16fc9",
+      "bytes": 1002
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/binding-mutation.stdout",
+      "path": "anatomy-alias-confirmation/binding-mutation.stdout",
+      "sha256": "2e8992f567c3b0c79eb748d9a50049ebb06d4a3c44dbc6b48dd1d8f45c42cfcc",
+      "bytes": 714
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/helper.mojo",
+      "path": "anatomy-alias-confirmation/helper.mojo",
+      "sha256": "8dfc08bdc429de0a3954a793db122af1df7cf82c6b936a509910f8708cbd14ee",
+      "bytes": 34
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/pkg/__init__.mojo",
+      "path": "anatomy-alias-confirmation/pkg/__init__.mojo",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/pkg/bound.mojo",
+      "path": "anatomy-alias-confirmation/pkg/bound.mojo",
+      "sha256": "8dfc08bdc429de0a3954a793db122af1df7cf82c6b936a509910f8708cbd14ee",
+      "bytes": 34
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_control.mojo",
+      "path": "anatomy-alias-confirmation/from_control.mojo",
+      "sha256": "6ed0386230da479009dbb63d87970ede3716ac9aa095f654b183c34a33745ba2",
+      "bytes": 73
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_control.mojo",
+      "path": "anatomy-alias-confirmation/plain_control.mojo",
+      "sha256": "068e18aada19b8b6ac7b0b3b0f0977ea4d070fbafe0d6e22500eed4b4c53a120",
+      "bytes": 65
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_after_as.mojo",
+      "path": "anatomy-alias-confirmation/from_tab_after_as.mojo",
+      "sha256": "e9056c1a4605a233fd12b56d4d30840c3cecfd050cc6fc942ec858f2942ebe43",
+      "bytes": 73
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_before_as.mojo",
+      "path": "anatomy-alias-confirmation/from_tab_before_as.mojo",
+      "sha256": "dcd3460f22bd0dc3e7074ce2bdc8eeb04f5a396940d9d63ced683df679a2b2a5",
+      "bytes": 73
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_after_as.mojo",
+      "path": "anatomy-alias-confirmation/plain_tab_after_as.mojo",
+      "sha256": "b7dd6691c718aa4bf6be544548264e2619642a6c9d002d7f658cb73ea1126a73",
+      "bytes": 65
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_before_as.mojo",
+      "path": "anatomy-alias-confirmation/plain_tab_before_as.mojo",
+      "sha256": "cb7a698e7a8730ba22a5d7cb1ad0dc876385fa0fcbdf029d4020549efa665bf0",
+      "bytes": 65
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_control.run.stdout",
+      "path": "anatomy-alias-confirmation/from_control.run.stdout",
+      "sha256": "084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0",
+      "bytes": 3
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_after_as.run.stdout",
+      "path": "anatomy-alias-confirmation/from_tab_after_as.run.stdout",
+      "sha256": "084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0",
+      "bytes": 3
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_before_as.run.stdout",
+      "path": "anatomy-alias-confirmation/from_tab_before_as.run.stdout",
+      "sha256": "084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0",
+      "bytes": 3
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_control.run.stdout",
+      "path": "anatomy-alias-confirmation/plain_control.run.stdout",
+      "sha256": "084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0",
+      "bytes": 3
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_after_as.run.stdout",
+      "path": "anatomy-alias-confirmation/plain_tab_after_as.run.stdout",
+      "sha256": "084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0",
+      "bytes": 3
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_before_as.run.stdout",
+      "path": "anatomy-alias-confirmation/plain_tab_before_as.run.stdout",
+      "sha256": "084c799cd551dd1d8d5c5f9a5d593b2e931f5e36122ee5c793c1d08a19839cc0",
+      "bytes": 3
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_control.build.stderr",
+      "path": "anatomy-alias-confirmation/from_control.build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_after_as.build.stderr",
+      "path": "anatomy-alias-confirmation/from_tab_after_as.build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_before_as.build.stderr",
+      "path": "anatomy-alias-confirmation/from_tab_before_as.build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_control.build.stderr",
+      "path": "anatomy-alias-confirmation/plain_control.build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_after_as.build.stderr",
+      "path": "anatomy-alias-confirmation/plain_tab_after_as.build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_before_as.build.stderr",
+      "path": "anatomy-alias-confirmation/plain_tab_before_as.build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_control.run.stderr",
+      "path": "anatomy-alias-confirmation/from_control.run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_after_as.run.stderr",
+      "path": "anatomy-alias-confirmation/from_tab_after_as.run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/from_tab_before_as.run.stderr",
+      "path": "anatomy-alias-confirmation/from_tab_before_as.run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_control.run.stderr",
+      "path": "anatomy-alias-confirmation/plain_control.run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_after_as.run.stderr",
+      "path": "anatomy-alias-confirmation/plain_tab_after_as.run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/anatomy-alias-confirmation-20261010/plain_tab_before_as.run.stderr",
+      "path": "anatomy-alias-confirmation/plain_tab_before_as.run.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    }
+  ]
+}

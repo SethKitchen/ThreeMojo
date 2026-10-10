@@ -1,0 +1,6 @@
+{'fixture': 'from_tab_after_as.mojo', 'dependency': 'pkg/bound.mojo', 'dependency_bound': False, 'digest_changed': False}
+{'fixture': 'from_tab_before_as.mojo', 'dependency': 'pkg/bound.mojo', 'dependency_bound': False, 'digest_changed': False}
+{'fixture': 'plain_tab_after_as.mojo', 'dependency': 'helper.mojo', 'dependency_bound': False, 'digest_changed': False}
+{'fixture': 'plain_tab_before_as.mojo', 'dependency': 'helper.mojo', 'dependency_bound': False, 'digest_changed': False}
+{'fixture': 'from_control.mojo', 'dependency': 'pkg/bound.mojo', 'dependency_bound': True, 'digest_changed': True}
+{'fixture': 'plain_control.mojo', 'dependency': 'helper.mojo', 'dependency_bound': True, 'digest_changed': True}
