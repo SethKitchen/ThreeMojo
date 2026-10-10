@@ -26,8 +26,10 @@ import affected
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB_DIRS = set('math render units cameras core geometries helpers objects renderers materials lights loaders animation postprocessing controls window exporters environments generators extensions'.split())
-GPU = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'tests/test_gpu.mojo',
-       'tests/test_gpu_layout.mojo', 'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo'}
+GPU = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo',
+       'tests/test_gpu.mojo', 'tests/test_gpu_water.mojo', 'tests/test_gpu_layout.mojo',
+       'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo',
+       'bench/water_gpu_bench.mojo'}
 GPU_TESTS = {name for name in GPU if name.startswith('tests/')}
 GLOBAL_TOOLS = {'tools/cache_key.py', 'tools/suite_key.py', 'tools/run_suite.py',
                 'tools/shard.py', 'tools/native_test_support.py', 'tools/test_environment.py',

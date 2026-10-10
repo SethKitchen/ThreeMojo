@@ -15,9 +15,11 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 GPU_ENTRIES = (
-    'tests/test_gpu.mojo', 'tests/test_gpu_layout.mojo',
+    'tests/test_gpu.mojo', 'tests/test_gpu_water.mojo', 'tests/test_gpu_layout.mojo',
     'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo',
+    'bench/water_gpu_bench.mojo',
 )
+GPU_LIBRARIES = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo'}
 
 
 class GpuCompileRecipeTests(unittest.TestCase):
@@ -94,9 +96,8 @@ class GpuCompileRecipeTests(unittest.TestCase):
             targets=('lint-gpu MOJOFLAGS="-I ."',))
         self.assertEqual(results[0].returncode, 0, results[0].stdout + results[0].stderr)
         self.assertEqual([call[0] for call in calls],
-                         ['build'] * len(GPU_ENTRIES) + ['doc'] * 2)
-        self.assertEqual({call[-1] for call in calls if call[0] == 'doc'},
-                         {'render/gpu.mojo', 'render/gpu_vxgi.mojo'})
+                         ['build'] * len(GPU_ENTRIES) + ['doc'] * len(GPU_LIBRARIES))
+        self.assertEqual({call[-1] for call in calls if call[0] == 'doc'}, GPU_LIBRARIES)
         self.assertEqual(stamps, {'compile-gpu-stamp', 'lint-gpu-stamp'})
         for call in calls:
             self.assertEqual(call[1:3], ['-I', '.'])
