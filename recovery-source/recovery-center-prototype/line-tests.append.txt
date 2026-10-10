@@ -1,0 +1,123 @@
+
+def _check_line_phase(best: Float64, external: Bool) raises:
+    _require_sum2_environment()
+    var road = _road()
+    var location = Vector3(1, 1, 0)
+    var query: Array[Float64, 3] = [1.0, 1.0, 0.0]
+    var terms = 0
+    var point = _checked_center(road, 0, 0, best, terms, 100)
+    var scale = _point_gap_scale(point, query)
+    var score = _refinement_square[3](point, query, scale)
+    var whole_work = _reference_work(road, 0.0, 2.0)
+    assert_equal(whole_work, 1)
+    terms += whole_work
+    var whole = _lane_jet_with_proof(
+        road, 0, 0, 0.0, 2.0, 0.0, 2.0, None
+    )
+    var natural = _scaled_point_distance_box(whole, location, scale).low
+    var domain = _scaled_point_distance_jet(whole, location, scale)
+    var tolerance = _search_accuracy(
+        road, 0, 0, 0.0, 2.0, best, score.low, scale, None
+    )
+    var witness: Optional[Array[Float64, 3]] = None
+    if external:
+        # A checked point from a separate road supplies a genuine witness.
+        var other = _road(id=2, y=-1.0)
+        witness = _checked_center(other, 0, 0, best, terms, 100)
+    var context = _LaneExpansionContext(
+        0, 0, _Interval(0.0, 2.0), location,
+        None, None, witness^, None, None,
+    )
+    var nodes = 0
+    var before_terms = terms
+    var policy = _LaneBoundPolicy(score.high, scale, tolerance, None)
+    var result = _try_lane_center_bound(
+        road, context, _Interval(0.0, 2.0), best,
+        domain, natural, whole_work, policy, nodes, terms, 100, 100,
+    )
+    assert_equal(nodes, 0)
+    assert_equal(terms, before_terms + 1)
+    assert_false(Bool(context.cached_fast))
+    if best == 1.0:
+        assert_true(Bool(result))
+        assert_true(result.value().isa[_LaneBoundClose]())
+        var close = result.value()[_LaneBoundClose]
+        assert_equal(close.support.low, 0.0)
+        assert_equal(close.support.high, 2.0)
+        assert_true(close.lower <= score.high)
+    elif not external:
+        # An admitted but inconclusive attempt keeps its charged center work.
+        assert_false(Bool(result))
+        assert_false(Bool(context.cached_expansion))
+    if external:
+        assert_true(Bool(context.cached_expansion))
+        var cached = context.cached_expansion.value()
+        assert_equal(
+            cached[0], bitcast[DType.uint64](_expansion_center(0.0, 2.0, best))
+        )
+        assert_equal(cached[1], bitcast[DType.uint64](scale))
+        before_terms = terms
+        var repeated = _try_lane_center_bound(
+            road, context, _Interval(0.0, 2.0), best,
+            domain, natural, whole_work, policy, nodes, terms, 100, 100,
+        )
+        assert_equal(terms, before_terms + 1)
+        assert_equal(nodes, 0)
+        assert_equal(Bool(result), Bool(repeated))
+        if result:
+            assert_equal(
+                result.value().isa[_LaneBoundDiscard](),
+                repeated.value().isa[_LaneBoundDiscard](),
+            )
+            assert_equal(
+                result.value().isa[_LaneBoundClose](),
+                repeated.value().isa[_LaneBoundClose](),
+            )
+            assert_equal(
+                result.value().isa[_LaneBoundContract](),
+                repeated.value().isa[_LaneBoundContract](),
+            )
+        # An admission error preserves the populated cache and spent ledger.
+        before_terms = terms
+        with assert_raises(contains="quadrature work limit"):
+            _ = _try_lane_center_bound(
+                road, context, _Interval(0.0, 2.0), best,
+                domain, natural, whole_work, policy,
+                nodes, terms, 100, before_terms,
+            )
+        assert_equal(nodes, 0)
+        assert_equal(terms, before_terms)
+        assert_false(Bool(context.cached_fast))
+        var after = context.cached_expansion.value()
+        assert_equal(after[0], cached[0])
+        assert_equal(after[1], cached[1])
+        for values in [
+            (after[2].value.low, cached[2].value.low),
+            (after[2].value.high, cached[2].value.high),
+            (after[2].first.low, cached[2].first.low),
+            (after[2].first.high, cached[2].first.high),
+            (after[2].second.low, cached[2].second.low),
+            (after[2].second.high, cached[2].second.high),
+            (after[2].error, cached[2].error),
+        ]:
+            assert_equal(
+                bitcast[DType.uint64](values[0]),
+                bitcast[DType.uint64](values[1]),
+            )
+    assert_true(_sum2_supported_environment())
+
+
+def test_real_line_inconclusion_retains_center_debit() raises:
+    _check_line_phase(2.0, False)
+
+
+def test_real_line_close_proposes_original_whole_support() raises:
+    _check_line_phase(1.0, False)
+
+
+def test_real_line_cache_reuse_and_admission_error_preserve_words() raises:
+    _check_line_phase(2.0, True)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()
