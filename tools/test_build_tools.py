@@ -52,7 +52,10 @@ class DependencyTests(unittest.TestCase):
         known = {'math/__init__.mojo', 'math/vector3.mojo', 'tests/math.mojo'}
         self.assertEqual(affected.resolve('math.vector3', 'core/scene.mojo', known),
                          ['math/__init__.mojo', 'math/vector3.mojo'])
-        self.assertEqual(affected.resolve('math', 'tests/test.mojo', known), ['tests/math.mojo'])
+        # The module beside the entry point comes first. The root package it
+        # hides stays a dependency, so a change there still selects the test.
+        self.assertEqual(affected.resolve('math', 'tests/test.mojo', known),
+                         ['tests/math.mojo', 'math/__init__.mojo'])
 
 
 class CacheTests(unittest.TestCase):
