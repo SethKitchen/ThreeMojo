@@ -166,23 +166,26 @@ def entry_directories(sources):
 
 def _search(parts, base, known):
     """Return the files a dotted name reaches under one search root: the
-    package `__init__.mojo` files on the way, and the module if it is
-    there."""
+    package initializers and module candidates at every prefix.
+
+    An ancestor module can hide a package needed by the remaining name.
+    Keep both candidates so adding or removing the shadow selects users.
+    """
     prefix = base + "/" if base else ""
     reached = []
     for count in range(1, len(parts) + 1):
         package = prefix + "/".join(parts[:count]) + "/__init__.mojo"
         if package in known:
             reached.append(package)
-    module = prefix + "/".join(parts) + ".mojo"
-    if module in known:
-        reached.append(module)
+        module = prefix + "/".join(parts[:count]) + ".mojo"
+        if module in known:
+            reached.append(module)
     return reached
 
 
 def resolve(name, importer, known, entries=None):
-    """Return the files a dotted name reaches from an importer: the module
-    and the package `__init__.mojo` files on the way to it.
+    """Return the files a dotted name reaches from an importer: modules
+    and package `__init__.mojo` files at every prefix.
 
     Mojo searches the compiled entry point's directory and the repo root
     (`-I .`), never the importer's own directory. `entries` lists the

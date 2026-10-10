@@ -14,6 +14,8 @@ imports `pkg.one` and pkg/one.mojo imports `helper`:
 - tools/helper.mojo, helper.mojo and pkg/helper.mojo: the tools one;
 - tools/pkg/__init__.mojo without tools/pkg/one.mojo: "unable to locate
   module 'one'" even with a root pkg/one.mojo;
+- tools/pkg.mojo: "unable to locate module 'one'" even with a root
+  pkg/one.mojo under a plain directory;
 - a plain tools/pkg directory without one.mojo: the root pkg/one.mojo;
 - tools/pkg/one.mojo and pkg/one.mojo, neither under a package
   initializer: "ambiguous import 'one'".
@@ -84,6 +86,16 @@ class ResolveTests(unittest.TestCase):
         }
         self.assertEqual(affected.entry_directories(sources), ['', 'bench', 'tools'])
 
+    def test_nested_module_prefixes_keep_both_roots_and_initializers(self):
+        known = {'tools/pkg.mojo', 'tools/pkg/sub.mojo',
+                 'tools/pkg/__init__.mojo', 'tools/pkg/sub/__init__.mojo',
+                 'pkg.mojo', 'pkg/sub.mojo', 'pkg/sub/one.mojo'}
+        self.assertEqual(
+            affected.resolve('pkg.sub.one', 'tools/probe.mojo', known),
+            ['tools/pkg/__init__.mojo', 'tools/pkg.mojo',
+             'tools/pkg/sub/__init__.mojo', 'tools/pkg/sub.mojo',
+             'pkg.mojo', 'pkg/sub.mojo', 'pkg/sub/one.mojo'])
+
     def test_resolver_remembers_answers_for_one_root_set(self):
         known = {'helper.mojo', 'tools/helper.mojo'}
         lookup = affected.resolver(known, ['tools'])
@@ -137,6 +149,53 @@ class TreeTests(unittest.TestCase):
         imports, users = ci_scope.graph(sources)
         self.assertEqual(imports['pkg/one.mojo'], {'helper.mojo'})
         self.assertNotIn('pkg/helper.mojo', users)
+
+    def test_prefix_module_change_and_removal_select_the_importer(self):
+        self.write('tools/pkg.mojo', 'def main():\n    pass\n')
+        for deleted in (False, True):
+            with self.subTest(deleted=deleted):
+                if deleted:
+                    (self.root / 'tools/pkg.mojo').unlink()
+                changed = {'tools/pkg.mojo': deleted}
+                with self.subTest(tool='affected'):
+                    self.assertIn('tools/probe.mojo', affected.affected_set(changed))
+                sources = {name: (self.root / name).read_text()
+                           for name in affected.mojo_files()}
+                with patch.object(ci_scope, 'source_tree', return_value=sources):
+                    plan = ci_scope.plan(changed, old={})
+                with self.subTest(tool='ci_scope'):
+                    self.assertFalse(plan['full'])
+                    self.assertIn('tools/probe.mojo', plan['files']['cpu_entries'])
+                    self.assertIn('tests/test_probe.mojo', plan['files']['cpu_tests'])
+                    self.assertEqual('tools/pkg.mojo' in plan['files']['cpu_entries'],
+                                     not deleted)
+
+    def test_ci_scope_graph_keeps_prefix_module_and_hidden_target(self):
+        self.write('tools/pkg.mojo', 'def main():\n    pass\n')
+        sources = {name: (self.root / name).read_text()
+                   for name in affected.mojo_files()}
+        imports, users = ci_scope.graph(sources)
+        self.assertEqual(imports['tools/probe.mojo'],
+                         {'tools/pkg.mojo', 'pkg/one.mojo'})
+        self.assertIn('tools/probe.mojo', users['tools/pkg.mojo'])
+
+    def test_removed_import_keeps_historical_prefix_module_dependencies(self):
+        self.write('tools/pkg.mojo', 'from core.hidden import value\n')
+        self.write('core/hidden.mojo', VALUE)
+        self.write('tests/test_hidden.mojo',
+                   'from core.hidden import value\n\ndef main():\n    print(value())\n')
+        old = {name: (self.root / name).read_text()
+               for name in affected.mojo_files()}
+        sources = dict(old)
+        sources['tests/test_probe.mojo'] = 'def main():\n    pass\n'
+        # Only the old test import can retain this unchanged dependency.
+        changed = {'tests/test_probe.mojo': False}
+        with patch.object(ci_scope, 'source_tree', return_value=sources):
+            plan = ci_scope.plan(changed, old=old)
+        self.assertFalse(plan['full'])
+        self.assertEqual(plan['files']['covered'], ['core/hidden.mojo'])
+        self.assertIn('tests/test_hidden.mojo', plan['files']['coverage_tests'])
+        self.assertNotIn('tests/test_hidden.mojo', plan['files']['cpu_tests'])
 
     def test_suite_closure_and_weight_use_the_suite_directory(self):
         self.write('tests/helper.mojo', VALUE)
