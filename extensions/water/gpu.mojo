@@ -194,6 +194,9 @@ struct GpuWater(Movable):
 
     var _pebble: DeviceBuffer[DType.float32]
     var _pebble_table: DeviceBuffer[DType.int64]
+    # A test raises once after a frame's uploads are queued, as a failed
+    # launch or read back would, to check the cleanup on that path.
+    var _fail_after_uploads: Bool
     # Declared last, and released last in `__deinit__`.
     var context: DeviceContext
     """The CUDA device the frames run on."""
@@ -210,16 +213,10 @@ struct GpuWater(Movable):
         if not has_nvidia_gpu_accelerator():
             raise Error("GpuWater needs an NVIDIA CUDA GPU")
         var context = DeviceContext(api="cuda")
-        var packed = pack_pebbles(bed)
-        var texels = _upload[DType.float32](context, packed[0])
-        var table = _upload[DType.int64](context, packed[1])
-        # A copy reads its host list until it completes. Wait before the
-        # packed lists can be freed.
-        context.synchronize()
-        _ = packed[0][0]
-        _ = packed[1][0]
-        self._pebble = texels^
-        self._pebble_table = table^
+        var buffers = _upload_bed(context, pack_pebbles(bed))
+        self._pebble = buffers[0]
+        self._pebble_table = buffers[1]
+        self._fail_after_uploads = False
         self.context = context^
 
     def __deinit__(deinit self):
@@ -318,7 +315,9 @@ struct GpuWater(Movable):
         """Compose water into a rendered scene as `WaterScene.compose`
         does, shading on the GPU.
 
-        The depth test and the write run on the CPU, in pixel order.
+        It shades on the GPU before it changes `image`. The depth test and
+        the write then run on the CPU, in pixel order. If shading fails,
+        `image` and its depths are unchanged.
 
         Parameters:
             C: The camera type.
@@ -345,10 +344,12 @@ struct GpuWater(Movable):
         )
         var surface = scene._surface()
         var caustics = scene._caustics(surface)
-        var shown = scene._compose_depth(image, plan, surface)
+        # Every pixel is shaded, so the shading does not need the depth
+        # test. Shading first leaves the image whole if it fails.
         var hdr = self._shade(
             scene, surface, caustics, plan.look, image.width, image.height
         )
+        var shown = scene._compose_depth(image, plan, surface)
         return scene._compose_write(image, hdr, shown)
 
     def _shade(
@@ -387,50 +388,93 @@ struct GpuWater(Movable):
             caustics.shift_x,
             caustics.shift_z,
         ]
-        var surface_texels = _upload[DType.float32](
-            self.context, packed_surface[0]
-        )
-        var surface_table = _upload[DType.int64](
-            self.context, packed_surface[1]
-        )
-        var ripple = _upload[DType.float32](self.context, scene._ripples.normal)
-        var caustic_texels = _upload[DType.float32](
-            self.context, packed_caustics[0]
-        )
-        var caustic_table = _upload[DType.int64](
-            self.context, packed_caustics[1]
-        )
-        var frame = _upload[DType.float32](self.context, values)
-        var output = self.context.enqueue_create_buffer[DType.float32](
-            width * height * 3
-        )
-        self.context.enqueue_function[water_kernel](
-            _device(surface_texels),
-            _device(surface_table),
-            _device(ripple),
-            _device(caustic_texels),
-            _device(caustic_table),
-            _device(self._pebble),
-            _device(self._pebble_table),
-            _device(frame),
-            _device(output),
-            Int32(scene._ripples.n),
-            Int32(width),
-            Int32(height),
-            grid_dim=(ceildiv(width, _TILE), ceildiv(height, _TILE)),
-            block_dim=(_TILE, _TILE),
-        )
         var radiance = List[Float32](length=width * height * 3, fill=0.0)
-        self.context.enqueue_copy(radiance.unsafe_ptr(), output)
-        self.context.synchronize()
-        # Every copy has completed. The host lists can go now, and the
-        # device buffers after them.
-        _ = packed_surface[0][0]
-        _ = packed_surface[1][0]
-        _ = packed_caustics[0][0]
-        _ = packed_caustics[1][0]
-        _ = values[0]
+        # A copy reads its host list until it completes. On every exit, wait
+        # for the queue before these lists can be freed.
+        try:
+            var surface_texels = _upload[DType.float32](
+                self.context, packed_surface[0]
+            )
+            var surface_table = _upload[DType.int64](
+                self.context, packed_surface[1]
+            )
+            var ripple = _upload[DType.float32](
+                self.context, scene._ripples.normal
+            )
+            var caustic_texels = _upload[DType.float32](
+                self.context, packed_caustics[0]
+            )
+            var caustic_table = _upload[DType.int64](
+                self.context, packed_caustics[1]
+            )
+            var frame = _upload[DType.float32](self.context, values)
+            if self._fail_after_uploads:
+                self._fail_after_uploads = False
+                raise Error("Water shading failed after its uploads")
+            var output = self.context.enqueue_create_buffer[DType.float32](
+                width * height * 3
+            )
+            self.context.enqueue_function[water_kernel](
+                _device(surface_texels),
+                _device(surface_table),
+                _device(ripple),
+                _device(caustic_texels),
+                _device(caustic_table),
+                _device(self._pebble),
+                _device(self._pebble_table),
+                _device(frame),
+                _device(output),
+                Int32(scene._ripples.n),
+                Int32(width),
+                Int32(height),
+                grid_dim=(ceildiv(width, _TILE), ceildiv(height, _TILE)),
+                block_dim=(_TILE, _TILE),
+            )
+            self.context.enqueue_copy(radiance.unsafe_ptr(), output)
+            self.context.synchronize()
+        except error:
+            _drain(self.context)
+            _keep(packed_surface, packed_caustics, values, radiance)
+            raise error^
+        # Every copy has completed. The host lists can go now.
+        _keep(packed_surface, packed_caustics, values, radiance)
         return radiance^
+
+
+def _upload_bed(
+    context: DeviceContext, packed: Tuple[List[Float32], List[Int64]]
+) raises -> Tuple[DeviceBuffer[DType.float32], DeviceBuffer[DType.int64]]:
+    # A copy reads its host list until it completes. On every exit, wait for
+    # the queue before the packed lists can be freed.
+    try:
+        var texels = _upload[DType.float32](context, packed[0])
+        var table = _upload[DType.int64](context, packed[1])
+        context.synchronize()
+        return (texels^, table^)
+    except error:
+        _drain(context)
+        raise error^
+
+
+def _drain(context: DeviceContext):
+    # Wait for queued copies after a failure. A queue that cannot be waited
+    # on has failed already, and the original error is the one to report.
+    try:
+        context.synchronize()
+    except:
+        pass
+
+
+def _keep(
+    surface: Tuple[List[Float32], List[Int64]],
+    caustics: Tuple[List[Float32], List[Int64]],
+    values: List[Float32],
+    radiance: List[Float32],
+):
+    # A use after the wait, so that no host list a copy reads is freed
+    # before the copy completes.
+    _ = len(surface[0]) + len(surface[1]) + len(caustics[0])
+    _ = len(caustics[1]) + len(values) + len(radiance)
 
 
 def _no_bed() raises -> PebbleBed:

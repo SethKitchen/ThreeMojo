@@ -222,9 +222,20 @@ def _composed(
     camera.place(Vector3(0, 1.55, 2), Vector3(0, 0.6, -6))
     var renderer = Renderer(WIDTH, HEIGHT)
     var water = _water()
+    # The water takes the scene's sun: the light's node is at (3, 10, 5)
+    # and shines toward the origin.
+    water.set_sun(Vector3(3, 10, 5))
     var dt = Duration(1.0 / 60.0, SECOND)
     var stages = _Stages(
-        ["advance", "scene render", "depth", "shade", "write", "frame"]
+        [
+            "advance",
+            "scene render",
+            "surface+caustics",
+            "depth",
+            "shade",
+            "write",
+            "frame",
+        ]
     )
     for frame in range(WARMUP + frames):
         var t0 = perf_counter_ns()
@@ -240,12 +251,22 @@ def _composed(
         )
         var surface = water._surface()
         var caustics = water._caustics(surface)
-        var shown = water._compose_depth(image, plan, surface)
         var t3 = perf_counter_ns()
         var hdr: List[Float32]
+        var shown: List[Bool]
+        var depth_time: Int
+        var shade_time: Int
         if device:
+            # `GpuWater.compose` shades every pixel first, then tests depth.
             hdr = gpu._shade(water, surface, caustics, plan.look, WIDTH, HEIGHT)
+            var shaded = perf_counter_ns()
+            shown = water._compose_depth(image, plan, surface)
+            shade_time = Int(shaded - t3)
+            depth_time = Int(perf_counter_ns() - shaded)
         else:
+            # The CPU tests depth first, then shades the pixels that pass.
+            shown = water._compose_depth(image, plan, surface)
+            var tested = perf_counter_ns()
             hdr = _radiance_image(
                 plan.look,
                 plan.aspect,
@@ -259,6 +280,8 @@ def _composed(
                 HEIGHT,
                 shown,
             )
+            depth_time = Int(tested - t3)
+            shade_time = Int(perf_counter_ns() - tested)
         var t4 = perf_counter_ns()
         var drawn = water._compose_write(image, hdr, shown)
         var t5 = perf_counter_ns()
@@ -269,9 +292,10 @@ def _composed(
         stages.add(0, t0, t1)
         stages.add(1, t1, t2)
         stages.add(2, t2, t3)
-        stages.add(3, t3, t4)
-        stages.add(4, t4, t5)
-        stages.add(5, t0, t5)
+        stages.times[3].append(depth_time)
+        stages.times[4].append(shade_time)
+        stages.add(5, t4, t5)
+        stages.add(6, t0, t5)
     stages.print(
         "composed scene 1920x1080 on the " + ("GPU" if device else "CPU")
     )

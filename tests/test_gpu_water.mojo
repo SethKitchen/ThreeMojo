@@ -169,13 +169,12 @@ def test_gpu_draw_matches_the_cpu_draw() raises:
                     abs(Int(p.r) - Int(q.r)),
                     max(abs(Int(p.g) - Int(q.g)), abs(Int(p.b) - Int(q.b))),
                 )
-                if d > 2:
+                if view == CAUSTICS:
+                    # Caustics do not shade, so they match exactly.
+                    assert_equal(d, 0)
+                elif d > 2:
                     far += 1
-        # Caustics do not shade, so they match exactly.
-        if view == CAUSTICS:
-            assert_equal(far, 0)
-        else:
-            assert_true(far * 100 <= 64 * 48 * 2, String(far))
+        assert_true(far * 100 <= 64 * 48 * 2, String(far))
     with assert_raises(contains="dimensions must be positive"):
         var c = _scene()
         _ = gpu.draw(c, 0, 4, FRAME, True, pitch)
@@ -205,6 +204,13 @@ def _ball() raises -> Tuple[Scene, Assets, PerspectiveCamera]:
     return (world^, assets^, camera^)
 
 
+def _channels(a: Color, b: Color) -> Int:
+    return max(
+        abs(Int(a.r) - Int(b.r)),
+        max(abs(Int(a.g) - Int(b.g)), abs(Int(a.b) - Int(b.b))),
+    )
+
+
 def test_gpu_compose_matches_the_cpu_compose() raises:
     if _skipped("gpu compose matches the cpu compose"):
         return
@@ -213,6 +219,7 @@ def test_gpu_compose_matches_the_cpu_compose() raises:
     var parts = _ball()
     var renderer = Renderer(40, 30)
     renderer.set_background(Color(0, 0, 0))
+    var scene_only = renderer.render(parts[0], parts[1], parts[2])
     var device = renderer.render(parts[0], parts[1], parts[2])
     var host = renderer.render(parts[0], parts[1], parts[2])
     var water = _scene()
@@ -222,13 +229,59 @@ def test_gpu_compose_matches_the_cpu_compose() raises:
     assert_equal(a, b)
     assert_true(a > 0)
     var far = 0
+    var kept = 0
     for i in range(40 * 30):
+        var x = i % 40
+        var y = i // 40
         assert_equal(device.depth[i], host.depth[i])
-        var p = device.get_pixel(i % 40, i // 40)
-        var q = host.get_pixel(i % 40, i // 40)
-        if abs(Int(p.g) - Int(q.g)) > 2:
+        var p = device.get_pixel(x, y)
+        if device.depth[i] == scene_only.depth[i]:
+            # Not water: the ball and the sky keep their pixels exactly.
+            assert_equal(_channels(p, scene_only.get_pixel(x, y)), 0)
+            kept += 1
+        elif _channels(p, host.get_pixel(x, y)) > 2:
             far += 1
+    assert_true(kept > 0)
     assert_true(far * 100 <= 40 * 30 * 2, String(far))
+
+
+def test_a_failed_frame_leaves_the_gpu_and_the_image_usable() raises:
+    if _skipped("a failed frame leaves the gpu and the image usable"):
+        return
+    var bed = _bed()
+    var gpu = GpuWater(bed)
+    var scene = _scene()
+    # A failure after the uploads are queued, then a good frame.
+    gpu._fail_after_uploads = True
+    with assert_raises(contains="failed after its uploads"):
+        _ = _gpu(gpu, scene, -0.72, 48, 32)
+    _agree(_gpu(gpu, scene, -0.72, 48, 32), _cpu(scene, bed, -0.72, 48, 32))
+    # A composition that fails leaves its image and depths as they were.
+    var parts = _ball()
+    var renderer = Renderer(40, 30)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(parts[0], parts[1], parts[2])
+    var before = renderer.render(parts[0], parts[1], parts[2])
+    gpu._fail_after_uploads = True
+    with assert_raises(contains="failed after its uploads"):
+        _ = gpu.compose(scene, image, parts[0], parts[2], Length(0.0, METER))
+    for i in range(40 * 30):
+        assert_equal(image.depth[i], before.depth[i])
+        assert_equal(
+            _channels(
+                image.get_pixel(i % 40, i // 40),
+                before.get_pixel(i % 40, i // 40),
+            ),
+            0,
+        )
+    # A retry draws the same water as a first try.
+    var host = renderer.render(parts[0], parts[1], parts[2])
+    var drawn = gpu.compose(
+        scene, image, parts[0], parts[2], Length(0.0, METER)
+    )
+    assert_equal(
+        drawn, scene.compose(host, parts[0], parts[2], Length(0.0, METER), bed)
+    )
 
 
 def _resident_bytes() raises -> Int:
@@ -268,7 +321,9 @@ def test_gpu_resources_stay_bounded_and_are_released() raises:
         assert_true(
             probe.get_memory_info()[0] + (1 << 20) >= settled, String(round)
         )
-        # A frame at these sizes holds well under 16 MiB at its peak.
+        # Free memory read after each frame stays within 16 MiB of where
+        # warm-up left it. This is a post-frame reading, not the in-frame
+        # peak; see the storage bound in the GPU water report.
         assert_true(settled - lowest <= 16 << 20, String(settled - lowest))
         # Host memory does not grow with the frame count.
         assert_true(_resident_bytes() - host <= 32 << 20)
@@ -276,6 +331,25 @@ def test_gpu_resources_stay_bounded_and_are_released() raises:
         _ = gpu^
         assert_true(
             probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
+        )
+
+
+def test_gpu_water_releases_after_construction_and_failure() raises:
+    if _skipped("gpu water releases after construction and failure"):
+        return
+    var probe = DeviceContext(api="cuda")
+    var empty = probe.get_memory_info()[0]
+    var scene = _scene()
+    for failing in [False, True]:
+        var gpu = GpuWater(_bed())
+        if failing:
+            gpu._fail_after_uploads = True
+            with assert_raises(contains="failed after its uploads"):
+                _ = _gpu(gpu, scene, -0.72, 64, 48)
+        # Dropped with no frame, or after a failed one.
+        _ = gpu^
+        assert_true(
+            probe.get_memory_info()[0] + (1 << 20) >= empty, String(failing)
         )
 
 

@@ -122,14 +122,14 @@ Underwater absorption and ripple lookup follow the refracted sun direction. The 
 Make one with the pebble photograph, which it copies to the device once. Then use the same calls as `WaterScene`:
 
 - `draw(scene, width, height, view, sway, pitch)` draws a whole picture. Bloom, glare and grading run on the CPU.
-- `compose(scene, image, world, camera, water_level)` composes water into a rendered scene. The depth test and the write run on the CPU.
+- `compose(scene, image, world, camera, water_level)` composes water into a rendered scene. It shades on the GPU before it changes the image, so a failed frame leaves the image whole. The depth test and the write run on the CPU.
 - `radiance(scene, look, width, height)` returns the linear radiance, three floats a pixel.
 
-Each frame copies the surface, the ripple window and the caustics to the device. It waits for the copies, then frees them. Dropping a `GpuWater` waits for the device, then frees its buffers and its context.
+Each frame copies the surface, the ripple window and the caustics to the device. It waits for the device on every exit, success or failure, before it frees its host copies. Dropping a `GpuWater` waits for the device, then frees its buffers and its context.
 
 The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires every value to be finite. It requires 98 percent of values within 1 percent of the CPU, 99.5 percent within 10 percent, and none beyond 2.
 
-See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 75 milliseconds. A whole water frame takes about 506 milliseconds, because bloom, glare and grading take about 373 on the CPU. A composed scene takes about 1,043, because its depth pass takes about 701 on one CPU thread.
+See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 76 milliseconds. A whole water frame takes about 515 milliseconds, because bloom, glare and grading take about 382 on the CPU. A composed scene takes about 971, because its depth pass takes about 621 on one CPU thread.
 
 ## Shader storage
 
