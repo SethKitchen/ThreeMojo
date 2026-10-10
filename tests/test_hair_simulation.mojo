@@ -379,5 +379,18 @@ def test_parallel_passes_equal_one_serial_pass() raises:
         assert_true(written.points != groom.points)
 
 
+def test_an_empty_groom_steps_and_writes_with_no_tasks() raises:
+    # No strands schedule no task, in either mode, for each pass.
+    for guides_only in [False, True]:
+        var groom = HairGroom()
+        var motion = HairSimulation(groom, guides_only=guides_only)
+        motion.step(_collider(), HairWind(Vector3(1, 0, 0), 1))
+        motion._lay_followers()
+        motion.write(groom)
+        assert_equal(motion.frame, 1)
+        assert_equal(len(motion.now), 0)
+        assert_equal(groom.starts, [0])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
