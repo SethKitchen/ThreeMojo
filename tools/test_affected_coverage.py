@@ -17,7 +17,10 @@ FILES = {
     'core/used.mojo': 'from core.common import common\n',
     'core/other.mojo': 'def other():\n    pass\n',
     'tests/helper.mojo': 'def helper():\n    pass\n',
-    'tests/test_a.mojo': 'from core.used import common\nfrom helper import helper\n',
+    # A suite defines main, so its directory is an entry directory and
+    # the bare helper import resolves beside it.
+    'tests/test_a.mojo': ('from core.used import common\nfrom helper import helper\n'
+                          '\n\ndef main():\n    pass\n'),
     'tests/test_b.mojo': 'from core.common import common\n',
     'tests/test_other.mojo': 'from core.other import other\n',
     'tests/test_asset.mojo': 'from core.used import common\n# "assets/fixture/"\n',

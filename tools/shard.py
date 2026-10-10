@@ -35,8 +35,10 @@ def weight(suite, known, sizes, cache):
         path = stack.pop()
         with open(os.path.join(affected.ROOT, path), encoding="utf-8") as source:
             text = source.read()
+        # Every import in the build searches the suite's directory first.
         for name in affected.imported_names(text):
-            for reached in affected.resolve(name, path, known):
+            for reached in affected.resolve(name, path, known,
+                                            [os.path.dirname(suite)]):
                 if reached not in seen:
                     seen.add(reached)
                     stack.append(reached)

@@ -43,7 +43,13 @@ TOOLING = ["Makefile", "tools/affected.py", "tools/run_suite.py", "tools/suite_k
 
 def closure(suite, known, imports):
     """Return the sorted files `suite` reaches through its imports, itself
-    included. `imports` caches each file's direct imports."""
+    included. `imports` caches each file's imported names, quoted assets,
+    and direct imports for each entry-point directory.
+
+    Mojo searches the suite's own directory, then the repo root, for every
+    import in the build, not the directory of the importing module.
+    """
+    entry = os.path.dirname(suite)
     seen = {suite}
     stack = [suite]
     while stack:
@@ -51,11 +57,15 @@ def closure(suite, known, imports):
         if path not in imports:
             with open(os.path.join(affected.ROOT, path), encoding="utf-8") as source:
                 text = source.read()
+            imports[path] = (affected.imported_names(text),
+                             affected.QUOTED_ASSET.findall(text), {})
+        names, _, resolved = imports[path]
+        if entry not in resolved:
             reached = []
-            for name in affected.imported_names(text):
-                reached.extend(affected.resolve(name, path, known))
-            imports[path] = (reached, affected.QUOTED_ASSET.findall(text))
-        for target in imports[path][0]:
+            for name in names:
+                reached.extend(affected.resolve(name, path, known, [entry]))
+            resolved[entry] = reached
+        for target in resolved[entry]:
             if target not in seen:
                 seen.add(target)
                 stack.append(target)
