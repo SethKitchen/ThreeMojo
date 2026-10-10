@@ -41,6 +41,19 @@ One render with parts hidden:
 
 The simulation and the shading fit in the budget: together they take about 6.6 milliseconds. Rasterizing about 58,000 one-pixel wide-line segments takes about 1.2 to 2.0 seconds. The head hides some strands, so the frame with both is faster than the hair alone.
 
+## Wide-line triangles on every core (#732)
+
+`Renderer.prepare_frame` built the strand triangles one segment after another: about 930 milliseconds of the frame. [Issue 732](https://github.com/SethKitchen/ThreeMojo/issues/732) builds runs of 1024 segments or more on the renderer's workers and joins them in segment order. The triangles are the same, in the same order. With 24 workers, on the same machine:
+
+| Stage | Before | After |
+|---|---:|---:|
+| `prepare_frame` | 930 ms | 477 to 517 ms |
+| CPU raster, p50 | 1,192 ms | 747 ms |
+| Whole frame, p50 | 1,198 ms | 754 ms |
+| Hair only | 1,969 ms | 735 ms |
+
+Building the triangles now takes about 220 milliseconds on 24 workers, against 890 on one. The frame is still about 45 times the budget.
+
 ## Results on the GPU
 
 The device rasterizer gives each pixel one thread, which walks every primitive. A 1920 x 1080 frame would run far past the one-minute limit this machine keeps for GPU work, so the bench ran the GPU stages at 240 x 135, 1/64 of the pixels:
@@ -55,6 +68,6 @@ The run was stopped at 60 seconds, during the third frame. Even at 1/64 of the p
 
 ## Decisions
 
-- **The CPU rasterizer is the bottleneck.** The hair stages take about 6.6 milliseconds, but drawing the strands takes about 1.2 seconds. Wide-line rasterization needs its own work before any 60 frames-per-second claim.
+- **The CPU rasterizer is the bottleneck.** The hair stages take about 6.6 milliseconds, but drawing the strands took about 1.2 seconds, and 0.75 seconds after #732. Wide-line rasterization needs more work before any 60 frames-per-second claim.
 - **The GPU rasterizer does not suit strand hair.** Its per-pixel walk over every primitive, and the per-draw upload, cost seconds at a small size. It is not a path to the target until it bins primitives into tiles.
 - **No 1080p, 60 frames-per-second claim is made.** These numbers describe this machine.
