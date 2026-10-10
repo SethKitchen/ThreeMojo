@@ -27,21 +27,23 @@ builds the next simulation.
 Run it with `mojo run -I . bench/hair_cost_bench.mojo`.
 
 Hardware: AMD Ryzen 9 5900X (12 cores, 24 threads), 62 GiB, WSL 2 on
-Windows 11, Mojo 1.1.0 (`8189361e`). Shading and its self-shadow depths
-run on every logical core. Growth and the simulation step run on one
-thread.
+Windows 11, Mojo 1.1.0 (`8189361e`). Shading, its self-shadow depths, the
+simulation step, the follower layout and the write run on every logical
+core. Growth runs on one thread.
 
 ## Results
 
 | Guides x followers | Strands | Points | Vertex bytes | Grow and upload | Shade | Step and write | Shade after step | Guides-only step and write | Guides-only frame |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 250 x 2 | 708 | 4,713 | 192,240 | 86 ms | 1.03 ms | 2.41 ms | 1.08 ms | 1.17 ms | 2.31 ms |
-| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 227 ms | 2.57 ms | 16.9 ms | 2.70 ms | 6.73 ms | 9.96 ms |
-| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 319 ms | 4.98 ms | 34.9 ms | 4.69 ms | 13.3 ms | 19.1 ms |
-| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 299 ms | 1.36 ms | 5.07 ms | 1.42 ms | 4.90 ms | 6.43 ms |
+| 250 x 2 | 708 | 4,713 | 192,240 | 68 ms | 1.04 ms | 0.88 ms | 1.04 ms | 0.27 ms | 1.57 ms |
+| 1000 x 4 | 4,875 | 32,865 | 1,343,520 | 216 ms | 2.53 ms | 2.05 ms | 2.54 ms | 1.45 ms | 4.38 ms |
+| 1500 x 6 (default) | 10,185 | 68,495 | 2,798,880 | 306 ms | 4.48 ms | 3.53 ms | 4.46 ms | 2.31 ms | 7.29 ms |
+| 1500 x 0 (no followers) | 1,455 | 9,785 | 399,840 | 291 ms | 1.43 ms | 1.05 ms | 1.33 ms | 1.02 ms | 2.74 ms |
 
 Before shading ran in parallel, one thread shaded the default groom in 20.5
-milliseconds.
+milliseconds. Before the step, the follower layout and the write ran in
+parallel, the default groom's step and write took 34.9 milliseconds, its
+guides-only step and write 13.3, and its guides-only frame 19.1.
 
 Both per-frame stages scale linearly with the point count. The full step
 costs about 0.5 microseconds a point on one thread.
@@ -51,10 +53,10 @@ of the default groom's 319 milliseconds.
 
 On one thread the default groom's per-frame hair work was about 55
 milliseconds. A 60 frames-per-second frame has 16.7 milliseconds for
-everything. With guides-only simulation and parallel shading, a measured
-frame of the default groom takes 19.1 milliseconds on this machine. That is
-still over the budget. The write, which turns every normal and depth, is
-now a large part of the guides-only step.
+everything. With guides-only simulation and every per-frame stage in parallel,
+a measured frame of the default groom takes 7.3 milliseconds on this
+machine. That is the hair alone. The rest of a frame shares the same
+16.7 milliseconds.
 
 ## Decisions
 
@@ -71,6 +73,12 @@ now a large part of the guides-only step.
   stays a separate decision with the rasterizer work in #298 and the
   general compositor in
   [#251](https://github.com/SethKitchen/ThreeMojo/issues/251).
+- **Step, lay and write in parallel.** Strands are independent in the
+  Verlet and settle passes, followers read only the moved guides, and the
+  write turns each point's frame from its own strand. Each task owns a
+  disjoint run of strands, and the points, normals and depths equal the
+  serial arithmetic bit for bit. For the default groom the guides-only
+  step and its write fall from 13.3 to 2.3 milliseconds.
 - **Keep growth as a load-time cost.** It runs once per groom.
 
 These numbers describe this machine. They are not a hardware-independent
