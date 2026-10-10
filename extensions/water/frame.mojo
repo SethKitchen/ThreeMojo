@@ -10,11 +10,15 @@ holds the camera still, which is what `?t=` does. Sway is the idle motion
 the page adds while time is running.
 """
 
-from extensions.water.caustics import CausticField, render_caustics
+from extensions.water.caustics import (
+    CausticField,
+    CausticTexels,
+    render_caustics,
+)
 from extensions.water.field import ComplexField, fft2
 from extensions.water.filter import anisotropic_step
 from extensions.water.glare import GlareKernels, apply_glare, glare_kernels
-from extensions.water.pebbles import PebbleBed
+from extensions.water.pebbles import PebbleBed, PebbleTexels
 from extensions.water.optics import (
     Refracted,
     aces_channel,
@@ -36,6 +40,7 @@ from extensions.water.optics import (
 from extensions.water.resolution import SpectrumResolution
 from extensions.water.ripple import (
     RippleField,
+    RippleTexels,
     clearwater_ripple_size,
     sample_ripple,
     step_ripple,
@@ -43,6 +48,7 @@ from extensions.water.ripple import (
 from extensions.water.spectrum import build_spectrum, evolve_spectrum
 from extensions.water.surface import (
     SurfaceField,
+    SurfaceTexels,
     resolve_surface,
     sample_surface,
     sample_surface_filtered,
@@ -63,9 +69,10 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.tasks import TaskGroup
-from std.math import cos, exp, isfinite, pow, sin, sqrt, tan
+from std.math import cos, exp, isfinite, pow, sin, sqrt
+from std.memory import bitcast
 from std.sys import num_logical_cores
-from units.si import DEGREE, SECOND, Angle, Duration, Length
+from units.si import SECOND, Angle, Duration, Length
 
 # The page's ocean patch, water depth and root-mean-square slope.
 comptime _PATCH_METERS = Float32(4.6)
@@ -74,6 +81,10 @@ comptime _TARGET_SLOPE = Float32(0.078)
 
 # Clearwater biases the caustic lookup one mip level to smooth concentrated light.
 comptime CAUSTIC_LOD_BIAS = Float32(1.0)
+
+# tan(32 degrees), the page's half field of view, as the host's libm rounds
+# it. A GPU has no libm, so the shader reads the stored bits.
+comptime _TAN_HALF_FOV = bitcast[DType.float32](UInt32(0x3F1FF770))
 
 
 @fieldwise_init
@@ -262,7 +273,7 @@ def _radiance_rows(
                 continue
             var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
             var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-            var rgb = _lit_radiance(
+            var rgb = lit_radiance(
                 look,
                 ndc_x,
                 ndc_y,
@@ -374,13 +385,15 @@ def _grade_rows(
             graded[unsafe_offset=p + 2] = rgb.z
 
 
-def _surface_hit(
+def _surface_hit[
+    S: SurfaceTexels, R: RippleTexels
+](
     look: CameraLook,
     ndc_x: Float32,
     ndc_y: Float32,
     aspect: Float32,
-    surface: SurfaceField,
-    ripples: RippleField,
+    surface: S,
+    ripples: R,
 ) -> _SurfaceHit:
     # Three fixed-point steps from the flat plane onto the waves.
     var rd = _ray(look, ndc_x, ndc_y, aspect)
@@ -431,7 +444,7 @@ def water_radiance(
     Returns:
         Linear radiance before grading.
     """
-    return _lit_radiance(
+    return lit_radiance(
         look,
         ndc_x,
         ndc_y,
@@ -447,21 +460,35 @@ def water_radiance(
     )
 
 
-def _lit_radiance(
+def lit_radiance[
+    S: SurfaceTexels,
+    R: RippleTexels,
+    C: CausticTexels,
+    B: PebbleTexels,
+](
     look: CameraLook,
     ndc_x: Float32,
     ndc_y: Float32,
     aspect: Float32,
-    surface: SurfaceField,
-    ripples: RippleField,
-    caustics: CausticField,
-    bed: PebbleBed,
+    surface: S,
+    ripples: R,
+    caustics: C,
+    bed: B,
     clock: Duration,
     pixel_x: Float32,
     pixel_y: Float32,
     sun: Vector3,
 ) -> Vector3:
     """Shade one view ray under the sun toward `sun`.
+
+    The CPU frame and a GPU kernel both call this. It reads every texture
+    through the texel traits, so the arithmetic is the same on both.
+
+    Parameters:
+        S: The surface storage.
+        R: The ripple storage.
+        C: The caustic storage.
+        B: The pebble photograph storage.
 
     Args:
         look: The camera basis.
@@ -577,22 +604,23 @@ def _lit_radiance(
     )
 
 
-def _wave_height(
-    surface: SurfaceField, ripples: RippleField, x: Float32, z: Float32
-) -> Float32:
+def _wave_height[
+    S: SurfaceTexels, R: RippleTexels
+](surface: S, ripples: R, x: Float32, z: Float32) -> Float32:
     var a = sample_surface(surface, x, z)
-    var b_uv_x = (0.8 * x + 0.6 * z) / (surface.patch.value * 0.41) + 0.37
-    var b_uv_z = (-0.6 * x + 0.8 * z) / (surface.patch.value * 0.41) + 0.37
-    var b = sample_surface(
-        surface, b_uv_x * surface.patch.value, b_uv_z * surface.patch.value
-    )
+    var patch = surface.surface_patch()
+    var b_uv_x = (0.8 * x + 0.6 * z) / (patch * 0.41) + 0.37
+    var b_uv_z = (-0.6 * x + 0.8 * z) / (patch * 0.41) + 0.37
+    var b = sample_surface(surface, b_uv_x * patch, b_uv_z * patch)
     var ripple = sample_ripple(ripples, x, z)
     return a.height + 0.10 * 0.41 * b.height + ripple.height
 
 
-def _wave_slope(
-    surface: SurfaceField,
-    ripples: RippleField,
+def _wave_slope[
+    S: SurfaceTexels, R: RippleTexels
+](
+    surface: S,
+    ripples: R,
     x: Float32,
     z: Float32,
     dist: Float32,
@@ -601,7 +629,7 @@ def _wave_slope(
     dpy_x: Float32,
     dpy_z: Float32,
 ) -> Vector3:
-    var patch = surface.patch.value
+    var patch = surface.surface_patch()
     var a = sample_surface_filtered(
         surface,
         x,
@@ -654,16 +682,18 @@ def _wave_slope(
     return Vector3(sx, sz, variance)
 
 
-def _underwater(
+def _underwater[
+    C: CausticTexels, R: RippleTexels, B: PebbleTexels
+](
     x: Float32,
     z: Float32,
     height: Float32,
     wd: Vector3,
     normal: Vector3,
     sun: Vector3,
-    caustics: CausticField,
-    ripples: RippleField,
-    bed_photo: PebbleBed,
+    caustics: C,
+    ripples: R,
+    bed_photo: B,
     clock: Duration,
     dpx_x: Float32,
     dpx_z: Float32,
@@ -704,16 +734,21 @@ def _underwater(
     if column < 0.0:
         column = 0.0
     var nudge = (bed.height - 0.35) * 0.05 / -sun_ray.y
-    var cu = (bed_x - caustics.shift_x + sun_ray.x * nudge) / caustics.patch
-    var cv = (bed_z - caustics.shift_z + sun_ray.z * nudge) / caustics.patch
+    var caustic_patch = caustics.caustic_patch()
+    var cu = (
+        bed_x - caustics.caustic_shift_x() + sun_ray.x * nudge
+    ) / caustic_patch
+    var cv = (
+        bed_z - caustics.caustic_shift_z() + sun_ray.z * nudge
+    ) / caustic_patch
     var caus = _caustic_grad(
         caustics,
         cu,
         cv,
-        dpx_x * span / caustics.patch,
-        dpx_z * span / caustics.patch,
-        dpy_x * span / caustics.patch,
-        dpy_z * span / caustics.patch,
+        dpx_x * span / caustic_patch,
+        dpx_z * span / caustic_patch,
+        dpy_x * span / caustic_patch,
+        dpy_z * span / caustic_patch,
     )
     var entered = sample_ripple(
         ripples,
@@ -841,8 +876,10 @@ def floor_f(value: Float32) -> Float32:
     return floor(value)
 
 
-def _caustic_grad(
-    field: CausticField,
+def _caustic_grad[
+    C: CausticTexels
+](
+    field: C,
     u: Float32,
     v: Float32,
     du_dx: Float32,
@@ -855,11 +892,11 @@ def _caustic_grad(
         dv_dx,
         du_dy,
         dv_dy,
-        Float32(field.n),
-        Float32(field.n),
+        Float32(field.caustic_side(0)),
+        Float32(field.caustic_side(0)),
         8.0,
         CAUSTIC_LOD_BIAS,
-        Float32(len(field.mip_n)),
+        Float32(field.caustic_levels()),
     )
     var acc = Vector3(0.0, 0.0, 0.0)
     var count = step.taps
@@ -873,10 +910,10 @@ def _caustic_grad(
     return Vector3(acc.x * inv, acc.y * inv, acc.z * inv)
 
 
-def _caustic_lod(
-    field: CausticField, u: Float32, v: Float32, lod: Float32
-) -> Vector3:
-    var levels = len(field.mip_n)
+def _caustic_lod[
+    C: CausticTexels
+](field: C, u: Float32, v: Float32, lod: Float32) -> Vector3:
+    var levels = field.caustic_levels()
     var i0 = Int(floor_f(lod))
     var i1 = i0 + 1
     if i1 > levels:
@@ -887,12 +924,10 @@ def _caustic_lod(
     return _mix3(a, b, frac)
 
 
-def _caustic_level(
-    field: CausticField, level: Int, u: Float32, v: Float32
-) -> Vector3:
-    var n = field.n
-    if level > 0:
-        n = field.mip_n[level - 1]
+def _caustic_level[
+    C: CausticTexels
+](field: C, level: Int, u: Float32, v: Float32) -> Vector3:
+    var n = field.caustic_side(level)
     var fu = u - _floor_wrap(u)
     var fv = v - _floor_wrap(v)
     var px = fu * Float32(n) - 0.5
@@ -912,13 +947,13 @@ def _caustic_level(
     return _mix3(top, bottom, ty)
 
 
-def _caustic_level_texel(
-    field: CausticField, level: Int, x: Int, y: Int
-) -> Vector3:
+def _caustic_level_texel[
+    C: CausticTexels
+](field: C, level: Int, x: Int, y: Int) -> Vector3:
     return Vector3(
-        field.level_channel(level, x, y, 0),
-        field.level_channel(level, x, y, 1),
-        field.level_channel(level, x, y, 2),
+        field.caustic_channel(level, x, y, 0),
+        field.caustic_channel(level, x, y, 1),
+        field.caustic_channel(level, x, y, 2),
     )
 
 
@@ -976,7 +1011,7 @@ def _reflect(ix: Float32, iy: Float32, iz: Float32, normal: Vector3) -> Vector3:
 def _ray(
     look: CameraLook, ndc_x: Float32, ndc_y: Float32, aspect: Float32
 ) -> Vector3:
-    var tan_f = tan(Angle(32.0, DEGREE).value)
+    var tan_f = _TAN_HALF_FOV
     return _unit(
         look.fx + ndc_x * aspect * tan_f * look.rx + ndc_y * tan_f * look.ux,
         look.fy + ndc_x * aspect * tan_f * look.ry + ndc_y * tan_f * look.uy,
@@ -1368,7 +1403,7 @@ struct WaterScene(Movable):
             raise Error("The camera must be above the water")
         # Scale the basis so the fixed Clearwater field of view in `_ray`
         # reproduces this camera's projection exactly.
-        var tan_f = tan(Angle(32.0, DEGREE).value)
+        var tan_f = _TAN_HALF_FOV
         var aspect = Float32(image.width) / Float32(image.height)
         var sx = (1.0 / p[0]) / (aspect * tan_f)
         var sy = (1.0 / p[5]) / tan_f
