@@ -97,7 +97,7 @@ Shading, its self-shadow depths, the simulation step, the follower layout and th
 
 ## Hardware qualification
 
-`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 6.6 milliseconds, but the CPU raster of the strands takes about 1.2 seconds. The GPU rasterizer is slower for this scene.
+`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU. The GPU rasterizer is slower for this scene.
 
 A 1920 by 1080 frame at 60 frames per second has a 16.667 millisecond budget. A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
 

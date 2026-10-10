@@ -15,7 +15,11 @@ stage:
 - `step+write`: one guides-only `HairSimulation.step` and its `write`.
 - `shade`: `HairStrands.shade`: the density volume, self-shadow depths,
   shading and the vertex upload into the geometry store.
-- `cpu raster`: `Renderer.render` on every logical core.
+- `cpu prepare`: `Renderer.prepare_frame` alone, the host step that
+  builds the screen-space triangles. It is measured separately and is
+  not part of the frame total.
+- `cpu render`: `Renderer.render` on every logical core: its own
+  preparation, lighting, rasterization and resolve.
 - `gpu prepare`: `Renderer.prepare_frame`, the host step that turns the
   scene into screen-space triangles and segments for the device.
 - `gpu draw`: `GpuRenderer.draw`: the upload, the launch and the
@@ -177,6 +181,10 @@ def main() raises:
             if q.x >= 0 and q.y >= 0 and q.x < WIDTH and q.y < HEIGHT:
                 visible += 1
                 break
+    var paint = assets.materials.get(hair.material.value())
+    var triangles = (
+        len(renderer.prepare_frame(scene, assets, camera).whole_corners()) // 3
+    )
     print(
         "1920x1080; strands",
         strands,
@@ -184,9 +192,15 @@ def main() raises:
         points,
         "points per strand",
         Float64(points) / Float64(strands),
-        "strands with a point in the image",
+        "strands with a point projected into the image at rest",
         visible,
-        "line width 1 px, opaque; density resolution",
+        "; line width",
+        paint.line_width.size,
+        "px, opacity",
+        paint.opacity,
+        "with hashed strand coverage; triangles emitted",
+        triangles,
+        "; density resolution",
         hair.density.resolution,
         "; raster workers",
         renderer.workers,
@@ -195,8 +209,8 @@ def main() raises:
         "ms",
     )
 
-    # Which part of the raster is the hair: the same frame with each part
-    # hidden. The hair node is the first node `add_groom` adds.
+    # Which part of the render is the hair: the rest pose with each part
+    # hidden, one render each. The animated frames below differ.
     var hair_node = hair.node.value()
     for part in range(3):
         scene.node(hair_node).visible = part != 1
@@ -221,6 +235,7 @@ def main() raises:
     var steps = List[Int]()
     var shades = List[Int]()
     var cpu = List[Int]()
+    var cpu_prepares = List[Int]()
     var prepares = List[Int]()
     var draws = List[Int]()
     var reads = List[Int]()
@@ -231,17 +246,20 @@ def main() raises:
         device = GpuRenderer(gpu_width, gpu_height)
         print("GPU stages at", gpu_width, "x", gpu_height)
     for frame in range(WARMUP + frames):
-        var t0 = perf_counter_ns()
+        var stepped = perf_counter_ns()
         motion.step(collider, wind)
         motion.write(hair.groom)
-        var t1 = perf_counter_ns()
+        var shaded = perf_counter_ns()
         hair.shade(assets, lights, eye, ambient)
-        var t2 = perf_counter_ns()
+        var rendered = perf_counter_ns()
         _ = renderer.render(scene, assets, camera)
-        var t3 = perf_counter_ns()
-        var t4 = t3
-        var t5 = t3
-        var t6 = t3
+        var prepared_cpu = perf_counter_ns()
+        _ = renderer.prepare_frame(scene, assets, camera)
+        var done_cpu = perf_counter_ns()
+        var gpu_start = done_cpu
+        var gpu_drawn = done_cpu
+        var gpu_drawing = done_cpu
+        var gpu_read = done_cpu
         if gpu:
             var small = Renderer(gpu_width, gpu_height, num_logical_cores())
             var prepared = small.prepare_frame(scene, assets, camera)
@@ -251,15 +269,7 @@ def main() raises:
                 camera_position(scene, camera),
                 toward_camera(scene, camera),
             )
-            t4 = perf_counter_ns()
-            print(
-                "frame",
-                frame,
-                "gpu prepare",
-                Float64(t4 - t3) / 1e6,
-                "ms",
-                flush=True,
-            )
+            gpu_drawing = perf_counter_ns()
             device.value().draw(
                 prepared.whole_corners(),
                 small.background,
@@ -268,34 +278,39 @@ def main() raises:
                 lines=prepared.segments,
                 draws=prepared.draws,
             )
-            t5 = perf_counter_ns()
+            gpu_drawn = perf_counter_ns()
             _ = device.value().read_back()
-            t6 = perf_counter_ns()
+            gpu_read = perf_counter_ns()
+            # Progress, after the frame's last measured stage.
             print(
                 "frame",
                 frame,
-                "gpu draw",
-                Float64(t5 - t4) / 1e6,
+                "gpu prepare",
+                Float64(gpu_drawing - gpu_start) / 1e6,
+                "draw",
+                Float64(gpu_drawn - gpu_drawing) / 1e6,
                 "read back",
-                Float64(t6 - t5) / 1e6,
+                Float64(gpu_read - gpu_drawn) / 1e6,
                 "ms",
                 flush=True,
             )
         if frame < WARMUP:
             continue
-        steps.append(Int(t1 - t0))
-        shades.append(Int(t2 - t1))
-        cpu.append(Int(t3 - t2))
-        cpu_total.append(Int(t3 - t0))
+        steps.append(Int(shaded - stepped))
+        shades.append(Int(rendered - shaded))
+        cpu.append(Int(prepared_cpu - rendered))
+        cpu_prepares.append(Int(done_cpu - prepared_cpu))
+        cpu_total.append(Int(prepared_cpu - stepped))
         if gpu:
-            prepares.append(Int(t4 - t3))
-            draws.append(Int(t5 - t4))
-            reads.append(Int(t6 - t5))
-            gpu_total.append(Int((t2 - t0) + (t6 - t3)))
+            prepares.append(Int(gpu_drawing - gpu_start))
+            draws.append(Int(gpu_drawn - gpu_drawing))
+            reads.append(Int(gpu_read - gpu_drawn))
+            gpu_total.append(Int((rendered - stepped) + (gpu_read - gpu_start)))
     print(_report("step+write", steps^))
     print(_report("shade", shades^))
-    print(_report("cpu raster", cpu^))
-    print(_report("frame with cpu raster", cpu_total^))
+    print(_report("cpu prepare (diagnostic, not in the frame)", cpu_prepares^))
+    print(_report("cpu render", cpu^))
+    print(_report("frame with cpu render", cpu_total^))
     if gpu:
         print(_report("gpu prepare", prepares^))
         print(_report("gpu draw", draws^))
