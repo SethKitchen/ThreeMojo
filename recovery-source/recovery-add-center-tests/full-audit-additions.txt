@@ -1,0 +1,143 @@
+    def test_rounded_consumers_qualify_current_variant_scope_before_projection(self):
+        import rounded_line_selector_contracts as selector
+        import rounded_line_singleton_contracts as singleton
+        import sum2_guard_contracts as guards
+        path = self.root/CENTER_LANE
+        original = path.read_bytes()
+        current = original.decode()
+        historical_scope = singleton.read_record(self.root)['import_scopes'][CENTER_LANE]
+        def import_scope(text):
+            return text.split('\ndef ', 1)[0].split('\n@', 1)[0].split('\nstruct ', 1)[0]
+        self.assertEqual(current.count('from std.utils import Variant'), 1)
+        self.assertNotEqual(guards.significant(import_scope(current)),
+                            guards.significant(historical_scope))
+        projected = cleanup.reviewed_text(self.root, CENTER_LANE, current)
+        self.assertEqual(guards.significant(import_scope(projected)),
+                         guards.significant(historical_scope))
+        for variant in (original, b'# Inert current import-scope comment.\n' + original,
+                        original.replace(b'\n', b'\r\n')):
+            with self.subTest(formatting=variant != original):
+                try:
+                    path.write_bytes(variant)
+                    for contract in (selector, singleton):
+                        self.assertEqual(contract.verify_premises(self.root), contract.verify(self.root))
+                    self.assertEqual(path.read_bytes(), variant)
+                finally:
+                    path.write_bytes(original)
+        cleanup.verify(self.root, exact=True)
+
+    def test_rounded_consumers_reject_center_changes_behind_unchanged_scope(self):
+        import rounded_line_selector_contracts as selector
+        import rounded_line_singleton_contracts as singleton
+        import sum2_guard_contracts as guards
+        path = self.root/CENTER_LANE
+        original = path.read_bytes()
+        current = original.decode()
+        rounded = guards.declaration(current, '_rounded_axis_lane_minimum', ())
+        scope = current.split('\ndef ', 1)[0]
+        labels = ('center_count_predicate', 'cache_key', 'cache_lifetime',
+                  'context_fields', 'direct_certificate_alias', 'caller_discard')
+        variants = [next(row for row in CENTER_SEMANTIC_MUTANTS if row[0] == label)
+                    for label in labels]
+        for contract in (selector, singleton):
+            contract.verify(self.root)
+        for label, owner, before, after in variants:
+            changed = replace_center_target(self, current, owner, before, after)
+            self.assertEqual(changed.split('\ndef ', 1)[0], scope)
+            self.assertEqual(guards.declaration(changed, '_rounded_axis_lane_minimum', ()), rounded)
+            with self.subTest(center_owner=label):
+                try:
+                    path.write_text(changed)
+                    for contract in (selector, singleton):
+                        with self.subTest(contract=contract.__name__):
+                            with self.assertRaises(ValueError):
+                                contract.verify_premises(self.root)
+                            with self.assertRaises(ValueError):
+                                contract.verify(self.root)
+                finally:
+                    path.write_bytes(original)
+                for contract in (selector, singleton):
+                    contract.verify(self.root)
+
+    def test_rounded_consumers_keep_variant_resolver_witness_and_census_live(self):
+        import rounded_line_selector_contracts as selector
+        import rounded_line_singleton_contracts as singleton
+        path = self.root/CENTER_LANE
+        original = path.read_bytes()
+        current = original.decode()
+        mutations = (
+            (CENTER_LANE, current.replace('from std.utils import Variant',
+                                          'from std.utils import Variant as Hidden', 1).encode()),
+            (CENTER_LANE, current.replace('from std.utils import Variant',
+                                          'from unreviewed import Variant', 1).encode()),
+            (CENTER_WITNESS, (self.root/CENTER_WITNESS).read_bytes() + b'\n# Changed witness.\n'),
+            ('std/utils.mojo', b'struct Variant: pass\n'),
+            ('fresh_namespace/center_consumer.mojo',
+             b'from extensions.carla.lane_refinement import _try_lane_center_bound as hidden\n'),
+        )
+        for contract in (selector, singleton):
+            contract.verify(self.root)
+        for name, changed in mutations:
+            target = self.root/name
+            previous = target.read_bytes() if target.exists() else None
+            self.assertNotEqual(changed, previous)
+            created_directories = []
+            parent = target.parent
+            while not parent.exists():
+                created_directories.append(parent)
+                parent = parent.parent
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with self.subTest(live_input=name, mutation=changed[:80]):
+                try:
+                    target.write_bytes(changed)
+                    for contract in (selector, singleton):
+                        with self.subTest(contract=contract.__name__):
+                            with self.assertRaises(ValueError):
+                                contract.verify_premises(self.root)
+                            with self.assertRaises(ValueError):
+                                contract.verify(self.root)
+                finally:
+                    if previous is None:
+                        target.unlink()
+                    else:
+                        target.write_bytes(previous)
+                    for directory in created_directories:
+                        directory.rmdir()
+                for contract in (selector, singleton):
+                    contract.verify(self.root)
+        self.assertEqual(path.read_bytes(), original)
+
+    def test_rounded_consumers_reject_old_center_endpoint_and_combined_faults(self):
+        import rounded_line_selector_contracts as selector
+        import rounded_line_singleton_contracts as singleton
+        path = self.root/CENTER_LANE
+        original = path.read_bytes()
+        context_path = self.root/'extensions/carla/curve_rounded_line.mojo'
+        context = context_path.read_bytes()
+        intermediate = cleanup.reverse_center_exact(original.decode(), self.record['sources'][CENTER_LANE])
+        self.assertEqual(cleanup.sha(intermediate), CENTER_INTERMEDIATE_SHA256)
+        changed = replace_center_target(self, original.decode(), 'helper',
+                                        'if center_work >= 0:', 'if center_work > 0:')
+        self.assertEqual(context.count(b'if not (x.known and y.known):'), 1)
+        for label, lane_bytes, context_bytes in (
+            ('old center endpoint', intermediate.encode(), context),
+            ('lane fault only', changed.encode(), context),
+            ('context fault only', original, context.replace(b'if not (x.known and y.known):', b'if False:', 1)),
+            ('combined faults', changed.encode(), context.replace(b'if not (x.known and y.known):', b'if False:', 1)),
+        ):
+            with self.subTest(fault=label):
+                try:
+                    path.write_bytes(lane_bytes)
+                    context_path.write_bytes(context_bytes)
+                    for contract in (selector, singleton):
+                        with self.subTest(contract=contract.__name__):
+                            with self.assertRaises(ValueError):
+                                contract.verify_premises(self.root)
+                            with self.assertRaises(ValueError):
+                                contract.verify(self.root)
+                finally:
+                    path.write_bytes(original)
+                    context_path.write_bytes(context)
+                for contract in (selector, singleton):
+                    contract.verify(self.root)
+

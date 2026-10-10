@@ -1,0 +1,64 @@
+# Current-owner equivalents for the eight lane mutations whose target moved
+# into the typed center producer/context. The original CASES remain unchanged
+# and are checked separately on the exact verified 370dee historical source.
+CURRENT_CENTER_CASES = {
+    'grouped_recheck_headroom': ('_try_lane_center_bound',
+        'if max_nodes - nodes >= 2:', 'if max_nodes - nodes >= 1:'),
+    'grouped_stale_optional_result': ('_try_lane_center_bound',
+        'var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None',
+        'var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = previous_grouped'),
+    'model_capture_reintroduction': ('_try_lane_center_bound',
+        'var delta = _Interval(cell.low, cell.high) - _Interval.point(center_s)',
+        'var hidden = _try_objective_model(cell.low, cell.high, center_s, policy.scale, domain, center)\n        var delta = _Interval(cell.low, cell.high) - _Interval.point(center_s)'),
+    'fast_memo_wrong_station': ('_try_lane_center_bound',
+        '_same_cache_key(context.cached_fast.value()[0], context.cached_fast.value()[1], station_word, scale_word)',
+        '_same_cache_key(context.cached_fast.value()[0], context.cached_fast.value()[1], scale_word, scale_word)'),
+    'fast_memo_wrong_scale': ('_try_lane_center_bound',
+        '_same_cache_key(context.cached_fast.value()[0], context.cached_fast.value()[1], station_word, scale_word)',
+        '_same_cache_key(context.cached_fast.value()[0], context.cached_fast.value()[1], station_word, station_word)'),
+    'expansion_memo_wrong_station': ('_try_lane_center_bound',
+        '_same_cache_key(context.cached_expansion.value()[0], context.cached_expansion.value()[1], station_word, scale_word)',
+        '_same_cache_key(context.cached_expansion.value()[0], context.cached_expansion.value()[1], scale_word, scale_word)'),
+    'expansion_memo_wrong_scale': ('_try_lane_center_bound',
+        '_same_cache_key(context.cached_expansion.value()[0], context.cached_expansion.value()[1], station_word, scale_word)',
+        '_same_cache_key(context.cached_expansion.value()[0], context.cached_expansion.value()[1], station_word, station_word)'),
+    'memo_cross_invocation': ('_run_lane_search',
+        'external_witness.copy(), None, None', 'external_witness.copy(), None, saved'),
+}
+MODEL_CENSUS_CASES = frozenset(('model_state_reintroduction', 'model_capture_reintroduction',
+                               'model_restriction_reintroduction'))
+CURRENT_GROUPED_CASES = (
+    ('terms += whole_work', 'terms += 0'),
+    ('if max_nodes - nodes >= 2:', 'if True:'),
+    ('point_domain = _lane_jet(road, context.section, context.lane, cell.low, cell.high)',
+     'point_domain = grouped.value()'),
+)
+
+CURRENT_OWNER_GUARDS = (
+    ('support_actual_witness', '_try_lane_center_bound',
+     '_minimizer_support(domain, center, center_s, best, cell.low, cell.high)',
+     '_minimizer_support(domain, center, center_s, cell.low, cell.low, cell.high)'),
+    ('context_root_interval', '_run_lane_search',
+     'section, lane, _Interval(low, high), location, spiral_proof, frozen, external_witness.copy(), None, None',
+     'section, lane, _Interval(low, low), location, spiral_proof, frozen, external_witness.copy(), None, None'),
+    ('direct_certificate_counters', '_run_lane_search',
+     '_LaneBoundPolicy(best_upper, scale, tolerance, goal), certificate.nodes, certificate.terms, max_nodes, max_terms',
+     '_LaneBoundPolicy(best_upper, scale, tolerance, goal), certificate.terms, certificate.nodes, max_nodes, max_terms'),
+)
+
+
+def physical_cleanup_fixture(case, record):
+    directory = tempfile.TemporaryDirectory(prefix='optional-current-owner-')
+    case.addCleanup(directory.cleanup)
+    root = Path(directory.name)
+    paths = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS,
+             *record['inventory'], str(sources.PINS), str(guards.PINS)}
+    for group in cleanup.BOUND_GROUPS:
+        paths.update(record[group])
+    for paths_in_group in sources.GROUP_PATHS.values():
+        paths.update(paths_in_group)
+    for name in paths:
+        target = root/name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT/name, target)
+    return root

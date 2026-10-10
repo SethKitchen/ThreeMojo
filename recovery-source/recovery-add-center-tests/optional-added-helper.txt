@@ -1,0 +1,5 @@
+    def current_lane_change(self, case):
+        label, module, name, before, after, diagnostic = case
+        self.assertEqual(module, 'lane_refinement')
+        name, before, after = CURRENT_CENTER_CASES.get(label, (name, before, after))
+        return self.changed(module, name, before, after)

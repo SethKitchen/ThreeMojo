@@ -1,0 +1,109 @@
+    @classmethod
+    def setUpClass(cls):
+        cls.cleanup_record = cleanup.verify(ROOT, exact=True)
+        cls.cleanup_fixture = cls.cleanup_record['sources']
+        lane = cls.cleanup_fixture['extensions/carla/lane_refinement.mojo']
+        cls.search_source = cleanup.reverse_center_exact(lane['after_source'], lane)
+        if cleanup.sha(cls.search_source) != '370dee032a5e126e727c46d0ceb7103359f1ad7fba8151e341b594df0c7d0e30':
+            raise RuntimeError('historical search fixture is not the verified center predecessor')
+        optional.verify_search_semantics(optional.body_from_source(cls.search_source, '_run_lane_search'))
+        cls.semantic = optional.verify(ROOT)
+        cls.guarded = guards.verify(ROOT)
+        cls.sampled = sampled.verify(ROOT)
+        cls.pins = {path: (ROOT/path).read_bytes() for path in (sources.PINS, guards.PINS)}
+
+    def changed(self, module, name, before, after, *, source_text=None):
+        path = ROOT/'extensions/carla'/f'{module}.mojo'
+        original = path.read_text() if source_text is None else source_text
+        function, span, tokens = guards.function_span(original, name, ())
+        first, last = tokens[span[0]].start[0]-1, tokens[span[1]-1].start[0]-1
+        lines = original.splitlines(keepends=True)
+        original_function = ''.join(lines[first:last])
+        replacement = replace_token_fragment(original_function, before, after)
+        self.assertNotEqual(replacement, original_function)
+        return path, ''.join(lines[:first]) + replacement + ''.join(lines[last:])
+
+    def exercise(self, case):
+        label, module, name, before, after, diagnostic = case
+        read = Path.read_text
+        if module == 'lane_refinement':
+            path, historical = self.changed(module, name, before, after,
+                                            source_text=self.search_source)
+            if label in MODEL_CENSUS_CASES:
+                # Census only: this historical text is never admitted as a
+                # current root or supplied to the production semantic gate.
+                with patch.object(Path, 'read_text', lambda p, *a, **k:
+                                  historical if p == path else read(p, *a, **k)):
+                    with self.assertRaisesRegex(ValueError, diagnostic):
+                        optional.verify_no_containing_model_consumers(ROOT)
+            else:
+                with self.assertRaisesRegex(ValueError, diagnostic):
+                    optional.verify_search_semantics(optional.body_from_source(historical, name))
+            optional.verify_search_semantics(optional.body_from_source(self.search_source, name))
+            path, changed = self.current_lane_change(case)
+            with patch.object(Path, 'read_text', lambda p, *a, **k:
+                              changed if p == path else read(p, *a, **k)):
+                with self.assertRaises(ValueError):
+                    optional.verify_semantics(ROOT)
+                with self.assertRaisesRegex(ValueError, 'runtime source dependency changed'):
+                    sources.verify_group(ROOT, 'optional_runtime')
+        else:
+            path, changed = self.changed(module, name, before, after)
+            with patch.object(Path, 'read_text', lambda p, *a, **k:
+                              changed if p == path else read(p, *a, **k)):
+                with self.assertRaisesRegex(ValueError, diagnostic):
+                    optional.verify_semantics(ROOT)
+                with self.assertRaisesRegex(ValueError, 'runtime source dependency changed'):
+                    sources.verify_group(ROOT, 'optional_runtime')
+        for path, pin in self.pins.items():
+            self.assertEqual((ROOT/path).read_bytes(), pin)
+
+    def test_dispatch_cannot_move_before_original_closures(self):
+        path = ROOT/'extensions/carla/lane_refinement.mojo'
+        original = self.search_source
+        setup = '''        if not sampled_checked:
+            sampled_checked = True
+            sampled_cuts = _try_sample_dispatch_cuts(
+                road, low, high, certificate.nodes, certificate.terms,
+                max_nodes, max_terms,
+            )
+'''
+        marker = '        var best_upper = best_bounds.high\n        var work = _reference_work(road, lo, hi)\n'
+        changed = replace_token_fragment(original, setup, '')
+        changed = replace_token_fragment(changed, marker, setup + marker)
+        with self.assertRaisesRegex(ValueError, 'depth refusal precedes dispatch'):
+            optional.verify_search_semantics(optional.body_from_source(changed, '_run_lane_search'))
+        optional.verify_search_semantics(optional.body_from_source(self.search_source, '_run_lane_search'))
+        current = path.read_text()
+        current = replace_token_fragment(current, setup, '')
+        current = replace_token_fragment(current, marker, setup + marker)
+        read = Path.read_text
+        with patch.object(Path, 'read_text', lambda p, *a, **k: current if p == path else read(p, *a, **k)):
+            with self.assertRaises(ValueError):
+                optional.verify_semantics(ROOT)
+
+    def test_grouped_reserve_cannot_bypass_prepaid_fallback_order(self):
+        cases = (
+            ('certificate.terms += work', 'certificate.terms += 0'),
+            ('if max_nodes - certificate.nodes >= 2:', 'if True:'),
+            ('point_domain = _lane_jet(road, section, lane, lo, hi)', 'point_domain = grouped.value()'),
+        )
+        original = optional.GROUPED_ADMISSION
+        for index, (before, after) in enumerate(cases):
+            path, changed = self.changed('lane_refinement', '_run_lane_search',
+                original, textwrap.indent(original.replace(before, after, 1).strip(), ' ' * 20),
+                source_text=self.search_source)
+            with self.subTest(change=after):
+                with self.assertRaisesRegex(ValueError, 'grouped caller must retain recheck'):
+                    optional.verify_search_semantics(optional.body_from_source(changed, '_run_lane_search'))
+                optional.verify_search_semantics(optional.body_from_source(self.search_source, '_run_lane_search'))
+                current_before, current_after = CURRENT_GROUPED_CASES[index]
+                path, current = self.changed('lane_refinement', '_try_lane_center_bound',
+                                             current_before, current_after)
+                read = Path.read_text
+                with patch.object(Path, 'read_text', lambda p, *a, **k:
+                                  current if p == path else read(p, *a, **k)):
+                    with self.assertRaises(ValueError):
+                        optional.verify_semantics(ROOT)
+                    with self.assertRaisesRegex(ValueError, 'runtime source dependency changed'):
+                        sources.verify_group(ROOT, 'optional_runtime')

@@ -1,0 +1,170 @@
+--- a/tools/carla_lane_oracle/optional_runtime_contracts.py
++++ b/tools/carla_lane_oracle/optional_runtime_contracts.py
+@@ -16,9 +16,11 @@
+     import check_sampled_values as sampled
+     import sum2_guard_contracts as guard
+     import source_contracts
++    import full_audit_cleanup_contracts as full_audit
+ except ModuleNotFoundError:
+     from tools.carla_lane_oracle import check_sampled_values as sampled
+     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
++    from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
+ 
+ FOLLOWUP_ROOM = """
+ def _objective_followup_room(
+@@ -75,6 +77,11 @@
+ 
+ def body(root, module, name):
+     text = (root / ('extensions/carla/' + module + '.mojo')).read_text()
++    return body_from_source(text, name)
++
++
++def body_from_source(text, name):
++    """Parse a supplied semantic fixture; this grants no source admission."""
+     source = guard.declaration(text, name)
+     # The historical AST adapter has no lane-search move arguments. Remove
+     # only postfix move sigils before argument delimiters for this semantic
+@@ -218,6 +225,38 @@
+         sequence(run, 'var station_word = bitcast[DType.uint64](center_s)\n'
+                  + 'var scale_word = bitcast[DType.uint64](scale)\n' + fragment,
+                  'exact station/scale ' + label + ' expansion memo and fresh fallback')
++
++
++def verify_search_semantics(run):
++    """Check the retained pre-center run predicates, without admitting a root.
++
++    Production callers must first qualify the complete live successor and
++    reconstruct its exact center predecessor. Tests may give this pure checker
++    separately mutated historical AST fixtures; those fixtures are never an
++    alternative live-source endpoint.
++    """
++    verify_fresh_producer(run)
++    contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
++    contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
++    contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
++    expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',
++               'support receives same ideal and actual witness')
++    sequence(run, GROUPED_ADMISSION,
++             'grouped caller must retain recheck and prepaid original fallback')
++    expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
++               'one guarded grouped caller edge')
++    while_nodes = [item for item in run.body if isinstance(item, ast.While)]
++    require(len(while_nodes) == 1, 'one original search frontier loop')
++    statements = while_nodes[0].body
++    setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
++             and sampled.dump(item.test) == sampled.dump(ast.parse(
++                 'not sampled_checked', mode='eval').body)]
++    require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
++    preceding = statements[setup[0] - 1]
++    contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
++             'depth refusal precedes dispatch setup')
++    expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
++               'split predecessor preserves every stored owner station')
+ 
+ 
+ def verify_semantics(root):
+@@ -323,14 +362,7 @@
+         require(wanted in names and names.index(wanted) < loop,
+                 'dispatch debit must precede optional attempts')
+ 
+-    run = body(root, 'lane_refinement', '_run_lane_search')
+     verify_no_containing_model_consumers(root)
+-    verify_fresh_producer(run)
+-    contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
+-    contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
+-    contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
+-    expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',
+-               'support receives same ideal and actual witness')
+     # The standalone helper remains reviewed and tested even though the
+     # search solver no longer imports, captures, or restricts this model.
+     room = body(root, 'curve_objective_model', '_objective_followup_room')
+@@ -341,22 +373,6 @@
+     require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(
+         sampled.syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
+         'complete integer cached-closure recheck admission')
+-    sequence(run, GROUPED_ADMISSION,
+-             'grouped caller must retain recheck and prepaid original fallback')
+-    expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
+-               'one guarded grouped caller edge')
+-    while_nodes = [item for item in run.body if isinstance(item, ast.While)]
+-    require(len(while_nodes) == 1, 'one original search frontier loop')
+-    statements = while_nodes[0].body
+-    setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
+-             and sampled.dump(item.test) == sampled.dump(ast.parse(
+-                 'not sampled_checked', mode='eval').body)]
+-    require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
+-    preceding = statements[setup[0] - 1]
+-    contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
+-             'depth refusal precedes dispatch setup')
+-    expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
+-               'split predecessor preserves every stored owner station')
+     fee = body(root, 'map', '_query_node_step_cost')
+     contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')
+     contains(fee, 'fixed += 16', 'stored dispatch logical fee')
+@@ -370,6 +386,16 @@
+     except ModuleNotFoundError:
+         from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw_inverse
+     raw_inverse.verify_premises(root)
++    # Preserve specific live producer, absence, integer-fee and raw-inverse
++    # diagnostics before the transitive source gate. Current lane faults use
++    # the complete-successor diagnostic; historical AST predicates keep their
++    # old labels. Multiply invalid inputs can report a different first error.
++    # The center helper/context/caller are checked on actual live sources by
++    # the complete gate before any historical run body is made available.
++    record = full_audit.verify(root)
++    item = record['sources']['extensions/carla/lane_refinement.mojo']
++    previous = full_audit.reverse_center_exact(item['after_source'], item)
++    verify_search_semantics(body_from_source(previous, '_run_lane_search'))
+     # Keep the specific raw-inverse diagnostic before this projection's new
+     # transitive cleanup inventory. Both checks remain mandatory; when both
+     # independent premise sets are invalid, the raw premise is reported first.
+--- a/tools/carla_lane_oracle/rounded_line_selector_contracts.py
++++ b/tools/carla_lane_oracle/rounded_line_selector_contracts.py
+@@ -49,14 +49,20 @@
+                     import reviewed_cleanup_contracts as words
+                 words.verify_dependency(name, actual, item['token_sha256'])
+     for name, expected in old['import_scopes'].items():
+-        actual=(root/name).read_text().split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
++        text = (root/name).read_text()
++        if name == 'extensions/carla/lane_refinement.mojo':
++            # The added Variant import belongs to the complete, reviewed
++            # center extraction. Never erase an import from an unverified view.
++            text = full_audit.reviewed_text(root, name, text)
++        actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+         require(guard.significant(actual) == guard.significant(expected), 'consumer import scope changed')
+     for item in old['declarations']:
+         text = (root/item['path']).read_text()
+         if (item['path'], item['name'], tuple(item['owner'])) == (
+                 'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ()):
+             # Only this complete live consumer can request its fixed earlier
+-            # declaration. All selector/context/import/reference reads stay live.
++            # declaration. Selector/context/reference reads remain live; the
++            # lane import scope above consumes the same fully reviewed edge.
+             text = full_audit.reviewed_text(root, item['path'], text)
+         actual = guard.declaration(text, item['name'], tuple(item['owner']))
+         require(guard.significant(actual) == guard.significant(item['source']), 'prior consumer/reference changed: ' + item['name'])
+--- a/tools/carla_lane_oracle/rounded_line_singleton_contracts.py
++++ b/tools/carla_lane_oracle/rounded_line_singleton_contracts.py
+@@ -69,14 +69,20 @@
+         if guard.significant(actual) != guard.significant(item['source']):
+             _verify_dependency(path, actual, item['token_sha256'])
+     for path, expected in record['import_scopes'].items():
+-        actual = (root/path).read_text().split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
++        text = (root/path).read_text()
++        if path == 'extensions/carla/lane_refinement.mojo':
++            # The added Variant import belongs to the complete, reviewed
++            # center extraction. Never erase an import from an unverified view.
++            text = full_audit.reviewed_text(root, path, text)
++        actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+         require(guard.significant(actual) == guard.significant(expected), 'consumer import scope changed: ' + path)
+     for item in record['declarations']:
+         text = (root/item['path']).read_text()
+         if (item['path'], item['name'], tuple(item['owner'])) == (
+                 'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ()):
+             # Only this complete live consumer can request its fixed earlier
+-            # declaration. All selector/context/import/reference reads stay live.
++            # declaration. Selector/context/reference reads remain live; the
++            # lane import scope above consumes the same fully reviewed edge.
+             text = full_audit.reviewed_text(root, item['path'], text)
+         actual = guard.declaration(text, item['name'], tuple(item['owner']))
+         require(guard.significant(actual) == guard.significant(item['source']),

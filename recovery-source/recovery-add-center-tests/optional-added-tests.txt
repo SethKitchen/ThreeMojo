@@ -1,0 +1,93 @@
+    def test_every_historical_lane_family_has_a_live_current_owner_refusal(self):
+        cases = [case for case in CASES if case[1] == 'lane_refinement']
+        self.assertEqual(len(cases), 18)
+        self.assertTrue(set(CURRENT_CENTER_CASES) <= {case[0] for case in cases})
+        root = physical_cleanup_fixture(self, self.cleanup_record)
+        self.assertEqual(optional.verify(root)['status'], 'PASS')
+        path = root/'extensions/carla/lane_refinement.mojo'
+        original = path.read_bytes()
+        variants = [(case[0], self.current_lane_change(case)[1]) for case in cases]
+        variants.extend(('grouped_prepaid_' + str(index),
+                         self.changed('lane_refinement', '_try_lane_center_bound', before, after)[1])
+                        for index, (before, after) in enumerate(CURRENT_GROUPED_CASES))
+        variants.extend((label, self.changed('lane_refinement', owner, before, after)[1])
+                        for label, owner, before, after in CURRENT_OWNER_GUARDS)
+        setup = '''        if not sampled_checked:
+            sampled_checked = True
+            sampled_cuts = _try_sample_dispatch_cuts(
+                road, low, high, certificate.nodes, certificate.terms,
+                max_nodes, max_terms,
+            )
+'''
+        marker = '        var best_upper = best_bounds.high\n        var work = _reference_work(road, lo, hi)\n'
+        moved = replace_token_fragment(original.decode(), setup, '')
+        moved = replace_token_fragment(moved, marker, setup + marker)
+        variants.append(('dispatch_before_original_closures', moved))
+        for label, changed in variants:
+            self.assertNotEqual(changed.encode(), original)
+            with self.subTest(current_owner=label):
+                try:
+                    path.write_text(changed)
+                    with self.assertRaises(ValueError):
+                        optional.verify_semantics(root)
+                    with self.assertRaises(ValueError):
+                        optional.verify(root)
+                    with self.assertRaises(cleanup.ContractError):
+                        cleanup.verify(root)
+                    with self.assertRaisesRegex(ValueError, 'runtime source dependency changed'):
+                        sources.verify_group(root, 'optional_runtime')
+                finally:
+                    path.write_bytes(original)
+                self.assertEqual(optional.verify(root)['status'], 'PASS')
+
+    def test_historical_search_helper_never_admits_an_old_physical_endpoint(self):
+        root = physical_cleanup_fixture(self, self.cleanup_record)
+        path = root/'extensions/carla/lane_refinement.mojo'
+        original = path.read_bytes()
+        item = self.cleanup_fixture['extensions/carla/lane_refinement.mojo']
+        self.assertEqual(self.search_source, item['center_extraction']['intermediate_source'])
+        self.assertIsNone(optional.verify_search_semantics(
+            optional.body_from_source(self.search_source, '_run_lane_search')))
+        for historical in (self.search_source, item['before_source']):
+            with self.subTest(endpoint=cleanup.sha(historical)):
+                try:
+                    path.write_text(historical)
+                    with self.assertRaises(ValueError):
+                        optional.verify_semantics(root)
+                    with self.assertRaises(ValueError):
+                        optional.verify(root)
+                finally:
+                    path.write_bytes(original)
+                self.assertEqual(optional.verify(root)['status'], 'PASS')
+
+    def test_combined_current_lane_and_producer_faults_never_project_away(self):
+        root = physical_cleanup_fixture(self, self.cleanup_record)
+        lane_path = root/'extensions/carla/lane_refinement.mojo'
+        model_path = root/'extensions/carla/curve_objective_model.mojo'
+        lane_bytes, model_bytes = lane_path.read_bytes(), model_path.read_bytes()
+        lane_case = next(case for case in CASES if case[0] == 'fast_memo_wrong_scale')
+        model_case = next(case for case in CASES if case[0] == 'owner_low')
+        lane_changed = self.current_lane_change(lane_case)[1]
+        model_changed = self.changed(*model_case[1:5])[1]
+        # Single non-lane faults retain their original exact diagnostic.
+        try:
+            model_path.write_text(model_changed)
+            with self.assertRaisesRegex(ValueError, model_case[-1]):
+                optional.verify_semantics(root)
+        finally:
+            model_path.write_bytes(model_bytes)
+        try:
+            lane_path.write_text(lane_changed)
+            with self.assertRaisesRegex(ValueError, 'unreviewed complete live endpoint'):
+                optional.verify_semantics(root)
+            model_path.write_text(model_changed)
+            # Both premises remain mandatory; only first-error ordering may
+            # differ for this deliberately multiply invalid physical root.
+            with self.assertRaises(ValueError):
+                optional.verify_semantics(root)
+            with self.assertRaises(ValueError):
+                optional.verify(root)
+        finally:
+            lane_path.write_bytes(lane_bytes)
+            model_path.write_bytes(model_bytes)
+        self.assertEqual(optional.verify(root)['status'], 'PASS')
