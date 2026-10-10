@@ -1,0 +1,27 @@
+--- a/extensions/carla/lane_refinement.mojo
++++ b/extensions/carla/lane_refinement.mojo
+@@ -2320,16 +2320,20 @@
+         max(Float64(start.z), Float64(end.z)),
+     )
+     var natural = _length_up(x.magnitude(), y.magnitude(), z.magnitude())
++    # Endpoint admission and a finite second derivative are independent
++    # requirements for the optional smooth certificate. Check the counts
++    # first, including when the original coarse box is already unbounded.
++    # Either refusal retains the same natural bound and spent-work ledger.
++    var first_work = _reference_work(road, low, low)
++    var last_work = _reference_work(road, high, high)
++    if first_work < 0 or last_work < 0:
++        return (natural, box, spent)
+     var derivative = _length_up(
+         point[0].second.magnitude(),
+         point[1].second.magnitude(),
+         point[2].second.magnitude(),
+     )
+     if not isfinite(derivative):
+-        return (natural, box, spent)
+-    var first_work = _reference_work(road, low, low)
+-    var last_work = _reference_work(road, high, high)
+-    if first_work < 0 or last_work < 0:
+         return (natural, box, spent)
+     if first_work > max_terms - spent:
+         return (natural, box, spent)

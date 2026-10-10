@@ -1,0 +1,226 @@
+def reverse_center_exact(text, item):
+    """Invert only the five anchored center spans to the fixed v14 endpoint."""
+    _center_require(type(item) is dict and 'center_extraction' in item,
+                    'missing center inverse descriptor')
+    descriptor = item['center_extraction']
+    _center_descriptor(descriptor)
+    _center_require(sha(text) == AFTER_SHA256[SOURCE_PATHS[2]]
+                    and text == item['after_source'], 'complete center inverse endpoint changed')
+    _center_require(tuple(edit['name'] for edit in item['edits']) == EDIT_NAMES[SOURCE_PATHS[2]],
+                    'missing, duplicate, reordered or extra inverse edit')
+    for edit in reversed(item['edits'][-len(CENTER_EDIT_NAMES):]):
+        text = _reverse_span(text, edit)
+    _center_require(sha(text) == CENTER_INTERMEDIATE_SHA256
+                    and text == descriptor['intermediate_source'],
+                    'byte-exact center intermediate reconstruction failed')
+    return text
+
+
+def read_record(root):
+    require(MIGRATION_SHA256 != 'UNSEALED' and set(AFTER_SHA256) == set(SOURCE_PATHS),
+            'successor candidate is not sealed')
+    raw = (Path(root)/MIGRATION).read_bytes()
+    require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256,
+            'immutable successor record changed')
+    record = json.loads(raw, object_pairs_hook=source.unique_keys)
+    require(type(record['schema']) is int and record['schema'] == 2,
+            'wrong schema')
+    require(set(record['sources']) == set(SOURCE_PATHS), 'wrong source endpoint set')
+    require(set(record['native_witnesses']) == set(NATIVE_WITNESSES), 'native witness scope changed')
+    require(set(record['native_support_inputs']) == set(NATIVE_SUPPORT_INPUTS),
+            'native fixture support scope changed')
+    require(record['native_support_mapping'] == NATIVE_SUPPORT_MAPPING,
+            'native fixture registration changed')
+    require(set(record['theorem_documents']) == {THEOREM_DOCUMENT},
+            'theorem document scope changed')
+    for path, item in record['sources'].items():
+        require(item['before_sha256'] == BEFORE_SHA256[path]
+                and item['after_sha256'] == AFTER_SHA256[path],
+                'reviewed endpoint metadata changed: ' + path)
+        for side in ('before', 'after'):
+            text = item[side + '_source']
+            require(sha(text) == item[side + '_sha256']
+                    and source.token_sha256(text) == item[side + '_token_sha256'],
+                    'complete recorded source changed: ' + path)
+    for group, expected in FROZEN_GROUP_SHA256.items():
+        require(sha(json.dumps(record[group], sort_keys=True, separators=(',', ':'))) == expected,
+                'frozen predecessor input group changed: ' + group)
+    for path, item in record['sources'].items():
+        original = item['edits'][:-len(CENTER_EDIT_NAMES)] if path == SOURCE_PATHS[2] else item['edits']
+        require(sha(json.dumps(original, sort_keys=True, separators=(',', ':')))
+                == FROZEN_ORIGINAL_EDITS_SHA256[path], 'original inverse objects changed: ' + path)
+    require('center_extraction' in record['sources'][SOURCE_PATHS[2]],
+            'missing explicit center extraction edge')
+    _center_descriptor(record['sources'][SOURCE_PATHS[2]]['center_extraction'])
+    return record
+
+
+def _reverse_span(text, edit):
+    require(set(edit) == {'name', 'before', 'after', 'before_sha256', 'after_sha256'},
+            'wrong inverse span fields')
+    for side in ('before', 'after'):
+        require(bool(edit[side]) and sha(edit[side]) == edit[side + '_sha256'],
+                'inverse span digest changed: ' + edit['name'])
+    require(text.count(edit['after']) == 1,
+            'missing or ambiguous inverse span: ' + edit['name'])
+    return text.replace(edit['after'], edit['before'], 1)
+
+
+def reverse_exact(path, text, item):
+    """Invert named spans through the fixed intermediate and predecessor."""
+    require(path in SOURCE_PATHS, 'unlisted inverse source')
+    require(sha(text) == AFTER_SHA256[path] and text == item['after_source'],
+            'complete live successor bytes changed: ' + path)
+    require(tuple(e['name'] for e in item['edits']) == EDIT_NAMES[path],
+            'missing, duplicate, reordered or extra inverse edit: ' + path)
+    edits = item['edits']
+    if path == SOURCE_PATHS[2]:
+        text = reverse_center_exact(text, item)
+        edits = edits[:-len(CENTER_EDIT_NAMES)]
+    for edit in reversed(edits):
+        text = _reverse_span(text, edit)
+    require(sha(text) == BEFORE_SHA256[path] and text == item['before_source'],
+            'byte-exact predecessor reconstruction failed: ' + path)
+    return text
+
+
+def verify(root, *, exact=False, include_roots=()):
+    """Check real current endpoints and premises before exposing any edge."""
+    root = Path(root)
+    executing = executing_checker_bindings()
+    record = read_record(root)
+    verify_chord_refusal_order(record['sources'][SOURCE_PATHS[2]])
+    snapshots = {path: (root/path).read_bytes() for path in SOURCE_PATHS}
+    for path, raw in snapshots.items():
+        text, item = (root/path).read_text(encoding='utf-8'), record['sources'][path]
+        # Match ordinary text-file universal-newline decoding for the physical
+        # snapshot, then check both views. A supplied text view cannot hide
+        # different physical operations, and exact consumers still bind bytes.
+        with io.TextIOWrapper(io.BytesIO(raw), encoding='utf-8', newline=None) as reader:
+            physical_text = reader.read()
+        require((not exact or hashlib.sha256(raw).hexdigest() == AFTER_SHA256[path])
+                and source.token_sha256(physical_text) == item['after_token_sha256']
+                and source.token_sha256(text) == item['after_token_sha256'],
+                'unreviewed complete live endpoint: ' + path)
+        observed = live_observations(text)
+        require(observed == item['live_observations'],
+                'retained live environment, budget or debit observation changed: ' + path)
+        # The rounded inverse removes one proved conditional nesting level.
+        # Compare ordered statements independently, while the complete tokens
+        # and the scoped observation above still bind all live nesting.
+        retained_observed = observed
+        if path == SOURCE_PATHS[2]:
+            descriptor = item['center_extraction']
+            # Check actual current text first. Comment/CRLF compatibility is
+            # not a fabricated physical source or an exact-byte edge.
+            verify_center_correspondence(descriptor['intermediate_source'], text, descriptor)
+            intermediate = reverse_center_exact(item['after_source'], item)
+            retained_observed = live_observations(intermediate)
+            require(retained_observed == descriptor['intermediate_live_observations'],
+                    'original cleanup intermediate observations changed')
+        before_rows = [row[1] for row in json.loads(live_observations(item['before_source']))]
+        after_rows = [row[1] for row in json.loads(retained_observed)]
+        def statement_tokens(fragment):
+            return [[token.type, token.string] for token in source.tokens(fragment)
+                    if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                          tokenize.NEWLINE, tokenize.ENDMARKER)]
+        for ordinal, before_statement, after_statement in OBSERVATION_RENAMES.get(path, ()):
+            require(ordinal < len(before_rows) and ordinal < len(after_rows)
+                    and before_rows[ordinal] == statement_tokens(before_statement)
+                    and after_rows[ordinal] == statement_tokens(after_statement),
+                    'rounded inverse local-name correspondence changed: ' + path)
+            before_rows[ordinal] = statement_tokens(after_statement)
+        require(before_rows == after_rows,
+                'retained ordered ledger/environment statements differ from predecessor: ' + path)
+        for name, expected in item['live_declarations'].items():
+            require(declaration_sha256(text, name) == expected,
+                    'live theorem declaration changed: ' + path + ':' + name)
+    resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
+                      | set(record['native_dependency_inventory']))
+    require(resolver_unshadowed(root, resolver_paths)
+            and all(resolver_unshadowed(location, resolver_paths) for location in include_roots),
+            'unreviewed alternate, entrypoint, compiled, package or std resolver surface')
+    known = {p.as_posix() for p in inputs.input_paths(root) if p.suffix == '.mojo'}
+    require(dependency_inventory(root, roots=(*SOURCE_PATHS, *record['inventory']), _known=known)
+            == set(record['dependency_inventory']),
+            'maintained source import inventory changed')
+    require(dependency_inventory(root, roots=NATIVE_WITNESSES, _known=known)
+            == set(record['native_dependency_inventory']),
+            'native witness helper import inventory changed')
+    for group in BOUND_GROUPS:
+        for path, expected in record[group].items():
+            require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+                    'unchanged premise, record or native fixture changed: ' + path)
+    require(native_support_mapping(root) == record['native_support_mapping'],
+            'actual native fixture mapping changed')
+    require(inventory(root) == record['inventory'], 'production caller/use inventory changed')
+    for path, raw in snapshots.items():
+        reverse_exact(path, record['sources'][path]['after_source'], record['sources'][path])
+        require((root/path).read_bytes() == raw, 'source changed during verification: ' + path)
+    require(executing_checker_bindings() == executing, 'executing checker identity changed during verification')
+    return record
+
+
+def predecessor_source(root, path):
+    """Return one named predecessor only after the real successor qualifies."""
+    require(path in SOURCE_PATHS, 'unlisted predecessor source request')
+    record = verify(root)
+    return reverse_exact(path, record['sources'][path]['after_source'], record['sources'][path])
+
+
+def reviewed_text(root, path, text):
+    """Preserve old states; project only this edge and its exact supplied view."""
+    path = str(path)
+    if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
+        return text
+    require(source.token_sha256(text) == read_record(root)['sources'][path]['after_token_sha256'],
+            'unreviewed supplied successor source: ' + path)
+    # A caller may supply comment/whitespace-equivalent text. The real physical
+    # endpoint still has to have all reviewed tokens and is never replaced.
+    return predecessor_source(root, path)
+
+
+def reviewed_sources(root, texts):
+    """Qualify one operation's requested live views together, without caching."""
+    changed = {path for path, text in texts.items() if path in SOURCE_PATHS
+               and source.token_sha256(text) != BEFORE_TOKEN_SHA256[path]}
+    if not changed:
+        return dict(texts)
+    record = verify(root)
+    result = dict(texts)
+    for path in changed:
+        item = record['sources'][path]
+        require(source.token_sha256(texts[path]) == item['after_token_sha256'],
+                'unreviewed supplied successor source: ' + path)
+        result[path] = reverse_exact(path, item['after_source'], item)
+    return result
+
+
+def verified_edges(root, *, include_roots=()):
+    # Digest-bound consumers never inherit token-only compatibility.
+    record = verify(root, exact=True, include_roots=include_roots)
+    return {path: {'path': path, **{field: item[field] for field in (
+        'before_sha256', 'after_sha256', 'before_token_sha256', 'after_token_sha256')}}
+        for path, item in record['sources'].items()}
+
+
+def extends_digest(root, path, before, after, *, include_roots=()):
+    """Admit exactly one named before-to-after consumer digest transition."""
+    if path not in SOURCE_PATHS or before != BEFORE_SHA256[path] or after != AFTER_SHA256.get(path):
+        return False
+    edge = verified_edges(root, include_roots=include_roots)[path]
+    return edge['before_sha256'] == before and edge['after_sha256'] == after
+
+
+def proof_bindings(root, *, include_roots=()):
+    """Bind every new theorem input in each receipt that uses this edge."""
+    root = Path(root)
+    executing = executing_checker_bindings(root)
+    record = verify(root, exact=True, include_roots=include_roots)
+    require(executing_checker_bindings(root) == executing,
+            'receipt executing checker identity changed during verification')
+    result = {MIGRATION: MIGRATION_SHA256, **executing}
+    result.update({path: item['after_sha256'] for path, item in record['sources'].items()})
+    for group in BOUND_GROUPS:
+        result.update(record[group])
+    return result
