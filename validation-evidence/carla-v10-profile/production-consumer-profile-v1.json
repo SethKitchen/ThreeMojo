@@ -1,0 +1,20 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v10",
+  "seal": "CANDIDATE-V10-SOURCE-SEAL.json",
+  "phase": "production-consumer-profile-v1",
+  "window_seconds": 600,
+  "scope": "Root-approved one bounded diagnostic of maintained production-inventory route on reconciled v10.115s instrumented work timer inside unchanged120s child cap; raw code identities retained before pstats. Launcher restores -c sys.path[0] empty spelling but preloads standard-library profiler: diagnostic only, no timing pass or import-equivalence claim.",
+  "stages": [
+    {
+      "label": "profile-normal-production-inventory",
+      "seconds": 180,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_production_fixture_driver_v10.py",
+        "{evidence}"
+      ]
+    }
+  ],
+  "pause_request_file": "native-lane-v10.pause"
+}

@@ -1,0 +1,23 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_production_fixture_driver_v10.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/production-consumer-profile-v1"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v10",
+  "label": "profile-normal-production-inventory",
+  "leader_reaped": true,
+  "log_sha256": "fdb3e2cdce180b801fba4a88e48afd69a3cbbafc530f4ca58190c074f5085445",
+  "pgid": 6,
+  "pid": 6,
+  "remaining_owned_descendants": [],
+  "returncode": 1,
+  "seconds": 123.33409390499946,
+  "single_cpu": 0,
+  "source_seal_sha256": "72d6f4185d25db2fa3126a8184234f37729d7825f249e85ddbdfbf05f305a756",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T21:51:59.522242+00:00",
+  "timed_out": false
+}

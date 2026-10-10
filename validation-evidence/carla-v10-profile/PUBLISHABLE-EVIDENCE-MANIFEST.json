@@ -1,0 +1,132 @@
+{
+  "schema": 1,
+  "scope": "Fresh bounded v10 diagnostic only. No passing qualification claim. Internal review notes excluded.",
+  "files": [
+    {
+      "path": "RESULT.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/RESULT.json",
+      "sha256": "994363b1fe522f4ed659be2fe48ee53e45a5349681fa35f2577a811ae1682f89",
+      "bytes": 1722,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "SOURCE-SEAL.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/SOURCE-SEAL.json",
+      "sha256": "72d6f4185d25db2fa3126a8184234f37729d7825f249e85ddbdfbf05f305a756",
+      "bytes": 419029,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "SDK-BEFORE.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "bytes": 2165,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "SDK-AFTER.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "bytes": 2165,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "WINDOW-START.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/WINDOW-START.json",
+      "sha256": "b1233a32f86374d3130e5f1fcffe7c1b98fb4dd7bc741469c28532803d486ee4",
+      "bytes": 369,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "RAW-PROFILE.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/RAW-PROFILE.json",
+      "sha256": "5d5a35a1a7ddb0490eb769e2235c1d0a310c9d70182edb07ef7549ab61539afc",
+      "bytes": 2558368,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "MAINTAINED-COMMAND.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/MAINTAINED-COMMAND.json",
+      "sha256": "a9e7d7375d77e4e2f934a75e6cbb73d78996efe7a1fcc5af24107804c191db34",
+      "bytes": 1264,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "EXACT-CHILD-RESULT.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/EXACT-CHILD-RESULT.json",
+      "sha256": "5f859821c8ddd2063e78a6e0b1ffa8955c025a80dc787752060a1f0e62c70446",
+      "bytes": 1463,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "FIXTURE-SOURCE-SEAL.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "123b103a1f4f9757c843110f6703221bc07fc99ec7b33cdde91bd686471988b1",
+      "bytes": 302073,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "CHILD-stdout.log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/CHILD-stdout.log",
+      "sha256": "8dda6b2c720e5593f03fe66e7578ba73bc2d66b0ea41770e1c836afba202020c",
+      "bytes": 1949,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "CHILD-stderr.log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "profile-normal-production-inventory-START.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/profile-normal-production-inventory-START.json",
+      "sha256": "ddfc6453376d52ebdb4984f742020f566fcef3aadd404a342b2b99517a842483",
+      "bytes": 665,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "profile-normal-production-inventory-RESULT.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/profile-normal-production-inventory-RESULT.json",
+      "sha256": "2c179f13413bc77a41fd18eb22b4f47bec9830172994931010a76255f6d5fe93",
+      "bytes": 909,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "profile-normal-production-inventory.log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/profile-normal-production-inventory.log",
+      "sha256": "fdb3e2cdce180b801fba4a88e48afd69a3cbbafc530f4ca58190c074f5085445",
+      "bytes": 1399,
+      "kind": "actual-diagnostic-receipt-or-raw-profile"
+    },
+    {
+      "path": "profile_production_child_v10.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/profile_production_child_v10.py",
+      "sha256": "d06a4fca8de12d2b7cc566b41f154f9136097b33d71596628170e96229c27ef9",
+      "bytes": 3387,
+      "kind": "executed-profiler-source-or-plan"
+    },
+    {
+      "path": "profile_production_fixture_driver_v10.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/profile_production_fixture_driver_v10.py",
+      "sha256": "728720a172e761dea598efad0672d6e945e9d31c77d2ac7e2c9d66eaf1155309",
+      "bytes": 4009,
+      "kind": "executed-profiler-source-or-plan"
+    },
+    {
+      "path": "production-consumer-profile-v1.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/production-consumer-profile-v1.json",
+      "sha256": "80e107031649831631901fdeec449c760e36c288cd66c34715236c7213d0a1e0",
+      "bytes": 910,
+      "kind": "executed-profiler-source-or-plan"
+    },
+    {
+      "path": "DIAGNOSTIC-SUMMARY.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v10-profile-packet/DIAGNOSTIC-SUMMARY.json",
+      "sha256": "38ce85aeb0c3ddeb370802ae38fcacca76f5cfd3449ec8e4644df9f788f4b5fb",
+      "bytes": 1154,
+      "kind": "factual-diagnostic-summary"
+    }
+  ]
+}

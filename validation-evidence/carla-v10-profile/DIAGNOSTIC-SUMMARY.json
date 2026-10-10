@@ -1,0 +1,17 @@
+{
+  "scope": "Partial instrumented diagnostic, not passing qualification or an uninstrumented timing measurement.",
+  "source_seal_sha256": "72d6f4185d25db2fa3126a8184234f37729d7825f249e85ddbdfbf05f305a756",
+  "result_sha256": "994363b1fe522f4ed659be2fe48ee53e45a5349681fa35f2577a811ae1682f89",
+  "raw_profile_sha256": "5d5a35a1a7ddb0490eb769e2235c1d0a310c9d70182edb07ef7549ab61539afc",
+  "deadline_seconds": 115,
+  "child_cap_seconds": 120,
+  "full_gate_entries_observed_before_deadline": 28,
+  "full_gate_cumulative_seconds": 106.845,
+  "limitations": [
+    "The maintained command bytes are unchanged; profiling preloads standard-library modules and runs exec in separate globals while __main__ remains the launcher.",
+    "The deadline cuts off the command;28 gate calls is an observed lower bound, not a whole-command count.",
+    "Nested cumulative times overlap and cannot be summed.",
+    "No existing gate, input requirement, or timeout is changed."
+  ],
+  "format": "RAW-PROFILE retains code identities and edges before pstats serialization. Redundant binary pstats is omitted from this text-only publishable packet; original remains local."
+}
