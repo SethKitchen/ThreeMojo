@@ -1,0 +1,49 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+  "seal": "CANDIDATE-V11-SOURCE-SEAL.json",
+  "phase": "owned-input-current-controls-v11",
+  "window_seconds": 3900,
+  "pause_request_file": "native-lane-v11.pause",
+  "scope": "Fresh focused current-controls for reviewed cache-owned immutable source inputs; normal and optimized, zero skips. Maintained1800s module maximum; fake preflight has tighter180s bound. Focused selection does not replace full matrix.",
+  "stages": [
+    {
+      "label": "current-controls-normal",
+      "seconds": 1800,
+      "expected_tests": 22,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "CacheInputViewCurrentControls",
+        "-v"
+      ]
+    },
+    {
+      "label": "current-controls-optimized",
+      "seconds": 1800,
+      "expected_tests": 22,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "CacheInputViewCurrentControls",
+        "-v"
+      ]
+    }
+  ]
+}

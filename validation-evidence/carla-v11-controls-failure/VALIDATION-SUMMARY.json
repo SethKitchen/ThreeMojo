@@ -1,0 +1,14 @@
+{
+  "error_method": "test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image",
+  "evidence_policy": "Copied original bytes; no reconstructed receipts. Prior exact-child/fake-lifecycle passing evidence remains separate; this failure is not hidden by those passes.",
+  "next_action": "Review a test-only correction retaining existing protected-namespace rejection; no production admission change or corrected outcome is claimed here.",
+  "observed_error": "The initial full-audit resolver_unshadowed premise rejected the positive fixture before input capture. The fixture contains nested protected tests/tools namespace names.",
+  "schema": 1,
+  "scope": "Actual failed normal real-control phase.22tests:21passed,1error. The optimized stage did not execute. This is not a passing gate or final qualification.",
+  "source_checkpoint_commit": "d28047a6d18a94483d1d02b6f422be9a4aa59db1",
+  "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+  "stage_cap_seconds": 1800,
+  "stage_seconds": 383.4578954639983,
+  "timed_out": false,
+  "unittest_seconds": 382.135
+}

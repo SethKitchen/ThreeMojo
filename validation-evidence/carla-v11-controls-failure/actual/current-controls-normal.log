@@ -1,0 +1,57 @@
+test_current_capture_keeps_initial_read_two_three_and_verify_group_aba (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_capture_keeps_initial_read_two_three_and_verify_group_aba) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_current_capture_sink_cannot_be_supplied_by_arbitrary_callers (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_capture_sink_cannot_be_supplied_by_arbitrary_callers) ... ok
+test_current_checker_final_uses_original_baseline (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_checker_final_uses_original_baseline) ... ok
+test_current_consecutive_roots_and_relative_root_interpretation_are_fresh (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_consecutive_roots_and_relative_root_interpretation_are_fresh) ... ok
+test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image) ... ERROR
+test_current_equal_byte_leaf_and_ancestor_aliases_fail_final_regular_checks (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_equal_byte_leaf_and_ancestor_aliases_fail_final_regular_checks) ... ok
+test_current_exact_condition_stays_at_seed_boundary_and_all_four_endpoints (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_exact_condition_stays_at_seed_boundary_and_all_four_endpoints) ... ok
+test_current_fresh_seed_lookup_uses_separate_modules_and_none_entries (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_fresh_seed_lookup_uses_separate_modules_and_none_entries) ... ok
+test_current_image_covers_all_104_fixed_paths_and_complete_lookup_context (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_image_covers_all_104_fixed_paths_and_complete_lookup_context) ... ok
+test_current_importlib_alias_stays_fresh_and_never_issues_owned_view (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_importlib_alias_stays_fresh_and_never_issues_owned_view) ... ok
+test_current_map_supplied_comments_allowed_semantics_refuse_before_projection (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_map_supplied_comments_allowed_semantics_refuse_before_projection) ... ok
+test_current_one_semantic_gate_two_checkpoints_and_all_score_predicates (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_one_semantic_gate_two_checkpoints_and_all_score_predicates) ... ok
+test_current_owned_map_io_failure_preserves_cause_and_single_prefix (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_owned_map_io_failure_preserves_cause_and_single_prefix) ... ok
+test_current_production_entries_native_parents_and_seed_fallback_remain_separate (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_production_entries_native_parents_and_seed_fallback_remain_separate) ... ok
+test_current_public_helpers_stay_fresh_while_owned_view_is_active (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_public_helpers_stay_fresh_while_owned_view_is_active) ... ok
+test_current_removed_categories_pair_initial_and_final_persistent_b (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_removed_categories_pair_initial_and_final_persistent_b) ... ok
+test_current_removed_reads_use_captured_a_and_keep_every_semantic_predicate (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_removed_reads_use_captured_a_and_keep_every_semantic_predicate) ... ok
+test_current_retained_map_each_observation_refuses_b_before_parsing (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_retained_map_each_observation_refuses_b_before_parsing) ... ok
+test_current_retained_map_exotic_values_fail_before_equality_or_parser (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_retained_map_exotic_values_fail_before_equality_or_parser) ... ok
+test_current_second_gate_views_removed_first_views_and_final_bytes_retained (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_second_gate_views_removed_first_views_and_final_bytes_retained) ... ok
+test_current_source_record_new_negative_missing_and_resolver_final_refuse (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_source_record_new_negative_missing_and_resolver_final_refuse) ... ok
+test_current_standalone_cache_inventory_still_reads_supplied_non_map_text (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_standalone_cache_inventory_still_reads_supplied_non_map_text) ... ok
+
+======================================================================
+ERROR: test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image (test_full_audit_cleanup_contracts.CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/cache_key_contracts.py", line 187, in verify
+    current, _inputs = full_audit._cache_lane_inputs(root, current, _input_owner)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1102, in _cache_lane_inputs
+    record = verify(root, _expected_lane_raw=raw, _capture=_pending)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1153, in verify
+    require(resolver_unshadowed(root, resolver_paths)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 31, in require
+    raise ContractError('full-audit cleanup successor: ' + message)
+full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unreviewed alternate, compiled, package, symlink or std resolver surface
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py", line 2775, in test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image
+    self.assertEqual(cache.verify(self.root), self.cache_record)
+                     ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11/tools/carla_lane_oracle/cache_key_contracts.py", line 193, in verify
+    raise ContractError('cache-key successor: ' + str(error)) from error
+cache_key_contracts.ContractError: cache-key successor: full-audit cleanup successor: unreviewed alternate, compiled, package, symlink or std resolver surface
+
+----------------------------------------------------------------------
+Ran 22 tests in 382.135s
+
+FAILED (errors=1)

@@ -1,0 +1,90 @@
+{
+  "files": [
+    {
+      "bytes": 1602,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/RESULT.json",
+      "path": "actual/RESULT.json",
+      "sha256": "449843b0abc2463cb660a3a7aed0da959383a67361b3481067e4dde0523a994d"
+    },
+    {
+      "bytes": 765,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/FAILURE.json",
+      "path": "actual/FAILURE.json",
+      "sha256": "f15ca1133fe215e9374a469247a92c898f2d7dcfb4594d5ae9e6c21e9079acdf"
+    },
+    {
+      "bytes": 419029,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/SOURCE-SEAL.json",
+      "path": "actual/SOURCE-SEAL.json",
+      "sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/SDK-BEFORE.json",
+      "path": "actual/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/SDK-AFTER.json",
+      "path": "actual/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/WINDOW-START.json",
+      "path": "actual/WINDOW-START.json",
+      "sha256": "b1381cf6768b16d5086e580e0d96928d3fd5d05469434bfdf6c813e1efc53f70"
+    },
+    {
+      "bytes": 643,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/current-controls-normal-START.json",
+      "path": "actual/current-controls-normal-START.json",
+      "sha256": "31430872d8619a23ba8720a2cb2ca1201456cb4587764573192932a5f7585ecb"
+    },
+    {
+      "bytes": 886,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/current-controls-normal-RESULT.json",
+      "path": "actual/current-controls-normal-RESULT.json",
+      "sha256": "cbcb759418a5470d177696e7a5adb61e10a56c7791300a8f380d3357f7563301"
+    },
+    {
+      "bytes": 7818,
+      "kind": "original-failed-receipt-or-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/actual/current-controls-normal.log",
+      "path": "actual/current-controls-normal.log",
+      "sha256": "e0cc2aa5060d1f177bd39db92738e6c30d0af1847b45056b77aaca4fe2e1a36a"
+    },
+    {
+      "bytes": 10102,
+      "kind": "original-harness-or-plan",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1335,
+      "kind": "original-harness-or-plan",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/reproduce/owned-input-current-controls-v11.json",
+      "path": "reproduce/owned-input-current-controls-v11.json",
+      "sha256": "580584bd0909a84559bd9f4b7cd1b79f093569ff7de1b5278e584db4ef56a9d6"
+    },
+    {
+      "bytes": 1116,
+      "kind": "factual-failure-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-controls-failure-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "9c7833d2a905662a391067799c1e5b119a58b6f44933a331fe1a8d56e56b0666"
+    }
+  ],
+  "schema": 1,
+  "scope": "Actual failed normal real-control phase.22tests:21passed,1error. The optimized stage did not execute. This is not a passing gate or final qualification."
+}
