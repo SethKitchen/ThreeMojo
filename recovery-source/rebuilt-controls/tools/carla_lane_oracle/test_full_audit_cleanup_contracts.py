@@ -910,6 +910,44 @@ cleanup.executing_checker_bindings(root)
                     self.assertNotEqual(result.returncode, 0)
                     self.assertIn('full-audit cleanup successor:', result.stderr)
 
+    def test_consumer_first_import_orders_normal_and_optimized(self):
+        # Each process starts with the actual named consumer before any
+        # explicit gate import. This includes transitive/circular imports and
+        # the maintained sampled checker's importlib loader entrypoint.
+        command = '''import importlib, importlib.util, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+route = sys.argv[2]
+sys.path.insert(0, str(root/'tools/carla_lane_oracle'))
+if route == 'sampled-spec':
+    spec = importlib.util.spec_from_file_location(
+        'sampled_consumer_first', root/'tools/carla_lane_oracle/check_sampled_values.py')
+    if spec is None or spec.loader is None:
+        raise RuntimeError('sampled consumer loader unavailable')
+    consumer = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(consumer)
+else:
+    consumer = importlib.import_module(route)
+import full_audit_cleanup_contracts as cleanup
+cleanup.verify(root, exact=True)
+cleanup.proof_bindings(root)
+if route == 'source_contracts':
+    consumer.verify_group(root, 'optional_runtime')
+else:
+    consumer.verify(root)
+print('consumer-first accepted: ' + route)
+'''
+        routes = ('sum2_guard_contracts', 'cache_key_contracts',
+                  'seed_count_contracts', 'source_contracts', 'sampled-spec')
+        for mode in ([], ['-O']):
+            for route in routes:
+                with self.subTest(mode=mode, first_consumer=route):
+                    result = subprocess.run([sys.executable, *mode, '-B', '-c', command,
+                                             str(self.root), route], cwd=self.root,
+                                            capture_output=True, text=True, timeout=120)
+                    self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+                    self.assertIn('consumer-first accepted: ' + route, result.stdout)
+
     def test_normal_and_optimized_python_preserve_positive_and_count_refusal(self):
         command = ('import sys; from pathlib import Path; '
                    'sys.path.insert(0, str(Path(sys.argv[1])/"tools/carla_lane_oracle")); '
