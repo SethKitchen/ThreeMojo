@@ -13,13 +13,15 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be positive and isotropic, and the sphere can spin.
+An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
+
+The tensor can be anisotropic. Each pair of mirrored off-diagonal elements must be exactly equal. A tensor computed as `R M Rᵀ` in Float32 can round each pair differently. Set each pair to its mean before you give the tensor to the body.
 
 A capsule's inverse inertia must be zero in every element, and its angular velocity and angular push must be zero. A capsule then only translates, as a character or walker body does. Its half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
 
 A body's reachable region must not overlap another moving body's reachable region, including the contact margin. A capsule's region uses a bounding sphere around its actual world-space segment. The radius includes an outward-rounded length of the Float32-rotated half axis. The same bound selects swept mesh candidates. This includes stretch from accepted near-unit rotations and rotation roundoff.
 
-The bound uses the sphere's total translational and rotational energy after the force update. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
+The bound uses the sphere's total translational and rotational energy after the force update. The rotational energy uses the inertia tensor at the sphere's orientation at the start of the step. It also includes split-correction travel. This conservative check covers friction that transfers spin into translation and any number of static-mesh rebounds. A step that cannot establish separation raises an error. It does not silently use discrete moving-body contacts.
 
 The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic bodies, static primitives, offset spheres and interacting moving bodies. General convex, rotating-capsule, rotating-offset and moving-pair CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
 
@@ -41,9 +43,13 @@ The sweep tests the triangle face, its three edge cylinders and its three vertex
 
 A capsule's sweep adds two features to the two cap spheres. The segment can reach a triangle edge, and a triangle vertex can reach the segment's cylinder. The segment's interior reaches the face itself only when the segment is parallel to it. Then the whole segment reaches the plane at once, and a cap over the face or an edge crossing reports that time. Because the capsule cannot rotate, its friction impulse changes only its velocity.
 
-The normal response cannot add kinetic energy for restitution between zero and one. Tangential response dissipates slip energy. These statements apply to the ideal static, isotropic impulse calculation. Stored state still rounds to Float32. External forces and the existing split-overlap correction are separate operations.
+The normal response cannot add kinetic energy for restitution between zero and one. Tangential response dissipates slip energy.
+
+For an anisotropic sphere, every impact in a step uses the world tensor at the step's start orientation. The energy that the separation bound measured then cannot increase during the step. These statements apply to the ideal static impulse calculation. Stored state still rounds to Float32. External forces and the existing split-overlap correction are separate operations.
 
 The sphere's orientation advances separately over each time segment. It uses the existing normalized-quaternion rule and the angular velocity for that segment. This is an approximate rotation integrator, not an exact angular trajectory.
+
+A sphere with an impact keeps the constant angular velocity that made its orientation in that step. For an anisotropic tensor, the integrator's torque-free precession starts again on the next step. A sphere's sweep does not depend on its orientation, so this choice does not change any impact time.
 
 Initial front-side overlaps keep the existing contact solver and pose-only split correction. Stationary and slow front-side contacts keep the previous speculative-contact path. A negative-depth contact is deferred to the sweep when its closing travel exceeds the existing contact margin. This prevents a fast sphere from bouncing before it reaches the surface. The margin is not enlarged.
 
