@@ -17,7 +17,16 @@ radiance. Bloom, glare and grading stay on the CPU.
 This module imports MAX, so it builds only where MAX is installed.
 """
 
-from extensions.water.frame import CameraLook, WaterScene, lit_radiance
+from cameras.camera import Camera
+from core.scene import Scene
+from extensions.water.caustics import CausticField
+from extensions.water.frame import (
+    CameraLook,
+    WaterScene,
+    _compose_plan,
+    camera_look,
+    lit_radiance,
+)
 from extensions.water.packed import (
     CausticView,
     PebbleView,
@@ -28,12 +37,16 @@ from extensions.water.packed import (
     pack_surface,
 )
 from extensions.water.pebbles import PebbleBed
+from extensions.water.surface import SurfaceField
+from extensions.water.view import CAUSTICS, WaterView, require_view
 from math.vector3 import Vector3
 from max.gpu import global_idx
 from max.gpu.host import DeviceBuffer, DeviceContext
 from max.gpu.memory import AddressSpace
+from render.framebuffer import Framebuffer
 from std.math import ceildiv
-from units.si import SECOND, Duration
+from std.sys import has_nvidia_gpu_accelerator
+from units.si import SECOND, Angle, Duration, Length
 
 comptime _GLOBAL = AddressSpace.GLOBAL
 comptime _Untracked = UntrackedOrigin[mut=False]
@@ -173,26 +186,58 @@ def water_kernel(
 
 
 struct GpuWater(Movable):
-    """A GPU that shades water frames, holding the pebble photograph."""
+    """An NVIDIA GPU that shades water frames, holding the pebble photograph.
 
-    var context: DeviceContext
-    """The device the frames run on."""
+    CUDA is the only supported backend. The kernel was run on a TITAN RTX,
+    and CI builds it for sm_80. No Metal check covers this kernel.
+    """
+
     var _pebble: DeviceBuffer[DType.float32]
     var _pebble_table: DeviceBuffer[DType.int64]
+    # Declared last, and released last in `__deinit__`.
+    var context: DeviceContext
+    """The CUDA device the frames run on."""
 
     def __init__(out self, bed: PebbleBed) raises:
-        """Open the default GPU and copy the photograph to it once.
+        """Open the CUDA GPU and copy the photograph to it once.
 
         Args:
             bed: The pebble photograph.
 
         Raises:
-            Error: If there is no GPU or a copy fails.
+            Error: If there is no NVIDIA GPU, or a copy fails.
         """
-        self.context = DeviceContext()
+        if not has_nvidia_gpu_accelerator():
+            raise Error("GpuWater needs an NVIDIA CUDA GPU")
+        var context = DeviceContext(api="cuda")
         var packed = pack_pebbles(bed)
-        self._pebble = _upload[DType.float32](self.context, packed[0])
-        self._pebble_table = _upload[DType.int64](self.context, packed[1])
+        var texels = _upload[DType.float32](context, packed[0])
+        var table = _upload[DType.int64](context, packed[1])
+        # A copy reads its host list until it completes. Wait before the
+        # packed lists can be freed.
+        context.synchronize()
+        _ = packed[0][0]
+        _ = packed[1][0]
+        self._pebble = texels^
+        self._pebble_table = table^
+        self.context = context^
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then release the context.
+
+        `render/gpu.mojo` found that releasing a CUDA context with live
+        buffers or a launch in flight can hang the next context on WSL 2.
+        The order is spelled out so that a field reorder cannot change it.
+        """
+        # A destructor cannot raise. A context that cannot be waited on
+        # has nothing left worth reporting.
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self._pebble^
+        _ = self._pebble_table^
+        _ = self.context^
 
     def radiance(
         mut self, scene: WaterScene, look: CameraLook, width: Int, height: Int
@@ -219,21 +264,104 @@ struct GpuWater(Movable):
             raise Error("Water image dimensions must be positive")
         var surface = scene._surface()
         var caustics = scene._caustics(surface)
+        return self._shade(scene, surface, caustics, look, width, height)
+
+    def draw(
+        mut self,
+        mut scene: WaterScene,
+        width: Int,
+        height: Int,
+        view: WaterView,
+        sway: Bool,
+        pitch: Angle,
+    ) raises -> Framebuffer:
+        """Draw a whole frame as `WaterScene.draw` does, shading on the GPU.
+
+        Bloom, glare and the tone curve run on the CPU over the GPU
+        radiance. `CAUSTICS` has no shading and runs on the CPU.
+
+        Args:
+            scene: The water at its current clock. It keeps the glare
+                kernels that a first `FRAME` or `GLARE` builds.
+            width: Image width in pixels. It must be positive.
+            height: Image height in pixels. It must be positive.
+            view: Which picture. See `WaterView`.
+            sway: True adds the idle camera bob.
+            pitch: Camera pitch. The page starts at -0.72 radians.
+
+        Returns:
+            A framebuffer of display-ready pixels.
+
+        Raises:
+            Error: If a size or the view is not valid, or a device step
+                fails.
+        """
+        if width <= 0 or height <= 0:
+            raise Error("Water image dimensions must be positive")
+        require_view(view)
+        if view == CAUSTICS:
+            return scene.draw(width, height, view, sway, _no_bed(), pitch)
+        var look = camera_look(scene.clock, sway, pitch)
+        var hdr = self.radiance(scene, look, width, height)
+        return scene._finish(hdr, width, height, view)
+
+    def compose[
+        C: Camera
+    ](
+        mut self,
+        scene: WaterScene,
+        mut image: Framebuffer,
+        world: Scene,
+        camera: C,
+        water_level: Length,
+    ) raises -> Int:
+        """Compose water into a rendered scene as `WaterScene.compose`
+        does, shading on the GPU.
+
+        The depth test and the write run on the CPU, in pixel order.
+
+        Parameters:
+            C: The camera type.
+
+        Args:
+            scene: The water at its current clock.
+            image: The rendered scene, with its depth buffer. It is changed.
+            world: The scene that was rendered, with current world matrices.
+            camera: The centered perspective camera that rendered `image`.
+                It must be above the water.
+            water_level: The world height of the still water plane.
+
+        Returns:
+            How many pixels now show water.
+
+        Raises:
+            Error: If the camera view is invalid, or a device step fails.
+        """
+        var plan = _compose_plan(
+            image,
+            camera.projection_matrix(),
+            camera.view_matrix_in(world),
+            water_level,
+        )
+        var surface = scene._surface()
+        var caustics = scene._caustics(surface)
+        var shown = scene._compose_depth(image, plan, surface)
+        var hdr = self._shade(
+            scene, surface, caustics, plan.look, image.width, image.height
+        )
+        return scene._compose_write(image, hdr, shown)
+
+    def _shade(
+        mut self,
+        scene: WaterScene,
+        surface: SurfaceField,
+        caustics: CausticField,
+        look: CameraLook,
+        width: Int,
+        height: Int,
+    ) raises -> List[Float32]:
         var packed_surface = pack_surface(surface)
         var packed_caustics = pack_caustics(caustics)
-        var surface_texels = _upload[DType.float32](
-            self.context, packed_surface[0]
-        )
-        var surface_table = _upload[DType.int64](
-            self.context, packed_surface[1]
-        )
-        var ripple = _upload[DType.float32](self.context, scene._ripples.normal)
-        var caustic_texels = _upload[DType.float32](
-            self.context, packed_caustics[0]
-        )
-        var caustic_table = _upload[DType.int64](
-            self.context, packed_caustics[1]
-        )
         var values: List[Float32] = [
             look.fx,
             look.fy,
@@ -259,6 +387,19 @@ struct GpuWater(Movable):
             caustics.shift_x,
             caustics.shift_z,
         ]
+        var surface_texels = _upload[DType.float32](
+            self.context, packed_surface[0]
+        )
+        var surface_table = _upload[DType.int64](
+            self.context, packed_surface[1]
+        )
+        var ripple = _upload[DType.float32](self.context, scene._ripples.normal)
+        var caustic_texels = _upload[DType.float32](
+            self.context, packed_caustics[0]
+        )
+        var caustic_table = _upload[DType.int64](
+            self.context, packed_caustics[1]
+        )
         var frame = _upload[DType.float32](self.context, values)
         var output = self.context.enqueue_create_buffer[DType.float32](
             width * height * 3
@@ -282,4 +423,16 @@ struct GpuWater(Movable):
         var radiance = List[Float32](length=width * height * 3, fill=0.0)
         self.context.enqueue_copy(radiance.unsafe_ptr(), output)
         self.context.synchronize()
+        # Every copy has completed. The host lists can go now, and the
+        # device buffers after them.
+        _ = packed_surface[0][0]
+        _ = packed_surface[1][0]
+        _ = packed_caustics[0][0]
+        _ = packed_caustics[1][0]
+        _ = values[0]
         return radiance^
+
+
+def _no_bed() raises -> PebbleBed:
+    # `CAUSTICS` reads no photograph, and a bed needs one texel at least.
+    return PebbleBed(1, 1, [Float32(0), 0, 0])

@@ -117,13 +117,19 @@ Underwater absorption and ripple lookup follow the refracted sun direction. The 
 
 ## Shade it on a GPU
 
-`GpuWater` in `extensions/water/gpu.mojo` runs `lit_radiance` with one thread for each pixel. It needs MAX and an NVIDIA CUDA GPU. It was tested on a TITAN RTX, and CI builds it for sm_80. Apple Metal is not a supported target: no Metal check covers this kernel.
+`GpuWater` in `extensions/water/gpu.mojo` runs `lit_radiance` with one thread for each pixel. It needs MAX and an NVIDIA CUDA GPU, and it refuses a machine without one. It was run on a TITAN RTX, and CI builds it for sm_80. Apple Metal is not a supported target: no Metal check covers this kernel.
 
-Make one with the pebble photograph, which it copies to the device once. Then call `radiance(scene, look, width, height)` each frame. It returns the linear radiance that `draw` grades, three floats a pixel.
+Make one with the pebble photograph, which it copies to the device once. Then use the same calls as `WaterScene`:
 
-The surface FFT, the caustics, bloom, glare and grading still run on the CPU. Each frame copies the surface, the ripple window and the caustics to the device and frees them after the frame.
+- `draw(scene, width, height, view, sway, pitch)` draws a whole picture. Bloom, glare and grading run on the CPU.
+- `compose(scene, image, world, camera, water_level)` composes water into a rendered scene. The depth test and the write run on the CPU.
+- `radiance(scene, look, width, height)` returns the linear radiance, three floats a pixel.
 
-The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires 98 percent of values within 1 percent of the CPU, and 99.5 percent within 10 percent. It also checks that free device memory stays level over 40 frames. See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md): a 1920 x 1080 frame of radiance takes about 78 milliseconds on that GPU.
+Each frame copies the surface, the ripple window and the caustics to the device. It waits for the copies, then frees them. Dropping a `GpuWater` waits for the device, then frees its buffers and its context.
+
+The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires every value to be finite. It requires 98 percent of values within 1 percent of the CPU, 99.5 percent within 10 percent, and none beyond 2.
+
+See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 75 milliseconds. A whole water frame takes about 506 milliseconds, because bloom, glare and grading take about 373 on the CPU. A composed scene takes about 1,043, because its depth pass takes about 701 on one CPU thread.
 
 ## Shader storage
 

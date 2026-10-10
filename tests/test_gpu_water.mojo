@@ -3,22 +3,45 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The GPU water shader agrees with the CPU frame."""
+"""The GPU water shader agrees with the CPU frame and holds no resources.
 
+The device fuses multiplies and adds where the host does not, and its math
+functions round differently. A last-bit change can flip an anisotropic tap
+count, a mip clamp or a noise band, so a few values differ a lot. Each
+comparison uses the difference over max(|CPU value|, 0.01): relative for
+bright values, absolute near black. On a TITAN RTX about 1.3 percent of
+values differ by more than 1 percent, and under 0.1 percent by more than
+10 percent. No value may differ by more than 2.
+"""
+
+from cameras.perspective_camera import PerspectiveCamera
+from core.assets import Assets
+from core.object3d import Object3D
+from core.scene import Scene
 from extensions.water.frame import WaterScene, _radiance_image, camera_look
 from extensions.water.gpu import GpuWater
 from extensions.water.pebbles import PebbleBed
 from extensions.water.resolution import SpectrumResolution
-from std.sys import has_accelerator
+from extensions.water.view import CAUSTICS, FRAME
+from geometries.sphere import sphere
+from materials.material import BASIC, Material
+from math.vector3 import Vector3
+from max.gpu.host import DeviceContext
+from objects.mesh import Mesh
+from render.framebuffer import Color, Framebuffer
+from renderers.renderer import Renderer
+from std.math import isfinite
+from std.pathlib import Path
+from std.sys import has_nvidia_gpu_accelerator
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
-from units.si import RADIAN, SECOND, Angle, Duration
+from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 
 
 def _skipped(name: String) -> Bool:
     # An early return looks like a pass, so a skip says so.
-    if has_accelerator():
+    if has_nvidia_gpu_accelerator():
         return False
-    print("SKIP (no accelerator):", name)
+    print("SKIP (no NVIDIA GPU):", name)
     return True
 
 
@@ -30,6 +53,7 @@ def _bed() raises -> PebbleBed:
 
 
 def _scene() raises -> WaterScene:
+    # A 64-texel window lets the center tap raise real ripples.
     var scene = WaterScene(
         SpectrumResolution(64),
         16,
@@ -42,81 +66,217 @@ def _scene() raises -> WaterScene:
     return scene^
 
 
+def _agree(device: List[Float32], host: List[Float32]) raises:
+    """Check that every value is finite and that the two images agree."""
+    assert_equal(len(device), len(host))
+    var near = 0
+    var close = 0
+    var worst = Float32(0)
+    for i in range(len(host)):
+        assert_true(isfinite(host[i]) and isfinite(device[i]))
+        var d = abs(device[i] - host[i]) / max(abs(host[i]), 1e-2)
+        worst = max(worst, d)
+        if d <= 1e-2:
+            near += 1
+        if d <= 1e-1:
+            close += 1
+    assert_true(near * 100 >= len(host) * 98, String(near))
+    assert_true(close * 1000 >= len(host) * 995, String(close))
+    assert_true(worst <= 2.0, String(worst))
+
+
+def _cpu(
+    scene: WaterScene, bed: PebbleBed, pitch: Float32, w: Int, h: Int
+) raises -> List[Float32]:
+    var look = camera_look(scene.clock, True, Angle(pitch, RADIAN))
+    var surface = scene._surface()
+    var caustics = scene._caustics(surface)
+    return _radiance_image(
+        look,
+        Float32(w) / Float32(h),
+        surface,
+        scene._ripples,
+        caustics,
+        bed,
+        scene.clock,
+        scene.sun,
+        w,
+        h,
+        List[Bool](),
+    )
+
+
+def _gpu(
+    mut gpu: GpuWater, scene: WaterScene, pitch: Float32, w: Int, h: Int
+) raises -> List[Float32]:
+    var look = camera_look(scene.clock, True, Angle(pitch, RADIAN))
+    return gpu.radiance(scene, look, w, h)
+
+
 def test_gpu_radiance_matches_the_cpu_frame() raises:
-    # The device fuses multiplies and adds where the host does not, and its
-    # math functions round differently. A last-bit change can flip an
-    # anisotropic tap count, a mip clamp or a noise band, so a few values
-    # differ a lot. Measured on a TITAN RTX: about 1.3 percent of values
-    # differ by more than 1 percent, and 16 of 18432 by more than 10.
     if _skipped("gpu radiance matches the cpu frame"):
         return
     var scene = _scene()
     var bed = _bed()
     var gpu = GpuWater(bed)
-    var width = 96
-    var height = 64
-    for pitch in [Float32(-0.72), Float32(-0.25)]:
-        var look = camera_look(scene.clock, True, Angle(pitch, RADIAN))
-        var device = gpu.radiance(scene, look, width, height)
-        var surface = scene._surface()
-        var caustics = scene._caustics(surface)
-        var host = _radiance_image(
-            look,
-            Float32(width) / Float32(height),
-            surface,
-            scene._ripples,
-            caustics,
-            bed,
-            scene.clock,
-            scene.sun,
-            width,
-            height,
-            List[Bool](),
+    # A tile-aligned size and an odd size that leaves partial tiles.
+    for size in [(96, 64), (97, 61)]:
+        for pitch in [Float32(-0.72), Float32(-0.25)]:
+            _agree(
+                _gpu(gpu, scene, pitch, size[0], size[1]),
+                _cpu(scene, bed, pitch, size[0], size[1]),
+            )
+
+
+def test_gpu_radiance_follows_reset_and_lighting() raises:
+    if _skipped("gpu radiance follows reset and lighting"):
+        return
+    var scene = _scene()
+    var bed = _bed()
+    var gpu = GpuWater(bed)
+    var before = _gpu(gpu, scene, -0.72, 48, 32)
+    # A new sun changes the picture, and the device follows it.
+    scene.set_sun(Vector3(-0.4, 0.5, 0.6))
+    var lit = _gpu(gpu, scene, -0.72, 48, 32)
+    _agree(lit, _cpu(scene, bed, -0.72, 48, 32))
+    var changed = 0
+    for i in range(len(lit)):
+        if lit[i] != before[i]:
+            changed += 1
+    assert_true(changed * 2 > len(lit))
+    # After a reset the calm window and the start clock are shaded.
+    scene.reset()
+    _agree(_gpu(gpu, scene, -0.72, 48, 32), _cpu(scene, bed, -0.72, 48, 32))
+
+
+def test_gpu_draw_matches_the_cpu_draw() raises:
+    if _skipped("gpu draw matches the cpu draw"):
+        return
+    var bed = _bed()
+    var gpu = GpuWater(bed)
+    var pitch = Angle(-0.72, RADIAN)
+    for view in [FRAME, CAUSTICS]:
+        var a = _scene()
+        var b = _scene()
+        var device = gpu.draw(a, 64, 48, view, True, pitch)
+        var host = b.draw(64, 48, view, True, bed, pitch)
+        var far = 0
+        for y in range(48):
+            for x in range(64):
+                var p = device.get_pixel(x, y)
+                var q = host.get_pixel(x, y)
+                var d = max(
+                    abs(Int(p.r) - Int(q.r)),
+                    max(abs(Int(p.g) - Int(q.g)), abs(Int(p.b) - Int(q.b))),
+                )
+                if d > 2:
+                    far += 1
+        # Caustics do not shade, so they match exactly.
+        if view == CAUSTICS:
+            assert_equal(far, 0)
+        else:
+            assert_true(far * 100 <= 64 * 48 * 2, String(far))
+    with assert_raises(contains="dimensions must be positive"):
+        var c = _scene()
+        _ = gpu.draw(c, 0, 4, FRAME, True, pitch)
+
+
+def _ball() raises -> Tuple[Scene, Assets, PerspectiveCamera]:
+    var assets = Assets()
+    var world = Scene()
+    var node = world.add(Object3D())
+    world.node(node).set_position(0, 0.6, -2.5)
+    var paint = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    world.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.35, METER), 12, 8)),
+            paint,
+            node,
         )
-        assert_equal(len(device), len(host))
-        var near = 0
-        var close = 0
-        for i in range(len(host)):
-            var d = abs(device[i] - host[i]) / max(abs(host[i]), 1e-2)
-            if d <= 1e-2:
-                near += 1
-            if d <= 1e-1:
-                close += 1
-        assert_true(near * 100 >= len(host) * 98, String(near))
-        assert_true(close * 1000 >= len(host) * 995, String(close))
+    )
+    world.update()
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(40) / Float32(30),
+        Length(0.05, METER),
+        Length(200.0, METER),
+    )
+    camera.place(Vector3(0, 1.2, 0), Vector3(0, 0.4, -3))
+    return (world^, assets^, camera^)
 
 
-def test_gpu_radiance_refuses_an_empty_image() raises:
-    if _skipped("gpu radiance refuses an empty image"):
+def test_gpu_compose_matches_the_cpu_compose() raises:
+    if _skipped("gpu compose matches the cpu compose"):
         return
-    var scene = _scene()
-    var gpu = GpuWater(_bed())
-    var look = camera_look(scene.clock, False, Angle(-0.72, RADIAN))
-    for size in [(0, 4), (4, 0)]:
-        with assert_raises(contains="dimensions must be positive"):
-            _ = gpu.radiance(scene, look, size[0], size[1])
+    var bed = _bed()
+    var gpu = GpuWater(bed)
+    var parts = _ball()
+    var renderer = Renderer(40, 30)
+    renderer.set_background(Color(0, 0, 0))
+    var device = renderer.render(parts[0], parts[1], parts[2])
+    var host = renderer.render(parts[0], parts[1], parts[2])
+    var water = _scene()
+    var a = gpu.compose(water, device, parts[0], parts[2], Length(0.0, METER))
+    var b = water.compose(host, parts[0], parts[2], Length(0.0, METER), bed)
+    # The depth test runs on the CPU in both, so the same pixels show water.
+    assert_equal(a, b)
+    assert_true(a > 0)
+    var far = 0
+    for i in range(40 * 30):
+        assert_equal(device.depth[i], host.depth[i])
+        var p = device.get_pixel(i % 40, i // 40)
+        var q = host.get_pixel(i % 40, i // 40)
+        if abs(Int(p.g) - Int(q.g)) > 2:
+            far += 1
+    assert_true(far * 100 <= 40 * 30 * 2, String(far))
 
 
-def test_gpu_frames_keep_device_memory_bounded() raises:
-    if _skipped("gpu frames keep device memory bounded"):
+def _resident_bytes() raises -> Int:
+    # Linux reports resident pages second in /proc/self/statm.
+    var fields = Path("/proc/self/statm").read_text().split(" ")
+    return Int(fields[1]) * 4096
+
+
+def test_gpu_resources_stay_bounded_and_are_released() raises:
+    if _skipped("gpu resources stay bounded and are released"):
         return
+    # A separate context reads free device memory for the whole device.
+    var probe = DeviceContext(api="cuda")
+    var empty = probe.get_memory_info()[0]
     var scene = _scene()
-    var gpu = GpuWater(_bed())
-    var look = camera_look(scene.clock, False, Angle(-0.72, RADIAN))
-    # Two warm-up frames let the device allocator settle.
-    for _ in range(2):
-        scene.advance(Duration(0.02, SECOND), False)
-        _ = gpu.radiance(scene, look, 64, 48)
-    var settled = gpu.context.get_memory_info()[0]
-    var lowest = settled
-    for step in range(40):
-        scene.advance(Duration(0.02, SECOND), step % 7 == 0)
-        _ = gpu.radiance(scene, look, 64, 48)
-        lowest = min(lowest, gpu.context.get_memory_info()[0])
-    # Each frame frees its buffers, so free memory does not drift down.
-    var after = gpu.context.get_memory_info()[0]
-    print("free bytes settled", settled, "lowest", lowest, "after", after)
-    assert_true(after + (1 << 20) >= settled)
+    var sizes = [(64, 48), (97, 61), (128, 72)]
+    for round in range(2):
+        var gpu = GpuWater(_bed())
+        for size in sizes:
+            _ = _gpu(gpu, scene, -0.72, size[0], size[1])
+        var settled = probe.get_memory_info()[0]
+        var host = _resident_bytes()
+        var lowest = settled
+        for frame in range(60):
+            scene.advance(Duration(0.02, SECOND), frame % 7 == 0)
+            if frame == 30:
+                scene.reset()
+            if frame == 40:
+                # A refused frame leaves the object usable.
+                with assert_raises(contains="dimensions must be positive"):
+                    _ = _gpu(gpu, scene, -0.72, 0, 8)
+            var size = sizes[frame % 3]
+            _ = _gpu(gpu, scene, -0.72, size[0], size[1])
+            lowest = min(lowest, probe.get_memory_info()[0])
+        # Sixty frames at three sizes leave free memory where warm-up
+        # left it. Allocator caching settles in the warm-up frames.
+        assert_true(
+            probe.get_memory_info()[0] + (1 << 20) >= settled, String(round)
+        )
+        # A frame at these sizes holds well under 16 MiB at its peak.
+        assert_true(settled - lowest <= 16 << 20, String(settled - lowest))
+        # Host memory does not grow with the frame count.
+        assert_true(_resident_bytes() - host <= 32 << 20)
+        # Dropping the object releases its context and its buffers.
+        _ = gpu^
+        assert_true(
+            probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
+        )
 
 
 def main() raises:
