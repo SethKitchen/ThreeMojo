@@ -1,0 +1,3469 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/BEFORE-EXPECTED-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/baseline-v4-center-only"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/PROBE-INPUTS-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs"
+    }
+  ],
+  "phase": "recovered-center-observer-v1",
+  "scope": "Fresh center-only paired observer: 49 cases per O3/O0 mode, exact exported words/order/errors/ledgers. Newly reconstructed observer, not recovered old receipts, no exhaustive internal trace or full-search count-refusal reachability claim.",
+  "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V4-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4",
+  "stages": [
+    {
+      "command": [
+        "{mojo}",
+        "build",
+        "-I",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/baseline-v4-center-only",
+        "--num-threads",
+        "1",
+        "--target-triple=x86_64-unknown-linux-gnu",
+        "--target-cpu=x86-64-v3",
+        "--Werror",
+        "-O3",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "-o",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-build",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "{mojo}",
+        "build",
+        "-I",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4",
+        "--num-threads",
+        "1",
+        "--target-triple=x86_64-unknown-linux-gnu",
+        "--target-cpu=x86-64-v3",
+        "--Werror",
+        "-O3",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "-o",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-build",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=ordinary-no-proof",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-00",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=ordinary-no-proof",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-00",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cached-proof",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-01",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cached-proof",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-01",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-proof",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-02",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-proof",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-02",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=stale-proof",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-03",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=stale-proof",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-03",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=thin-width-proof",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-04",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=thin-width-proof",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-04",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=above-eager-threshold",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-05",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=above-eager-threshold",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-05",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-endpoint-partition",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-06",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-endpoint-partition",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-06",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-interior-partition",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-07",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-interior-partition",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-07",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-cached",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-08",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-cached",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-08",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-stale",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-09",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-stale",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-09",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-interior",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-10",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-interior",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-10",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-endpoint",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-11",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-endpoint",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-11",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-exact",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-12",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-exact",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-12",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-one-short",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-13",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-one-short",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-13",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-exact",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-14",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-exact",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-14",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-one-short",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-15",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-one-short",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-15",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-480",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-16",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-480",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-16",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-489",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-17",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-489",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-17",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-490",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-18",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-490",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-18",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-headroom-489",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-19",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-headroom-489",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-19",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=node-one-short",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-20",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=node-one-short",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-20",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=depth-zero-grouped",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-21",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=depth-zero-grouped",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-21",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-edge-seed",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-22",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-edge-seed",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-22",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-center-seed",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-23",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-center-seed",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-23",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-edge-seed",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-24",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-edge-seed",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-24",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-center-seed",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-25",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-center-seed",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-25",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-node-headroom",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-26",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-node-headroom",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-26",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-term-headroom",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-27",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-term-headroom",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-27",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-full-headroom",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-28",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-full-headroom",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-28",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-active-zero-gap",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-29",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-active-zero-gap",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-29",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-0",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-30",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-0",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-30",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-1",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-31",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-1",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-31",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-2",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-32",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-2",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-32",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-0",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-33",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-0",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-33",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-1",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-34",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-1",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-34",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-3",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-35",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-3",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-35",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-partition-depth-1",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-36",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-partition-depth-1",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-36",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-1",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-37",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-1",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-37",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-2",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-38",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-2",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-38",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-3",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-39",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-3",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-39",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-4",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-40",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-4",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-40",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-5",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-41",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-5",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-41",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-6",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-42",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-6",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-42",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-1",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-43",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-1",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-43",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-2",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-44",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-2",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-44",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-3",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-45",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-3",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-45",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-4",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-46",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-4",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-46",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-5",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-47",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-5",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-47",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-6",
+        "{evidence}/before-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O3-case-48",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-6",
+        "{evidence}/after-O3-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O3-case-48",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/compare_observations.py",
+        "--evidence",
+        "{evidence}",
+        "--cases",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/cases.json",
+        "--mode",
+        "O3",
+        "--contract",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/PAIR-CONTRACT.json",
+        "--output",
+        "{evidence}/PAIRS-O3.json"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "compare-O3",
+      "seconds": 30
+    },
+    {
+      "command": [
+        "{mojo}",
+        "build",
+        "-I",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/baseline-v4-center-only",
+        "--num-threads",
+        "1",
+        "--target-triple=x86_64-unknown-linux-gnu",
+        "--target-cpu=x86-64-v3",
+        "--Werror",
+        "-O0",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "-o",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-build",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "{mojo}",
+        "build",
+        "-I",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4",
+        "--num-threads",
+        "1",
+        "--target-triple=x86_64-unknown-linux-gnu",
+        "--target-cpu=x86-64-v3",
+        "--Werror",
+        "-O0",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "-o",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-build",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=ordinary-no-proof",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-00",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=ordinary-no-proof",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-00",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cached-proof",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-01",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cached-proof",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-01",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-proof",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-02",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-proof",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-02",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=stale-proof",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-03",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=stale-proof",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-03",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=thin-width-proof",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-04",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=thin-width-proof",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-04",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=above-eager-threshold",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-05",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=above-eager-threshold",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-05",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-endpoint-partition",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-06",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-endpoint-partition",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-06",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-interior-partition",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-07",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=grouped-interior-partition",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-07",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-cached",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-08",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-cached",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-08",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-stale",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-09",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-stale",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-09",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-interior",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-10",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-interior",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-10",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-endpoint",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-11",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=goal-grouped-endpoint",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-11",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-exact",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-12",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-exact",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-12",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-one-short",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-13",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-cached-one-short",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-13",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-exact",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-14",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-exact",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-14",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-one-short",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-15",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=resume-enlarged-one-short",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-15",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-480",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-16",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-480",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-16",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-489",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-17",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-489",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-17",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-490",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-18",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=headroom-490",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-18",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-headroom-489",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-19",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=enlarged-headroom-489",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-19",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=node-one-short",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-20",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=node-one-short",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-20",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=depth-zero-grouped",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-21",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=depth-zero-grouped",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-21",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-edge-seed",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-22",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-edge-seed",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-22",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-center-seed",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-23",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-line-center-seed",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-23",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-edge-seed",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-24",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-edge-seed",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-24",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-center-seed",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-25",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=cache-spiral-center-seed",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-25",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-node-headroom",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-26",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-node-headroom",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-26",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-term-headroom",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-27",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-term-headroom",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-27",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-full-headroom",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-28",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-full-headroom",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-28",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-active-zero-gap",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-29",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=frozen-active-zero-gap",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-29",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-0",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-30",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-0",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-30",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-1",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-31",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-1",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-31",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-2",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-32",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=support-depth-2",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-32",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-0",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-33",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-0",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-33",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-1",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-34",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-1",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-34",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-3",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-35",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-depth-3",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-35",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-partition-depth-1",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-36",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=sampled-partition-depth-1",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-36",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-1",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-37",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-1",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-37",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-2",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-38",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-2",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-38",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-3",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-39",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-3",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-39",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-4",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-40",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-4",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-40",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-5",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-41",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-5",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-41",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-6",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-42",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-prefix-6",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-42",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-1",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-43",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-1",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-43",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-2",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-44",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-2",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-44",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-3",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-45",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-3",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-45",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-4",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-46",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-4",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-46",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-5",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-47",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-5",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-47",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-6",
+        "{evidence}/before-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "before-O0-case-48",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v4/tools/run_suite.py",
+        "--seconds",
+        "5",
+        "--suite",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/lane_phase_differential.mojo",
+        "--",
+        "/usr/bin/env",
+        "THREEMOJO_LANE_PHASE_CASE=order-reversed-prefix-6",
+        "{evidence}/after-O0-bin"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "after-O0-case-48",
+      "seconds": 15
+    },
+    {
+      "command": [
+        "{python}",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/compare_observations.py",
+        "--evidence",
+        "{evidence}",
+        "--cases",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/cases.json",
+        "--mode",
+        "O0",
+        "--contract",
+        "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs/PAIR-CONTRACT.json",
+        "--output",
+        "{evidence}/PAIRS-O0.json"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/recovery-center-observer/probe-inputs",
+      "label": "compare-O0",
+      "seconds": 30
+    }
+  ],
+  "window_seconds": 1200
+}
