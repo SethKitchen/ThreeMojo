@@ -1,0 +1,35 @@
+[
+  {
+    "suite": "test_wide_line_workers",
+    "passed": 2,
+    "failed": 0,
+    "skipped": 0,
+    "max_test_ms": 904.951,
+    "suite_reported_total_ms": 955.0980000000001,
+    "build_seconds": 45.14924795099978,
+    "runner_wall_seconds": 1.5029554329994426,
+    "binary_sha256": "d3f48f18c6d58f23d685aba2bad359c56786756ce014b0551585d28ff41bf86f"
+  },
+  {
+    "suite": "test_wide_lines",
+    "passed": 36,
+    "failed": 0,
+    "skipped": 0,
+    "max_test_ms": 1.159,
+    "suite_reported_total_ms": 3.336,
+    "build_seconds": 67.34546619000139,
+    "runner_wall_seconds": 0.5017546939998283,
+    "binary_sha256": "5b811b62393c0823980211258a9256787f55addfee77ae3fa5c3b15fd1843e6a"
+  },
+  {
+    "suite": "test_renderer_resources",
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "max_test_ms": 83.036,
+    "suite_reported_total_ms": 166.717,
+    "build_seconds": 49.2188596750002,
+    "runner_wall_seconds": 0.5021555990006163,
+    "binary_sha256": "2348a7ae4552bfbc2ab686ea16d5cfd0ee6796faa393d14cd680aa009d10257e"
+  }
+]

@@ -1,0 +1,11 @@
+
+Running 6 tests for /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_renderer_resources.mojo 
+    PASS [ 0.500 ] test_shadow_casters_use_the_view_layers_for_every_light
+    PASS [ 0.100 ] test_cube_capture_skips_shadow_lights_outside_its_layers
+    PASS [ 0.218 ] test_transferred_shadow_maps_keep_their_texel_storage
+    PASS [ 64.324 ] test_parallel_jobs_keep_gouraud_clips_and_uv_space_identical
+    PASS [ 83.036 ] test_parallel_jobs_flush_before_and_after_a_volume
+    PASS [ 18.539 ] test_vertex_budget_flushes_keep_draw_order
+--------
+Summary [ 166.718 ] 6 tests run: 6 passed , 0 failed , 0 skipped 
+

@@ -1,0 +1,29 @@
+{
+  "commit": "d06143b149ba31ab44afaa690c93289b57bc1778",
+  "tree": "9dc0ba7e858c067f76f222c8fbc945317f7dfd02",
+  "archive_files": 3948,
+  "archive_mismatches": [],
+  "donor_status_before": "",
+  "mojo_version": "Mojo 1.1.0 (8189361e)",
+  "python_version": "3.12.14 (main, Sep 29 2026, 15:01:18) [Clang 22.1.3 ]",
+  "sdk_payload_receipt_matches": {
+    "modular/bin/lld": true,
+    "modular/bin/modular-crashpad-handler": true,
+    "modular/bin/mojo": true,
+    "modular/lib/libAsyncRTRuntimeGlobals.so": true,
+    "modular/lib/libKGENCompilerRTShared.so": true,
+    "modular/lib/libMSupportGlobals.so": true,
+    "modular/lib/mojo/std.mojoc": true,
+    "mojo/_entrypoints.py": true,
+    "mojo/_package_root.py": true,
+    "mojo/importer.py": true,
+    "mojo/notebook.py": true,
+    "mojo/paths.py": true,
+    "mojo/run.py": true
+  },
+  "mojo_sha256": "be444a046291b9e120394a7bc2836192fd2c82c9d5bd1c2960b79a9f4859466e",
+  "python_sha256": "5ebcd7993f0e40cb4b16e15d2c4c3c343ecad419966299b8e8f6f9e6a36bf779",
+  "maintained_test_seconds": 5,
+  "compile_outer_budget_seconds": 300,
+  "gpu_claim": false
+}

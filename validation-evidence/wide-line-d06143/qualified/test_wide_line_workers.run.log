@@ -1,0 +1,7 @@
+
+Running 2 tests for /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_line_workers.mojo 
+    PASS [ 904.951 ] test_many_workers_draw_what_one_draws
+    PASS [ 50.147 ] test_a_refused_dash_pattern_refuses_on_many_workers
+--------
+Summary [ 955.098 ] 2 tests run: 2 passed , 0 failed , 0 skipped 
+

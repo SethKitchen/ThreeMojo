@@ -1,0 +1,398 @@
+Failed to initialize Crashpad.  Crash reporting will not be available.  Cause: /home/agent/.local/share/modular could not be created: Read-only file system
+/workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:6:1: error: unable to locate module 'std'
+"""Tests for `objects.line_segments2`, `line_material` and the wide-line
+^
+/workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:6:1: error: 'std' is required for all normal mojo compiles.
+If you see this either:
+- Your mojo installation is broken and needs to be reinstalled or
+- You are a 'std' developer and are intentionally avoiding a pre-built 'std'
+"""Tests for `objects.line_segments2`, `line_material` and the wide-line
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:6:1: error: unable to locate module 'std'
+"""A camera without perspective, from three.js `src/cameras/OrthographicCamera.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:37:
+./cameras/camera.mojo:6:1: error: unable to locate module 'std'
+"""What the renderer needs of a camera, and nothing more.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:37:
+./cameras/camera.mojo:137:14: error: module 'camera' has no declaration 'Copyable'
+trait Camera(Copyable, Movable):
+             ^~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+./units/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+./units/si.mojo:6:1: error: unable to locate module 'std'
+"""Named dimensions and the units that measure them.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:6:1: error: unable to locate module 'std'
+"""Numbers that carry their units, checked at compile time.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:75:13: error: use of unknown declaration 'Int'
+    length: Int,
+            ^~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:76:11: error: use of unknown declaration 'Int'
+    mass: Int,
+          ^~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:77:11: error: use of unknown declaration 'Int'
+    time: Int,
+          ^~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:78:12: error: use of unknown declaration 'Int'
+    angle: Int,
+           ^~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:79:18: error: use of unknown declaration 'Int'
+    temperature: Int = 0,
+                 ^~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:79:24: error: unable to locate module 'std'
+    temperature: Int = 0,
+                       ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:80:12: error: use of unknown declaration 'DType'
+    dtype: DType = DType.float32,
+           ^~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+Imported from ./cameras/orthographic_camera.mojo:44:
+Imported from ./units/si.mojo:18:
+./units/quantity.mojo:80:20: error: use of unknown declaration 'DType'
+    dtype: DType = DType.float32,
+                   ^~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:307:5: error: unable to locate module 'std'
+    height: Length, aspect: Float32, near: Length, far: Length
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:307:29: error: use of unknown declaration 'Float32'
+    height: Length, aspect: Float32, near: Length, far: Length
+                            ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:307:21: error: unable to locate module 'std'
+    height: Length, aspect: Float32, near: Length, far: Length
+                    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:307:38: error: unable to locate module 'std'
+    height: Length, aspect: Float32, near: Length, far: Length
+                                     ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:307:52: error: unable to locate module 'std'
+    height: Length, aspect: Float32, near: Length, far: Length
+                                                   ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:308:13: error: unable to locate module 'std'
+) raises -> OrthographicCamera:
+            ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:15:
+./cameras/perspective_camera.mojo:6:1: error: unable to locate module 'std'
+"""A perspective camera, ported from three.js `src/cameras/PerspectiveCamera.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:14:
+./cameras/orthographic_camera.mojo:308:13: error: 'std' is required for all normal mojo compiles.
+If you see this either:
+- Your mojo installation is broken and needs to be reinstalled or
+- You are a 'std' developer and are intentionally avoiding a pre-built 'std'
+) raises -> OrthographicCamera:
+            ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:16:
+./core/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:16:
+./core/assets.mojo:6:1: error: unable to locate module 'std'
+"""Everything a scene draws with, owned in one place.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:16:
+./core/assets.mojo:37:15: error: use of unknown declaration 'Movable'
+struct Assets(Movable):
+              ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:17:
+./core/buffer_attribute.mojo:6:1: error: unable to locate module 'std'
+"""One named array of per-vertex data, from three.js
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:17:
+./core/buffer_attribute.mojo:172:24: error: use of unknown declaration 'Copyable'
+struct BufferAttribute(Copyable, Movable):
+                       ^~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:18:
+./core/buffer_geometry.mojo:6:1: error: unable to locate module 'std'
+"""A mesh's vertex data, from three.js `src/core/BufferGeometry.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:18:
+./core/buffer_geometry.mojo:394:23: error: use of unknown declaration 'Movable'
+struct BufferGeometry(Movable):
+                      ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:18:
+./core/buffer_geometry.mojo:139:18: error: unable to locate module 'std'
+comptime COLOR = "color"
+                 ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:18:
+./core/buffer_geometry.mojo:124:21: error: unable to locate module 'std'
+comptime POSITION = "position"
+                    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:19:
+./core/geometry_store.mojo:6:1: error: unable to locate module 'std'
+"""The owner of every geometry in a scene.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:19:
+./core/geometry_store.mojo:33:19: error: use of unknown declaration 'Equatable'
+struct GeometryId(Equatable, ImplicitlyCopyable, Writable):
+                  ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:20:
+./core/layers.mojo:6:1: error: unable to locate module 'std'
+"""Which of thirty-two layers something is on, from three.js
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:20:
+./core/layers.mojo:34:15: error: use of unknown declaration 'Equatable'
+struct Layers(Equatable, ImplicitlyCopyable, Writable):
+              ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:21:
+./core/object3d.mojo:6:1: error: unable to locate module 'std'
+"""A node in the scene graph, ported from three.js `src/core/Object3D.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:21:
+./core/object3d.mojo:58:15: error: use of unknown declaration 'Equatable'
+struct NodeId(Equatable, ImplicitlyCopyable, Writable):
+              ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:21:
+./core/object3d.mojo:170:17: error: use of unknown declaration 'ImplicitlyCopyable'
+struct Object3D(ImplicitlyCopyable):
+                ^~~~~~~~~~~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:22:
+./core/raycaster.mojo:6:1: error: unable to locate module 'std'
+"""Picking, from three.js `src/core/Raycaster.js` and `Mesh.raycast`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:22:
+./core/raycaster.mojo:162:16: error: use of unknown declaration 'Equatable'
+struct HitKind(Equatable, ImplicitlyCopyable, Writable):
+               ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:22:
+./core/raycaster.mojo:439:18: error: use of unknown declaration 'ImplicitlyCopyable'
+struct Raycaster(ImplicitlyCopyable, RayQuery):
+                 ^~~~~~~~~~~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:23:
+./core/scene.mojo:6:1: error: unable to locate module 'std'
+"""The flat array of nodes that makes up a scene graph.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:23:
+./core/scene.mojo:131:14: error: use of unknown declaration 'Movable'
+struct Scene(Movable):
+             ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:24:
+./materials/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:6:1: error: unable to locate module 'std'
+"""How a surface looks, from three.js `src/materials/Material.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:720:21: error: use of unknown declaration 'Equatable'
+struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
+                    ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:303:18: error: use of unknown declaration 'Equatable'
+struct LineWidth(Equatable, ImplicitlyCopyable, Writable):
+                 ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:960:17: error: use of unknown declaration 'ImplicitlyCopyable'
+struct Material(ImplicitlyCopyable):
+                ^~~~~~~~~~~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:951:19: error: use of unknown declaration 'Equatable'
+struct MaterialId(Equatable, ImplicitlyCopyable, Writable):
+                  ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+Imported from ./materials/material.mojo:205:
+./render/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+Imported from ./materials/material.mojo:205:
+./render/framebuffer.mojo:6:1: error: unable to locate module 'std'
+"""An RGBA pixel buffer with a depth buffer alongside it.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+Imported from ./materials/material.mojo:205:
+./render/framebuffer.mojo:64:14: error: use of unknown declaration 'ImplicitlyCopyable'
+struct Color(ImplicitlyCopyable):
+             ^~~~~~~~~~~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3503:5: error: unable to locate module 'std'
+    color: Color = _WHITE,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3504:5: error: unable to locate module 'std'
+    line_width: LineWidth = DEFAULT_LINE_WIDTH,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3505:5: error: unable to locate module 'std'
+    dash_size: Length = NO_DASH,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3506:5: error: unable to locate module 'std'
+    gap_size: Length = NO_DASH,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3507:17: error: use of unknown declaration 'Float32'
+    dash_scale: Float32 = 1.0,
+                ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3507:27: error: unable to locate module 'std'
+    dash_scale: Float32 = 1.0,
+                          ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3507:5: error: unable to locate module 'std'
+    dash_scale: Float32 = 1.0,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3508:5: error: unable to locate module 'std'
+    dash_offset: Length = NO_DASH,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3509:14: error: use of unknown declaration 'Float32'
+    opacity: Float32 = 1.0,
+             ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3509:24: error: unable to locate module 'std'
+    opacity: Float32 = 1.0,
+                       ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3509:5: error: unable to locate module 'std'
+    opacity: Float32 = 1.0,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3510:15: error: use of unknown declaration 'Optional'
+    blending: Optional[Blending] = None,
+              ^~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3510:5: error: unable to locate module 'std'
+    blending: Optional[Blending] = None,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3511:18: error: use of unknown declaration 'Bool'
+    transparent: Bool = False,
+                 ^~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3511:25: error: unable to locate module 'std'
+    transparent: Bool = False,
+                        ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3511:5: error: unable to locate module 'std'
+    transparent: Bool = False,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3512:20: error: use of unknown declaration 'Bool'
+    vertex_colors: Bool = False,
+                   ^~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3512:27: error: unable to locate module 'std'
+    vertex_colors: Bool = False,
+                          ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3512:5: error: unable to locate module 'std'
+    vertex_colors: Bool = False,
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:25:
+./materials/material.mojo:3513:13: error: unable to locate module 'std'
+) raises -> Material:
+            ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:34:
+./math/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:34:
+./math/vector3.mojo:6:1: error: unable to locate module 'std'
+"""A 3D vector, ported from three.js `src/math/Vector3.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:34:
+./math/vector3.mojo:41:16: error: use of unknown declaration 'Equatable'
+struct Vector3(Equatable, ImplicitlyCopyable):
+               ^~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:35:
+./objects/__init__.mojo:5:1: error: unable to locate module 'std'
+
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:35:
+./objects/line.mojo:6:1: error: unable to locate module 'std'
+"""Points joined by one-pixel lines, from three.js `src/objects/Line.js`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:35:
+./objects/line.mojo:195:13: error: use of unknown declaration 'ImplicitlyCopyable'
+struct Line(ImplicitlyCopyable):
+            ^~~~~~~~~~~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:6:1: error: unable to locate module 'std'
+"""Lines wider than a pixel, from three.js `examples/jsm/lines`.
+^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:83:22: error: use of unknown declaration 'ImplicitlyCopyable'
+struct LineSegments2(ImplicitlyCopyable):
+                     ^~~~~~~~~~~~~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:61:26: error: unable to locate module 'std'
+comptime MAX_CAP_STEPS = 64
+                         ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:60:26: error: unable to locate module 'std'
+comptime MIN_CAP_STEPS = 2
+                         ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:270:23: error: use of unknown declaration 'Float32'
+def cap_steps(radius: Float32) -> Int:
+                      ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:270:15: error: unable to locate module 'std'
+def cap_steps(radius: Float32) -> Int:
+              ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:270:35: error: use of unknown declaration 'Int'
+def cap_steps(radius: Float32) -> Int:
+                                  ^~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:270:35: error: unable to locate module 'std'
+def cap_steps(radius: Float32) -> Int:
+                                  ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:291:12: error: use of unknown declaration 'Float32'
+    start: Float32, end: Float32, dash: Float32, gap: Float32
+           ^~~~~~~
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:291:5: error: unable to locate module 'std'
+    start: Float32, end: Float32, dash: Float32, gap: Float32
+    ^
+Imported from /workspace/scratch/c2bcdb1ca387/wide-line-qualification-d06143b/src/tests/test_wide_lines.mojo:37:
+./objects/line_segments2.mojo:291:26: error: use of unknown declaration 'Float32'
+    start: Float32, end: Float32, dash: Float32, gap: Float32
+                         ^~~~~~~
