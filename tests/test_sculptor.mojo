@@ -103,6 +103,7 @@ from units.si import Angle, DEGREE, Length, METER, RADIAN
 # A ray stroke rounds as three.js's does; the sums of 81 or more
 # coordinates add rounding of their own.
 comptime EXACT = Float64(1e-6)
+comptime SUMS = Float64(1e-5)
 # A pointer's ray is unprojected in `Float32`.
 comptime POINTER = Float64(2e-4)
 

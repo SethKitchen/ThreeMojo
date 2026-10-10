@@ -47,6 +47,7 @@ comptime TOLERANCE = Float64(1e-5)
 comptime ALPHABET = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 )
+comptime FLOAT = 5126
 comptime UBYTE = 5121
 comptime SHORT = 5122
 comptime USHORT = 5123
