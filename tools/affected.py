@@ -50,6 +50,8 @@ SKIP_DIRS = {".git", ".venv", ".cache", "out", "coverage/build", "node_modules"}
 
 FROM_IMPORT = re.compile(r"^\s*from\s+([A-Za-z_][\w.]*)\s+import\s+(.*)$")
 PLAIN_IMPORT = re.compile(r"^\s*import\s+(.*)$")
+# An alias can follow any whitespace, a tab as well as a space.
+ALIAS = re.compile(r"\s+as\s+")
 QUOTED_ASSET = re.compile(r'"(assets/[^"]*)"')
 # A file Mojo can compile on its own defines `main` at the top level.
 ENTRY_POINT = re.compile(r"^(?:def|fn)\s+main\s*\(", re.MULTILINE)
@@ -140,14 +142,14 @@ def imported_names(source):
             rest = rest.split("#")[0].replace("(", " ").replace(")", " ")
             names.append(module)
             for item in rest.split(","):
-                item = item.strip().split(" as ")[0].strip()
+                item = ALIAS.split(item.strip())[0].strip()
                 if item:
                     names.append(module + "." + item)
         else:
             match = PLAIN_IMPORT.match(line)
             if match:
                 for item in match.group(1).split(","):
-                    name = item.strip().split(" as ")[0].strip()
+                    name = ALIAS.split(item.strip())[0].strip()
                     if name:
                         names.append(name)
         index += 1

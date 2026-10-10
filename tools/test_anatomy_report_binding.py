@@ -42,7 +42,6 @@ def _fixture(root):
         'unrelated.mojo': 'def unrelated():\n    pass\n',
         'tools/anatomy_validity.py': 'report logic',
         'tools/affected.py': 'resolver',
-        'tools/suite_key.py': 'closure',
         'docs/validation/anatomy-provenance.json':
             json.dumps({'parameters': [{'source_files': ['cited.mojo']}]}),
     }
@@ -66,7 +65,7 @@ class AnatomyReportBindingTests(unittest.TestCase):
             self.assertEqual(av.bound_paths(root), [
                 'cited.mojo', 'docs/validation/anatomy-provenance.json', 'helper.mojo',
                 'pkg/bound.mojo', 'tools/affected.py', 'tools/anatomy_probe.mojo',
-                'tools/anatomy_validity.py', 'tools/suite_key.py'])
+                'tools/anatomy_validity.py'])
 
     def test_bound_changes_stale_the_report_and_others_do_not(self):
         changes = {
@@ -103,7 +102,7 @@ class AnatomyReportBindingTests(unittest.TestCase):
             before = av.source_digest(root)
             for name, value in (('PINNED_TOOLCHAIN', 'Mojo 1.2.0 (other)'),
                                 ('BUILD_FLAGS', ['--Werror']),
-                                ('BINDING_VERSION', 'anatomy-binding-v3')):
+                                ('BINDING_VERSION', 'anatomy-binding-v4')):
                 with self.subTest(name=name), patch.object(av, name, value):
                     self.assertNotEqual(av.source_digest(root), before)
 
@@ -111,11 +110,23 @@ class AnatomyReportBindingTests(unittest.TestCase):
         refusals = {
             'missing probe': lambda root: (root/'tools/anatomy_probe.mojo').unlink(),
             'missing cited input': lambda root: (root/'cited.mojo').unlink(),
-            'missing binding code': lambda root: (root/'tools/suite_key.py').unlink(),
+            'missing binding code': lambda root: (root/'tools/affected.py').unlink(),
             'unresolved import': lambda root: (root/'pkg/bound.mojo').write_text(
                 'from nowhere import other\n'),
             'relative import': lambda root: (root/'pkg/bound.mojo').write_text(
                 'from .helper import other\n'),
+            # An existing ancestor does not stand for a missing module.
+            'missing module in a package': lambda root: (
+                (root/'pkg/__init__.mojo').write_text('')
+                or (root/'pkg/bound.mojo').write_text('from pkg.missing import other\n')),
+            'missing module beside a module': lambda root: (root/'pkg/bound.mojo').write_text(
+                'import helper.missing\n'),
+            'unreadable import': lambda root: (root/'pkg/bound.mojo').write_text(
+                'import 3d\n'),
+            'unclosed import list': lambda root: (root/'pkg/bound.mojo').write_text(
+                'from helper import (other\n'),
+            'unended string': lambda root: (root/'pkg/bound.mojo').write_text(
+                'var text = "open\nfrom helper import other\n'),
         }
         for name, apply in refusals.items():
             with self.subTest(refusal=name), tempfile.TemporaryDirectory() as folder:
@@ -124,6 +135,38 @@ class AnatomyReportBindingTests(unittest.TestCase):
                 apply(root)
                 with self.assertRaises(ValueError):
                     av.source_digest(root)
+
+    def test_imports_are_read_as_the_compiler_reads_them(self):
+        # Prose and strings hold no imports, and an alias can follow a tab.
+        probe = ('"""Prose that is not code.\n\nimport missing\n'
+                 'from .example import value\n"""\n'
+                 'from pkg import bound\tas renamed\n'
+                 'from helper import (\n    other\tas\tanother,  # import nowhere\n)\n'
+                 "var text = r'from .x import y\\'\n"
+                 '\n\ndef main():\n    pass\n')
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            _fixture(root)
+            (root/'pkg/__init__.mojo').write_text('')
+            (root/'tools/anatomy_probe.mojo').write_text(probe)
+            self.assertEqual(av.imports_of(probe),
+                             [('pkg', ['bound']), ('helper', ['other'])])
+            self.assertIn('pkg/bound.mojo', av.bound_paths(root))
+            self.assertIn('helper.mojo', av.bound_paths(root))
+            before = av.source_digest(root)
+            (root/'pkg/bound.mojo').write_text('def value() -> Int:\n    return 4\n')
+            self.assertNotEqual(av.source_digest(root), before)
+
+    def test_plain_imports_and_symbols_are_kept_apart(self):
+        source = 'import pkg.bound as bound, helper\nfrom pkg import *\nimport a.b; import c\n'
+        self.assertEqual(av.imports_of(source), [
+            ('pkg.bound', None), ('helper', None), ('pkg', []), ('a.b', None), ('c', None)])
+        for unreadable in ('from pkg import a.b\n', 'from pkg import\n', 'import\n',
+                           'from 3d import x\n', 'import pkg as\n'):
+            with self.subTest(source=unreadable), self.assertRaises(ValueError):
+                av.imports_of(unreadable)
+        # A name that only starts like an import is not one.
+        self.assertEqual(av.imports_of('from_here = 1\nimported = 2\n'), [])
 
     def test_missing_and_stale_reports_are_rejected(self):
         for mutation in ('none', 'source', 'logic', 'inventory', 'missing_report',

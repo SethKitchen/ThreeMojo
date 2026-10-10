@@ -253,15 +253,191 @@ def diagnostic_findings(groups):
 
 # The report binds what can change the measured anatomy, not every source
 # file (#702). Bump the version when the binding rule changes.
-BINDING_VERSION = 'anatomy-binding-v2'
+BINDING_VERSION = 'anatomy-binding-v3'
 PROBE = 'tools/anatomy_probe.mojo'
 INVENTORY = 'docs/validation/anatomy-provenance.json'
 # The code that decides the binding is bound with it.
-BINDING_CODE = ('tools/anatomy_validity.py', 'tools/affected.py', 'tools/suite_key.py')
+BINDING_CODE = ('tools/anatomy_validity.py', 'tools/affected.py')
 # Packages that come with the pinned toolchain. The toolchain string binds them.
 TOOLCHAIN_PACKAGES = ('std', 'max')
-RELATIVE_IMPORT = re.compile(r'^\s*from\s+\.', re.MULTILINE)
-MODULE_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*')
+_NAME = r'[A-Za-z_][A-Za-z0-9_]*'
+_DOTTED = _NAME + r'(?:\.' + _NAME + r')*'
+_FROM_STATEMENT = re.compile(r'from\s+(\S+)\s+import\s+(.*)', re.DOTALL)
+_PLAIN_STATEMENT = re.compile(r'import\s+(.*)', re.DOTALL)
+_IMPORT_START = re.compile(r'(?:from|import)\b')
+_ITEM = re.compile(r'(' + _DOTTED + r')(?:\s+as\s+' + _NAME + r')?')
+_STRING_PREFIX = re.compile(r'(?<![A-Za-z0-9_])[A-Za-z]{1,2}$')
+
+
+def _code_only(text):
+    """Return `text` with each comment and string literal blanked.
+
+    Newlines stay, so a docstring cannot join or split the lines around it.
+    A string prefix such as `r` stays, which no import can contain.
+
+    Raises:
+        ValueError: If a string literal does not end.
+    """
+    out = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == '#':
+            end = text.find('\n', index)
+            end = len(text) if end < 0 else end
+        elif char in '"\'':
+            quote = text[index:index+3] if text[index:index+3] in ('"""', "'''") else char
+            prefix = _STRING_PREFIX.search(''.join(out[-3:]))
+            # A backslash escapes the next character, except in a raw string.
+            raw = bool(prefix) and 'r' in prefix.group(0).lower()
+            end = index + len(quote)
+            while not text.startswith(quote, end):
+                if end >= len(text) or (len(quote) == 1 and text[end] == '\n'):
+                    raise ValueError('a string literal does not end')
+                end += 1 if raw or text[end] != '\\' else 2
+            end += len(quote)
+        else:
+            out.append(char)
+            index += 1
+            continue
+        out.append(''.join(c if c == '\n' else ' ' for c in text[index:end]))
+        index = end
+    return ''.join(out)
+
+
+def _statements(text):
+    """Return each logical statement of `text`, comments and strings blanked.
+
+    A statement goes on over lines inside brackets and after a backslash,
+    and a semicolon ends one.
+
+    Raises:
+        ValueError: If a string literal does not end or a bracket does not
+            close.
+    """
+    code = _code_only(text).replace('\\\n', '  ')
+    statements = []
+    current = []
+    depth = 0
+    for char in code + '\n':
+        if char in '([{':
+            depth += 1
+        elif char in ')]}':
+            depth = max(0, depth - 1)
+        if (char == '\n' and depth == 0) or char == ';':
+            statements.append(''.join(current).strip())
+            current = []
+        else:
+            current.append(' ' if char == '\n' else char)
+    if depth:
+        raise ValueError('a bracket does not close')
+    return [statement for statement in statements if statement]
+
+
+def imports_of(text):
+    """Return the imports in a Mojo source, as the compiler reads them.
+
+    Each is `(module, names)`: the dotted module, and for a `from` import
+    the names after `import`, which can be symbols or submodules. A plain
+    import has `None` for its names. Comments and string literals,
+    docstrings among them, hold no imports. An alias can follow any
+    whitespace.
+
+    Raises:
+        ValueError: If an import is relative, or a statement that starts
+            with `from` or `import` cannot be read.
+    """
+    found = []
+    for statement in _statements(text):
+        if not _IMPORT_START.match(statement):
+            continue
+        match = _FROM_STATEMENT.fullmatch(statement)
+        if match:
+            module, rest = match.group(1), match.group(2).strip()
+            if module.startswith('.'):
+                raise ValueError('relative imports are not supported: ' + statement)
+            if rest.startswith('(') and rest.endswith(')'):
+                rest = rest[1:-1]
+            items = [item.strip() for item in rest.split(',')]
+            # A parenthesized list can end with a comma.
+            if items and not items[-1]:
+                items.pop()
+            names = []
+            for item in items:
+                parsed = _ITEM.fullmatch(item)
+                if item != '*' and not (parsed and '.' not in parsed.group(1)):
+                    raise ValueError('cannot read the import: ' + statement)
+                if parsed:
+                    names.append(parsed.group(1))
+            if not re.fullmatch(_DOTTED, module) or not items:
+                raise ValueError('cannot read the import: ' + statement)
+            found.append((module, names))
+            continue
+        match = _PLAIN_STATEMENT.fullmatch(statement)
+        items = [item.strip() for item in match.group(1).split(',')] if match else []
+        if not items:
+            raise ValueError('cannot read the import: ' + statement)
+        for item in items:
+            parsed = _ITEM.fullmatch(item)
+            if not parsed:
+                raise ValueError('cannot read the import: ' + statement)
+            found.append((parsed.group(1), None))
+    return found
+
+
+def module_file(name, entry, known):
+    """Return the file a dotted module name names, or `None`.
+
+    The compiler looks in the entry point's directory first, then in the
+    root. The file is `a/b.mojo` or the package `a/b/__init__.mojo` for
+    `a.b`. An ancestor package alone does not satisfy the name.
+
+    Args:
+        name: The dotted module name.
+        entry: The entry point's directory, relative to the root.
+        known: Every `.mojo` file, relative to the root.
+    """
+    for base in (entry, ''):
+        stem = (base + '/' if base else '') + name.replace('.', '/')
+        for candidate in (stem + '.mojo', stem + '/__init__.mojo'):
+            if candidate in known:
+                return candidate
+    return None
+
+
+def probe_closure(root, known):
+    """Return the sorted files the probe reaches through its imports.
+
+    Each import's own module must resolve to a file of its own: a missing
+    module under an existing package is refused. The edges come from
+    `affected.resolve`, which also keeps the ancestor packages and the
+    shadowing candidates, so the closure can only be larger than what the
+    compiler reads.
+
+    Raises:
+        ValueError: If an import cannot be read, is relative, or names a
+            module that resolves to no file.
+    """
+    import affected
+    entry = str(Path(PROBE).parent.as_posix())
+    seen = {PROBE}
+    stack = [PROBE]
+    while stack:
+        path = stack.pop()
+        for module, names in imports_of((Path(root)/path).read_text()):
+            if module.split('.')[0] in TOOLCHAIN_PACKAGES:
+                continue
+            if module_file(module, entry, known) is None:
+                raise ValueError('an anatomy probe import resolves to no module: '
+                                 + module + ' in ' + path)
+            # A name after `import` is a submodule when its file exists, and
+            # a symbol otherwise, which the compiler checks.
+            for name in [module] + [module + '.' + name for name in names or []]:
+                for target in affected.resolve(name, path, known, [entry]):
+                    if target not in seen:
+                        seen.add(target)
+                        stack.append(target)
+    return sorted(seen)
 
 
 def bound_paths(root):
@@ -274,10 +450,9 @@ def bound_paths(root):
 
     Raises:
         ValueError: If the probe or a cited input is missing, an import is
-            relative, or a local import resolves to no file.
+            relative or unreadable, or a local import resolves to no file.
     """
     import affected
-    import suite_key
     root = Path(root)
     saved = affected.ROOT
     affected.ROOT = str(root)
@@ -285,28 +460,7 @@ def bound_paths(root):
         known = set(affected.mojo_files())
         if PROBE not in known:
             raise ValueError('the anatomy probe is missing: ' + PROBE)
-        imports = {}
-        closure = suite_key.closure(PROBE, known, imports)
-        entry = [str(Path(PROBE).parent.as_posix())]
-        for path in closure:
-            # The shared import parser skips `from .x import y`, so look
-            # for it here rather than let a relative import go unbound.
-            if RELATIVE_IMPORT.search((root/path).read_text()):
-                raise ValueError('relative imports are not supported: ' + path)
-            for name in imports[path][0]:
-                if name.split('.')[0] in TOOLCHAIN_PACKAGES:
-                    continue
-                # The import parser also reads prose that starts with
-                # "import" in a docstring. Only a dotted name can import.
-                if not MODULE_NAME.fullmatch(name):
-                    continue
-                # `from module import name` lists the module and module.name;
-                # the name can be a symbol, so its parent must resolve.
-                parent = name.rsplit('.', 1)[0] if '.' in name else name
-                if not (affected.resolve(name, path, known, entry)
-                        or affected.resolve(parent, path, known, entry)):
-                    raise ValueError('an anatomy probe import resolves to no file: '
-                                     + name + ' in ' + path)
+        closure = probe_closure(root, known)
     finally:
         affected.ROOT = saved
     inventory = json.loads((root/INVENTORY).read_text())

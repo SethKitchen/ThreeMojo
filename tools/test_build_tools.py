@@ -28,6 +28,10 @@ class DependencyTests(unittest.TestCase):
         )
         import core.scene as scene, core.assets # both
         '''), ['math', 'math.vector2', 'math.vector3', 'core.scene', 'core.assets'])
+        # A tab before or after `as` still ends the imported name.
+        self.assertEqual(affected.imported_names(
+            'from pkg import bound\tas renamed\nimport core.scene\tas\tscene\n'),
+            ['pkg', 'pkg.bound', 'core.scene'])
 
     def test_nul_paths_and_untracked_tooling(self):
         with patch.object(affected, 'git', side_effect=[
