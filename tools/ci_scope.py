@@ -84,10 +84,12 @@ def kind(path):
 
 def graph(sources):
     known = set(sources)
+    # Any entry point can compile a module, so keep every root it can use.
+    lookup = affected.resolver(known, affected.entry_directories(sources))
     imports, users = {}, {}
     for path, source in sources.items():
         for name in affected.imported_names(source):
-            for target in affected.resolve(name, path, known):
+            for target in lookup(name):
                 if target != path:
                     imports.setdefault(path, set()).add(target)
                     users.setdefault(target, set()).add(path)

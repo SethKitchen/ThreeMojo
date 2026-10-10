@@ -256,7 +256,7 @@ struct HairSimulation(Movable):
         var strands = len(self.starts) - 1
         var tasks = min(num_logical_cores(), strands)
         var group = TaskGroup()
-        for task in range(tasks):  # pragma: no branch
+        for task in range(tasks):
             group.create_task(
                 _step_task(
                     Pointer(to=self).unsafe_origin_cast[MutAnyOrigin](),
@@ -312,7 +312,7 @@ struct HairSimulation(Movable):
         var strands = len(self.starts) - 1
         var tasks = min(num_logical_cores(), strands)
         var group = TaskGroup()
-        for task in range(tasks):  # pragma: no branch
+        for task in range(tasks):
             group.create_task(
                 _lay_task(
                     Pointer(to=self).unsafe_origin_cast[MutAnyOrigin](),
@@ -465,7 +465,7 @@ struct HairSimulation(Movable):
         var strands = len(self.starts) - 1
         var tasks = min(num_logical_cores(), strands)
         var group = TaskGroup()
-        for task in range(tasks):  # pragma: no branch
+        for task in range(tasks):
             group.create_task(
                 _write_task(
                     Pointer(to=self).unsafe_origin_cast[ImmutAnyOrigin](),
