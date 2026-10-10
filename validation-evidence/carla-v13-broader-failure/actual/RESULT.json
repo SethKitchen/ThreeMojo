@@ -1,0 +1,44 @@
+{
+  "elapsed_seconds": 749.0083209609984,
+  "failure": "RuntimeError('Stage failed: 03-normal-test_consumer_first_import_orders_normal_and_optimized')",
+  "finished": "2026-10-10T23:32:51.307088+00:00",
+  "known_process_count": 15,
+  "remaining_owned_descendants": [],
+  "scope": "Fresh required broader preflight on reviewed v13 cache-owned inputs and fixture correction: all4 historically failing methods bothmodes; unchanged120s children,1800s module caps and10800s window. Does not replace final full matrix.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": false,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_consumer_first_import_orders_normal_and_optimized",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v13",
+      "label": "03-normal-test_consumer_first_import_orders_normal_and_optimized",
+      "leader_reaped": true,
+      "log_sha256": "bc734fd860b5232b1c1c5e711458e3248646a84e52f5d5d3814649bef6b66b91",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 745.575244675998,
+      "single_cpu": 0,
+      "source_seal_sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-10T23:20:23.712299+00:00",
+      "timed_out": false
+    }
+  ]
+}

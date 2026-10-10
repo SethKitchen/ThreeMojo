@@ -1,0 +1,97 @@
+{
+  "files": [
+    {
+      "bytes": 1708,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/RESULT.json",
+      "path": "actual/RESULT.json",
+      "sha256": "c178f9eb1f62777b5759d3ebf038f9b0b2abec6e3a7adf723e2bfee031e240ea"
+    },
+    {
+      "bytes": 847,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/FAILURE.json",
+      "path": "actual/FAILURE.json",
+      "sha256": "bdb9fa83b6b9a6594dde7ca215ec3fb9f77d2bffa33f8534a16722997452085b"
+    },
+    {
+      "bytes": 419029,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/SOURCE-SEAL.json",
+      "path": "actual/SOURCE-SEAL.json",
+      "sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/SDK-BEFORE.json",
+      "path": "actual/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/SDK-AFTER.json",
+      "path": "actual/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/WINDOW-START.json",
+      "path": "actual/WINDOW-START.json",
+      "sha256": "a611329e41dcc12c96eff8ddfc7ab05bea94822917d03295ff98bfecdeda341f"
+    },
+    {
+      "bytes": 709,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "path": "actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "sha256": "35f84e8e568c192880cf2f1291efc7775cf6874d35e7cf3257db81a5a73f7e26"
+    },
+    {
+      "bytes": 951,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "path": "actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "sha256": "3785d3db2d78fab95872393df2d18f5b075e8af5f04066c2f08885841f2a844c"
+    },
+    {
+      "bytes": 4154,
+      "kind": "original-failed-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/actual/03-normal-test_consumer_first_import_orders_normal_and_optimized.log",
+      "path": "actual/03-normal-test_consumer_first_import_orders_normal_and_optimized.log",
+      "sha256": "bc734fd860b5232b1c1c5e711458e3248646a84e52f5d5d3814649bef6b66b91"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-plan-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 4367,
+      "kind": "executed-plan-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/reproduce/focused-known-failures-v5.json",
+      "path": "reproduce/focused-known-failures-v5.json",
+      "sha256": "8821c3bdcac2b5e2f1b6ba65c6b81d9e06649473a06903c458aff70a280748ed"
+    },
+    {
+      "bytes": 497,
+      "kind": "executed-plan-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/reproduce/V13-REPAIR-GATE-BINDING.json",
+      "path": "reproduce/V13-REPAIR-GATE-BINDING.json",
+      "sha256": "6f4d13b7c17e3f4e72ac585eb990b4df4a44cbd04cbe314cd3982a0bb52b1d00"
+    },
+    {
+      "bytes": 1790,
+      "kind": "factual-failure-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-broader-failure-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "2bdc72bbf91133c87f14a5df45223df57ca0b1b98677d1202b4344f65205c01b"
+    }
+  ],
+  "schema": 1,
+  "scope": "Failed first stage of the required v13 broader preflight. One enclosing unittest exercised its 14 consumer/mode subtests and reported one optimized production-inventory child timeout. The remaining seven planned stages did not execute."
+}

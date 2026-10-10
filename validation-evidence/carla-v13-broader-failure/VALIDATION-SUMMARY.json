@@ -1,0 +1,20 @@
+{
+  "child_cap_seconds": 120,
+  "configured_window_cap_seconds": 10800,
+  "evidence_policy": "Original receipts and raw log copied byte-for-byte; summary is separately derived. No private review notes or coordination.",
+  "failure": "Optimized test_production_inventory_paths consumer-first child exceeded 120 seconds. The enclosing stage itself did not reach its 1800-second watchdog.",
+  "limitations": "No full matrix, native coverage, report, hosted CI or issue-completion claim. No cap changed and no repeated retry is claimed as qualification.",
+  "prior_evidence_boundary": "Earlier isolated production-child timings of 113.593 seconds normal and 112.839 seconds optimized remain exact v11 observations. This broader v13 failure disproves treating those passes as reliable timing margin.",
+  "remaining_owned_descendants": [],
+  "result_sha256": "c178f9eb1f62777b5759d3ebf038f9b0b2abec6e3a7adf723e2bfee031e240ea",
+  "schema": 1,
+  "scope": "Failed first stage of the required v13 broader preflight. One enclosing unittest exercised its 14 consumer/mode subtests and reported one optimized production-inventory child timeout. The remaining seven planned stages did not execute.",
+  "source_checkpoint": "2981582ed174483ea3b64a2c0ce6a09d22470aa0",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1",
+  "stage_cap_seconds": 1800,
+  "stage_seconds": 745.575244675998,
+  "successful_child_boundary": "Other 13 subtests reported no error; the maintained test asserts their return status and acceptance marker. Individual child timing or captured stdout is not emitted for successful subtests, so this is not a separate per-child receipt claim.",
+  "unittest_seconds": 744.606,
+  "window_seconds": 749.0083209609984
+}

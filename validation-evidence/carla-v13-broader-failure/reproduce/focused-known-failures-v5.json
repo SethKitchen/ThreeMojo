@@ -1,0 +1,166 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v13",
+  "seal": "CANDIDATE-V13-SOURCE-SEAL.json",
+  "phase": "focused-known-failures-v5",
+  "window_seconds": 10800,
+  "pause_request_file": "native-lane-v13.pause",
+  "scope": "Fresh required broader preflight on reviewed v13 cache-owned inputs and fixture correction: all4 historically failing methods bothmodes; unchanged120s children,1800s module caps and10800s window. Does not replace final full matrix.",
+  "stages": [
+    {
+      "label": "03-normal-test_consumer_first_import_orders_normal_and_optimized",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_consumer_first_import_orders_normal_and_optimized",
+        "-v"
+      ]
+    },
+    {
+      "label": "03-optimized-test_consumer_first_import_orders_normal_and_optimized",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_consumer_first_import_orders_normal_and_optimized",
+        "-v"
+      ]
+    },
+    {
+      "label": "02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_sum2_historical_grouping_and_current_mixed_root_controls",
+        "-v"
+      ]
+    },
+    {
+      "label": "02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_sum2_historical_grouping_and_current_mixed_root_controls",
+        "-v"
+      ]
+    },
+    {
+      "label": "00-normal-test_incomplete_consumed_module_import_fails_closed",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_incomplete_consumed_module_import_fails_closed",
+        "-v"
+      ]
+    },
+    {
+      "label": "00-optimized-test_incomplete_consumed_module_import_fails_closed",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_incomplete_consumed_module_import_fails_closed",
+        "-v"
+      ]
+    },
+    {
+      "label": "01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+        "-v"
+      ]
+    },
+    {
+      "label": "01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+      "seconds": 1800,
+      "expected_tests": 1,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+        "-v"
+      ]
+    }
+  ]
+}
