@@ -43,7 +43,9 @@ from extensions.humanoid.skeleton.head.hair.groom import (
     follower_across,
 )
 from math.vector3 import Vector3
+from render.tasks import TaskGroup
 from std.math import floor, isfinite, max, min
+from std.sys import num_logical_cores
 
 
 @fieldwise_init
@@ -249,9 +251,33 @@ struct HairSimulation(Movable):
                 or a `HairCollider`.
             wind: The wind.
         """
+        # Strands are independent. Each task owns a disjoint run of them,
+        # so the points equal the serial arithmetic bit for bit.
+        var strands = len(self.starts) - 1
+        var tasks = min(num_logical_cores(), strands)
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _step_task(
+                    Pointer(to=self).unsafe_origin_cast[MutAnyOrigin](),
+                    Pointer(to=collider).unsafe_origin_cast[ImmutAnyOrigin](),
+                    wind,
+                    task * strands // tasks,
+                    (task + 1) * strands // tasks,
+                )
+            )
+        group.wait()
+        if self.guides_only:
+            self._lay_followers()
+        self.frame += 1
+
+    def _step_strands[
+        F: DistanceField
+    ](mut self, collider: F, wind: HairWind, first_strand: Int, past: Int):
+        """Move and settle the strands `first_strand` up to `past`."""
         var p = self.physics
         var dt2 = p.step * p.step
-        for strand in range(len(self.starts) - 1):  # pragma: no branch
+        for strand in range(first_strand, past):  # pragma: no branch
             if self.guides_only and self.guides[strand] >= 0:
                 continue
             var first = self.starts[strand]
@@ -279,14 +305,28 @@ struct HairSimulation(Movable):
                 self.previous[index] = before
             for _ in range(p.iterations):  # pragma: no branch
                 self._settle(first, end, collider)
-        if self.guides_only:
-            self._lay_followers()
-        self.frame += 1
 
     def _lay_followers(mut self):
+        # Followers read only the moved guides, so each task owns a
+        # disjoint run of strands.
+        var strands = len(self.starts) - 1
+        var tasks = min(num_logical_cores(), strands)
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _lay_task(
+                    Pointer(to=self).unsafe_origin_cast[MutAnyOrigin](),
+                    task * strands // tasks,
+                    (task + 1) * strands // tasks,
+                )
+            )
+        group.wait()
+
+    def _lay_strands(mut self, first_strand: Int, past: Int):
         # Each follower point sits at its guide point, offset across the
-        # hair and up off it in the guide's moved frame.
-        for strand in range(len(self.starts) - 1):
+        # hair and up off it in the guide's moved frame. Every task gets
+        # one strand at least.
+        for strand in range(first_strand, past):  # pragma: no branch
             var guide = self.guides[strand]
             if guide < 0:
                 continue
@@ -421,7 +461,29 @@ struct HairSimulation(Movable):
                 raise Error("Hair motion must have finite positions")
         for index in range(len(self.now)):
             groom.points[index] = self.now[index]
-        for index in range(len(self.now)):
+        # Each point's frame reads the written points of its own strand.
+        var strands = len(self.starts) - 1
+        var tasks = min(num_logical_cores(), strands)
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _write_task(
+                    Pointer(to=self).unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=groom).unsafe_origin_cast[MutAnyOrigin](),
+                    task * strands // tasks,
+                    (task + 1) * strands // tasks,
+                )
+            )
+        group.wait()
+
+    def _write_strands(
+        self, mut groom: HairGroom, first_strand: Int, past: Int
+    ):
+        """Turn the normals and depths of strands `first_strand` up to
+        `past`."""
+        for index in range(
+            self.starts[first_strand], self.starts[past]
+        ):  # pragma: no branch
             var normal = self.initial_normals[index]
             groom.normals[index] = _motion_normal(
                 self.initial_tangents[index], groom.tangent(index), normal
@@ -430,3 +492,32 @@ struct HairSimulation(Movable):
             groom.depths[index] = max(
                 Float32(0), self.initial_depths[index] - lift
             )
+
+
+async def _step_task[
+    F: DistanceField
+](
+    simulation: Pointer[HairSimulation, MutAnyOrigin],
+    collider: Pointer[F, ImmutAnyOrigin],
+    wind: HairWind,
+    first_strand: Int,
+    past: Int,
+):
+    simulation[]._step_strands(collider[], wind, first_strand, past)
+
+
+async def _lay_task(
+    simulation: Pointer[HairSimulation, MutAnyOrigin],
+    first_strand: Int,
+    past: Int,
+):
+    simulation[]._lay_strands(first_strand, past)
+
+
+async def _write_task(
+    simulation: Pointer[HairSimulation, ImmutAnyOrigin],
+    groom: Pointer[HairGroom, MutAnyOrigin],
+    first_strand: Int,
+    past: Int,
+):
+    simulation[]._write_strands(groom[], first_strand, past)
