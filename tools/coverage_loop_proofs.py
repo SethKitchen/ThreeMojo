@@ -669,13 +669,15 @@ def repaired_density_loops(root, *, include_roots=()):
 # Bind the complete producer/consumer and maintained exceptional-value control;
 # fail closed on source changes or local/staged stdlib shadows. The receipt
 # separately binds the exact compiler/SDK and still requires a runtime True hit.
+# Successor for #732: renderer.mojo changed only after `_emit_wide_line`
+# begins; lines 1-3829, with this loop and every cap helper, are identical.
 STRAND_CAP_SOURCES = {
     'objects/__init__.mojo':
         '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
     'renderers/__init__.mojo':
         '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
     'renderers/renderer.mojo':
-        '920a1f2583e41c460646f1f2f257bdeee709094d6140ac94e59195fc17310a12',
+        '40a82d7ec8c82ce33c1fdcca4e2ab012eefa1338599864c2f372b1f85ea6bb73',
     'objects/line_segments2.mojo':
         '5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79',
     'tests/test_small_loop_witnesses.mojo':

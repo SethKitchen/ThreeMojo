@@ -1,6 +1,6 @@
 # A 1080p strand-hair frame by stage (#729)
 
-This report measures one 1920 x 1080 frame of the default groom, as [issue 729](https://github.com/SethKitchen/ThreeMojo/issues/729) asks, split from [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298). A frame takes about 0.79 seconds on the CPU, about 47 times the 16.667 millisecond budget. Building and drawing the strand triangles takes almost all of it. The GPU rasterizer could not draw a 1080p frame within this machine's one-minute GPU limit, so issue 729 stays open: it asks for post-warm-up 1080p samples on both rasterizers.
+This report measures one 1920 x 1080 frame of the default groom, as [issue 729](https://github.com/SethKitchen/ThreeMojo/issues/729) asks, split from [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298). A frame takes about 0.79 seconds on the CPU, about 47 times the 16.667 millisecond budget. Building and drawing the strand triangles takes almost all of it. The GPU path did not finish three frames at 240 x 135 within this machine's one-minute GPU limit, and no 1080p GPU run was attempted. Issue 729 stays open: it asks for post-warm-up 1080p samples on both rasterizers.
 
 ## Method
 
@@ -12,7 +12,7 @@ This report measures one 1920 x 1080 frame of the default groom, as [issue 729](
 | Points | 68,495, 6.7 a strand |
 | Strands with a point projected into the image, at rest | 10,185. This counts projected points before motion and before the depth test. It is not a count of strands that stay visible. |
 | Coverage | 1 pixel wide lines, opacity 0.65, hashed strand coverage (`STRAND_LINE_COVERAGE`). Accepted samples write opaque depth. |
-| Triangles emitted a frame | 1,750,484, from about 58,000 strand segments with feathered ribbons and caps |
+| Triangles prepared | 1,750,484 for the whole rest-pose scene, head included, counted once before motion. Almost all come from about 58,000 strand segments with feathered ribbons and caps. |
 | Density resolution | 24 cells a side |
 | Raster workers | 24, every logical core |
 | Warm-up | 2 frames; then 10 timed frames |
@@ -43,7 +43,7 @@ One render of the rest pose with parts hidden, after #732:
 | Head only | 20 ms |
 | Hair only | 775 ms |
 
-The simulation and the shading take about 7 milliseconds together. Of the 784 millisecond render, preparing the 1.75 million triangles takes about 484 and drawing them about 300. Before #732, preparation took about 930 milliseconds on one thread.
+The simulation and the shading take about 7 milliseconds together. A separate `prepare_frame` takes about 484 of the 784 milliseconds that a whole render takes. The remaining 300 milliseconds is an estimate from two medians, not a measured stage. It holds the lighting, the rasterization, the resolve and whatever else the render does. Before #732, preparation took about 930 milliseconds on one thread.
 
 ## Results on the GPU
 

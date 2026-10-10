@@ -19,6 +19,7 @@ from objects.line_segments2 import (
     line_segments_geometry,
 )
 from render.framebuffer import Color, Framebuffer
+from render.rasterizer import RasterVertex
 from renderers.renderer import Renderer, WIDE_RUN_SEGMENTS
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
 from units.si import Length, METER
@@ -83,9 +84,31 @@ def _render(scene: Scene, assets: Assets, workers: Int) raises -> Framebuffer:
     return renderer.render(scene, assets, _camera())
 
 
-def _corners(scene: Scene, assets: Assets, workers: Int) raises -> Int:
+def _corners(
+    scene: Scene, assets: Assets, workers: Int
+) raises -> List[RasterVertex]:
     var renderer = Renderer(SIZE, SIZE, workers=workers)
-    return len(renderer.prepare_frame(scene, assets, _camera()).whole_corners())
+    return renderer.prepare_frame(scene, assets, _camera()).whole_corners()
+
+
+def _same_corners(one: List[RasterVertex], many: List[RasterVertex]) raises:
+    # Every corner, in order: place, depth, color, texture coordinates and
+    # world point.
+    assert_equal(len(one), len(many))
+    for i in range(len(one)):
+        ref a = one[i]
+        ref b = many[i]
+        assert_equal(a.x, b.x)
+        assert_equal(a.y, b.y)
+        assert_equal(a.z, b.z)
+        assert_equal(a.inv_w, b.inv_w)
+        assert_equal(a.color.r, b.color.r)
+        assert_equal(a.color.g, b.color.g)
+        assert_equal(a.color.b, b.color.b)
+        assert_equal(a.color.a, b.color.a)
+        assert_equal(a.u, b.u)
+        assert_equal(a.v, b.v)
+        assert_true(a.world == b.world)
 
 
 def test_many_workers_draw_what_one_draws() raises:
@@ -97,9 +120,9 @@ def test_many_workers_draw_what_one_draws() raises:
     ]
     for choice in cases:
         var parts = _scene(choice[0], choice[1])
-        var count = _corners(parts[0], parts[1], 1)
-        assert_true(count > 0)
-        assert_equal(_corners(parts[0], parts[1], 8), count)
+        var serial = _corners(parts[0], parts[1], 1)
+        assert_true(len(serial) > 0)
+        _same_corners(serial, _corners(parts[0], parts[1], 8))
         var one = _render(parts[0], parts[1], 1)
         var many = _render(parts[0], parts[1], 8)
         var drawn = 0
