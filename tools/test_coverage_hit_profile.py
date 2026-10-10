@@ -31,6 +31,14 @@ class CompiledProfileCommands(unittest.TestCase):
         self.assertEqual(dict(os.environ), before)
         build.assert_not_called()
 
+    def test_compiled_profile_limits_an_unbounded_compiler_to_one_thread(self):
+        command = ['mojo', 'run', '-I', str(self.root), str(self.suite), 'arg']
+        prepared, name = profile.prepare_profile(
+            self.root, self.suite, self.root/'cache', 'cc', command, 'aot')
+        self.assertEqual(prepared[:4], ['mojo', 'run', '--num-threads', '1'])
+        self.assertEqual(name, str(self.suite))
+        self.assertEqual(prepared[prepared.index(str(self.suite)) + 1:], ['arg'])
+
     def test_plain_compiled_profile_preserves_source_identity_and_program_args(self):
         command, name = profile.prepare_profile(
             self.root, self.suite, self.root/'cache', 'cc', self.command, 'aot')
