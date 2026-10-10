@@ -168,6 +168,119 @@ struct _SurfaceHit(ImplicitlyCopyable):
     var height: Float32
 
 
+async def _write_task(
+    hdr: Pointer[List[Float32], ImmutAnyOrigin],
+    shown: Pointer[List[Bool], ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    drawn: MutPointer[Int, MutAnyOrigin],
+    clock: Duration,
+    width: Int,
+    height: Int,
+    first: Int,
+    past: Int,
+):
+    drawn[] = _write_rows(
+        hdr[], shown[], pixels, clock, width, height, first, past
+    )
+
+
+def _write_rows(
+    hdr: List[Float32],
+    shown: List[Bool],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    clock: Duration,
+    width: Int,
+    height: Int,
+    first: Int,
+    past: Int,
+) -> Int:
+    """Grade and write the shown pixels of rows `first` up to `past`, as
+    `Framebuffer.set_pixel` writes them, and return how many."""
+    var drawn = 0
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            if not shown[y * width + x]:
+                continue
+            var p = (y * width + x) * 3
+            var graded = grade_pixel(
+                hdr[p],
+                hdr[p + 1],
+                hdr[p + 2],
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                x,
+                y,
+                width,
+                height,
+                clock,
+                LINEAR,
+            )
+            var color = FloatColor(
+                clamp01(graded.x), clamp01(graded.y), clamp01(graded.z), 1.0
+            ).quantize()
+            var at = (y * width + x) * Framebuffer.CHANNELS
+            pixels[unsafe_offset=at] = color.r
+            pixels[unsafe_offset=at + 1] = color.g
+            pixels[unsafe_offset=at + 2] = color.b
+            pixels[unsafe_offset=at + 3] = color.a
+            drawn += 1
+    return drawn
+
+
+async def _depth_task(
+    plan: _ComposePlan,
+    surface: Pointer[SurfaceField, ImmutAnyOrigin],
+    ripples: Pointer[RippleField, ImmutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
+    shown: MutPointer[Bool, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    first: Int,
+    past: Int,
+):
+    _depth_rows(
+        plan, surface[], ripples[], depth, shown, width, height, first, past
+    )
+
+
+def _depth_rows(
+    plan: _ComposePlan,
+    surface: SurfaceField,
+    ripples: RippleField,
+    depth: MutPointer[Float32, MutAnyOrigin],
+    shown: MutPointer[Bool, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    first: Int,
+    past: Int,
+):
+    """Test rows `first` up to `past` against the image depth, as
+    `Framebuffer.test_depth` does: a nearer water point claims its pixel."""
+    var look = plan.look
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
+            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+            if _ray(look, ndc_x, ndc_y, plan.aspect).y > -0.0015:
+                continue
+            var hit = _surface_hit(
+                look, ndc_x, ndc_y, plan.aspect, surface, ripples
+            )
+            var point = plan.eye + hit.direction * hit.distance
+            var z = plan.clip.transform_point(point).z
+            if not (z >= -1.0 and z <= 1.0):
+                continue
+            var slot = y * width + x
+            if z >= depth[unsafe_offset=slot]:
+                continue
+            depth[unsafe_offset=slot] = z
+            shown[unsafe_offset=slot] = True
+
+
 def _radiance_image(
     look: CameraLook,
     aspect: Float32,
@@ -1414,71 +1527,66 @@ struct WaterScene(Movable):
     def _compose_depth(
         self, mut image: Framebuffer, plan: _ComposePlan, surface: SurfaceField
     ) raises -> List[Bool]:
-        # The depth test writes as it goes, so it stays in pixel order.
-        # Only the pixels that pass are shaded, in parallel.
+        # Each pixel's depth test reads and writes only that pixel, so
+        # disjoint runs of rows test in parallel. The depths and the mask
+        # equal the serial pass bit for bit.
         var width = image.width
         var height = image.height
-        var look = plan.look
         var shown = List[Bool](length=width * height, fill=False)
-        for y in range(height):  # pragma: no branch
-            for x in range(width):  # pragma: no branch
-                var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-                var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-                if _ray(look, ndc_x, ndc_y, plan.aspect).y > -0.0015:
-                    continue
-                var hit = _surface_hit(
-                    look, ndc_x, ndc_y, plan.aspect, surface, self._ripples
+        var tasks = min(num_logical_cores() * 8, height)
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _depth_task(
+                    plan,
+                    Pointer(to=surface).unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=self._ripples).unsafe_origin_cast[
+                        ImmutAnyOrigin
+                    ](),
+                    image.depth.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    shown.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    width,
+                    height,
+                    task * height // tasks,
+                    (task + 1) * height // tasks,
                 )
-                var point = plan.eye + hit.direction * hit.distance
-                var z = plan.clip.transform_point(point).z
-                if not (z >= -1.0 and z <= 1.0) or not image.test_depth(
-                    x, y, z
-                ):
-                    continue
-                shown[y * width + x] = True
+            )
+        group.wait()
         return shown^
 
     def _compose_write(
         self, mut image: Framebuffer, hdr: List[Float32], shown: List[Bool]
     ) raises -> Int:
-        # Grade and write each shown pixel, as `draw` grades `LINEAR`.
+        # Grade and write each shown pixel, as `draw` grades `LINEAR`. Each
+        # pixel has one writer, so disjoint runs of rows write in parallel.
         var width = image.width
         var height = image.height
-        var drawn = 0
-        for y in range(height):  # pragma: no branch
-            for x in range(width):  # pragma: no branch
-                if not shown[y * width + x]:
-                    continue
-                var p = (y * width + x) * 3
-                var graded = grade_pixel(
-                    hdr[p],
-                    hdr[p + 1],
-                    hdr[p + 2],
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    x,
-                    y,
+        var tasks = min(num_logical_cores(), height)
+        var drawn = List[Int](length=tasks, fill=0)
+        var group = TaskGroup()
+        for task in range(tasks):  # pragma: no branch
+            group.create_task(
+                _write_task(
+                    Pointer(to=hdr).unsafe_origin_cast[ImmutAnyOrigin](),
+                    Pointer(to=shown).unsafe_origin_cast[ImmutAnyOrigin](),
+                    image.pixels.unsafe_ptr().unsafe_origin_cast[
+                        MutAnyOrigin
+                    ](),
+                    drawn.unsafe_ptr()
+                    .unsafe_offset(task)
+                    .unsafe_origin_cast[MutAnyOrigin](),
+                    self.clock,
                     width,
                     height,
-                    self.clock,
-                    LINEAR,
+                    task * height // tasks,
+                    (task + 1) * height // tasks,
                 )
-                image.set_pixel(
-                    x,
-                    y,
-                    FloatColor(
-                        clamp01(graded.x),
-                        clamp01(graded.y),
-                        clamp01(graded.z),
-                        1.0,
-                    ).quantize(),
-                )
-                drawn += 1
-        return drawn
+            )
+        group.wait()
+        var total = 0
+        for task in range(tasks):  # pragma: no branch
+            total += drawn[task]
+        return total
 
     def draw(
         mut self,
@@ -1690,8 +1798,49 @@ def _caustic_picture(
 def _highlights(
     hdr: List[Float32], width: Int, height: Int, threshold: Float32
 ) -> List[Float32]:
+    # Each output pixel reads fixed input neighbors, so disjoint runs of
+    # rows run in parallel and equal the serial pass bit for bit.
     var out = List[Float32](length=width * height * 3, fill=0.0)
-    for y in range(height):  # pragma: no branch
+    var tasks = min(num_logical_cores(), height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _highlight_task(
+                Pointer(to=hdr).unsafe_origin_cast[ImmutAnyOrigin](),
+                out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                width,
+                height,
+                threshold,
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return out^
+
+
+async def _highlight_task(
+    hdr: Pointer[List[Float32], ImmutAnyOrigin],
+    result: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    threshold: Float32,
+    first: Int,
+    past: Int,
+):
+    _highlight_rows(hdr[], result, width, height, threshold, first, past)
+
+
+def _highlight_rows(
+    hdr: List[Float32],
+    result: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    threshold: Float32,
+    first: Int,
+    past: Int,
+):
+    for y in range(first, past):  # pragma: no branch
         for x in range(width):  # pragma: no branch
             var r = Float32(0.0)
             var g = Float32(0.0)
@@ -1716,16 +1865,56 @@ def _highlights(
                 k = 0.0
             # The brightest glint in this model stays under the page's 160 cap.
             k /= max(l, Float32(1e-4))
-            out[(y * width + x) * 3] = r * k
-            out[(y * width + x) * 3 + 1] = g * k
-            out[(y * width + x) * 3 + 2] = b * k
-    return out^
+            result[unsafe_offset=(y * width + x) * 3] = r * k
+            result[unsafe_offset=(y * width + x) * 3 + 1] = g * k
+            result[unsafe_offset=(y * width + x) * 3 + 2] = b * k
 
 
 def _blur(
     src: List[Float32], width: Int, height: Int, horizontal: Bool
 ) -> List[Float32]:
+    # Each output pixel reads fixed input taps, so disjoint runs of rows
+    # run in parallel and equal the serial pass bit for bit.
     var out = List[Float32](length=width * height * 3, fill=0.0)
+    var tasks = min(num_logical_cores(), height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _blur_task(
+                Pointer(to=src).unsafe_origin_cast[ImmutAnyOrigin](),
+                out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                width,
+                height,
+                horizontal,
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return out^
+
+
+async def _blur_task(
+    src: Pointer[List[Float32], ImmutAnyOrigin],
+    result: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    horizontal: Bool,
+    first: Int,
+    past: Int,
+):
+    _blur_rows(src[], result, width, height, horizontal, first, past)
+
+
+def _blur_rows(
+    src: List[Float32],
+    result: MutPointer[Float32, MutAnyOrigin],
+    width: Int,
+    height: Int,
+    horizontal: Bool,
+    first: Int,
+    past: Int,
+):
     var offsets = List[Int](length=5, fill=0)
     var weights = List[Float32](length=5, fill=0.0)
     offsets[0] = 0
@@ -1738,7 +1927,7 @@ def _blur(
     weights[3] = 0.0702702703
     offsets[4] = -3
     weights[4] = 0.0702702703
-    for y in range(height):  # pragma: no branch
+    for y in range(first, past):  # pragma: no branch
         for x in range(width):  # pragma: no branch
             var r = Float32(0.0)
             var g = Float32(0.0)
@@ -1763,7 +1952,6 @@ def _blur(
                 g += src[p + 1] * weights[tap]
                 b += src[p + 2] * weights[tap]
             var o = (y * width + x) * 3
-            out[o] = r
-            out[o + 1] = g
-            out[o + 2] = b
-    return out^
+            result[unsafe_offset=o] = r
+            result[unsafe_offset=o + 1] = g
+            result[unsafe_offset=o + 2] = b

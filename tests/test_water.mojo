@@ -26,10 +26,17 @@ from extensions.water.filter import anisotropic_step
 from extensions.water.frame import (
     CameraLook,
     WaterScene,
+    _blur,
+    _blur_rows,
+    _compose_plan,
+    _depth_rows,
     _grade_rows,
     _graded_image,
     _radiance_image,
+    _highlight_rows,
+    _highlights,
     _radiance_rows,
+    _write_rows,
     camera_look,
     floor_f,
     grade_pixel,
@@ -1518,6 +1525,97 @@ def test_composition_refuses_stale_or_missing_attached_camera_atomically() raise
         for i in range(len(depth)):
             assert_equal(image.depth[i], depth[i])
         _assert_same_scene_state(water, control)
+
+
+def test_parallel_post_and_depth_equal_one_serial_pass() raises:
+    # Highlights, both blurs and the composition depth test run disjoint
+    # runs of rows in parallel with the serial arithmetic.
+    var width = 29
+    var height = 41
+    var hdr = List[Float32](length=width * height * 3, fill=0.0)
+    for i in range(len(hdr)):
+        hdr[i] = Float32((i * 7919) % 1000) / 50.0
+    for threshold in [Float32(2.5), Float32(14.0)]:
+        var serial = List[Float32](length=width * height * 3, fill=0.0)
+        _highlight_rows(
+            hdr,
+            serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            width,
+            height,
+            threshold,
+            0,
+            height,
+        )
+        assert_true(_highlights(hdr, width, height, threshold) == serial)
+    for horizontal in [True, False]:
+        var serial = List[Float32](length=width * height * 3, fill=0.0)
+        _blur_rows(
+            hdr,
+            serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            width,
+            height,
+            horizontal,
+            0,
+            height,
+        )
+        assert_true(_blur(hdr, width, height, horizontal) == serial)
+    var water = _scene(Duration(5.0, SECOND))
+    water.advance(Duration(1.0 / 60.0, SECOND), True)
+    var surface = water._surface()
+    var camera = _page_camera(width, height)
+    var image = Framebuffer(width, height, Color(0, 0, 0))
+    # A few pixels already hold a nearer surface, so some tests fail.
+    for i in range(0, width * height, 5):
+        image.depth[i] = -0.5
+    var reference = image.depth.copy()
+    var plan = _compose_plan(
+        image,
+        camera.projection_matrix(),
+        camera.view_matrix(),
+        Length(0.0, METER),
+    )
+    var shown = water._compose_depth(image, plan, surface)
+    var serial_shown = List[Bool](length=width * height, fill=False)
+    _depth_rows(
+        plan,
+        surface,
+        water._ripples,
+        reference.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        serial_shown.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        width,
+        height,
+        0,
+        height,
+    )
+    assert_true(shown == serial_shown)
+    assert_true(image.depth == reference)
+    var drawn = 0
+    var kept = 0
+    for i in range(width * height):
+        if shown[i]:
+            drawn += 1
+        elif i % 5 == 0:
+            kept += 1
+    assert_true(drawn > 0 and kept > 0)
+    # Grading and writing the shown pixels, in parallel and in one pass.
+    var hdr_small = List[Float32](length=width * height * 3, fill=0.0)
+    for i in range(len(hdr_small)):
+        hdr_small[i] = Float32((i * 37) % 101) / 40.0
+    var serial_pixels = image.pixels.copy()
+    var count = water._compose_write(image, hdr_small, shown)
+    var serial_count = _write_rows(
+        hdr_small,
+        shown,
+        serial_pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        water.clock,
+        width,
+        height,
+        0,
+        height,
+    )
+    assert_equal(count, drawn)
+    assert_equal(count, serial_count)
+    assert_true(image.pixels == serial_pixels)
 
 
 def test_parallel_water_rows_equal_one_serial_pass() raises:

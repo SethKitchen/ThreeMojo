@@ -129,7 +129,7 @@ Each frame copies the surface, the ripple window and the caustics to the device.
 
 The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires every value to be finite. It requires 98 percent of values within 1 percent of the CPU, 99.5 percent within 10 percent, and none beyond 2.
 
-See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 76 milliseconds. A whole water frame takes about 515 milliseconds, because bloom, glare and grading take about 382 on the CPU. A composed scene takes about 971, because its depth pass takes about 621 on one CPU thread.
+See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 41 to 76 milliseconds. A whole water frame takes about 255 milliseconds, because bloom, glare and grading take about 154 on the CPU. A composed scene takes about 247. The depth pass, the highlight and blur passes, and the grade and write run on every logical core.
 
 ## Shader storage
 

@@ -1,6 +1,6 @@
 # Clearwater water on a GPU (#300)
 
-This report measures the GPU water shader that [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300) asks for, compares its pixels with the CPU frame, and states what the numbers decide for the 60 frames-per-second goal. The GPU shades a 1920 x 1080 frame in about 76 milliseconds; the CPU takes about 1.34 seconds on every core. A whole frame is still far over the 16.7 millisecond budget, because bloom, glare, grading and the composition depth pass stay on the CPU.
+This report measures the GPU water shader that [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300) asks for, compares its pixels with the CPU frame, and states what the numbers decide for the 60 frames-per-second goal. The GPU shades a 1920 x 1080 frame in about 41 to 76 milliseconds; the CPU takes about 1.36 seconds on every core. A whole frame is still far over the 16.7 millisecond budget, because bloom, glare, grading, the scene render and the surface FFT stay on the CPU.
 
 ## Method
 
@@ -16,38 +16,42 @@ Hardware: NVIDIA TITAN RTX (24 GiB, driver 591.86) and AMD Ryzen 9 5900X (12 cor
 
 ## Results
 
+The depth pass, the highlight and blur passes, and the grade-and-write pass run disjoint runs of rows on every logical core ([issue 733](https://github.com/SethKitchen/ThreeMojo/issues/733)). Each pixel has one writer and the serial arithmetic, and tests compare each pass with one serial pass bit for bit. The glare pass stays serial.
+
 Radiance only, in milliseconds:
 
 | Image | p50 | p95 | max |
 |---|---:|---:|---:|
-| 320 x 180 | 46.6 | 47.1 | 47.1 |
-| 640 x 360 | 49.7 | 50.8 | 50.8 |
-| 1280 x 720 | 62.9 | 66.2 | 66.2 |
-| 1920 x 1080 | 84.5 | 89.7 | 89.7 |
+| 320 x 180 | 46.7 | 47.4 | 47.4 |
+| 640 x 360 | 49.9 | 50.8 | 50.8 |
+| 1280 x 720 | 62.9 | 65.8 | 65.8 |
+| 1920 x 1080 | 82.7 | 85.3 | 85.3 |
 
 A 1920 x 1080 water frame, in milliseconds as p50 / p95 / max:
 
 | Stage | GPU | CPU |
 |---|---:|---:|
-| `advance` | 12.8 / 13.1 / 13.1 | 12.9 / 12.9 / 12.9 |
-| Surface and caustics | 43.8 / 44.4 / 44.4 | 44.0 / 44.0 / 44.0 |
-| Shading | 76.2 / 123 / 123 | 1,344 / 1,355 / 1,355 |
-| Bloom, glare and grading | 382 / 400 / 400 | 393 / 394 / 394 |
-| Whole frame | 515 / 561 / 561 | 1,793 / 1,806 / 1,806 |
+| `advance` | 13.0 / 13.0 / 13.0 | 12.9 / 12.9 / 12.9 |
+| Surface and caustics | 44.0 / 45.1 / 45.1 | 43.9 / 44.0 / 44.0 |
+| Shading | 41.0 / 74.7 / 74.7 | 1,360 / 1,372 / 1,372 |
+| Bloom, glare and grading | 154 / 163 / 163 | 152 / 161 / 161 |
+| Whole frame | 255 / 294 / 294 | 1,578 / 1,581 / 1,581 |
 
 A 1920 x 1080 composed scene, in milliseconds as p50 / p95 / max:
 
 | Stage | GPU | CPU |
 |---|---:|---:|
-| `advance` | 12.9 / 13.0 / 13.0 | 12.9 / 13.0 / 13.0 |
-| Scene render | 91.7 / 96.7 / 96.7 | 100 / 103 / 103 |
-| Surface and caustics | 42.6 / 43.0 / 43.0 | 42.9 / 43.4 / 43.4 |
-| Depth pass | 621 / 625 / 625 | 620 / 623 / 623 |
-| Shading | 85.0 / 138 / 138 | 637 / 643 / 643 |
-| Grade and write | 115 / 119 / 119 | 117 / 117 / 117 |
-| Whole frame | 971 / 1,024 / 1,024 | 1,533 / 1,533 / 1,533 |
+| `advance` | 13.4 / 13.8 / 13.8 | 13.2 / 13.3 / 13.3 |
+| Scene render | 93.1 / 98.1 / 98.1 | 93.9 / 101 / 101 |
+| Surface and caustics | 42.8 / 43.2 / 43.2 | 42.6 / 42.8 / 42.8 |
+| Depth pass | 41.4 / 42.7 / 42.7 | 41.4 / 42.5 / 42.5 |
+| Shading | 43.7 / 78.6 / 78.6 | 635 / 639 / 639 |
+| Grade and write | 10.1 / 10.3 / 10.3 | 10.5 / 11.4 / 11.4 |
+| Whole frame | 247 / 281 / 281 | 836 / 849 / 849 |
 
-Opening the device and copying the photograph took 703 milliseconds once.
+Before the row passes ran in parallel, the same run gave 382 ms for bloom, glare and grading, 621 ms for the depth pass and 115 ms for the grade and write. The GPU water frame took 515 ms and the GPU composed scene 971 ms.
+
+Opening the device and copying the photograph took 634 milliseconds once.
 
 ## Agreement with the CPU
 
@@ -82,9 +86,9 @@ The resource tests read free device memory after each frame, never inside one. T
 
 ## Decisions
 
-- **The GPU makes the shading about 18 times faster.** A 1920 x 1080 shade takes about 76 milliseconds on the GPU and 1,344 on every CPU core.
-- **The whole frame does not reach 60 frames per second.** A water frame takes about 515 milliseconds, about 31 times the budget. A composed scene takes about 971.
-- **The CPU stages around the shader are now the bottleneck.** Bloom, glare and grading take about 382 milliseconds. The composition depth pass takes about 621 milliseconds on one thread. The scene render takes about 92. Each is a candidate for parallel rows or the device.
+- **The GPU makes the shading about 15 to 30 times faster.** A 1920 x 1080 shade takes about 41 to 76 milliseconds on the GPU and 1,360 on every CPU core.
+- **The whole frame does not reach 60 frames per second.** A GPU water frame takes about 255 milliseconds, about 15 times the budget. A GPU composed scene takes about 247.
+- **The CPU stages around the shader are now the bottleneck.** Bloom, glare and grading take about 154 milliseconds, the scene render 93, the surface FFT and caustics 43, and the depth pass 41.
 - **CUDA is the only supported target.** `GpuWater` refuses a machine without an NVIDIA GPU. No Metal check covers this kernel.
 
 These numbers describe this machine. They are not a hardware-independent claim.
