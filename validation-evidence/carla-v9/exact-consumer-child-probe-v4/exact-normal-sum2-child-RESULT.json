@@ -1,0 +1,23 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_exact_consumer_child_v9.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/exact-consumer-child-probe-v4"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9",
+  "label": "exact-normal-sum2-child",
+  "leader_reaped": true,
+  "log_sha256": "840154551fb32d092b1faed1b24ce57d9dc4aa605cd90b37745ffc8f3c4dfa9b",
+  "pgid": 6,
+  "pid": 6,
+  "remaining_owned_descendants": [],
+  "returncode": 0,
+  "seconds": 115.75092611000036,
+  "single_cpu": 0,
+  "source_seal_sha256": "f16aee52387b9663e7a9f884fff72a52b6be87a4c1d5e2c43244d31fc1725af8",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T21:09:50.616180+00:00",
+  "timed_out": false
+}

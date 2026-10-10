@@ -1,0 +1,13 @@
+test_both_record_seals_reject_edits (test_rounded_line_selector_contracts.RoundedLineSelectorContracts.test_both_record_seals_reject_edits) ... ok
+test_exact_positive (test_rounded_line_selector_contracts.RoundedLineSelectorContracts.test_exact_positive) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:598: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:596: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_graph_and_name_mutations (test_rounded_line_selector_contracts.RoundedLineSelectorContracts.test_graph_and_name_mutations) ... ok
+test_reference_mutation (test_rounded_line_selector_contracts.RoundedLineSelectorContracts.test_reference_mutation) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 5.101s
+
+OK

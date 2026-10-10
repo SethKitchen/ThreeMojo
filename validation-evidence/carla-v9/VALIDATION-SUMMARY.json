@@ -1,0 +1,38 @@
+{
+  "actual_command_sha256": "e5e8921dd23490f57605b35ba05559c0ec71c3c7b3d041643ffce35995ce6f0d",
+  "candidate_source_seal_sha256": "f16aee52387b9663e7a9f884fff72a52b6be87a4c1d5e2c43244d31fc1725af8",
+  "caps": {
+    "child_probe_supervisor_seconds": 180,
+    "consumer_child_seconds": 120,
+    "python_module_seconds": 1800
+  },
+  "evidence_policy": "Original raw logs and receipts copied byte-for-byte; no historical lost receipt reconstruction. Internal review notes and private coordination context excluded. Absolute paths, transient fixture names and times remain exactly as recorded.",
+  "phases": {
+    "combined-local-focused-v1": {
+      "result_sha256": "a060aa837a76fc3b35670a10c1dd93a08e171e8399102d839be2234f3295c36a",
+      "stage_seconds": {
+        "combined-observations-normal": 235.20983690399953,
+        "combined-observations-optimized": 238.18257991399878,
+        "existing-selector-normal": 5.67147814800046,
+        "existing-selector-optimized": 5.513958961000753
+      }
+    },
+    "exact-consumer-child-probe-v4": {
+      "result_sha256": "7123393eb6eaf5a694b1ecea7fff6d259632483caba5c8bcdb5e753670ed9567",
+      "stage_seconds": {
+        "exact-normal-sum2-child": 115.75092611000036
+      }
+    },
+    "exact-consumer-child-probe-v5": {
+      "result_sha256": "63a75769687fa0671e5e69e454f35a7e63b3fde21d404a53b3a240c7d6eca54e",
+      "stage_seconds": {
+        "exact-optimized-sum2-child": 105.77121732299929
+      }
+    }
+  },
+  "schema": 1,
+  "scope": "Fresh focused validation only; no full Python matrix, native paired controls, instrumented coverage, anatomy report, combined CI or issue-completion claim.",
+  "sdk": "Official restored Mojo1.1.0 (8189361e) and Python3.12.14; exact identities are in unchanged original SDK receipts.",
+  "source_base": "3b92e85b7b105693a84f37262fdb97d84b1082a7",
+  "source_checkpoint_commit": "5871f84fb97da10e42eb244dbb15f10b4df13a0a"
+}

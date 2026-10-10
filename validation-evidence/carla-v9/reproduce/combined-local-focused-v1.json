@@ -1,0 +1,96 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9",
+  "seal": "CANDIDATE-V9-SOURCE-SEAL.json",
+  "phase": "combined-local-focused-v1",
+  "window_seconds": 5400,
+  "pause_request_file": "native-lane-v9.pause",
+  "scope": "Fresh isolated v9 composition:22 local-optimization controls plus originalABA and4 existing selector regressions per mode;54 expected executions, zero skips. Original1800s module and child caps. Full matrix still required.",
+  "stages": [
+    {
+      "label": "combined-observations-normal",
+      "seconds": 1800,
+      "expected_tests": 23,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_selector_projection_",
+        "-k",
+        "test_snapshot_a_b_a_and_stale_supplied_historical_view_reject",
+        "-k",
+        "NativeDependencyInventoryBatching",
+        "-k",
+        "test_native_batch_preserves_final_source_path_and_resolver_checks",
+        "-v"
+      ]
+    },
+    {
+      "label": "existing-selector-normal",
+      "seconds": 1800,
+      "expected_tests": 4,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_rounded_line_selector_contracts.py",
+        "-v"
+      ]
+    },
+    {
+      "label": "combined-observations-optimized",
+      "seconds": 1800,
+      "expected_tests": 23,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-k",
+        "test_selector_projection_",
+        "-k",
+        "test_snapshot_a_b_a_and_stale_supplied_historical_view_reject",
+        "-k",
+        "NativeDependencyInventoryBatching",
+        "-k",
+        "test_native_batch_preserves_final_source_path_and_resolver_checks",
+        "-v"
+      ]
+    },
+    {
+      "label": "existing-selector-optimized",
+      "seconds": 1800,
+      "expected_tests": 4,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_rounded_line_selector_contracts.py",
+        "-v"
+      ]
+    }
+  ]
+}

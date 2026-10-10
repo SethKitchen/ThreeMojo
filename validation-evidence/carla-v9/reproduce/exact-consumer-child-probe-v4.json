@@ -1,0 +1,20 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9",
+  "seal": "CANDIDATE-V9-SOURCE-SEAL.json",
+  "phase": "exact-consumer-child-probe-v4",
+  "window_seconds": 600,
+  "scope": "Exact unchanged maintained normal Sum2 command and original120s child bound on isolated composition of reviewed native batching and selector-local lane/road projection. Fresh physical fixture/source/SDK seals; focused cap control, not matrix replacement.",
+  "stages": [
+    {
+      "label": "exact-normal-sum2-child",
+      "seconds": 180,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_exact_consumer_child_v9.py",
+        "{evidence}"
+      ]
+    }
+  ],
+  "pause_request_file": "native-lane-v9.pause"
+}
