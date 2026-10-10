@@ -1,0 +1,61 @@
+{
+  "caps": {
+    "exact_child_seconds": 120,
+    "exact_probe_stage_seconds": 180,
+    "fake_preflight_stage_seconds": 180
+  },
+  "evidence_policy": "Original raw stdout/stderr, seals and supervisor receipts copied byte-for-byte. No reconstructed receipts, private review notes or internal coordination included. Recorded absolute paths and times are unchanged.",
+  "exact_children": {
+    "normal-sum2-guard-contracts": {
+      "limit_seconds": 120,
+      "margin_seconds": 18.731263556001068,
+      "passed": true,
+      "seconds": 101.26873644399893
+    },
+    "normal-test-production-inventory-paths": {
+      "limit_seconds": 120,
+      "margin_seconds": 6.4073418869993475,
+      "passed": true,
+      "seconds": 113.59265811300065
+    },
+    "optimized-sum2-guard-contracts": {
+      "limit_seconds": 120,
+      "margin_seconds": 13.008589433000452,
+      "passed": true,
+      "seconds": 106.99141056699955
+    },
+    "optimized-test-production-inventory-paths": {
+      "limit_seconds": 120,
+      "margin_seconds": 7.160730415998842,
+      "passed": true,
+      "seconds": 112.83926958400116
+    }
+  },
+  "fake_lifecycle_executions": 28,
+  "fake_lifecycle_qualification": "Qualification replaced by controlled fixtures; lifecycle/decoding behavior only, not real source admission or performance.",
+  "maintained_command_sha256": "e5e8921dd23490f57605b35ba05559c0ec71c3c7b3d041643ffce35995ce6f0d",
+  "phases": {
+    "owned-input-exact-probes-v11": {
+      "result_sha256": "de5ca19e1044634a045bb488ca471c9c5aa34c72789910600372ad46025ae536",
+      "stage_seconds": {
+        "normal-sum2-guard-contracts": 109.25217810599861,
+        "normal-test-production-inventory-paths": 121.38512223199723,
+        "optimized-sum2-guard-contracts": 115.56310845600092,
+        "optimized-test-production-inventory-paths": 121.92798025199954
+      }
+    },
+    "owned-input-fake-preflight-v11": {
+      "result_sha256": "41c8d77d25d66f3ff08f1c18ebde13c1dfc47a7d35b8e81b07e8ea13c7e65e3d",
+      "stage_seconds": {
+        "fake-preflight-normal": 1.0058796949997486,
+        "fake-preflight-optimized": 1.5039848540000094
+      }
+    }
+  },
+  "schema": 1,
+  "scope": "Fresh fake lifecycle controls and one exact four-child round only. Real source mutation controls, broader repeated consumer preflight, full Python matrix, native paired controls, coverage, combined report and hosted CI remain pending. No robust timing, issue-completion or merge-readiness claim.",
+  "source_base": "d06143b149ba31ab44afaa690c93289b57bc1778",
+  "source_checkpoint_commit": "d28047a6d18a94483d1d02b6f422be9a4aa59db1",
+  "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+  "timing_limit": "One round only; production margins are6\u20137seconds. Historical v9 timeouts remain separate durable evidence and are not superseded by these passes."
+}

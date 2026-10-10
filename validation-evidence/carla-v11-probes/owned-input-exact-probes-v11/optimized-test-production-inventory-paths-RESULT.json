@@ -1,0 +1,23 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v11_optimized-test-production-inventory-paths.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owned-input-exact-probes-v11"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+  "label": "optimized-test-production-inventory-paths",
+  "leader_reaped": true,
+  "log_sha256": "600bfcbb7d2715f493a3573bb087431efa4f02c33234ddfd21fc6c9d7db63806",
+  "pgid": 9,
+  "pid": 9,
+  "remaining_owned_descendants": [],
+  "returncode": 0,
+  "seconds": 121.92798025199954,
+  "single_cpu": 0,
+  "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T22:39:40.359392+00:00",
+  "timed_out": false
+}

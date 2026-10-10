@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v11_normal-test-production-inventory-paths.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owned-input-exact-probes-v11"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+  "label": "normal-test-production-inventory-paths",
+  "pgid": 7,
+  "pid": 7,
+  "single_cpu": 0,
+  "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T22:37:37.363048+00:00"
+}

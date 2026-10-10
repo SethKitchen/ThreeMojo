@@ -1,0 +1,378 @@
+{
+  "files": [
+    {
+      "bytes": 2726,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/RESULT.json",
+      "path": "owned-input-fake-preflight-v11/RESULT.json",
+      "sha256": "41c8d77d25d66f3ff08f1c18ebde13c1dfc47a7d35b8e81b07e8ea13c7e65e3d"
+    },
+    {
+      "bytes": 419029,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/SOURCE-SEAL.json",
+      "path": "owned-input-fake-preflight-v11/SOURCE-SEAL.json",
+      "sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/SDK-BEFORE.json",
+      "path": "owned-input-fake-preflight-v11/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/SDK-AFTER.json",
+      "path": "owned-input-fake-preflight-v11/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/WINDOW-START.json",
+      "path": "owned-input-fake-preflight-v11/WINDOW-START.json",
+      "sha256": "3a57aa24a84c38b2c44a91f046646f732c9840c6163f72a21758fc768b75a03c"
+    },
+    {
+      "bytes": 634,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/fake-preflight-normal-START.json",
+      "path": "owned-input-fake-preflight-v11/fake-preflight-normal-START.json",
+      "sha256": "2e376c8b0f7abfe7ecca428e6c701bbfb876e01118fbf31c6d1bd58f8dbb31db"
+    },
+    {
+      "bytes": 949,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/fake-preflight-normal-RESULT.json",
+      "path": "owned-input-fake-preflight-v11/fake-preflight-normal-RESULT.json",
+      "sha256": "fed4cbb123ffc6f5fb1eb640afc683889cf0687ad4d6723f0dc80b2c67022105"
+    },
+    {
+      "bytes": 2909,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/fake-preflight-normal.log",
+      "path": "owned-input-fake-preflight-v11/fake-preflight-normal.log",
+      "sha256": "162ef6a7f0ca0af238a8602cd547f4fb419d6011e6dd90d8c62287f0862736ea"
+    },
+    {
+      "bytes": 647,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/fake-preflight-optimized-START.json",
+      "path": "owned-input-fake-preflight-v11/fake-preflight-optimized-START.json",
+      "sha256": "7c7012014bda75b30c785dbb1f8737a9a39a86fbb86dcf8ed52d44dd0bbd6618"
+    },
+    {
+      "bytes": 962,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/fake-preflight-optimized-RESULT.json",
+      "path": "owned-input-fake-preflight-v11/fake-preflight-optimized-RESULT.json",
+      "sha256": "a353d74fe7970f4df6b76fcff2bda9acab0e949e26adc25e9b2e261a1bf68f58"
+    },
+    {
+      "bytes": 2909,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-fake-preflight-v11/fake-preflight-optimized.log",
+      "path": "owned-input-fake-preflight-v11/fake-preflight-optimized.log",
+      "sha256": "131ef0a06a40d9c6767bbb936b806feb8987219ba7905200507cd9e757d33db4"
+    },
+    {
+      "bytes": 4615,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/RESULT.json",
+      "path": "owned-input-exact-probes-v11/RESULT.json",
+      "sha256": "de5ca19e1044634a045bb488ca471c9c5aa34c72789910600372ad46025ae536"
+    },
+    {
+      "bytes": 419029,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/SOURCE-SEAL.json",
+      "path": "owned-input-exact-probes-v11/SOURCE-SEAL.json",
+      "sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/SDK-BEFORE.json",
+      "path": "owned-input-exact-probes-v11/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/SDK-AFTER.json",
+      "path": "owned-input-exact-probes-v11/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/WINDOW-START.json",
+      "path": "owned-input-exact-probes-v11/WINDOW-START.json",
+      "sha256": "9b040bd7e1555b9c5cad7706790cd2c21c0b80a993cec5f5781822c711d25b6c"
+    },
+    {
+      "bytes": 689,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths-START.json",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths-START.json",
+      "sha256": "7af5531f589c8e45daac3b09aa4fca225fa4b53c15f0a28dd917ad9dca9a85ef"
+    },
+    {
+      "bytes": 933,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths-RESULT.json",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths-RESULT.json",
+      "sha256": "2e3d0a581c73fdb15f567009e7f01d071914bac77e20b4501b90d328b7c29f5e"
+    },
+    {
+      "bytes": 2146,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths.log",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths.log",
+      "sha256": "bb7711a8cef9dda26ccb1f487f630bedf4ae8b810a1c35819a9092c8601764ae"
+    },
+    {
+      "bytes": 2208,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "sha256": "df9be11723e2aa82736aa9accaf21837af7c89bf811fc167d9bf913bcd88b56b"
+    },
+    {
+      "bytes": 302073,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "f557a8b8eec45ed061170b957896a5a0a403b7acced1621d2666c0fcd941afd0"
+    },
+    {
+      "bytes": 57,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths/CHILD-stdout.log",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths/CHILD-stdout.log",
+      "sha256": "e87964e614659431260e0cc08ff2119bfdaa133122705ac82a13d1bcb9440bbe"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-test-production-inventory-paths/CHILD-stderr.log",
+      "path": "owned-input-exact-probes-v11/normal-test-production-inventory-paths/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3632,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/probe_owned_scope_v11_normal-test-production-inventory-paths.py",
+      "path": "reproduce/probe_owned_scope_v11_normal-test-production-inventory-paths.py",
+      "sha256": "88d215fed204805a39a4a4a6a045065f609600620232bb916dfec2a3396a95d4"
+    },
+    {
+      "bytes": 695,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths-START.json",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths-START.json",
+      "sha256": "cb6ed61261a2e1f1584e97d5409334015c9f822c22413d8c7b889555f7132739"
+    },
+    {
+      "bytes": 939,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths-RESULT.json",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths-RESULT.json",
+      "sha256": "691f05755641c518d75242d1bbae93fa8f8ced816ec2edfba421967c4e0b2b10"
+    },
+    {
+      "bytes": 2155,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths.log",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths.log",
+      "sha256": "600bfcbb7d2715f493a3573bb087431efa4f02c33234ddfd21fc6c9d7db63806"
+    },
+    {
+      "bytes": 2221,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "sha256": "8ee837abf90fca7238332b3b44711045501dae22e58e0eefd48c19fe7b5acc22"
+    },
+    {
+      "bytes": 302073,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "f557a8b8eec45ed061170b957896a5a0a403b7acced1621d2666c0fcd941afd0"
+    },
+    {
+      "bytes": 57,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths/CHILD-stdout.log",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths/CHILD-stdout.log",
+      "sha256": "e87964e614659431260e0cc08ff2119bfdaa133122705ac82a13d1bcb9440bbe"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-test-production-inventory-paths/CHILD-stderr.log",
+      "path": "owned-input-exact-probes-v11/optimized-test-production-inventory-paths/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3643,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/probe_owned_scope_v11_optimized-test-production-inventory-paths.py",
+      "path": "reproduce/probe_owned_scope_v11_optimized-test-production-inventory-paths.py",
+      "sha256": "f2f71ff298080f7999b7918f2df6317299fac118c404e78d0179a5e64276308b"
+    },
+    {
+      "bytes": 669,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts-START.json",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts-START.json",
+      "sha256": "1055ae506232a9f8321f5977fb28cdbd05e7e845c9073dc1d5da92b6a01afbf4"
+    },
+    {
+      "bytes": 913,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts-RESULT.json",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts-RESULT.json",
+      "sha256": "e14f172ecc4185da8a1d51ee2c6fcb8be1fc511e73e904b3250e0e22cdcd6e46"
+    },
+    {
+      "bytes": 2124,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts.log",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts.log",
+      "sha256": "7c46153b285f873c51611603c3d5fd17eebf6d5b026d7d4f174658b5cd181a8b"
+    },
+    {
+      "bytes": 2186,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "sha256": "aa3d2bc168ebac59f3ade05a9bc82e5a3dce2310692bed687c986fb0a6ef1d81"
+    },
+    {
+      "bytes": 302073,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "f557a8b8eec45ed061170b957896a5a0a403b7acced1621d2666c0fcd941afd0"
+    },
+    {
+      "bytes": 46,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts/CHILD-stdout.log",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts/CHILD-stdout.log",
+      "sha256": "1cc1165c6a4d05e946ba1a44af4ad29b35b33241da2f7d5dd499011ea6f83bed"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/normal-sum2-guard-contracts/CHILD-stderr.log",
+      "path": "owned-input-exact-probes-v11/normal-sum2-guard-contracts/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3599,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/probe_owned_scope_v11_normal-sum2-guard-contracts.py",
+      "path": "reproduce/probe_owned_scope_v11_normal-sum2-guard-contracts.py",
+      "sha256": "ef431860207501066e49411591c5828c9891da30e1f05b02c694c85ee29312c5"
+    },
+    {
+      "bytes": 675,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts-START.json",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts-START.json",
+      "sha256": "babef443a8f205e5f2fd4835fdf777bda5d6da0309ba6baf35742128d3aa12a3"
+    },
+    {
+      "bytes": 919,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts-RESULT.json",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts-RESULT.json",
+      "sha256": "7336fdd69f995ea279b63f0f04bd27c9a16fec44d4da56d1417022e6488d5b0e"
+    },
+    {
+      "bytes": 2133,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts.log",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts.log",
+      "sha256": "af183fb193c90624b3ddd6df0fb2e9201dc6eae7a298757c52b55daf6a4580ec"
+    },
+    {
+      "bytes": 2199,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "sha256": "c7377589cd9dbb32f53712d1b1b1deec3b5af50925c2ce6ddbdd3331d2428da7"
+    },
+    {
+      "bytes": 302073,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "f557a8b8eec45ed061170b957896a5a0a403b7acced1621d2666c0fcd941afd0"
+    },
+    {
+      "bytes": 46,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts/CHILD-stdout.log",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts/CHILD-stdout.log",
+      "sha256": "1cc1165c6a4d05e946ba1a44af4ad29b35b33241da2f7d5dd499011ea6f83bed"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/owned-input-exact-probes-v11/optimized-sum2-guard-contracts/CHILD-stderr.log",
+      "path": "owned-input-exact-probes-v11/optimized-sum2-guard-contracts/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3610,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/probe_owned_scope_v11_optimized-sum2-guard-contracts.py",
+      "path": "reproduce/probe_owned_scope_v11_optimized-sum2-guard-contracts.py",
+      "sha256": "c496c9fd1522c1365f731d923f0d525dad71281fdfeafeb8ac89f72df394700e"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1312,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/owned-input-fake-preflight-v11.json",
+      "path": "reproduce/owned-input-fake-preflight-v11.json",
+      "sha256": "8a4919210133cdada55dd4d4fc00d934ca76ee2e4e9c17dd30ed681b1ad973a3"
+    },
+    {
+      "bytes": 1697,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/owned-input-exact-probes-v11.json",
+      "path": "reproduce/owned-input-exact-probes-v11.json",
+      "sha256": "9562e594ef4224bf746af60796d401cf4421ab30b9816d9c75af48416ef35c95"
+    },
+    {
+      "bytes": 1502,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/reproduce/OWNED-INPUT-PROBE-BINDING-V11.json",
+      "path": "reproduce/OWNED-INPUT-PROBE-BINDING-V11.json",
+      "sha256": "d7259aed4a87a8a004d2e0842a3be101ac055409a19681fda986e4ef0fd1d316"
+    },
+    {
+      "bytes": 2862,
+      "kind": "factual-scope-limited-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v11-probes-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "7cf72ae7855890353d635822ede79387a31dec146aa17f7e6311a248f00b794b"
+    }
+  ],
+  "schema": 1,
+  "scope": "Fresh fake lifecycle controls and one exact four-child round only. Real source mutation controls, broader repeated consumer preflight, full Python matrix, native paired controls, coverage, combined report and hosted CI remain pending. No robust timing, issue-completion or merge-readiness claim.",
+  "source_checkpoint_commit": "d28047a6d18a94483d1d02b6f422be9a4aa59db1"
+}

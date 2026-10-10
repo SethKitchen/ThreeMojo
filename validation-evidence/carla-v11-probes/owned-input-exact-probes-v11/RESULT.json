@@ -1,0 +1,105 @@
+{
+  "elapsed_seconds": 476.3183207260008,
+  "failure": null,
+  "finished": "2026-10-10T22:45:32.357783+00:00",
+  "known_process_count": 8,
+  "remaining_owned_descendants": [],
+  "scope": "Exact unchanged maintained production-inventory and Sum2 children in normal and optimized modes on reviewed cache-owned immutable input view. Original120s child bounds, fresh physical fixture/source/SDK seals; focused controls only.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v11_normal-test-production-inventory-paths.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owned-input-exact-probes-v11"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+      "label": "normal-test-production-inventory-paths",
+      "leader_reaped": true,
+      "log_sha256": "bb7711a8cef9dda26ccb1f487f630bedf4ae8b810a1c35819a9092c8601764ae",
+      "pgid": 7,
+      "pid": 7,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 121.38512223199723,
+      "single_cpu": 0,
+      "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-10T22:37:37.363048+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v11_optimized-test-production-inventory-paths.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owned-input-exact-probes-v11"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+      "label": "optimized-test-production-inventory-paths",
+      "leader_reaped": true,
+      "log_sha256": "600bfcbb7d2715f493a3573bb087431efa4f02c33234ddfd21fc6c9d7db63806",
+      "pgid": 9,
+      "pid": 9,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 121.92798025199954,
+      "single_cpu": 0,
+      "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-10T22:39:40.359392+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v11_normal-sum2-guard-contracts.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owned-input-exact-probes-v11"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+      "label": "normal-sum2-guard-contracts",
+      "leader_reaped": true,
+      "log_sha256": "7c46153b285f873c51611603c3d5fd17eebf6d5b026d7d4f174658b5cd181a8b",
+      "pgid": 11,
+      "pid": 11,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 109.25217810599861,
+      "single_cpu": 0,
+      "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-10T22:41:43.661625+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v11_optimized-sum2-guard-contracts.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owned-input-exact-probes-v11"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+      "label": "optimized-sum2-guard-contracts",
+      "leader_reaped": true,
+      "log_sha256": "af183fb193c90624b3ddd6df0fb2e9201dc6eae7a298757c52b55daf6a4580ec",
+      "pgid": 13,
+      "pid": 13,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 115.56310845600092,
+      "single_cpu": 0,
+      "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-10T22:43:34.276843+00:00",
+      "timed_out": false
+    }
+  ]
+}

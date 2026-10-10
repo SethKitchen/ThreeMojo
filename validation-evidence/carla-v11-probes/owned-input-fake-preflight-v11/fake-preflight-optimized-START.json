@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-O",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_full_audit_cleanup_contracts.py",
+    "-k",
+    "CacheInputViewPreflight",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+  "label": "fake-preflight-optimized",
+  "pgid": 9,
+  "pid": 9,
+  "single_cpu": 0,
+  "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-10T22:37:15.315783+00:00"
+}

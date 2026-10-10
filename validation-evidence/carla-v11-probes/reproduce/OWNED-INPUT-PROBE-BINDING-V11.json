@@ -1,0 +1,30 @@
+{
+  "builder_sha256": "406fd5d20305e765652ce807169bfe48227e95b98e64fdf647db73ac4c8777d5",
+  "candidate_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v11",
+  "configuration": "owned-input-exact-probes-v11.json",
+  "configuration_sha256": "9562e594ef4224bf746af60796d401cf4421ab30b9816d9c75af48416ef35c95",
+  "files": [
+    {
+      "path": "probe_owned_scope_v11_normal-test-production-inventory-paths.py",
+      "sha256": "88d215fed204805a39a4a4a6a045065f609600620232bb916dfec2a3396a95d4"
+    },
+    {
+      "path": "probe_owned_scope_v11_optimized-test-production-inventory-paths.py",
+      "sha256": "f2f71ff298080f7999b7918f2df6317299fac118c404e78d0179a5e64276308b"
+    },
+    {
+      "path": "probe_owned_scope_v11_normal-sum2-guard-contracts.py",
+      "sha256": "ef431860207501066e49411591c5828c9891da30e1f05b02c694c85ee29312c5"
+    },
+    {
+      "path": "probe_owned_scope_v11_optimized-sum2-guard-contracts.py",
+      "sha256": "c496c9fd1522c1365f731d923f0d525dad71281fdfeafeb8ac89f72df394700e"
+    }
+  ],
+  "maintained_command_sha256": "e5e8921dd23490f57605b35ba05559c0ec71c3c7b3d041643ffce35995ce6f0d",
+  "maintained_method_ast_unchanged": true,
+  "source_seal_sha256": "c8ae0707fda42c9bc84fb9cc784b32c83d8b0ffcb67ff59abc05f31abcca989e",
+  "status": "Prepared only; no execution",
+  "template_sha256": "bf60b79a325fc36e49d66f449676493355321eede91767674369f5bb7a79a0db",
+  "test_source_sha256": "8e58c8c8679d93f3a90ee4de0b5c78f88f44f7d9ad7118e421df638d09a03f62"
+}
