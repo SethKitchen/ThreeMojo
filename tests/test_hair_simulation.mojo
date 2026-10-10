@@ -259,5 +259,78 @@ def test_guides_only_needs_matching_guide_records() raises:
     assert_equal(len(empty.now), 0)
 
 
+def test_simulation_refuses_starts_that_do_not_partition_the_points() raises:
+    # No starts, a first start past zero, a last start short of the points,
+    # an empty strand and a decreasing start.
+    for change in range(5):
+        var groom = _guided()
+        if change == 0:
+            groom.starts = List[Int]()
+        elif change == 1:
+            groom.starts[0] = 1
+        elif change == 2:
+            groom.starts[3] = 23
+        elif change == 3:
+            groom.starts[1] = 0
+        else:
+            groom.starts[1] = 17
+        for guides_only in [False, True]:
+            with assert_raises(contains="partition the points"):
+                _ = HairSimulation(groom, guides_only=guides_only)
+
+
+def test_simulation_needs_a_normal_and_a_depth_per_point() raises:
+    for change in range(2):
+        var groom = _hanging(0)
+        if change == 0:
+            _ = groom.normals.pop()
+        else:
+            _ = groom.depths.pop()
+        with assert_raises(contains="shading fields"):
+            _ = HairSimulation(groom)
+
+
+def test_guides_only_refuses_followers_without_a_matching_guide() raises:
+    # Past the last strand, below -1, itself, and another follower.
+    for guide in [3, -2, 1, 2]:
+        var groom = _guided()
+        groom.guides[1] = guide
+        with assert_raises(contains="needs a guide strand"):
+            _ = HairSimulation(groom, guides_only=True)
+        # Every strand steps on its own, so the full step needs no guide.
+        _ = HairSimulation(groom)
+    var groom = _guided()
+    _strand(groom, [Vector3(0, 0.3, 0), Vector3(0, 0.28, 0)])
+    groom.guides[1] = 3
+    with assert_raises(contains="point count"):
+        _ = HairSimulation(groom, guides_only=True)
+
+
+def test_guides_only_accepts_later_guides_and_single_points() raises:
+    # The first strand follows the second, with no offset.
+    var groom = _hanging(0.25)
+    _strand(groom, _hanging(0.3).points)
+    groom.guides[0] = 1
+    var guided = HairSimulation(groom, guides_only=True)
+    # The full step moves the guide as the guide-only step does.
+    var full = HairSimulation(groom)
+    var collider = _collider()
+    for _ in range(5):  # pragma: no branch
+        guided.step(collider, HairWind(Vector3(1, 0, 0), 1))
+        full.step(collider, HairWind(Vector3(1, 0, 0), 1))
+    for k in range(8):  # pragma: no branch
+        assert_true(guided.now[8 + k] == full.now[8 + k])
+        assert_true(guided.now[k] == guided.now[8 + k])
+    # A strand of one point can lead and follow.
+    var dots = HairGroom()
+    _strand(dots, [Vector3(0, 0.3, 0)])
+    _strand(dots, [Vector3(0, 0.3, 0)])
+    dots.guides[1] = 0
+    var moved = HairSimulation(dots, guides_only=True)
+    moved.step(collider, HairWind(Vector3(1, 0, 0), 1))
+    assert_true(moved.now[0] == Vector3(0, 0.3, 0))
+    assert_true(moved.now[1] == moved.now[0])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

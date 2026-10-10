@@ -175,15 +175,48 @@ struct HairSimulation(Movable):
                 the guides alone.
 
         Raises:
-            Error: If `guides_only` is set and the groom's guide records do
-                not match its strands.
+            Error: If the strand starts do not divide the points into
+                strands of one point or more, or the normal or depth count
+                differs from the point count. Also if `guides_only` is set
+                and the guide records do not match the strands, or a
+                follower does not name a guide strand with as many points.
         """
-        if guides_only and (
-            len(groom.guides) != len(groom)
-            or len(groom.follow_across) != len(groom.points)
-            or len(groom.follow_up) != len(groom.points)
+        var points = len(groom.points)
+        var strands = len(groom.starts) - 1
+        # Check the spans before any tangent or span read uses them.
+        if (
+            strands < 0
+            or groom.starts[0] != 0
+            or groom.starts[strands] != points
         ):
-            raise Error("The groom's guide records do not match its strands")
+            raise Error("Hair strand starts must partition the points")
+        for strand in range(strands):
+            if groom.starts[strand + 1] <= groom.starts[strand]:
+                raise Error("Hair strand starts must partition the points")
+        if len(groom.normals) != points or len(groom.depths) != points:
+            raise Error("The groom's shading fields do not match its points")
+        if guides_only:
+            if (
+                len(groom.guides) != strands
+                or len(groom.follow_across) != points
+                or len(groom.follow_up) != points
+            ):
+                raise Error(
+                    "The groom's guide records do not match its strands"
+                )
+            for strand in range(strands):
+                var guide = groom.guides[strand]
+                if guide == -1:
+                    continue
+                # A guide is -1 itself, so this also refuses a strand that
+                # follows itself or another follower. A later guide is valid.
+                if guide < 0 or guide >= strands or groom.guides[guide] != -1:
+                    raise Error("A follower needs a guide strand")
+                if (
+                    groom.starts[guide + 1] - groom.starts[guide]
+                    != groom.starts[strand + 1] - groom.starts[strand]
+                ):
+                    raise Error("A follower must match its guide's point count")
         self.guides_only = guides_only
         self.guides = groom.guides.copy()
         self.follow_across = groom.follow_across.copy()
