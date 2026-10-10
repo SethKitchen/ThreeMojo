@@ -114,13 +114,16 @@ def test_stopping_teleport_and_actor_lifecycle() raises:
     )
     visuals.sync(world, scene, assets)
     assert_true(fresh != walker)
-    assert_equal(len(visuals.walkers), 2)
-    assert_equal(scene.node(visuals.walkers[1].limbs[0]).quaternion.z, 0)
+    # The new walker takes over the hidden model, and starts standing.
+    assert_equal(len(visuals.walkers), 1)
+    assert_true(visuals.walkers[0].actor == fresh)
+    assert_true(scene.node(visuals.walkers[0].node).visible)
+    assert_equal(scene.node(visuals.walkers[0].limbs[0]).quaternion.z, 0)
     # A stationary airborne walker must not swing from vertical velocity.
     world.set_transform(fresh, _pose(50, -4.5, 10, 0))
     _ = world.tick()
     visuals.sync(world, scene, assets)
-    assert_equal(scene.node(visuals.walkers[1].limbs[0]).quaternion.z, 0)
+    assert_equal(scene.node(visuals.walkers[0].limbs[0]).quaternion.z, 0)
 
 
 def test_variable_world_steps_and_capture_cadence() raises:

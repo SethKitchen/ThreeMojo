@@ -162,6 +162,14 @@ def verify(root):
         require(path not in successors, 'duplicate runtime boundary edge')
         successors[path] = edge
 
+    if __package__:
+        from . import render_actor_reuse_contracts as reuse
+    else:
+        import render_actor_reuse_contracts as reuse
+    for path, edge in reuse.verify(root).items():
+        require(path not in successors, 'duplicate render actor reuse edge')
+        successors[path] = edge
+
     for path, expected in record['canonical_source_unchanged'].items():
         if path in successors:
             require(expected == successors[path]['before_sha256'],

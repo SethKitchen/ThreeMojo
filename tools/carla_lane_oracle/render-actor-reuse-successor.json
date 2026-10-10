@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "issue": 306,
+  "scope": "Reviewed #306 render-resource edge for one pinned consumer: ActorVisuals lets a new vehicle or walker take over the first hidden model built from the same blueprint, box and cached model, recoloring its own paint or clothes. No parser, Map query, lane geometry or physics source changes. Every other consumer change remains fail-closed.",
+  "edges": {
+    "extensions/carla/render_actors.mojo": {
+      "before_sha256": "ae1f86645cb6c7dac99a741619595be18a61c558c56262c27a50fa9b9bacef3b",
+      "after_sha256": "0169a2466ef2cfe970e5e53b3311ea8cf81e481d11f668c531c2ca545497cdcc",
+      "before_token_sha256": "f77b3bea2a872f7b2a026cbfba75aa7a98ab9339f1c7aa21d1fae2bb6cb4cd1e",
+      "after_token_sha256": "8b8a3b10474f988da8ebe3868e4ca277819c6096105e0940bf9acb7783f435d2"
+    }
+  },
+  "correctness_tests": {
+    "tests/test_carla_render_reuse.mojo": "642c63f1f17d7c3729810ec576056a0831518547cfbf4e34c83bbbc58a013fc4",
+    "tests/test_carla_model_cache.mojo": "e8da22f338e2c2a602012960541954bc9f52082bda40c90775142b84dfdf779f",
+    "tests/test_carla_walker_render_motion.mojo": "8c7d4bdbc5a62348f43fd18ecc98486b2212b373e52452d31547c117bc4020a3"
+  }
+}

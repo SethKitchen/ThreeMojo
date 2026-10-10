@@ -407,13 +407,22 @@ def test_vehicle_spawns_share_resources_with_independent_colors_lights_and_pose(
     _ = world.destroy_actor(first)
     visuals.sync(world, scene, assets, registry)
     assert_false(scene.get(visuals.vehicles[0].node).visible)
-    # A new instance after destruction must not inherit the first's lights.
+    # A new instance takes over the hidden model, but not the first's
+    # lights or paint.
     pose.location.x = 40
-    _ = world.spawn_actor(blueprint, pose)
+    blueprint.set_attribute("color", "5,6,7")
+    var third = world.spawn_actor(blueprint, pose)
     visuals.sync(world, scene, assets, registry)
+    assert_equal(len(visuals.vehicles), 2)
+    assert_true(visuals.vehicles[0].actor == third)
+    assert_true(scene.get(visuals.vehicles[0].node).visible)
     assert_equal(
-        assets.materials.get(visuals.vehicles[2].heads).emissive_intensity, 0
+        assets.materials.get(visuals.vehicles[0].heads).emissive_intensity, 0
     )
+    assert_equal(
+        assets.materials.get(visuals.vehicles[0].tails).emissive_intensity, 0
+    )
+    assert_equal(assets.materials.get(visuals.vehicles[0].paint).color.b, 7)
     assert_equal(assets.geometries.count(), 6)
     assert_equal(assets.textures.count(), 1)
 
