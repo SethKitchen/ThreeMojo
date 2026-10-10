@@ -1800,7 +1800,7 @@ def check(value,message):
     if not value: raise RuntimeError(message)
 if shadow == 'True':
     check(bool(prefix),'shadow control requires a package namespace')
-    for name in ('source_contracts','cache_key_contracts','speed_parser_contracts','seed_count_contracts','runtime_boundary_contracts','ideal_projection'):
+    for name in ('source_contracts','cache_key_contracts','speed_parser_contracts','seed_count_contracts','runtime_boundary_contracts','render_actor_reuse_contracts','ideal_projection'):
         sys.modules[name]=types.ModuleType(name)
 try:
     module=importlib.import_module(prefix+consumer)

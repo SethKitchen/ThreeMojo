@@ -720,6 +720,9 @@ struct VehicleVisual(Copyable, Movable):
     # many follow it.
     var first_mesh: Int
     var mesh_count: Int
+    # What the model was built from. Only a new actor with the same key
+    # can take the model over.
+    var key: String
 
 
 @fieldwise_init
@@ -735,6 +738,12 @@ struct WalkerVisual(Copyable, Movable):
     # many follow it.
     var first_mesh: Int
     var mesh_count: Int
+    # What the model was built from. Only a new actor with the same key
+    # can take the model over.
+    var key: String
+    # A procedural walker's own shirt, trousers and skin; empty for a
+    # cached model.
+    var clothes: List[MaterialId]
 
 
 def clothing(id: ActorId) -> Tuple[Color, Color, Color]:
@@ -865,6 +874,80 @@ struct ActorVisuals(Movable):
         self.models.append(model)
         return model
 
+    def _model_key(
+        self, world: World, id: ActorId, registry: AssetRegistry
+    ) raises -> String:
+        """Return what a vehicle's or walker's model is built from."""
+        var box = world.get_bounding_box(id)
+        var type_id = world.actor(id).type_id
+        var cached = String("")
+        if Bool(registry.cached_entry(registry.model_key(type_id))):
+            cached = registry.model_key(type_id)
+        return (
+            type_id
+            + "|"
+            + cached
+            + "|"
+            + String(box.extent.x)
+            + ","
+            + String(box.extent.y)
+            + ","
+            + String(box.extent.z)
+        )
+
+    def _reuse_vehicle(
+        mut self,
+        world: World,
+        id: ActorId,
+        mut assets: Assets,
+        registry: AssetRegistry,
+    ) raises -> Bool:
+        """Give a new vehicle the first hidden model of its key.
+
+        The model's own paint takes the new actor's color. Its lamps and
+        beam follow the new actor's light state on this sync.
+        """
+        var key = self._model_key(world, id, registry)
+        for k in range(len(self.vehicles)):
+            if self.vehicles[k].key != key or world.is_alive(
+                self.vehicles[k].actor
+            ):
+                continue
+            assets.materials.materials[
+                self.vehicles[k].paint.value
+            ] = car_paint(vehicle_color(world.actor(id)))
+            self.vehicles[k].actor = id
+            return True
+        return False
+
+    def _reuse_walker(
+        mut self,
+        world: World,
+        id: ActorId,
+        mut assets: Assets,
+        registry: AssetRegistry,
+    ) raises -> Bool:
+        """Give a new walker the first hidden model of its key.
+
+        A procedural model's clothes take the new actor's colors.
+        """
+        var key = self._model_key(world, id, registry)
+        for k in range(len(self.walkers)):
+            if self.walkers[k].key != key or world.is_alive(
+                self.walkers[k].actor
+            ):
+                continue
+            if len(self.walkers[k].clothes) == 3:
+                var colors = clothing(id)
+                var looks = _clothes(colors)
+                for c in range(3):  # pragma: no branch
+                    assets.materials.materials[
+                        self.walkers[k].clothes[c].value
+                    ] = looks[c].copy()
+            self.walkers[k].actor = id
+            return True
+        return False
+
     def _add_vehicle(
         mut self,
         world: World,
@@ -993,6 +1076,7 @@ struct ActorVisuals(Movable):
                 index,
                 first,
                 count,
+                self._model_key(world, id, registry),
             )
         )
 
@@ -1027,25 +1111,15 @@ struct ActorVisuals(Movable):
                     List[NodeId](),
                     placed.first_mesh,
                     placed.mesh_count,
+                    self._model_key(world, id, registry),
+                    List[MaterialId](),
                 )
             )
             return
-        var colors = clothing(id)
-        var shirt = assets.materials.add(
-            standard_material(
-                colors[0], roughness=0.85, env_map=SCENE_ENVIRONMENT
-            )
-        )
-        var trousers = assets.materials.add(
-            standard_material(
-                colors[1], roughness=0.85, env_map=SCENE_ENVIRONMENT
-            )
-        )
-        var skin = assets.materials.add(
-            standard_material(
-                colors[2], roughness=0.6, env_map=SCENE_ENVIRONMENT
-            )
-        )
+        var looks = _clothes(clothing(id))
+        var shirt = assets.materials.add(looks[0].copy())
+        var trousers = assets.materials.add(looks[1].copy())
+        var skin = assets.materials.add(looks[2].copy())
         var first = len(scene.meshes)
         var node = scene.add(Object3D())
         var torso = capsule(Length(0.17, METER), Length(0.36, METER), 4, 10)
@@ -1142,7 +1216,15 @@ struct ActorVisuals(Movable):
             )
             limbs.append(joint_node)
         self.walkers.append(
-            WalkerVisual(id, node, limbs^, first, len(scene.meshes) - first)
+            WalkerVisual(
+                id,
+                node,
+                limbs^,
+                first,
+                len(scene.meshes) - first,
+                self._model_key(world, id, registry),
+                [shirt, trousers, skin],
+            )
         )
 
     def sync(
@@ -1158,7 +1240,9 @@ struct ActorVisuals(Movable):
         A blueprint whose key the registry's cache holds, by its id or by
         its family's wildcard, gets the cached model; every other one gets
         the procedural model. A model whose actor is gone is hidden, and
-        its beam put out.
+        its beam put out. A new actor takes over the first hidden model
+        built from the same blueprint, box and cached model, so a cycle
+        of spawns and destroys does not grow the scene or the stores.
 
         Args:
             world: The world.
@@ -1184,9 +1268,11 @@ struct ActorVisuals(Movable):
         for id in world.get_actors():  # pragma: no branch
             var kind = world.actor(id).kind
             if kind == VEHICLE_ACTOR and id.value not in vehicles:
-                self._add_vehicle(world, id, scene, assets, registry)
+                if not self._reuse_vehicle(world, id, assets, registry):
+                    self._add_vehicle(world, id, scene, assets, registry)
             if kind == WALKER_ACTOR and id.value not in walkers:
-                self._add_walker(world, id, scene, assets, registry)
+                if not self._reuse_walker(world, id, assets, registry):
+                    self._add_walker(world, id, scene, assets, registry)
         for v in self.vehicles:
             var alive = world.is_alive(v.actor)
             scene.node(v.node).visible = alive
@@ -1253,6 +1339,15 @@ struct ActorVisuals(Movable):
         ref target = scene.node(node)
         target.set_rotation_from_matrix(matrix)
         target.set_position(at.x, at.z, at.y)
+
+
+def _clothes(colors: Tuple[Color, Color, Color]) raises -> List[Material]:
+    """Return a procedural walker's shirt, trousers and skin."""
+    return [
+        standard_material(colors[0], roughness=0.85, env_map=SCENE_ENVIRONMENT),
+        standard_material(colors[1], roughness=0.85, env_map=SCENE_ENVIRONMENT),
+        standard_material(colors[2], roughness=0.6, env_map=SCENE_ENVIRONMENT),
+    ]
 
 
 def _glow(mut assets: Assets, id: MaterialId, intensity: Float32) raises:

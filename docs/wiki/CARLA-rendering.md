@@ -128,6 +128,10 @@ When the cache holds the blueprint's model, a vehicle is CARLA's own model, fitt
 
 The body wears car paint: a metallic base under a clear coat, in the color of the `color` attribute. The lamps follow the `VehicleLightState`.
 
+A destroyed actor's model is hidden, and its beam goes out. A new vehicle or walker takes over the first hidden model with the same key. The key is the blueprint id, the bounding box and the cached model, if there is one. The model's paint takes the new vehicle's color, and a procedural walker's clothes take the new walker's colors. The model's lamps follow the new vehicle's light state.
+
+A cycle of spawns and destroys therefore keeps the same scene nodes, meshes, lights and materials. A destroyed actor's id names no model. Survivors keep their own materials. The physics bodies and the traffic manager's records of destroyed actors are not reclaimed yet. See [#306](https://github.com/SethKitchen/ThreeMojo/issues/306).
+
 | Light state | Head lamps | Tail lamps | Beam on the road |
 |---|---|---|---|
 | Position | Dim glow | Glow | None |
