@@ -39,8 +39,9 @@ comptime _CELL = 4
 # The largest corner height, and the largest slope of any terrain triangle.
 comptime _PEAK = Float32(0.16)
 comptime _SLOPE = Float64(0.06)
-# Float32 positions near 100 m and the solver's contact slop round to
-# well under a millimeter. A body closer than this has penetrated.
+# This bench's numerical allowance for Float32 positions near 100 m, not
+# the solver's 5 mm contact slop. A body more than 1 mm inside the
+# terrain fails.
 comptime _TOLERANCE = Float64(0.001)
 
 

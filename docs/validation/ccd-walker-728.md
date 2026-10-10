@@ -17,7 +17,7 @@ Each scene runs one warm-up step, then twenty timed steps. After each timed step
 - **Clearance.** The bench finds the body's gap to the terrain with its own Float64 point-to-triangle distance, which shares no code with the CCD sweep. It measures from the sphere center or from the lower end of the capsule axis to the nine nearest cells, less the radius. The terrain slopes at most 0.06, so the lower end of an upright axis is its nearest point.
 - **Local height.** A body whose lowest point is under the terrain height at its own position gets a negative gap.
 
-A CCD row passes when its least gap is above -1 mm. That tolerance covers Float32 positions near 100 m and the solver's contact slop.
+A CCD row passes when its least gap is above -1 mm. That tolerance is this bench's numerical allowance for Float32 positions near 100 m. It is not the solver's 5 mm contact slop. The measured CCD gaps are within 1.2e-7 m of contact or clear of it.
 
 Controls run first:
 
