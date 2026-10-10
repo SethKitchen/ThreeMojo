@@ -373,10 +373,10 @@ REVIEWED_LOOP_RULES = {
     )),
     'extensions/humanoid/skeleton/head/hair/strands': ({
         'extensions/humanoid/skeleton/head/hair/strands.mojo':
-            'b38db045a18fbdbf5fc391a8b6795b03afb0b4e10bb0328e3da4e1b98a0f64a1',
+            '42e4799761c82ebc1f51ed87c5e77d67c018bd5d310670cecb74d220c236e880',
     }, (
-        (195, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
-        (201, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),
+        (225, 'literal-range', 2, 2, 'range(2)', 'hair-upload-two-endpoints'),
+        (231, 'literal-range', 3, 3, 'range(3)', 'hair-upload-three-channels'),
     )),
 }
 
@@ -404,11 +404,11 @@ GUARDED_LOOP_SOURCE_SHA256 = {
     'extensions/humanoid/skeleton/head/hair/density.mojo':
         'cf1a58fa00938a2522e25fdf9b061ec53bec3e3bf08dbe99ed2eb942a37b8ab9',
     'extensions/humanoid/skeleton/head/hair/groom.mojo':
-        'd4f041e4f7686930d89c4dd504b79e3bca1231d038261d9ab30f4ff013c2c4f9',
+        'f083d89edf192cdc70acc758e5cf7bdd563fe883303eb9543d430348e22a888f',
     'extensions/humanoid/skeleton/head/hair/shading.mojo':
-        '9e799dccc63511086a7c065a6725c35fdf8796f4d336351787e139087ef01286',
+        'eba4c66a1203e4dc67845ad874e50fa68653e1adb0c9c973cb2a29205d826ba9',
     'extensions/humanoid/skeleton/head/hair/strands.mojo':
-        'b38db045a18fbdbf5fc391a8b6795b03afb0b4e10bb0328e3da4e1b98a0f64a1',
+        '42e4799761c82ebc1f51ed87c5e77d67c018bd5d310670cecb74d220c236e880',
     'tests/test_carla_route_search.mojo':
         '50874817a790dbea31b01cfeff51615be4181474a01ccefb98e42caea9421e8b',
 }
@@ -432,8 +432,7 @@ GUARDED_LOOP_RULES = (
     ('extensions/carla/map', 2396, 'literal-range', 10, 'range(10)', 'target-ten-frontier-reservations', (), ()),
     ('extensions/humanoid/skeleton/head/hair/density', 100, 'reviewed-nonempty-range', 262144, 'range(count)', 'density-validated-positive-cube-count', (), ()),
     ('extensions/humanoid/skeleton/head/hair/density', 137, 'reviewed-nonempty-range', None, 'range(len(groom))', 'density-partitioned-nonempty-groom', ('extensions/humanoid/skeleton/head/hair/groom.mojo',), ()),
-    ('extensions/humanoid/skeleton/head/hair/strands', 180, 'reviewed-nonempty-range', None, 'range(len(self.groom.points))', 'hair-retained-nonempty-points', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
-    ('extensions/humanoid/skeleton/head/hair/strands', 191, 'reviewed-nonempty-range', None, 'range(len(self.groom))', 'hair-retained-nonempty-strands', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
+    ('extensions/humanoid/skeleton/head/hair/strands', 221, 'reviewed-nonempty-range', None, 'range(len(self.groom))', 'hair-retained-nonempty-strands', ('extensions/humanoid/skeleton/head/hair/density.mojo', 'extensions/humanoid/skeleton/head/hair/groom.mojo', 'extensions/humanoid/skeleton/head/hair/shading.mojo', 'extensions/carla/agents_route.mojo', 'tests/test_carla_route_search.mojo'), ()),
     ('extensions/carla/opendrive', 450, 'reviewed-nonempty-iterator', None, 'records', 'border-active-maintained-nonempty-callers', (), ('_active',)),
     ('extensions/carla/opendrive', 593, 'reviewed-nonempty-range', None, 'range(len(ids))', 'border-positive-record-count-keeps-ids', (), ()),
     ('extensions/carla/opendrive', 601, 'reviewed-nonempty-range', None, 'range(len(ids))', 'border-inner-scan-retains-positive-ids', (), ()),
@@ -460,8 +459,7 @@ _HAIR_RETAINED_CENSUS = (
     )),
 )
 HAIR_RETAINED_RULE_CENSUS = {
-    (180, 'hair-retained-nonempty-points'): _HAIR_RETAINED_CENSUS,
-    (191, 'hair-retained-nonempty-strands'): _HAIR_RETAINED_CENSUS,
+    (221, 'hair-retained-nonempty-strands'): _HAIR_RETAINED_CENSUS,
 }
 
 
@@ -661,6 +659,86 @@ def repaired_density_loops(root, *, include_roots=()):
         'expression': expression, 'proof_id': proof_id,
         'dependency_sha256': {DENSITY_SOURCE: DENSITY_AFTER_SHA256},
     } for line, kind, minimum, maximum, expression, proof_id in DENSITY_REPAIRED_RULES}
+
+
+# Separate producer theorem: every Float32 radius passes through the pinned
+# min/max graph in cap_steps, yielding Int 2..64 under the bound Mojo SDK.
+# The consumer adds one without overflow and never changes steps. Thus its
+# range(1, steps + 1) is nonempty for every possible private caller input.
+# Unlike an input-guard theorem, this needs no restricted caller census.
+# Bind the complete producer/consumer and maintained exceptional-value control;
+# fail closed on source changes or local/staged stdlib shadows. The receipt
+# separately binds the exact compiler/SDK and still requires a runtime True hit.
+STRAND_CAP_SOURCES = {
+    'objects/__init__.mojo':
+        '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+    'renderers/__init__.mojo':
+        '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
+    'renderers/renderer.mojo':
+        '920a1f2583e41c460646f1f2f257bdeee709094d6140ac94e59195fc17310a12',
+    'objects/line_segments2.mojo':
+        '5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79',
+    'tests/test_small_loop_witnesses.mojo':
+        '8f768e04ecaebdb132cf359819be03cb039d5a546b823674c22ac06a1b790362',
+}
+
+
+def _strand_cap_resolver_unshadowed(root):
+    """Refuse alternate packages/modules at the producer's resolver surfaces."""
+    root = Path(root)
+    allowed = {'objects', 'renderers', 'objects/line_segments2.mojo',
+               'objects/line_segments2.mojo.cov-origin'}
+
+    def unreadable(error):
+        raise error
+
+    try:
+        for directory, folders, files in os.walk(root, onerror=unreadable):
+            base = Path(directory)
+            folders[:] = [name for name in folders
+                          if name not in cache_key.SKIP
+                          and (base / name).relative_to(root) != Path('coverage/build')]
+            for name in (*folders, *files):
+                path = base / name
+                relative = path.relative_to(root).as_posix()
+                if path.is_symlink():
+                    return False
+                folded = name.casefold()
+                if (base.relative_to(root).as_posix() in {'objects', 'renderers'}
+                        and folded.startswith('__init__.')
+                        and name not in {'__init__.mojo', '__init__.mojo.cov-origin'}):
+                    return False
+                if any(folded == stem or folded.startswith(stem + '.')
+                       for stem in ('objects', 'renderers', 'line_segments2')):
+                    if relative not in allowed:
+                        return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def strand_cap_loops(root, *, include_roots=()):
+    """Bind the nonempty strand-cap loop without suppressing its True edge."""
+    try:
+        actual = {name: file_sha256(relative_source(root, name))
+                  for name in STRAND_CAP_SOURCES}
+        if actual != STRAND_CAP_SOURCES:
+            return {}
+        if not all(
+                _density_stdlib_unshadowed(path)
+                and _strand_cap_resolver_unshadowed(path)
+                for path in (root, *include_roots)):
+            return {}
+    except (OSError, ValueError):
+        return {}
+    return {3757: {
+        'line': 3757, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
+        'minimum_cardinality': 2, 'maximum_cardinality': 64,
+        'required': 'T', 'impossible': 'F',
+        'expression': 'range(1, steps + 1)',
+        'proof_id': 'strand-cap-bounded-count-2-to-64',
+        'dependency_sha256': actual,
+    }}
 
 
 def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
@@ -964,6 +1042,8 @@ def construction_boundary_loops(root, *, include_roots=()):
 def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
     result = _historical_reviewed_nonempty_loops(root, module)
+    if module == 'renderers/renderer':
+        result.update(strand_cap_loops(root, include_roots=include_roots))
     if module == 'extensions/carla/map':
         result.update(construction_boundary_loops(root, include_roots=include_roots))
     if module + '.mojo' == DENSITY_SOURCE:

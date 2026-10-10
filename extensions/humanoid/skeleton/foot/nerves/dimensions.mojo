@@ -23,9 +23,10 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
 
 from extensions.humanoid.skeleton.field import (
     DistanceField,
-    TubeChain,
     field_gradient,
     mix_point,
+    uniform_bend,
+    uniform_tube,
 )
 from extensions.humanoid.skeleton.foot.bones.dimensions import (
     FootDimensions,
@@ -214,7 +215,7 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
     var lateral = med * Float32(-1)
     if part == TIBIAL_NERVE:
         return one_tube(
-            _line(
+            uniform_tube(
                 dimensions.medial_malleolus
                 + Vector3(0, 0.018 * S, Float32(-0.010) * S),
                 dimensions.medial_malleolus
@@ -224,7 +225,7 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
         )
     if part == MEDIAL_PLANTAR_NERVE:
         return one_tube(
-            _via(
+            uniform_bend(
                 dimensions.medial_malleolus
                 + Vector3(0, Float32(-0.012) * S, Float32(-0.006) * S),
                 dimensions.navicular + Vector3(0, Float32(-0.007) * S, 0),
@@ -234,7 +235,7 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
         )
     if part == LATERAL_PLANTAR_NERVE:
         return one_tube(
-            _via(
+            uniform_bend(
                 dimensions.medial_malleolus
                 + Vector3(0, Float32(-0.012) * S, Float32(-0.006) * S),
                 dimensions.cuboid + Vector3(0, Float32(-0.007) * S, 0),
@@ -244,7 +245,7 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
         )
     if part == DEEP_FIBULAR_NERVE:
         return one_tube(
-            _via(
+            uniform_bend(
                 Vector3(0, 0, 0.014 * S) + lateral * (0.003 * S),
                 dimensions.intermediate_cuneiform + Vector3(0, 0.007 * S, 0),
                 mix_point(dimensions.mt1_head, dimensions.mt2_head, 0.5)
@@ -256,13 +257,13 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
         var start = Vector3(0, 0.006 * S, 0.020 * S) + lateral * (0.012 * S)
         var radius = 0.00050 * S
         return two_tubes(
-            _via(
+            uniform_bend(
                 start,
                 dimensions.mt2_head + Vector3(0, 0.010 * S, 0),
                 dimensions.toe2_pip + Vector3(0, 0.006 * S, 0),
                 radius,
             ),
-            _via(
+            uniform_bend(
                 start,
                 dimensions.mt4_head + Vector3(0, 0.009 * S, 0),
                 dimensions.toe4_pip + Vector3(0, 0.005 * S, 0),
@@ -274,7 +275,7 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
             0, 0.004 * S, Float32(-0.008) * S
         )
         return one_tube(
-            _via(
+            uniform_bend(
                 behind + Vector3(0, 0.020 * S, 0),
                 behind,
                 dimensions.toe5_pip + Vector3(0, 0.006 * S, 0),
@@ -287,42 +288,10 @@ def _tubes(dimensions: FootDimensions, part: FootNerve) -> TubeSet:
         + Vector3(0, 0.006 * S, 0.008 * S)
     )
     return one_tube(
-        _via(
+        uniform_bend(
             front + Vector3(0, 0.024 * S, 0),
             front,
             dimensions.medial_cuneiform + Vector3(0, 0.006 * S, 0),
             0.00045 * S,
         )
-    )
-
-
-def _line(a: Vector3, b: Vector3, radius: Float32) -> TubeChain:
-    """Return five stations on a straight nerve."""
-    return TubeChain(
-        a,
-        mix_point(a, b, 0.25),
-        mix_point(a, b, 0.50),
-        mix_point(a, b, 0.75),
-        b,
-        radius,
-        radius,
-        radius,
-        radius,
-        radius,
-    )
-
-
-def _via(a: Vector3, b: Vector3, c: Vector3, radius: Float32) -> TubeChain:
-    """Return five stations from `a` to `c` through `b`."""
-    return TubeChain(
-        a,
-        mix_point(a, b, 0.5),
-        b,
-        mix_point(b, c, 0.5),
-        c,
-        radius,
-        radius,
-        radius,
-        radius,
-        radius,
     )

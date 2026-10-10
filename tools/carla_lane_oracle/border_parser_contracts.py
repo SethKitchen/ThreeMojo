@@ -16,11 +16,13 @@ if __package__:
     from . import sum2_guard_contracts as guard
     from . import speed_parser_contracts as speed
     from . import runtime_boundary_contracts as boundary
+    from . import render_actor_reuse_contracts as reuse
 else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import speed_parser_contracts as speed
     import runtime_boundary_contracts as boundary
+    import render_actor_reuse_contracts as reuse
 
 MODULE = 'extensions/carla/opendrive.mojo'
 MIGRATION = 'tools/carla_lane_oracle/border-parser-successor.json'
@@ -144,12 +146,16 @@ def verify_source(text, record):
             'after_token_sha256': AFTER_TOKEN_SHA256}
 
 
+@source.lexical_memo_scope()
 def verify(root):
     """Check the real source, retained lineage, live consumers and tests."""
     root = Path(root)
     record = read_record(root)
     edge = verify_source((root/MODULE).read_bytes().decode('utf-8'), record)
     consumers = boundary.verify(root)
+    for path, reviewed in reuse.verify(root).items():
+        require(path not in consumers, 'duplicate reviewed consumer edge: ' + path)
+        consumers[path] = reviewed
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
         for path, expected in record[group].items():
             actual = hashlib.sha256((root/path).read_bytes()).hexdigest()

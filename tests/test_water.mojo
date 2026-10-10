@@ -5,6 +5,15 @@
 
 """Clearwater's spectrum, ripples, caustics, glare and graded frame."""
 
+from cameras.orthographic_camera import OrthographicCamera
+from cameras.perspective_camera import PerspectiveCamera
+from core.assets import Assets
+from core.object3d import NodeId, Object3D
+from core.scene import Scene
+from geometries.sphere import sphere
+from materials.material import BASIC, Material
+from objects.mesh import Mesh
+from renderers.renderer import Renderer
 from extensions.water.caustics import (
     _splat,
     CausticField,
@@ -17,6 +26,10 @@ from extensions.water.filter import anisotropic_step
 from extensions.water.frame import (
     CameraLook,
     WaterScene,
+    _grade_rows,
+    _graded_image,
+    _radiance_image,
+    _radiance_rows,
     camera_look,
     floor_f,
     grade_pixel,
@@ -89,8 +102,8 @@ from extensions.water.view import (
     require_view,
 )
 from math.vector3 import Vector3
-from std.math import inf, nan, sqrt
-from render.framebuffer import Framebuffer
+from std.math import cos, inf, isfinite, nan, sin, sqrt
+from render.framebuffer import Color, Framebuffer
 from render.png import SRGB, DecodedImage
 from std.testing import (
     TestSuite,
@@ -100,7 +113,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import RADIAN, SECOND, Angle, Duration, Length
+from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 
 
 def test_resolution_and_view() raises:
@@ -975,6 +988,614 @@ def test_water_scene_refuses_bad_steps_and_pictures() raises:
         _ = scene.draw(2, 0, FRAME, False, stones, pitch)
     with assert_raises():
         _ = scene.draw(2, 2, WaterView(8), False, stones, pitch)
+
+
+def _page_camera(width: Int, height: Int) raises -> PerspectiveCamera:
+    # Clearwater's still camera: 1.55 m up, 64 degrees, pitched down 0.72.
+    var camera = PerspectiveCamera(
+        Angle(64.0, DEGREE),
+        Float32(width) / Float32(height),
+        Length(0.01, METER),
+        Length(1000.0, METER),
+    )
+    var pitch = Float32(-0.72)
+    camera.place(
+        Vector3(0, 1.55, 0), Vector3(0, 1.55 + sin(pitch), -cos(pitch))
+    )
+    return camera^
+
+
+def test_composed_water_matches_the_page_camera() raises:
+    # With Clearwater's own camera and an empty depth buffer, composition
+    # draws the LINEAR picture wherever a ray reaches the water.
+    var stones = _stones()
+    var scene = _scene(Duration(5.0, SECOND))
+    var picture = scene.draw(6, 4, LINEAR, False, stones, Angle(-0.72, RADIAN))
+    var image = Framebuffer(6, 4, Color(0, 0, 0))
+    var drawn = scene.compose(
+        image, _page_camera(6, 4), Length(0.0, METER), stones
+    )
+    assert_equal(drawn, 24)
+    for y in range(4):
+        for x in range(6):
+            var a = image.get_pixel(x, y)
+            var b = picture.get_pixel(x, y)
+            assert_true(abs(Int(a.r) - Int(b.r)) <= 2)
+            assert_true(abs(Int(a.g) - Int(b.g)) <= 2)
+            assert_true(abs(Int(a.b) - Int(b.b)) <= 2)
+            assert_true(image.depth_at(x, y) < 1.0)
+
+
+def test_composed_water_respects_the_scene_depth() raises:
+    # A white ball floats above the water in a rendered scene. Water fills
+    # the rest of the view below the horizon; the ball and the sky stay.
+    var width = 16
+    var height = 12
+    var assets = Assets()
+    var world = Scene()
+    var node = world.add(Object3D())
+    world.node(node).set_position(0, 0.6, -2.5)
+    var paint = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    world.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.35, METER), 12, 8)),
+            paint,
+            node,
+        )
+    )
+    world.update()
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(width) / Float32(height),
+        Length(0.05, METER),
+        Length(200.0, METER),
+    )
+    camera.place(Vector3(0, 1.2, 0), Vector3(0, 0.4, -3))
+    var renderer = Renderer(width, height)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(world, assets, camera)
+    var before = image.depth.copy()
+    var ball = camera.screen_matrix(width, height).transform_point(
+        Vector3(0, 0.6, -2.5)
+    )
+    var bx = Int(ball.x)
+    var by = Int(ball.y)
+    assert_equal(image.get_pixel(bx, by).r, 255)
+    var water = _scene(Duration(5.0, SECOND))
+    var drawn = water.compose(image, camera, Length(0.0, METER), _stones())
+    assert_true(drawn > 0)
+    # The ball is nearer than the water behind it, so it keeps its pixel.
+    var kept = image.get_pixel(bx, by)
+    assert_equal(kept.r, 255)
+    assert_equal(kept.g, 255)
+    assert_equal(image.depth_at(bx, by), before[by * width + bx])
+    # The top row looks above the horizon and stays clear.
+    for x in range(width):
+        assert_equal(image.get_pixel(x, 0).r, 0)
+    # The bottom row looks down at the water, which is drawn with depth.
+    for x in range(width):
+        assert_true(image.depth_at(x, height - 1) < 1.0)
+    # Every water pixel holds a depth no farther than before.
+    for i in range(width * height):
+        assert_true(image.depth[i] <= before[i])
+
+
+def test_composition_refuses_unsupported_cameras() raises:
+    var stones = _stones()
+    var water = _scene(Duration(1.0, SECOND))
+    var image = Framebuffer(4, 4, Color(0, 0, 0))
+    var below = _page_camera(4, 4)
+    below.place(Vector3(0, -0.5, 0), Vector3(0, -1, -1))
+    with assert_raises(contains="above the water"):
+        _ = water.compose(image, below, Length(0.0, METER), stones)
+    var level = _page_camera(4, 4)
+    with assert_raises(contains="above the water"):
+        _ = water.compose(image, level, Length(2.0, METER), stones)
+    var flat = OrthographicCamera(
+        Length(-1.0, METER),
+        Length(1.0, METER),
+        Length(1.0, METER),
+        Length(-1.0, METER),
+        Length(0.1, METER),
+        Length(10.0, METER),
+    )
+    flat.place(Vector3(0, 2, 0), Vector3(0, 0, -1))
+    with assert_raises(contains="centered perspective"):
+        _ = water.compose(image, flat, Length(0.0, METER), stones)
+    # A shifted projection is refused, horizontally or vertically.
+    for slot in [8, 9]:
+        var shifted = _page_camera(4, 4)
+        var matrix = shifted.projection_matrix()
+        matrix.elements[slot] = 0.1
+        shifted.projection_override = matrix
+        with assert_raises(contains="centered perspective"):
+            _ = water.compose(image, shifted, Length(0.0, METER), stones)
+
+
+def test_water_scene_takes_the_scene_sun() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var scene = _scene(Duration(5.0, SECOND))
+    var page = scene.draw(4, 3, LINEAR, False, stones, pitch)
+    # A directional light's position minus its target, any length.
+    scene.set_sun(Vector3(0.0, 2.0, 0.0))
+    assert_equal(scene.sun.x, 0.0)
+    assert_equal(scene.sun.y, 1.0)
+    var overhead = scene.draw(4, 3, LINEAR, False, stones, pitch)
+    var changed = 0
+    for y in range(3):
+        for x in range(4):
+            if page.get_pixel(x, y).r != overhead.get_pixel(x, y).r:
+                changed += 1
+    assert_true(changed > 0)
+    # Composition shades with the same sun as the scene's own picture.
+    var image = Framebuffer(4, 3, Color(0, 0, 0))
+    _ = scene.compose(image, _page_camera(4, 3), Length(0.0, METER), stones)
+    for y in range(3):
+        for x in range(4):
+            assert_true(
+                abs(
+                    Int(image.get_pixel(x, y).g)
+                    - Int(overhead.get_pixel(x, y).g)
+                )
+                <= 2
+            )
+    for bad in [
+        Vector3(0, 0, 0),
+        Vector3(0, -1, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, nan[DType.float32](), 0),
+        Vector3(inf[DType.float32](), 1, 0),
+    ]:
+        with assert_raises():
+            scene.set_sun(bad)
+    assert_equal(scene.sun.y, 1.0)
+
+
+def test_composition_skips_water_outside_the_depth_range() raises:
+    # Water nearer than the near plane, or past the far plane, is not drawn.
+    var stones = _stones()
+    var water = _scene(Duration(1.0, SECOND))
+    for near_far in [
+        (Float32(50.0), Float32(100.0)),
+        (Float32(0.01), Float32(0.5)),
+    ]:
+        var camera = PerspectiveCamera(
+            Angle(64.0, DEGREE),
+            1.0,
+            Length(near_far[0], METER),
+            Length(near_far[1], METER),
+        )
+        camera.place(Vector3(0, 1.55, 0), Vector3(0, 0.5, -1))
+        var image = Framebuffer(4, 4, Color(0, 0, 0))
+        assert_equal(
+            water.compose(image, camera, Length(0.0, METER), stones), 0
+        )
+
+
+def _active_scene(clock: Duration) raises -> WaterScene:
+    # The center tap reaches texel centers at this resolution.
+    return WaterScene(
+        SpectrumResolution(64), 2, 4, SpectrumResolution(4), clock
+    )
+
+
+def _assert_same_ripple_state(a: RippleField, b: RippleField) raises:
+    assert_equal(a.n, b.n)
+    assert_equal(a.size, b.size)
+    assert_equal(a.center_x, b.center_x)
+    assert_equal(a.center_z, b.center_z)
+    assert_equal(len(a.height), len(b.height))
+    assert_equal(len(a.velocity), len(b.velocity))
+    assert_equal(len(a.normal), len(b.normal))
+    for i in range(len(a.height)):
+        assert_equal(a.height[i], b.height[i])
+        assert_equal(a.velocity[i], b.velocity[i])
+    for i in range(len(a.normal)):
+        assert_equal(a.normal[i], b.normal[i])
+
+
+def _assert_same_scene_state(a: WaterScene, b: WaterScene) raises:
+    assert_equal(a.start.value, b.start.value)
+    assert_equal(a.clock.value, b.clock.value)
+    assert_equal(a.steps, b.steps)
+    assert_equal(a.sun.x, b.sun.x)
+    assert_equal(a.sun.y, b.sun.y)
+    assert_equal(a.sun.z, b.sun.z)
+    _assert_same_ripple_state(a._ripples, b._ripples)
+
+
+def _assert_active_ripples(scene: WaterScene) raises:
+    var height_changed = False
+    var velocity_changed = False
+    var normal_changed = False
+    for value in scene._ripples.height:
+        height_changed = height_changed or value != 0.0
+    for value in scene._ripples.velocity:
+        velocity_changed = velocity_changed or value != 0.0
+    for value in scene._ripples.normal:
+        normal_changed = normal_changed or value != 0.0
+    assert_true(height_changed)
+    assert_true(velocity_changed)
+    assert_true(normal_changed)
+
+
+def test_water_scene_active_ripples_step_and_replay_exactly() raises:
+    var a = _active_scene(Duration(1.0, SECOND))
+    var b = _active_scene(Duration(1.0, SECOND))
+    var expected = RippleField(SpectrumResolution(64), clearwater_ripple_size())
+    var tick = Duration(1.0 / 60.0, SECOND)
+    var clock = Float32(1.0)
+    for k in range(6):
+        var drop = k % 3 == 0
+        a.advance(tick, drop)
+        b.advance(tick, drop)
+        step_ripple(
+            expected,
+            0.0,
+            0.0,
+            0.5,
+            0.5,
+            0.022,
+            Float32(0.07) if drop else Float32(0.0),
+        )
+        clock += tick.value
+        assert_equal(a.clock.value, clock)
+        assert_equal(a.steps, k + 1)
+        _assert_same_scene_state(a, b)
+        _assert_same_ripple_state(a._ripples, expected)
+        if k == 0:
+            # The first tap changes height before the next step adds velocity.
+            assert_true(a._ripples.height[31 * 64 + 31] < 0.0)
+    _assert_active_ripples(a)
+    a.reset()
+    var fresh = _active_scene(Duration(1.0, SECOND))
+    _assert_same_scene_state(a, fresh)
+    for k in range(6):
+        a.advance(tick, k % 3 == 0)
+        fresh.advance(tick, k % 3 == 0)
+        _assert_same_scene_state(a, fresh)
+    _assert_same_scene_state(a, b)
+
+
+def test_water_scene_draw_preserves_active_ripples() raises:
+    var a = _active_scene(Duration(1.0, SECOND))
+    var b = _active_scene(Duration(1.0, SECOND))
+    var tick = Duration(1.0 / 60.0, SECOND)
+    a.advance(tick, True)
+    b.advance(tick, True)
+    a.advance(tick, False)
+    b.advance(tick, False)
+    _assert_active_ripples(a)
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    for view in [CAUSTICS, LINEAR, FRAME, GLARE]:
+        var picture = a.draw(3, 2, view, False, stones, pitch)
+        _assert_same_scene_state(a, b)
+        _assert_same_picture(picture, a.draw(3, 2, view, False, stones, pitch))
+        _assert_same_scene_state(a, b)
+    for bad in [0, -1]:
+        with assert_raises(contains="dimensions"):
+            _ = a.draw(bad, 2, FRAME, False, stones, pitch)
+        _assert_same_scene_state(a, b)
+        with assert_raises(contains="dimensions"):
+            _ = a.draw(2, bad, FRAME, False, stones, pitch)
+        _assert_same_scene_state(a, b)
+    with assert_raises():
+        _ = a.draw(2, 2, WaterView(8), False, stones, pitch)
+    _assert_same_scene_state(a, b)
+
+
+def test_water_scene_bad_steps_preserve_active_ripples() raises:
+    var a = _active_scene(Duration(3e38, SECOND))
+    var b = _active_scene(Duration(3e38, SECOND))
+    a.advance(Duration(0.0, SECOND), True)
+    b.advance(Duration(0.0, SECOND), True)
+    a.advance(Duration(0.0, SECOND), False)
+    b.advance(Duration(0.0, SECOND), False)
+    _assert_active_ripples(a)
+    for bad in [
+        inf[DType.float32](),
+        -inf[DType.float32](),
+        nan[DType.float32](),
+        -0.5,
+    ]:
+        with assert_raises(contains="time step"):
+            a.advance(Duration(bad, SECOND), True)
+        _assert_same_scene_state(a, b)
+    # Both operands are finite, but their Float32 sum is not.
+    with assert_raises(contains="clock"):
+        a.advance(Duration(3e38, SECOND), True)
+    _assert_same_scene_state(a, b)
+
+
+def test_water_scene_refuses_nonfinite_start_clocks() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    for bad in [
+        inf[DType.float32](),
+        -inf[DType.float32](),
+        nan[DType.float32](),
+    ]:
+        with assert_raises(contains="start clock"):
+            _ = _scene(Duration(bad, SECOND))
+        # Time validation comes before spectrum allocation and validation.
+        with assert_raises(contains="start clock"):
+            _ = WaterScene(
+                SpectrumResolution(3),
+                2,
+                4,
+                SpectrumResolution(4),
+                Duration(bad, SECOND),
+            )
+        for view in [CAUSTICS, LINEAR, FRAME, GLARE]:
+            with assert_raises(contains="start clock"):
+                _ = render_water(
+                    2,
+                    2,
+                    Duration(bad, SECOND),
+                    view,
+                    False,
+                    SpectrumResolution(4),
+                    2,
+                    4,
+                    SpectrumResolution(4),
+                    False,
+                    stones,
+                    pitch,
+                )
+
+
+def test_water_scene_keeps_negative_time_and_lazy_glare() raises:
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var scene = WaterScene(
+        SpectrumResolution(4),
+        2,
+        4,
+        SpectrumResolution(3),
+        Duration(-1.0, SECOND),
+    )
+    assert_equal(scene.clock.value, Float32(-1.0))
+    scene.advance(Duration(0.25, SECOND), True)
+    assert_equal(scene.clock.value, Float32(-0.75))
+    assert_equal(scene.steps, 1)
+    for view in [CAUSTICS, LINEAR]:
+        _assert_same_picture(
+            scene.draw(2, 2, view, False, stones, pitch),
+            render_water(
+                2,
+                2,
+                Duration(-0.75, SECOND),
+                view,
+                False,
+                SpectrumResolution(4),
+                2,
+                4,
+                SpectrumResolution(3),
+                True,
+                stones,
+                pitch,
+            ),
+        )
+    assert_false(Bool(scene._glare))
+    for view in [FRAME, GLARE]:
+        with assert_raises(contains="power of two"):
+            _ = scene.draw(2, 2, view, False, stones, pitch)
+    scene.reset()
+    assert_equal(scene.clock.value, Float32(-1.0))
+    assert_equal(scene.steps, 0)
+
+
+def test_composition_uses_the_attached_camera_parent_transform() raises:
+    var width = 16
+    var height = 12
+    var world = Scene()
+    var pivot = Object3D()
+    pivot.set_position(1.0, 0.25, -0.5)
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(90.0, DEGREE), Angle(0.0, DEGREE))
+    var parent = world.add(pivot^)
+    var eye = Object3D()
+    eye.set_position(0.0, 1.55, 0.0)
+    eye.set_euler(Angle(-0.72, RADIAN), Angle(0.0, RADIAN), Angle(0.0, RADIAN))
+    var node = world.attach(eye^, parent)
+    var assets = Assets()
+    var ball_position = Vector3(-1.5, 0.6, -0.5)
+    var ball_node = world.add(Object3D())
+    world.node(ball_node).set_position(
+        ball_position.x, ball_position.y, ball_position.z
+    )
+    var paint = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    world.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.35, METER), 12, 8)),
+            paint,
+            ball_node,
+        )
+    )
+    world.update()
+    var attached = _page_camera(width, height)
+    attached.attach(node)
+    # The parent's translation and quarter turn carry the pitched eye.
+    var detached = _page_camera(width, height)
+    detached.place(
+        Vector3(1.0, 1.8, -0.5),
+        Vector3(1.0 - cos(Float32(-0.72)), 1.8 + sin(Float32(-0.72)), -0.5),
+    )
+    var attached_view = attached.view_matrix_in(world)
+    var detached_view = detached.view_matrix()
+    for i in range(16):
+        assert_almost_equal(
+            attached_view.elements[i], detached_view.elements[i], atol=1e-6
+        )
+    var renderer = Renderer(width, height)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(world, assets, attached)
+    var expected = renderer.render(world, assets, detached)
+    var ball = detached.screen_matrix(width, height).transform_point(
+        ball_position
+    )
+    var bx = Int(ball.x)
+    var by = Int(ball.y)
+    assert_equal(image.get_pixel(bx, by).r, 255)
+    var before_depth = image.depth.copy()
+    var water = _scene(Duration(5.0, SECOND))
+    var control = _scene(Duration(5.0, SECOND))
+    var stones = _stones()
+    water.set_sun(Vector3(0.0, 2.0, 0.0))
+    control.set_sun(Vector3(0.0, 2.0, 0.0))
+    var count = water.compose(
+        image, world, attached, Length(0.0, METER), stones
+    )
+    var expected_count = control.compose(
+        expected, detached, Length(0.0, METER), stones
+    )
+    assert_true(count > 0)
+    assert_equal(count, expected_count)
+    _assert_same_scene_state(water, control)
+    for i in range(len(image.pixels)):
+        assert_true(abs(Int(image.pixels[i]) - Int(expected.pixels[i])) <= 2)
+    for i in range(len(image.depth)):
+        if isfinite(image.depth[i]):
+            assert_almost_equal(image.depth[i], expected.depth[i], atol=1e-6)
+        else:
+            assert_equal(image.depth[i], expected.depth[i])
+        assert_true(image.depth[i] <= before_depth[i])
+    assert_equal(image.get_pixel(bx, by).r, 255)
+    assert_equal(image.get_pixel(bx, by).g, 255)
+    assert_equal(image.depth_at(bx, by), before_depth[by * width + bx])
+    # The scene-aware overload also preserves detached-camera behavior.
+    var plain = Framebuffer(4, 3, Color(0, 0, 0))
+    var through_scene = Framebuffer(4, 3, Color(0, 0, 0))
+    var camera = _page_camera(4, 3)
+    assert_equal(
+        water.compose(plain, camera, Length(0.0, METER), stones),
+        water.compose(through_scene, world, camera, Length(0.0, METER), stones),
+    )
+    _assert_same_picture(plain, through_scene)
+    for i in range(len(plain.depth)):
+        assert_equal(plain.depth[i], through_scene.depth[i])
+
+
+def test_composition_refuses_stale_or_missing_attached_camera_atomically() raises:
+    var world = Scene()
+    var eye = Object3D()
+    eye.set_position(0.0, 1.55, 0.0)
+    eye.set_euler(Angle(-0.72, RADIAN), Angle(0.0, RADIAN), Angle(0.0, RADIAN))
+    var node = world.add(eye^)
+    var camera = _page_camera(4, 3)
+    camera.attach(node)
+    var water = _active_scene(Duration(5.0, SECOND))
+    var control = _active_scene(Duration(5.0, SECOND))
+    water.advance(Duration(0.0, SECOND), True)
+    control.advance(Duration(0.0, SECOND), True)
+    water.advance(Duration(0.0, SECOND), False)
+    control.advance(Duration(0.0, SECOND), False)
+    _assert_active_ripples(water)
+    var stones = _stones()
+    var image = Framebuffer(4, 3, Color(31, 63, 127))
+    image.depth[0] = -0.5
+    var pixels = image.pixels.copy()
+    var depth = image.depth.copy()
+    for refusal in range(4):
+        if refusal == 1:
+            world.update()
+            world.node(node).set_position(0.0, 2.0, 0.0)
+        elif refusal == 2:
+            world.update()
+            camera.attach(NodeId(999))
+        elif refusal == 3:
+            camera.attach(node)
+        with assert_raises():
+            if refusal == 3:
+                _ = water.compose(image, camera, Length(0.0, METER), stones)
+            else:
+                _ = water.compose(
+                    image, world, camera, Length(0.0, METER), stones
+                )
+        for i in range(len(pixels)):
+            assert_equal(image.pixels[i], pixels[i])
+        for i in range(len(depth)):
+            assert_equal(image.depth[i], depth[i])
+        _assert_same_scene_state(water, control)
+
+
+def test_parallel_water_rows_equal_one_serial_pass() raises:
+    # Disjoint runs of rows shade in parallel with the serial arithmetic.
+    var water = _scene(Duration(5.0, SECOND))
+    water.advance(Duration(1.0 / 60.0, SECOND), True)
+    var bed = _stones()
+    var surface = water._surface()
+    var caustics = water._caustics(surface)
+    var look = camera_look(water.clock, True, Angle(-0.22, RADIAN))
+    var width = 23
+    var height = 37
+    var aspect = Float32(width) / Float32(height)
+    var shown = List[Bool](length=width * height, fill=False)
+    for i in range(0, width * height, 3):
+        shown[i] = True
+    for masked in [False, True]:
+        var mask = shown.copy() if masked else List[Bool]()
+        var parallel = _radiance_image(
+            look,
+            aspect,
+            surface,
+            water._ripples,
+            caustics,
+            bed,
+            water.clock,
+            water.sun,
+            width,
+            height,
+            mask,
+        )
+        var serial = List[Float32](length=width * height * 3, fill=0.0)
+        _radiance_rows(
+            look,
+            aspect,
+            surface,
+            water._ripples,
+            caustics,
+            bed,
+            water.clock,
+            water.sun,
+            width,
+            height,
+            mask,
+            serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            0,
+            height,
+        )
+        for i in range(len(serial)):
+            assert_equal(parallel[i], serial[i])
+        # An unmarked pixel stays zero.
+        if masked:
+            assert_equal(parallel[3], 0.0)
+            assert_true(parallel[0] != 0.0)
+    # Grading runs in parallel too, with the serial arithmetic.
+    var hdr = List[Float32](length=width * height * 3, fill=0.0)
+    var glow = List[Float32](length=width * height * 3, fill=0.0)
+    for i in range(len(hdr)):
+        hdr[i] = Float32(i % 17) * 0.3
+        glow[i] = Float32(i % 5) * 0.01
+    var parallel = _graded_image(
+        hdr, glow, glow, width, height, water.clock, FRAME
+    )
+    var serial = List[Float32](length=width * height * 3, fill=-1.0)
+    _grade_rows(
+        hdr,
+        glow,
+        glow,
+        width,
+        height,
+        water.clock,
+        FRAME,
+        serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        0,
+        height,
+    )
+    for i in range(len(serial)):
+        assert_equal(parallel[i], serial[i])
 
 
 def main() raises:

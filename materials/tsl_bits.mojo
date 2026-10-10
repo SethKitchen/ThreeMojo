@@ -28,6 +28,7 @@ whole numbers, which a float holds exactly up to 2 ** 24. A word is one
 `uint`: a vector of words is a list of `NodeWord`s.
 """
 
+from materials.tsl_check import _expect
 from materials.nodes import (
     NODE_FLOAT,
     NODE_VEC2,
@@ -72,17 +73,6 @@ struct NodeWord(ImplicitlyCopyable, Movable, Writable):
             Whether the halves' ref is zero or more.
         """
         return self.halves.is_valid()
-
-
-def _expect(g: NodeGraph, node: NodeRef, type: ValueType, what: String) raises:
-    """Refuse a node that is not of the type a function reads.
-
-    Raises:
-        Error: If the node is not of this graph or not of `type`.
-    """
-    var got = g.type_of(node)
-    if got != type:
-        raise Error(what + " reads a " + type.name() + ", not a " + got.name())
 
 
 def _check_word(g: NodeGraph, word: NodeWord, what: String) raises:

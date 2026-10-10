@@ -552,6 +552,235 @@ def tube_chain_volume(chain: TubeChain) -> Float32:
     return volume
 
 
+def uniform_tube(a: Vector3, b: Vector3, radius: Float32) -> TubeChain:
+    """Return five equal-radius stations on the straight segment `a` to `b`.
+
+    Args:
+        a: The first end.
+        b: The other end.
+        radius: The radius at every station, in meters.
+
+    Returns:
+        A tube of constant radius.
+    """
+    return TubeChain(
+        a,
+        mix_point(a, b, 0.25),
+        mix_point(a, b, 0.50),
+        mix_point(a, b, 0.75),
+        b,
+        radius,
+        radius,
+        radius,
+        radius,
+        radius,
+    )
+
+
+def uniform_bend(
+    a: Vector3, b: Vector3, c: Vector3, radius: Float32
+) -> TubeChain:
+    """Return five equal-radius stations from `a` to `c` through `b`.
+
+    Args:
+        a: The first end.
+        b: The bend.
+        c: The other end.
+        radius: The radius at every station, in meters.
+
+    Returns:
+        A tube of constant radius.
+    """
+    return TubeChain(
+        a,
+        mix_point(a, b, 0.5),
+        b,
+        mix_point(b, c, 0.5),
+        c,
+        radius,
+        radius,
+        radius,
+        radius,
+        radius,
+    )
+
+
+def tapered_tube(
+    a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
+) -> TubeChain:
+    """Return five stations on a straight tube whose radius changes linearly.
+
+    Args:
+        a: The first end.
+        b: The other end.
+        radius_a: The radius at `a`, in meters.
+        radius_b: The radius at `b`, in meters.
+
+    Returns:
+        A tube whose station radii interpolate from `radius_a` to `radius_b`.
+    """
+    return TubeChain(
+        a,
+        mix_point(a, b, 0.25),
+        mix_point(a, b, 0.50),
+        mix_point(a, b, 0.75),
+        b,
+        radius_a,
+        radius_a + (radius_b - radius_a) * 0.25,
+        radius_a + (radius_b - radius_a) * 0.50,
+        radius_a + (radius_b - radius_a) * 0.75,
+        radius_b,
+    )
+
+
+def blend_six_shafts(
+    point: Vector3,
+    a0: Vector3,
+    b0: Vector3,
+    a1: Vector3,
+    b1: Vector3,
+    a2: Vector3,
+    b2: Vector3,
+    a3: Vector3,
+    b3: Vector3,
+    a4: Vector3,
+    b4: Vector3,
+    a5: Vector3,
+    b5: Vector3,
+    radius: Float32,
+    k: Float32,
+) -> Float32:
+    """Return the smooth union of six equal-radius hair shafts.
+
+    Args:
+        point: The sample, in the same frame as the shafts.
+        a0: The root of the first shaft.
+        b0: The tip of the first shaft.
+        a1: The root of the second shaft.
+        b1: The tip of the second shaft.
+        a2: The root of the third shaft.
+        b2: The tip of the third shaft.
+        a3: The root of the fourth shaft.
+        b3: The tip of the fourth shaft.
+        a4: The root of the fifth shaft.
+        b4: The tip of the fifth shaft.
+        a5: The root of the sixth shaft.
+        b5: The tip of the sixth shaft.
+        radius: The physical radius of every shaft, in meters.
+        k: The smooth-union radius, in meters.
+
+    Returns:
+        The signed distance, in meters. Negative is inside.
+    """
+    var d = sd_segment(point, a0, b0, radius, radius)
+    d = smin(d, sd_segment(point, a1, b1, radius, radius), k)
+    d = smin(d, sd_segment(point, a2, b2, radius, radius), k)
+    d = smin(d, sd_segment(point, a3, b3, radius, radius), k)
+    d = smin(d, sd_segment(point, a4, b4, radius, radius), k)
+    return smin(d, sd_segment(point, a5, b5, radius, radius), k)
+
+
+def bounds_of_six_shafts(
+    a0: Vector3,
+    b0: Vector3,
+    a1: Vector3,
+    b1: Vector3,
+    a2: Vector3,
+    b2: Vector3,
+    a3: Vector3,
+    b3: Vector3,
+    a4: Vector3,
+    b4: Vector3,
+    a5: Vector3,
+    b5: Vector3,
+    radius: Float32,
+    pad: Float32,
+) -> Bounds:
+    """Return a padded box around six hair shafts.
+
+    Args:
+        a0: The root of the first shaft.
+        b0: The tip of the first shaft.
+        a1: The root of the second shaft.
+        b1: The tip of the second shaft.
+        a2: The root of the third shaft.
+        b2: The tip of the third shaft.
+        a3: The root of the fourth shaft.
+        b3: The tip of the fourth shaft.
+        a4: The root of the fifth shaft.
+        b4: The tip of the fifth shaft.
+        a5: The root of the sixth shaft.
+        b5: The tip of the sixth shaft.
+        radius: The radius of every end sphere, in meters.
+        pad: Extra margin after that radius, in meters.
+
+    Returns:
+        The padded bounds.
+    """
+    var box = empty_bounds()
+    box.include_sphere(a0, radius)
+    box.include_sphere(a1, radius)
+    box.include_sphere(a2, radius)
+    box.include_sphere(a3, radius)
+    box.include_sphere(a4, radius)
+    box.include_sphere(a5, radius)
+    box.include_sphere(b0, radius)
+    box.include_sphere(b1, radius)
+    box.include_sphere(b2, radius)
+    box.include_sphere(b3, radius)
+    box.include_sphere(b4, radius)
+    box.include_sphere(b5, radius)
+    return box.padded(pad)
+
+
+def surface_root[
+    field_type: DistanceField
+](
+    skin: field_type, inside: Vector3, outward: Vector3, stature: Float32
+) -> Vector3:
+    """Return where an outward ray leaves a skin field.
+
+    Args:
+        skin: The skin to project onto.
+        inside: A point under the skin, in meters.
+        outward: The ray direction. It is normalized here.
+        stature: Standing height, in meters. The ray is `0.16` of it.
+
+    Returns:
+        The first point of the ray that is outside the skin.
+    """
+    var direction = outward
+    direction.normalize()
+    var low = inside
+    var high = inside + direction * (0.16 * stature)
+    for _ in range(18):  # pragma: no branch
+        var middle = (low + high) * Float32(0.5)
+        if skin.distance(middle) < 0:
+            low = middle
+        else:
+            high = middle
+    return high
+
+
+def enlarge_tube_chain(chain: TubeChain, least: Float32) -> TubeChain:
+    """Return `chain` with each radius held at least to `least`.
+
+    Args:
+        chain: Five stations.
+        least: The smallest radius to keep, in meters.
+
+    Returns:
+        A copy whose radii are at least `least`.
+    """
+    var out = chain
+    out.r0 = max(out.r0, least)
+    out.r1 = max(out.r1, least)
+    out.r2 = max(out.r2, least)
+    out.r3 = max(out.r3, least)
+    out.r4 = max(out.r4, least)
+    return out
+
+
 def _frustum_volume(
     a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
 ) -> Float32:

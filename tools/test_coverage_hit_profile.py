@@ -41,6 +41,14 @@ class CompiledProfileCommands(unittest.TestCase):
         self.assertEqual(dict(os.environ), before)
         build.assert_not_called()
 
+    def test_compiled_profile_limits_an_unbounded_compiler_to_one_thread(self):
+        command = ['mojo', 'run', '-I', str(self.root), str(self.suite), 'arg']
+        prepared, name = profile.prepare_profile(
+            self.root, self.suite, self.root/'cache', 'cc', command, 'aot')
+        self.assertEqual(prepared[:4], ['mojo', 'run', '--num-threads', '1'])
+        self.assertEqual(name, str(self.suite))
+        self.assertEqual(prepared[prepared.index(str(self.suite)) + 1:], ['arg'])
+
     def test_plain_compiled_profile_preserves_source_identity_and_program_args(self):
         command, name = profile.prepare_profile(
             self.root, self.suite, self.root/'cache', 'cc', self.command, 'aot')
@@ -230,8 +238,9 @@ class PhaseObserverTests(unittest.TestCase):
             'native_runtime_launch_request', 'adapter_finish'])
         build, runtime, finish = rows[1:]
         self.assertEqual(build['executable'], str(self.compiler))
-        self.assertEqual(build['argv'][:5], [str(self.compiler), 'build', '-I',
-                                            str(self.root), '-Dliteral=$value; spaced'])
+        # Compiled profiles add one compiler thread when the caller set none.
+        self.assertEqual(build['argv'][:7], [str(self.compiler), 'build', '--num-threads', '1',
+                                            '-I', str(self.root), '-Dliteral=$value; spaced'])
         self.assertEqual(build['argv'][-1], str(self.suite))
         self.assertEqual(runtime['argv'], [str(self.suite)])
         self.assertEqual(runtime['executable'], build['argv'][-2])

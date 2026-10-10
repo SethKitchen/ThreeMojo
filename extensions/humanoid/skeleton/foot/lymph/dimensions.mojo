@@ -22,9 +22,10 @@ Plus y is proximal. Plus x is body-right. Plus z is anterior.
 
 from extensions.humanoid.skeleton.field import (
     DistanceField,
-    TubeChain,
     field_gradient,
     mix_point,
+    uniform_bend,
+    uniform_tube,
 )
 from extensions.humanoid.skeleton.foot.bones.dimensions import (
     FootDimensions,
@@ -198,7 +199,7 @@ def _tubes(dimensions: FootDimensions, part: FootLymph) -> TubeSet:
     var lateral = med * Float32(-1)
     if part == DORSAL_LYMPHATICS:
         return one_tube(
-            _line(
+            uniform_tube(
                 dimensions.mt5_head + Vector3(0, 0.011 * S, 0),
                 dimensions.mt1_head + Vector3(0, 0.011 * S, 0),
                 radius,
@@ -206,7 +207,7 @@ def _tubes(dimensions: FootDimensions, part: FootLymph) -> TubeSet:
         )
     if part == PLANTAR_LYMPHATICS:
         return one_tube(
-            _line(
+            uniform_tube(
                 dimensions.heel + Vector3(0, Float32(-0.008) * S, 0.012 * S),
                 dimensions.mt3_head + Vector3(0, Float32(-0.006) * S, 0),
                 radius,
@@ -219,7 +220,7 @@ def _tubes(dimensions: FootDimensions, part: FootLymph) -> TubeSet:
             + Vector3(0, 0.006 * S, 0.008 * S)
         )
         return one_tube(
-            _via(
+            uniform_bend(
                 dimensions.navicular_tuberosity + Vector3(0, 0.006 * S, 0),
                 front,
                 front + Vector3(0, 0.028 * S, 0.002 * S),
@@ -232,42 +233,10 @@ def _tubes(dimensions: FootDimensions, part: FootLymph) -> TubeSet:
         + Vector3(0, 0.004 * S, Float32(-0.006) * S)
     )
     return one_tube(
-        _via(
+        uniform_bend(
             dimensions.mt5_head + Vector3(0, 0.008 * S, 0),
             behind,
             behind + Vector3(0, 0.026 * S, Float32(-0.002) * S),
             radius,
         )
-    )
-
-
-def _line(a: Vector3, b: Vector3, radius: Float32) -> TubeChain:
-    """Return five stations on a straight trunk."""
-    return TubeChain(
-        a,
-        mix_point(a, b, 0.25),
-        mix_point(a, b, 0.50),
-        mix_point(a, b, 0.75),
-        b,
-        radius,
-        radius,
-        radius,
-        radius,
-        radius,
-    )
-
-
-def _via(a: Vector3, b: Vector3, c: Vector3, radius: Float32) -> TubeChain:
-    """Return five stations from `a` to `c` through `b`."""
-    return TubeChain(
-        a,
-        mix_point(a, b, 0.5),
-        b,
-        mix_point(b, c, 0.5),
-        c,
-        radius,
-        radius,
-        radius,
-        radius,
-        radius,
     )

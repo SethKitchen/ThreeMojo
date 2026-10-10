@@ -29,6 +29,8 @@ from generators.utils import (
     PartId,
     Vec3d,
     compose_matrix,
+    angle_radians as _a,
+    length_meters as _l,
     meters,
     part,
     unit_vectors_quaternion,
@@ -41,7 +43,7 @@ from geometries.sphere import sphere
 from geometries.utils import merge_geometries, merge_vertices
 from math.matrix4 import Matrix4
 from std.math import floor, pi, sin, sqrt
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Length, METER
 
 # A streetlight's parts.
 comptime LIGHT_METAL = PartId(0)
@@ -71,16 +73,6 @@ comptime TREE_GRATE = PartId(2)
 comptime CROWN_CENTER_Y = 3.9
 comptime CROWN_CENTER_Z = 0.1
 comptime CROWN_RADIUS = 3.1
-
-
-def _l(value: Float64) -> Length:
-    """Return a number of meters as a length."""
-    return Length(Float32(value), METER)
-
-
-def _a(value: Float64) -> Angle:
-    """Return a number of radians as an angle."""
-    return Angle(Float32(value), RADIAN)
 
 
 def _moved(

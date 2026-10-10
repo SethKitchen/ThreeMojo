@@ -62,6 +62,9 @@ def kind(path):
         return 'coverage_tools'
     if path == 'tools/check_portability.py':
         return 'portability'
+    if path in {'assets/carla/tools/carla_assets.py',
+                'assets/carla/tools/test_carla_assets.py'}:
+        return 'tools'
     if path.startswith('assets/carla/tools/export/'):
         return 'export'
     # These generators have exact compiler-free replay gates in test-tools.

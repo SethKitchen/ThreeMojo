@@ -23,6 +23,7 @@ fragment here has no local position. For a mesh at the origin, the two
 are the same. Otherwise, give the position and the normal.
 """
 
+from materials.tsl_check import _expect
 from materials.nodes import (
     NODE_FLOAT,
     NODE_SAMPLER,
@@ -34,17 +35,6 @@ from materials.nodes import (
 )
 from math.euler import AXIS_X, AXIS_Y, EulerOrder, XYZ
 from std.math import pi
-
-
-def _expect(g: NodeGraph, node: NodeRef, type: ValueType, what: String) raises:
-    """Refuse a node that is not of the type a function reads.
-
-    Raises:
-        Error: If the node is not of this graph or not of `type`.
-    """
-    var got = g.type_of(node)
-    if got != type:
-        raise Error(what + " reads a " + type.name() + ", not a " + got.name())
 
 
 def _or(

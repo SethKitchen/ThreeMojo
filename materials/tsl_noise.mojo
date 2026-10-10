@@ -21,6 +21,7 @@ the CPU and the GPU run it with the one interpreter.
 and gives the values the tests check.
 """
 
+from materials.tsl_check import _expect
 from materials.nodes import (
     NODE_FLOAT,
     NODE_VEC2,
@@ -31,17 +32,6 @@ from materials.nodes import (
     ValueType,
 )
 from std.math import pi
-
-
-def _expect(g: NodeGraph, node: NodeRef, type: ValueType, what: String) raises:
-    """Refuse a node that is not of the type a function reads.
-
-    Raises:
-        Error: If the node is not of this graph or not of `type`.
-    """
-    var got = g.type_of(node)
-    if got != type:
-        raise Error(what + " reads a " + type.name() + ", not a " + got.name())
 
 
 # --- triNoise3D ---------------------------------------------------------------

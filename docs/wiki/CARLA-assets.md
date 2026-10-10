@@ -185,6 +185,48 @@ python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/A
 Hosting durability is tracked in [#309](https://github.com/SethKitchen/ThreeMojo/issues/309).
 The current share links are not a durable distribution guarantee.
 
+## Stage renders for sharing
+
+Use `stage-render` to copy named render files into a new distribution directory:
+
+```sh
+python3 assets/carla/tools/carla_assets.py stage-render --output /tmp/carla-distribution out/carla.png out/carla_rgb.png
+```
+
+The directory contains only the named files, copied by basename,
+`manifest.json`, and `ATTRIBUTION.md`.
+The render files and manifest keep their exact bytes.
+The attribution uses the same manifest snapshot and includes all entries.
+This catalog does not prove which assets appear in an image.
+
+For historical renders, select the manifest that corresponds to those renders:
+
+```sh
+python3 assets/carla/tools/carla_assets.py --manifest /path/to/historical-manifest.json stage-render --output /tmp/historical-distribution /path/to/render.png
+```
+
+Keep the source files unchanged while the command runs.
+The manifest and render inputs must be regular files, not symbolic links.
+The output directory must not exist, even if it would be empty.
+Its parent directory must already exist.
+Duplicate input files and case-insensitive basename collisions are refused.
+The names `manifest.json` and `ATTRIBUTION.md` are reserved, regardless of case.
+
+The command checks every input before it creates the output directory.
+It never replaces an existing output file.
+A successful command returns zero and creates the complete distribution.
+
+If staging fails after directory creation, the command returns an error with the output path.
+It retains all partial output and does not delete any directory entries.
+This preserves files another process adds or replaces during the failure.
+Inspect the retained directory and remove unwanted files manually.
+Use a new directory for the next attempt.
+
+This command does not render, export, download, or inspect the asset cache.
+It does not change archive checksums or create sidecars beside source renders.
+The existing `credits` command is unchanged.
+Staging a distribution does not provide a hosted mirror or close #309.
+
 ## Hosting work still required
 
 Offline recovery does not provide a hosted mirror.

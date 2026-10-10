@@ -136,6 +136,24 @@ def _finish_phases(phases):
                 pass
 
 
+def _isolate_compiler_cache(environment):
+    """Give this capture a private Mojo cache.
+
+    Parallel captures otherwise share one compiler cache and can stop
+    before the compiler writes a diagnostic. The directory is inside the
+    capture's temporary root and disappears with it.
+    """
+    root = environment.get('THREEMOJO_TEST_TMPDIR')
+    if not root:
+        return
+    compiler = Path(root) / 'mojo-cache'
+    xdg = Path(root) / 'xdg-cache'
+    compiler.mkdir(parents=True, exist_ok=True)
+    xdg.mkdir(parents=True, exist_ok=True)
+    environment['MODULAR_CACHE_DIR'] = str(compiler)
+    environment['XDG_CACHE_HOME'] = str(xdg)
+
+
 def shared_deadline():
     """Read the group's absolute clock deadline, never a fresh suite budget."""
     value = os.environ.get(DEADLINE_ENV)
@@ -460,6 +478,7 @@ def capture(command, out_path, err_path, *, progress_interval=60, loop_proof=Non
     try:
         with isolated_environment() as environment, open(out_path, 'wb') as output, gzip.open(err_path, 'wb', compresslevel=1) as errors:
             phases = _prepare_phases(command, out_path, proof, environment)
+            _isolate_compiler_cache(environment)
             with _CaptureProcess(command, output, environment, deadline) as process:
                 try:
                     reducer = Reducer(errors.write)

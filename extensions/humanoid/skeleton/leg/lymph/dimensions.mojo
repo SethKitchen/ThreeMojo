@@ -28,12 +28,12 @@ from extensions.humanoid.skeleton.field import (
     mix_point,
     sd_sphere,
     smin,
+    enlarge_tube_chain,
     tube_chain_bounds,
     tube_chain_distance,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
 from math.vector3 import Vector3
-from std.math import max
 
 
 @fieldwise_init
@@ -339,12 +339,12 @@ def _display_lymph_field(
     var field = LymphField(dimensions, part)
     if not field.nodes:
         var least = 0.0018 * dimensions.stature.value
-        field.chain = _display_chain(field.chain, least)
-        field.chain2 = _display_chain(field.chain2, least)
+        field.chain = enlarge_tube_chain(field.chain, least)
+        field.chain2 = enlarge_tube_chain(field.chain2, least)
         if field.chain_count >= 3:
-            field.chain3 = _display_chain(field.chain3, least)
+            field.chain3 = enlarge_tube_chain(field.chain3, least)
         if field.chain_count >= 4:
-            field.chain4 = _display_chain(field.chain4, least)
+            field.chain4 = enlarge_tube_chain(field.chain4, least)
         field.k = 0.0006 * dimensions.stature.value
         field.epsilon = Float32(0.25) * least
         var box = tube_chain_bounds(field.chain, 0.008 + least)
@@ -356,17 +356,6 @@ def _display_lymph_field(
         field.low = box.low
         field.high = box.high
     return field
-
-
-def _display_chain(chain: TubeChain, least: Float32) -> TubeChain:
-    """Return `chain` with every radius at least `least`."""
-    var out = chain
-    out.r0 = max(out.r0, least)
-    out.r1 = max(out.r1, least)
-    out.r2 = max(out.r2, least)
-    out.r3 = max(out.r3, least)
-    out.r4 = max(out.r4, least)
-    return out
 
 
 def _include_chain_bounds(mut box: Bounds, chain: TubeChain):

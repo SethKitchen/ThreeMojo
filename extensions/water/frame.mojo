@@ -57,9 +57,14 @@ from extensions.water.view import (
     WaterView,
     require_view,
 )
+from cameras.camera import Camera
+from core.scene import Scene
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.tasks import TaskGroup
 from std.math import cos, exp, isfinite, pow, sin, sqrt, tan
+from std.sys import num_logical_cores
 from units.si import DEGREE, SECOND, Angle, Duration, Length
 
 # The page's ocean patch, water depth and root-mean-square slope.
@@ -141,6 +146,260 @@ def camera_look(clock: Duration, sway: Bool, pitch: Angle) -> CameraLook:
     )
 
 
+@fieldwise_init
+struct _SurfaceHit(ImplicitlyCopyable):
+    # The view direction after the horizon clamp, the distance along it, and
+    # the wave point it reaches: x and z on the plane, height above it.
+    var direction: Vector3
+    var distance: Float32
+    var x: Float32
+    var z: Float32
+    var height: Float32
+
+
+def _radiance_image(
+    look: CameraLook,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: List[Bool],
+) -> List[Float32]:
+    """Shade every pixel, or the pixels `shown` marks, into linear RGB.
+
+    Disjoint runs of rows shade in parallel. Each pixel has one writer and
+    the serial arithmetic, so the image is the serial one. An unmarked
+    pixel stays zero. An empty `shown` marks every pixel.
+    """
+    var hdr = List[Float32](length=width * height * 3, fill=0.0)
+    # Sky rows cost far less than water rows, so small runs of rows balance
+    # the threads. Each task gets at least one row, because tasks <= height.
+    var tasks = min(num_logical_cores() * 8, height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _radiance_task(
+                look,
+                aspect,
+                Pointer(to=surface).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=ripples).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=caustics).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=bed).unsafe_origin_cast[ImmutAnyOrigin](),
+                clock,
+                sun,
+                width,
+                height,
+                Pointer(to=shown).unsafe_origin_cast[ImmutAnyOrigin](),
+                hdr.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return hdr^
+
+
+async def _radiance_task(
+    look: CameraLook,
+    aspect: Float32,
+    surface: Pointer[SurfaceField, ImmutAnyOrigin],
+    ripples: Pointer[RippleField, ImmutAnyOrigin],
+    caustics: Pointer[CausticField, ImmutAnyOrigin],
+    bed: Pointer[PebbleBed, ImmutAnyOrigin],
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: Pointer[List[Bool], ImmutAnyOrigin],
+    hdr: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    _radiance_rows(
+        look,
+        aspect,
+        surface[],
+        ripples[],
+        caustics[],
+        bed[],
+        clock,
+        sun,
+        width,
+        height,
+        shown[],
+        hdr,
+        first,
+        past,
+    )
+
+
+def _radiance_rows(
+    look: CameraLook,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    sun: Vector3,
+    width: Int,
+    height: Int,
+    shown: List[Bool],
+    hdr: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Shade rows `first` up to `past` into `hdr`."""
+    var every = len(shown) == 0
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            if not every and not shown[y * width + x]:
+                continue
+            var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
+            var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+            var rgb = _lit_radiance(
+                look,
+                ndc_x,
+                ndc_y,
+                aspect,
+                surface,
+                ripples,
+                caustics,
+                bed,
+                clock,
+                2.0 / Float32(width),
+                2.0 / Float32(height),
+                sun,
+            )
+            var p = (y * width + x) * 3
+            hdr[unsafe_offset=p] = rgb.x
+            hdr[unsafe_offset=p + 1] = rgb.y
+            hdr[unsafe_offset=p + 2] = rgb.z
+
+
+def _graded_image(
+    hdr: List[Float32],
+    glare: List[Float32],
+    bloom: List[Float32],
+    width: Int,
+    height: Int,
+    clock: Duration,
+    view: WaterView,
+) -> List[Float32]:
+    """Grade every pixel, in parallel runs of rows, as `grade_pixel` does.
+
+    Each pixel has one writer and the serial arithmetic.
+    """
+    var graded = List[Float32](length=width * height * 3, fill=0.0)
+    # Sky rows cost far less than water rows, so small runs of rows balance
+    # the threads. Each task gets at least one row, because tasks <= height.
+    var tasks = min(num_logical_cores() * 8, height)
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _grade_task(
+                Pointer(to=hdr).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=glare).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=bloom).unsafe_origin_cast[ImmutAnyOrigin](),
+                width,
+                height,
+                clock,
+                view,
+                graded.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                task * height // tasks,
+                (task + 1) * height // tasks,
+            )
+        )
+    group.wait()
+    return graded^
+
+
+async def _grade_task(
+    hdr: Pointer[List[Float32], ImmutAnyOrigin],
+    glare: Pointer[List[Float32], ImmutAnyOrigin],
+    bloom: Pointer[List[Float32], ImmutAnyOrigin],
+    width: Int,
+    height: Int,
+    clock: Duration,
+    view: WaterView,
+    graded: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    _grade_rows(
+        hdr[], glare[], bloom[], width, height, clock, view, graded, first, past
+    )
+
+
+def _grade_rows(
+    hdr: List[Float32],
+    glare: List[Float32],
+    bloom: List[Float32],
+    width: Int,
+    height: Int,
+    clock: Duration,
+    view: WaterView,
+    graded: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Grade rows `first` up to `past` into `graded`."""
+    for y in range(first, past):  # pragma: no branch
+        for x in range(width):  # pragma: no branch
+            var p = (y * width + x) * 3
+            var rgb = grade_pixel(
+                hdr[p],
+                hdr[p + 1],
+                hdr[p + 2],
+                glare[p],
+                glare[p + 1],
+                glare[p + 2],
+                bloom[p],
+                bloom[p + 1],
+                bloom[p + 2],
+                x,
+                y,
+                width,
+                height,
+                clock,
+                view,
+            )
+            graded[unsafe_offset=p] = rgb.x
+            graded[unsafe_offset=p + 1] = rgb.y
+            graded[unsafe_offset=p + 2] = rgb.z
+
+
+def _surface_hit(
+    look: CameraLook,
+    ndc_x: Float32,
+    ndc_y: Float32,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+) -> _SurfaceHit:
+    # Three fixed-point steps from the flat plane onto the waves.
+    var rd = _ray(look, ndc_x, ndc_y, aspect)
+    var wdy = rd.y
+    if wdy > -0.0015:
+        wdy = -0.0015
+    var wd = _unit(rd.x, wdy, rd.z)
+    var t = -look.py / wd.y
+    var hit_x = Float32(0.0)
+    var hit_z = Float32(0.0)
+    var height = Float32(0.0)
+    for _step in range(3):  # pragma: no branch
+        hit_x = look.px + wd.x * t
+        hit_z = look.pz + wd.z * t
+        height = _wave_height(surface, ripples, hit_x, hit_z)
+        t = (height - look.py) / wd.y
+    return _SurfaceHit(wd, t, hit_x, hit_z, height)
+
+
 def water_radiance(
     look: CameraLook,
     ndc_x: Float32,
@@ -172,20 +431,62 @@ def water_radiance(
     Returns:
         Linear radiance before grading.
     """
+    return _lit_radiance(
+        look,
+        ndc_x,
+        ndc_y,
+        aspect,
+        surface,
+        ripples,
+        caustics,
+        bed,
+        clock,
+        pixel_x,
+        pixel_y,
+        sun_direction(),
+    )
+
+
+def _lit_radiance(
+    look: CameraLook,
+    ndc_x: Float32,
+    ndc_y: Float32,
+    aspect: Float32,
+    surface: SurfaceField,
+    ripples: RippleField,
+    caustics: CausticField,
+    bed: PebbleBed,
+    clock: Duration,
+    pixel_x: Float32,
+    pixel_y: Float32,
+    sun: Vector3,
+) -> Vector3:
+    """Shade one view ray under the sun toward `sun`.
+
+    Args:
+        look: The camera basis.
+        ndc_x: Horizontal normalized coordinate, -1 to 1.
+        ndc_y: Vertical normalized coordinate, -1 at the bottom.
+        aspect: Width over height.
+        surface: The ocean FFT surface.
+        ripples: The local wave-equation window.
+        caustics: The refracted-grid texture.
+        bed: The pebble photograph.
+        clock: Frame time, used by the suspended specks.
+        pixel_x: Normalized width of one pixel. Zero skips the mip footprint.
+        pixel_y: Normalized height of one pixel. Zero skips the mip footprint.
+        sun: The unit direction toward the sun. Y is up.
+
+    Returns:
+        Linear radiance before grading.
+    """
     var rd = _ray(look, ndc_x, ndc_y, aspect)
-    var wdy = rd.y
-    if wdy > -0.0015:
-        wdy = -0.0015
-    var wd = _unit(rd.x, wdy, rd.z)
-    var t = -look.py / wd.y
-    var hit_x = Float32(0.0)
-    var hit_z = Float32(0.0)
-    var height = Float32(0.0)
-    for _step in range(3):  # pragma: no branch
-        hit_x = look.px + wd.x * t
-        hit_z = look.pz + wd.z * t
-        height = _wave_height(surface, ripples, hit_x, hit_z)
-        t = (height - look.py) / wd.y
+    var hit = _surface_hit(look, ndc_x, ndc_y, aspect, surface, ripples)
+    var wd = hit.direction
+    var t = hit.distance
+    var hit_x = hit.x
+    var hit_z = hit.z
+    var height = hit.height
     var foot = _footprint(look, ndc_x, ndc_y, aspect, height, pixel_x, pixel_y)
     var slope = _wave_slope(
         surface, ripples, hit_x, hit_z, t, foot[0], foot[1], foot[2], foot[3]
@@ -207,7 +508,6 @@ def water_radiance(
     var reflected = _reflect(wd.x, wd.y, wd.z, normal)
     if reflected.y < 0.0:
         reflected = Vector3(reflected.x, -reflected.y, reflected.z)
-    var sun = sun_direction()
     var sky = sky_radiance(reflected.x, reflected.y, reflected.z, sun)
     var refl = sky * 1.25
     var variance = slope.z
@@ -844,6 +1144,8 @@ struct WaterScene(Movable):
     """Seconds since the start of the simulation."""
     var steps: Int
     """How many times `advance` has stepped the ripples since a reset."""
+    var sun: Vector3
+    """The unit direction toward the sun. Y is up. See `set_sun`."""
     var _spectrum: ComplexField
     var _ripples: RippleField
     var _glare: Optional[GlareKernels]
@@ -863,11 +1165,13 @@ struct WaterScene(Movable):
             caustic_grid: Ray-grid cells on one side.
             caustic_resolution: Caustic texels on one side.
             glare_resolution: Diffraction FFT size.
-            start: The clock of the first frame.
+            start: The finite clock of the first frame. It can be negative.
 
         Raises:
-            Error: If a resolution is not valid.
+            Error: If a resolution is not valid, or `start` is not finite.
         """
+        if not isfinite(start.value):
+            raise Error("A water start clock must be finite")
         self.ocean = ocean
         self.caustic_grid = caustic_grid
         self.caustic_resolution = caustic_resolution
@@ -875,6 +1179,7 @@ struct WaterScene(Movable):
         self.start = start
         self.clock = start
         self.steps = 0
+        self.sun = sun_direction()
         self._spectrum = build_spectrum(
             ocean, Length(_PATCH_METERS), _TARGET_SLOPE
         )
@@ -893,6 +1198,29 @@ struct WaterScene(Movable):
         self.clock = self.start
         self.steps = 0
 
+    def set_sun(mut self, toward: Vector3) raises:
+        """Light the water from the direction `toward`, such as a scene's
+        directional light: its position minus its target.
+
+        Args:
+            toward: A finite direction toward the sun, above the horizon.
+                It does not need unit length.
+
+        Raises:
+            Error: If the direction is not finite, has zero length, or does
+                not point above the horizon.
+        """
+        var length = sqrt(
+            toward.x * toward.x + toward.y * toward.y + toward.z * toward.z
+        )
+        if not (isfinite(length) and length > 0.0):
+            raise Error("A water sun direction must be finite and nonzero")
+        if not (toward.y > 0.0):
+            raise Error("A water sun must be above the horizon")
+        self.sun = Vector3(
+            toward.x / length, toward.y / length, toward.z / length
+        )
+
     def advance(mut self, dt: Duration, drop: Bool) raises:
         """Step the ripple equation once, then move the clock by `dt`.
 
@@ -902,14 +1230,241 @@ struct WaterScene(Movable):
             drop: True taps the middle of the ripple window this step.
 
         Raises:
-            Error: If `dt` is not finite or is negative.
+            Error: If `dt` is not finite or is negative, or the next clock
+                is not finite. The simulation does not change on refusal.
         """
         if not (isfinite(dt.value) and dt.value >= 0):
             raise Error("A water time step must be finite and nonnegative")
+        var next_clock = self.clock.value + dt.value
+        if not isfinite(next_clock):
+            raise Error("The next water clock must be finite")
         var strength = Float32(0.07) if drop else Float32(0.0)
         step_ripple(self._ripples, 0.0, 0.0, 0.5, 0.5, 0.022, strength)
-        self.clock = Duration(self.clock.value + dt.value, SECOND)
+        self.clock = Duration(next_clock, SECOND)
         self.steps += 1
+
+    def _surface(self) raises -> SurfaceField:
+        var evolved = evolve_spectrum(
+            self._spectrum, Length(_PATCH_METERS), shader_time(self.clock)
+        )
+        return SurfaceField(
+            Length(_PATCH_METERS), resolve_surface(fft2(evolved, 1.0))
+        )
+
+    def _caustics(self, surface: SurfaceField) raises -> CausticField:
+        return render_caustics(
+            surface,
+            self.sun,
+            Length(_DEPTH_METERS),
+            self.caustic_grid,
+            self.caustic_resolution,
+        )
+
+    def compose[
+        C: Camera
+    ](
+        mut self,
+        mut image: Framebuffer,
+        camera: C,
+        water_level: Length,
+        bed: PebbleBed,
+    ) raises -> Int:
+        """Draw the water into a rendered scene where the water is nearest.
+
+        Each pixel casts the scene camera's own ray. A ray that reaches the
+        water surface shades it as `draw` does for `LINEAR`, then tests its
+        depth against `image`. Opaque geometry nearer than the water keeps
+        its pixel, and water nearer than the geometry replaces it and writes
+        its depth. A ray at or above the horizon leaves the pixel alone. The
+        water is an endless plane at `water_level` that repeats the ocean
+        patch. It uses the direction set by `set_sun`.
+
+        Parameters:
+            C: The camera type.
+
+        Args:
+            image: The rendered scene, with its depth buffer. It is changed.
+            camera: The camera that rendered `image`. It must be a centered
+                perspective camera above the water, not attached to a node.
+                Use the scene overload for an attached camera.
+            water_level: The world height of the still water plane.
+            bed: The pebble photograph.
+
+        Returns:
+            How many pixels now show water.
+
+        Raises:
+            Error: If the camera is not a centered perspective camera, it
+                is not above the water, is attached, or a matrix is invalid.
+        """
+        return self._compose_view(
+            image,
+            camera.projection_matrix(),
+            camera.view_matrix(),
+            water_level,
+            bed,
+        )
+
+    def compose[
+        C: Camera
+    ](
+        mut self,
+        mut image: Framebuffer,
+        scene: Scene,
+        camera: C,
+        water_level: Length,
+        bed: PebbleBed,
+    ) raises -> Int:
+        """Compose water through the same camera and scene as the renderer.
+
+        Resolve the camera's view before changing the framebuffer. An
+        attached camera uses its node's current world transform, including
+        its parents. A detached camera keeps the placement from `place`.
+
+        Parameters:
+            C: The camera type.
+
+        Args:
+            image: The rendered scene, with its depth buffer. It is changed.
+            scene: The scene that was rendered, with current world matrices.
+            camera: The centered perspective camera that rendered `image`.
+                It must be above the water. It can be attached to a node.
+            water_level: The world height of the still water plane.
+            bed: The pebble photograph.
+
+        Returns:
+            How many pixels now show water.
+
+        Raises:
+            Error: If the camera's view is invalid, its node is absent, or
+                the attached scene is stale. Also if the projection is not
+                centered perspective, or the camera is not above the water.
+        """
+        return self._compose_view(
+            image,
+            camera.projection_matrix(),
+            camera.view_matrix_in(scene),
+            water_level,
+            bed,
+        )
+
+    def _compose_view(
+        mut self,
+        mut image: Framebuffer,
+        projection: Matrix4,
+        view: Matrix4,
+        water_level: Length,
+        bed: PebbleBed,
+    ) raises -> Int:
+        # Both public paths resolve exactly one view before any image writes.
+        ref p = projection.elements
+        if p[11] != -1.0 or p[8] != 0.0 or p[9] != 0.0:
+            raise Error("Water composition needs a centered perspective camera")
+        var world = view
+        world.invert()
+        ref w = world.elements
+        var above = w[13] - water_level.value
+        if not (above > 0.0):
+            raise Error("The camera must be above the water")
+        # Scale the basis so the fixed Clearwater field of view in `_ray`
+        # reproduces this camera's projection exactly.
+        var tan_f = tan(Angle(32.0, DEGREE).value)
+        var aspect = Float32(image.width) / Float32(image.height)
+        var sx = (1.0 / p[0]) / (aspect * tan_f)
+        var sy = (1.0 / p[5]) / tan_f
+        var look = CameraLook(
+            -w[8],
+            -w[9],
+            -w[10],
+            w[0] * sx,
+            w[1] * sx,
+            w[2] * sx,
+            w[4] * sy,
+            w[5] * sy,
+            w[6] * sy,
+            w[12],
+            above,
+            w[14],
+        )
+        var clip = projection
+        clip.multiply(view)
+        var surface = self._surface()
+        var caustics = self._caustics(surface)
+        var clock = self.clock
+        var width = image.width
+        var height = image.height
+        # The depth test writes as it goes, so it stays in pixel order.
+        # Only the pixels that pass are shaded, in parallel.
+        var shown = List[Bool](length=width * height, fill=False)
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
+                var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
+                var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
+                if _ray(look, ndc_x, ndc_y, aspect).y > -0.0015:
+                    continue
+                var hit = _surface_hit(
+                    look, ndc_x, ndc_y, aspect, surface, self._ripples
+                )
+                var point = Vector3(
+                    w[12] + hit.direction.x * hit.distance,
+                    w[13] + hit.direction.y * hit.distance,
+                    w[14] + hit.direction.z * hit.distance,
+                )
+                var z = clip.transform_point(point).z
+                if not (z >= -1.0 and z <= 1.0) or not image.test_depth(
+                    x, y, z
+                ):
+                    continue
+                shown[y * width + x] = True
+        var hdr = _radiance_image(
+            look,
+            aspect,
+            surface,
+            self._ripples,
+            caustics,
+            bed,
+            clock,
+            self.sun,
+            width,
+            height,
+            shown,
+        )
+        var drawn = 0
+        for y in range(height):  # pragma: no branch
+            for x in range(width):  # pragma: no branch
+                if not shown[y * width + x]:
+                    continue
+                var p = (y * width + x) * 3
+                var rgb = Vector3(hdr[p], hdr[p + 1], hdr[p + 2])
+                var graded = grade_pixel(
+                    rgb.x,
+                    rgb.y,
+                    rgb.z,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    x,
+                    y,
+                    width,
+                    height,
+                    clock,
+                    LINEAR,
+                )
+                image.set_pixel(
+                    x,
+                    y,
+                    FloatColor(
+                        clamp01(graded.x),
+                        clamp01(graded.y),
+                        clamp01(graded.z),
+                        1.0,
+                    ).quantize(),
+                )
+                drawn += 1
+        return drawn
 
     def draw(
         mut self,
@@ -941,46 +1496,25 @@ struct WaterScene(Movable):
             raise Error("Water image dimensions must be positive")
         require_view(view)
         var clock = self.clock
-        var evolved = evolve_spectrum(
-            self._spectrum, Length(_PATCH_METERS), shader_time(clock)
-        )
-        var surface = SurfaceField(
-            Length(_PATCH_METERS), resolve_surface(fft2(evolved, 1.0))
-        )
-        var sun = sun_direction()
-        var caustics = render_caustics(
-            surface,
-            sun,
-            Length(_DEPTH_METERS),
-            self.caustic_grid,
-            self.caustic_resolution,
-        )
+        var surface = self._surface()
+        var caustics = self._caustics(surface)
         if view == CAUSTICS:
             return _caustic_picture(width, height, caustics)
-        var hdr = List[Float32](length=width * height * 3, fill=0.0)
         var look = camera_look(clock, sway, pitch)
         var aspect = Float32(width) / Float32(height)
-        for y in range(height):  # pragma: no branch
-            for x in range(width):  # pragma: no branch
-                var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
-                var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
-                var rgb = water_radiance(
-                    look,
-                    ndc_x,
-                    ndc_y,
-                    aspect,
-                    surface,
-                    self._ripples,
-                    caustics,
-                    bed,
-                    clock,
-                    2.0 / Float32(width),
-                    2.0 / Float32(height),
-                )
-                var p = (y * width + x) * 3
-                hdr[p] = rgb.x
-                hdr[p + 1] = rgb.y
-                hdr[p + 2] = rgb.z
+        var hdr = _radiance_image(
+            look,
+            aspect,
+            surface,
+            self._ripples,
+            caustics,
+            bed,
+            clock,
+            self.sun,
+            width,
+            height,
+            List[Bool](),
+        )
         var bright = _highlights(hdr, width, height, 2.5)
         var bloom = _blur(
             _blur(bright, width, height, True), width, height, False
@@ -993,34 +1527,20 @@ struct WaterScene(Movable):
             for i in range(len(sparks)):  # pragma: no branch
                 sparks[i] *= 0.001
             glare = apply_glare(sparks, width, height, self._glare.value())
+        var graded = _graded_image(
+            hdr, glare, bloom, width, height, clock, view
+        )
         var image = Framebuffer(width, height, Color(0, 0, 0))
         for y in range(height):  # pragma: no branch
             for x in range(width):  # pragma: no branch
                 var p = (y * width + x) * 3
-                var graded = grade_pixel(
-                    hdr[p],
-                    hdr[p + 1],
-                    hdr[p + 2],
-                    glare[p],
-                    glare[p + 1],
-                    glare[p + 2],
-                    bloom[p],
-                    bloom[p + 1],
-                    bloom[p + 2],
-                    x,
-                    y,
-                    width,
-                    height,
-                    clock,
-                    view,
-                )
                 image.set_pixel(
                     x,
                     y,
                     FloatColor(
-                        clamp01(graded.x),
-                        clamp01(graded.y),
-                        clamp01(graded.z),
+                        clamp01(graded[p]),
+                        clamp01(graded[p + 1]),
+                        clamp01(graded[p + 2]),
                         1.0,
                     ).quantize(),
                 )
@@ -1049,7 +1569,7 @@ def render_water(
     Args:
         width: Image width in pixels. It must be positive.
         height: Image height in pixels. It must be positive.
-        clock: Seconds since the start.
+        clock: Finite seconds since the start. It can be negative.
         view: Which picture. See `WaterView`.
         sway: True adds the idle camera bob.
         ocean: Spectrum resolution.
@@ -1065,7 +1585,7 @@ def render_water(
         texture scaled by 0.25, without the tone curve.
 
     Raises:
-        Error: If a size or the view is not valid.
+        Error: If a size or the view is not valid, or `clock` is not finite.
     """
     if width <= 0 or height <= 0:
         raise Error("Water image dimensions must be positive")

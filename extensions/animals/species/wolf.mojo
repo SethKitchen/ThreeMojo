@@ -34,6 +34,7 @@ from extensions.sdf.sculpt import (
 )
 from extensions.animals.kit import (
     EyeSpec,
+    add_orbit_lid_and_socket,
     eye_frame_of,
     head_local,
     is_limb,
@@ -583,32 +584,7 @@ def wolf_sculpt(mut m: SdfModel, rig: Rig, t: Traits) raises:
     for s in [1.0, -1.0]:  # pragma: no branch
         var ef = eye_frame_of(eye, HEAD_O, s)
         # The orbit: a soft hollow so brow, cheek and bridge fall to the lids.
-        _ = ell_y(
-            m,
-            "orbit",
-            h,
-            ef.at(-0.002 * s, -0.0005, 0.019),
-            ef.y,
-            V3(0.018, 0.0125, 0.009),
-            lateral=ef.x,
-            k=0.008,
-            carve=True,
-        )
-        _ = m.sphere("eyelid", h, ef.c, eye.r + eye.lid, k=0.005)
-        _ = m.lens(
-            "eyesocket",
-            h,
-            ef.c + ef.y * eye.off,
-            ef.x,
-            ef.y,
-            ef.z,
-            eye.big_r,
-            eye.d,
-            -0.002,
-            0.024,
-            k=0.0022,
-            carve=True,
-        )
+        add_orbit_lid_and_socket(m, h, ef, eye, s)
         # The nostril and its alar slit.
         var nc = _nose_at(0.0088 * s, -0.0036, 0.0009)
         _ = m.ell(

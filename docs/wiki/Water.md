@@ -57,11 +57,36 @@ for frame in range(60):
     var image = scene.draw(320, 180, FRAME, True, bed, Angle(-0.72, RADIAN))
 ```
 
-`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. `draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
+`advance` steps the ripple equation once, then moves the clock. Its `Bool` taps the middle of the ripple window. The step must be finite and nonnegative. The resulting clock must also be finite. A refused step leaves the ripples, clock and step count unchanged.
+
+`draw` makes a picture at the scene's clock and does not change the simulation. Equal steps give equal pictures.
+
+The start clock must be finite. Finite negative start times are valid. `WaterScene` checks the start before it builds resources. This also makes `render_water` refuse nonfinite time. Earlier versions could propagate a nonfinite time into the picture. Valid finite times keep the same arithmetic and step order.
 
 `reset` returns the ripples and the clock to the start. It keeps the spectrum and the glare kernels. The buffers keep their sizes for the life of the scene.
 
-`render_water` is one scene step and one draw. A scene is the start of persistent scene water, [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300). It does not compose with a three.js scene yet. It has no GPU path. It does not establish a frame rate.
+`render_water` is one scene step and one draw.
+
+## Compose it with a scene
+
+Use `compose` to put the water into a picture that the renderer made. Pass the rendered framebuffer, the updated scene, its camera and the height of the still water. An attached camera uses its node and parent transforms.
+
+```mojo
+var image = renderer.render(scene, assets, camera)
+var shown = water.compose(image, scene, camera, Length(0.0, METER), bed)
+```
+
+The overload without a scene accepts detached cameras. An attached camera with a stale scene or invalid node is refused before any pixels or depths change. Update the scene before rendering and composing.
+
+Each pixel casts the camera's own ray. A ray that reaches the water shades it as the `LINEAR` picture does. Its depth is then tested against the framebuffer.
+
+Geometry nearer than the water keeps its pixel. Water nearer than the geometry replaces the pixel and writes its depth. A ray at or above the horizon leaves the pixel alone. `compose` returns how many pixels show water.
+
+The water is an endless plane at the given height. It repeats the ocean patch. The camera must be a centered perspective camera above the water. Water nearer than the near plane or past the far plane is not drawn. With the page's camera, `compose` gives the `LINEAR` picture below the horizon.
+
+`set_sun` lights the water from a scene's directional light. Pass the light's position minus its target. The direction must be finite and above the horizon. The default is Clearwater's sun. The sun lights the reflections, the bed and the caustics.
+
+The water shades the pebble bed under the surface, not the scene's geometry under the water. It has no GPU path, and it does not establish a frame rate. See [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300).
 
 ## Pictures
 
@@ -91,3 +116,9 @@ Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 
 This extension draws a CPU still. It is not a shared scene-water object or a validated fluid solver. The picture does not establish a real-time frame rate, buoyancy, or engineering fluid accuracy.
+
+## Cost
+
+`draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test in pixel order first. It then shades only the pixels that pass, in parallel.
+
+On an AMD Ryzen 9 5900X, a 1920 x 1080 `draw` takes about 1.7 seconds. On one thread it took about 18 seconds. One `advance` takes about 12 milliseconds. The CPU path therefore cannot reach 60 frames per second at that size. See [the water cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-cost-300.md) and `bench/water_bench.mojo`.

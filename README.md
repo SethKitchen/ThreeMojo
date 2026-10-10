@@ -76,7 +76,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Physics safety
 
-- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): rotation-locked capsules against static meshes are implemented; rotating capsules, convex shapes, kinematic bodies and moving pairs remain open [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
+- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): rotation-locked capsules and anisotropic spheres against static meshes work; rotating capsules, convex shapes, kinematic bodies and moving pairs remain open [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
 
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
@@ -513,7 +513,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 
 - [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
-- [ ] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps the spectrum, glare and ripples across frames; scene integration, GPU and benchmarks remain open [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
+- [ ] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state across frames and composes with a scene's camera, sun and depth; GPU and benchmarks remain open [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)
 - [x] [CARLA lane borders](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-borders): border-only OpenDRIVE lanes get width records from their borders, with ASAM's precedence and refusal rules [#577](https://github.com/SethKitchen/ThreeMojo/issues/577)
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)

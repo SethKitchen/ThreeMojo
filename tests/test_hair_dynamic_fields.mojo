@@ -44,6 +44,54 @@ def _add(mut groom: HairGroom, x: Float32, z: Float32 = 0):
     )
 
 
+def test_shading_refuses_starts_that_do_not_partition_the_points() raises:
+    # Overlapping strands would let two parallel tasks write one point.
+    var lights: List[HairLight] = [
+        HairLight(Vector3(0, 0, 1), Vector3(1, 1, 1))
+    ]
+    var look = HairLook(Vector3(0.3, 0.2, 0.1))
+    var eye = Vector3(0, 0, 1)
+    var ambient = Vector3(0, 0, 0)
+    for choice in range(5):
+        var groom = HairGroom()
+        _add(groom, 0)
+        _add(groom, 0.08)
+        if choice == 0:
+            groom.starts.clear()
+        elif choice == 1:
+            groom.starts[0] = 1
+        elif choice == 2:
+            groom.starts[2] = 5
+        elif choice == 3:
+            groom.starts = [0, 4, 3, 6]
+            groom.shades.append(1)
+        else:
+            groom.starts = [0, 3, 1, 4]
+            groom.points.resize(4, Vector3(0, 0, 0))
+            groom.normals.resize(4, Vector3(0, 0, 1))
+            groom.depths.resize(4, 0)
+            groom.shades.append(1)
+        with assert_raises(contains="partition the points"):
+            _ = shade_groom(groom, look, lights, eye, ambient)
+        var colors = List[Float32](length=len(groom.points) * 3, fill=0)
+        with assert_raises(contains="partition the points"):
+            shade_groom_into(
+                groom, look, lights, eye, ambient, colors, List[Float32]()
+            )
+    # An empty strand, with two equal starts, still shades.
+    var groom = HairGroom()
+    _add(groom, 0)
+    groom.starts.append(3)
+    groom.shades.append(1)
+    _add(groom, 0.08)
+    assert_equal(groom.starts, [0, 3, 3, 6])
+    var colors = shade_groom(groom, look, lights, eye, ambient)
+    var single = HairGroom()
+    _add(single, 0)
+    _add(single, 0.08)
+    assert_equal(colors, shade_groom(single, look, lights, eye, ambient))
+
+
 def test_density_conserves_deposited_projected_area() raises:
     var groom = HairGroom()
     _add(groom, 0)

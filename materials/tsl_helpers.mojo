@@ -30,6 +30,7 @@ interpreter.
   `normalize` gives NaN.
 """
 
+from materials.tsl_check import _expect
 from materials.nodes import (
     MAX_LOOP_COUNT,
     NODE_FLOAT,
@@ -49,17 +50,6 @@ from units.si import Length, METER
 # that misses the scene is taken to go, and past which a hit is a miss.
 comptime ENV_RAY_LENGTH = Length(1e4, METER)
 comptime ENV_RAY_LENGTH_THRESHOLD = Length(1e3, METER)
-
-
-def _expect(g: NodeGraph, node: NodeRef, type: ValueType, what: String) raises:
-    """Refuse a node that is not of the type a function reads.
-
-    Raises:
-        Error: If the node is not of this graph or not of `type`.
-    """
-    var got = g.type_of(node)
-    if got != type:
-        raise Error(what + " reads a " + type.name() + ", not a " + got.name())
 
 
 def _floats(g: NodeGraph, nodes: List[NodeRef], what: String) raises:

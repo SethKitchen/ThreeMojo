@@ -56,6 +56,7 @@ def fresh_guard(text):
             'fresh environment guard must be the first operation')
 
 
+@source.lexical_memo_scope()
 def verify(root):
     payload = (root/MIGRATION).read_bytes()
     require(hashlib.sha256(payload).hexdigest() == guard.WINNER_SIGN_MIGRATION_SHA256,
@@ -159,6 +160,14 @@ def verify(root):
         import runtime_boundary_contracts as boundary
     for path, edge in boundary.verify(root).items():
         require(path not in successors, 'duplicate runtime boundary edge')
+        successors[path] = edge
+
+    if __package__:
+        from . import render_actor_reuse_contracts as reuse
+    else:
+        import render_actor_reuse_contracts as reuse
+    for path, edge in reuse.verify(root).items():
+        require(path not in successors, 'duplicate render actor reuse edge')
         successors[path] = edge
 
     for path, expected in record['canonical_source_unchanged'].items():

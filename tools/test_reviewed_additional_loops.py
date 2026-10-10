@@ -26,7 +26,7 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
     def test_exact_sites_and_truthful_cardinalities(self):
         expected = {AXES: {50: ('reviewed-nonempty-range', 1, 3)},
                     BLEND: {592: ('literal-list', 4, 4)},
-                    HAIR: {195: ('literal-range', 2, 2), 201: ('literal-range', 3, 3)}}
+                    HAIR: {225: ('literal-range', 2, 2), 231: ('literal-range', 3, 3)}}
         for module, sites in expected.items():
             actual = loops.reviewed_nonempty_loops(self.root, module)
             self.assertEqual(set(actual), set(sites))

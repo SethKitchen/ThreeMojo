@@ -109,7 +109,7 @@ from materials.material import (
     MaterialKind,
     Side,
 )
-from math.matrix4 import Matrix4, scaling, translation
+from math.matrix4 import Matrix4, rotation_axis, scaling, translation
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -126,7 +126,7 @@ from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB, ColorSpace, srgb_to_linear
 from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, Alpha, Wrap
 from render.texture_store import TextureId
-from std.math import cos, isfinite, sin, sqrt
+from std.math import isfinite, sqrt
 from std.pathlib import Path
 from units.si import DEGREE, METER, Angle, Length
 
@@ -414,39 +414,6 @@ def _ints(text: String) raises -> List[Int]:
         except:
             raise Error("Collada: not a whole number: " + field)
     return out^
-
-
-def _axis_rotation(axis: Vector3, angle: Angle) -> Matrix4:
-    """Return three.js's `Matrix4.makeRotationAxis`: a turn about an axis
-    used as given, which a `<rotate>` step names."""
-    var c = cos(angle.value)
-    var s = sin(angle.value)
-    var t = 1 - c
-    var x = axis.x
-    var y = axis.y
-    var z = axis.z
-    var tx = t * x
-    var ty = t * y
-    var matrix = Matrix4()
-    matrix.set(
-        tx * x + c,
-        tx * y - s * z,
-        tx * z + s * y,
-        0,
-        tx * y + s * z,
-        ty * y + c,
-        ty * z - s * x,
-        0,
-        tx * z - s * y,
-        ty * z + s * x,
-        t * z * z + c,
-        0,
-        0,
-        0,
-        0,
-        1,
-    )
-    return matrix^
 
 
 @fieldwise_init
@@ -1249,7 +1216,7 @@ struct _Loader(Movable):
             elif name == "rotate":
                 var v = self.numbers(step, 4, "<rotate>")
                 matrix.multiply(
-                    _axis_rotation(
+                    rotation_axis(
                         Vector3(Float32(v[0]), Float32(v[1]), Float32(v[2])),
                         Angle(Float32(v[3]), DEGREE),
                     )

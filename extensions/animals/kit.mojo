@@ -13,6 +13,7 @@ from extensions.sdf.ids import BoneId
 from extensions.animals.options import AnimalRandom
 from extensions.sdf.distance import almond_distance
 from extensions.sdf.field import SdfModel
+from extensions.sdf.sculpt import ell_y
 from extensions.sdf.vector import (
     V3,
     dot,
@@ -160,6 +161,57 @@ def sculpt_eye_socket(
         carve=True,
     )
     return ef
+
+
+def add_orbit_lid_and_socket(
+    mut model: SdfModel,
+    bone: BoneId,
+    frame: EyeFrame,
+    eye: EyeSpec,
+    side: Float64,
+) raises:
+    """Add the shared orbit hollow, lid and almond socket of one eye.
+
+    The radii and blend are the fixed mammal socket. Species that need
+    a different socket keep their own primitives.
+
+    Args:
+        model: The sculpt.
+        bone: The bone the socket rides.
+        frame: The eye frame from `eye_frame_of`.
+        eye: The eye. The lid uses `r` and `lid`, and the aperture uses
+            `off`, `big_r` and `d`.
+        side: One for the left eye, minus one for the right.
+
+    Raises:
+        Error: If the sculpt refuses a primitive.
+    """
+    _ = ell_y(
+        model,
+        "orbit",
+        bone,
+        frame.at(-0.002 * side, -0.0005, 0.019),
+        frame.y,
+        V3(0.018, 0.0125, 0.009),
+        lateral=frame.x,
+        k=0.008,
+        carve=True,
+    )
+    _ = model.sphere("eyelid", bone, frame.c, eye.r + eye.lid, k=0.005)
+    _ = model.lens(
+        "eyesocket",
+        bone,
+        frame.c + frame.y * eye.off,
+        frame.x,
+        frame.y,
+        frame.z,
+        eye.big_r,
+        eye.d,
+        -0.002,
+        0.024,
+        k=0.0022,
+        carve=True,
+    )
 
 
 def head_local(

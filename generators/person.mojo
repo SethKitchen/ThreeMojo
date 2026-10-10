@@ -27,6 +27,8 @@ from generators.utils import (
     Instances,
     PartId,
     Vec3d,
+    angle_radians as _a,
+    length_meters as _l,
     meters,
     part,
     unit_vectors_quaternion,
@@ -40,7 +42,7 @@ from geometries.utils import merge_geometries, merge_vertices
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Length, METER
 
 # A figure's parts.
 comptime PERSON_SKIN = PartId(0)
@@ -249,16 +251,6 @@ def shoe_section(z: Float64, width: Float64, top: Float64) -> List[Vec3d]:
         Vec3d(-width * 0.9, -0.085, z),
         Vec3d(width * 0.9, -0.085, z),
     ]
-
-
-def _l(value: Float64) -> Length:
-    """Return a number of meters as a length."""
-    return Length(Float32(value), METER)
-
-
-def _a(value: Float64) -> Angle:
-    """Return a number of radians as an angle."""
-    return Angle(Float32(value), RADIAN)
 
 
 def _uv_from(
