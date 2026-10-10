@@ -1,0 +1,50 @@
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:598: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:596: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+test_consumer_first_import_orders_normal_and_optimized (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_consumer_first_import_orders_normal_and_optimized) ... 
+  test_consumer_first_import_orders_normal_and_optimized (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_consumer_first_import_orders_normal_and_optimized) (mode=[], first_consumer='sum2_guard_contracts') ... ERROR
+  test_consumer_first_import_orders_normal_and_optimized (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_consumer_first_import_orders_normal_and_optimized) (mode=[], first_consumer='test_production_inventory_paths') ... ERROR
+
+======================================================================
+ERROR: test_consumer_first_import_orders_normal_and_optimized (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_consumer_first_import_orders_normal_and_optimized) (mode=[], first_consumer='sum2_guard_contracts')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py", line 1286, in test_consumer_first_import_orders_normal_and_optimized
+    result = subprocess.run([sys.executable, *mode, '-B', '-c', command,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python', '-B', '-c', "import importlib, importlib.util, sys\nfrom pathlib import Path\nroot = Path(sys.argv[1])\nroute = sys.argv[2]\nsys.path.insert(0, str(root/'tools/carla_lane_oracle'))\nif route == 'sampled-spec':\n    spec = importlib.util.spec_from_file_location(\n        'sampled_consumer_first', root/'tools/carla_lane_oracle/check_sampled_values.py')\n    if spec is None or spec.loader is None:\n        raise RuntimeError('sampled consumer loader unavailable')\n    consumer = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(consumer)\nelse:\n    consumer = importlib.import_module(route)\nimport full_audit_cleanup_contracts as cleanup\ncleanup.verify(root, exact=True)\ncleanup.proof_bindings(root)\nif route == 'source_contracts':\n    consumer.verify_group(root, 'optional_runtime')\nelif route == 'test_accepted_successor_contracts':\n    consumer.prior.verify(root)\nelif route == 'test_production_inventory_paths':\n    consumer.cache.verify(root)\n    consumer.order.verify(root)\n    consumer.guard.verify(root)\nelse:\n    consumer.verify(root)\nprint('consumer-first accepted: ' + route)\n", '/tmp/full-audit-physical-6n5nxe2m', 'sum2_guard_contracts']' timed out after 120 seconds
+
+======================================================================
+ERROR: test_consumer_first_import_orders_normal_and_optimized (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_consumer_first_import_orders_normal_and_optimized) (mode=[], first_consumer='test_production_inventory_paths')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v9/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py", line 1286, in test_consumer_first_import_orders_normal_and_optimized
+    result = subprocess.run([sys.executable, *mode, '-B', '-c', command,
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python', '-B', '-c', "import importlib, importlib.util, sys\nfrom pathlib import Path\nroot = Path(sys.argv[1])\nroute = sys.argv[2]\nsys.path.insert(0, str(root/'tools/carla_lane_oracle'))\nif route == 'sampled-spec':\n    spec = importlib.util.spec_from_file_location(\n        'sampled_consumer_first', root/'tools/carla_lane_oracle/check_sampled_values.py')\n    if spec is None or spec.loader is None:\n        raise RuntimeError('sampled consumer loader unavailable')\n    consumer = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(consumer)\nelse:\n    consumer = importlib.import_module(route)\nimport full_audit_cleanup_contracts as cleanup\ncleanup.verify(root, exact=True)\ncleanup.proof_bindings(root)\nif route == 'source_contracts':\n    consumer.verify_group(root, 'optional_runtime')\nelif route == 'test_accepted_successor_contracts':\n    consumer.prior.verify(root)\nelif route == 'test_production_inventory_paths':\n    consumer.cache.verify(root)\n    consumer.order.verify(root)\n    consumer.guard.verify(root)\nelse:\n    consumer.verify(root)\nprint('consumer-first accepted: ' + route)\n", '/tmp/full-audit-physical-6n5nxe2m', 'test_production_inventory_paths']' timed out after 120 seconds
+
+----------------------------------------------------------------------
+Ran 1 test in 804.130s
+
+FAILED (errors=2)

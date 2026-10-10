@@ -1,0 +1,10 @@
+{
+  "scope": "The v9 focused preflight failed. This evidence supplements, and limits, the earlier isolated v9 passes; it does not establish issue completion.",
+  "source_seal_sha256": "f16aee52387b9663e7a9f884fff72a52b6be87a4c1d5e2c43244d31fc1725af8",
+  "failed_result_sha256": "7374687ae2dd972d3eb7da104f0910c08f252adc415bf831472ebeaf5eacffd9",
+  "normal_enclosing_method": "All14 consumer children passed, stage769.120705104s.",
+  "optimized_enclosing_method": "Two normal-mode children timed out at120s: sum2_guard_contracts and test_production_inventory_paths. Other12 children passed; stage805.220167104s.",
+  "not_executed": "Remaining6 focused preflight stages and full70-module matrix.",
+  "limits": "Original120s child and1800s module caps retained. Both source/SDK end checks passed; supervisor reports zero remaining descendants. No causal attribution to host variability is established.",
+  "evidence": "All raw logs and receipts are original bytes; only this labeled summary is newly written."
+}

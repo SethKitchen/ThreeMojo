@@ -1,0 +1,97 @@
+{
+  "schema": 1,
+  "scope": "Fresh failed v9 preflight; no passing qualification claim. Internal notes excluded.",
+  "files": [
+    {
+      "path": "RESULT.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/RESULT.json",
+      "sha256": "7374687ae2dd972d3eb7da104f0910c08f252adc415bf831472ebeaf5eacffd9",
+      "bytes": 2874,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "SOURCE-SEAL.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/SOURCE-SEAL.json",
+      "sha256": "f16aee52387b9663e7a9f884fff72a52b6be87a4c1d5e2c43244d31fc1725af8",
+      "bytes": 418809,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "SDK-BEFORE.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "bytes": 2165,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "SDK-AFTER.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "bytes": 2165,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "WINDOW-START.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/WINDOW-START.json",
+      "sha256": "4243165d17d947852ee835a70323a9dd02e1e0a3a1a43f25bc7652c02c907303",
+      "bytes": 371,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "03-normal-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/03-normal-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "sha256": "68244ae8e1318e757ace05f4e8f4b1a4d59d3ae50f319eb7c32ca134f00e697d",
+      "bytes": 710,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "03-normal-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/03-normal-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "sha256": "2ea79adb75b3b2a1e326647f0e81a2859feeaeab3dd6edc929e0545673694a4a",
+      "bytes": 1022,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "03-normal-test_consumer_first_import_orders_normal_and_optimized.log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/03-normal-test_consumer_first_import_orders_normal_and_optimized.log",
+      "sha256": "63903b17d54dcd859a8b1d244ab5d39af3a1cd422b6c431785f28859d5c982a8",
+      "bytes": 800,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "03-optimized-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/03-optimized-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "sha256": "cf9601cd34f7c637cfff33e57163ccbe820c922deeb25c4fba37ac14fb02ce0f",
+      "bytes": 723,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "03-optimized-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/03-optimized-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "sha256": "ddff609e4a8b706c23afe4eca3d13dbdc8c4590e7c60700b4499a4b2b1bafacf",
+      "bytes": 966,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "03-optimized-test_consumer_first_import_orders_normal_and_optimized.log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/03-optimized-test_consumer_first_import_orders_normal_and_optimized.log",
+      "sha256": "352dd4925aa5ca5c5b8c9a60de678351b7cb337f8f130da708b271c5ed164338",
+      "bytes": 7428,
+      "kind": "actual-failed-run-receipt-or-raw-log"
+    },
+    {
+      "path": "focused-known-failures-v3.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/focused-known-failures-v3.json",
+      "sha256": "7bbe5cca4fbe3165a29abd6b0d109dc687f3f2132af0eed7202b854aab7b9e5f",
+      "bytes": 4348,
+      "kind": "executed-plan"
+    },
+    {
+      "path": "VALIDATION-FAILURE-SUMMARY.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v9-failure-packet/VALIDATION-FAILURE-SUMMARY.json",
+      "sha256": "4c6097f35c8ce161b86afcca5083dec634b3537f72a082a8373e84d09f725be3",
+      "bytes": 1009,
+      "kind": "factual-failure-summary"
+    }
+  ]
+}
