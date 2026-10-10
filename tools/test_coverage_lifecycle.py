@@ -718,5 +718,23 @@ time.sleep(30)
         self.assertEqual(recipe.count('tools/coverage_io.py capture'), 1)
 
 
+class PrivateCompilerCacheTests(unittest.TestCase):
+    def test_each_capture_gets_a_cache_inside_its_temporary_root(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            script = (
+                'import os, pathlib, sys\n'
+                'temporary = pathlib.Path(os.environ["THREEMOJO_TEST_TMPDIR"])\n'
+                'cache = pathlib.Path(os.environ["MODULAR_CACHE_DIR"])\n'
+                'xdg = pathlib.Path(os.environ["XDG_CACHE_HOME"])\n'
+                'sys.exit(0 if cache.parent == temporary and xdg.parent == temporary '
+                'and cache.is_dir() and xdg.is_dir() else 1)\n'
+            )
+            with contextlib.redirect_stdout(io.StringIO()):
+                status = coverage_io.capture(
+                    [sys.executable, '-c', script], root / 'out', root / 'err.gz')
+        self.assertEqual(status, 0)
+
+
 if __name__ == '__main__':
     unittest.main()
