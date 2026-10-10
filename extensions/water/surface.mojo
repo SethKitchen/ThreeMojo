@@ -11,6 +11,9 @@ across the patch. `sample_surface` is the page's bilinear `texture` call.
 `sample_surface_smooth` is the cubic filter the page uses on slopes, so
 highlights stay smooth. `sample_surface_filtered` is that sample with the
 page's mipmaps and anisotropy of 8.
+
+The samplers read texels through `SurfaceTexels`, so the same arithmetic
+runs on a `SurfaceField` and on a packed copy in device memory.
 """
 
 from extensions.water.field import ComplexField, fft2
@@ -36,7 +39,54 @@ struct SurfaceSample(ImplicitlyCopyable):
     var slope_sq: Float32
 
 
-struct SurfaceField(Copyable, Movable):
+trait SurfaceTexels:
+    """Read access to a resolved surface and its mipmaps.
+
+    Level 0 is the base grid. Level `k` is the `k`th coarser mip.
+    """
+
+    def surface_patch(self) -> Float32:
+        """Return the world length of one tile, in meters.
+
+        Returns:
+            The patch length.
+        """
+        ...
+
+    def surface_levels(self) -> Int:
+        """Return how many mip levels follow the base grid.
+
+        Returns:
+            The count of coarser levels.
+        """
+        ...
+
+    def surface_side(self, level: Int) -> Int:
+        """Return the texels on one side of a level.
+
+        Args:
+            level: The level. Zero or less is the base grid.
+
+        Returns:
+            The side length.
+        """
+        ...
+
+    def surface_texel(self, level: Int, x: Int, y: Int) -> SurfaceSample:
+        """Return one texel of a level.
+
+        Args:
+            level: The level. Zero or less is the base grid.
+            x: Column inside that level.
+            y: Row inside that level.
+
+        Returns:
+            Height, slopes and squared slope.
+        """
+        ...
+
+
+struct SurfaceField(Copyable, Movable, SurfaceTexels):
     """A resolved ocean surface on one square grid."""
 
     var patch: Length
@@ -56,6 +106,50 @@ struct SurfaceField(Copyable, Movable):
         self.patch = patch
         self.field = field^
         self.mips = _mip_chain(self.field)
+
+    def surface_patch(self) -> Float32:
+        """Return the world length of one tile, in meters.
+
+        Returns:
+            The patch length.
+        """
+        return self.patch.value
+
+    def surface_levels(self) -> Int:
+        """Return how many mip levels follow the base grid.
+
+        Returns:
+            The count of coarser levels.
+        """
+        return len(self.mips)
+
+    def surface_side(self, level: Int) -> Int:
+        """Return the texels on one side of a level.
+
+        Args:
+            level: The level. Zero or less is the base grid.
+
+        Returns:
+            The side length.
+        """
+        if level <= 0:
+            return self.field.n
+        return self.mips[level - 1].n
+
+    def surface_texel(self, level: Int, x: Int, y: Int) -> SurfaceSample:
+        """Return one texel of a level.
+
+        Args:
+            level: The level. Zero or less is the base grid.
+            x: Column inside that level.
+            y: Row inside that level.
+
+        Returns:
+            Height, slopes and squared slope.
+        """
+        if level <= 0:
+            return _texel(self.field, x, y)
+        return _texel(self.mips[level - 1], x, y)
 
 
 def resolve_surface(spatial: ComplexField) -> ComplexField:
@@ -136,10 +230,13 @@ def _wrap(index: Int, n: Int) -> Int:
     return index % n
 
 
-def sample_surface(
-    surface: SurfaceField, x: Float32, z: Float32
-) -> SurfaceSample:
+def sample_surface[
+    S: SurfaceTexels
+](surface: S, x: Float32, z: Float32) -> SurfaceSample:
     """Sample the surface at one world position, repeating the patch.
+
+    Parameters:
+        S: The surface storage.
 
     Args:
         surface: A resolved ocean.
@@ -150,9 +247,9 @@ def sample_surface(
         The bilinear height and slopes. Variance for LEAN mapping is
         `slope_sq` minus the squared filtered slope, and it is not negative.
     """
-    var n = surface.field.n
-    var u = x / surface.patch.value
-    var v = z / surface.patch.value
+    var n = surface.surface_side(0)
+    var u = x / surface.surface_patch()
+    var v = z / surface.surface_patch()
     var px = u * Float32(n) - 0.5
     var pz = v * Float32(n) - 0.5
     var x0 = Int(floor(px))
@@ -163,22 +260,25 @@ def sample_surface(
     var z1 = _wrap(z0 + 1, n)
     x0 = _wrap(x0, n)
     z0 = _wrap(z0, n)
-    var s00 = _texel(surface.field, x0, z0)
-    var s10 = _texel(surface.field, x1, z0)
-    var s01 = _texel(surface.field, x0, z1)
-    var s11 = _texel(surface.field, x1, z1)
+    var s00 = surface.surface_texel(0, x0, z0)
+    var s10 = surface.surface_texel(0, x1, z0)
+    var s01 = surface.surface_texel(0, x0, z1)
+    var s11 = surface.surface_texel(0, x1, z1)
     var a = _mix_sample(s00, s10, fx)
     var b = _mix_sample(s01, s11, fx)
     return _mix_sample(a, b, fz)
 
 
-def sample_surface_smooth(
-    surface: SurfaceField, x: Float32, z: Float32
-) -> SurfaceSample:
+def sample_surface_smooth[
+    S: SurfaceTexels
+](surface: S, x: Float32, z: Float32) -> SurfaceSample:
     """Sample the surface with the page's cubic B-spline filter.
 
     Four bilinear taps. The page uses this on the two large tiles so a
     slope, and the sun glint on it, stays smooth.
+
+    Parameters:
+        S: The surface storage.
 
     Args:
         surface: A resolved ocean.
@@ -188,8 +288,8 @@ def sample_surface_smooth(
     Returns:
         The cubic height and slopes.
     """
-    var n = Float32(surface.field.n)
-    var patch = surface.patch.value
+    var n = Float32(surface.surface_side(0))
+    var patch = surface.surface_patch()
     var px = x / patch * n - 0.5
     var pz = z / patch * n - 0.5
     var ix = floor(px)
@@ -265,8 +365,10 @@ def _add_sample(a: SurfaceSample, b: SurfaceSample) -> SurfaceSample:
     )
 
 
-def sample_surface_filtered(
-    surface: SurfaceField,
+def sample_surface_filtered[
+    S: SurfaceTexels
+](
+    surface: S,
     x: Float32,
     z: Float32,
     du_dx: Float32,
@@ -280,6 +382,9 @@ def sample_surface_filtered(
     A footprint of one texel or less uses the cubic filter when `cubic` is
     true, and bilinear sampling otherwise. A wider footprint averages along
     its long axis. The level comes from the short axis.
+
+    Parameters:
+        S: The surface storage.
 
     Args:
         surface: A resolved ocean.
@@ -299,11 +404,11 @@ def sample_surface_filtered(
         dv_dx,
         du_dy,
         dv_dy,
-        Float32(surface.field.n),
-        Float32(surface.field.n),
+        Float32(surface.surface_side(0)),
+        Float32(surface.surface_side(0)),
         8.0,
         0.0,
-        Float32(len(surface.mips)),
+        Float32(surface.surface_levels()),
     )
     var smooth = cubic
     if step.lod > 0.0:
@@ -312,8 +417,8 @@ def sample_surface_filtered(
         smooth = False
     if smooth:
         return sample_surface_smooth(surface, x, z)
-    var u = x / surface.patch.value
-    var v = z / surface.patch.value
+    var u = x / surface.surface_patch()
+    var v = z / surface.surface_patch()
     var acc = SurfaceSample(0.0, 0.0, 0.0, 0.0)
     var count = step.taps
     for i in range(count):  # pragma: no branch
@@ -325,10 +430,10 @@ def sample_surface_filtered(
     return _scale_sample(acc, 1.0 / Float32(count))
 
 
-def _trilinear_uv(
-    surface: SurfaceField, u: Float32, v: Float32, lod: Float32
-) -> SurfaceSample:
-    var levels = len(surface.mips)
+def _trilinear_uv[
+    S: SurfaceTexels
+](surface: S, u: Float32, v: Float32, lod: Float32) -> SurfaceSample:
+    var levels = surface.surface_levels()
     var i0 = Int(floor(lod))
     var i1 = i0 + 1
     if i1 > levels:
@@ -339,16 +444,10 @@ def _trilinear_uv(
     return _mix_sample(a, b, frac)
 
 
-def _sample_level(
-    surface: SurfaceField, level: Int, u: Float32, v: Float32
-) -> SurfaceSample:
-    if level <= 0:
-        return _sample_uv(surface.field, u, v)
-    return _sample_uv(surface.mips[level - 1], u, v)
-
-
-def _sample_uv(field: ComplexField, u: Float32, v: Float32) -> SurfaceSample:
-    var n = field.n
+def _sample_level[
+    S: SurfaceTexels
+](surface: S, level: Int, u: Float32, v: Float32) -> SurfaceSample:
+    var n = surface.surface_side(level)
     var px = u * Float32(n) - 0.5
     var pz = v * Float32(n) - 0.5
     var x0 = Int(floor(px))
@@ -359,10 +458,10 @@ def _sample_uv(field: ComplexField, u: Float32, v: Float32) -> SurfaceSample:
     var z1 = _wrap(z0 + 1, n)
     x0 = _wrap(x0, n)
     z0 = _wrap(z0, n)
-    var s00 = _texel(field, x0, z0)
-    var s10 = _texel(field, x1, z0)
-    var s01 = _texel(field, x0, z1)
-    var s11 = _texel(field, x1, z1)
+    var s00 = surface.surface_texel(level, x0, z0)
+    var s10 = surface.surface_texel(level, x1, z0)
+    var s01 = surface.surface_texel(level, x0, z1)
+    var s11 = surface.surface_texel(level, x1, z1)
     var a = _mix_sample(s00, s10, fx)
     var b = _mix_sample(s01, s11, fx)
     return _mix_sample(a, b, fz)

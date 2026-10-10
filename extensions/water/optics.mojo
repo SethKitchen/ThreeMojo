@@ -10,9 +10,14 @@ page's formulae. `bed_color` repeats the pebble photograph the way the
 shader does, then mixes sand, cobble and weed on top.
 """
 
-from extensions.water.pebbles import PebbleBed, PebbleSample, sample_pebble_grad
+from extensions.water.pebbles import (
+    PebbleSample,
+    PebbleTexels,
+    sample_pebble_grad,
+)
+from math.arc_tangent import atan2_float32
 from math.vector3 import Vector3
-from std.math import cos, exp, floor, log, pow, sin, sqrt
+from std.math import cos, exp, floor, log, pow, round, sin, sqrt
 from units.si import DEGREE, Angle
 
 
@@ -82,18 +87,45 @@ def hash12(x: Float32, y: Float32) -> Float32:
     Returns:
         A number in `[0, 1)`.
     """
-    var px = _fract(x * 0.1031)
-    var py = _fract(y * 0.1031)
-    var pz = _fract(x * 0.1031)
-    var dot = px * (py + 33.33) + py * (pz + 33.33) + pz * (px + 33.33)
-    px += dot
-    py += dot
-    pz += dot
-    return _fract((px + py) * pz)
+    # The last `fract` reads the low bits of a product near 2e4. A fused
+    # multiply-add there gives a different hash, and a CPU and a GPU fuse
+    # differently. Each step is a Float32 operation rounded once.
+    var c = Float32(0.1031)
+    var k = Float32(33.33)
+    var px = _fract(_times(x, c))
+    var py = _fract(_times(y, c))
+    var pz = _fract(_times(x, c))
+    var dot = _plus(
+        _plus(_times(px, _plus(py, k)), _times(py, _plus(pz, k))),
+        _times(pz, _plus(px, k)),
+    )
+    px = _plus(px, dot)
+    py = _plus(py, dot)
+    pz = _plus(pz, dot)
+    return _fract(_times(_plus(px, py), pz))
+
+
+def _times(a: Float32, b: Float32) -> Float32:
+    # A Float32 product is exact in Float64, so one cast rounds it once.
+    return Float32(Float64(a) * Float64(b))
+
+
+def _plus(a: Float32, b: Float32) -> Float32:
+    # Float64 has more than 2 * 24 + 2 bits, so the second rounding of a
+    # Float32 sum is the correct one.
+    return Float32(Float64(a) + Float64(b))
 
 
 def _fract(value: Float32) -> Float32:
     return value - floor(value)
+
+
+def _sin(value: Float32) -> Float32:
+    # A GPU sine is accurate near zero only. Remove whole turns in Float64
+    # first, so a CPU and a GPU take the sine of the same small angle.
+    var turn = Float64(6.283185307179586)
+    var angle = Float64(value)
+    return sin(Float32(angle - turn * round(angle / turn)))
 
 
 def value_noise(x: Float32, y: Float32) -> Float32:
@@ -340,10 +372,10 @@ def sky_radiance(
     var azimuth = _atan2(z, x)
     var ridge = (
         0.040
-        + 0.016 * sin(azimuth * 2.0 + 0.7)
-        + 0.011 * sin(azimuth * 5.0 + 2.1)
-        + 0.006 * sin(azimuth * 11.0 + 0.3)
-        + 0.003 * sin(azimuth * 23.0 + 1.7)
+        + 0.016 * _sin(azimuth * 2.0 + 0.7)
+        + 0.011 * _sin(azimuth * 5.0 + 2.1)
+        + 0.006 * _sin(azimuth * 11.0 + 0.3)
+        + 0.003 * _sin(azimuth * 23.0 + 1.7)
     )
     ridge += 0.0045 * (value_noise(azimuth * 260.0, 0.0) - 0.5)
     ridge += 0.002 * (value_noise(azimuth * 900.0, 3.0) - 0.5)
@@ -406,9 +438,8 @@ def sky_radiance(
 
 
 def _atan2(y: Float32, x: Float32) -> Float32:
-    from std.math import atan2
-
-    return atan2(y, x)
+    # libm's atan2 has no GPU form. The shared one keeps CPU and GPU equal.
+    return atan2_float32(y, x)
 
 
 def floor_depth(x: Float32, z: Float32) -> Float32:
@@ -444,8 +475,10 @@ struct BedColor(ImplicitlyCopyable):
     var height: Float32
 
 
-def bed_color(
-    bed: PebbleBed,
+def bed_color[
+    B: PebbleTexels
+](
+    bed: B,
     x: Float32,
     z: Float32,
     dx_x: Float32 = 0.0,
@@ -458,6 +491,9 @@ def bed_color(
     Fine pebbles and coarse cobbles are two samplings of the photograph.
     Sand fills the gaps. A weed tint darkens the hollows. A non-zero
     footprint reads the photograph through its mipmaps.
+
+    Parameters:
+        B: The photograph storage.
 
     Args:
         bed: The pebble photograph, in linear light.
@@ -490,7 +526,7 @@ def bed_color(
     var zone = fbm2(x * 0.16 + 3.0, z * 0.16 + 3.0) + 0.10 * (
         value_noise(x * 2.5, z * 2.5) - 0.5
     )
-    var marks = 0.5 + 0.5 * sin(
+    var marks = 0.5 + 0.5 * _sin(
         (x * 0.93 + z * 0.37) * 16.0 + 3.0 * value_noise(x * 0.8, z * 0.8)
     )
     var sand_n = 0.82 + 0.22 * value_noise(x * 40.0, z * 40.0) + 0.10 * marks
@@ -533,8 +569,10 @@ def bed_color(
     return BedColor(r, g, b, h)
 
 
-def _pebbles(
-    bed: PebbleBed,
+def _pebbles[
+    B: PebbleTexels
+](
+    bed: B,
     x: Float32,
     z: Float32,
     scale: Float32,
@@ -553,16 +591,16 @@ def _pebbles(
     var level = value_noise(x * 0.85, z * 0.85) * 8.0
     var band = floor(level)
     var blend = level - band
-    var shift_u = sin(3.0 * band)
-    var shift_v = sin(7.0 * band)
+    var shift_u = _sin(3.0 * band)
+    var shift_v = _sin(7.0 * band)
     var first = sample_pebble_grad(
         bed, uv_x + shift_u, uv_z + shift_v, du_dx, dv_dx, du_dy, dv_dy
     )
     var next_band = band + 1.0
     var second = sample_pebble_grad(
         bed,
-        uv_x + sin(3.0 * next_band),
-        uv_z + sin(7.0 * next_band),
+        uv_x + _sin(3.0 * next_band),
+        uv_z + _sin(7.0 * next_band),
         du_dx,
         dv_dx,
         du_dy,
@@ -585,8 +623,8 @@ def _pebbles(
     )
     var wide_b = sample_pebble_grad(
         bed,
-        uv_x + sin(3.0 * next_band),
-        uv_z + sin(7.0 * next_band),
+        uv_x + _sin(3.0 * next_band),
+        uv_z + _sin(7.0 * next_band),
         du_dx * 6.0,
         dv_dx * 6.0,
         du_dy * 6.0,
