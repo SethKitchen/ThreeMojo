@@ -25,7 +25,7 @@ This is not a three.js port. See Extensions.
     var d = field.distance(Vector3(0, 0.1, 0.2))
 """
 
-from extensions.humanoid.skeleton.field import DistanceField
+from extensions.humanoid.skeleton.field import DistanceField, cross
 from math.vector3 import Vector3
 from std.collections import Dict
 from std.math import acos, iota, max, min
@@ -52,13 +52,6 @@ comptime ON_C = 3
 comptime ON_AB = 4
 comptime ON_BC = 5
 comptime ON_CA = 6
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product of `a` and `b`."""
-    return Vector3(
-        a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x
-    )
 
 
 def _closest_on_flat_triangle(
@@ -120,7 +113,7 @@ def closest_on_triangle(
     """
     var ab = b - a
     var ac = c - a
-    var area = _cross(ab, ac)
+    var area = cross(ab, ac)
     if area.dot(area) == 0:
         return _closest_on_flat_triangle(p, a, b, c)
     var ap = p - a
@@ -321,7 +314,7 @@ struct MeshTree(Movable):
         self.faces = List[Vector3](capacity=count)
         self.normals = List[Vector3](length=len(points), fill=Vector3(0, 0, 0))
         for t in range(count):  # pragma: no branch
-            var n = _cross(
+            var n = cross(
                 points[triangles[t * 3 + 1]] - points[triangles[t * 3]],
                 points[triangles[t * 3 + 2]] - points[triangles[t * 3]],
             )
@@ -440,15 +433,15 @@ struct MeshTree(Movable):
             var ab = b - a
             var bc = c - b
             var ca = a - c
-            var n = _cross(ab, c - a)
+            var n = cross(ab, c - a)
             var sides: List[Vector3] = [
                 a,
                 ab,
                 bc,
                 ca,
-                _cross(n, ab),
-                _cross(n, bc),
-                _cross(n, ca),
+                cross(n, ab),
+                cross(n, bc),
+                cross(n, ca),
                 n,
             ]
             for k in range(8):  # pragma: no branch

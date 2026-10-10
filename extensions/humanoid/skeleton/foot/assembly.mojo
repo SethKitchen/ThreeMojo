@@ -17,7 +17,6 @@ body-right. Plus z is anterior. Pass `ankle_center()` from a leg as
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
@@ -75,7 +74,7 @@ from extensions.humanoid.skeleton.look import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
+from extensions.humanoid.skeleton.place import place_mesh
 
 # Optional `add_foot` paint. A negative id asks the assembler to create
 # the default look for that layer.
@@ -174,7 +173,7 @@ def add_foot(
         var bones = named_foot_bones()
         var b_index = 0
         while b_index < len(bones):
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -186,7 +185,7 @@ def add_foot(
         var bands = named_foot_ligaments()
         var g_index = 0
         while g_index < len(bands):
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -202,7 +201,7 @@ def add_foot(
             var paint = muscle_paint
             if is_tendon(part):
                 paint = tendon_paint
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -220,7 +219,7 @@ def add_foot(
             var paint = vein
             if is_artery(vessel):
                 paint = artery
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -233,7 +232,7 @@ def add_foot(
         var nodes = named_foot_lymph()
         var l_index = 0
         while l_index < len(nodes):
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -246,7 +245,7 @@ def add_foot(
         var trunks = named_foot_nerves()
         var n_index = 0
         while n_index < len(trunks):
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -258,7 +257,7 @@ def add_foot(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _place(
+        place_mesh(
             scene,
             assets,
             root_id,
@@ -272,7 +271,7 @@ def add_foot(
         var groups = named_foot_hair()
         var h_index = 0
         while h_index < len(groups):
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -281,28 +280,3 @@ def add_foot(
             )
             h_index += 1
     return root_id
-
-
-def _place(
-    mut scene: Scene,
-    mut assets: Assets,
-    parent: NodeId,
-    var geometry: BufferGeometry,
-    paint: MaterialId,
-) raises:
-    """Attach one mesh at the foot origin under `parent`.
-
-    Args:
-        scene: The scene that receives the node and the mesh.
-        assets: Geometry store for the new mesh.
-        parent: Node the part hangs from.
-        geometry: The solid to draw.
-        paint: Material id.
-
-    Raises:
-        Error: If the scene refuses the node or the mesh.
-    """
-    var node = Object3D()
-    var nid = scene.attach(node^, parent)
-    var shape = assets.geometries.add(geometry^)
-    scene.add_mesh(Mesh(shape, paint, nid))

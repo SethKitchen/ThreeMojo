@@ -31,6 +31,8 @@ from generators.utils import (
     PART_ID,
     PartId,
     Vec3d,
+    angle_radians as _a,
+    length_meters as _l,
     part,
 )
 from geometries.box import box
@@ -43,7 +45,6 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.color_spaces import srgb_to_linear_three
 from std.math import cos, pi, sqrt
-from units.si import Angle, Length, METER, RADIAN
 
 # A car's parts.
 comptime CAR_BODY = PartId(0)
@@ -408,16 +409,6 @@ def panel(
 def _corner(point: Vec3d, side: Float64) -> Vec3d:
     """Return a cabin corner on one side."""
     return Vec3d(point.x * side, point.y, point.z)
-
-
-def _l(value: Float64) -> Length:
-    """Return a number of meters as a length."""
-    return Length(Float32(value), METER)
-
-
-def _a(value: Float64) -> Angle:
-    """Return a number of radians as an angle."""
-    return Angle(Float32(value), RADIAN)
 
 
 def _roof(spec: CarSpec) raises -> BufferGeometry:

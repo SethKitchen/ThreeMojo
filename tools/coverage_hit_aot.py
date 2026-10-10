@@ -7,6 +7,8 @@ This prototype preserves the source argument as argv[0], trailing arguments,
 cwd, environment and the supervisor's total deadline. The process executable
 is a temporary native binary in compiled profiles; that identity deliberately
 differs from the Mojo JIT. Raw/JIT mode keeps its original command unchanged.
+Compiled profiles use one compiler thread unless the caller already set one,
+so parallel captures do not each occupy every core.
 """
 import argparse
 import os
@@ -30,11 +32,26 @@ def source_index(command, suite):
     raise ValueError('coverage profile is missing its source argument')
 
 
+def _one_compiler_thread(command):
+    """Keep a compiled capture on one compiler thread.
+
+    CPU CI already passes ``--num-threads 1``. Coverage runs several captures
+    at once, and each Mojo process otherwise starts one thread per core.
+    """
+    if '--num-threads' in command:
+        return list(command)
+    prepared = list(command)
+    slot = prepared.index('run') + 1
+    prepared[slot:slot] = ['--num-threads', '1']
+    return prepared
+
+
 def prepare_profile(root, suite, cache, cc, command, profile):
     if profile == 'raw':
         return list(command), None
-    index = source_index(command, suite)
-    prepared = list(command)
+    source = source_index(command, suite)
+    prepared = _one_compiler_thread(command)
+    index = source_index(prepared, suite)
     if profile == 'aot-hits':
         if platform.system() != 'Linux':
             raise ValueError('private hit profile currently supports Linux only')
@@ -48,7 +65,7 @@ def prepare_profile(root, suite, cache, cc, command, profile):
         identity = native.compiler_identity(cc + ' -pthread')
         obj = native.build_object(ROOT, HELPER, cache, identity)
         prepared[index:index] = ['-DTHREEMOJO_COVERAGE_HIT_CACHE', '-Xlinker', str(obj)]
-    return prepared, command[index]
+    return prepared, command[source]
 
 
 def main(argv=None):

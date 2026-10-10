@@ -17,7 +17,6 @@ on the sacrum.
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -81,7 +80,7 @@ from extensions.humanoid.skeleton.torso.vessels.geometry import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
+from extensions.humanoid.skeleton.place import place_mesh
 
 # Optional `add_torso` paint. A negative id asks the assembler to create
 # the default look for that layer.
@@ -148,7 +147,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_bone(bones[index]):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -167,7 +166,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_ligament(band):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -182,7 +181,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_muscle(parts[index]):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -203,7 +202,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_vessel(vessel):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -219,7 +218,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_lymph(groups[index]):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -235,7 +234,7 @@ def add_torso(
             for s in range(2):  # pragma: no branch
                 if s == 1 and not is_paired_nerve(trunks[index]):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -248,7 +247,7 @@ def add_torso(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _place(
+        place_mesh(
             scene,
             assets,
             root_id,
@@ -256,28 +255,3 @@ def add_torso(
             skin,
         )
     return root_id
-
-
-def _place(
-    mut scene: Scene,
-    mut assets: Assets,
-    parent: NodeId,
-    var geometry: BufferGeometry,
-    paint: MaterialId,
-) raises:
-    """Attach one mesh at the torso origin under `parent`.
-
-    Args:
-        scene: The scene that receives the node and the mesh.
-        assets: Geometry store for the new mesh.
-        parent: Node the part hangs from.
-        geometry: The solid to draw.
-        paint: Material id.
-
-    Raises:
-        Error: If the scene refuses the node or the mesh.
-    """
-    var node = Object3D()
-    var nid = scene.attach(node^, parent)
-    var shape = assets.geometries.add(geometry^)
-    scene.add_mesh(Mesh(shape, paint, nid))

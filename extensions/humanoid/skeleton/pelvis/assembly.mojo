@@ -19,7 +19,6 @@ together.
 
 from core.assets import Assets
 from extensions.humanoid.skeleton.look import resolved_paint as _resolved_paint
-from core.buffer_geometry import BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
@@ -82,7 +81,7 @@ from extensions.humanoid.skeleton.pelvis.vessels.geometry import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from objects.mesh import Mesh
+from extensions.humanoid.skeleton.place import place_mesh
 
 # Optional `add_pelvis` paint. A negative id asks the assembler to create
 # the default look for that layer.
@@ -200,7 +199,7 @@ def add_pelvis(
     if contents.includes_bones():
         var bones = named_pelvis_bones()
         for index in range(len(bones)):  # pragma: no branch
-            _place(
+            place_mesh(
                 scene,
                 assets,
                 root_id,
@@ -221,7 +220,7 @@ def add_pelvis(
             for s in range(2):  # pragma: no branch
                 if s == 1 and is_midline(band):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -234,7 +233,7 @@ def add_pelvis(
         var parts = named_pelvis_muscles()
         for index in range(len(parts)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -255,7 +254,7 @@ def add_pelvis(
             for s in range(2):  # pragma: no branch
                 if s == 1 and is_unpaired_vessel(vessel):
                     continue
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -269,7 +268,7 @@ def add_pelvis(
         var groups = named_pelvis_lymph()
         for index in range(len(groups)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -283,7 +282,7 @@ def add_pelvis(
         var trunks = named_pelvis_nerves()
         for index in range(len(trunks)):  # pragma: no branch
             for s in range(2):  # pragma: no branch
-                _place(
+                place_mesh(
                     scene,
                     assets,
                     root_id,
@@ -296,7 +295,7 @@ def add_pelvis(
         var skin = _resolved_paint(
             assets, skin_paint, skin_phong(genome=spec.genome)
         )
-        _place(
+        place_mesh(
             scene,
             assets,
             root_id,
@@ -304,28 +303,3 @@ def add_pelvis(
             skin,
         )
     return root_id
-
-
-def _place(
-    mut scene: Scene,
-    mut assets: Assets,
-    parent: NodeId,
-    var geometry: BufferGeometry,
-    paint: MaterialId,
-) raises:
-    """Attach one mesh at the pelvis origin under `parent`.
-
-    Args:
-        scene: The scene that receives the node and the mesh.
-        assets: Geometry store for the new mesh.
-        parent: Node the part hangs from.
-        geometry: The solid to draw.
-        paint: Material id.
-
-    Raises:
-        Error: If the scene refuses the node or the mesh.
-    """
-    var node = Object3D()
-    var nid = scene.attach(node^, parent)
-    var shape = assets.geometries.add(geometry^)
-    scene.add_mesh(Mesh(shape, paint, nid))
