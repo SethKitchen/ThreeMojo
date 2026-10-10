@@ -86,7 +86,7 @@ The water is an endless plane at the given height. It repeats the ocean patch. T
 
 `set_sun` lights the water from a scene's directional light. Pass the light's position minus its target. The direction must be finite and above the horizon. The default is Clearwater's sun. The sun lights the reflections, the bed and the caustics.
 
-The water shades the pebble bed under the surface, not the scene's geometry under the water. It has no GPU path, and it does not establish a frame rate. See [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300).
+The water shades the pebble bed under the surface, not the scene's geometry under the water. `compose` shades on the CPU. See [Shade it on a GPU](#shade-it-on-a-gpu) for the GPU shading path.
 
 ## Pictures
 
@@ -114,6 +114,16 @@ The caustic grid in the still is 64. The page uses 256.
 Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear, cubic and mip samples use the same convention. Caustic triangles use a half-open edge rule, so a shared edge receives light once. A flat surface under a vertical sun has unit caustic intensity.
 
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
+
+## Shade it on a GPU
+
+`GpuWater` in `extensions/water/gpu.mojo` runs `lit_radiance` with one thread for each pixel. It needs MAX and an NVIDIA CUDA GPU. It was tested on a TITAN RTX, and CI builds it for sm_80. Apple Metal is not a supported target: no Metal check covers this kernel.
+
+Make one with the pebble photograph, which it copies to the device once. Then call `radiance(scene, look, width, height)` each frame. It returns the linear radiance that `draw` grades, three floats a pixel.
+
+The surface FFT, the caustics, bloom, glare and grading still run on the CPU. Each frame copies the surface, the ripple window and the caustics to the device and frees them after the frame.
+
+The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires 98 percent of values within 1 percent of the CPU, and 99.5 percent within 10 percent. It also checks that free device memory stays level over 40 frames. See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md): a 1920 x 1080 frame of radiance takes about 78 milliseconds on that GPU.
 
 ## Shader storage
 
