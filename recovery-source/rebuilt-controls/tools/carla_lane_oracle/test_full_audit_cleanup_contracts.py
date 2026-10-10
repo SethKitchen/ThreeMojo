@@ -574,7 +574,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
                     'extensions/carla/lane_refinement.mojopkg',
                     'extensions/carla/lane_refinement/__init__.mojo',
                     'extensions/carla/Lane_Refinement.mojo', 'tests/__init__.mojo',
-                    'math.mojo', 'extensions/carla/math.mojo',
+                    'math.mojo', 'tests/math.mojo',
                     'extensions/carla/std/utils.mojo', 'docs/wiki/Math.txt')
         with tempfile.TemporaryDirectory(prefix='cleanup-include-root-') as folder:
             include = Path(folder)
@@ -598,6 +598,132 @@ class FullAuditCleanupContracts(unittest.TestCase):
             # gate protects resolver topology; generation-origin and capture
             # tests separately bind their source-to-staged-byte relationship.
             cleanup.verify(self.root, include_roots=(include,))
+
+    def test_resolver_namespace_boundaries_keep_unrelated_leaves(self):
+        # The real repository already contains geometries/utils.mojo while
+        # math/utils.mojo is consumed. Neither leaf makes the other a shadow.
+        self.assertTrue((self.root/'geometries/utils.mojo').is_file())
+        cleanup.verify(self.root, exact=True)
+        with tempfile.TemporaryDirectory(prefix='cleanup-qualified-resolver-') as folder:
+            include = Path(folder)
+            for root in (self.root, include):
+                for name in ('unconsumed_namespace/utils.mojo',
+                             'unconsumed_namespace/geometry.mojo'):
+                    with self.subTest(root=str(root), positive=name), physical_change(root, name, b'# unrelated qualified leaf\n'):
+                        cleanup.verify(self.root, include_roots=(include,))
+                for name in ('tests/math.mojo', 'bench/extensions.mojopkg',
+                             'math.mojoc', 'math.mojopkg', 'tests/math.mojoc',
+                             'tests/math.mojopkg', 'bench/extensions.mojoc',
+                             'extensions/carla/lane_refinement.mojoc',
+                             'tests/extensions/carla/lane_refinement.mojo',
+                             'tests/math/__init__.mojo', 'tests/extensions/__init__.mojo',
+                             'tests/Math.mojo', 'tests/std/__init__.mojo'):
+                    with self.subTest(root=str(root), negative=name), physical_change(root, name, b'# actual entry namespace competitor\n'):
+                        with self.assertRaises(cleanup.ContractError):
+                            cleanup.verify(self.root, include_roots=(include,))
+            for root in (self.root, include):
+                for name in ('MATH', 'extensions/CARLA'):
+                    directory = root/name
+                    directory.mkdir(parents=True)
+                    try:
+                        with self.subTest(root=str(root), empty_case_prefix=name):
+                            with self.assertRaises(cleanup.ContractError):
+                                cleanup.verify(self.root, include_roots=(include,))
+                    finally:
+                        directory.rmdir()
+            # This is an allowed qualified path, not bare math in an entry dir.
+            # The maintained generation-origin protocol owns staged bytes.
+            with physical_change(include, 'extensions/carla/math.mojo', b'# staged instrumentation view\n'):
+                cleanup.verify(self.root, include_roots=(include,))
+            cleanup.verify(self.root, exact=True)
+
+    def test_maintained_resolver_keeps_ordered_entry_roots_before_repository(self):
+        affected = cleanup._sibling('affected')
+        known = {'tools/probe.mojo', 'tests/probe.mojo', 'pkg/one.mojo',
+                 'helper.mojo', 'pkg/helper.mojo', 'tools/helper.mojo', 'tests/helper.mojo'}
+        self.assertEqual(affected.resolve('helper', 'pkg/one.mojo', known,
+                                          entries=['tests', 'tools']),
+                         ['tests/helper.mojo', 'tools/helper.mojo', 'helper.mojo'])
+        self.assertEqual(affected.resolve('helper', 'pkg/one.mojo', known,
+                                          entries=['tools', 'tests']),
+                         ['tools/helper.mojo', 'tests/helper.mojo', 'helper.mojo'])
+        self.assertEqual(affected.resolve('helper', 'pkg/one.mojo', known,
+                                          entries=['tests', 'tests']),
+                         ['tests/helper.mojo', 'helper.mojo'])
+        self.assertEqual(affected.resolve('helper', 'tools/probe.mojo', known),
+                         ['tools/helper.mojo', 'helper.mojo'])
+        self.assertEqual(affected.resolve('helper', 'pkg/one.mojo',
+                                          {'pkg/one.mojo', 'pkg/helper.mojo'}, entries=['tools']), [])
+        prefix_known = {'tools/pkg/__init__.mojo', 'tools/pkg.mojo',
+                        'tools/pkg/sub/__init__.mojo', 'tools/pkg/sub.mojo',
+                        'pkg/__init__.mojo', 'pkg.mojo', 'pkg/sub/one.mojo'}
+        self.assertEqual(affected.resolve('pkg.sub.one', 'pkg/other.mojo', prefix_known,
+                                          entries=['tools']),
+                         ['tools/pkg/__init__.mojo', 'tools/pkg.mojo',
+                          'tools/pkg/sub/__init__.mojo', 'tools/pkg/sub.mojo',
+                          'pkg/__init__.mojo', 'pkg.mojo', 'pkg/sub/one.mojo'])
+        self.assertEqual(affected.entry_directories({
+            'tools/probe.mojo': 'def main():\n    pass\n',
+            'tests/probe.mojo': 'fn main():\n    pass\n',
+            'pkg/one.mojo': '# def main():\nfrom helper import value\n',
+        }), ['tests', 'tools'])
+
+    def test_dependency_census_uses_entry_directory_for_transitive_imports(self):
+        # A sparse physical fixture exercises only the maintained resolver
+        # primitive. It makes no complete-source-admission claim.
+        with tempfile.TemporaryDirectory(prefix='cleanup-entry-roots-') as folder:
+            root = Path(folder)
+            files = {
+                'tools/probe.mojo': 'from pkg.one import value\ndef main():\n    pass\n',
+                'tests/probe.mojo': 'from pkg.one import value\ndef main():\n    pass\n',
+                'pkg/one.mojo': 'from helper import value\n',
+                'helper.mojo': 'def value() -> Int:\n    return 0\n',
+                'tools/helper.mojo': 'def value() -> Int:\n    return 1\n',
+                'tests/helper.mojo': 'def value() -> Int:\n    return 2\n',
+                'pkg/helper.mojo': 'def value() -> Int:\n    return 3\n',
+            }
+            for name, text in files.items():
+                target = root/name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text)
+            for entry in ('tools', 'tests'):
+                with self.subTest(compiled_entry_directory=entry):
+                    self.assertEqual(cleanup.dependency_inventory(root,
+                        roots=(entry+'/probe.mojo',), entries=(entry,)),
+                        {entry+'/probe.mojo', 'pkg/one.mojo', entry+'/helper.mojo', 'helper.mojo'})
+            self.assertEqual(cleanup.dependency_inventory(root,
+                roots=('tools/probe.mojo', 'tests/probe.mojo'), entries=('tests', 'tools')),
+                {'tools/probe.mojo', 'tests/probe.mojo', 'pkg/one.mojo',
+                 'tests/helper.mojo', 'tools/helper.mojo', 'helper.mojo'})
+
+    def test_entry_namespace_symlinks_and_real_qualified_byte_mutation_reject(self):
+        name = 'extensions/carla/math.mojo'
+        original = (self.root/name).read_bytes()
+        with physical_change(self.root, name, original+b'\n# Changed actual producer.\n'):
+            self.reject_current()
+        cleanup.verify(self.root, exact=True)
+        with tempfile.TemporaryDirectory(prefix='cleanup-entry-symlink-') as folder:
+            include = Path(folder)
+            for root in (self.root, include):
+                with self.subTest(root=str(root), symlink='entry module'), physical_change(
+                        root, 'tests/math.mojo', b'# placeholder\n') as path:
+                    path.unlink()
+                    path.symlink_to(self.root/'math/utils.mojo')
+                    with self.assertRaises(cleanup.ContractError):
+                        cleanup.verify(self.root, include_roots=(include,))
+                link = root/'tests/extensions'
+                parent_existed = link.parent.exists()
+                link.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    link.symlink_to(self.root/'extensions', target_is_directory=True)
+                    with self.subTest(root=str(root), symlink='entry package'):
+                        with self.assertRaises(cleanup.ContractError):
+                            cleanup.verify(self.root, include_roots=(include,))
+                finally:
+                    link.unlink()
+                    if not parent_existed:
+                        link.parent.rmdir()
+                cleanup.verify(self.root, include_roots=(include,))
 
     def test_symlink_source_prefix_root_and_inert_exception_reject(self):
         path = self.root/LANE

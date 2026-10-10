@@ -768,24 +768,26 @@ def dependency_inventory(root, *, roots=(), entries=(), _known=None, _snapshots=
 
 
 def resolver_unshadowed(root, paths):
-    """Refuse alternate native lookup surfaces at root and importer scopes.
+    """Refuse alternate qualified-module and namespace lookup surfaces.
 
-    Source closure alone is not native resolution. Any case-folded module or
-    prefix collision, alternate suffix/package, symlink or std namespace in
-    the actual input roots fails. Only three exact regular wiki files are inert.
-    Include roots receive structural checks only: maintained generation_origins
-    and source/staged manifests separately bind instrumented coverage bytes.
+    Every reviewed import begins at a protected top-level namespace. Guard
+    those namespace names conservatively everywhere, including every compiled
+    entry directory, repository root and supplied include root. Imported-module
+    directories are not Mojo lookup roots. An unrelated leaf basename elsewhere
+    cannot shadow a qualified import and is not itself a namespace competitor.
+    Exact consumed module/prefix coordinates still reject case, alternate
+    suffix/package and symlink changes. Only three exact regular wiki files are
+    inert. Include roots receive structural checks only: maintained generation
+    origins and source/staged manifests bind instrumented coverage bytes.
     """
     root = Path(root)
     if not root.is_dir() or not _root_unaliased(root):
         return False
     allowed = set(paths)
     stems = {str(Path(p).with_suffix('')).casefold() for p in allowed}
-    prefixes = {str(parent).casefold() for p in allowed for parent in Path(p).parents if str(parent) != '.'}
+    canonical_prefixes = {str(parent) for p in allowed for parent in Path(p).parents if str(parent) != '.'}
+    prefixes = {prefix.casefold() for prefix in canonical_prefixes}
     top = {Path(p).parts[0].casefold() for p in allowed} | {'std'}
-    basenames = {Path(p).stem.casefold() for p in allowed} | top
-    basenames.discard('__init__')
-    importer_dirs = {str(Path(p).parent) for p in allowed}
     inert = {'docs/wiki/Math.md', 'docs/wiki/Units.md', 'docs/wiki/Extensions.md'}
     try:
         for folder, directories, files in os.walk(root, followlinks=False):
@@ -797,11 +799,10 @@ def resolver_unshadowed(root, paths):
                 relative = path.relative_to(root).as_posix()
                 folded = relative.casefold()
                 stem = str(Path(relative).with_suffix('')).casefold()
-                # Every std shadow is forbidden in any consumed include root.
+                # Namespace roots remain protected at every actual lookup root.
                 scoped_name = name.split('.')[0].casefold()
-                local_prefix = relative_dir in importer_dirs and scoped_name in top
                 relevant = (folded in stems or folded in prefixes or stem in stems
-                            or stem in prefixes or local_prefix or scoped_name in basenames
+                            or stem in prefixes or scoped_name in top
                             or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
                 if not relevant:
                     continue
@@ -810,7 +811,7 @@ def resolver_unshadowed(root, paths):
                 if path.is_symlink():
                     return False
                 if path.is_dir():
-                    if folded not in prefixes or local_prefix:
+                    if relative not in canonical_prefixes:
                         return False
                     continue
                 if relative not in allowed or not path.is_file():
