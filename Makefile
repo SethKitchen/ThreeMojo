@@ -75,7 +75,7 @@ GPU_LIB_SOURCES  := render/gpu.mojo render/gpu_vxgi.mojo extensions/water/gpu.mo
 GPU_HOST_TESTS   := tests/test_gpu_layout.mojo \
                     tests/test_gpu_volume_packing.mojo
 GPU_TESTS        := tests/test_gpu.mojo tests/test_gpu_water.mojo $(GPU_HOST_TESTS)
-GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo
+GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo bench/water_gpu_bench.mojo bench/hair_frame_bench.mojo
 
 CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
 CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
