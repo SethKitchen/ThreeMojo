@@ -172,8 +172,10 @@ class AnatomyValidityTests(unittest.TestCase):
             (root/'tools').mkdir()
             (root/'docs/validation').mkdir(parents=True)
             (root/'tools/anatomy_validity.py').write_text('fixture')
+            (root/'tools/affected.py').write_text('resolver')
+            (root/'tools/suite_key.py').write_text('closure')
             (root/'tools/anatomy_probe.mojo').write_text('def main(): pass')
-            (root/'docs/validation/anatomy-provenance.json').write_text('{}')
+            (root/'docs/validation/anatomy-provenance.json').write_text('{"parameters": []}')
             probe = root/'.cache/probe'
             calls = []
             def run(command, **options):
@@ -195,7 +197,10 @@ class AnatomyValidityTests(unittest.TestCase):
             (root/'tools').mkdir()
             (root/'docs/validation').mkdir(parents=True)
             (root/'tools/anatomy_validity.py').write_text('one')
-            (root/'docs/validation/anatomy-provenance.json').write_text('{}')
+            (root/'tools/affected.py').write_text('resolver')
+            (root/'tools/suite_key.py').write_text('closure')
+            (root/'tools/anatomy_probe.mojo').write_text('def main(): pass')
+            (root/'docs/validation/anatomy-provenance.json').write_text('{"parameters": []}')
             probe = root/'probe'
             with self.assertRaisesRegex(ValueError, 'build'):
                 av.prepare_probe(root, probe, 'mojo', False)
@@ -228,6 +233,10 @@ class AnatomyValidityTests(unittest.TestCase):
                     (root/'docs/validation').mkdir(parents=True)
                     logic = root/'tools/anatomy_validity.py'
                     logic.write_text('report fixture')
+                    (root/'tools/affected.py').write_text('resolver')
+                    (root/'tools/suite_key.py').write_text('closure')
+                    (root/'tools/anatomy_probe.mojo').write_text(
+                        'from bound import fixture\n\n\ndef main():\n    fixture()\n')
                     source = root/'bound.mojo'
                     source.write_text('def fixture(): pass')
                     inventory_path = root/'docs/validation/anatomy-provenance.json'
@@ -250,7 +259,8 @@ class AnatomyValidityTests(unittest.TestCase):
                             if mutation == 'source':
                                 source.write_text('def changed(): pass')
                             elif mutation == 'new_source':
-                                (root/'added.mojo').write_text('def added(): pass')
+                                # Beside the probe, it shadows the bound module.
+                                (root/'tools/bound.mojo').write_text('def fixture(): pass')
                             elif mutation == 'removed_source':
                                 source.unlink()
                             elif mutation == 'logic':

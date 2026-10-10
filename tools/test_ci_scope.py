@@ -41,6 +41,18 @@ def selected(changed, *, sources=None, old=None):
 
 
 class RoutingTests(unittest.TestCase):
+    def test_anatomy_evidence_runs_the_tools_binding_test(self):
+        # The report and its inventory are bound evidence, not documents.
+        for path in ('docs/validation/anatomy-template-report.json',
+                     'docs/validation/anatomy-provenance.json'):
+            with self.subTest(path=path):
+                self.assertEqual(ci_scope.kind(path), 'tools')
+                value = selected({path: False})
+                self.assertFalse(value['full'])
+                self.assertTrue(value['flags']['tools'])
+        # Other validation documents stay documentation.
+        self.assertEqual(ci_scope.kind('docs/validation/water-gpu-300.md'), 'docs')
+
     def test_carla_asset_packaging_tools_select_python_and_documentation_checks(self):
         paths = {'assets/carla/tools/carla_assets.py': False,
                  'assets/carla/tools/test_carla_assets.py': False}

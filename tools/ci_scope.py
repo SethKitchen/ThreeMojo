@@ -55,6 +55,11 @@ def kind(path):
         return 'all'
     if path == 'bench/results-linux.json':
         return 'tools'
+    # The anatomy report and its inventory are evidence, not documentation:
+    # their binding test runs with the tools (#702).
+    if path in {'docs/validation/anatomy-template-report.json',
+                'docs/validation/anatomy-provenance.json'}:
+        return 'tools'
     if affected.is_documentation(path):
         return 'docs'
     if path in ROUTING or path.startswith('tools/test_') and path.endswith('.py'):

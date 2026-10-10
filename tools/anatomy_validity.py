@@ -12,6 +12,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 
@@ -250,19 +251,90 @@ def diagnostic_findings(groups):
     return findings
 
 
+# The report binds what can change the measured anatomy, not every source
+# file (#702). Bump the version when the binding rule changes.
+BINDING_VERSION = 'anatomy-binding-v2'
+PROBE = 'tools/anatomy_probe.mojo'
+INVENTORY = 'docs/validation/anatomy-provenance.json'
+# The code that decides the binding is bound with it.
+BINDING_CODE = ('tools/anatomy_validity.py', 'tools/affected.py', 'tools/suite_key.py')
+# Packages that come with the pinned toolchain. The toolchain string binds them.
+TOOLCHAIN_PACKAGES = ('std', 'max')
+RELATIVE_IMPORT = re.compile(r'^\s*from\s+\.', re.MULTILINE)
+MODULE_NAME = re.compile(r'[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*')
+
+
+def bound_paths(root):
+    """Return the sorted inputs the anatomy report depends on.
+
+    They are the probe's import closure as the pinned compiler resolves it,
+    every source file the inventory cites, the inventory, and the code that
+    computes this list. The closure is worked out again from the imports on
+    every call, so a new import, module or shadowing file joins it.
+
+    Raises:
+        ValueError: If the probe or a cited input is missing, an import is
+            relative, or a local import resolves to no file.
+    """
+    import affected
+    import suite_key
+    root = Path(root)
+    saved = affected.ROOT
+    affected.ROOT = str(root)
+    try:
+        known = set(affected.mojo_files())
+        if PROBE not in known:
+            raise ValueError('the anatomy probe is missing: ' + PROBE)
+        imports = {}
+        closure = suite_key.closure(PROBE, known, imports)
+        entry = [str(Path(PROBE).parent.as_posix())]
+        for path in closure:
+            # The shared import parser skips `from .x import y`, so look
+            # for it here rather than let a relative import go unbound.
+            if RELATIVE_IMPORT.search((root/path).read_text()):
+                raise ValueError('relative imports are not supported: ' + path)
+            for name in imports[path][0]:
+                if name.split('.')[0] in TOOLCHAIN_PACKAGES:
+                    continue
+                # The import parser also reads prose that starts with
+                # "import" in a docstring. Only a dotted name can import.
+                if not MODULE_NAME.fullmatch(name):
+                    continue
+                # `from module import name` lists the module and module.name;
+                # the name can be a symbol, so its parent must resolve.
+                parent = name.rsplit('.', 1)[0] if '.' in name else name
+                if not (affected.resolve(name, path, known, entry)
+                        or affected.resolve(parent, path, known, entry)):
+                    raise ValueError('an anatomy probe import resolves to no file: '
+                                     + name + ' in ' + path)
+    finally:
+        affected.ROOT = saved
+    inventory = json.loads((root/INVENTORY).read_text())
+    cited = {name for item in inventory['parameters'] for name in item['source_files']}
+    for name in sorted(cited):
+        if not (root/name).is_file():
+            raise ValueError('an inventory-cited input is missing: ' + name)
+    for name in BINDING_CODE:
+        if not (root/name).is_file():
+            raise ValueError('binding code is missing: ' + name)
+    return sorted(set(closure) | cited | set(BINDING_CODE) | {INVENTORY})
+
+
 def source_snapshot(root):
     """Read bound inputs once, retaining hashes and the exact inventory bytes."""
+    root = Path(root)
     digest = hashlib.sha256()
+    # The pinned build contract is part of what the report depends on.
+    contract = json.dumps({'binding': BINDING_VERSION, 'toolchain': PINNED_TOOLCHAIN,
+                           'flags': BUILD_FLAGS}, sort_keys=True)
+    digest.update(contract.encode()+b'\0')
     hashes = {}
-    inventory_path = root/'docs/validation/anatomy-provenance.json'
-    paths = [p for p in root.rglob('*.mojo') if not any(s in ('.cache', '.git', 'build', '.venv', 'node_modules') for s in p.relative_to(root).parts)]
-    paths += [root/'tools/anatomy_validity.py', inventory_path]
-    for path in sorted(paths):
-        content = path.read_bytes()
-        name = str(path.relative_to(root))
+    inventory = None
+    for name in bound_paths(root):
+        content = (root/name).read_bytes()
         digest.update(name.encode()+b'\0'+content+b'\0')
         hashes[name] = hashlib.sha256(content).hexdigest()
-        if path == inventory_path:
+        if name == INVENTORY:
             inventory = content
     return digest.hexdigest(), hashes, inventory
 
@@ -273,7 +345,11 @@ def source_digest(root):
 
 def verify_report_inputs(root, probe, provenance, snapshot, metadata):
     """Reject observed input changes; this is not an atomic filesystem transaction."""
-    current = source_snapshot(root)
+    try:
+        current = source_snapshot(root)
+    except ValueError:
+        # The inputs were bindable when the report began.
+        raise ValueError('report inputs changed during execution; rebuild before reporting')
     if (current != snapshot or current[0] != provenance['source_sha256']
             or hashlib.sha256(probe.read_bytes()).hexdigest() != provenance['binary_sha256']
             or probe.with_suffix(probe.suffix+'.provenance.json').read_bytes() != metadata
