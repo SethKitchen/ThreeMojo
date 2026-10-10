@@ -1,0 +1,10 @@
+{
+  "source_seal_sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1",
+  "test_source_sha256": "b93851146773accc61cae8efb1075bec50896dbac1879baebda83456cbb85b10",
+  "changed_method_only": [
+    "CacheInputViewCurrentControls.test_current_dynamic_negative_paths_and_non_ascii_census_use_complete_image"
+  ],
+  "all_production_and_other_source_bytes_unchanged": true,
+  "original_consumer_preflight_stage_commands_unchanged": true,
+  "status": "Prepared only; no execution"
+}

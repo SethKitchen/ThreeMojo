@@ -1,0 +1,90 @@
+{
+  "files": [
+    {
+      "bytes": 3590,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/RESULT.json",
+      "path": "owned-input-remaining-optimized-v13/RESULT.json",
+      "sha256": "afdea28c4d14a92e2ca16a7304fe68315be9b3498571a378acbec41ead63cb69"
+    },
+    {
+      "bytes": 419029,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/SOURCE-SEAL.json",
+      "path": "owned-input-remaining-optimized-v13/SOURCE-SEAL.json",
+      "sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/SDK-BEFORE.json",
+      "path": "owned-input-remaining-optimized-v13/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/SDK-AFTER.json",
+      "path": "owned-input-remaining-optimized-v13/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/WINDOW-START.json",
+      "path": "owned-input-remaining-optimized-v13/WINDOW-START.json",
+      "sha256": "a2252df6416a8e98950b78a929e52dfce4e954fcd4dc43fbfb6763fe538f8d18"
+    },
+    {
+      "bytes": 2464,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/remaining-current-optimized-START.json",
+      "path": "owned-input-remaining-optimized-v13/remaining-current-optimized-START.json",
+      "sha256": "0d0d56c694b1958d6c36269ffb6857da9cf45d1cfce455df25d98066c1d6fb0f"
+    },
+    {
+      "bytes": 2778,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/remaining-current-optimized-RESULT.json",
+      "path": "owned-input-remaining-optimized-v13/remaining-current-optimized-RESULT.json",
+      "sha256": "820fd8c73a9534dea0e61a78ca0b6f2ed26648f41e0cd5176949a304ec31889b"
+    },
+    {
+      "bytes": 5152,
+      "kind": "actual-supervisor-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/owned-input-remaining-optimized-v13/remaining-current-optimized.log",
+      "path": "owned-input-remaining-optimized-v13/remaining-current-optimized.log",
+      "sha256": "608eefb8f49e0da2f7ff71599980a6975e72a9209e1910db2ad42b9621ccc1d7"
+    },
+    {
+      "bytes": 2878,
+      "kind": "executed-plan-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/reproduce/owned-input-remaining-optimized-v13.json",
+      "path": "reproduce/owned-input-remaining-optimized-v13.json",
+      "sha256": "27f9f4f14b9925ccbb2c1506c3ae97a5b15312ffe846ffb563a30ab871390e15"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-plan-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 497,
+      "kind": "executed-plan-harness-or-source-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/reproduce/V13-REPAIR-GATE-BINDING.json",
+      "path": "reproduce/V13-REPAIR-GATE-BINDING.json",
+      "sha256": "6f4d13b7c17e3f4e72ac585eb990b4df4a44cbd04cbe314cd3982a0bb52b1d00"
+    },
+    {
+      "bytes": 1055,
+      "kind": "factual-separately-scoped-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v13-remaining-controls-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "2a4933e7888b479b08e02bfa887e27b0a7d0614eaa346fcfb5056e45aa43e551"
+    }
+  ],
+  "schema": 1,
+  "scope": "Fresh execution of the remaining 21 real-current optimized controls on exact v13. The corrected method has its own normal/optimized packet. Earlier 21 normal passes remain scoped to v11."
+}

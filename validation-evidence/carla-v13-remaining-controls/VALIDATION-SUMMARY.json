@@ -1,0 +1,17 @@
+{
+  "configured_window_cap_seconds": 2100,
+  "evidence_policy": "Original receipts and raw log copied byte-for-byte; summary is separately derived. No private notes or coordination.",
+  "executed_tests": 21,
+  "limitations": "Broader preflight is ongoing and excluded. No full-matrix, native coverage, report, hosted CI, robust timing or issue-completion claim. Earlier failures remain preserved.",
+  "per_stage_cap_seconds": 1800,
+  "remaining_owned_descendants": [],
+  "result_sha256": "afdea28c4d14a92e2ca16a7304fe68315be9b3498571a378acbec41ead63cb69",
+  "schema": 1,
+  "scope": "Fresh execution of the remaining 21 real-current optimized controls on exact v13. The corrected method has its own normal/optimized packet. Earlier 21 normal passes remain scoped to v11.",
+  "skips": 0,
+  "source_checkpoint": "2981582ed174483ea3b64a2c0ce6a09d22470aa0",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "09b1a60c0519873d3766065f1af12007f79e28841c77df438370754959a1fbe1",
+  "stage_seconds": 297.7748302629989,
+  "window_seconds": 301.3201590790013
+}
