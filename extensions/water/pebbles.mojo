@@ -8,7 +8,9 @@
 The page stores a 1024 by 1024 sRGB JPEG and reads it as an sRGB texture,
 so a sample is linear before the bed shader mixes sand and weed. The file
 is `assets/pebbles.jpg`. It tiles every 0.78 m. The page also builds
-mipmaps and samples them with anisotropy 16.
+mipmaps and samples them with anisotropy 16. `sample_pebble_grad` reads
+texels through `PebbleTexels`, so the same arithmetic runs on a
+`PebbleBed` and on a copy in device memory.
 """
 
 from extensions.water.filter import anisotropic_step
@@ -37,7 +39,57 @@ struct PebbleSample(ImplicitlyCopyable):
         self.b = b
 
 
-struct PebbleBed(Movable):
+trait PebbleTexels:
+    """Read access to the pebble photograph and its mipmaps.
+
+    Level 0 is the photograph. Level `k` is the `k`th coarser mip.
+    """
+
+    def pebble_levels(self) -> Int:
+        """Return how many mip levels follow the photograph.
+
+        Returns:
+            The count of coarser levels.
+        """
+        ...
+
+    def pebble_width(self, level: Int) -> Int:
+        """Return the texels across a level.
+
+        Args:
+            level: The level. Zero or less is the photograph.
+
+        Returns:
+            The width.
+        """
+        ...
+
+    def pebble_height(self, level: Int) -> Int:
+        """Return the texels down a level.
+
+        Args:
+            level: The level. Zero or less is the photograph.
+
+        Returns:
+            The height.
+        """
+        ...
+
+    def pebble_texel(self, level: Int, x: Int, y: Int) -> PebbleSample:
+        """Return one linear texel of a level.
+
+        Args:
+            level: The level. Zero or less is the photograph.
+            x: Column inside that level.
+            y: Row inside that level.
+
+        Returns:
+            The linear color.
+        """
+        ...
+
+
+struct PebbleBed(Movable, PebbleTexels):
     """The pebble photograph in linear RGB, row-major from the top."""
 
     var width: Int
@@ -76,6 +128,53 @@ struct PebbleBed(Movable):
         self.mip_off = List[Int]()
         self.mip_px = List[Float32]()
         _fill_mips(self)
+
+    def pebble_levels(self) -> Int:
+        """Return how many mip levels follow the photograph.
+
+        Returns:
+            The count of coarser levels.
+        """
+        return len(self.mip_w)
+
+    def pebble_width(self, level: Int) -> Int:
+        """Return the texels across a level.
+
+        Args:
+            level: The level. Zero or less is the photograph.
+
+        Returns:
+            The width.
+        """
+        if level <= 0:
+            return self.width
+        return self.mip_w[level - 1]
+
+    def pebble_height(self, level: Int) -> Int:
+        """Return the texels down a level.
+
+        Args:
+            level: The level. Zero or less is the photograph.
+
+        Returns:
+            The height.
+        """
+        if level <= 0:
+            return self.height
+        return self.mip_h[level - 1]
+
+    def pebble_texel(self, level: Int, x: Int, y: Int) -> PebbleSample:
+        """Return one linear texel of a level.
+
+        Args:
+            level: The level. Zero or less is the photograph.
+            x: Column inside that level.
+            y: Row inside that level.
+
+        Returns:
+            The linear color.
+        """
+        return _level_texel(self, level, x, y)
 
 
 def pebble_bed(image: DecodedImage) raises -> PebbleBed:
@@ -151,8 +250,10 @@ def _mix_sample(a: PebbleSample, b: PebbleSample, t: Float32) -> PebbleSample:
     return PebbleSample(a.r * s + b.r * t, a.g * s + b.g * t, a.b * s + b.b * t)
 
 
-def sample_pebble_grad(
-    bed: PebbleBed,
+def sample_pebble_grad[
+    B: PebbleTexels
+](
+    bed: B,
     u: Float32,
     v: Float32,
     du_dx: Float32,
@@ -161,6 +262,9 @@ def sample_pebble_grad(
     dv_dy: Float32,
 ) -> PebbleSample:
     """Return one anisotropic mipmapped pebble sample.
+
+    Parameters:
+        B: The photograph storage.
 
     Args:
         bed: A linear pebble image.
@@ -179,11 +283,11 @@ def sample_pebble_grad(
         dv_dx,
         du_dy,
         dv_dy,
-        Float32(bed.width),
-        Float32(bed.height),
+        Float32(bed.pebble_width(0)),
+        Float32(bed.pebble_height(0)),
         16.0,
         0.0,
-        Float32(len(bed.mip_w)),
+        Float32(bed.pebble_levels()),
     )
     var acc = PebbleSample(0.0, 0.0, 0.0)
     var count = step.taps
@@ -199,10 +303,10 @@ def _mix_add(a: PebbleSample, b: PebbleSample) -> PebbleSample:
     return PebbleSample(a.r + b.r, a.g + b.g, a.b + b.b)
 
 
-def _trilinear(
-    bed: PebbleBed, u: Float32, v: Float32, lod: Float32
-) -> PebbleSample:
-    var levels = len(bed.mip_w)
+def _trilinear[
+    B: PebbleTexels
+](bed: B, u: Float32, v: Float32, lod: Float32) -> PebbleSample:
+    var levels = bed.pebble_levels()
     var i0 = Int(floor(lod))
     var i1 = i0 + 1
     if i1 > levels:
@@ -213,14 +317,11 @@ def _trilinear(
     return _mix_sample(a, b, frac)
 
 
-def _sample_level(
-    bed: PebbleBed, level: Int, u: Float32, v: Float32
-) -> PebbleSample:
-    var w = bed.width
-    var h = bed.height
-    if level > 0:
-        w = bed.mip_w[level - 1]
-        h = bed.mip_h[level - 1]
+def _sample_level[
+    B: PebbleTexels
+](bed: B, level: Int, u: Float32, v: Float32) -> PebbleSample:
+    var w = bed.pebble_width(level)
+    var h = bed.pebble_height(level)
     var fu = u - floor(u)
     var fv = v - floor(v)
     var x = fu * Float32(w) - 0.5
@@ -231,10 +332,10 @@ def _sample_level(
     var y1 = (y0 + 1) % h
     var tx = x - floor(x)
     var ty = y - floor(y)
-    var s00 = _level_texel(bed, level, x0, y0)
-    var s10 = _level_texel(bed, level, x1, y0)
-    var s01 = _level_texel(bed, level, x0, y1)
-    var s11 = _level_texel(bed, level, x1, y1)
+    var s00 = bed.pebble_texel(level, x0, y0)
+    var s10 = bed.pebble_texel(level, x1, y0)
+    var s01 = bed.pebble_texel(level, x0, y1)
+    var s11 = bed.pebble_texel(level, x1, y1)
     var top = _mix_sample(s00, s10, tx)
     var bottom = _mix_sample(s01, s11, tx)
     return _mix_sample(top, bottom, ty)

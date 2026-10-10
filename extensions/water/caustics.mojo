@@ -8,6 +8,8 @@
 Each water cell is refracted along the sun onto the bed, once per color,
 because the index changes. The flat-surface shift of the green channel is
 removed so the pattern stays registered. What remains is dispersion.
+The shader reads the texture through `CausticTexels`, so the same
+arithmetic runs on a `CausticField` and on a copy in device memory.
 """
 
 from extensions.water.optics import channel_ior, refract
@@ -22,7 +24,71 @@ comptime MAX_CAUSTIC_INTENSITY = Float32(40.0)
 comptime MIN_SUN_Y = Float32(0.05)
 
 
-struct CausticField(Movable):
+trait CausticTexels:
+    """Read access to a caustic texture and its mipmaps.
+
+    Level 0 is the base texture. Level `k` is the `k`th coarser mip.
+    """
+
+    def caustic_patch(self) -> Float32:
+        """Return the ocean patch length the texture tiles, in meters.
+
+        Returns:
+            The patch length.
+        """
+        ...
+
+    def caustic_shift_x(self) -> Float32:
+        """Return the x registration shift, in meters.
+
+        Returns:
+            The flat-surface shift along x.
+        """
+        ...
+
+    def caustic_shift_z(self) -> Float32:
+        """Return the z registration shift, in meters.
+
+        Returns:
+            The flat-surface shift along z.
+        """
+        ...
+
+    def caustic_levels(self) -> Int:
+        """Return how many mip levels follow the base texture.
+
+        Returns:
+            The count of coarser levels.
+        """
+        ...
+
+    def caustic_side(self, level: Int) -> Int:
+        """Return the texels on one side of a level.
+
+        Args:
+            level: The level. Zero or less is the base texture.
+
+        Returns:
+            The side length.
+        """
+        ...
+
+    def caustic_channel(self, level: Int, x: Int, y: Int, c: Int) -> Float32:
+        """Return one channel of one texel of a level.
+
+        Args:
+            level: The level. Zero or less is the base texture.
+            x: Column inside that level.
+            y: Row inside that level.
+            c: 0 red, 1 green, 2 blue.
+
+        Returns:
+            The stored intensity.
+        """
+        ...
+
+
+struct CausticField(CausticTexels, Movable):
     """A square caustic texture, three additive channels."""
 
     var n: Int
@@ -87,6 +153,65 @@ struct CausticField(Movable):
         var w = self.mip_n[level - 1]
         var at = self.mip_off[level - 1] + (y * w + x) * 3 + c
         return self.mip_px[at]
+
+    def caustic_patch(self) -> Float32:
+        """Return the ocean patch length the texture tiles, in meters.
+
+        Returns:
+            The patch length.
+        """
+        return self.patch
+
+    def caustic_shift_x(self) -> Float32:
+        """Return the x registration shift, in meters.
+
+        Returns:
+            The flat-surface shift along x.
+        """
+        return self.shift_x
+
+    def caustic_shift_z(self) -> Float32:
+        """Return the z registration shift, in meters.
+
+        Returns:
+            The flat-surface shift along z.
+        """
+        return self.shift_z
+
+    def caustic_levels(self) -> Int:
+        """Return how many mip levels follow the base texture.
+
+        Returns:
+            The count of coarser levels.
+        """
+        return len(self.mip_n)
+
+    def caustic_side(self, level: Int) -> Int:
+        """Return the texels on one side of a level.
+
+        Args:
+            level: The level. Zero or less is the base texture.
+
+        Returns:
+            The side length.
+        """
+        if level <= 0:
+            return self.n
+        return self.mip_n[level - 1]
+
+    def caustic_channel(self, level: Int, x: Int, y: Int, c: Int) -> Float32:
+        """Return one channel of one texel of a level.
+
+        Args:
+            level: The level. Zero or less is the base texture.
+            x: Column inside that level.
+            y: Row inside that level.
+            c: 0 red, 1 green, 2 blue.
+
+        Returns:
+            The stored intensity.
+        """
+        return self.level_channel(level, x, y, c)
 
 
 def flat_shift(sun: Vector3, depth: Float32) -> Tuple[Float32, Float32]:
