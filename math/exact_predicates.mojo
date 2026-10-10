@@ -34,6 +34,9 @@ struct _Dyadic(ImplicitlyCopyable):
     var exponent: Int
     var sign: Int
 
+    # Keep fixed-capacity initialization out of predicate callers to avoid
+    # Mojo 1.1 AOT code-generation stalls.
+    @inline(.never)
     def __init__(out self, value: Float64 = 0):
         self.words = Array[UInt32, _CAPACITY](fill=0)
         var bits = bitcast[DType.uint64](value)

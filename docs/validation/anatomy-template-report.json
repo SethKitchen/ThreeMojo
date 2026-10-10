@@ -12,14 +12,14 @@
     "reason": "Template and game/fantasy use is permitted. Other claims lack task-specific independent reference evidence and acceptance thresholds."
   },
   "build_provenance": {
-    "source_sha256": "79c9ac20829b8bf53c29b4935b7b2a7940145e1d5377b7f53b62b2704c53dac2",
+    "source_sha256": "8cf1e357464040f6e2d84bd157ab3c5715eb3171d620cb266ba06a1f96f201b5",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "53aff41451fa6dd8df31915b4291a98d791cb424bcb78132704ada96a282ab07"
+    "binary_sha256": "9eab601dd274dc59ace179f3151d984df4b2b8f153cf6adccd9e018476eff35e"
   },
   "source_file_sha256": {
     "extensions/anatomy/soft_tissue.mojo": "3af2496ae83428e477d5e8ec2eb364a88a3a5435235faeb88f776dbfdaed3238",
@@ -79194,7 +79194,7 @@
         "samples": 3584,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.012127836,
+        "signed_field_witness_m": 0.012127839,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/bone/tibia|leg/vascular/5",
         "allowlist_applied": false,
@@ -79698,7 +79698,7 @@
         "samples": 104,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.014065964,
+        "signed_field_witness_m": 0.014065967,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/bone/tibia|leg/lymphatic/1",
         "allowlist_applied": false,
@@ -165180,7 +165180,7 @@
         "samples": 6248,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.007766196,
+        "signed_field_witness_m": 0.007766197,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/muscle/12|leg/nerve/1",
         "allowlist_applied": false,
@@ -171300,7 +171300,7 @@
         "samples": 16940,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.004154097,
+        "signed_field_witness_m": 0.0041540973,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/lymphatic/2|leg/muscle/16",
         "allowlist_applied": false,
@@ -226020,7 +226020,7 @@
         "samples": 21120,
         "overlap_samples": 0,
         "overlap_volume_m3": 0.0,
-        "signed_field_witness_m": 0.0019066656,
+        "signed_field_witness_m": 0.0019066635,
         "frame_id": "canonical/selected-side/lower-limb/knee-origin",
         "pair_id": "canonical/lower-limb/leg/lymphatic/2|leg/nerve/4",
         "allowlist_applied": false,
