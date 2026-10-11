@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-11T11:10:31.198713+00:00",
+  "independent_tree_audit_sha256": "4dc64061d23c8b87a6fd5e9cc47d9bf9f3e2e8284ad619e723ef276a1b4b258b",
+  "inventory_sha256": "43ea211d82c5a2ab09ba692d07697815a1f9c9479494c8aa85d74c7f39723841",
+  "manifest_sha256": "6f9bb381b2e8063747c5a4b50e47e4fa25f296ff8dc0762446d05667ab2c6162",
+  "matrix_artifact_audit_sha256": "282e0363f5fb56e899f0c2aa40f4dd38cc21270ec1ae01e2bac9b2463e78a5e2",
+  "matrix_config_sha256": "848e38cd12efb3807cb92f8ccd07144133b4837e28edf9bc7f26ee2eb4d0737b",
+  "published_commit": "19287a0b1564b9a628f15c96e7675c51413ca1a9",
+  "published_parent": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "published_tree": "5c1f67c196fc30d6a323d6d854748b65e3640585",
+  "separate_two_probe_owner_approval": "pending",
+  "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+  "status": "Fetched commit/tree/parent verified. Parent released fresh complete matrix for evidence collection; no readiness or merge approval."
+}
