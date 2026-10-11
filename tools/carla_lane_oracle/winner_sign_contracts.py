@@ -195,6 +195,12 @@ def verify(root):
         else:
             import consumer_successor_ledger as ledger
         successors = ledger.extend(successors, root, _operation=_operation)
+        for path, reviewed in full_audit.shared_helper_edges(root, paths=tuple(path for path in full_audit.shared_helpers.SOURCE_PATHS
+                if path in record['canonical_source_unchanged']),
+                _operation=_operation).items():
+            if path in record['canonical_source_unchanged']:
+                require(path not in successors, 'duplicate shared-helper consumer edge: ' + path)
+                successors[path] = reviewed
 
         for path, expected in record['canonical_source_unchanged'].items():
             if path in successors:
