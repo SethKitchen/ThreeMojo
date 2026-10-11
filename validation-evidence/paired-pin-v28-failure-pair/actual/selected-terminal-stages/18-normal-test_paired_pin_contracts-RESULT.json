@@ -1,0 +1,32 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_paired_pin_contracts.py",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+  "expected_tests": 33,
+  "label": "18-normal-test_paired_pin_contracts",
+  "leader_reaped": true,
+  "log_sha256": "417fd79076c5cbc27082d7717f2ffeeb21f9e8483180c724ede0f97fa05c78e3",
+  "pgid": 74,
+  "pid": 74,
+  "remaining_owned_descendants": [],
+  "returncode": 1,
+  "seconds": 267.95406237099814,
+  "single_cpu": 0,
+  "skipped_test_count": 0,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T06:54:34.489926+00:00",
+  "test_count": 33,
+  "timed_out": false
+}

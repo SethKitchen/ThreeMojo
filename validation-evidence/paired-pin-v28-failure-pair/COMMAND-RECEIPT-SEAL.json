@@ -1,0 +1,83 @@
+{
+  "config_sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+  "kind": "derived-selected-commands-and-binding-index",
+  "schema": 1,
+  "scope": "Selected terminal pair only; no aggregate continuation status.",
+  "selected_stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 33,
+      "label": "18-normal-test_paired_pin_contracts",
+      "leader_reaped": true,
+      "log_sha256": "417fd79076c5cbc27082d7717f2ffeeb21f9e8483180c724ede0f97fa05c78e3",
+      "pgid": 74,
+      "pid": 74,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 267.95406237099814,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T06:54:34.489926+00:00",
+      "test_count": 33,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 33,
+      "label": "18-optimized-test_paired_pin_contracts",
+      "leader_reaped": true,
+      "log_sha256": "31134047816c2f1893557807a1a7570ed13c897bc3c75b3dd8c79ea2fbca46b3",
+      "pgid": 87,
+      "pid": 87,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 282.7085649589935,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T06:59:04.594328+00:00",
+      "test_count": 33,
+      "timed_out": false
+    }
+  ],
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stage_files_sha256": {
+    "18-normal-test_paired_pin_contracts-RESULT.json": "aa2f6e033172d77d253adcd2fc3c3c6bb9f2b0f8417ff98c60aa64971e7715aa",
+    "18-normal-test_paired_pin_contracts-START.json": "5a8931ace5cc1437abc174767eb299c46a7c4e3680edf41c0a2a1e4bdac86619",
+    "18-normal-test_paired_pin_contracts.log": "417fd79076c5cbc27082d7717f2ffeeb21f9e8483180c724ede0f97fa05c78e3",
+    "18-optimized-test_paired_pin_contracts-RESULT.json": "8a0ee08d24b505abf2a2aefe4125476456402612760a1ac06ff134166f8d8969",
+    "18-optimized-test_paired_pin_contracts-START.json": "e26f87503c1f831f95594fd02464e006ef2c735804ea3cf9a53d5b8a1a28de85",
+    "18-optimized-test_paired_pin_contracts.log": "31134047816c2f1893557807a1a7570ed13c897bc3c75b3dd8c79ea2fbca46b3"
+  },
+  "supervisor_sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+}

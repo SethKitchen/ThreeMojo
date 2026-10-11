@@ -1,0 +1,139 @@
+{
+  "files": [
+    {
+      "bytes": 3316,
+      "kind": "derived-selected-command-binding-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "c1ef143a8feff2499cbffe81a4485feb3398d84961d512cd3badc10a9e1cf7ad"
+    },
+    {
+      "bytes": 13677,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "b59732d3f9db0b81b320df2113a92f079378dcadb91bb8e7fec3d1a6842abf20"
+    },
+    {
+      "bytes": 2741,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/README.md",
+      "path": "README.md",
+      "sha256": "415c0fcccf200044c020dea61a755480979ee47b54563554a2ca5905d0ab87c7"
+    },
+    {
+      "bytes": 6390,
+      "kind": "derived-selected-error-pair-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "ee09db8e75c995c60939a3d48529fa9db461bc926b0426211f09a3c4df0ea819"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "path": "actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 376,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/constant-continuation-bindings/WINDOW-START.json",
+      "path": "actual/constant-continuation-bindings/WINDOW-START.json",
+      "sha256": "d87934d76871e7ba07167d30214cfc93a7c6746be3574d26e21abc4d74c63cc4"
+    },
+    {
+      "bytes": 917,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/selected-terminal-stages/18-normal-test_paired_pin_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/18-normal-test_paired_pin_contracts-RESULT.json",
+      "sha256": "aa2f6e033172d77d253adcd2fc3c3c6bb9f2b0f8417ff98c60aa64971e7715aa"
+    },
+    {
+      "bytes": 602,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/selected-terminal-stages/18-normal-test_paired_pin_contracts-START.json",
+      "path": "actual/selected-terminal-stages/18-normal-test_paired_pin_contracts-START.json",
+      "sha256": "5a8931ace5cc1437abc174767eb299c46a7c4e3680edf41c0a2a1e4bdac86619"
+    },
+    {
+      "bytes": 10206,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/selected-terminal-stages/18-normal-test_paired_pin_contracts.log",
+      "path": "actual/selected-terminal-stages/18-normal-test_paired_pin_contracts.log",
+      "sha256": "417fd79076c5cbc27082d7717f2ffeeb21f9e8483180c724ede0f97fa05c78e3"
+    },
+    {
+      "bytes": 929,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/selected-terminal-stages/18-optimized-test_paired_pin_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/18-optimized-test_paired_pin_contracts-RESULT.json",
+      "sha256": "8a0ee08d24b505abf2a2aefe4125476456402612760a1ac06ff134166f8d8969"
+    },
+    {
+      "bytes": 615,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/selected-terminal-stages/18-optimized-test_paired_pin_contracts-START.json",
+      "path": "actual/selected-terminal-stages/18-optimized-test_paired_pin_contracts-START.json",
+      "sha256": "e26f87503c1f831f95594fd02464e006ef2c735804ea3cf9a53d5b8a1a28de85"
+    },
+    {
+      "bytes": 10206,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/actual/selected-terminal-stages/18-optimized-test_paired_pin_contracts.log",
+      "path": "actual/selected-terminal-stages/18-optimized-test_paired_pin_contracts.log",
+      "sha256": "31134047816c2f1893557807a1a7570ed13c897bc3c75b3dd8c79ea2fbca46b3"
+    },
+    {
+      "bytes": 880165,
+      "kind": "lossless-original-source-and-constant-bindings",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "f49fff01c09c425fb1dd80326b2529749bbf1c3d741a495fd598bc3f8d987d5e"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 19619,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/reproduce/build_paired_pin_failure_pair_v28_packet.py",
+      "path": "reproduce/build_paired_pin_failure_pair_v28_packet.py",
+      "sha256": "33683d25c08778088cfd690340caeb17f283591d87b3a647e8cc9a7d62f0cc1d"
+    },
+    {
+      "bytes": 53516,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/reproduce/full-python-diagnostic-continuation-v28.json",
+      "path": "reproduce/full-python-diagnostic-continuation-v28.json",
+      "sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3"
+    },
+    {
+      "bytes": 11833,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/reproduce/run_diagnostic_continuation_v28.py",
+      "path": "reproduce/run_diagnostic_continuation_v28.py",
+      "sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+    },
+    {
+      "bytes": 54195,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-v28-failure-pair-packet/reproduce/source/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "c581c353a2cfbacec9a012ed8e41bc89529733d22e436555bcb228377703be9d"
+    }
+  ],
+  "schema": 1,
+  "scope": "Two selected completed diagnostic stages on immutable v28: normal and optimized paired-pin each ran33methods with31passing,1failure and1error, zero skips. Both retained1800-second stage caps and returned1 without timeout. This pair is not a passing module, complete continuation result or full qualification."
+}
