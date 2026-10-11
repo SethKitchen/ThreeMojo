@@ -2399,11 +2399,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
         'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '8b1b5c07c343a5fd8cea1460dbd3fa50f6e91dc00192c077774b7be7bb920d9e',
-        'full_audit_cleanup_contracts.py': '303dbd4b4c647f1055f436587aa9c3ddab43dfa903a75f9347abb9e50515f73f',
+        'coverage_loop_proofs.py': '2b6dbe7483d3c9ceb2ee9914158d99fcd8c1d87f9298f797edac150a78457f67',
+        'full_audit_cleanup_contracts.py': 'a182c861c55962fb749b2c0aa6b7a5c0466674b474e1c6b67dd6ed621dc44f25',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': '14cd4cbfe4d8a17be1d31950e1abf4856d160b1c4afe19f7417bc55ad606c380',
+        'seed_count_contracts.py': 'd5b16ad9ef253250c5cceffe2fe82ca6f013526f574974e5b952c81ee012a4c4',
         'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
     }
 
@@ -2740,7 +2740,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1053,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1157,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -2930,11 +2930,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         from carla_lane_oracle import seed_count_contracts as seed
         production_site = self._site(seed.verify_score_caller_inventory, 486,
                                      'guard.production_mojo_paths(root)')
-        known_site = self._site(loops._construction_boundary_callers, 1150,
+        known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1332,
+        production_catch = self._site(core._operation_production_paths, 1471,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1255,
+        known_catch = self._site(loops.construction_boundary_loops, 1326,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
