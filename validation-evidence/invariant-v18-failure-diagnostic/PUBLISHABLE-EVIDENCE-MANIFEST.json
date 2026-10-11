@@ -1,0 +1,237 @@
+{
+  "files": [
+    {
+      "bytes": 5075,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "b5baa0afbf23aeee7a70191c58d01502d952200b8f6e5db3fea2414eb59e4d20"
+    },
+    {
+      "bytes": 31845,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "7a49f998d8f511836323f1ab34c3a22bce7edd295e7e294517bbd9c881e10ece"
+    },
+    {
+      "bytes": 2422,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/README.md",
+      "path": "README.md",
+      "sha256": "5eabfc5432c3dd21ccf0dac898537f8a8377698650e96a323626cf485ef02b47"
+    },
+    {
+      "bytes": 4227,
+      "kind": "derived-failure-and-censoring-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "da7aae133e3de8094086767c342cf72e7e7c68fa4cc0899c166c5639daafccbe"
+    },
+    {
+      "bytes": 1441,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-adapter-synthetic-controls-v18/RESULT.json",
+      "path": "actual/invariant-adapter-synthetic-controls-v18/RESULT.json",
+      "sha256": "15805a1caac24ac02a4bdb18a1ecb47bf991b81413d5d2b628e451edf631b6bb"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-adapter-synthetic-controls-v18/SDK-AFTER.json",
+      "path": "actual/invariant-adapter-synthetic-controls-v18/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-adapter-synthetic-controls-v18/SDK-BEFORE.json",
+      "path": "actual/invariant-adapter-synthetic-controls-v18/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-adapter-synthetic-controls-v18/WINDOW-START.json",
+      "path": "actual/invariant-adapter-synthetic-controls-v18/WINDOW-START.json",
+      "sha256": "e529e0212a85c5747a07a6b44cde54976815620f805cd43e5a69977a6932f7cc"
+    },
+    {
+      "bytes": 3565,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-adapter-synthetic-controls-v18/normal.log",
+      "path": "actual/invariant-adapter-synthetic-controls-v18/normal.log",
+      "sha256": "266dae2258ca2afa6ce0ce5d1ac63d966859354f712bf457e0e00b99944c6813"
+    },
+    {
+      "bytes": 1698,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-cold-probes-v18/RESULT.json",
+      "path": "actual/invariant-input-cold-probes-v18/RESULT.json",
+      "sha256": "0b1d1fb066889920ea20f48632ee50b6d1f8a1f6b8f136c5c72faf4c3bfdda79"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-cold-probes-v18/SDK-AFTER.json",
+      "path": "actual/invariant-input-cold-probes-v18/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-cold-probes-v18/SDK-BEFORE.json",
+      "path": "actual/invariant-input-cold-probes-v18/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-cold-probes-v18/WINDOW-START.json",
+      "path": "actual/invariant-input-cold-probes-v18/WINDOW-START.json",
+      "sha256": "ebd5736715eb42063cf79ff0a4187e3ecdbb120020fa818bb64fb1e5697206a3"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-cold-probes-v18/normal-direct.log",
+      "path": "actual/invariant-input-cold-probes-v18/normal-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1698,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-diagnostic-v18/RESULT.json",
+      "path": "actual/invariant-input-diagnostic-v18/RESULT.json",
+      "sha256": "ad8b662acac31c2fcbffee82c2db4560eca88222de485ea3a283acd376a7bb44"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-diagnostic-v18/SDK-AFTER.json",
+      "path": "actual/invariant-input-diagnostic-v18/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-diagnostic-v18/SDK-BEFORE.json",
+      "path": "actual/invariant-input-diagnostic-v18/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-diagnostic-v18/WINDOW-START.json",
+      "path": "actual/invariant-input-diagnostic-v18/WINDOW-START.json",
+      "sha256": "bd43c3a2f421ca14649cfe81495f3df42ab7cbbdeedbe6c7bc7913f07321823f"
+    },
+    {
+      "bytes": 4320,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/actual/invariant-input-diagnostic-v18/bounded-partial-profile.log",
+      "path": "actual/invariant-input-diagnostic-v18/bounded-partial-profile.log",
+      "sha256": "afea5cc5ebec278570ce19bafe554defefe5994e251f1e37bb0970b369b2bff3"
+    },
+    {
+      "bytes": 1490821,
+      "kind": "lossless-original-bytes-including-binary-pstats",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "3a9ecf1b59f6d0a3cd2d3097370b74312e5c9d838aa14ff89aa9f0ca1a1e72e0"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-execution-or-pstats-loading",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419400,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/CANDIDATE-V18-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V18-SOURCE-SEAL.json",
+      "sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66"
+    },
+    {
+      "bytes": 9746,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "052d767a5ad66e848e5f2ed3139e4dec96f29c602936ebd63ed51388e00d1fab"
+    },
+    {
+      "bytes": 20542,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/build_invariant_v18_failure_diagnostic_packet.py",
+      "path": "reproduce/build_invariant_v18_failure_diagnostic_packet.py",
+      "sha256": "e2c5e1d2efbf498f7f26aa45e959d8f8d6cd88d67409a7897c4d0da883eae8c4"
+    },
+    {
+      "bytes": 1235,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-adapter-synthetic-controls-v18.json",
+      "path": "reproduce/invariant-adapter-synthetic-controls-v18.json",
+      "sha256": "c913f415e860a32328070acf3fe3af37ad21b182e9d4b1daaa7cf6eeb981b96b"
+    },
+    {
+      "bytes": 1962,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-adapter-synthetic-controls-v18.supervisor.log",
+      "path": "reproduce/invariant-adapter-synthetic-controls-v18.supervisor.log",
+      "sha256": "1c508a827f97e2ef0c943023cce2c7726a3d2225d104833ab23e9d8db2c625d4"
+    },
+    {
+      "bytes": 2259,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-input-cold-probes-v18.json",
+      "path": "reproduce/invariant-input-cold-probes-v18.json",
+      "sha256": "02b9a6fa8ccb1fefbd00d1be8c6155921e998735e7297843704e2b0c47e45571"
+    },
+    {
+      "bytes": 2472,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-input-cold-probes-v18.supervisor.log",
+      "path": "reproduce/invariant-input-cold-probes-v18.supervisor.log",
+      "sha256": "314cb9816a0a57fbffd50e33bd84b5d5b3991368f180d133aae686105ac93353"
+    },
+    {
+      "bytes": 1087,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-input-diagnostic-v18.json",
+      "path": "reproduce/invariant-input-diagnostic-v18.json",
+      "sha256": "cf0454cc79e6da2a9d7d88b0eadd052e1f08bbbf84a5be81e1f963c2cc76b0ef"
+    },
+    {
+      "bytes": 2506,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-input-diagnostic-v18.supervisor.log",
+      "path": "reproduce/invariant-input-diagnostic-v18.supervisor.log",
+      "sha256": "8ccbac2b8132d7b8795701ffcb28ef33ab896c048ef27c410048ee7b4ec0ef33"
+    },
+    {
+      "bytes": 451,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/invariant-profile-command-v18.json",
+      "path": "reproduce/invariant-profile-command-v18.json",
+      "sha256": "6615aa3fc423f020df95033b5c5d6a6769a7ab4d9c740b5c9519e48176abb56a"
+    },
+    {
+      "bytes": 3488,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/profile_invariant_child_v18.py",
+      "path": "reproduce/profile_invariant_child_v18.py",
+      "sha256": "649fbd70bbe58a4c43b12332bea001723055a98a9d6c25ccbbbd700a5fcbbdf2"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-invariant-v18-failure-diagnostic-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    }
+  ],
+  "schema": 1,
+  "scope": "Ordinary frozen-v18 failure and diagnostic receipts only. No passing real admission or timing-cap result; no v19 or broader qualification claim."
+}

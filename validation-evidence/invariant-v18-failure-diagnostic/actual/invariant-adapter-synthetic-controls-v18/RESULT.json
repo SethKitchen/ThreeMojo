@@ -1,0 +1,42 @@
+{
+  "elapsed_seconds": 4.2544159819954075,
+  "failure": "RuntimeError('Stage failed: normal')",
+  "finished": "2026-10-11T03:00:57.175611+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "Eight source-reviewed synthetic/AST controls only, normal/optimized; no actual source-admission or cap qualification. V18 maintained10s gate is explicitly failed.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": false,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18",
+      "label": "normal",
+      "leader_reaped": true,
+      "log_sha256": "266dae2258ca2afa6ce0ce5d1ac63d966859354f712bf457e0e00b99944c6813",
+      "pgid": 7,
+      "pid": 7,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 1.5046749520042795,
+      "single_cpu": 0,
+      "source_seal_sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66",
+      "stage_timeout_seconds": 60,
+      "started": "2026-10-11T03:00:54.407473+00:00",
+      "timed_out": false
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "elapsed_seconds": 11.264443002000917,
+  "failure": null,
+  "finished": "2026-10-11T02:53:07.279246+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "Bounded diagnostic only after failed maintained10s cold invariant. Same exact command under cProfile;8s interrupt leaves2s for raw identity-preserving serialization under10s outer cap. No admission or qualification success implied.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_invariant_child_v18.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-diagnostic-v18",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-profile-command-v18.json"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18",
+      "label": "bounded-partial-profile",
+      "leader_reaped": true,
+      "log_sha256": "afea5cc5ebec278570ce19bafe554defefe5994e251f1e37bb0970b369b2bff3",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 8.515222622001602,
+      "single_cpu": 0,
+      "source_seal_sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66",
+      "stage_timeout_seconds": 10,
+      "started": "2026-10-11T02:52:57.449110+00:00",
+      "timed_out": false
+    }
+  ]
+}

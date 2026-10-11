@@ -1,0 +1,66 @@
+{
+  "all_phase_remaining_owned_descendants": [],
+  "all_phase_source_sdk_unchanged": true,
+  "cold_probe": {
+    "cap_seconds": 10,
+    "executed": "normal-direct",
+    "observed_stage_seconds": 10.033769374000258,
+    "result_sha256": "0b1d1fb066889920ea20f48632ee50b6d1f8a1f6b8f136c5c72faf4c3bfdda79",
+    "returncode": -9,
+    "status": "FAILED_10_SECOND_BOUND",
+    "timed_out": true,
+    "unrun": [
+      "normal-package",
+      "optimized-direct",
+      "optimized-package"
+    ]
+  },
+  "diagnostic": {
+    "censoring_limit": "One verify invocation is observed in the interrupted profile; its successful completion is not established. No operation finish entry is observed before censoring. Timings include profiling instrumentation and are not comparable to an unprofiled admission pass.",
+    "four_second_stack": "Original merged diagnostic log retains faulthandler stack at full_audit_cleanup_contracts.inventory line 749.",
+    "module_bindings": 244,
+    "observed_full_audit_verify_invocations": 1,
+    "operation_finish_entries_observed": 0,
+    "outer_stage_cap_seconds": 10,
+    "profile_elapsed_seconds": 8.010562538998784,
+    "profiler_binding_limit": "The original stage identifies the profiler path but does not separately hash its source. This packet records the present source bytes and digest; WINDOW-START independently binds the supervisor hash.",
+    "pstats_loaded_by_packager": false,
+    "pstats_sha256": "0bbd86078cc4906ef002a832e4a26c14d5935b48e2ef296a25e8f75c03dca48b",
+    "raw_code_entries": 771,
+    "raw_code_object_ids_preserved": true,
+    "raw_profile_sha256": "9af291f75f5e2ebd1e8018e912cc158f5b972e7331722392a638a3fcf9c74c4d",
+    "result_sha256": "ad8b662acac31c2fcbffee82c2db4560eca88222de485ea3a283acd376a7bb44",
+    "returncode": 1,
+    "sequence_completed_meaning": "The configured diagnostic collection sequence accepted nonzero exit 1. It does not mean invariant.verify completed or passed.",
+    "status": "CENSORED_PARTIAL_PROFILE_NOT_A_PASS",
+    "supervised_stage_seconds": 8.515222622001602,
+    "timed_out_by_outer_supervisor": false,
+    "work_cap_seconds": 8
+  },
+  "evidence_policy": "Every file in the three original phase directories is preserved byte-for-byte, including failures, nonzero results, empty output, pstats and raw profile. No internal reviews/design notes, secrets, executable binaries, broad unrelated source, source edits, reruns, native execution or external upload.",
+  "exact_frozen_source_paths": 18,
+  "later_candidate_boundary": "Frozen v18 bytes and outcomes remain unchanged. Any v19 comment-prefix fixture correction is outside this packet and has no execution or qualification receipt here.",
+  "schema": 1,
+  "scope": "Ordinary frozen-v18 failure and diagnostic receipts only. No passing real admission or timing-cap result; no v19 or broader qualification claim.",
+  "source_manifest_sha256": "052d767a5ad66e848e5f2ed3139e4dec96f29c602936ebd63ed51388e00d1fab",
+  "source_manifest_time_boundary": "The original 18-path manifest retains its historical pending-runtime wording. The later original receipts here record the observed failures.",
+  "source_seal_sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66",
+  "status": "FAILED_V18_REAL_COLD_GATE_AND_SYNTHETIC_CONTROL_WITH_CENSORED_DIAGNOSTIC",
+  "stream_capture": "Original stage .log files merge stdout and stderr. Separate streams were not recorded or reconstructed.",
+  "synthetic_controls": {
+    "error_methods": 1,
+    "failed_method": "test_private_selector_supplied_comments_keep_token_equivalence",
+    "limit": "Synthetic/AST controls do not establish real source-admission or timing-cap qualification. The recorded fixture error is retained without substitution by a later correction.",
+    "methods_run": 8,
+    "passing_methods": 7,
+    "reported_error": "full-audit cleanup successor: checked physical and supplied views differ: extensions/carla/lane_refinement.mojo",
+    "result_sha256": "15805a1caac24ac02a4bdb18a1ecb47bf991b81413d5d2b628e451edf631b6bb",
+    "returncode": 1,
+    "stage_cap_seconds": 60,
+    "status": "FAILED_ONE_NEW_COMMENT_POSITIVE_FIXTURE",
+    "unrun": [
+      "optimized"
+    ]
+  },
+  "window_cap_seconds_per_phase": 300
+}

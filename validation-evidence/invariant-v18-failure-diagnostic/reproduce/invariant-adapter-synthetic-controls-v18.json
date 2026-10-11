@@ -1,0 +1,46 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18",
+  "seal": "CANDIDATE-V18-SOURCE-SEAL.json",
+  "source_seal_sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66",
+  "phase": "invariant-adapter-synthetic-controls-v18",
+  "window_seconds": 300,
+  "pause_request_file": "invariant-adapter-synthetic-controls-v18.pause",
+  "scope": "Eight source-reviewed synthetic/AST controls only, normal/optimized; no actual source-admission or cap qualification. V18 maintained10s gate is explicitly failed.",
+  "stages": [
+    {
+      "label": "normal",
+      "seconds": 60,
+      "expected_tests": 8,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ]
+    },
+    {
+      "label": "optimized",
+      "seconds": 60,
+      "expected_tests": 8,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18",
+  "seal": "CANDIDATE-V18-SOURCE-SEAL.json",
+  "source_seal_sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66",
+  "phase": "invariant-input-cold-probes-v18",
+  "window_seconds": 300,
+  "pause_request_file": "invariant-input-cold-probes-v18.pause",
+  "scope": "Exact former failed10s import-plus-invariant.verify commands on reviewed invariant-only v18. Normal direct/package match maintained child bodies; explicit optimized variants additional. Fake8-method controls remain separate; broader winner/parser/Map/Rtree not qualified.",
+  "stages": [
+    {
+      "label": "normal-direct",
+      "seconds": 10,
+      "command": [
+        "{python}",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ]
+    },
+    {
+      "label": "normal-package",
+      "seconds": 10,
+      "command": [
+        "{python}",
+        "-c",
+        "import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ]
+    },
+    {
+      "label": "optimized-direct",
+      "seconds": 10,
+      "command": [
+        "{python}",
+        "-O",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ]
+    },
+    {
+      "label": "optimized-package",
+      "seconds": 10,
+      "command": [
+        "{python}",
+        "-O",
+        "-c",
+        "import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ]
+    }
+  ]
+}
