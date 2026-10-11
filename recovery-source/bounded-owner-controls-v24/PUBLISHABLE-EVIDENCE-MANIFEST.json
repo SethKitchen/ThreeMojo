@@ -1,0 +1,29 @@
+{
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24",
+  "delta_from_v23": [
+    {
+      "after_sha256": "34de24645442874738c92d26b25e55b978b894cc344e8943a5c290f6cf73bef7",
+      "before_sha256": "d346635b988f7e71f20611006b8be6f51d0b28d35be7e1c6f77650d15467f3bc",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "files": [
+    {
+      "before_sha256": null,
+      "bytes": 51575,
+      "git_blob": "beee3ef24a94ce8452ced3dcc673d024d872b00d",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "34de24645442874738c92d26b25e55b978b894cc344e8943a5c290f6cf73bef7",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "Only the unchanged reviewed 19 real-gate and3 synthetic test additions; original8 tests preserved. All production/proof bytes equal v23. New controls require fresh execution.",
+  "source_seal_sha256": "fbc9cb60f5ee9320a9ec81b3bfe0c57bdb3ed331b3a93f7ec75268c651f95525",
+  "status": "source_only_unqualified",
+  "backup_delta_parent": "49c53f40c6ec5d1f4fbaed442e1dccac6c2331ff"
+}
