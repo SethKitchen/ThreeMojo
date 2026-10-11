@@ -1,0 +1,29 @@
+{
+  "backup_delta_parent": "ce69fecf25de1211f7cb7cc81a5a8068c58d41ad",
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25",
+  "delta_from_v24": [
+    {
+      "after_sha256": "a24b9ead2d8ed2ae3f05785ebbf3233773c473e595a7214216dc1f568ac54f1d",
+      "before_sha256": "34de24645442874738c92d26b25e55b978b894cc344e8943a5c290f6cf73bef7",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "files": [
+    {
+      "before_sha256": null,
+      "bytes": 52478,
+      "git_blob": "badd3bbec2c762ce45388ff1d6750b06f877345a",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "a24b9ead2d8ed2ae3f05785ebbf3233773c473e595a7214216dc1f568ac54f1d",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "Four test outer error expectations now assert exact established public wrapper, exact coherence cause, poisoned reason and disposal. All other methods and production/proof bytes equal v24. Fresh execution required.",
+  "source_seal_sha256": "22dae75f9db4f3569aba6d839f71fad9f426fdf10bf32c5d22e2e01530582ac8",
+  "status": "source_only_unqualified"
+}
