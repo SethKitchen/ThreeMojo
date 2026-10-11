@@ -91,6 +91,14 @@ AGENT = 'ThreeMojo-carla-assets/1.0'
 # before each new try.
 ATTEMPTS = 5
 BACKOFF_SECONDS = 2.0
+# The entries converted from a CARLA release. Each one must keep the
+# credit, the release, the changes and the pinned sums that CC BY 4.0 and
+# a durable host need (issue #309).
+CARLA_PREFIX = 'carla.'
+CARLA_AUTHOR = 'CARLA Team (Computer Vision Center)'
+CARLA_RELEASE = re.compile(r'https://github\.com/carla-simulator/carla/releases/tag/(\d+\.\d+\.\d+)')
+# The first bytes of a web page that a host sends in place of a file.
+WEB_PAGE = (b'<!doctype html', b'<html')
 
 
 class ManifestError(ValueError):
@@ -146,6 +154,38 @@ def _check_file(entry_id, kind, item, members):
             _check_file(entry_id, kind, member, True)
 
 
+def _check_carla(entry):
+    """Refuse a CARLA entry that loses its credit, release, changes or sums.
+
+    Args:
+        entry: A manifest entry whose id starts with `CARLA_PREFIX`.
+    Returns:
+        None.
+    Raises:
+        ManifestError: The entry is not CC BY 4.0, does not credit the
+            CARLA Team, does not name a CARLA release page and the same
+            version in its provenance, has no changes, or has a file
+            without a pinned sum.
+    """
+    entry_id = entry['id']
+    if entry['license'] != 'CC-BY-4.0':
+        raise ManifestError(f'{entry_id}: a CARLA entry must be CC-BY-4.0')
+    if entry['author'] != CARLA_AUTHOR:
+        raise ManifestError(f'{entry_id}: a CARLA entry must credit {CARLA_AUTHOR!r}')
+    release = CARLA_RELEASE.fullmatch(entry['source'])
+    if release is None:
+        raise ManifestError(f'{entry_id}: a CARLA entry needs its release page as source, '
+                            'https://github.com/carla-simulator/carla/releases/tag/VERSION')
+    if f'CARLA {release.group(1)}' not in entry['provenance']:
+        raise ManifestError(f'{entry_id}: the provenance must name CARLA {release.group(1)}, '
+                            'the release in the source')
+    if not entry.get('changes'):
+        raise ManifestError(f'{entry_id}: a CARLA entry must state its changes, as CC BY 4.0 asks')
+    for item in entry['files']:
+        if item.get('sha256') is None:
+            raise ManifestError(f'{entry_id}: file {item["path"]!r} needs a pinned sha256')
+
+
 def binding_kind(key):
     """Return the kind of entry a binding key takes: a texture set for a
     surface, the ground or a facade, an HDRI for the sky, a town for a
@@ -179,8 +219,10 @@ def check_manifest(manifest):
     whose paths stay in the cache, whose URLs are https or file, and whose
     sums are 64 hex digits or null; a texture set with an albedo and a
     positive tile size; a model with one model file and a forward axis; a
-    town with one model file; an HDRI with one HDRI file; and bindings that name null or an entry of
-    the kind `binding_kind` gives the key.
+    town with one model file; an HDRI with one HDRI file; a CARLA entry
+    (id `carla.`) that credits the CARLA Team, names its release, states
+    its changes and pins every file; and bindings that name null or an
+    entry of the kind `binding_kind` gives the key.
     """
     if (not isinstance(manifest, dict) or isinstance(manifest.get('format'), bool)
             or manifest.get('format') != FORMAT):
@@ -211,6 +253,9 @@ def check_manifest(manifest):
         for key in ('author', 'source', 'provenance'):
             if not isinstance(entry[key], str) or not entry[key].strip():
                 raise ManifestError(f'{entry_id}: {key} must be a non-empty string')
+        if 'changes' in entry and (not isinstance(entry['changes'], str)
+                                   or not entry['changes'].strip()):
+            raise ManifestError(f'{entry_id}: changes must be a non-empty string')
         files = entry['files']
         if not isinstance(files, list) or not files:
             raise ManifestError(f'{entry_id}: an entry needs at least one file')
@@ -240,6 +285,8 @@ def check_manifest(manifest):
             raise ManifestError(f'{entry_id}: a town needs exactly one model file')
         if kind == 'hdri' and roles.count('hdri') != 1:
             raise ManifestError(f'{entry_id}: an HDRI needs exactly one HDRI file')
+        if entry_id.startswith(CARLA_PREFIX):
+            _check_carla(entry)
     bindings = manifest.get('bindings', {})
     if not isinstance(bindings, dict):
         raise ManifestError('the bindings must be an object')
@@ -292,17 +339,36 @@ def direct_url(url):
 
 
 def _download(url, destination):
-    """Copy a URL's bytes into `destination`. A web page sent in place of
-    the file, which is what a host sends for a file it does not share, is
-    refused."""
+    """Copy a URL's bytes into `destination`.
+
+    A web page sent in place of the file is refused, by its content type
+    or by its first bytes. A host sends one for a file it does not share,
+    for a file whose download quota is used up, or for a virus-scan
+    confirmation. An HTTP error and a proxy that refuses the tunnel are
+    final; a dropped connection is tried again.
+
+    Args:
+        url: The URL to download; a Drive share link is made direct.
+        destination: The path to write the bytes to.
+    Returns:
+        None.
+    Raises:
+        FetchError: The host or proxy refuses, sends a web page, or the
+            connection fails on every try.
+    """
     request = urllib.request.Request(direct_url(url), headers={'User-Agent': AGENT})
+    page = (f'{url}: the host sent a web page, not the file; check the file is shared '
+            'with anyone who has the link and its download quota is not used up')
     for attempt in range(ATTEMPTS):
         try:
             with urllib.request.urlopen(request, timeout=60) as response:
                 if response.headers.get_content_type() == 'text/html':
-                    raise FetchError(f'{url}: the host sent a web page, not the file; '
-                                     'check the file is shared with anyone who has the link')
+                    raise FetchError(page)
+                first = response.read(CHUNK)
+                if first.lstrip()[:16].lower().startswith(WEB_PAGE):
+                    raise FetchError(page)
                 with open(destination, 'wb') as out:
+                    out.write(first)
                     shutil.copyfileobj(response, out, CHUNK)
             return
         except urllib.error.HTTPError as error:
@@ -310,8 +376,10 @@ def _download(url, destination):
             raise FetchError(f'{url}: {error}') from error
         except OSError as error:
             # A dropped connection or a timeout: try again from the start.
-            # A local file that is not there will not be there next time.
-            if attempt + 1 == ATTEMPTS or not url.startswith('https://'):
+            # A local file that is not there will not be there next time,
+            # and a proxy that refuses the tunnel refuses it again.
+            if (attempt + 1 == ATTEMPTS or not url.startswith('https://')
+                    or 'Tunnel connection failed' in str(error)):
                 raise FetchError(f'{url}: {error}') from error
             time.sleep(BACKOFF_SECONDS * (attempt + 1))
 
