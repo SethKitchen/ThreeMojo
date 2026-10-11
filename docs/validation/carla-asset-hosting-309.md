@@ -4,7 +4,8 @@ The 47 CARLA archives are on Google Drive, and each one is shared with anyone wh
 The Drive API returned 36 archives, and each one matched its pinned SHA-256 sum.
 The public download links were not tested from this environment, because its network proxy refuses connections to Google Drive.
 The other 11 archives were not checked, because they are larger than the Drive connector can return.
-[Issue 309](https://github.com/SethKitchen/ThreeMojo/issues/309) stays open until a public download of all 47 archives is verified.
+The owner then ran the public download of all 47 archives into an empty cache, from a network that can open Google Drive. The owner reported that it works: every archive was fetched and `verify --strict` passed.
+This closes [issue 309](https://github.com/SethKitchen/ThreeMojo/issues/309).
 
 Date: 2026-10-11. Manifest: `assets/carla/manifest.json` at commit `765356f`, not changed by this check.
 
@@ -130,14 +131,18 @@ Run the tests:
 python3 -m unittest discover -s assets/carla/tools -p 'test_*.py'
 ```
 
-## Work to close #309
+## Public download by the owner
 
-1. Run a public download of all 47 archives from a network that can open Google Drive:
+On 2026-10-11 the owner ran these commands from a network that can open Google Drive:
 
-   ```sh
-   python3 assets/carla/tools/carla_assets.py --cache "$(mktemp -d)/cache" fetch
-   python3 assets/carla/tools/carla_assets.py --cache CACHE verify --strict
-   ```
+```sh
+python3 assets/carla/tools/carla_assets.py --cache "$(mktemp -d)/cache" fetch
+python3 assets/carla/tools/carla_assets.py --cache CACHE verify --strict
+```
 
-   Every CARLA line must say `fetched`, and `verify --strict` must return 0.
-2. Record any archive that fails, and fix its sharing on Drive. Do not change its sum.
+The owner reported that the download works for all 47 archives.
+This result is the owner's report. The command output is not stored in this repository.
+This download also covers the 11 archives that the Drive connector could not return.
+
+If a later public download fails, record the archive and fix its sharing on Drive.
+Do not change its sum.
