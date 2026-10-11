@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "issue": 333,
+  "scope": "Reviewed #333 runtime view steps for two Map consumers that already have runtime boundary edges. LaneInvasionEvent takes a Duration64, refuses a nonfinite or negative time and has a typed elapsed view; SensorMeasurement refuses a nonfinite or negative world time and has a typed elapsed view. The raw Float64 fields and the serialized header bytes are unchanged. No parser, Map query or lane geometry source changes. Every other consumer change remains fail-closed.",
+  "steps": {
+    "extensions/carla/lane_invasion.mojo": {
+      "before_sha256": "3b7262b84e9e170c0e7181e7e013a6763376b34b9e65feddcd98a2c457350850",
+      "after_sha256": "c2dfa4b2e3b17434b25dfb1ad637a7901cc044349b1b2eaa34055ce10aaaa981",
+      "before_token_sha256": "aa6689b8b166448f64a5b66cda02235aacb555d952f4a37e52ae6d1551f8629b",
+      "after_token_sha256": "6a66ff378e3f2aca58938ac905cfa6002e90f48349cb88fe52bdedad554b29c1"
+    },
+    "extensions/carla/sensor_manager.mojo": {
+      "before_sha256": "cf801d357feeaf3c9d0d49dd3953b332243fd398c0ed1c876e4d9301e9251a7b",
+      "after_sha256": "6c8c81d18596601c31b4bb8e510beb814cbadd237dd8494b954c3e0663eeec82",
+      "before_token_sha256": "b2eb67ce39823f19d7c7e78acaa6f5545ef936d146506d4f397893047f30dc4e",
+      "after_token_sha256": "88272d53dd71b4e142e020d6371b22dc55354a91192ba8f4aeedf998fb5cf602"
+    }
+  },
+  "correctness_tests": {
+    "tests/test_carla_event_time_quantity.mojo": "aad48b17fa70c97738758a3883b719e67b4246111ada66cf50ea9ecf756fadf8",
+    "tests/compile_fail/carla_lane_invasion_event_time_rejects_float32_duration.mojo": "f9b40e5d783da9a78e9e2eebac1ce5b48a7777e4c1382f754c5fa880f70440d8",
+    "tests/compile_fail/carla_lane_invasion_event_time_rejects_length.mojo": "976ffbd0ba203dfbfdebc898793680576c64ab7b6f5d8cc7e5ba1696f153dd49",
+    "tests/compile_fail/carla_lane_invasion_event_time_rejects_raw_float64.mojo": "f3a3ff755860bb8ce8774597bff5acbd51e6f898935e531f8dbabffee5b0ad4f",
+    "tests/compile_fail/carla_measurement_time_is_not_a_raw_float64.mojo": "c2068b1cd1ca8cbec8be217dab7a89a46ec7b4f76d19f66a0d1f6853c9d4f364"
+  }
+}

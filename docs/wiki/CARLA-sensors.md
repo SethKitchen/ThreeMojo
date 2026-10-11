@@ -45,7 +45,7 @@ A sensor is due on the first tick that brings the time since its last measuremen
 
 ### What a measurement holds
 
-Every `SensorMeasurement` has the frame, the time, the sensor's transform, the 48-byte header and the `raw_data` bytes. It also holds the record of its sensor.
+Every `SensorMeasurement` has the frame, the time, the sensor's transform, the 48-byte header and the `raw_data` bytes. It also holds the record of its sensor. The `timestamp` field holds CARLA's raw Float64 seconds, and the header writes the same bits. `SensorMeasurement.elapsed` returns the time as a `Duration64`. A measurement refuses a world time that is not finite or is negative.
 
 | Blueprint | Record | When |
 |---|---|---|
@@ -145,7 +145,7 @@ The sensor reports each body that pushed its parent in the tick. It gives the ot
 
 The sensor follows the four bottom corners of its parent vehicle's box. When the corners move, it asks the map which marks each corner crossed. It reports only when a mark was crossed.
 
-`LaneInvasionSensor.tick` takes the snapshot time as a `Duration64`. The time must be finite and nonnegative. The event's `timestamp` field keeps the same Float64 seconds.
+`LaneInvasionSensor.tick` takes the snapshot time as a `Duration64`. The time must be finite and nonnegative. The `LaneInvasionEvent` constructor also takes a `Duration64` and refuses the same values. The event's `timestamp` field keeps the same Float64 seconds, as CARLA does. `LaneInvasionEvent.elapsed` returns that time as a `Duration64`. It checks the field first, because a caller can change the field.
 
 ### Obstacle
 
