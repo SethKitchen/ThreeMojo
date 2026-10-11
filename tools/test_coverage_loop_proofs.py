@@ -2365,7 +2365,7 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
         temporary = tempfile.TemporaryDirectory(prefix='construction-boundary-',
-            dir=Path(tempfile.gettempdir()).resolve() if getattr(self, 'station', False) else None)
+            dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.map = 'extensions/carla/map.mojo'
@@ -2374,6 +2374,11 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
         from carla_lane_oracle import seed_count_contracts as seed
         record = seed.read_record(self.repo)
         names = {*loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256, self.loft, seed.MIGRATION, *seed.SCORE_TESTS, *seed.station.TESTS, 'tools/carla_lane_oracle/map_station_contracts.py'}
+        from carla_lane_oracle import shared_helper_contracts as helpers
+        names.update((
+            'tools/carla_lane_oracle/shared_helper_contracts.py',
+            'loaders/utf8.mojo', *helpers.TEST_PATHS['extensions/carla/curve_distance.mojo'],
+            *helpers.TEST_PATHS['loaders/xml.mojo']))
         if getattr(self, 'station', False):
             # The station receipt control also exercises the independent R-tree theorem.
             names.update(loops.REVIEWED_LOOP_RULES['extensions/carla/rtree'][0])
@@ -2402,9 +2407,11 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
                           row['minimum_cardinality'], row['maximum_cardinality']),
                          ('T', 'F', 1, 1, None))
         self.assertEqual(row['proof_id'], 'construction-geometry-boundary-list')
+        from carla_lane_oracle import shared_helper_contracts as helpers
         for name, expected in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256.items():
             self.assertEqual(row['dependency_sha256'][name],
-                             loops.file_sha256(self.root/name) if self.score and name == self.map else expected)
+                             loops.file_sha256(self.root/name) if (self.score and name == self.map)
+                             or name in helpers.SOURCE_PATHS else expected)
         for name, expected in row['dependency_sha256'].items():
             self.assertEqual(loops.file_sha256(self.root/name), expected)
         self.assertEqual((self.root/self.map).read_text().splitlines()[self.line-1].strip(),
