@@ -381,6 +381,25 @@ def test_neighboring_cervical_pillars_keep_the_disc_apart() raises:
                     )
 
 
+def test_cervical_pillars_refuse_reversed_endpoints() raises:
+    var h = head_dimensions(Length(6.0, FOOT), MALE)
+    var diameter = 2 * h.cm(0.45)
+    for index in range(1, 7):
+        var original = h.heights[index]
+        h.heights[index] = diameter * 0.5
+        h.validate()  # Other head consumers can use this positive size.
+        with assert_raises():
+            _ = head_bone_field(h, HeadBone(index))
+        h.heights[index] = diameter
+        var field = head_bone_field(h, HeadBone(index))
+        var pillar_index = 4 if index == 6 else 5
+        var pillar = field.sweeps[pillar_index].copy()
+        assert_equal(pillar.stations[0].p.y, pillar.stations[1].p.y)
+        assert_equal(pillar.low.y, h.centers[index].y - diameter * 0.5)
+        assert_equal(pillar.high.y, h.centers[index].y + diameter * 0.5)
+        h.heights[index] = original
+
+
 def test_bone_mass() raises:
     var person = _person()
     var skull = head_bone_mass(person, SKULL, COARSE)
