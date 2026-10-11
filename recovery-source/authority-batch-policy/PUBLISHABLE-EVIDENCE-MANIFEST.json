@@ -1,0 +1,32 @@
+{
+  "active_or_old_run_configs_edited": false,
+  "after_sha256": "1aad53905c18fdd8020c72a75d4faa6caddf2752097896fd5fe055fa578b202f",
+  "aggregate_proposal_seconds": 21600,
+  "authority_batch_proposal_seconds": 3600,
+  "before_sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2",
+  "bytes": 3937,
+  "candidate_not_modified": true,
+  "delta_count": 1,
+  "git_blob": "75ffc924068a7d7b693dcd4d2a182583d16cac03",
+  "inverse_replacement_restores_all_original_bytes": true,
+  "maintained_individual_caps_unchanged": true,
+  "mode": "100644",
+  "other_module_caps_seconds": 1800,
+  "patch_sha256": "31be41c8fdfd0bb272b01b23272175c47c68cb2bcb23cbe6111ae657508506d8",
+  "path": "docs/validation/full-audit-721-qualification-policy.md",
+  "prior_aggregate_only_proposal_preserved": "matrix-window-policy-proposal-v34/SOURCE-MANIFEST.json",
+  "prior_manifest_sha256": "f724bc290d911ab18e20762ea285dd0cc7f9a9fef06d88fe814afb7b6b188392",
+  "schema": 1,
+  "separate_two_probe_owner_approval": "still pending",
+  "status": "Independently approved source-only policy correction; no candidate installation or qualification claim.",
+  "theorem_and_historical_records_not_touched": true,
+  "files": [
+    {
+      "path": "docs/validation/full-audit-721-qualification-policy.md",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/authority-batch-policy-proposal-v34/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "1aad53905c18fdd8020c72a75d4faa6caddf2752097896fd5fe055fa578b202f",
+      "mode": "100644",
+      "git_blob": "75ffc924068a7d7b693dcd4d2a182583d16cac03"
+    }
+  ]
+}
