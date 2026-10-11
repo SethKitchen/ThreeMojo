@@ -52,7 +52,7 @@ from extensions.humanoid.skeleton.foot.bones.mass import (
     foot_bone_mass_from_dimensions,
     foot_bone_occupancy,
 )
-from extensions.humanoid.skeleton.foot.chain import tube_set_volume
+from extensions.humanoid.skeleton.foot.chain import one_segment, tube_set_volume
 from extensions.humanoid.skeleton.foot.contents import (
     ALL,
     BONES,
@@ -472,6 +472,40 @@ def test_neighboring_bones_meet_without_a_common_interior() raises:
                         removed += 1
                     assert_false(bone and talus.distance(p) < 0)
         assert_true(removed > 0)
+
+
+def test_joint_subtraction_removes_buried_zero_sets() raises:
+    # Exact binary-radius spheres isolate each difference branch from the
+    # anatomical landmarks. The smaller sphere is buried in its neighbor.
+    var field = FootBoneField(_right_foot(), CALCANEUS)
+    var center = Vector3(0, 0, 0)
+    field.segments = one_segment(center, center, 0.125, 0.125)
+    field.k = 0
+    field.j0.segments = one_segment(center, center, 0.25, 0.25)
+    field.j0.k = 0
+    field.j1 = field.j0
+    field.j2 = field.j0
+    field.j3 = field.j0
+    field.j1.segments = one_segment(center, center, 0.375, 0.375)
+    field.j2.segments = one_segment(center, center, 0.5, 0.5)
+    field.j3.segments = one_segment(center, center, 0.625, 0.625)
+    for joints in range(1, 5):
+        field.joints = joints
+        for x in [Float32(0.0625), Float32(0.125), Float32(0.1875)]:
+            var p = Vector3(x, 0, 0)
+            var radius = Float32(joints + 1) * 0.125
+            assert_equal(field.distance(p), max(x - 0.125, radius - x))
+
+    # The talus/tibia branch must apply at zero and positive raw values too.
+    field.joints = 0
+    field.yields_to_tibia = True
+    var shin = tibia_dimensions(Length(6.0, FOOT), MALE)
+    var p = Vector3(0.125, 0, 0)
+    field.tibia_offset = shin.medial_condyle - p
+    var bone = field.tibia.distance(p + field.tibia_offset)
+    assert_true(bone < 0)
+    assert_equal(field.unclipped_distance(p), Float32(0))
+    assert_equal(field.distance(p), -bone)
 
 
 def test_bone_occupancy_is_shell_then_trabecular() raises:
