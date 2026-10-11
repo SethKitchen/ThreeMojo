@@ -1,0 +1,281 @@
+{
+  "all_phases_passed": false,
+  "base_publication_reference": {
+    "binding_sha256": "9f7159cc980b51da7be9ed5b3822cbb0a8c88977794200cf6b24315f9c4a8e2c",
+    "boundary": "Historical base reference only. No new remote check or v37 source-backup binding is asserted.",
+    "published_commit": "19287a0b1564b9a628f15c96e7675c51413ca1a9",
+    "published_tree": "5c1f67c196fc30d6a323d6d854748b65e3640585"
+  },
+  "cli_probe": {
+    "boundary": "28.203s is one unittest wrapper duration, not a raw child-only duration or stable performance headroom.",
+    "maintained_child_cap_seconds": 30,
+    "parent_stage_cap_seconds": 45,
+    "parent_stage_elapsed_seconds": 28.635078032995807,
+    "wrapper_reported_seconds": 28.203
+  },
+  "consumer_variants": {
+    "boundary": "The exact sealed source defines 6 real-script and 4 CLI/package shadow child variants per mode. Two passing methods per mode are logged; no separate per-child receipts or durations are invented. Shadow mode does not include direct.",
+    "maintained_child_cap_seconds": 30,
+    "method_executions": 4,
+    "source_defined_count": 20,
+    "variants_per_mode": 10
+  },
+  "earlier_v36_methods_reported": 4,
+  "exclusions": [
+    "All other phases, including Mac evidence",
+    "LATEST.json and PROCESSES.jsonl polling bytes",
+    "Private design and review notes",
+    "Unlisted candidate files and directory traversal",
+    "SDK images, interpreter binaries, tests, imports, profiling and new source stability scans",
+    "Unverified source-backup or remote publication bindings"
+  ],
+  "final_changed_source_paths": [
+    "tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+    "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+  ],
+  "final_source_manifest_sha256": "f3ce07626dd86f63c810522a22ad6d34752febdd189f4d14f6de2e45e83b8dd0",
+  "full_matrix_passed": false,
+  "hosted_qualification_passed": false,
+  "input_manifest_sha256": "550ea80253312dc3ca463baee4b57adda690667e139f9c564699ad6bb5747eb0",
+  "kind": "derived-four-phase-focused-evidence-summary",
+  "mechanics_differential_cases": {
+    "attribution": "Source-defined inventory for one of four mechanics methods per interpreter mode; not 49 cases in every method.",
+    "fallback_cases": 30,
+    "fast_cases": 19,
+    "per_differential_method_execution": 49
+  },
+  "phases": [
+    {
+      "config_sha256": "e0f1ef311395a74a159ed3d0b0e9450e5f6530b11ace2d928c43f389611b9eff",
+      "configured_window_seconds": 420,
+      "console_sha256": "5d51d1dc8a31b000189576ebb03ee4f0ead98df64c64d12537232861651e5fca",
+      "elapsed_seconds": 4.490632000000915,
+      "finished": "2026-10-11T14:07:25.658363+00:00",
+      "original_failure": "RuntimeError('Stage failed: normal-root-text-mechanics')",
+      "original_scope": "Focused exact guarded root-text conversion controls only:4 methods normal and optimized,49 differential cases each. No30s performance qualification or full matrix claim.",
+      "original_sequence_completed": false,
+      "phase": "root-text-conversion-controls-v36",
+      "phase_passed": false,
+      "remaining_owned_descendants": [],
+      "result_sha256": "c49480186aaf823cc27cde36130a228f045e35aeb889d992c359990fc80b0488",
+      "sdk_after_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_before_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_identity_unchanged": true,
+      "source_seal_sha256": "d99455479cff76a44adcce2517b5d00e977c0a466046e0ad68c9c4e05f9f707f",
+      "source_seal_unchanged": true,
+      "stages": [
+        {
+          "label": "normal-root-text-mechanics",
+          "log_sha256": "1001745d880a0178c74c9b827ca1bf87c63e92434a52a17cfe0386c0c003bfce",
+          "methods_reported": 4,
+          "outcome": "FAILED",
+          "parent_stage_cap_seconds": 180,
+          "parent_stage_elapsed_seconds": 1.0041792870033532,
+          "parent_timed_out": false,
+          "remaining_owned_descendants": [],
+          "result_sha256": "c17b8fd1cc06d6d2a2a1fa4ab339400d01f65bf37c929c30ef46246b9d954ad1",
+          "returncode": 1,
+          "source_seal_sha256": "d99455479cff76a44adcce2517b5d00e977c0a466046e0ad68c9c4e05f9f707f",
+          "start_sha256": "0865e31320d6d580a599f9928b7144a5bab72f055af8775d4013f5cd021363a3",
+          "wrapper_reported_seconds": 0.445
+        }
+      ],
+      "started": "2026-10-11T14:07:22.545943+00:00",
+      "unrun_configured_stages": [
+        {
+          "command": [
+            "{python}",
+            "-B",
+            "-O",
+            "-m",
+            "unittest",
+            "-v",
+            "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+          ],
+          "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle",
+          "expected_tests": 4,
+          "label": "optimized-root-text-mechanics",
+          "seconds": 180
+        }
+      ],
+      "version": "v36"
+    },
+    {
+      "config_sha256": "f386139004bcce5f37c67720df59a4a6f44742958b91d0b79962e17de3f7d257",
+      "configured_window_seconds": 420,
+      "console_sha256": "e9c6b66dec6e99db9d5c3f1006fdc6b5fcca2c33434447ffb9ef8441196bfef9",
+      "elapsed_seconds": 6.484938484005397,
+      "finished": "2026-10-11T14:09:41.518331+00:00",
+      "original_failure": null,
+      "original_scope": "Focused exact guarded root-text conversion controls only:4 methods normal and optimized,49 differential cases each. No30s performance qualification or full matrix claim.",
+      "original_sequence_completed": true,
+      "phase": "root-text-conversion-controls-v37",
+      "phase_passed": true,
+      "remaining_owned_descendants": [],
+      "result_sha256": "13ffde515fb3d8d17c039bbfd5893395c78961f0a6cc0cf30660503edc9db9e9",
+      "sdk_after_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_before_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_identity_unchanged": true,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source_seal_unchanged": true,
+      "stages": [
+        {
+          "label": "normal-root-text-mechanics",
+          "log_sha256": "1ed5766b0747b31791a6180fd3e63674bf0a8d8798dd7b3974ebde12e7e148f1",
+          "methods_reported": 4,
+          "outcome": "PASSED",
+          "parent_stage_cap_seconds": 180,
+          "parent_stage_elapsed_seconds": 1.0042126180051127,
+          "parent_timed_out": false,
+          "remaining_owned_descendants": [],
+          "result_sha256": "6a320022fb02f61b534fa69e178dc50ed8e807b6a9b3c147121f7eee6e549397",
+          "returncode": 0,
+          "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+          "start_sha256": "446d0fe4fd0d021c85aac622b389e242d6c6ed0a3090fce6e254642061444db8",
+          "wrapper_reported_seconds": 0.47
+        },
+        {
+          "label": "optimized-root-text-mechanics",
+          "log_sha256": "4c1d3f90ea5e42fe6c7e1d8d7916a933ef5c8eef9acdecea5d9f5278442d6755",
+          "methods_reported": 4,
+          "outcome": "PASSED",
+          "parent_stage_cap_seconds": 180,
+          "parent_stage_elapsed_seconds": 1.5039224270003615,
+          "parent_timed_out": false,
+          "remaining_owned_descendants": [],
+          "result_sha256": "8cd944e7fd80925df69dfa614cebf56c12a1f4841704d53b18e5d4a4367ffafe",
+          "returncode": 0,
+          "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+          "start_sha256": "d14a32b830bf313e1c657041d3f3ae539e520da2f28c238df312e242d4966a72",
+          "wrapper_reported_seconds": 0.475
+        }
+      ],
+      "started": "2026-10-11T14:09:35.940144+00:00",
+      "unrun_configured_stages": [],
+      "version": "v37"
+    },
+    {
+      "config_sha256": "2465b85fab15574ed05b70688177e8653bfd66453f0dbb852fa5a5e9f030ab7e",
+      "configured_window_seconds": 70,
+      "console_sha256": "1c2ce4e224bb0f45c4480be09b801691c138dfc3c323ba350b92614e50c30be7",
+      "elapsed_seconds": 31.385525377001613,
+      "finished": "2026-10-11T14:10:55.365538+00:00",
+      "original_failure": null,
+      "original_scope": "One authorized exact maintained normal CLI winner probe after reviewed pure lexical root-text conversion and8 passing focused checks. Original30-second child cap;45-second parent watchdog. One observed pass is not fullmatrix or timing robustness.",
+      "original_sequence_completed": true,
+      "phase": "winner-cli-root-text-probe-v37",
+      "phase_passed": true,
+      "remaining_owned_descendants": [],
+      "result_sha256": "e9152823c76f66670253c218a1bfa68424776a8d268fa3da2595b0ebeb64f2e9",
+      "sdk_after_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_before_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_identity_unchanged": true,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source_seal_unchanged": true,
+      "stages": [
+        {
+          "label": "v37-normal-cli-winner",
+          "log_sha256": "3c29cee1db0a36550a9b87cae3f0ae77b4e6e830994714cf6314411195ea5a85",
+          "methods_reported": 1,
+          "outcome": "PASSED",
+          "parent_stage_cap_seconds": 45,
+          "parent_stage_elapsed_seconds": 28.635078032995807,
+          "parent_timed_out": false,
+          "remaining_owned_descendants": [],
+          "result_sha256": "5086386632d695e28c8b2fa0b8e6211d0a21af25a19d563902cf38ecb8e364c2",
+          "returncode": 0,
+          "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+          "start_sha256": "4f7f7da712def4b5df14756952d92358d5fc0a9b71752ad6dfc5369145c4afd1",
+          "wrapper_reported_seconds": 28.203
+        }
+      ],
+      "started": "2026-10-11T14:10:24.803215+00:00",
+      "unrun_configured_stages": [],
+      "version": "v37"
+    },
+    {
+      "config_sha256": "ff2641b2c8ecb43f6e29527fc6379b2f422f11611cda3483eeec64b9b6da578f",
+      "configured_window_seconds": 1900,
+      "console_sha256": "cbf7ab562f839612b3f11bcc2491244e8e042e2d8c658cc3359f64d88d18a7df",
+      "elapsed_seconds": 348.93055283199647,
+      "finished": "2026-10-11T14:18:24.676740+00:00",
+      "original_failure": null,
+      "original_scope": "Exactly two unchanged maintained winner/parser consumer methods normal and optimized:4 executions, every real-script and foreign-shadow variant retained, each original30-second subprocess bound. No retries or broader module claim.",
+      "original_sequence_completed": true,
+      "phase": "winner-consumer-variants-v37",
+      "phase_passed": true,
+      "remaining_owned_descendants": [],
+      "result_sha256": "3c6301b6646c74b86a0f704b9c4a0ba682f34d0f8945d5006b824e212683795d",
+      "sdk_after_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_before_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "sdk_identity_unchanged": true,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source_seal_unchanged": true,
+      "stages": [
+        {
+          "label": "normal-maintained-consumer-variants",
+          "log_sha256": "ba28ca94b469064eaff360003c296aea0d48cc3b0c8f2fd38be92af0e639e5c6",
+          "methods_reported": 2,
+          "outcome": "PASSED",
+          "parent_stage_cap_seconds": 900,
+          "parent_stage_elapsed_seconds": 170.69351864799683,
+          "parent_timed_out": false,
+          "remaining_owned_descendants": [],
+          "result_sha256": "9872d35caab4da33a35bea5721018c9bc46b178c897469fcd6a654154d870b88",
+          "returncode": 0,
+          "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+          "start_sha256": "23a2eefcc912c7b307c0ea5c847cc8562f963395bea82bca25d101cc9d0ad085",
+          "wrapper_reported_seconds": 170.075
+        },
+        {
+          "label": "optimized-maintained-consumer-variants",
+          "log_sha256": "9682a7dcd29c6c8d11d22faa59b2cd6e457307ccaf7bbb2f7da80ef326fe8e73",
+          "methods_reported": 2,
+          "outcome": "PASSED",
+          "parent_stage_cap_seconds": 900,
+          "parent_stage_elapsed_seconds": 172.18198707200645,
+          "parent_timed_out": false,
+          "remaining_owned_descendants": [],
+          "result_sha256": "dd80e1065c7fe5032af862fb63d5c8d1526c2ba1ac180bd88c203965ae41c8ee",
+          "returncode": 0,
+          "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+          "start_sha256": "abad7a619e2835bb6c6ae8b1b147f952501117dd636e3b37889261478a06b7ad",
+          "wrapper_reported_seconds": 171.006
+        }
+      ],
+      "started": "2026-10-11T14:12:36.608807+00:00",
+      "unrun_configured_stages": [],
+      "version": "v37"
+    }
+  ],
+  "qualification_passed": false,
+  "schema": 1,
+  "scope": "Four distinct terminal focused phases only. Failed v36 remains failed; three v37 focused phases passed. No full-matrix, hosted, timing-robustness, merge-readiness or issue-completion qualification.",
+  "source_manifest_chronology": "The original source manifest says affected variants were ongoing. Its bytes remain unchanged; later terminal variant receipts establish the focused outcome.",
+  "source_manifest_status_preserved": "REVIEWED_SOURCE_CHECKPOINT;8 mechanics executions and1 maintained CLI probe passed; full affected variants ongoing; no integration publication or full qualification",
+  "source_only_packaging": true,
+  "source_original_roles": "Two final v37 changed files, the failed v36 test file, and the unchanged sealed v37 consumer support module. Four originals do not mean four final changed files.",
+  "stability_boundary": "Source/SDK stability and process cleanup are original terminal supervisor receipts; this builder performs no new candidate or SDK scans.",
+  "status": "TERMINAL_V36_FAILURE_PRESERVED_AND_THREE_V37_FOCUSED_PHASES_PASSED",
+  "successful_v37_method_or_wrapper_executions": 13,
+  "timing_robustness_established": false,
+  "v36_failure_accounting": {
+    "affected_methods": 3,
+    "boundary": "49 subtest errors and the single failure belong to the same differential method. These are not 52 failed methods. Optimized v36 never launched.",
+    "differential_subtest_error_records": 49,
+    "error_records_total": 51,
+    "failure_records": 1,
+    "ordinary_error_records": 2,
+    "ordinary_passed_methods": 1
+  },
+  "v36_optimized_methods_never_launched": 4,
+  "v36_to_v37_source_transition": {
+    "boundary": "The two complete source-seal mappings differ only in the test file. This is a bounded comparison of supplied seals and named source bytes, not a candidate tree scan.",
+    "exact_test_repair": "Replacing the seven _root_text_outcome tokens in v37 test bytes with _outcome exactly reconstructs the preserved v36 test bytes.",
+    "production_core_sha256": "993496a159a84a9515ee3284cb6a36a8f411820ba4d4d4df0fe5e6766cb74498",
+    "production_core_unchanged_in_both_seals": true,
+    "seal_changed_paths": [
+      "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    ]
+  }
+}

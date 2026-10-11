@@ -1,0 +1,38 @@
+{
+  "elapsed_seconds": 4.490632000000915,
+  "failure": "RuntimeError('Stage failed: normal-root-text-mechanics')",
+  "finished": "2026-10-11T14:07:25.658363+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "Focused exact guarded root-text conversion controls only:4 methods normal and optimized,49 differential cases each. No30s performance qualification or full matrix claim.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": false,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "-v",
+        "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle",
+      "label": "normal-root-text-mechanics",
+      "leader_reaped": true,
+      "log_sha256": "1001745d880a0178c74c9b827ca1bf87c63e92434a52a17cfe0386c0c003bfce",
+      "pgid": 9,
+      "pid": 9,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 1.0041792870033532,
+      "single_cpu": 0,
+      "source_seal_sha256": "d99455479cff76a44adcce2517b5d00e977c0a466046e0ad68c9c4e05f9f707f",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-11T14:07:23.096732+00:00",
+      "timed_out": false
+    }
+  ]
+}

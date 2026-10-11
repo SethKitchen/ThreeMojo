@@ -1,0 +1,9 @@
+test_context_keeps_fresh_cwd_short_circuit_and_exception_order (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_context_keeps_fresh_cwd_short_circuit_and_exception_order) ... ok
+test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) ... ok
+test_only_two_original_root_expressions_change (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_only_two_original_root_expressions_change) ... ok
+test_private_bridge_keeps_both_root_checks_in_order (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_private_bridge_keeps_both_root_checks_in_order) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.475s
+
+OK

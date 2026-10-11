@@ -1,0 +1,72 @@
+{
+  "elapsed_seconds": 348.93055283199647,
+  "failure": null,
+  "finished": "2026-10-11T14:18:24.676740+00:00",
+  "known_process_count": 22,
+  "remaining_owned_descendants": [],
+  "scope": "Exactly two unchanged maintained winner/parser consumer methods normal and optimized:4 executions, every real-script and foreign-shadow variant retained, each original30-second subprocess bound. No retries or broader module claim.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "-v",
+        "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_winner_and_parser_consumers_in_real_script_locations",
+        "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_ignore_foreign_direct_module_shadows"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools",
+      "expected_tests": 2,
+      "label": "normal-maintained-consumer-variants",
+      "leader_reaped": true,
+      "log_sha256": "ba28ca94b469064eaff360003c296aea0d48cc3b0c8f2fd38be92af0e639e5c6",
+      "pgid": 9,
+      "pid": 9,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 170.69351864799683,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "stage_timeout_seconds": 900,
+      "started": "2026-10-11T14:12:37.139487+00:00",
+      "test_count": 2,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-O",
+        "-m",
+        "unittest",
+        "-v",
+        "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_winner_and_parser_consumers_in_real_script_locations",
+        "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_ignore_foreign_direct_module_shadows"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools",
+      "expected_tests": 2,
+      "label": "optimized-maintained-consumer-variants",
+      "leader_reaped": true,
+      "log_sha256": "9682a7dcd29c6c8d11d22faa59b2cd6e457307ccaf7bbb2f7da80ef326fe8e73",
+      "pgid": 20,
+      "pid": 20,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 172.18198707200645,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "stage_timeout_seconds": 900,
+      "started": "2026-10-11T14:15:29.139291+00:00",
+      "test_count": 2,
+      "timed_out": false
+    }
+  ]
+}

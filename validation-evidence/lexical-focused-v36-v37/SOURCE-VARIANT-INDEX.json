@@ -1,0 +1,174 @@
+{
+  "attribution": "The exact sealed source defines 6 real-script and 4 CLI/package shadow child variants per mode. Two passing methods per mode are logged; no separate per-child receipts or durations are invented. Shadow mode does not include direct.",
+  "definitions": [
+    {
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations",
+      "source_line_end": 2041,
+      "source_line_start": 2037,
+      "variants_per_interpreter_mode": 6
+    },
+    {
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows",
+      "source_line_end": 2047,
+      "source_line_start": 2043,
+      "variants_per_interpreter_mode": 4
+    }
+  ],
+  "helper_line_end": 2035,
+  "helper_line_start": 1952,
+  "interpreter_modes": [
+    "normal",
+    "optimized"
+  ],
+  "kind": "derived-source-defined-child-variant-index",
+  "maintained_child_cap_seconds": 30,
+  "methods_per_interpreter_mode": 2,
+  "schema": 1,
+  "source": "candidate-v37/tools/test_coverage_loop_proofs.py",
+  "source_defined_child_variants": 20,
+  "source_sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5",
+  "total_method_executions": 4,
+  "variants": [
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "cli",
+      "interpreter_mode": "normal",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "package",
+      "interpreter_mode": "normal",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "direct",
+      "interpreter_mode": "normal",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "cli",
+      "interpreter_mode": "normal",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "package",
+      "interpreter_mode": "normal",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "direct",
+      "interpreter_mode": "normal",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "cli",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "package",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "direct",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "cli",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "package",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": false,
+      "import_mode": "direct",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_winner_and_parser_consumers_in_real_script_locations"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "cli",
+      "interpreter_mode": "normal",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "package",
+      "interpreter_mode": "normal",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "cli",
+      "interpreter_mode": "normal",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "package",
+      "interpreter_mode": "normal",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "cli",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "winner_sign_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "package",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "cli",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    },
+    {
+      "consumer": "border_parser_contracts",
+      "foreign_direct_module_shadow": true,
+      "import_mode": "package",
+      "interpreter_mode": "optimized",
+      "method": "test_complete_consumers_ignore_foreign_direct_module_shadows"
+    }
+  ],
+  "variants_per_interpreter_mode": 10
+}

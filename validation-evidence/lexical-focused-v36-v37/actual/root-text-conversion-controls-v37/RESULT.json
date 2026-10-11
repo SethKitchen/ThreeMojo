@@ -1,0 +1,70 @@
+{
+  "elapsed_seconds": 6.484938484005397,
+  "failure": null,
+  "finished": "2026-10-11T14:09:41.518331+00:00",
+  "known_process_count": 2,
+  "remaining_owned_descendants": [],
+  "scope": "Focused exact guarded root-text conversion controls only:4 methods normal and optimized,49 differential cases each. No30s performance qualification or full matrix claim.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "-v",
+        "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle",
+      "expected_tests": 4,
+      "label": "normal-root-text-mechanics",
+      "leader_reaped": true,
+      "log_sha256": "1ed5766b0747b31791a6180fd3e63674bf0a8d8798dd7b3974ebde12e7e148f1",
+      "pgid": 9,
+      "pid": 9,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 1.0042126180051127,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-11T14:09:36.453891+00:00",
+      "test_count": 4,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-O",
+        "-m",
+        "unittest",
+        "-v",
+        "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle",
+      "expected_tests": 4,
+      "label": "optimized-root-text-mechanics",
+      "leader_reaped": true,
+      "log_sha256": "4c1d3f90ea5e42fe6c7e1d8d7916a933ef5c8eef9acdecea5d9f5278442d6755",
+      "pgid": 10,
+      "pid": 10,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 1.5039224270003615,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "stage_timeout_seconds": 180,
+      "started": "2026-10-11T14:09:38.632671+00:00",
+      "test_count": 4,
+      "timed_out": false
+    }
+  ]
+}

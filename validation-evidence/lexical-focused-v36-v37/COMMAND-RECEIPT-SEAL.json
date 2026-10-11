@@ -1,0 +1,329 @@
+{
+  "phases": [
+    {
+      "config_sha256": "e0f1ef311395a74a159ed3d0b0e9450e5f6530b11ace2d928c43f389611b9eff",
+      "phase": "root-text-conversion-controls-v36",
+      "stages": [
+        {
+          "actual": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle",
+            "label": "normal-root-text-mechanics",
+            "leader_reaped": true,
+            "log_sha256": "1001745d880a0178c74c9b827ca1bf87c63e92434a52a17cfe0386c0c003bfce",
+            "pgid": 9,
+            "pid": 9,
+            "remaining_owned_descendants": [],
+            "returncode": 1,
+            "seconds": 1.0041792870033532,
+            "single_cpu": 0,
+            "source_seal_sha256": "d99455479cff76a44adcce2517b5d00e977c0a466046e0ad68c9c4e05f9f707f",
+            "stage_timeout_seconds": 180,
+            "started": "2026-10-11T14:07:23.096732+00:00",
+            "timed_out": false
+          },
+          "execution_state": "EXECUTED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle",
+            "expected_tests": 4,
+            "label": "normal-root-text-mechanics",
+            "seconds": 180
+          },
+          "position_one_based": 1
+        },
+        {
+          "actual": null,
+          "execution_state": "NEVER_LAUNCHED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "-O",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle",
+            "expected_tests": 4,
+            "label": "optimized-root-text-mechanics",
+            "seconds": 180
+          },
+          "position_one_based": 2
+        }
+      ]
+    },
+    {
+      "config_sha256": "f386139004bcce5f37c67720df59a4a6f44742958b91d0b79962e17de3f7d257",
+      "phase": "root-text-conversion-controls-v37",
+      "stages": [
+        {
+          "actual": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle",
+            "expected_tests": 4,
+            "label": "normal-root-text-mechanics",
+            "leader_reaped": true,
+            "log_sha256": "1ed5766b0747b31791a6180fd3e63674bf0a8d8798dd7b3974ebde12e7e148f1",
+            "pgid": 9,
+            "pid": 9,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 1.0042126180051127,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+            "stage_timeout_seconds": 180,
+            "started": "2026-10-11T14:09:36.453891+00:00",
+            "test_count": 4,
+            "timed_out": false
+          },
+          "execution_state": "EXECUTED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle",
+            "expected_tests": 4,
+            "label": "normal-root-text-mechanics",
+            "seconds": 180
+          },
+          "position_one_based": 1
+        },
+        {
+          "actual": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-O",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle",
+            "expected_tests": 4,
+            "label": "optimized-root-text-mechanics",
+            "leader_reaped": true,
+            "log_sha256": "4c1d3f90ea5e42fe6c7e1d8d7916a933ef5c8eef9acdecea5d9f5278442d6755",
+            "pgid": 10,
+            "pid": 10,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 1.5039224270003615,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+            "stage_timeout_seconds": 180,
+            "started": "2026-10-11T14:09:38.632671+00:00",
+            "test_count": 4,
+            "timed_out": false
+          },
+          "execution_state": "EXECUTED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "-O",
+              "-m",
+              "unittest",
+              "-v",
+              "test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle",
+            "expected_tests": 4,
+            "label": "optimized-root-text-mechanics",
+            "seconds": 180
+          },
+          "position_one_based": 2
+        }
+      ]
+    },
+    {
+      "config_sha256": "2465b85fab15574ed05b70688177e8653bfd66453f0dbb852fa5a5e9f030ab7e",
+      "phase": "winner-cli-root-text-probe-v37",
+      "stages": [
+        {
+          "actual": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+              "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37",
+              "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37",
+            "expected_tests": 1,
+            "label": "v37-normal-cli-winner",
+            "leader_reaped": true,
+            "log_sha256": "3c29cee1db0a36550a9b87cae3f0ae77b4e6e830994714cf6314411195ea5a85",
+            "pgid": 9,
+            "pid": 9,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 28.635078032995807,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+            "stage_timeout_seconds": 45,
+            "started": "2026-10-11T14:10:25.291653+00:00",
+            "test_count": 1,
+            "timed_out": false
+          },
+          "execution_state": "EXECUTED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+              "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37",
+              "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37",
+            "expected_tests": 1,
+            "label": "v37-normal-cli-winner",
+            "seconds": 45
+          },
+          "position_one_based": 1
+        }
+      ]
+    },
+    {
+      "config_sha256": "ff2641b2c8ecb43f6e29527fc6379b2f422f11611cda3483eeec64b9b6da578f",
+      "phase": "winner-consumer-variants-v37",
+      "stages": [
+        {
+          "actual": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-m",
+              "unittest",
+              "-v",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_winner_and_parser_consumers_in_real_script_locations",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_ignore_foreign_direct_module_shadows"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools",
+            "expected_tests": 2,
+            "label": "normal-maintained-consumer-variants",
+            "leader_reaped": true,
+            "log_sha256": "ba28ca94b469064eaff360003c296aea0d48cc3b0c8f2fd38be92af0e639e5c6",
+            "pgid": 9,
+            "pid": 9,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 170.69351864799683,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+            "stage_timeout_seconds": 900,
+            "started": "2026-10-11T14:12:37.139487+00:00",
+            "test_count": 2,
+            "timed_out": false
+          },
+          "execution_state": "EXECUTED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "-m",
+              "unittest",
+              "-v",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_winner_and_parser_consumers_in_real_script_locations",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_ignore_foreign_direct_module_shadows"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools",
+            "expected_tests": 2,
+            "label": "normal-maintained-consumer-variants",
+            "seconds": 900
+          },
+          "position_one_based": 1
+        },
+        {
+          "actual": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-O",
+              "-m",
+              "unittest",
+              "-v",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_winner_and_parser_consumers_in_real_script_locations",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_ignore_foreign_direct_module_shadows"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools",
+            "expected_tests": 2,
+            "label": "optimized-maintained-consumer-variants",
+            "leader_reaped": true,
+            "log_sha256": "9682a7dcd29c6c8d11d22faa59b2cd6e457307ccaf7bbb2f7da80ef326fe8e73",
+            "pgid": 20,
+            "pid": 20,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 172.18198707200645,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+            "stage_timeout_seconds": 900,
+            "started": "2026-10-11T14:15:29.139291+00:00",
+            "test_count": 2,
+            "timed_out": false
+          },
+          "execution_state": "EXECUTED",
+          "planned": {
+            "command": [
+              "{python}",
+              "-B",
+              "-O",
+              "-m",
+              "unittest",
+              "-v",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_winner_and_parser_consumers_in_real_script_locations",
+              "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_ignore_foreign_direct_module_shadows"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools",
+            "expected_tests": 2,
+            "label": "optimized-maintained-consumer-variants",
+            "seconds": 900
+          },
+          "position_one_based": 2
+        }
+      ]
+    }
+  ],
+  "schema": 1,
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+}

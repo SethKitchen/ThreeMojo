@@ -1,0 +1,611 @@
+{
+  "decoder": {
+    "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4",
+    "source": "validation-evidence-qualification-policy-v23-packet/decode_verify.py"
+  },
+  "exclusions": [
+    "All other phases, including Mac evidence",
+    "LATEST.json and PROCESSES.jsonl polling bytes",
+    "Private design and review notes",
+    "Unlisted candidate files and directory traversal",
+    "SDK images, interpreter binaries, tests, imports, profiling and new source stability scans",
+    "Unverified source-backup or remote publication bindings"
+  ],
+  "kind": "strict-source-only-terminal-input-allowlist",
+  "original_member_bytes": 3290228,
+  "original_member_count": 58,
+  "originals": [
+    {
+      "bytes": 771,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/FAILURE.json",
+      "readable": true,
+      "sha256": "1cf9e8846a78a04e515b518d7dfdb077bc8cb7b522ac322a1de17938b1e156d0",
+      "source": "evidence/root-text-conversion-controls-v36/FAILURE.json"
+    },
+    {
+      "bytes": 1460,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/RESULT.json",
+      "readable": true,
+      "sha256": "c49480186aaf823cc27cde36130a228f045e35aeb889d992c359990fc80b0488",
+      "source": "evidence/root-text-conversion-controls-v36/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/SDK-AFTER.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/root-text-conversion-controls-v36/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/SDK-BEFORE.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/root-text-conversion-controls-v36/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/SOURCE-SEAL.json",
+      "readable": false,
+      "sha256": "d99455479cff76a44adcce2517b5d00e977c0a466046e0ad68c9c4e05f9f707f",
+      "source": "evidence/root-text-conversion-controls-v36/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 369,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/WINDOW-START.json",
+      "readable": false,
+      "sha256": "8506d60edcf35e28b6eda1f76e546d7b3e3b291502d9ab714093c1453b9b964d",
+      "source": "evidence/root-text-conversion-controls-v36/WINDOW-START.json"
+    },
+    {
+      "bytes": 828,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/normal-root-text-mechanics-RESULT.json",
+      "readable": false,
+      "sha256": "c17b8fd1cc06d6d2a2a1fa4ab339400d01f65bf37c929c30ef46246b9d954ad1",
+      "source": "evidence/root-text-conversion-controls-v36/normal-root-text-mechanics-RESULT.json"
+    },
+    {
+      "bytes": 584,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/normal-root-text-mechanics-START.json",
+      "readable": false,
+      "sha256": "0865e31320d6d580a599f9928b7144a5bab72f055af8775d4013f5cd021363a3",
+      "source": "evidence/root-text-conversion-controls-v36/normal-root-text-mechanics-START.json"
+    },
+    {
+      "bytes": 53182,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v36/normal-root-text-mechanics.log",
+      "readable": true,
+      "sha256": "1001745d880a0178c74c9b827ca1bf87c63e92434a52a17cfe0386c0c003bfce",
+      "source": "evidence/root-text-conversion-controls-v36/normal-root-text-mechanics.log"
+    },
+    {
+      "bytes": 2038,
+      "kind": "complete-original-terminal-supervisor-console",
+      "path": "actual/root-text-conversion-controls-v36.supervisor.log",
+      "readable": true,
+      "sha256": "5d51d1dc8a31b000189576ebb03ee4f0ead98df64c64d12537232861651e5fca",
+      "source": "root-text-conversion-controls-v36.supervisor.log"
+    },
+    {
+      "bytes": 1225,
+      "kind": "exact-original-phase-configuration",
+      "path": "reproduce/root-text-conversion-controls-v36.json",
+      "readable": false,
+      "sha256": "e0f1ef311395a74a159ed3d0b0e9450e5f6530b11ace2d928c43f389611b9eff",
+      "source": "root-text-conversion-controls-v36.json"
+    },
+    {
+      "bytes": 2515,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/RESULT.json",
+      "readable": true,
+      "sha256": "13ffde515fb3d8d17c039bbfd5893395c78961f0a6cc0cf30660503edc9db9e9",
+      "source": "evidence/root-text-conversion-controls-v37/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/SDK-AFTER.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/root-text-conversion-controls-v37/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/SDK-BEFORE.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/root-text-conversion-controls-v37/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/SOURCE-SEAL.json",
+      "readable": false,
+      "sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source": "evidence/root-text-conversion-controls-v37/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 369,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/WINDOW-START.json",
+      "readable": false,
+      "sha256": "40d56088a1883f7c79e88f8258db85f9c3225d8c5d3275f46124c871d3a07aff",
+      "source": "evidence/root-text-conversion-controls-v37/WINDOW-START.json"
+    },
+    {
+      "bytes": 897,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/normal-root-text-mechanics-RESULT.json",
+      "readable": false,
+      "sha256": "6a320022fb02f61b534fa69e178dc50ed8e807b6a9b3c147121f7eee6e549397",
+      "source": "evidence/root-text-conversion-controls-v37/normal-root-text-mechanics-RESULT.json"
+    },
+    {
+      "bytes": 584,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/normal-root-text-mechanics-START.json",
+      "readable": false,
+      "sha256": "446d0fe4fd0d021c85aac622b389e242d6c6ed0a3090fce6e254642061444db8",
+      "source": "evidence/root-text-conversion-controls-v37/normal-root-text-mechanics-START.json"
+    },
+    {
+      "bytes": 830,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/normal-root-text-mechanics.log",
+      "readable": true,
+      "sha256": "1ed5766b0747b31791a6180fd3e63674bf0a8d8798dd7b3974ebde12e7e148f1",
+      "source": "evidence/root-text-conversion-controls-v37/normal-root-text-mechanics.log"
+    },
+    {
+      "bytes": 912,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/optimized-root-text-mechanics-RESULT.json",
+      "readable": false,
+      "sha256": "8cd944e7fd80925df69dfa614cebf56c12a1f4841704d53b18e5d4a4367ffafe",
+      "source": "evidence/root-text-conversion-controls-v37/optimized-root-text-mechanics-RESULT.json"
+    },
+    {
+      "bytes": 599,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/optimized-root-text-mechanics-START.json",
+      "readable": false,
+      "sha256": "d14a32b830bf313e1c657041d3f3ae539e520da2f28c238df312e242d4966a72",
+      "source": "evidence/root-text-conversion-controls-v37/optimized-root-text-mechanics-START.json"
+    },
+    {
+      "bytes": 830,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/root-text-conversion-controls-v37/optimized-root-text-mechanics.log",
+      "readable": true,
+      "sha256": "4c1d3f90ea5e42fe6c7e1d8d7916a933ef5c8eef9acdecea5d9f5278442d6755",
+      "source": "evidence/root-text-conversion-controls-v37/optimized-root-text-mechanics.log"
+    },
+    {
+      "bytes": 3664,
+      "kind": "complete-original-terminal-supervisor-console",
+      "path": "actual/root-text-conversion-controls-v37.supervisor.log",
+      "readable": true,
+      "sha256": "e9c6b66dec6e99db9d5c3f1006fdc6b5fcca2c33434447ffb9ef8441196bfef9",
+      "source": "root-text-conversion-controls-v37.supervisor.log"
+    },
+    {
+      "bytes": 1225,
+      "kind": "exact-original-phase-configuration",
+      "path": "reproduce/root-text-conversion-controls-v37.json",
+      "readable": false,
+      "sha256": "f386139004bcce5f37c67720df59a4a6f44742958b91d0b79962e17de3f7d257",
+      "source": "root-text-conversion-controls-v37.json"
+    },
+    {
+      "bytes": 1682,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/RESULT.json",
+      "readable": true,
+      "sha256": "e9152823c76f66670253c218a1bfa68424776a8d268fa3da2595b0ebeb64f2e9",
+      "source": "evidence/winner-cli-root-text-probe-v37/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/SDK-AFTER.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/winner-cli-root-text-probe-v37/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/SDK-BEFORE.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/winner-cli-root-text-probe-v37/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/SOURCE-SEAL.json",
+      "readable": false,
+      "sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source": "evidence/winner-cli-root-text-probe-v37/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 368,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/WINDOW-START.json",
+      "readable": false,
+      "sha256": "b06bec7b3ea19398fa7fb98ca7b23070687aefbfdc6c588710f7bff6c7384179",
+      "source": "evidence/winner-cli-root-text-probe-v37/WINDOW-START.json"
+    },
+    {
+      "bytes": 1019,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/v37-normal-cli-winner-RESULT.json",
+      "readable": false,
+      "sha256": "5086386632d695e28c8b2fa0b8e6211d0a21af25a19d563902cf38ecb8e364c2",
+      "source": "evidence/winner-cli-root-text-probe-v37/v37-normal-cli-winner-RESULT.json"
+    },
+    {
+      "bytes": 706,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/v37-normal-cli-winner-START.json",
+      "readable": false,
+      "sha256": "4f7f7da712def4b5df14756952d92358d5fc0a9b71752ad6dfc5369145c4afd1",
+      "source": "evidence/winner-cli-root-text-probe-v37/v37-normal-cli-winner-START.json"
+    },
+    {
+      "bytes": 1542,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-cli-root-text-probe-v37/v37-normal-cli-winner.log",
+      "readable": true,
+      "sha256": "3c29cee1db0a36550a9b87cae3f0ae77b4e6e830994714cf6314411195ea5a85",
+      "source": "evidence/winner-cli-root-text-probe-v37/v37-normal-cli-winner.log"
+    },
+    {
+      "bytes": 2376,
+      "kind": "complete-original-terminal-supervisor-console",
+      "path": "actual/winner-cli-root-text-probe-v37.supervisor.log",
+      "readable": true,
+      "sha256": "1c2ce4e224bb0f45c4480be09b801691c138dfc3c323ba350b92614e50c30be7",
+      "source": "winner-cli-root-text-probe-v37.supervisor.log"
+    },
+    {
+      "bytes": 1276,
+      "kind": "exact-original-phase-configuration",
+      "path": "reproduce/winner-cli-root-text-probe-v37.json",
+      "readable": false,
+      "sha256": "2465b85fab15574ed05b70688177e8653bfd66453f0dbb852fa5a5e9f030ab7e",
+      "source": "winner-cli-root-text-probe-v37.json"
+    },
+    {
+      "bytes": 2898,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/RESULT.json",
+      "readable": true,
+      "sha256": "3c6301b6646c74b86a0f704b9c4a0ba682f34d0f8945d5006b824e212683795d",
+      "source": "evidence/winner-consumer-variants-v37/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/SDK-AFTER.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/winner-consumer-variants-v37/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/SDK-BEFORE.json",
+      "readable": false,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/winner-consumer-variants-v37/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/SOURCE-SEAL.json",
+      "readable": false,
+      "sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source": "evidence/winner-consumer-variants-v37/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 370,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/WINDOW-START.json",
+      "readable": false,
+      "sha256": "496a6a50a2fe72227c3f3369faccc899084388d31dd35937dac1416a769e9ad6",
+      "source": "evidence/winner-consumer-variants-v37/WINDOW-START.json"
+    },
+    {
+      "bytes": 1053,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/normal-maintained-consumer-variants-RESULT.json",
+      "readable": false,
+      "sha256": "9872d35caab4da33a35bea5721018c9bc46b178c897469fcd6a654154d870b88",
+      "source": "evidence/winner-consumer-variants-v37/normal-maintained-consumer-variants-RESULT.json"
+    },
+    {
+      "bytes": 740,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/normal-maintained-consumer-variants-START.json",
+      "readable": false,
+      "sha256": "23a2eefcc912c7b307c0ea5c847cc8562f963395bea82bca25d101cc9d0ad085",
+      "source": "evidence/winner-consumer-variants-v37/normal-maintained-consumer-variants-START.json"
+    },
+    {
+      "bytes": 470,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/normal-maintained-consumer-variants.log",
+      "readable": true,
+      "sha256": "ba28ca94b469064eaff360003c296aea0d48cc3b0c8f2fd38be92af0e639e5c6",
+      "source": "evidence/winner-consumer-variants-v37/normal-maintained-consumer-variants.log"
+    },
+    {
+      "bytes": 1068,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/optimized-maintained-consumer-variants-RESULT.json",
+      "readable": false,
+      "sha256": "dd80e1065c7fe5032af862fb63d5c8d1526c2ba1ac180bd88c203965ae41c8ee",
+      "source": "evidence/winner-consumer-variants-v37/optimized-maintained-consumer-variants-RESULT.json"
+    },
+    {
+      "bytes": 755,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/optimized-maintained-consumer-variants-START.json",
+      "readable": false,
+      "sha256": "abad7a619e2835bb6c6ae8b1b147f952501117dd636e3b37889261478a06b7ad",
+      "source": "evidence/winner-consumer-variants-v37/optimized-maintained-consumer-variants-START.json"
+    },
+    {
+      "bytes": 470,
+      "kind": "complete-original-terminal-phase-evidence",
+      "path": "actual/winner-consumer-variants-v37/optimized-maintained-consumer-variants.log",
+      "readable": true,
+      "sha256": "9682a7dcd29c6c8d11d22faa59b2cd6e457307ccaf7bbb2f7da80ef326fe8e73",
+      "source": "evidence/winner-consumer-variants-v37/optimized-maintained-consumer-variants.log"
+    },
+    {
+      "bytes": 4335,
+      "kind": "complete-original-terminal-supervisor-console",
+      "path": "actual/winner-consumer-variants-v37.supervisor.log",
+      "readable": true,
+      "sha256": "cbf7ab562f839612b3f11bcc2491244e8e042e2d8c658cc3359f64d88d18a7df",
+      "source": "winner-consumer-variants-v37.supervisor.log"
+    },
+    {
+      "bytes": 1602,
+      "kind": "exact-original-phase-configuration",
+      "path": "reproduce/winner-consumer-variants-v37.json",
+      "readable": false,
+      "sha256": "ff2641b2c8ecb43f6e29527fc6379b2f422f11611cda3483eeec64b9b6da578f",
+      "source": "winner-consumer-variants-v37.json"
+    },
+    {
+      "bytes": 1410,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/ROOT-TEXT-CONVERSION-V37-SOURCE-MANIFEST.json",
+      "readable": false,
+      "sha256": "f3ce07626dd86f63c810522a22ad6d34752febdd189f4d14f6de2e45e83b8dd0",
+      "source": "ROOT-TEXT-CONVERSION-V37-SOURCE-MANIFEST.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/CANDIDATE-V36-SOURCE-SEAL.json",
+      "readable": false,
+      "sha256": "d99455479cff76a44adcce2517b5d00e977c0a466046e0ad68c9c4e05f9f707f",
+      "source": "CANDIDATE-V36-SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/CANDIDATE-V37-SOURCE-SEAL.json",
+      "readable": false,
+      "sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+      "source": "CANDIDATE-V37-SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 1010,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "readable": false,
+      "sha256": "9f7159cc980b51da7be9ed5b3822cbb0a8c88977794200cf6b24315f9c4a8e2c",
+      "source": "PUBLISHED-V35-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 85,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/WINNER-CLI-PAIRED-DIAGNOSTIC-PROTOCOL-SEAL.json",
+      "readable": false,
+      "sha256": "a9b8365038e16fd1e6f0a277652b4727bccc22277f737341e3ef41b72600123c",
+      "source": "WINNER-CLI-PAIRED-DIAGNOSTIC-PROTOCOL-SEAL.json"
+    },
+    {
+      "bytes": 1307,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+      "readable": false,
+      "sha256": "2a84aebc0d803d443854ad0d80fddc9c12c01a953229b5336b809bde37986fcb",
+      "source": "winner-cli-paired-diagnostic-v35-protocol/probe.py"
+    },
+    {
+      "bytes": 10102,
+      "kind": "exact-original-source-or-protocol-reference",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "readable": false,
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "source": "run_checkpoint_matrix.py"
+    },
+    {
+      "bytes": 103817,
+      "kind": "exact-bounded-original-candidate-source",
+      "path": "reproduce/candidate-v37/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "readable": false,
+      "sha256": "993496a159a84a9515ee3284cb6a36a8f411820ba4d4d4df0fe5e6766cb74498",
+      "source": "candidate-v37/tools/carla_lane_oracle/full_audit_cleanup_contracts.py"
+    },
+    {
+      "bytes": 200161,
+      "kind": "exact-bounded-original-candidate-source",
+      "path": "reproduce/candidate-v37/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "readable": false,
+      "sha256": "214a6354c8a2022e04302da022c3afaa79e63446745049fec5aa37942dcacab2",
+      "source": "candidate-v37/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    },
+    {
+      "bytes": 200091,
+      "kind": "exact-bounded-original-candidate-source",
+      "path": "reproduce/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "readable": false,
+      "sha256": "a26fa27e426dd13b539fab1dde0251cb40aef2730abed46d66b5127d593cec23",
+      "source": "candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    },
+    {
+      "bytes": 142145,
+      "kind": "exact-bounded-original-candidate-source",
+      "path": "reproduce/candidate-v37/tools/test_coverage_loop_proofs.py",
+      "readable": false,
+      "sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5",
+      "source": "candidate-v37/tools/test_coverage_loop_proofs.py"
+    }
+  ],
+  "phases": [
+    {
+      "evidence_names": [
+        "FAILURE.json",
+        "RESULT.json",
+        "SDK-AFTER.json",
+        "SDK-BEFORE.json",
+        "SOURCE-SEAL.json",
+        "WINDOW-START.json",
+        "normal-root-text-mechanics-RESULT.json",
+        "normal-root-text-mechanics-START.json",
+        "normal-root-text-mechanics.log"
+      ],
+      "excluded_polling_names": [
+        "LATEST.json",
+        "PROCESSES.jsonl"
+      ],
+      "executed_labels": [
+        "normal-root-text-mechanics"
+      ],
+      "methods_per_stage": 4,
+      "phase": "root-text-conversion-controls-v36",
+      "phase_passed": false,
+      "stage_cap_seconds": 180,
+      "version": "36",
+      "whole_window_seconds": 420,
+      "wrapper_reported_seconds": [
+        "0.445"
+      ]
+    },
+    {
+      "evidence_names": [
+        "RESULT.json",
+        "SDK-AFTER.json",
+        "SDK-BEFORE.json",
+        "SOURCE-SEAL.json",
+        "WINDOW-START.json",
+        "normal-root-text-mechanics-RESULT.json",
+        "normal-root-text-mechanics-START.json",
+        "normal-root-text-mechanics.log",
+        "optimized-root-text-mechanics-RESULT.json",
+        "optimized-root-text-mechanics-START.json",
+        "optimized-root-text-mechanics.log"
+      ],
+      "excluded_polling_names": [
+        "LATEST.json",
+        "PROCESSES.jsonl"
+      ],
+      "executed_labels": [
+        "normal-root-text-mechanics",
+        "optimized-root-text-mechanics"
+      ],
+      "methods_per_stage": 4,
+      "phase": "root-text-conversion-controls-v37",
+      "phase_passed": true,
+      "stage_cap_seconds": 180,
+      "version": "37",
+      "whole_window_seconds": 420,
+      "wrapper_reported_seconds": [
+        "0.470",
+        "0.475"
+      ]
+    },
+    {
+      "evidence_names": [
+        "RESULT.json",
+        "SDK-AFTER.json",
+        "SDK-BEFORE.json",
+        "SOURCE-SEAL.json",
+        "WINDOW-START.json",
+        "v37-normal-cli-winner-RESULT.json",
+        "v37-normal-cli-winner-START.json",
+        "v37-normal-cli-winner.log"
+      ],
+      "excluded_polling_names": [
+        "LATEST.json",
+        "PROCESSES.jsonl"
+      ],
+      "executed_labels": [
+        "v37-normal-cli-winner"
+      ],
+      "methods_per_stage": 1,
+      "phase": "winner-cli-root-text-probe-v37",
+      "phase_passed": true,
+      "stage_cap_seconds": 45,
+      "version": "37",
+      "whole_window_seconds": 70,
+      "wrapper_reported_seconds": [
+        "28.203"
+      ]
+    },
+    {
+      "evidence_names": [
+        "RESULT.json",
+        "SDK-AFTER.json",
+        "SDK-BEFORE.json",
+        "SOURCE-SEAL.json",
+        "WINDOW-START.json",
+        "normal-maintained-consumer-variants-RESULT.json",
+        "normal-maintained-consumer-variants-START.json",
+        "normal-maintained-consumer-variants.log",
+        "optimized-maintained-consumer-variants-RESULT.json",
+        "optimized-maintained-consumer-variants-START.json",
+        "optimized-maintained-consumer-variants.log"
+      ],
+      "excluded_polling_names": [
+        "LATEST.json",
+        "PROCESSES.jsonl"
+      ],
+      "executed_labels": [
+        "normal-maintained-consumer-variants",
+        "optimized-maintained-consumer-variants"
+      ],
+      "methods_per_stage": 2,
+      "phase": "winner-consumer-variants-v37",
+      "phase_passed": true,
+      "stage_cap_seconds": 900,
+      "version": "37",
+      "whole_window_seconds": 1900,
+      "wrapper_reported_seconds": [
+        "170.075",
+        "171.006"
+      ]
+    }
+  ],
+  "schema": 1,
+  "scope": "Four distinct terminal focused phases only. Failed v36 remains failed; three v37 focused phases passed. No full-matrix, hosted, timing-robustness, merge-readiness or issue-completion qualification.",
+  "status": "SOURCE_ONLY_REQUIRES_INDEPENDENT_REVIEW_AND_PARENT_RELEASE"
+}

@@ -1,0 +1,174 @@
+{
+  "files": [
+    {
+      "bytes": 13055,
+      "kind": "derived-command-cap-and-execution-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "299b2e220beea2b8597d1e79da560753a7ef26e2bb750dd599922bf186b715c9"
+    },
+    {
+      "bytes": 29460,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "c8c85301e00b96696ed2fec1fc46ea3b4af79bd43a24d99f115c799dedd11e58"
+    },
+    {
+      "bytes": 2920,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/README.md",
+      "path": "README.md",
+      "sha256": "677c4e988f125b44ab1405d3da60292eea7f72d3a8f8f4a6b304a0956d30bda1"
+    },
+    {
+      "bytes": 6261,
+      "kind": "derived-sealed-source-variant-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/SOURCE-VARIANT-INDEX.json",
+      "path": "SOURCE-VARIANT-INDEX.json",
+      "sha256": "2f349c301be0b2ff197216df670da4082f32407552c6a49a6b10405c93941648"
+    },
+    {
+      "bytes": 15223,
+      "kind": "derived-four-phase-focused-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "18b24fc046696c8a11be0a3d8df082c4d8f5b69ba6e3de0d0f0a67fb96aa188e"
+    },
+    {
+      "bytes": 2038,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v36.supervisor.log",
+      "path": "actual/root-text-conversion-controls-v36.supervisor.log",
+      "sha256": "5d51d1dc8a31b000189576ebb03ee4f0ead98df64c64d12537232861651e5fca"
+    },
+    {
+      "bytes": 771,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v36/FAILURE.json",
+      "path": "actual/root-text-conversion-controls-v36/FAILURE.json",
+      "sha256": "1cf9e8846a78a04e515b518d7dfdb077bc8cb7b522ac322a1de17938b1e156d0"
+    },
+    {
+      "bytes": 1460,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v36/RESULT.json",
+      "path": "actual/root-text-conversion-controls-v36/RESULT.json",
+      "sha256": "c49480186aaf823cc27cde36130a228f045e35aeb889d992c359990fc80b0488"
+    },
+    {
+      "bytes": 53182,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v36/normal-root-text-mechanics.log",
+      "path": "actual/root-text-conversion-controls-v36/normal-root-text-mechanics.log",
+      "sha256": "1001745d880a0178c74c9b827ca1bf87c63e92434a52a17cfe0386c0c003bfce"
+    },
+    {
+      "bytes": 3664,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v37.supervisor.log",
+      "path": "actual/root-text-conversion-controls-v37.supervisor.log",
+      "sha256": "e9c6b66dec6e99db9d5c3f1006fdc6b5fcca2c33434447ffb9ef8441196bfef9"
+    },
+    {
+      "bytes": 2515,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v37/RESULT.json",
+      "path": "actual/root-text-conversion-controls-v37/RESULT.json",
+      "sha256": "13ffde515fb3d8d17c039bbfd5893395c78961f0a6cc0cf30660503edc9db9e9"
+    },
+    {
+      "bytes": 830,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v37/normal-root-text-mechanics.log",
+      "path": "actual/root-text-conversion-controls-v37/normal-root-text-mechanics.log",
+      "sha256": "1ed5766b0747b31791a6180fd3e63674bf0a8d8798dd7b3974ebde12e7e148f1"
+    },
+    {
+      "bytes": 830,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/root-text-conversion-controls-v37/optimized-root-text-mechanics.log",
+      "path": "actual/root-text-conversion-controls-v37/optimized-root-text-mechanics.log",
+      "sha256": "4c1d3f90ea5e42fe6c7e1d8d7916a933ef5c8eef9acdecea5d9f5278442d6755"
+    },
+    {
+      "bytes": 2376,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-cli-root-text-probe-v37.supervisor.log",
+      "path": "actual/winner-cli-root-text-probe-v37.supervisor.log",
+      "sha256": "1c2ce4e224bb0f45c4480be09b801691c138dfc3c323ba350b92614e50c30be7"
+    },
+    {
+      "bytes": 1682,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-cli-root-text-probe-v37/RESULT.json",
+      "path": "actual/winner-cli-root-text-probe-v37/RESULT.json",
+      "sha256": "e9152823c76f66670253c218a1bfa68424776a8d268fa3da2595b0ebeb64f2e9"
+    },
+    {
+      "bytes": 1542,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-cli-root-text-probe-v37/v37-normal-cli-winner.log",
+      "path": "actual/winner-cli-root-text-probe-v37/v37-normal-cli-winner.log",
+      "sha256": "3c29cee1db0a36550a9b87cae3f0ae77b4e6e830994714cf6314411195ea5a85"
+    },
+    {
+      "bytes": 4335,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-consumer-variants-v37.supervisor.log",
+      "path": "actual/winner-consumer-variants-v37.supervisor.log",
+      "sha256": "cbf7ab562f839612b3f11bcc2491244e8e042e2d8c658cc3359f64d88d18a7df"
+    },
+    {
+      "bytes": 2898,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-consumer-variants-v37/RESULT.json",
+      "path": "actual/winner-consumer-variants-v37/RESULT.json",
+      "sha256": "3c6301b6646c74b86a0f704b9c4a0ba682f34d0f8945d5006b824e212683795d"
+    },
+    {
+      "bytes": 470,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-consumer-variants-v37/normal-maintained-consumer-variants.log",
+      "path": "actual/winner-consumer-variants-v37/normal-maintained-consumer-variants.log",
+      "sha256": "ba28ca94b469064eaff360003c296aea0d48cc3b0c8f2fd38be92af0e639e5c6"
+    },
+    {
+      "bytes": 470,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/actual/winner-consumer-variants-v37/optimized-maintained-consumer-variants.log",
+      "path": "actual/winner-consumer-variants-v37/optimized-maintained-consumer-variants.log",
+      "sha256": "9682a7dcd29c6c8d11d22faa59b2cd6e457307ccaf7bbb2f7da80ef326fe8e73"
+    },
+    {
+      "bytes": 2114997,
+      "kind": "lossless-complete-original-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "81bc7e6f58e66ea97d8352f2fa1c6c52b0b84b3fe694ba9a7fe2ee0e212380f4"
+    },
+    {
+      "bytes": 5175,
+      "kind": "unchanged-hash-bound-safe-decoder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 25337,
+      "kind": "source-only-strict-original-allowlist",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/reproduce/LEXICAL-FOCUSED-V36-V37-INPUT-MANIFEST.json",
+      "path": "reproduce/LEXICAL-FOCUSED-V36-V37-INPUT-MANIFEST.json",
+      "sha256": "550ea80253312dc3ca463baee4b57adda690667e139f9c564699ad6bb5747eb0"
+    },
+    {
+      "bytes": 32504,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-focused-v36-v37-packet/reproduce/build_lexical_focused_v36_v37_packet.py",
+      "path": "reproduce/build_lexical_focused_v36_v37_packet.py",
+      "sha256": "eacd12500bfabacd0d677feb226aab54e90644247810fdd01680218e93a87ab0"
+    }
+  ],
+  "schema": 1,
+  "scope": "Four distinct terminal focused phases only. Failed v36 remains failed; three v37 focused phases passed. No full-matrix, hosted, timing-robustness, merge-readiness or issue-completion qualification."
+}

@@ -1,0 +1,526 @@
+test_context_keeps_fresh_cwd_short_circuit_and_exception_order (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_context_keeps_fresh_cwd_short_circuit_and_exception_order) ... ERROR
+test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) ... 
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha/beta', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha/beta', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/with spaces', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/with spaces', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Å/雪', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Å/雪', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Case/case', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Case/case', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/colon:part/back\\\\slash', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/colon:part/back\\\\slash', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/nul\\x00part', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/nul\\x00part', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', False)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', True)") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="''") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'.'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'..'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'relative'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha/'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'//alpha'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'///alpha'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha//beta'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha/./beta'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha/../beta'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="foreign-'/alpha'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="foreign-''") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='foreign-17') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='foreign-None') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="foreign-b'/alpha'") ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pure-posix') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pure-windows') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='multiple-raw') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='path-subclass') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pathlike') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pathlike-raises') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pathlike-invalid') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='str-subclass') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='missing') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='tuple') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='list-subclass') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='non-string') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='lazy-string') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='lazy-early-failure') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='lazy-late-failure') ... ERROR
+  test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='cached') ... ERROR
+test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) ... FAIL
+test_only_two_original_root_expressions_change (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_only_two_original_root_expressions_change) ... ok
+test_private_bridge_keeps_both_root_checks_in_order (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_private_bridge_keeps_both_root_checks_in_order) ... ERROR
+
+======================================================================
+ERROR: test_context_keeps_fresh_cwd_short_circuit_and_exception_order (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_context_keeps_fresh_cwd_short_circuit_and_exception_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3334, in test_context_keeps_fresh_cwd_short_circuit_and_exception_order
+    outcomes.append(self._outcome(lambda: call(state, Path(root))))
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha/beta', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/alpha/beta', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/with spaces', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/with spaces', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Å/雪', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Å/雪', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Case/case', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/Case/case', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/colon:part/back\\\\slash', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/colon:part/back\\\\slash', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/nul\\x00part', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/nul\\x00part', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', False)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="('/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', True)")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="''")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'.'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'..'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'relative'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha/'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'//alpha'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'///alpha'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha//beta'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha/./beta'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="'/alpha/../beta'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="foreign-'/alpha'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="foreign-''")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='foreign-17')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='foreign-None')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name="foreign-b'/alpha'")
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pure-posix')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pure-windows')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='multiple-raw')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='path-subclass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pathlike')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pathlike-raises')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='pathlike-invalid')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='str-subclass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='missing')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='tuple')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='list-subclass')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='non-string')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='lazy-string')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='lazy-early-failure')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='lazy-late-failure')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match) (name='cached')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3273, in test_fresh_values_callbacks_and_fallback_errors_match
+    old = self._outcome(lambda: str(Path(old_root).absolute()))
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+ERROR: test_private_bridge_keeps_both_root_checks_in_order (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_private_bridge_keeps_both_root_checks_in_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3380, in test_private_bridge_keeps_both_root_checks_in_order
+    outcome = self._outcome(lambda: call(frame, 'invariant', operation) is caller)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: '_Outcome' object is not callable
+
+======================================================================
+FAIL: test_fresh_values_callbacks_and_fallback_errors_match (test_invariant_operation_inputs.ReviewedAbsoluteRootTextMechanics.test_fresh_values_callbacks_and_fallback_errors_match)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v36/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 3296, in test_fresh_values_callbacks_and_fallback_errors_match
+    self.assertEqual(counts, {'fast': 19, 'fallback': 30})
+AssertionError: Counter() != {'fast': 19, 'fallback': 30}
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.445s
+
+FAILED (failures=1, errors=51)
