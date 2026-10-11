@@ -381,7 +381,7 @@ class OptionalRuntimeContracts(unittest.TestCase):
 
     def test_global_inventory_rejects_new_modules_aliases_and_reexports(self):
         pins = json.loads(self.pins[guards.PINS])
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as folder:
             root = Path(folder)
             paths = set(pins['protected_inventory']) | {str(guards.PINS),
                 'tools/carla_lane_oracle/winner-sign-query-migration.json'}

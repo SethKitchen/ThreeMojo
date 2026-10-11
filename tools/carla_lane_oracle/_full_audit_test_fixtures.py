@@ -38,7 +38,9 @@ def copy_current_root(case, source, *, destination=None):
     source = Path(source)
     record = cleanup.verify(source, exact=True)
     if destination is None:
-        directory = tempfile.TemporaryDirectory(prefix='full-audit-physical-')
+        # Allocate physical fixtures below the real temp parent (macOS aliases /var).
+        directory = tempfile.TemporaryDirectory(
+            prefix='full-audit-physical-', dir=Path(tempfile.gettempdir()).resolve())
         case.addCleanup(directory.cleanup)
         destination = Path(directory.name)
     destination = Path(destination)

@@ -943,7 +943,7 @@ class _CacheInputs:
 
     def _check_context(self, root):
         try:
-            require(str(Path(root).absolute()) == self._root
+            require(_absolute_root_text(root) == self._root
                     and str(Path.cwd()) == self._cwd and self._include_roots == (),
                     'cache input root or working directory changed')
         except ContractError:
@@ -1221,7 +1221,7 @@ def _private_operation_wrapper(frame, kind, operation):
             or caller.f_locals.get('_operation') is not operation):
         return None
     for local in (frame.f_locals, caller.f_locals):
-        if str(Path(local.get('root')).absolute()) != operation._root:
+        if _absolute_root_text(local.get('root')) != operation._root:
             return None
     return caller
 
@@ -1976,6 +1976,18 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         return result
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
         _operation_fail(_operation, error)
+
+
+def _absolute_root_text(root):
+    """Avoid reconstructing an ordinary absolute POSIX root; retain fallbacks."""
+    if os.name == 'posix' and type(root) is PosixPath:
+        raw = getattr(root, '_raw_paths', None)
+        if type(raw) is list and len(raw) == 1 and type(raw[0]) is str:
+            text = raw[0]
+            if text == '/' or (text.startswith('/') and all(
+                    part not in ('', '.', '..') for part in text[1:].split('/'))):
+                return text
+    return str(Path(root).absolute())
 
 
 if __name__ == '__main__':

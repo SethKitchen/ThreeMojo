@@ -140,7 +140,8 @@ class NativeDependencyInventoryBatching(unittest.TestCase):
     """Small real-file graphs exercise traversal scope without native runs."""
 
     def setUp(self):
-        folder = tempfile.TemporaryDirectory(prefix='cleanup-native-closure-')
+        folder = tempfile.TemporaryDirectory(
+            prefix='cleanup-native-closure-', dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(folder.cleanup)
         self.root = Path(folder.name)
 
@@ -586,7 +587,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
     def test_native_batch_preserves_final_source_path_and_resolver_checks(self):
         # Mutate after all dependency consumption and bound-source checks.
         # Final checks must still reject, including an include-root shadow.
-        with tempfile.TemporaryDirectory(prefix='cleanup-final-resolver-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-final-resolver-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             include = Path(folder)
             cases = (
                 (self.root, cleanup.NATIVE_WITNESSES[0], 'input changed during verification'),
@@ -619,7 +621,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
             cleanup.verify(self.root, exact=True, include_roots=(include,))
 
     def test_symlink_ancestor_of_actual_and_include_roots_rejects(self):
-        with tempfile.TemporaryDirectory(prefix='cleanup-ancestor-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-ancestor-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             base = Path(folder)
             actual = base/'actual'
             actual.mkdir()
@@ -764,7 +767,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
                     'extensions/carla/Lane_Refinement.mojo', 'tests/__init__.mojo',
                     'math.mojo', 'tests/math.mojo',
                     'extensions/carla/std/utils.mojo', 'docs/wiki/Math.txt')
-        with tempfile.TemporaryDirectory(prefix='cleanup-include-root-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-include-root-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             include = Path(folder)
             cleanup.verify(self.root, include_roots=(include,))
             for root in (self.root, include):
@@ -792,7 +796,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
         # math/utils.mojo is consumed. Neither leaf makes the other a shadow.
         self.assertTrue((self.root/'geometries/utils.mojo').is_file())
         cleanup.verify(self.root, exact=True)
-        with tempfile.TemporaryDirectory(prefix='cleanup-qualified-resolver-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-qualified-resolver-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             include = Path(folder)
             for root in (self.root, include):
                 for name in ('unconsumed_namespace/utils.mojo',
@@ -859,7 +864,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
     def test_dependency_census_uses_entry_directory_for_transitive_imports(self):
         # A sparse physical fixture exercises only the maintained resolver
         # primitive. It makes no complete-source-admission claim.
-        with tempfile.TemporaryDirectory(prefix='cleanup-entry-roots-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-entry-roots-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             root = Path(folder)
             files = {
                 'tools/probe.mojo': 'from pkg.one import value\ndef main():\n    pass\n',
@@ -890,7 +896,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
         with physical_change(self.root, name, original+b'\n# Changed actual producer.\n'):
             self.reject_current()
         cleanup.verify(self.root, exact=True)
-        with tempfile.TemporaryDirectory(prefix='cleanup-entry-symlink-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-entry-symlink-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             include = Path(folder)
             for root in (self.root, include):
                 with self.subTest(root=str(root), symlink='entry module'), physical_change(
@@ -926,7 +933,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
             path.unlink()
             path.write_bytes(original)
             external.unlink()
-        with tempfile.TemporaryDirectory(prefix='cleanup-symlink-') as folder:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-symlink-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
             link = Path(folder)/'root'
             link.symlink_to(self.root, target_is_directory=True)
             with self.assertRaises(cleanup.ContractError):
@@ -1752,7 +1760,7 @@ print('consumer-first accepted: ' + route)
                     selector.verify_premises(other)
             selector.verify_premises(other)
             selector.verify_premises(self.root)
-            with tempfile.TemporaryDirectory() as directory:
+            with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as directory:
                 include = Path(directory)
                 (include/'std.mojo').write_text('# Resolver competitor.\n')
                 with self.assertRaisesRegex(cleanup.ContractError, 'resolver surface'):
@@ -1821,7 +1829,8 @@ class CacheInputViewPreflight(unittest.TestCase):
     def setUp(self):
         from contextlib import ExitStack
         import types
-        folder = tempfile.TemporaryDirectory(prefix='cache-input-fake-')
+        folder = tempfile.TemporaryDirectory(
+            prefix='cache-input-fake-', dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(folder.cleanup)
         self.root = Path(folder.name)
         self.stack = ExitStack()
@@ -2605,7 +2614,8 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         self.assertTrue(seed_calls)
         self.assertTrue(all(len(args) == 3 and 'entries' not in kwargs for args, kwargs in seed_calls))
         # Independently requested include contexts must perform fresh checks.
-        with tempfile.TemporaryDirectory(prefix='cache-input-include-') as directory:
+        with tempfile.TemporaryDirectory(
+                prefix='cache-input-include-', dir=Path(tempfile.gettempdir()).resolve()) as directory:
             include = Path(directory)
             (include/'std.mojopkg').write_bytes(b'include-root competitor')
             attempted = []

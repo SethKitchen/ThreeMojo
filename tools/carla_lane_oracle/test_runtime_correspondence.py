@@ -283,7 +283,7 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
                 contracts.verify_group(ROOT, 'stored_arithmetic')
 
     def test_cli_positive_negative_and_missing_inputs_normal_and_optimized(self):
-        with tempfile.TemporaryDirectory() as folder:
+        with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as folder:
             current = cleanup_fixtures.copy_current_root(
                 self, ROOT, destination=Path(folder)/'current')
             historical = cleanup_fixtures.copy_current_root(

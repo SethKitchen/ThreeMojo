@@ -25,7 +25,7 @@ spec.loader.exec_module(m)
 class SampledValueCorrespondenceTests(unittest.TestCase):
     def setUp(self):
         self.cleanup_sources = cleanup_fixtures.verified_predecessors(ROOT)
-        self.directory = tempfile.TemporaryDirectory()
+        self.directory = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
         pin = self.root/'tools/carla_lane_oracle/runtime-source-pins.json'

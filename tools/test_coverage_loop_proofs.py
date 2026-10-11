@@ -2470,7 +2470,8 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
 
     def test_each_include_root_reaches_count_and_map_dependencies(self):
         root = self.current_root()
-        with tempfile.TemporaryDirectory(prefix='cleanup-loop-include-') as name:
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-loop-include-', dir=Path(tempfile.gettempdir()).resolve()) as name:
             include = Path(name)
             (include/'std.mojo').write_text('def hidden():\n    pass\n')
             for module in ('extensions/carla/curve_sample_dispatch',

@@ -2392,7 +2392,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'cache_key_contracts.py': '99b947f241fa5459ecfbb890e277519e6735ff6a53e4d97a29e220b69acc78d0',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
         'coverage_loop_proofs.py': '3679bb0565255c19e9fcbf3af6da6790beb78cf9379197e7264b718444f14532',
-        'full_audit_cleanup_contracts.py': '9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643',
+        'full_audit_cleanup_contracts.py': '993496a159a84a9515ee3284cb6a36a8f411820ba4d4d4df0fe5e6766cb74498',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
         'seed_count_contracts.py': 'f87c9eef3bb9204c5dcb0eb4bdbedbc6651b8da26a8d9de7ebfb55cffe5098f5',
@@ -3061,6 +3061,327 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         self.assertIsNone(failures[0].__cause__)
         self._assert_refused(events, injected[0], reason, core, finalized=True)
         self.assertEqual((self.root/ROAD).read_bytes(), physical)
+
+
+class ReviewedAbsoluteRootTextMechanics(unittest.TestCase):
+    """Pure root spelling conversion; no input admission or cached authority."""
+
+    _V35_MODULE_AST_SHA = '6a067fc226ce7cd9473d1364d8ead8ab0a07f0b0845cbcbdf60872a31130af82'
+    _HELPER_AST_SHA = '280c064b53770cbdb8239251de6a5e629884a9f491b5979911058b100c6f0312'
+
+    def _checked_functions(self):
+        import pathlib
+        import types
+        if (cleanup.os.name != 'posix' or sys.version_info[:2] != (3, 12)
+                or type(getattr(pathlib.PosixPath('/alpha'), '_raw_paths', None)) is not list):
+            self.skipTest('fast-layout matrix requires pinned Python3.12 POSIX pathlib')
+        raw = Path(cleanup.__file__).read_bytes()
+        tree = ast.parse(raw)
+        helper = next(item for item in tree.body
+                      if isinstance(item, ast.FunctionDef) and item.name == '_absolute_root_text')
+        self.assertEqual(hashlib.sha256(ast_key(helper).encode()).hexdigest(), self._HELPER_AST_SHA)
+        compiled = compile(raw, cleanup.__file__, 'exec', dont_inherit=True, optimize=sys.flags.optimize)
+        codes = [item for item in compiled.co_consts if isinstance(item, types.CodeType)
+                 and item.co_name == '_absolute_root_text']
+        self.assertEqual(codes, [cleanup._absolute_root_text.__code__])
+        pending = [compiled]
+        core_codes = {}
+        while pending:
+            code = pending.pop()
+            core_codes[code.co_qualname] = code
+            pending.extend(item for item in code.co_consts if isinstance(item, types.CodeType))
+        self.assertEqual(core_codes['_CacheInputs._check_context'], cleanup._CacheInputs._check_context.__code__)
+        self.assertEqual(core_codes['_private_operation_wrapper'], cleanup._private_operation_wrapper.__code__)
+        # Bind the reference implementation to actual checked stdlib source,
+        # independently of interpreter optimization or relocation.
+        stdlib = Path(pathlib.__file__).read_bytes()
+        pending = [compile(stdlib, pathlib.__file__, 'exec', dont_inherit=True,
+                           optimize=sys.flags.optimize)]
+        names = {'PurePath.__init__', 'PurePath.__str__', 'Path.__init__',
+                 'Path.__new__', 'Path.absolute', 'Path.cwd', 'PurePath.is_absolute',
+                 'PurePath._load_parts', 'PurePath._parse_path', 'PurePath._format_parsed_parts',
+                 'PurePath.drive', 'PurePath.root', 'PurePath._tail', 'PurePath.with_segments'}
+        found = {}
+        while pending:
+            code = pending.pop()
+            if code.co_qualname in names:
+                found[code.co_qualname] = code
+            pending.extend(item for item in code.co_consts if isinstance(item, types.CodeType))
+        for qualified in names:
+            owner, name = qualified.split('.')
+            live = getattr(getattr(pathlib, owner), name)
+            if isinstance(live, property): live = live.fget
+            self.assertEqual(found[qualified], live.__code__)
+        return tree, helper
+
+    @staticmethod
+    def _root_text_outcome(call):
+        try:
+            value = call()
+            return ('return', type(value), value)
+        except Exception as error:
+            cause = error.__cause__
+            return ('error', type(error), error.args,
+                    None if cause is None else (type(cause), cause.args))
+
+    @staticmethod
+    def _reverse(node):
+        class Reverse(ast.NodeTransformer):
+            def __init__(self):
+                self.count = 0
+            def visit_Call(self, item):
+                item = self.generic_visit(item)
+                if isinstance(item.func, ast.Name) and item.func.id == '_absolute_root_text':
+                    if len(item.args) != 1 or item.keywords:
+                        raise AssertionError('unexpected root helper call shape')
+                    self.count += 1
+                    value = ast.parse('str(Path(ROOT).absolute())', mode='eval').body
+                    value.args[0].func.value.args[0] = item.args[0]
+                    return ast.copy_location(value, item)
+                return item
+        reverse = Reverse()
+        value = reverse.visit(copy.deepcopy(node))
+        return value, reverse.count
+
+    def test_only_two_original_root_expressions_change(self):
+        # Native fallback is checked even outside the scoped POSIX layout matrix.
+        self.assertEqual(cleanup._absolute_root_text('relative'), str(Path('relative').absolute()))
+        tree, helper = self._checked_functions()
+        tree.body.remove(helper)
+        original, count = self._reverse(tree)
+        self.assertEqual(count, 2)
+        self.assertEqual(hashlib.sha256(ast_key(original).encode()).hexdigest(), self._V35_MODULE_AST_SHA)
+        changed = copy.deepcopy(original)
+        context = next(item for item in changed.body if isinstance(item, ast.ClassDef)
+                       and item.name == '_CacheInputs')
+        context = next(item for item in context.body if getattr(item, 'name', None) == '_check_context')
+        cwd = next(item for item in ast.walk(context) if isinstance(item, ast.Call)
+                   and ast_key(item) == ast_key(ast.parse('Path.cwd()', mode='eval').body))
+        cwd.func.attr = 'home'
+        self.assertNotEqual(hashlib.sha256(ast_key(changed).encode()).hexdigest(), self._V35_MODULE_AST_SHA)
+
+    def test_fresh_values_callbacks_and_fallback_errors_match(self):
+        from pathlib import PosixPath, PurePosixPath, PureWindowsPath
+        import os
+        tree, helper = self._checked_functions()
+        fast = next(item.lineno for item in ast.walk(helper) if isinstance(item, ast.Return)
+                    and isinstance(item.value, ast.Name) and item.value.id == 'text')
+        fallback = next(item.lineno for item in ast.walk(helper) if isinstance(item, ast.Return)
+                        and isinstance(item.value, ast.Call))
+        class Foreign:
+            def __init__(self, events, value='/alpha', failure=False):
+                self.events, self.value, self.failure = events, value, failure
+            def __fspath__(self):
+                self.events.append('fspath')
+                if self.failure:
+                    raise OSError('deliberate root callback failure')
+                return self.value
+        class Text(str):
+            def __new__(cls, value, events, failure=None):
+                result = super().__new__(cls, value)
+                result.events, result.failure = events, failure
+                return result
+            def __bool__(self):
+                self.events.append('text-bool')
+                if self.failure == 'bool': raise ValueError('early lazy text failure')
+                return len(self) != 0
+            def split(self, *args, **kwargs):
+                self.events.append('text-split')
+                if self.failure == 'split': raise RuntimeError('late lazy text failure')
+                return super().split(*args, **kwargs)
+        class RawList(list):
+            def __iter__(self):
+                self.events.append('raw-iter')
+                return super().__iter__()
+        class Derived(PosixPath):
+            def __getattribute__(self, name):
+                if name == '_raw_paths':
+                    object.__getattribute__(self, 'events').append('path-raw')
+                return super().__getattribute__(name)
+        def raw_case(kind):
+            def factory(events):
+                root = PosixPath('/alpha')
+                if kind == 'missing':
+                    del root._raw_paths
+                elif kind == 'tuple':
+                    root._raw_paths = ('/alpha',)
+                elif kind == 'list-subclass':
+                    value = RawList(['/alpha']); value.events = events
+                    root._raw_paths = value
+                elif kind == 'non-string':
+                    root._raw_paths = [17]
+                elif kind == 'lazy-string':
+                    root._raw_paths = [Text('/alpha', events)]
+                elif kind in ('lazy-early-failure', 'lazy-late-failure'):
+                    root._raw_paths = [Text('/alpha' if kind == 'lazy-early-failure' else 'relative',
+                                            events, 'bool' if kind == 'lazy-early-failure' else 'split')]
+                elif kind == 'cached':
+                    root._str, root._drv, root._root, root._tail_cached = '/wrong', '', '/', ['wrong']
+                return root
+            return factory
+        def derived(events):
+            root = Derived('/alpha'); root.events = events
+            return root
+        cases = []
+        canonical = ['/', '/alpha', '/alpha/beta', '/with spaces', '/Å/雪', '/Case/case',
+                     '/colon:part/back\\slash', '/nul\x00part', '/' + 'x'*512]
+        for value in canonical:
+            for parsed in (False, True):
+                def factory(events, value=value, parsed=parsed):
+                    root = PosixPath(value)
+                    if parsed:
+                        str(root); root.parts
+                    return root
+                cases.append((repr((value, parsed)), factory, 'fast', None))
+        for value in ['', '.', '..', 'relative', '/alpha/', '//alpha', '///alpha',
+                      '/alpha//beta', '/alpha/./beta', '/alpha/../beta']:
+            cases.append((repr(value), lambda events, value=value: PosixPath(value), 'fallback', None))
+        for value in ['/alpha', '', 17, None, b'/alpha']:
+            cases.append(('foreign-'+repr(value), lambda events, value=value: value, 'fallback',
+                          None if isinstance(value, str) else TypeError))
+        cases.extend([('pure-posix', lambda events: PurePosixPath('/alpha'), 'fallback', None),
+                      ('pure-windows', lambda events: PureWindowsPath('C:/alpha'), 'fallback', None)])
+        cases.extend([
+            ('multiple-raw', lambda events: PosixPath('/alpha', 'beta'), 'fallback', None),
+            ('path-subclass', derived, 'fallback', None),
+            ('pathlike', lambda events: Foreign(events), 'fallback', None),
+            ('pathlike-raises', lambda events: Foreign(events, failure=True), 'fallback', OSError),
+            ('pathlike-invalid', lambda events: Foreign(events, 17), 'fallback', TypeError),
+            ('str-subclass', lambda events: Text('/alpha', events), 'fallback', None),
+        ])
+        for kind in ('missing', 'tuple', 'list-subclass', 'non-string', 'lazy-string',
+                     'lazy-early-failure', 'lazy-late-failure', 'cached'):
+            cases.append((kind, raw_case(kind), 'fast' if kind == 'cached' else 'fallback',
+                          {'missing': AttributeError, 'non-string': AttributeError,
+                           'lazy-early-failure': ValueError, 'lazy-late-failure': RuntimeError}.get(kind)))
+        counts = Counter()
+        for name, factory, expected_branch, expected_error in cases:
+            with self.subTest(name=name):
+                old_events, new_events, branches = [], [], []
+                old_root, new_root = factory(old_events), factory(new_events)
+                old_events.clear(); new_events.clear()
+                def cwd_old():
+                    old_events.append('cwd'); return '/observed-cwd'
+                def cwd_new():
+                    new_events.append('cwd'); return '/observed-cwd'
+                with patch.object(os, 'getcwd', cwd_old), patch.object(
+                        Path, 'stat', side_effect=AssertionError('unexpected filesystem stat')), patch.object(
+                        Path, 'lstat', side_effect=AssertionError('unexpected filesystem lstat')), patch.object(
+                        os, 'scandir', side_effect=AssertionError('unexpected filesystem scan')), patch(
+                        'builtins.open', side_effect=AssertionError('unexpected filesystem open')), patch(
+                        'io.open', side_effect=AssertionError('unexpected filesystem open')):
+                    old = self._root_text_outcome(lambda: str(Path(old_root).absolute()))
+                def trace(frame, event, arg):
+                    if frame.f_code is cleanup._absolute_root_text.__code__ and event == 'line':
+                        if frame.f_lineno == fast: branches.append('fast')
+                        if frame.f_lineno == fallback: branches.append('fallback')
+                    return trace
+                previous = sys.gettrace()
+                try:
+                    sys.settrace(trace)
+                    with patch.object(os, 'getcwd', cwd_new), patch.object(
+                            Path, 'stat', side_effect=AssertionError('unexpected filesystem stat')), patch.object(
+                            Path, 'lstat', side_effect=AssertionError('unexpected filesystem lstat')), patch.object(
+                        os, 'scandir', side_effect=AssertionError('unexpected filesystem scan')), patch(
+                        'builtins.open', side_effect=AssertionError('unexpected filesystem open')), patch(
+                        'io.open', side_effect=AssertionError('unexpected filesystem open')):
+                        new = self._root_text_outcome(lambda: cleanup._absolute_root_text(new_root))
+                finally:
+                    sys.settrace(previous)
+                self.assertEqual(new, old)
+                self.assertEqual(new[:2], ('return', str) if expected_error is None else ('error', expected_error))
+                self.assertEqual(new_events, old_events)
+                self.assertEqual(branches, [expected_branch])
+                counts.update(branches)
+        self.assertEqual(counts, {'fast': 19, 'fallback': 30})
+        for root in (PosixPath('/alpha'), PosixPath('relative')):
+            with self.subTest(missing_cwd=str(root)), patch.object(os, 'getcwd', side_effect=OSError('missing cwd')):
+                new = self._root_text_outcome(lambda: cleanup._absolute_root_text(root))
+                self.assertEqual(new, self._root_text_outcome(lambda: str(Path(root).absolute())))
+                self.assertEqual(new[:2], ('return', str) if root.is_absolute() else ('error', OSError))
+        import types
+        with patch.object(cleanup, 'os', types.SimpleNamespace(name='unsupported')):
+            self.assertEqual(cleanup._absolute_root_text(PosixPath('/alpha')), '/alpha')
+
+    def test_context_keeps_fresh_cwd_short_circuit_and_exception_order(self):
+        import os
+        from types import SimpleNamespace
+        tree, helper = self._checked_functions()
+        cls = next(item for item in tree.body if isinstance(item, ast.ClassDef) and item.name == '_CacheInputs')
+        node = next(item for item in cls.body if getattr(item, 'name', None) == '_check_context')
+        reference, count = self._reverse(node)
+        self.assertEqual(count, 1)
+        namespace = dict(vars(cleanup))
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[reference], type_ignores=[])),
+                     '<original-context>', 'exec'), namespace)
+        for root, stored, observed_cwd, includes, expected_cwd, succeeds in (
+            ('/alpha', '/alpha', '/work', (), 1, True),
+            ('/wrong', '/alpha', '/work', (), 0, False),
+            ('/alpha', '/alpha', '/changed', (), 1, False),
+            ('/alpha', '/alpha', OSError('missing cwd'), (), 1, False),
+            ('/alpha', '/alpha', '/work', ('foreign',), 1, False),
+            ('relative', '/work/relative', '/work', (), 2, True),
+        ):
+            outcomes, events = [], []
+            for call in (namespace['_check_context'], cleanup._CacheInputs._check_context):
+                seen = []
+                def cwd():
+                    seen.append('cwd')
+                    if isinstance(observed_cwd, Exception): raise observed_cwd
+                    return observed_cwd
+                state = SimpleNamespace(_root=stored, _cwd='/work', _include_roots=includes)
+                with patch.object(os, 'getcwd', cwd):
+                    outcomes.append(self._root_text_outcome(lambda: call(state, Path(root))))
+                events.append(seen)
+            self.assertEqual(outcomes[0], outcomes[1])
+            self.assertEqual(outcomes[1][:2], ('return', type(None)) if succeeds else ('error', cleanup.ContractError))
+            self.assertEqual(events, [['cwd']*expected_cwd]*2)
+
+    def test_private_bridge_keeps_both_root_checks_in_order(self):
+        import types
+        tree, helper = self._checked_functions()
+        node = next(item for item in tree.body if isinstance(item, ast.FunctionDef)
+                    and item.name == '_private_operation_wrapper')
+        reference, count = self._reverse(node)
+        self.assertEqual(count, 1)
+        namespace = dict(vars(cleanup))
+        exec(compile(ast.fix_missing_locations(ast.Module(body=[reference], type_ignores=[])),
+                     '<original-private-bridge>', 'exec'), namespace)
+        module = types.ModuleType('private_bridge_fixture')
+        exec('def verify(root): pass\ndef _verify_owned(root): pass\n', vars(module))
+        class LoggedRoot:
+            def __init__(self, label, events, value):
+                self.label, self.events, self.value = label, events, value
+            def __fspath__(self):
+                self.events.append(self.label)
+                if isinstance(self.value, Exception): raise self.value
+                return self.value
+        namespace['_owner_module'] = lambda kind: module
+        for first, second, first_kind, second_kind, expected, order in (
+            ('/alpha', '/alpha', 'logged', 'logged', True, ['first', 'second']),
+            ('/wrong', '/alpha', 'logged', 'logged', False, ['first']),
+            ('/alpha', '/wrong', 'logged', 'logged', False, ['first', 'second']),
+            ('/alpha', '/alpha', 'path', 'path', True, []),
+            ('/wrong', '/alpha', 'path', 'path', False, []),
+            ('/alpha', '/wrong', 'path', 'path', False, []),
+            ('/alpha', '/alpha', 'path', 'logged', True, ['second']),
+            ('/wrong', '/alpha', 'path', 'logged', False, []),
+            ('/alpha', OSError('second root failed'), 'path', 'logged', False, ['second']),
+        ):
+            results = []
+            for call in (namespace['_private_operation_wrapper'], cleanup._private_operation_wrapper):
+                events = []
+                operation = types.SimpleNamespace(_kind='winner', _root='/alpha')
+                caller = types.SimpleNamespace(f_globals=vars(module), f_code=module._verify_owned.__code__,
+                    f_locals={'_operation': operation, 'root': Path(second) if second_kind == 'path' else LoggedRoot('second', events, second)})
+                frame = types.SimpleNamespace(f_globals=vars(module), f_code=module.verify.__code__, f_back=caller,
+                    f_locals={'_operation': operation, 'root': Path(first) if first_kind == 'path' else LoggedRoot('first', events, first)})
+                with patch.object(cleanup, '_owner_module', lambda kind: module):
+                    outcome = self._root_text_outcome(lambda: call(frame, 'invariant', operation) is caller)
+                results.append((outcome, events))
+            self.assertEqual(results[0], results[1])
+            wanted = ('error', OSError, ('second root failed',), None) if isinstance(second, Exception) else ('return', bool, expected)
+            self.assertEqual(results[1], (wanted, order))
 
 
 if __name__ == '__main__':

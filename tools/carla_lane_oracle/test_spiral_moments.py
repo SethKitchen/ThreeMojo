@@ -133,7 +133,7 @@ class TableTests(unittest.TestCase):
         cls.historical_map = seed_count.historical_source(m.ROOT).encode('utf-8')
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)/'repo'
         paths = {m.PINS, m.DATA, m.source_contracts.PINS,

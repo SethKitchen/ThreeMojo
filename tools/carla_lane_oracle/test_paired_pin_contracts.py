@@ -105,7 +105,8 @@ class PairedPinFakeControls(unittest.TestCase):
     """Synthetic qualification and owner wiring only, never real gate evidence."""
 
     def setUp(self):
-        directory = tempfile.TemporaryDirectory(prefix='paired-pin-fake-')
+        directory = tempfile.TemporaryDirectory(
+            prefix='paired-pin-fake-', dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(directory.cleanup)
         self.root = Path(directory.name)
         (self.root/PIN_DIR).mkdir(parents=True)
