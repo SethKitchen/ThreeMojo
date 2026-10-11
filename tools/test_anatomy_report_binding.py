@@ -175,6 +175,30 @@ class AnatomyReportBindingTests(unittest.TestCase):
                 (root/'pkg/bound.mojo').write_text('def value() -> Int:\n    return 5\n')
                 self.assertNotEqual(av.source_digest(root), before)
 
+    def test_a_local_file_under_a_toolchain_name_is_bound(self):
+        # Pinned Mojo 1.1.0 reads a local max/sentinel.mojo for
+        # `max.sentinel`, with or without max/__init__.mojo. A local file
+        # under `std` is bound as well, which can only bind more.
+        layouts = {
+            'max namespace': ('max', False), 'max package': ('max', True),
+            'std namespace': ('std', False), 'std package': ('std', True),
+        }
+        for name, (package, explicit) in layouts.items():
+            with self.subTest(layout=name), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                _fixture(root)
+                (root/package).mkdir()
+                if explicit:
+                    (root/package/'__init__.mojo').write_text('')
+                (root/package/'sentinel.mojo').write_text('def value() -> Int:\n    return 42\n')
+                (root/'tools/anatomy_probe.mojo').write_text(
+                    'from ' + package + '.sentinel import value\n'
+                    'from ' + package + '.absent import other\n\n\ndef main():\n    pass\n')
+                self.assertIn(package + '/sentinel.mojo', av.bound_paths(root))
+                before = av.source_digest(root)
+                (root/package/'sentinel.mojo').write_text('def value() -> Int:\n    return 7\n')
+                self.assertNotEqual(av.source_digest(root), before)
+
     def test_plain_imports_and_symbols_are_kept_apart(self):
         source = 'import pkg.bound as bound, helper\nfrom pkg import *\nimport a.b; import c\n'
         self.assertEqual(av.imports_of(source), [

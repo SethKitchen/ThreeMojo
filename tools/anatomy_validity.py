@@ -409,7 +409,9 @@ def probe_closure(root, known):
     """Return the sorted files the probe reaches through its imports.
 
     Each import's own module must resolve to a file of its own: a missing
-    module under an existing package is refused. The edges come from
+    module under an existing package is refused. A `std` or `max` module
+    with no local file comes from the pinned SDK, which the toolchain string
+    binds. A local file under either name is bound. The edges come from
     `affected.resolve`, which also keeps the ancestor packages and the
     shadowing candidates, so the closure can only be larger than what the
     compiler reads.
@@ -425,9 +427,13 @@ def probe_closure(root, known):
     while stack:
         path = stack.pop()
         for module, names in imports_of((Path(root)/path).read_text()):
-            if module.split('.')[0] in TOOLCHAIN_PACKAGES:
-                continue
-            if module_file(module, entry, known) is None:
+            # A local file can shadow a toolchain package: the pinned
+            # compiler reads a local max/sentinel.mojo for `max.sentinel`.
+            # So every local candidate is bound, whatever the prefix. Only a
+            # toolchain name with no local file may resolve to no file here;
+            # the toolchain string binds the SDK.
+            if (module.split('.')[0] not in TOOLCHAIN_PACKAGES
+                    and module_file(module, entry, known) is None):
                 raise ValueError('an anatomy probe import resolves to no module: '
                                  + module + ' in ' + path)
             # A name after `import` is a submodule when its file exists, and
