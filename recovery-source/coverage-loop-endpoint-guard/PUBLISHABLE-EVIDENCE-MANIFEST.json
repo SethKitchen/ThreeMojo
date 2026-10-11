@@ -1,0 +1,51 @@
+{
+  "base_candidate": "candidate-v33",
+  "base_source_seal_sha256": "5b34331e984e7abc56840d55e6115851d17e62337b1c6d90abb1b6701f465397",
+  "delta_count": 3,
+  "files": [
+    {
+      "before_git_blob": "3f9858f548e8e51f744a8e21bd84e8ebe76e4223",
+      "before_mode": "100644",
+      "before_sha256": "2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30",
+      "bytes": 87042,
+      "git_blob": "c7d35aa3f50a11b57a8d2e2ddc7a196f94a18b43",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/coverage-loop-endpoint-proposal/tools/coverage_loop_proofs.py",
+      "mode": "100644",
+      "path": "tools/coverage_loop_proofs.py",
+      "sha256": "3679bb0565255c19e9fcbf3af6da6790beb78cf9379197e7264b718444f14532"
+    },
+    {
+      "before_git_blob": "a6917a263760b3551a4614b9b2893a7ae53d5896",
+      "before_mode": "100644",
+      "before_sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "bytes": 142145,
+      "git_blob": "3888bffc7f5dd1059b5fa550d398b7eaa10b01bb",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/coverage-loop-endpoint-proposal/tools/test_coverage_loop_proofs.py",
+      "mode": "100644",
+      "path": "tools/test_coverage_loop_proofs.py",
+      "sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+    },
+    {
+      "before_git_blob": "8033711797738c47e9df91f4cf1932a48c4e1841",
+      "before_mode": "100644",
+      "before_sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+      "bytes": 180754,
+      "git_blob": "8e620d7ec8ac4aa7544006ec87bf682226a5f6b0",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/coverage-loop-endpoint-proposal/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "6bf4cc71084e6a5f4471f12dc1f6f77719d39d5449617d65d6a2f2a426444351"
+    }
+  ],
+  "focused_selectors": [
+    "test_coverage_loop_proofs.MapSuccessorLoopTests.test_all_six_explicit_map_states_keep_eight_required_true_rows",
+    "test_coverage_loop_proofs.MapSuccessorLoopTests.test_complete_consumers_accept_six_exact_states_and_reject_mutations",
+    "test_coverage_loop_proofs.MapSuccessorLoopTests.test_eligible_constructor_failure_stays_failed_after_physical_restore",
+    "test_invariant_operation_inputs.BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults"
+  ],
+  "fresh_discovery": "pending; preserve complete 77-module inventory; do not infer final counts from this checkpoint",
+  "schema": 1,
+  "scope": "Three reviewed proposal sources: exact constructor endpoint guard, historical consumer fixture and sticky-failure controls, and mechanical source-bound owner-test coordinates. No candidate tree is materialized by this manifest.",
+  "status": "Reviewed source-only checkpoint. Candidate installation and focused execution pending. No full-matrix, native, or coverage qualification claim.",
+  "test_method_count_delta": 1
+}
