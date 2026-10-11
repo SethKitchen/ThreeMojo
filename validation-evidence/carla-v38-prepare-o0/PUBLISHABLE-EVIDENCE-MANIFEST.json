@@ -1,0 +1,48 @@
+{
+  "files": [
+    {
+      "bytes": 75200,
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "adfb69c82dee36333c67af30552bb222c033b51270ac0ee7d6778ba1b3cac0e3",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/INNER-MEMBER-MANIFEST.json"
+    },
+    {
+      "bytes": 1318,
+      "path": "README.txt",
+      "sha256": "b33e72da59daade294a3051868523110bdafe2cf6501af714d891588b89ec2fd",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/README.txt"
+    },
+    {
+      "bytes": 86266,
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "7bc3d52d7f7d9a3f3d3ac2d42b304c9f73d26d2d6112d4ec37f410e75b8e6d39",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/VALIDATION-SUMMARY.json"
+    },
+    {
+      "bytes": 3048285,
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "7e53f00e8d107b298370bac776deb61c9360930c70bd43d0face9f97f76b1ad9",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 5175,
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/decode_verify.py"
+    },
+    {
+      "bytes": 38437,
+      "path": "reproduce/CARLA-V38-PREPARE-O0-TERMINAL-INPUT-MANIFEST.json",
+      "sha256": "bd6aaedd9db46aa9c28a86b521e5369433e24c67a0154401bb2d01acf77bd103",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/reproduce/CARLA-V38-PREPARE-O0-TERMINAL-INPUT-MANIFEST.json"
+    },
+    {
+      "bytes": 38265,
+      "path": "reproduce/build_carla_v38_prepare_o0_packet.py",
+      "sha256": "df1fe6c68e77536fd20285e88f811b411167c99bae3f6d0bf34c61899e1508e9",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-carla-v38-prepare-o0-packet/reproduce/build_carla_v38_prepare_o0_packet.py"
+    }
+  ],
+  "schema": 1,
+  "scope": "Linux x86-64 preparation and explicit O0 native controls only. O3, capture, coverage completion, Arm, hosted CI and anatomy-report qualification are not established by this packet."
+}

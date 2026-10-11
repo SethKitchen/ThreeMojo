@@ -1,0 +1,920 @@
+{
+  "originals": [
+    {
+      "bytes": 420072,
+      "sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+      "source": "CANDIDATE-V38-SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 753,
+      "sha256": "f9f68c2382ef5e1961f092ac9638d2e0a575711a2cffbe89047e93b52d546190",
+      "source": "PUBLISHED-V38-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 112861,
+      "sha256": "4dc55b3c76ba56ad11f9417fca4eceab676f362b9f0784d1033c3e3b15e9a71d",
+      "source": "carla-final-v38-native-o0.supervisor.log"
+    },
+    {
+      "bytes": 13422,
+      "sha256": "27e4c91141ae1025e11695eb455113e3d8bcbd5d4cf653f2e83a33daa6ff74ca",
+      "source": "carla-final-v38-prepare.supervisor.log"
+    },
+    {
+      "bytes": 30724,
+      "sha256": "c6b35ba844f5b9956d05eddb47a1d1e12a82da805e682894f3e51cb4398e265e",
+      "source": "evidence/carla-final-v38-native-o0/NATIVE-SUMMARY.json"
+    },
+    {
+      "bytes": 66248,
+      "sha256": "2e11c57298e685c499e49143e66e71f5a7f241decb27a404a295ba736ca7eab4",
+      "source": "evidence/carla-final-v38-native-o0/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/carla-final-v38-native-o0/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/carla-final-v38-native-o0/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 420072,
+      "sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+      "source": "evidence/carla-final-v38-native-o0/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 370,
+      "sha256": "08f22565c2b4458a86bd0270ba60457e8b849b1cfd2977a1af40f2f9829d48a2",
+      "source": "evidence/carla-final-v38-native-o0/WINDOW-START.json"
+    },
+    {
+      "bytes": 1440,
+      "sha256": "43209d1d875b486d97daddcc2f381c4ccd8677fe3e0b86727fb5332cd4501b45",
+      "source": "evidence/carla-final-v38-native-o0/fixture-cache/cf1a0873ffa1b7187d5610dcca98a0295d48add7a185539c287a86155283dedf.json"
+    },
+    {
+      "bytes": 1007,
+      "sha256": "b190fe0a7285838d575599c6c79bedbba9aa47840b7f6b6d62dee04a8a7688be",
+      "source": "evidence/carla-final-v38-native-o0/native-summary-o0-RESULT.json"
+    },
+    {
+      "bytes": 763,
+      "sha256": "6c311c9e9728cf7d7fad95cd089586aa6b01d9c24ffc868e4b2d51009e475d33",
+      "source": "evidence/carla-final-v38-native-o0/native-summary-o0-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/native-summary-o0.log"
+    },
+    {
+      "bytes": 1928,
+      "sha256": "7d68394ba461e58df7a127da8dc5edf598a82ee9f5b4f96f4cbb8c412a9b80bb",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_chord_endpoint_refusals-build-RESULT.json"
+    },
+    {
+      "bytes": 1685,
+      "sha256": "7118df32482d622b7a371e9833914407c6a132c1bf05b575e3d1068f4cb84608",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_chord_endpoint_refusals-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_chord_endpoint_refusals-build.log"
+    },
+    {
+      "bytes": 1190,
+      "sha256": "c7504d0662202034a08425869af3ce1869890d46bf34203b008a2e71ea384342",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_chord_endpoint_refusals-run-RESULT.json"
+    },
+    {
+      "bytes": 946,
+      "sha256": "a45847750bda1d40c7bf039fbc52325d6ac464ea49b410040150d0a5c750e18e",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_chord_endpoint_refusals-run-START.json"
+    },
+    {
+      "bytes": 519,
+      "sha256": "25df357a09cc51f30fd838b60592368ae4898cd0f9db892b77fbd3e6110be2fb",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_chord_endpoint_refusals-run.log"
+    },
+    {
+      "bytes": 1889,
+      "sha256": "f0cbcffd8867e89ca0e1798b676a414be23daa445644b458a7749ec130560bc1",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_goal_directed-build-RESULT.json"
+    },
+    {
+      "bytes": 1645,
+      "sha256": "8998945998f18cb45b7776e7b84cdf5da4267143fb98d70448a2e53144dce0ec",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_goal_directed-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_goal_directed-build.log"
+    },
+    {
+      "bytes": 1162,
+      "sha256": "5e2e127467113685a5b67046ff6405895bbb82a45cef1ce44179dc33b29832fa",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_goal_directed-run-RESULT.json"
+    },
+    {
+      "bytes": 918,
+      "sha256": "5ba61f528db22f4af8fb87b928168c8a8a3dae5720d0ff32be84b4b0e8c3498c",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_goal_directed-run-START.json"
+    },
+    {
+      "bytes": 1020,
+      "sha256": "7122e4bd6ae072c4756aabb4bde5428529f8ceab7e07c4403fe3e259151f5d7f",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_goal_directed-run.log"
+    },
+    {
+      "bytes": 1943,
+      "sha256": "6cf968bda94c720647edd99ee8c77b7150a96d8d924674b6a18648928bf53965",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_arithmetic_states-build-RESULT.json"
+    },
+    {
+      "bytes": 1699,
+      "sha256": "97308e1c2199b339b637018021987a2a8eaecba38a62640bcfd0a1cc7820db73",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_arithmetic_states-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_arithmetic_states-build.log"
+    },
+    {
+      "bytes": 1201,
+      "sha256": "6de7223c5fab19ef9893ffadf601512adee09580ffb03ef63ed29a981cd5f1ad",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_arithmetic_states-run-RESULT.json"
+    },
+    {
+      "bytes": 957,
+      "sha256": "c5c4db6af4be6063e1c154363e4fb45a6eccec107edc6b6d4bc7e7368de86e23",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_arithmetic_states-run-START.json"
+    },
+    {
+      "bytes": 824,
+      "sha256": "66df8a950d46141f9dd5e9f1955ca5e053e0e3b2d6ae46c79d15f2162d84219d",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_arithmetic_states-run.log"
+    },
+    {
+      "bytes": 1941,
+      "sha256": "bc225be3cb7bb0d950b299973711caa29f46e421aa019edf0f1378af90886ac9",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_endpoint_refusals-build-RESULT.json"
+    },
+    {
+      "bytes": 1697,
+      "sha256": "8cc67496950abd71f5535bd114c323a0c1c1eb684370c47151eb8917b1851e41",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_endpoint_refusals-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_endpoint_refusals-build.log"
+    },
+    {
+      "bytes": 1199,
+      "sha256": "bde85cddc20d2d8e351876a63028d7c2c2c79bf174bd94d6502c352db6e8258f",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_endpoint_refusals-run-RESULT.json"
+    },
+    {
+      "bytes": 955,
+      "sha256": "d97a45ab8be3d6592f4116e67d7ba573d09b33f631e39646f04d5db906cbbb0e",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_endpoint_refusals-run-START.json"
+    },
+    {
+      "bytes": 531,
+      "sha256": "6e842ca9cd1337e269b8ac851b850eb847640da6313081f41d3724af75e03af4",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_junction_endpoint_refusals-run.log"
+    },
+    {
+      "bytes": 1941,
+      "sha256": "d0bb4ae1508f4e7f905455263fd1b077e6e23ca7068df24cbfc29f625f2bb547",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_cache_scale_residuals-build-RESULT.json"
+    },
+    {
+      "bytes": 1697,
+      "sha256": "381d652edf276e4db196beec3be0ab3a9d981abdd4c8d6025b5ee1991a86f0bb",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_cache_scale_residuals-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_cache_scale_residuals-build.log"
+    },
+    {
+      "bytes": 1199,
+      "sha256": "97a07637f3bc893db359720f3f4814b477862ce0ae364d13eeaf1cc80de364b1",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_cache_scale_residuals-run-RESULT.json"
+    },
+    {
+      "bytes": 955,
+      "sha256": "26b3885ac974ed4d1af0f4d987560cb5d46d2289fc5913b4bba1ceee4808c765",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_cache_scale_residuals-run-START.json"
+    },
+    {
+      "bytes": 386,
+      "sha256": "b26042e8bdb658d858da5d3462dfba4843aa48f8d9df442be63ea4d44a3a08e0",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_cache_scale_residuals-run.log"
+    },
+    {
+      "bytes": 1927,
+      "sha256": "2b9176a9273648f5734e16697f59ea1e95bea3a1986280b151e267696dc19e90",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_center_bound_phase-build-RESULT.json"
+    },
+    {
+      "bytes": 1685,
+      "sha256": "be1b9a0d6235a1c1eafdc8f8a3e8746a34d898e74d557f8ba916cbdbb92276ab",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_center_bound_phase-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_center_bound_phase-build.log"
+    },
+    {
+      "bytes": 1190,
+      "sha256": "32cd74a2715f1d5338e5708ef06b8b4a3c59b015108ea05b5749f5310fe726e3",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_center_bound_phase-run-RESULT.json"
+    },
+    {
+      "bytes": 946,
+      "sha256": "7b98a6b593406e0f60320e74bd7e062ebb811342c547b90d17ba98aac08c6ad8",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_center_bound_phase-run-START.json"
+    },
+    {
+      "bytes": 827,
+      "sha256": "1bdcb6d13d5ab8add7c4a6903d89caabfed589c22f821c5a37a63e7795cdf5f2",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_center_bound_phase-run.log"
+    },
+    {
+      "bytes": 1923,
+      "sha256": "8528495be83762f3d1645d1fbd428c0f8c5bca7e2a92eed351289ed4dbaa3199",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_local_scale_goal-build-RESULT.json"
+    },
+    {
+      "bytes": 1679,
+      "sha256": "aaae6f538db65da84bdbc0ad9e097b9576eae74da5c26b75cac3796b971b6c89",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_local_scale_goal-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_local_scale_goal-build.log"
+    },
+    {
+      "bytes": 1186,
+      "sha256": "5cdc9073cc2e8e0902219c876664da96fa7ddcd39bc8b4329d2178bab7a5bb76",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_local_scale_goal-run-RESULT.json"
+    },
+    {
+      "bytes": 942,
+      "sha256": "7b099c46c29abd144ca5c8709c4d964c42af1fba120470558dc3c2264b93c43e",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_local_scale_goal-run-START.json"
+    },
+    {
+      "bytes": 303,
+      "sha256": "55141604ddfcb6d9fc59075e98f4c6f52d798467e947a6626cf14d4901fb080b",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_local_scale_goal-run.log"
+    },
+    {
+      "bytes": 1953,
+      "sha256": "6b082215ed88f7dd1135f7cc419ab8599c5b149db537dca0661246bfa9605d00",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_proof_fallback_residuals-build-RESULT.json"
+    },
+    {
+      "bytes": 1709,
+      "sha256": "fd334c23d75633fb06a58ce523423a5859e85c69f9fd961654e39862220f04fd",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_proof_fallback_residuals-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_proof_fallback_residuals-build.log"
+    },
+    {
+      "bytes": 1208,
+      "sha256": "770b5ce54db32a142ec7c78a386f749a0ce3d02d69444ab0bc884ec053744301",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_proof_fallback_residuals-run-RESULT.json"
+    },
+    {
+      "bytes": 964,
+      "sha256": "609e3dec55a2a2435a638e44c76d69a5f2972d59f0ff6e6a97bde2b51393497a",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_proof_fallback_residuals-run-START.json"
+    },
+    {
+      "bytes": 744,
+      "sha256": "50faa90ce8b4e2f30c7e24fce12211edce2c5bc0e2912eb6ab03e17ab971bd22",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_proof_fallback_residuals-run.log"
+    },
+    {
+      "bytes": 1937,
+      "sha256": "8464cf42946e4c378f6f351e81a8bc45f3a675b910549d940f4efa8164176e0a",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_edge_controls-build-RESULT.json"
+    },
+    {
+      "bytes": 1693,
+      "sha256": "1d918b24ff374b1715924b764cc2c6be6bae9b0ef4ab8ad954b28c1321cc7e83",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_edge_controls-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_edge_controls-build.log"
+    },
+    {
+      "bytes": 1196,
+      "sha256": "a184e078db76dcf70633728fd437bdf733d1727fcf8dd92caf765eb45f9a40af",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_edge_controls-run-RESULT.json"
+    },
+    {
+      "bytes": 952,
+      "sha256": "6e688bcfdcaadfdf846458d4686c454d532c2d6476943b0df3c645f47aa9df95",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_edge_controls-run-START.json"
+    },
+    {
+      "bytes": 744,
+      "sha256": "95b837f74124e2f218189fbf1804c60525899e317b422a8170f519ba84396e9c",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_edge_controls-run.log"
+    },
+    {
+      "bytes": 1953,
+      "sha256": "41e62629753bb3c1bb02dcca42f10b9e751b1721f54caa27e0726f8f10c73d4b",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_positive_controls-build-RESULT.json"
+    },
+    {
+      "bytes": 1709,
+      "sha256": "b9eae2db419afba82a395be57a9b2b6cc5020f3d8f29be88598d5d9432be7731",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_positive_controls-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_positive_controls-build.log"
+    },
+    {
+      "bytes": 1208,
+      "sha256": "5ea628348c0187c66eeb3c85f194bb15d6b1dfa8ce1c36e58d08c1fa19d9af51",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_positive_controls-run-RESULT.json"
+    },
+    {
+      "bytes": 964,
+      "sha256": "6bc0ec83207b3f2b16c4987eb0c6c2a56e82d12f394966038a0a48a22550e768",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_positive_controls-run-START.json"
+    },
+    {
+      "bytes": 1094,
+      "sha256": "afa78e895f53a9248b3f5221f082c82b17dad4e27ce12a6ccba5106a9ce6b664",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_lane_search_positive_controls-run.log"
+    },
+    {
+      "bytes": 1906,
+      "sha256": "c331800c8989eba1d7296edbc2bd0d2c7e5ccbaa611e9eae47dace0a91f7205a",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_optional_followup-build-RESULT.json"
+    },
+    {
+      "bytes": 1663,
+      "sha256": "e9282331d3899dc380c7502fa5ccf255f25b7718505a287d1ad039f81a809bda",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_optional_followup-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_optional_followup-build.log"
+    },
+    {
+      "bytes": 1174,
+      "sha256": "01c0bb1b549ffd84997a2888ba25048e0a36a8215d60626a739d60abf4056128",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_optional_followup-run-RESULT.json"
+    },
+    {
+      "bytes": 930,
+      "sha256": "9b51ffbbd655c696f0ffa335ddd334ef9e6ac1f6bed408e8c938902d8cf6082a",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_optional_followup-run-START.json"
+    },
+    {
+      "bytes": 548,
+      "sha256": "2db4d1f8213f7d9e9665a97d19536c3f24632ecf561ca5b740a5dddb8cd26d79",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_optional_followup-run.log"
+    },
+    {
+      "bytes": 1932,
+      "sha256": "f455ffa061dc406dd7a92f725ac93a53281312877f7c7fa12d5b20ba060c8671",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_retained_boundary_guards-build-RESULT.json"
+    },
+    {
+      "bytes": 1689,
+      "sha256": "1cccfa63f230cc627ae4f81105f6a03444c132abb4d646e2ed1576f9967d0664",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_retained_boundary_guards-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_retained_boundary_guards-build.log"
+    },
+    {
+      "bytes": 1193,
+      "sha256": "0e7f6dc88d61007f11111dc985bee29439b4ca878fccc29efad6903ebfa23b30",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_retained_boundary_guards-run-RESULT.json"
+    },
+    {
+      "bytes": 949,
+      "sha256": "6809a5f93d969f7c9ae6271d05761e8b3420608f7627df71f40f7294a9962cd9",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_retained_boundary_guards-run-START.json"
+    },
+    {
+      "bytes": 493,
+      "sha256": "7d7cf9c6479cc1b7f3da91e027df4d86e2315c496725950076fa024430ac678d",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_retained_boundary_guards-run.log"
+    },
+    {
+      "bytes": 1915,
+      "sha256": "140e78561d03b11d1db97a279192f848ee340473f3940c6ce3725325e83ad366",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_rounded_arc_witness-build-RESULT.json"
+    },
+    {
+      "bytes": 1671,
+      "sha256": "97e712e1cd31766ecfbb6cc1e2eaeaf474f12f311137695485a91283a4ce1370",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_rounded_arc_witness-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_rounded_arc_witness-build.log"
+    },
+    {
+      "bytes": 1180,
+      "sha256": "993b0621912cd4943ca8eec4dac2b5ca9ea78732d5890c35d1f126140a679efe",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_rounded_arc_witness-run-RESULT.json"
+    },
+    {
+      "bytes": 936,
+      "sha256": "34ff79605494db7549e5ac14ce0585852746f973df66a51c7e5141b5a9f5f659",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_rounded_arc_witness-run-START.json"
+    },
+    {
+      "bytes": 1014,
+      "sha256": "820c5fe45417b523b43c532eaba457cfebcb6d94db01eced870f0caafa0e5c9c",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_rounded_arc_witness-run.log"
+    },
+    {
+      "bytes": 1917,
+      "sha256": "e5df9d3ef3a33b946812b7a619dacf02a1c54e6d04076a30992bb8ee9cb0a360",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_sampled_value_bounds-build-RESULT.json"
+    },
+    {
+      "bytes": 1673,
+      "sha256": "ee9272bb0ebf0a1924a97c9862e55984def6bc0950455bde7185b3e5aa0a1e69",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_sampled_value_bounds-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_sampled_value_bounds-build.log"
+    },
+    {
+      "bytes": 1180,
+      "sha256": "c225dc6eb0d69eba1bc88c8b4e433df3c1cb899e465fd3b1d77d0c66afb1423a",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_sampled_value_bounds-run-RESULT.json"
+    },
+    {
+      "bytes": 937,
+      "sha256": "77191526cd4a84e18bd4b04a8481f4879cc8296d5568ce5125d3a40d5e1032cd",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_sampled_value_bounds-run-START.json"
+    },
+    {
+      "bytes": 626,
+      "sha256": "72a16cad4fd86884701f68dd364e97c2df06c6dab92cdc317cb6efe7a3222c99",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_sampled_value_bounds-run.log"
+    },
+    {
+      "bytes": 1928,
+      "sha256": "48a00eea3ac76e0ee18e20701ea06064ea836c249803aad10feaa94f67dbc948",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_speed_parser_exceptions-build-RESULT.json"
+    },
+    {
+      "bytes": 1685,
+      "sha256": "3d592a774aa459d0da58c0f30cba70c79e0ec591068d82ea99cf55d3e3a6f53b",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_speed_parser_exceptions-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_speed_parser_exceptions-build.log"
+    },
+    {
+      "bytes": 1190,
+      "sha256": "9da49cdfe51f909933ea12a14dbfd88e727a84e7e9105f69fd4d4293a04283db",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_speed_parser_exceptions-run-RESULT.json"
+    },
+    {
+      "bytes": 946,
+      "sha256": "192cd54afcf3a5a5c72d42970301d230b58aa6c1b1cca29afbcf729d240cfb57",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_speed_parser_exceptions-run-START.json"
+    },
+    {
+      "bytes": 383,
+      "sha256": "81fbc7fde844fdb830162366f36767dd8050265a478b77929f9ec64b6bda8815",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_speed_parser_exceptions-run.log"
+    },
+    {
+      "bytes": 1892,
+      "sha256": "67a313e35a4dd5ebb36bf19ee440e12c0ed8bc9baa351c7dd2b2fde5ed700a93",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_tight_rounding-build-RESULT.json"
+    },
+    {
+      "bytes": 1649,
+      "sha256": "135abe7e4f844d9e9163a9022028c942355a3d72f1e65968a683b722688d4849",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_tight_rounding-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_tight_rounding-build.log"
+    },
+    {
+      "bytes": 1163,
+      "sha256": "690b89694bc442fe25eeb644fc9f4985dbee7f78cd01463117bd3481ad3f4adb",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_tight_rounding-run-RESULT.json"
+    },
+    {
+      "bytes": 919,
+      "sha256": "e6782e0378e4898802cf9100d6192b2c771ce1ef71862742652838b094834751",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_tight_rounding-run-START.json"
+    },
+    {
+      "bytes": 709,
+      "sha256": "65b4afea6a8e8ee3be5e52be0c5a9326dea3ed26e060a5c4f3f75fa5ff850c58",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_tight_rounding-run.log"
+    },
+    {
+      "bytes": 1933,
+      "sha256": "a957f98cc0c48c4ab18b7ea33e877fb2e8e3743a94fb92b8942c5180cc192963",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_width_overflow_admission-build-RESULT.json"
+    },
+    {
+      "bytes": 1689,
+      "sha256": "3b491a016bb4442a2874ecf9dd790b699a4ff290f5a37ffde4e415283fd12bd8",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_width_overflow_admission-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_width_overflow_admission-build.log"
+    },
+    {
+      "bytes": 1193,
+      "sha256": "c3096e73698a806e530697002651f3d26921d7b4d6ac3f395a90fa03489825b9",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_width_overflow_admission-run-RESULT.json"
+    },
+    {
+      "bytes": 949,
+      "sha256": "e8512311245e00abfde450dc2c2039a8cc9a1e1e321a48c3639c35583285bcf8",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_width_overflow_admission-run-START.json"
+    },
+    {
+      "bytes": 353,
+      "sha256": "cbe7a3da1443be28fe7f3306e7a5d440091189872ecb71d96f8e3a32e1c1924b",
+      "source": "evidence/carla-final-v38-native-o0/test_carla_width_overflow_admission-run.log"
+    },
+    {
+      "bytes": 1930,
+      "sha256": "99a8ba7e4c5f889edf7211e53239d145d406924c3846e00e7681eb3a083c9634",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_domain_map_integration-build-RESULT.json"
+    },
+    {
+      "bytes": 1687,
+      "sha256": "f9997bb800be215d2dbc2c756f933c848a27f1f513b47ea1eaf0b1dc760e3d54",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_domain_map_integration-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_domain_map_integration-build.log"
+    },
+    {
+      "bytes": 1192,
+      "sha256": "12941bf5657989549bb3022ced9541192fb0e40690bac70dc022af1c8bf9a1d4",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_domain_map_integration-run-RESULT.json"
+    },
+    {
+      "bytes": 948,
+      "sha256": "905feda831098203976cca2d4e1bdfb87cb66145ba1890828a2bfb979b3e8675",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_domain_map_integration-run-START.json"
+    },
+    {
+      "bytes": 483,
+      "sha256": "eec1f6608fc0cdad57c5ceb7a906c4126e679b3ba8c2d90d81ae04a0704f9063",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_domain_map_integration-run.log"
+    },
+    {
+      "bytes": 1911,
+      "sha256": "99f86162ff9930b3f6ed074a5504675f459587b36a8a62dac572309dd7adfea9",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_lazy_taylor_paths-build-RESULT.json"
+    },
+    {
+      "bytes": 1667,
+      "sha256": "0032847e2f0ac4f2070d59f95891c34cfabc6bc424a5584d381b1511ac023266",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_lazy_taylor_paths-build-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_lazy_taylor_paths-build.log"
+    },
+    {
+      "bytes": 1177,
+      "sha256": "0119251a27b13c32f24d2427ef8bb84dbcf48ccbc647a7bbbe38e3c2d76b407f",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_lazy_taylor_paths-run-RESULT.json"
+    },
+    {
+      "bytes": 933,
+      "sha256": "924e6450ab8cff223418a687d6cbe764c8f1e66eae7ddf05beee37ab55b26bdc",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_lazy_taylor_paths-run-START.json"
+    },
+    {
+      "bytes": 761,
+      "sha256": "73f7a5b5a2cbf292a014d9d72aef2c136db273168a72a00226b6d6e06fdf9146",
+      "source": "evidence/carla-final-v38-native-o0/test_spiral_lazy_taylor_paths-run.log"
+    },
+    {
+      "bytes": 22,
+      "sha256": "14e7312b5750ffb048f37d53ef2b122cd2b52e2d948ddf767efdf3d01b0c7c6d",
+      "source": "evidence/carla-final-v38-prepare/COMPILER-VERSION.txt"
+    },
+    {
+      "bytes": 284,
+      "sha256": "f3b1ed1bd6401126a09bc470c8a3bb6d97f98a2d009978c28fff8540deefdbd5",
+      "source": "evidence/carla-final-v38-prepare/GENERATION-RESULT.json"
+    },
+    {
+      "bytes": 137,
+      "sha256": "c975d53ca2b8df3ffc08f1ab03a5a53395b187110919f0e14fdde04a85b92277",
+      "source": "evidence/carla-final-v38-prepare/MATERIALIZATION.json"
+    },
+    {
+      "bytes": 62313,
+      "sha256": "abab946838a07b9c3cd3bf41fcbd894c2ae94627270c799952a513c6f9780469",
+      "source": "evidence/carla-final-v38-prepare/NATIVE-INVENTORY.json"
+    },
+    {
+      "bytes": 8160,
+      "sha256": "2eea6b913a9fb365f86587f9f7b4dec18ca4e4628a40a359b5c7a4bf66bc4061",
+      "source": "evidence/carla-final-v38-prepare/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/carla-final-v38-prepare/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "source": "evidence/carla-final-v38-prepare/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 420072,
+      "sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+      "source": "evidence/carla-final-v38-prepare/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 421037,
+      "sha256": "b1e3d4edcbfe8c022209231f89f8b84cbc01ac1d895c9a7e6102bdd798bebb95",
+      "source": "evidence/carla-final-v38-prepare/STAGED-SEAL.json"
+    },
+    {
+      "bytes": 286,
+      "sha256": "77d4b62a1ee6696d1167d25433af9b09583312c6678e1cefd837b59419819c87",
+      "source": "evidence/carla-final-v38-prepare/TARGET-SEAL.json"
+    },
+    {
+      "bytes": 370,
+      "sha256": "049f0709795eca9be137bda3e68de70e0862b3b991b0108f99d6dc607ec5ab9e",
+      "source": "evidence/carla-final-v38-prepare/WINDOW-START.json"
+    },
+    {
+      "bytes": 973,
+      "sha256": "abe6be0feecfe05d7ef44e599d628ceb28225990ddc4a221a272c5bfe28d55d0",
+      "source": "evidence/carla-final-v38-prepare/begin-generation-RESULT.json"
+    },
+    {
+      "bytes": 730,
+      "sha256": "a89f4100e624da3937a2024bc910e3b50686db560ce87a634cf4aaacc6ab2ad7",
+      "source": "evidence/carla-final-v38-prepare/begin-generation-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-prepare/begin-generation.log"
+    },
+    {
+      "bytes": 974,
+      "sha256": "494943bd0b3a57cc2cfe1dd43eb7c90fca6053f752ea82349003d8f5ad568545",
+      "source": "evidence/carla-final-v38-prepare/copy-passthrough-RESULT.json"
+    },
+    {
+      "bytes": 730,
+      "sha256": "ae561d9190796ff075adedc1425763345b52aeb8246cc816aa1269a010e5f5c2",
+      "source": "evidence/carla-final-v38-prepare/copy-passthrough-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-prepare/copy-passthrough.log"
+    },
+    {
+      "bytes": 962,
+      "sha256": "68c991ef7d16bc3a261ee31f461fcb5d3bd60eb7849294d85a59f886891bc881",
+      "source": "evidence/carla-final-v38-prepare/copy-source-RESULT.json"
+    },
+    {
+      "bytes": 718,
+      "sha256": "0bcc607e3746aaba29bf2f3fd41dbf07df84b917bd390cb6e47cc4a634c75020",
+      "source": "evidence/carla-final-v38-prepare/copy-source-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-prepare/copy-source.log"
+    },
+    {
+      "bytes": 970,
+      "sha256": "04dddd3cbe62bf75cc4323b8b2c089ca6bc8fba1c6cafa55594e6ba8053377ef",
+      "source": "evidence/carla-final-v38-prepare/freeze-targets-RESULT.json"
+    },
+    {
+      "bytes": 726,
+      "sha256": "fab870f282000816dc5467dcc92a03bf6fa2cd90c20491c044852f38261945ae",
+      "source": "evidence/carla-final-v38-prepare/freeze-targets-START.json"
+    },
+    {
+      "bytes": 612,
+      "sha256": "7368064449540c6c1d1ca6d9270615a1df6caa12965409073eae6375ab9b69b7",
+      "source": "evidence/carla-final-v38-prepare/freeze-targets.log"
+    },
+    {
+      "bytes": 630,
+      "sha256": "1aafd936050484e2eb72a437547e3aa476cd3cd1fc1513cc72e8d2bd06ece1d3",
+      "source": "evidence/carla-final-v38-prepare/frozen-target/FREEZE-RECEIPT.json"
+    },
+    {
+      "bytes": 18402,
+      "sha256": "d562545aa04597243b4b7ab459199c7b6cdd73e69de261bf028e48ed37e591fd",
+      "source": "evidence/carla-final-v38-prepare/frozen-target/TARGET-DENOMINATOR.json"
+    },
+    {
+      "bytes": 9153,
+      "sha256": "3098080f3ab4349d65495abc1b67198eb9b2d0effecfd3548a226355cf1d9984",
+      "source": "evidence/carla-final-v38-prepare/frozen-target/target-manifest.txt"
+    },
+    {
+      "bytes": 1093,
+      "sha256": "1886df6241c33c8f83a7a2daa24007768ec12e9406c654b98dcaa10724d406ee",
+      "source": "evidence/carla-final-v38-prepare/instrument-RESULT.json"
+    },
+    {
+      "bytes": 850,
+      "sha256": "3e89008d26d58147eaa0f651062c4776c22ee4807132296b922990a61a20fae3",
+      "source": "evidence/carla-final-v38-prepare/instrument-START.json"
+    },
+    {
+      "bytes": 65,
+      "sha256": "a0e1b0d1d729a3e1772b144987f9f57bd9770514358d2a4665e8c98c08ee7d0b",
+      "source": "evidence/carla-final-v38-prepare/instrument.log"
+    },
+    {
+      "bytes": 972,
+      "sha256": "815aa935573af82345be43b225c71e0e3d46d9b3ee74155cfb7dbeccd0e922f5",
+      "source": "evidence/carla-final-v38-prepare/native-inventory-RESULT.json"
+    },
+    {
+      "bytes": 728,
+      "sha256": "c2aac972e46dba2f83dcec19893ed6912e29dab483d33fce7255df15fdfcf1a5",
+      "source": "evidence/carla-final-v38-prepare/native-inventory-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-prepare/native-inventory.log"
+    },
+    {
+      "bytes": 972,
+      "sha256": "7c98db6633ece2355578219b28013a92421a41fe725d579457ccd0b0bd8d79d3",
+      "source": "evidence/carla-final-v38-prepare/seal-generation-RESULT.json"
+    },
+    {
+      "bytes": 728,
+      "sha256": "a336dd49922dc3e6c5d1637ea5fe1be269ccc990756606cceb5f3fa6c6f97cb4",
+      "source": "evidence/carla-final-v38-prepare/seal-generation-START.json"
+    },
+    {
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "evidence/carla-final-v38-prepare/seal-generation.log"
+    },
+    {
+      "bytes": 122120,
+      "sha256": "873fafea469ce2015ab241eca2156b26f18b7c6a27b8dd8fc1ad2e45dd221b5d",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/extensions/carla/curve_bounds.mojo.cov-origin"
+    },
+    {
+      "bytes": 102869,
+      "sha256": "65a7b04b2f6f4b24e6d8fe43f91c7573afecc781eeb0e8fdbb2136f7155eadfd",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/extensions/carla/junction_bounds.mojo.cov-origin"
+    },
+    {
+      "bytes": 324613,
+      "sha256": "c0c70440dcccbd73ff47e509abcf7eb0d6da7a98e48e5f245d21fae001dcab50",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/extensions/carla/lane_refinement.mojo.cov-origin"
+    },
+    {
+      "bytes": 74190,
+      "sha256": "642197481e39b2d544000800b2ba703ab67bca1a302cf8a671a79267cffb0bf6",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/extensions/carla/lane_value_bounds.mojo.cov-origin"
+    },
+    {
+      "bytes": 24065,
+      "sha256": "b3acfc30509d4457b0fc5a63bb6e6cca8cc56e885ed8bdc831a7aa192cc0b50e",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/extensions/carla/speed_limits.mojo.cov-origin"
+    },
+    {
+      "bytes": 386124,
+      "sha256": "88d2660150b52c6421cef375bb3c138cf07000dddfa5b5341c4bbdbb29538e48",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/generation-inputs.json"
+    },
+    {
+      "bytes": 1222050,
+      "sha256": "50a5a921361b51fab508b3a81a83c7025a893d79c38ac69e229628fdd7b8ca27",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/loop-proofs.json"
+    },
+    {
+      "bytes": 115942,
+      "sha256": "b73b67f42ec1903a4507c86cf6b09d9a8f857ad2c3238765c60bc3eb0210c867",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/manifest.txt"
+    },
+    {
+      "bytes": 502295,
+      "sha256": "9192c06910fec696a6fefc28aa6ccfeec5e31b50cd8621b24190ce714a9f2013",
+      "source": "evidence/carla-final-v38-prepare/source/coverage/build/origins.ready"
+    },
+    {
+      "bytes": 784,
+      "sha256": "5f2958c3fe76b2a383ace2eb026c33dd89bd204b008d2093ed56af58a52f050f",
+      "source": "fresh-capture-plan/prepared/carla-final-v38-SEAL.json"
+    },
+    {
+      "bytes": 1836,
+      "sha256": "8a355d5032f0950db3db5597ecb4a5f24aa12af5b3fcac2d5eb3122149adaad4",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/COMMANDS.txt"
+    },
+    {
+      "bytes": 4439,
+      "sha256": "33f2305f2f7cc869eccb3d2d348340a4b4e8c9592a22eafd8bf1d4036f49212c",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/capture.json"
+    },
+    {
+      "bytes": 33527,
+      "sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/capture_support.py"
+    },
+    {
+      "bytes": 2018,
+      "sha256": "4739fca1637d447d87116cfcc743ea5cf8bb0afddd03dcb891dd995a0c5f0a65",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/finish.json"
+    },
+    {
+      "bytes": 48044,
+      "sha256": "e3d931cc3b2a8e1b4f0c5db36fa0d6a92759c2e67797c35926eaf5152900ee88",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/native-o0.json"
+    },
+    {
+      "bytes": 48044,
+      "sha256": "aeec53eaa386b70cba75993f2dc069a77e678794e683e8995db1c4eefa3dd5a5",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/native-o3.json"
+    },
+    {
+      "bytes": 86405,
+      "sha256": "ffda9e0e80d5e1317fbaaf9fc0f18ec363459fe5bdd10dddf1a3969044c87954",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/plan.json"
+    },
+    {
+      "bytes": 4488,
+      "sha256": "e8779d10462b9ee3bee87ff54bc67f0c6a1ed6eaace330637496c18c12cf4e1a",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/prepare.json"
+    },
+    {
+      "bytes": 3622,
+      "sha256": "d5eb6b5856efeed526e150b36893a35f9973e5c62472a5566cf7e6f847382cbe",
+      "source": "fresh-capture-plan/prepared/carla-final-v38/settings.json"
+    },
+    {
+      "bytes": 7831,
+      "sha256": "9418d41fb962d00dbe4bd53107ef476428ba0c591f4478ac08d332ef907927ce",
+      "source": "run_stage.py"
+    }
+  ],
+  "schema": 1
+}
