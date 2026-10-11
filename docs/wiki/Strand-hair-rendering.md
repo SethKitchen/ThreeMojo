@@ -95,6 +95,16 @@ Pass `guides_only=True` to `HairSimulation` to step the guides only. Each follow
 
 Shading, its self-shadow depths, the simulation step, the follower layout and the write all run on every logical core. Each task owns a disjoint run of strands, so the results equal the serial arithmetic bit for bit. A measured guides-only frame of the default groom takes about 7.3 milliseconds on that machine. That is the hair alone, not a whole 60 frames-per-second frame.
 
+## Mixed body and strand frames
+
+`bench/hair_strand_raster_bench.mojo` renders body triangles and the default groom at 1920 by 1080 on the CPU. It doubles the worker count from one up to every logical core. It stops with an error when a worker count draws a different image from one worker. The [mixed frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-strand-raster-298.md) records one machine's results.
+
+A one-pixel strand has an inner feather radius of zero. Its middle strip and two of the three triangles in each cap step then have two corners at the same place. Neither rasterizer draws a triangle of zero area. So the renderer does not emit an uncut triangle with two corners at the same pixel coordinates. The image and the depths do not change. The default groom's frame holds 60 percent fewer corners.
+
+Each strand corner is projected once and shared by the triangles that use it. A draw with a polygon offset projects each triangle again, so its depths do not change. `test_strand_triangles` checks the triangle counts, the offset path and a strand cut by the image edge.
+
+On that machine a whole render at 4 workers fell from about 1.8 seconds to about 0.95 seconds. Rasterization and resolve now take most of it.
+
 ## Hardware qualification
 
 `bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU. The GPU rasterizer is slower for this scene.
