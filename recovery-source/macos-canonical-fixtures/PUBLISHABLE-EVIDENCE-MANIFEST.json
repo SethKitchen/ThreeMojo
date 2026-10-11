@@ -1,0 +1,88 @@
+{
+  "base_commit": "19287a0b1564b9a628f15c96e7675c51413ca1a9",
+  "files": [
+    {
+      "before_sha256": "fd3e8cc23b1250c3c1be811be11d4b49a8ccaebcf5fb419737d4fe4da3767953",
+      "bytes": 3315,
+      "git_blob": "1c282ab6d22cccbc9be43dbcaee1709932c8b345",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+      "sha256": "f49baa248d91c3150c39b239ed3f6fe8c26d340e34b1c9f89b8bfef6234886a4",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/_full_audit_test_fixtures.py"
+    },
+    {
+      "before_sha256": "b93851146773accc61cae8efb1075bec50896dbac1879baebda83456cbb85b10",
+      "bytes": 171593,
+      "git_blob": "8f6aa259258a391bf73cda0caee763251376ccd2",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py",
+      "sha256": "020659120c9b79052a4ae45e587e37d7ecda1f46a684a1239757ab610c92ad5a",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py"
+    },
+    {
+      "before_sha256": "70418c4e21ddb92ae4278d824e892ebd3d57bd58a415f6489b5b97a9936a7ded",
+      "bytes": 55718,
+      "git_blob": "ba15b508b88b57730114ab6a626fa2df8fdb1e16",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "d24d5fd35f2b3cbb21b617116d3b18f1b3104864c1ce72d207880027b23e9a5a",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_optional_runtime_contracts.py"
+    },
+    {
+      "before_sha256": "aeeaebc260194cb6450b30c533e2c43128ac9aaa2475d105e58c73d4692d21f3",
+      "bytes": 56152,
+      "git_blob": "3ccbe87654cf9be06f386f5d17bfb30323c8cbcc",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "9c5ae9a6658ef277d725ad4bfa4a8c0992aef4b0c7175d1cb1823437383e7435",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_paired_pin_contracts.py"
+    },
+    {
+      "before_sha256": "01dfa95a659cdafdc8abef7820502707d8cb3a7265e45a37a0d91180e6bcde5a",
+      "bytes": 24262,
+      "git_blob": "8d9c475c473fb8e68ca83de079d52bf6a5329ef2",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "sha256": "8231fb64a22f6d4df5fff5295c7795f84a549b408f405cde0814f0a6e9dde167",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_runtime_correspondence.py"
+    },
+    {
+      "before_sha256": "dec61dd71958d657924b47007aebd53feb6bf5d2b334d31e0aa3df33349544e0",
+      "bytes": 38567,
+      "git_blob": "b002e42b80057f5e9090af1b38b27445c5b1a07a",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_spiral_moments.py",
+      "sha256": "4412d9b135121dbe0cf8357524c92fe5419d3b31316b39f0d6da2df81e3a0d3b",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_spiral_moments.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/carla_lane_oracle/test_spiral_moments.py"
+    },
+    {
+      "before_sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5",
+      "bytes": 142205,
+      "git_blob": "d8496e38cf2c6b661967f3db81aed164558b69dd",
+      "mode": "100644",
+      "path": "tools/test_coverage_loop_proofs.py",
+      "sha256": "02f76d4d139b739c1f4e4420d77f18a1247fb49cf4c6f9b3311a9209f809b3f5",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/test_coverage_loop_proofs.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/test_coverage_loop_proofs.py"
+    },
+    {
+      "before_sha256": "17aeb68a26b90e93eaeba51abc5db32090e0852352c137926b42f681c1728a4d",
+      "bytes": 15515,
+      "git_blob": "ea2d7a6708de593e72418435d167cc273f9181c1",
+      "mode": "100644",
+      "path": "tools/test_sampled_values.py",
+      "sha256": "5ba7af72140d1a950bdec177123d3d0595b524833e55f42bf819fa3055d8e470",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/test_sampled_values.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-canonical-fixture-proposal/revision-2/proposed/tools/test_sampled_values.py"
+    }
+  ],
+  "schema": 1,
+  "scope": "18 test-only temporary allocation parents across8files; explicit supplied destinations, assertions and production symlink rejection remain unchanged.",
+  "status": "REVIEWED_TEST_FIXTURE_SOURCE_ONLY_FOCUSED_QUALIFICATION_PENDING"
+}
