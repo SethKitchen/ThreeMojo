@@ -1,6 +1,6 @@
-# Sphere and static-mesh continuous collision
+# Continuous collision
 
-Use `SPHERE_MESH_CCD` to prevent a supported sphere or rotation-locked capsule from passing through a static triangle during a step. It also prevents two moving spheres from passing through each other. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior.
+Use `SPHERE_MESH_CCD` to prevent a supported moving body from passing through a static triangle during a step. The supported bodies are dynamic spheres and capsules, turning or not, dynamic boxes and hulls that cannot turn, and kinematic spheres. The mode also prevents moving spheres and rotation-locked capsules from passing through each other. The mode is opt-in. The default `DISCRETE` mode keeps the previous solver behavior. The mode name is older than the wider support, and it is kept for compatibility.
 
 ```mojo
 from extensions.physics.ccd import SPHERE_MESH_CCD
@@ -114,7 +114,7 @@ A box or hull whose inverse inertia is zero in every element, with no spin and n
 
 The solid and a triangle overlap exactly when their projections overlap on every candidate axis. These are the solid's face normals, the triangle's normal, and the cross product of each solid edge with each triangle edge. Along each axis the solid's interval moves linearly. So the two overlap along that axis during one interval of time.
 
-The first contact is the latest entry over all axes, when it comes before the earliest exit. Its normal is the axis that entered last. A solid that already touches or overlaps a triangle uses the axis of least overlap instead. So a box that rests on a floor and slides does not close on it, and takes no impulse.
+The first contact is the latest entry over all axes, when it comes before the earliest exit. Its normal is the axis that entered last. An axis along which the solid does not move separates it for the whole step, even when the two only touch. So a face or edge that slides along a triangle with zero clearance takes no impulse. A solid that already touches or overlaps a triangle uses the axis of least overlap instead. So a box that rests on a floor and slides does not close on it, and takes no impulse.
 
 The mesh stays one-sided: a triangle that the solid starts wholly behind does not catch it. An impact is a linear impulse with restitution and Coulomb friction. A box or hull must be alone in its group. Its reach bound uses its farthest corner, which also sets its radius-relative precision limits.
 
@@ -176,7 +176,7 @@ Triangle ties retain triangle insertion order. Equal feature times retain face o
 
 `ccd_max_impacts` defaults to 16 per body per step. Valid limits are 1 through 1024. The loop does not discard remaining time, freeze a body or continue through a surface after exhaustion. It raises an error.
 
-A failed CCD step restores body positions, rotations, velocities, forces, torques, split state, previous contact count, previous events, primitive order and mesh dirty state. A failed step does not consume pending forces. A mesh index allocated during an unsuccessful rebuild can remain in memory.
+A failed CCD step restores body positions, rotations, velocities, forces, torques, split state, previous contact count, previous events, primitive order and mesh dirty state. A failed step does not consume pending forces. This applies to every supported shape. Tests check the complete restored state after an impact-limit, sub-step-limit or support failure for spheres, capsules, boxes, hulls and turning capsules. For boxes, hulls and turning capsules, a retried step also matches a world that never failed, bit for bit. A mesh index allocated during an unsuccessful rebuild can remain in memory.
 
 Restoring the dirty flag preserves ray-query behavior. The next successful step rebuilds that contact index. A validated CCD index can remain valid after rollback because the immutable triangle snapshot did not change. Tests cover equal-distance mesh ownership before and after failure.
 
@@ -210,6 +210,6 @@ The [interacting-sphere report](https://github.com/SethKitchen/ThreeMojo/blob/ma
 `bench/physics_ccd_index_bench.mojo` times the triangle index.
 `bench/physics_ccd_walker_bench.mojo` times rotation-locked capsule walkers and spinning anisotropic spheres on a terrain. See [the walker report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ccd-walker-728.md).
 
-Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
+Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Boxes and hulls have hand-derived grazing and energy controls with restitution 0 and 1 and with friction. Every supported shape has mode-change and ghost controls. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
 
-General shapes and moving-pair CCD remain separate work in [issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635). The immutable-mesh acceleration in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636) does not provide the mutable primitive ownership API in [issue 633](https://github.com/SethKitchen/ThreeMojo/issues/633).
+[Issue 635](https://github.com/SethKitchen/ThreeMojo/issues/635) still tracks the remaining refusals. These are boxes and hulls that turn, such as a vehicle chassis, and moving meshes. They also include kinematic shapes other than spheres and static primitives. Boxes, hulls and turning bodies that can reach another moving body are also refused. It also tracks representative vehicle and interacting-body benchmarks. The immutable-mesh acceleration in [issue 636](https://github.com/SethKitchen/ThreeMojo/issues/636) does not provide the mutable primitive ownership API in [issue 633](https://github.com/SethKitchen/ThreeMojo/issues/633).
