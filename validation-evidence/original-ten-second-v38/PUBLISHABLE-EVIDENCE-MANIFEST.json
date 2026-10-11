@@ -1,0 +1,55 @@
+{
+  "files": [
+    {
+      "bytes": 22258,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "74c5ca3c140bcb6f0d8266dfb641d52cc82f90fae5e6e8006e929251fa9ec4c5"
+    },
+    {
+      "bytes": 2923,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/README.md",
+      "path": "README.md",
+      "sha256": "2dc373d971d3c615f8e09879e5f19340e9b8bae5adbf8a395041ab035451190c"
+    },
+    {
+      "bytes": 53385,
+      "kind": "derived-exact-child-and-stage-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "f0318b6662145b1e8dca8363dbcf4a16e3a5ec47bac8a24975e2cbdac1682b3e"
+    },
+    {
+      "bytes": 640657,
+      "kind": "lossless-original-diagnostic-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "711b73f1f368aa7822203954cf4fe84b367314046c4002688e5e4e9ef23b499b"
+    },
+    {
+      "bytes": 5175,
+      "kind": "byte-identical-safe-decoder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 24308,
+      "kind": "source-only-static-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/reproduce/build_original_ten_second_v38_packet.py",
+      "path": "reproduce/build_original_ten_second_v38_packet.py",
+      "sha256": "cd19fb3e664e6409b3c61e2380d505ea5f45a46aade2b191950092f36349de65"
+    },
+    {
+      "bytes": 7949,
+      "kind": "exact-input-lock",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-original-ten-second-v38-diagnostic-packet/reproduce/original-ten-second-v38-packet-input-lock.json",
+      "path": "reproduce/original-ten-second-v38-packet-input-lock.json",
+      "sha256": "8f87eda85830d0f225a603d10de84d3547fb7aca076ad30520cf09230567ea0e"
+    }
+  ],
+  "schema": 1,
+  "scope": "One original-10-second diagnostic on immutable candidate-v38: five maintained methods per parent mode, 22 child attempts. No current-30-second qualification, owner timeout-policy approval, native/coverage/hosted-CI readiness, merge readiness, or issue-completion claim."
+}

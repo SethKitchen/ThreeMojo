@@ -1,0 +1,383 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 1278165,
+    "json_sha256": "de645c30fb080ab6c1b4184129623feb2be8536a0aba9867c27da50331094b46",
+    "members": 41,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 420072,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V38-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V38-SOURCE-SEAL.json",
+      "sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 177,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/ORIGINAL-TEN-SECOND-V38-PROTOCOL-SEAL.json",
+      "path": "reproduce/ORIGINAL-TEN-SECOND-V38-PROTOCOL-SEAL.json",
+      "sha256": "ca3743942a3e9300dc726d99e54c88e482635e6b0e25c29894f56ab0c47733cc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 753,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V38-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V38-QUALIFICATION-BINDING.json",
+      "sha256": "f9f68c2382ef5e1961f092ac9638d2e0a575711a2cffbe89047e93b52d546190",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9180,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/RESULT.json",
+      "sha256": "771e0adec2a55318933d3db57beba6c8aa8d4a84f37c98d1764ebfec7492da09",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/SDK-AFTER.json",
+      "path": "actual/original-ten-second-v38-diagnostic/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/SDK-BEFORE.json",
+      "path": "actual/original-ten-second-v38-diagnostic/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 420072,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/SOURCE-SEAL.json",
+      "path": "actual/original-ten-second-v38-diagnostic/SOURCE-SEAL.json",
+      "sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 369,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/WINDOW-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/WINDOW-START.json",
+      "sha256": "69dd32762f90421f391219d4093a35043633b8813c021497c042593d3b1a774e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12097,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/clean-import-normal-OBSERVATIONS.json",
+      "path": "actual/original-ten-second-v38-diagnostic/clean-import-normal-OBSERVATIONS.json",
+      "sha256": "74f2a3d74c0686a7df8be563f1bf404e4cc7be43724bb9f24771601d036af901",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12227,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/clean-import-optimized-OBSERVATIONS.json",
+      "path": "actual/original-ten-second-v38-diagnostic/clean-import-optimized-OBSERVATIONS.json",
+      "sha256": "f3292dab03c2d89015d82ab1353ad96380a1e02e2ec0f06d7b6d7bbfe6945e1c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3154,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/invariant-normal-OBSERVATIONS.json",
+      "path": "actual/original-ten-second-v38-diagnostic/invariant-normal-OBSERVATIONS.json",
+      "sha256": "9ed3cb7e0f6c3a753b4c9a43a6a841212dd793081e4be6fb1fe11f2bd89908db",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3060,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/invariant-optimized-OBSERVATIONS.json",
+      "path": "actual/original-ten-second-v38-diagnostic/invariant-optimized-OBSERVATIONS.json",
+      "sha256": "968030781ef81b902cb4ff6eea6e781f9aa66c68e48ecf2bedff8558d07559d1",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 988,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-clean-import-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-clean-import-RESULT.json",
+      "sha256": "f9f8a73f020557d15ecce6719e8c2ee698d7d45e6e62ff739a5d2c6e7619ea98",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 676,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-clean-import-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-clean-import-START.json",
+      "sha256": "9f5904a6a40bd27015e7ec769e83bff69283acf886367d5d0799158851221355",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 947,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-clean-import-inventory-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-clean-import-inventory-RESULT.json",
+      "sha256": "c041a950c86030e9ff461c2eea5ca6c05af7b7c9eb6036b4ee36b6c71d8a7686",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 703,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-clean-import-inventory-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-clean-import-inventory-START.json",
+      "sha256": "3119fca9cbc744c1ab1412ef7d1795c2920d6c44d7288c7712720df1a66c2946",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 81,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-clean-import-inventory.log",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-clean-import-inventory.log",
+      "sha256": "b76005bc0ef1d34a710a09e49b916b386942cc05ee5293de000305cc65ba3cb2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 6431,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-clean-import.log",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-clean-import.log",
+      "sha256": "42e3d11fe46fa02e6eef54fa3df859ba15601607de32dcfa4b44031fa9f66b23",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 981,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-invariant-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-invariant-RESULT.json",
+      "sha256": "77695251163c3610e350dd5e794c7edaf16cbf25d218b9ffefcf8cf81f35d8a9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 668,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-invariant-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-invariant-START.json",
+      "sha256": "50a08f1edc854fc339d587f87e67c82b0d8d92694eab88fe429c952038e4ead8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 941,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-invariant-inventory-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-invariant-inventory-RESULT.json",
+      "sha256": "e93ec345c4033964f00517ec8a368df7c181e9decd68f932e32fcb9ddcc54f84",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 697,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-invariant-inventory-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-invariant-inventory-START.json",
+      "sha256": "536eab68d3756c617ddbf315d92ed47d378056abaf275e9d08f8bcbc200273e3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 81,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-invariant-inventory.log",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-invariant-inventory.log",
+      "sha256": "b76005bc0ef1d34a710a09e49b916b386942cc05ee5293de000305cc65ba3cb2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2967,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/normal-invariant.log",
+      "path": "actual/original-ten-second-v38-diagnostic/normal-invariant.log",
+      "sha256": "5e13ee612812a3c9d5cedd36086859358030d02b88f9e158011aef560a840899",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1001,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-clean-import-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-clean-import-RESULT.json",
+      "sha256": "231d990c8c271462faa220a7a0c211cc85c2fe79e9d34be7f7954e73f6f4d3d9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 689,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-clean-import-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-clean-import-START.json",
+      "sha256": "7a4381cafd6eca322ffd35d69885c40ce9ab41359881cef757a5131ec4c2a8d7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 950,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-clean-import-inventory-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-clean-import-inventory-RESULT.json",
+      "sha256": "4324c867d1b7b22dafe379850edea5c1295b21245f0b811abe06eed116a3de91",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 706,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-clean-import-inventory-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-clean-import-inventory-START.json",
+      "sha256": "79a4c6785b4bdc1eb6081353ed486df77dd1f197feb4d4cf00fa2151a13b78dc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 81,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-clean-import-inventory.log",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-clean-import-inventory.log",
+      "sha256": "b76005bc0ef1d34a710a09e49b916b386942cc05ee5293de000305cc65ba3cb2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 6443,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-clean-import.log",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-clean-import.log",
+      "sha256": "74c262ba0a801752d49f22e432460760f0987e8ed94931c1e588b8184c96c952",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 996,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-invariant-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-invariant-RESULT.json",
+      "sha256": "2278958087876b228296aa2eb5acc0333c8641923cb70f420ffc67642d297163",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 683,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-invariant-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-invariant-START.json",
+      "sha256": "7a80a2b74cbb7e9be6f0931ae1ebb5f12eb7da1b375691678efbe6fbe9553928",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 944,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-invariant-inventory-RESULT.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-invariant-inventory-RESULT.json",
+      "sha256": "f2ffed84243a3fa7a61dbfcb4dcd8d9e367ea01d3e59e920fa43b051919ca9c4",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 700,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-invariant-inventory-START.json",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-invariant-inventory-START.json",
+      "sha256": "89abffa4f3b47ad17ca9d0bb0e8235422bc76a06daa3f5a8082eee047ac84657",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 81,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-invariant-inventory.log",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-invariant-inventory.log",
+      "sha256": "b76005bc0ef1d34a710a09e49b916b386942cc05ee5293de000305cc65ba3cb2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2691,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/original-ten-second-v38-diagnostic/optimized-invariant.log",
+      "path": "actual/original-ten-second-v38-diagnostic/optimized-invariant.log",
+      "sha256": "efaddaea3e7315a95565889c1782f7f2b5d60b326f87d212879c045aa3117820",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4121,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/original-ten-second-v38-diagnostic.json",
+      "path": "reproduce/original-ten-second-v38-diagnostic.json",
+      "sha256": "5e717a00f1f7c72d734fe59857067d13ee8bf8df7e8ceff37e2b0ba7f4591a02",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14786,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/original-ten-second-v38-diagnostic.supervisor.log",
+      "path": "actual/original-ten-second-v38-diagnostic.supervisor.log",
+      "sha256": "d775e5b59d976eeefbe46f73d6cd8d3486725179675f622d78d121fa67f1fd8e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1741,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/original-ten-second-v38-protocol/check_inventory.py",
+      "path": "reproduce/original-ten-second-v38-protocol/check_inventory.py",
+      "sha256": "4733bf585fe36f69525fe91ca2f1d1712f31f05e4530787e021c8bbc9d890f9a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4478,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/original-ten-second-v38-protocol/probe.py",
+      "path": "reproduce/original-ten-second-v38-protocol/probe.py",
+      "sha256": "c483418ca7d1fa9d6cb8a3c10e113c687f30b05956cd1b0b514acc8458f59dc8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 10102,
+      "kind": "complete-byte-exact-terminal-evidence-or-reproduction-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 952845,
+  "original_member_count": 41,
+  "schema": 1
+}
