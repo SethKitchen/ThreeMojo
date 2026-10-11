@@ -1,0 +1,97 @@
+{
+  "files": [
+    {
+      "bytes": 25837,
+      "kind": "derived-command-and-binding-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "5e071d77947094f3f8604b43f940d24f0f988b9923e135bf228beb4ccc7ed588"
+    },
+    {
+      "bytes": 44784,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "2c2396f49413172f003c56070423fd0d731a7dc18216ce60bdd9f8b23752e0ba"
+    },
+    {
+      "bytes": 1869,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/README.md",
+      "path": "README.md",
+      "sha256": "ccc50c6c74154d76b8bb812e6df3bc7904046e2c5941af109a307466134cf2a8"
+    },
+    {
+      "bytes": 19368,
+      "kind": "derived-focused-diagnostic-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "c0198c6596b19fa79c8de3c6de0dffa66a4afd21f793176dce57f111d2a74118"
+    },
+    {
+      "bytes": 17536,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/actual/post-diagnostic-repairs-focused-v34/RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/RESULT.json",
+      "sha256": "79a05c82e5f5f7d2aadcb8e887d602801f1f4ab4b0d4464e89f12e43a3575e8f"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/actual/post-diagnostic-repairs-focused-v34/SDK-AFTER.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/actual/post-diagnostic-repairs-focused-v34/SDK-BEFORE.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/actual/post-diagnostic-repairs-focused-v34/WINDOW-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/WINDOW-START.json",
+      "sha256": "bb44e17d06a57de366eb35079bc424bd097cd9c6f72430d52f76c3d4c944a462"
+    },
+    {
+      "bytes": 2207597,
+      "kind": "lossless-complete-original-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "75c98b5b3a1a88af114d3bef3a545705265347e91c543b0291dda4c24db738a5"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 21714,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/reproduce/build_post_diagnostic_repairs_focused_v34_packet.py",
+      "path": "reproduce/build_post_diagnostic_repairs_focused_v34_packet.py",
+      "sha256": "6cccff624ba61e365b78b126ffa0544710c74b06cd1b2df908cb4fbcc88f5522"
+    },
+    {
+      "bytes": 9710,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/reproduce/post-diagnostic-repairs-focused-v34.json",
+      "path": "reproduce/post-diagnostic-repairs-focused-v34.json",
+      "sha256": "9e98f266b990aa4b6d3ba864047f89316cd6a8978c3c3a93882cb89584f4a5a9"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-post-diagnostic-repairs-focused-v34-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    }
+  ],
+  "schema": 1,
+  "scope": "Forty root-approved focused diagnostic executions on reviewed composed v34: original30 runtime/sampled/seed, two Sum2 semantic/split-read checks, six coverage applicability/consumer/sticky checks and two directly affected owner-binding controls. Not full-module or final-matrix qualification. Two-probe timeout-policy owner approval is still pending."
+}

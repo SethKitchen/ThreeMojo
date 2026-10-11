@@ -1,0 +1,797 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 6000104,
+    "json_sha256": "f61191c1bb8dd1225bc819800698bf461e5122a25d16b38b8ad776533d5054f8",
+    "members": 81,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 27151,
+      "kind": "complete-actual-terminal-console",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/post-diagnostic-repairs-focused-v34.supervisor.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34.supervisor.log",
+      "sha256": "c734a57884c1ed54646f357aa5fb609d775e5245cb06d49b2844a091b47f8f7b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 216,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/LATEST.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/LATEST.json",
+      "sha256": "e93e75162efb7bc756e0ae0341ac8be27a9a73f7a4701bb3fd393db9d49bcea3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 605747,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/PROCESSES.jsonl",
+      "path": "actual/post-diagnostic-repairs-focused-v34/PROCESSES.jsonl",
+      "sha256": "6aa5b9c4a4acd0c38ff6d8f00a886191936f509e8ac2ed8e773077edeb08dfe7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 17536,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/RESULT.json",
+      "sha256": "79a05c82e5f5f7d2aadcb8e887d602801f1f4ab4b0d4464e89f12e43a3575e8f",
+      "storage": "readable",
+      "transport_path": "actual/post-diagnostic-repairs-focused-v34/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/SDK-AFTER.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/post-diagnostic-repairs-focused-v34/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/SDK-BEFORE.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/post-diagnostic-repairs-focused-v34/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/SOURCE-SEAL.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/SOURCE-SEAL.json",
+      "sha256": "482899bef6550a42cbbf8e63329fa3a9a32feec144640bc74d9a0c117461b796",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/WINDOW-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/WINDOW-START.json",
+      "sha256": "bb44e17d06a57de366eb35079bc424bd097cd9c6f72430d52f76c3d4c944a462",
+      "storage": "readable",
+      "transport_path": "actual/post-diagnostic-repairs-focused-v34/WINDOW-START.json"
+    },
+    {
+      "bytes": 1210,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-coverage-applicability-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-coverage-applicability-RESULT.json",
+      "sha256": "633e5f83fa91906dbe52849bb9aa4833fffa439fd42b5cd7c5a4f27153494829",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 897,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-coverage-applicability-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-coverage-applicability-START.json",
+      "sha256": "9142ed39f9a1b7beb0e6529c3c782bb2404c055dbdac7e24d437675596435b28",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1199,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-coverage-applicability.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-coverage-applicability.log",
+      "sha256": "7bc8db75097e98d8b0d420d24bd90288e3e6e3ed8124f1434bcb42eb5a0e38fb",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1033,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-owner-binding-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-owner-binding-RESULT.json",
+      "sha256": "2051131e10942f47a02158540b2daf6568c5fc9bffb0284ee99173d9a8bab23e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 720,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-owner-binding-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-owner-binding-START.json",
+      "sha256": "1e931a731c5a6d552c7bf1fe5ada155f119f1bcaa6fe55100342da27413b4381",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1369,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-owner-binding.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-owner-binding.log",
+      "sha256": "14e8e87c0a8a7bab9bc3f17a8c8694a07ef1412a527cf2df3cbd9cf5e0da8c53",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1064,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-runtime-correspondence-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-runtime-correspondence-RESULT.json",
+      "sha256": "194dd82b24804f73a55e1aae57c2946546aedc71e7a62fc53c2170a0c1358153",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 752,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-runtime-correspondence-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-runtime-correspondence-START.json",
+      "sha256": "149b324d66ee43c73a1d819ff7131ba6307431a8d378a40d9c2bb22b273f1c6e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 996,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-runtime-correspondence.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-runtime-correspondence.log",
+      "sha256": "b7f6634cce10ea2f387d4ac98b722a41681f27ff1f95160ffb5cda3620f6a9c0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 965,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-sampled-live-overlay-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-sampled-live-overlay-RESULT.json",
+      "sha256": "36e6d93540787856d9aff540e7bf381f03dab3e659a9e5e10cdef3180e17c1ec",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 652,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-sampled-live-overlay-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-sampled-live-overlay-START.json",
+      "sha256": "0293e1d450b658d1799b8b117488fd7aa6c1bb0a86cb7959cbf21bc034d90f71",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1337,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-sampled-live-overlay.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-sampled-live-overlay.log",
+      "sha256": "a84c938966e2840ddd164ccb0cb7ab71761c3deeeb5b54c6ca84dc391be4a678",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2190,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-seed-fixture-families-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-seed-fixture-families-RESULT.json",
+      "sha256": "5c307e48b41e3af890a8a7bd7f0d7f7b79feb179fb72955441d651553a3bc80c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1875,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-seed-fixture-families-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-seed-fixture-families-START.json",
+      "sha256": "69fcfb83426e094ec2dceb39e3f13a11080e3473303df8d2d8b77ee7e1d833f8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2835,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-seed-fixture-families.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-seed-fixture-families.log",
+      "sha256": "7f225b19932789eaf538e45ef9fb78f982757e8760a57f233ca061563321b815",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 991,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-sum2-declaration-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-sum2-declaration-RESULT.json",
+      "sha256": "e2efdb997c663d39199f947159aa8a4a4e16adb28a0621facd02e80ced1e3bdd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 679,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-sum2-declaration-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-sum2-declaration-START.json",
+      "sha256": "162f4679801d83caefde5014bbe98d6e6c0abb0ab015a9bd319769f7c15f2010",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 786,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/normal-sum2-declaration.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/normal-sum2-declaration.log",
+      "sha256": "60ef7de3bcc66f829c31a75ce70255b16ec09ca6c8dfc19946ced6b47b92536e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1223,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-coverage-applicability-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-coverage-applicability-RESULT.json",
+      "sha256": "319b0a27c6a7eb1d7dc328220ccf7bedd8f278bf9dcaac883b88bc25fcc1d49c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 910,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-coverage-applicability-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-coverage-applicability-START.json",
+      "sha256": "37cf14f9da050c65cba8551d3f415730c9d2aaa5ed58fa4cf3364eae5388a938",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1199,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-coverage-applicability.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-coverage-applicability.log",
+      "sha256": "be0a80fde72cb3e0852be7e605c25cf70e62cac5eb25b3415500474dbe470760",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1046,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-owner-binding-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-owner-binding-RESULT.json",
+      "sha256": "82af3dc3251d45ae6c60e02ceee4ef7678bcbfcd929490b1e9e768d29aecd60d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 733,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-owner-binding-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-owner-binding-START.json",
+      "sha256": "8745fd73eb1b2ff616b7cb4a12c28516a06714a5f38b4f29e0f8c9c2a5babbcb",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1369,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-owner-binding.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-owner-binding.log",
+      "sha256": "3dbffa569a0f507192117690475e625a69327932651e8d91afb3e7ee59aee550",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1079,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-runtime-correspondence-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-runtime-correspondence-RESULT.json",
+      "sha256": "67128b7a529db9d1132b9e43a4fd5a60f44d25926dd3471fff747c7058d1bc53",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 767,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-runtime-correspondence-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-runtime-correspondence-START.json",
+      "sha256": "ff2af9ce40212d8c89aca1e8ad0cae8fc8ea2b266c7991654a2ae92b726e47d3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 996,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-runtime-correspondence.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-runtime-correspondence.log",
+      "sha256": "9e02bbd5a48339cfbd005b4b6b147b8f22d64f080b37bda47703139ee8fd0daa",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 978,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-sampled-live-overlay-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-sampled-live-overlay-RESULT.json",
+      "sha256": "fbdd14af437fe1110ffcd22da6f8d322ab8217fa90c1c97a8ea514961f2b62e7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 665,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-sampled-live-overlay-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-sampled-live-overlay-START.json",
+      "sha256": "2f1f0658ab8a6b7fc0e9ecb6bdd207f58b1ba2fd9129b2860498058683573520",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1337,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-sampled-live-overlay.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-sampled-live-overlay.log",
+      "sha256": "74c08a94c46bbc7b1d5183496b2139957a60ec3882087fd16679f64a0b9337fc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2202,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-seed-fixture-families-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-seed-fixture-families-RESULT.json",
+      "sha256": "60bdc60460f037f6cca6321a70ca1fae4946b4e45fc900dab7cbfd0c33c14417",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1888,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-seed-fixture-families-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-seed-fixture-families-START.json",
+      "sha256": "e37d5416da866acdd0512ba40f10435e97289ce5c5ed8f7d43a6ab4d1732a641",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2835,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-seed-fixture-families.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-seed-fixture-families.log",
+      "sha256": "7854a0652333e888983a261a16ec1ee3bb729c30c10e0d0b41b7d564f26d8eec",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1004,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-sum2-declaration-RESULT.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-sum2-declaration-RESULT.json",
+      "sha256": "8c4cc79e7a8f5152a8d90cfade4d4a42b7bf740bb0034d67b4e0d8028e705b1b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 692,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-sum2-declaration-START.json",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-sum2-declaration-START.json",
+      "sha256": "2d8018a885da5caa2e19b1c5c21dbc1d811f5648a771333243265c790e669271",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 786,
+      "kind": "original-terminal-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/post-diagnostic-repairs-focused-v34/optimized-sum2-declaration.log",
+      "path": "actual/post-diagnostic-repairs-focused-v34/optimized-sum2-declaration.log",
+      "sha256": "b978dc168515a05cbe9a68a22a265edbc851a865ceb52b214849e67684bc782a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-primary-or-additional-baseline-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-primary-or-additional-baseline-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V33-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V33-SOURCE-SEAL.json",
+      "sha256": "5b34331e984e7abc56840d55e6115851d17e62337b1c6d90abb1b6701f465397",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-primary-or-additional-baseline-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V34-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V34-SOURCE-SEAL.json",
+      "sha256": "482899bef6550a42cbbf8e63329fa3a9a32feec144640bc74d9a0c117461b796",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 848,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7027,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/combined-repairs-implementation-v34/CUMULATIVE-ELEVEN-PATH-SOURCE-MANIFEST.json",
+      "path": "reproduce/combined-repairs-implementation-v34/CUMULATIVE-ELEVEN-PATH-SOURCE-MANIFEST.json",
+      "sha256": "4815c5fe6a728f90bf56215566a217d830c72ab94b347a2e57a53d2b80408ee3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3320,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/combined-repairs-implementation-v34/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/combined-repairs-implementation-v34/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "d4ddb7eabc284ee61ae8639c1639d960f241cf8c44331a690955ec98acb439c9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9738,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/combined-repairs-v34-independent-materialization/AUDIT.json",
+      "path": "reproduce/combined-repairs-v34-independent-materialization/AUDIT.json",
+      "sha256": "e8ade1e4b293d241f79b5d68a2f4c854a7090bd18d88d019ac9074536dacdb7d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 134456,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/RESULT.json",
+      "path": "reproduce/evidence/full-python-diagnostic-continuation-v28/RESULT.json",
+      "sha256": "ddcd0576ed61827896eac96a52ae44a7d98cbb9f202137d7a38ecb887838359b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 18919,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-matrix-final-v28/RESULT.json",
+      "path": "reproduce/evidence/full-python-matrix-final-v28/RESULT.json",
+      "sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9710,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/post-diagnostic-repairs-focused-v34.json",
+      "path": "reproduce/post-diagnostic-repairs-focused-v34.json",
+      "sha256": "9e98f266b990aa4b6d3ba864047f89316cd6a8978c3c3a93882cb89584f4a5a9",
+      "storage": "readable",
+      "transport_path": "reproduce/post-diagnostic-repairs-focused-v34.json"
+    },
+    {
+      "bytes": 10102,
+      "kind": "exact-reviewed-protocol-manifest-audit-or-prior-failure-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "storage": "readable",
+      "transport_path": "reproduce/run_checkpoint_matrix.py"
+    },
+    {
+      "bytes": 8056,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "3291ab50a099183be3c209b5bc2533c02aa3cc597808bb59e57062105735878a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7101,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "sha256": "c9f5790f7912b00a708a7ef5c218cc9419439469c1be33e0226d62409b3e91a8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 180754,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 53228,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "113fdf00378019493262fcdc287235449775c79881533c4568a13e3c7e43fd47",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 54195,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "c581c353a2cfbacec9a012ed8e41bc89529733d22e436555bcb228377703be9d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 21757,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "sha256": "89b2f18e7d2d9f265de163cbfdd3b09658808920cfe7b77dc5573906ca9e50ba",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 76824,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "sha256": "a21f8aea5148be3a97b233201782393ee919a142742fcfe5b7aae929d8f281ff",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 16399,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "path": "reproduce/source-before-v28/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "sha256": "a63343dfe6e1106140d2a5d5ca155c650c776a87d5be44e8a7d093a8472c673a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 86771,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/coverage_loop_proofs.py",
+      "path": "reproduce/source-before-v28/tools/coverage_loop_proofs.py",
+      "sha256": "2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 135702,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/test_coverage_loop_proofs.py",
+      "path": "reproduce/source-before-v28/tools/test_coverage_loop_proofs.py",
+      "sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 15032,
+      "kind": "exact-published-baseline-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/test_sampled_values.py",
+      "path": "reproduce/source-before-v28/tools/test_sampled_values.py",
+      "sha256": "3342b8ebd75d8265f8124f3d9013108f8b5553ca0c2701d2e936860462553ee0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 180754,
+      "kind": "exact-direct-predecessor-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v33/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source-before-v33/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 16399,
+      "kind": "exact-direct-predecessor-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v33/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "path": "reproduce/source-before-v33/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "sha256": "a63343dfe6e1106140d2a5d5ca155c650c776a87d5be44e8a7d093a8472c673a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 86771,
+      "kind": "exact-direct-predecessor-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v33/tools/coverage_loop_proofs.py",
+      "path": "reproduce/source-before-v33/tools/coverage_loop_proofs.py",
+      "sha256": "2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 135702,
+      "kind": "exact-direct-predecessor-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v33/tools/test_coverage_loop_proofs.py",
+      "path": "reproduce/source-before-v33/tools/test_coverage_loop_proofs.py",
+      "sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3173,
+      "kind": "exact-related-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+      "sha256": "fd3e8cc23b1250c3c1be811be11d4b49a8ccaebcf5fb419737d4fe4da3767953",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9002,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "143ce9c367283e8100c6bc2c7b344fc5d5e54af346266f9f337fc6580eb7026f",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 103293,
+      "kind": "exact-related-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 50964,
+      "kind": "exact-related-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/seed_count_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/seed_count_contracts.py",
+      "sha256": "f87c9eef3bb9204c5dcb0eb4bdbedbc6651b8da26a8d9de7ebfb55cffe5098f5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12704,
+      "kind": "exact-related-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/source_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/source_contracts.py",
+      "sha256": "857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 24282,
+      "kind": "exact-related-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "sha256": "870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 13742,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "sha256": "793445460dc7027ab00a76546cf9c003951fcf766ee5b9a47c8f0bb511cd3be2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 180754,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "6bf4cc71084e6a5f4471f12dc1f6f77719d39d5449617d65d6a2f2a426444351",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 55677,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "70418c4e21ddb92ae4278d824e892ebd3d57bd58a415f6489b5b97a9936a7ded",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 56096,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "aeeaebc260194cb6450b30c533e2c43128ac9aaa2475d105e58c73d4692d21f3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 24221,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "sha256": "01dfa95a659cdafdc8abef7820502707d8cb3a7265e45a37a0d91180e6bcde5a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 78938,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "sha256": "6dc6cc3e243181047a9659786ca099647d696050c525f533c13065e297482d13",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 18390,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "path": "reproduce/source-v34/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "sha256": "dd3ca4270118361c1d3d83387232d960aae5e5646bdf79590dc35d98f9273e3e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 87042,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/coverage_loop_proofs.py",
+      "path": "reproduce/source-v34/tools/coverage_loop_proofs.py",
+      "sha256": "3679bb0565255c19e9fcbf3af6da6790beb78cf9379197e7264b718444f14532",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8205,
+      "kind": "exact-related-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/coverage_toolchain_identity.py",
+      "path": "reproduce/source-v34/tools/coverage_toolchain_identity.py",
+      "sha256": "4fe6f947fc6cba35449287ed1398f7a8a37489be1f7aa5120fbe130e0391be22",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 142145,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/test_coverage_loop_proofs.py",
+      "path": "reproduce/source-v34/tools/test_coverage_loop_proofs.py",
+      "sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 15474,
+      "kind": "exact-cumulative-revised-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/test_sampled_values.py",
+      "path": "reproduce/source-v34/tools/test_sampled_values.py",
+      "sha256": "17aeb68a26b90e93eaeba51abc5db32090e0852352c137926b42f681c1728a4d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 4530389,
+  "original_member_count": 87,
+  "schema": 1
+}
