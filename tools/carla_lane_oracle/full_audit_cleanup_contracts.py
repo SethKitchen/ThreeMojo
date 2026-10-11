@@ -14,6 +14,7 @@ import io
 import json
 import types
 import os
+import pathlib
 from pathlib import Path, PosixPath
 import stat
 import struct
@@ -743,9 +744,21 @@ def _root_unaliased(root):
     return all(not path.is_symlink() for path in (absolute, *absolute.parents))
 
 
+def _canonical_relative_text(text):
+    """Recognize only builtin canonical POSIX relative spellings."""
+    return (type(text) is str and bool(text) and text not in ('.', '..')
+            and not text.startswith(('/', './', '../'))
+            and not text.endswith(('/', '/.', '/..'))
+            and '//' not in text and '/./' not in text and '/../' not in text)
+
+
 def _regular(root, relative):
-    parts = Path(relative).parts
-    require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
+    if os.name == 'posix' and Path is pathlib.Path and _canonical_relative_text(relative):
+        parts = tuple(relative.split('/'))
+        require(parts and not relative.startswith('/') and '..' not in parts, 'unsafe input path')
+    else:
+        parts = Path(relative).parts
+        require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
     path = Path(root)
     require(_root_unaliased(path), 'symbolic root or ancestor')
     for part in parts:
@@ -1674,8 +1687,10 @@ class _InvariantInputs(_CacheInputs):
     def _observe(self, root, path, value, mode):
         try:
             self._check_owner(root)
-            require(type(path) is str and path and Path(path).as_posix() == path
-                    and not Path(path).is_absolute() and '..' not in Path(path).parts,
+            plain_path = (os.name == 'posix' and Path is pathlib.Path and type(path) is str
+                          and (path == '.' or _canonical_relative_text(path)))
+            require(plain_path or (type(path) is str and path and Path(path).as_posix() == path
+                    and not Path(path).is_absolute() and '..' not in Path(path).parts),
                     'invalid operation observation path')
             require(mode in ('bytes', 'default', 'physical', 'utf8',
                              'supplied_default', 'supplied_physical'),
@@ -2395,8 +2410,8 @@ def _absolute_root_text(root):
         raw = getattr(root, '_raw_paths', None)
         if type(raw) is list and len(raw) == 1 and type(raw[0]) is str:
             text = raw[0]
-            if text == '/' or (text.startswith('/') and all(
-                    part not in ('', '.', '..') for part in text[1:].split('/'))):
+            if text == '/' or (text.startswith('/') and not text.endswith(('/', '/.', '/..'))
+                    and '//' not in text and '/./' not in text and '/../' not in text):
                 return text
     return str(Path(root).absolute())
 
