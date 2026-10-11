@@ -750,10 +750,14 @@ def _turning_step(
         var rate = _wide_dot(moving[end], normals[chosen])
         # The first positive root of room + rate t - curvature t^2 / 2.
         if curvature > 0:
-            limit = min(
-                limit,
-                (rate + sqrt(rate * rate + 2 * curvature * room)) / curvature,
+            var root = sqrt(rate * rate + 2 * curvature * room)
+            # Rationalize the closing root: when curvature is tiny, root
+            # rounds to -rate and their direct sum loses all progress.
+            var time = (
+                2 * room / (root - rate) if rate
+                < 0 else (rate + root) / curvature
             )
+            limit = min(limit, time)
         elif rate < 0:
             limit = min(limit, room / -rate)
     return limit
