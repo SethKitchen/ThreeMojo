@@ -26,8 +26,10 @@ import affected
 
 ROOT = Path(__file__).resolve().parents[1]
 LIB_DIRS = set('math render units cameras core geometries helpers objects renderers materials lights loaders animation postprocessing controls window exporters environments generators extensions'.split())
-GPU = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'tests/test_gpu.mojo',
-       'tests/test_gpu_layout.mojo', 'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo'}
+GPU = {'render/gpu.mojo', 'render/gpu_vxgi.mojo', 'extensions/water/gpu.mojo',
+       'tests/test_gpu.mojo', 'tests/test_gpu_water.mojo', 'tests/test_gpu_layout.mojo',
+       'tests/test_gpu_volume_packing.mojo', 'bench/raster_bench.mojo',
+       'bench/water_gpu_bench.mojo', 'bench/hair_frame_bench.mojo'}
 GPU_TESTS = {name for name in GPU if name.startswith('tests/')}
 GLOBAL_TOOLS = {'tools/cache_key.py', 'tools/suite_key.py', 'tools/run_suite.py',
                 'tools/shard.py', 'tools/native_test_support.py', 'tools/test_environment.py',
@@ -52,6 +54,11 @@ def kind(path):
     if path in GLOBAL_TOOLS or path == 'Makefile':
         return 'all'
     if path == 'bench/results-linux.json':
+        return 'tools'
+    # The anatomy report and its inventory are evidence, not documentation:
+    # their binding test runs with the tools (#702).
+    if path in {'docs/validation/anatomy-template-report.json',
+                'docs/validation/anatomy-provenance.json'}:
         return 'tools'
     if affected.is_documentation(path):
         return 'docs'
@@ -84,10 +91,12 @@ def kind(path):
 
 def graph(sources):
     known = set(sources)
+    # Any entry point can compile a module, so keep every root it can use.
+    lookup = affected.resolver(known, affected.entry_directories(sources))
     imports, users = {}, {}
     for path, source in sources.items():
         for name in affected.imported_names(source):
-            for target in affected.resolve(name, path, known):
+            for target in lookup(name):
                 if target != path:
                     imports.setdefault(path, set()).add(target)
                     users.setdefault(target, set()).add(path)

@@ -35,25 +35,45 @@ def verify_text(modules,interval,trig):
     if not 0<limit<=1048576:raise ValueError('Finite phase bound')
     return {'status':'PASS','ordered_theta':True,'nonnegative_error':True,'selector_endpoint_magnitude_below':4194304}
 
-def _producer_text(root, path):
+def _producer_text(root, path, *, _operation=None):
     """Admit only the exact current Y successor before a selection view."""
     text = (root/path).read_text()
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        text = full_audit._observe_text(root, path, text, _operation=_operation)
     if (path == 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
             and source_contracts.token_sha256(text) != EXPECTED[path]):
         if __package__:
             from . import grouped_y_finiteness_contracts as grouped_y
         else:
             import grouped_y_finiteness_contracts as grouped_y
-        text = grouped_y.predecessor_text(root, path)
+        text = grouped_y.predecessor_text(root, path, _operation=_operation)
     return text
 
 
-def verify(root):
+def verify(root, *, _operation=None):
     root=Path(root)
-    return verify_text({p:_producer_text(root,p) for p in EXPECTED},(root/'extensions/carla/curve_interval.mojo').read_text(),(root/'extensions/carla/curve_trig.mojo').read_text())
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+    modules = {p:_producer_text(root,p, _operation=_operation) for p in EXPECTED}
+    interval = (root/'extensions/carla/curve_interval.mojo').read_text()
+    if _operation is not None:
+        interval = full_audit._observe_text(
+            root, 'extensions/carla/curve_interval.mojo', interval, _operation=_operation)
+    trig = (root/'extensions/carla/curve_trig.mojo').read_text()
+    if _operation is not None:
+        trig = full_audit._observe_text(
+            root, 'extensions/carla/curve_trig.mojo', trig, _operation=_operation)
+    return verify_text(modules, interval, trig)
 
 
-def predecessor_text(root, path):
+def predecessor_text(root, path, *, _operation=None):
     """Verify both actual producers before reconstructing one legacy module."""
     import hashlib
     import json
@@ -62,7 +82,7 @@ def predecessor_text(root, path):
     else:
         import sum2_guard_contracts as guard
     root=Path(root)
-    verify(root)
+    verify(root, _operation=_operation)
     payload=(root/'tools/carla_lane_oracle/selection-finiteness-contract.json').read_bytes()
     if hashlib.sha256(payload).hexdigest()!='dcd2c780640775e29a566491679dc6fbf5ab1afa43fbfbae86cb778433cf92e8':
         raise ValueError('Unreviewed selection predecessor record')
@@ -72,7 +92,7 @@ def predecessor_text(root, path):
     item=record['modules'][path]
     name=('_try_spiral_grouped_roundoff_envelope' if path.endswith('/spiral_grouped_roundoff_proof.mojo')
           else '_try_spiral_roundoff_envelope')
-    text=_producer_text(root,path)
+    text=_producer_text(root,path, _operation=_operation)
     body,span,tokens=guard.function_span(text,name,())
     if guard.significant(body)!=guard.significant(item['after_complete_function']):
         raise ValueError('Selection complete successor body changed')

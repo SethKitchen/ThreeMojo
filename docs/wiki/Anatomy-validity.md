@@ -26,7 +26,13 @@ This rule is reproducible. It does not identify the worst anatomical overlap. Th
 
 Omit `--build` to reuse the probe. Its sidecar must match the source digest and binary digest. Rebuild after a source change. Reports record both digests, the exact compiler version and `--Werror`.
 
-The source digest includes all repository Mojo files, except build and cache copies. It also includes the report writer and provenance inventory. Unrelated Mojo changes therefore require a rebuild. This conservative rule avoids an incomplete dependency claim.
+The source digest binds what can change the measured anatomy. It covers the import closure of `tools/anatomy_probe.mojo`, found as the pinned compiler finds modules: from the probe's directory and the repository root. It also covers every source file the provenance inventory cites, the inventory itself, and the code that computes the binding (`tools/anatomy_validity.py` and `tools/affected.py`). It covers the pinned compiler version and build flags too.
+
+The closure is computed again from the imports for every snapshot. A new import, a new module in the closure, or a module that shadows one from the probe's directory changes the digest. A change to a Mojo file outside the closure does not. The binding refuses a missing probe, a missing cited input, a relative import, and a local import that resolves to no file.
+
+The binding reads each import as the compiler does. Comments and string literals, docstrings among them, hold no imports. An alias can follow a tab or a space. Each imported module must resolve to its own file. A package or module above it does not satisfy the name.
+
+The binding refuses an import statement that it cannot read, a string literal that does not end, and a bracket that does not close. The closure edges come from `tools/affected.py`. That code also keeps the ancestor packages and the shadowing candidates. So the closure can only be larger than what the compiler reads.
 
 The committed report is a reference for its recorded source revision. It does not describe a later combined revision. Probe reuse rejects changed source until `--build` regenerates the evidence. Regenerate the report after the final integration batch.
 

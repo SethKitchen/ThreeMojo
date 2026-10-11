@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import shutil
 import tempfile
 import unittest
@@ -25,6 +26,7 @@ class CacheKeyContracts(unittest.TestCase):
     def setUpClass(cls):
         # Existing cache-only fixtures intentionally omit unrelated dependencies.
         # Construct their historical Map only after qualifying the real root.
+        cls.cleanup_sources = cleanup_fixtures.verified_predecessors(ROOT)
         cls.map_fixture = (ROOT/seed.MODULE).read_bytes()
         if seed.sha(cls.map_fixture.decode()) == seed.SCORE_AFTER_SHA256:
             seed.verify_score(ROOT)
@@ -40,6 +42,7 @@ class CacheKeyContracts(unittest.TestCase):
                 dst.write_bytes(self.map_fixture)
             else:
                 shutil.copyfile(ROOT / rel, dst)
+        cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
         self.record = cache.verify(self.root)
 
     def tearDown(self):

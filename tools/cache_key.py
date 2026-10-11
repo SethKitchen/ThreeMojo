@@ -9,6 +9,9 @@ from pathlib import Path
 import subprocess
 import sys
 
+# Executed module identity for source-proof receipts, before local import cycles.
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
+
 SKIP = {'.git', '.venv', '.cache', 'out', 'node_modules', '__pycache__', '.agents', '.claude'}
 
 

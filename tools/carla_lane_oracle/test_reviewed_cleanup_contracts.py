@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import unittest
 from unittest.mock import patch
 
@@ -18,12 +19,30 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 class ReviewedCleanupContracts(unittest.TestCase):
+    def test_current_cleanup_adds_exactly_one_canonical_dependency(self):
+        result = winner.verify(ROOT)
+        self.assertEqual((result['reviewed_cleanup_successors'],
+                          result['canonical_dependencies_unchanged']), (20, 92))
+        historical = cleanup_fixtures.historical_root(self, ROOT)
+        path = historical/border.MODULE
+        original = path.read_text()
+        record = border.read_record(historical)
+        for text, expected in ((original, (19, 93)),
+                (border.predecessor_source(original, record), (18, 94))):
+            with self.subTest(expected=expected):
+                path.write_text(text)
+                result = winner.verify(historical)
+                self.assertEqual((result['reviewed_cleanup_successors'],
+                                  result['canonical_dependencies_unchanged']), expected)
+        path.write_text(original)
+
     def test_positive_source_and_exact_historical_scope(self):
         record = cleanup.verify(ROOT)
-        result = winner.verify(ROOT)
+        historical = cleanup_fixtures.historical_root(self, ROOT)
+        result = winner.verify(historical)
         # Four reviewed #333 runtime boundary edges join each state.
         expected = {border.BEFORE_SHA256: (18, 94), border.AFTER_SHA256: (19, 93)}
-        parser_sha = hashlib.sha256((ROOT/border.MODULE).read_bytes()).hexdigest()
+        parser_sha = hashlib.sha256((historical/border.MODULE).read_bytes()).hexdigest()
         self.assertIn(parser_sha, expected)
         self.assertEqual((result['reviewed_cleanup_successors'],
                           result['canonical_dependencies_unchanged']), expected[parser_sha])

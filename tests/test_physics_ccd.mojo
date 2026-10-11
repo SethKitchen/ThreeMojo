@@ -301,8 +301,14 @@ def test_ghosts_modes_and_reentry() raises:
     assert_equal(world.contact_count, 0)
     world.bodies[0].collides = True
     world.bodies[1].set_kind(KINEMATIC)
-    with assert_raises():
+    # A kinematic sphere passes through static meshes. With spin it is
+    # refused.
+    world.step(Duration(0.01))
+    assert_equal(world.contact_count, 0)
+    world.bodies[1].angular_velocity = Vector3(0, 0, 1)
+    with assert_raises(contains="kinematic sphere without spin"):
         world.step(Duration(0.01))
+    world.bodies[1].angular_velocity = Vector3(0, 0, 0)
     world.bodies[1].collides = False
     world.step(Duration(0.01))
     world.bodies[1].set_kind(STATIC)
@@ -362,7 +368,16 @@ def test_support_and_finite_failures_are_atomic() raises:
         elif choice == 14:
             world.bodies[1].force = Vector3(1, 2, 3e38)
         elif choice == 15:
-            _ = world.add_body(_ball(0.1, 0.3, 0))
+            # A kinematic capsule is refused.
+            _ = world.add_body(
+                RigidBody(
+                    KINEMATIC,
+                    Shape.capsule(Length(0.05), Length(0.05)),
+                    Mass(1),
+                    Vector3(0, 0, 0.3),
+                    Quaternion.identity(),
+                )
+            )
         else:
             world.bounce_threshold = nan[DType.float32]()
         var position = world.bodies[1].position

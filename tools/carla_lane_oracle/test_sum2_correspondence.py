@@ -13,6 +13,7 @@ import unittest
 from unittest.mock import patch
 
 import check_sampled_values as sampled
+import full_audit_cleanup_contracts as cleanup
 import source_contracts
 import sum2_contracts
 from sum2_analysis import sum2_error, U
@@ -131,8 +132,37 @@ class Sum2SourceTests(unittest.TestCase):
         for module, name in (('curve_bounds', '_spiral_expression'),
                              ('curve_interval', '_stored_half')):
             with self.subTest(module=module):
-                self.semantic_change(module, lambda text: text.replace(
-                    'def ' + name + '[', 'def  ' + name + '[', 1), reject=False)
+                target = ROOT/'extensions/carla'/f'{module}.mojo'
+                original = target.read_text()
+                self.assertEqual(original.count('def ' + name + '['), 1)
+                changed = original.replace('def ' + name + '[', 'def  ' + name + '[', 1)
+                self.assertNotEqual(original, changed)
+                self.assertEqual(source_contracts.token_sha256(changed),
+                                 source_contracts.token_sha256(original))
+                # These are the actual production declaration selectors. The
+                # positive is semantic selection, not full raw-source admission.
+                self.assertEqual(sampled.dump(sampled.unique_function(
+                                     sampled.syntax_tree(changed), name)),
+                                 sampled.dump(sampled.unique_function(
+                                     sampled.syntax_tree(original), name)))
+                read = Path.read_text
+                error_type = (cleanup._OperationCoherenceError if module == 'curve_bounds'
+                              else ValueError)
+                with patch.object(Path, 'read_text', lambda path, *a, **k:
+                                  changed if path == target else read(path, *a, **k)):
+                    with self.assertRaises(error_type) as raised:
+                        sum2_contracts.verify(ROOT)
+                error = raised.exception
+                self.assertIs(type(error), error_type)
+                message = ('full-audit cleanup successor: consumed operation text changed: '
+                           + 'extensions/carla/' + module + '.mojo')
+                if module == 'curve_interval':
+                    self.assertEqual(str(error), 'unreviewed complete successor: ' + message)
+                    error = error.__cause__
+                self.assertIs(type(error), cleanup._OperationCoherenceError)
+                self.assertEqual(str(error), message)
+                self.assertIs(type(error.__cause__), cleanup.ContractError)
+                self.assertEqual(str(error.__cause__), message)
 
     def test_half_helper_decorator_cannot_change_callable(self):
         self.semantic_change('curve_interval', lambda text: text.replace(

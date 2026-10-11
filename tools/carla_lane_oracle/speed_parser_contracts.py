@@ -14,12 +14,33 @@ TESTS = ('tests/test_carla_speed_lexical.mojo', 'tests/test_carla_speed_xml_lexi
 PROTECTED_INPUTS = (MIGRATION, MODULE, *TESTS)
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, mode='default'):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, mode=mode)
+
+
 def require(value, message):
     if not value:
         raise ValueError('reviewed speed parser successor: ' + message)
 
 
-def verify(root):
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
     raw = (root/MIGRATION).read_bytes()
     require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact edge')
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
@@ -32,7 +53,8 @@ def verify(root):
         text = record[side+'_complete_module']
         require(hashlib.sha256(text.encode()).hexdigest() == record[side+'_sha256']
                 and source.token_sha256(text) == record[side+'_token_sha256'], 'recorded source identity changed')
-    require(source.token_sha256((root/MODULE).read_text()) == record['after_token_sha256'],
+    require(source.token_sha256(_observe_text(
+        root, MODULE, (root/MODULE).read_text(), _operation=_operation)) == record['after_token_sha256'],
             'actual grammar, validation, binding or mantissa graph changed')
     for path, expected in record['correctness_tests'].items():
         require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,

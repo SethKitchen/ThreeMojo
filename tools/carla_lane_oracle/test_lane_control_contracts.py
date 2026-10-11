@@ -1,6 +1,7 @@
 """Fail-closed controls for the bounded lane successor migration."""
 import json
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import shutil
 import tempfile
 import unittest
@@ -11,6 +12,7 @@ import lane_control_contracts as contract
 class LaneControlContracts(unittest.TestCase):
     def setUp(self):
         self.source = Path(__file__).resolve().parents[2]
+        self.cleanup_sources = cleanup_fixtures.verified_predecessors(self.source)
         self.temp = tempfile.TemporaryDirectory(prefix='lane-migration-')
         self.root = Path(self.temp.name)
         record = contract.verify(self.source)
@@ -40,6 +42,8 @@ class LaneControlContracts(unittest.TestCase):
                 dest.write_bytes(text.encode('utf-8'))
             else:
                 shutil.copyfile(self.source / rel, dest)
+
+        cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
 
     def tearDown(self):
         self.temp.cleanup()

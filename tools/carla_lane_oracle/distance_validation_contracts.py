@@ -13,6 +13,18 @@ def verify_text(module,interval):
     if source_contracts.token_sha256(interval)!=INTERVAL:raise ValueError('Ordered nonnegative-error widening operation changed')
     return {'status':'PASS','scope':'Finite ordered raw value and finite nonnegative error; original derivative and association checks retained','provenance_authenticated':False,'original_debit_retained':True}
 
-def verify(root):
+def verify(root, *, _operation=None):
     root=Path(root)
-    return verify_text((root/MODULE).read_text(),(root/'extensions/carla/curve_interval.mojo').read_text())
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+    module = (root/MODULE).read_text()
+    if _operation is not None:
+        module = full_audit._observe_text(root, MODULE, module, _operation=_operation)
+    interval = (root/'extensions/carla/curve_interval.mojo').read_text()
+    if _operation is not None:
+        interval = full_audit._observe_text(
+            root, 'extensions/carla/curve_interval.mojo', interval, _operation=_operation)
+    return verify_text(module, interval)

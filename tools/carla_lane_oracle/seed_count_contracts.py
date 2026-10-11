@@ -17,9 +17,11 @@ from pathlib import Path
 
 if __package__:
     from . import source_contracts as source
+    from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
 else:
     import source_contracts as source
+    import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
 
 def _sibling_tool(name):
@@ -195,8 +197,20 @@ def sha(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 
-def read_record(root):
-    payload = (Path(root)/MIGRATION).read_bytes()
+def _check_inputs(root, inputs, owner, *, _operation=None):
+    if _operation is not None:
+        full_audit._operation_check(_operation, root)
+    require((inputs is None) == (owner is None), 'incomplete owned input binding')
+    if inputs is not None:
+        require(type(inputs) in (full_audit._CacheInputs, full_audit._BorrowedCacheInputs),
+                'invalid owned input view')
+        inputs._check(owner, root)
+
+
+def read_record(root, *, _inputs=None, _input_owner=None, _operation=None):
+    _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
+    payload = ((Path(root)/MIGRATION).read_bytes() if _inputs is None else
+               _inputs.raw(_input_owner, root, MIGRATION))
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'immutable successor record changed')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -274,10 +288,16 @@ def verify_source(text, record):
             'before_token_sha256': BEFORE_TOKEN_SHA256, 'after_token_sha256': AFTER_TOKEN_SHA256}
 
 
-def dependency_inventory(root):
+def dependency_inventory(root, *, _inputs=None, _input_owner=None, _operation=None):
     """Resolve the actual maintained import closure, including package files."""
     root = Path(root)
+    _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
     known = {path.as_posix() for path in cache_key.input_paths(root) if path.suffix == '.mojo'}
+    if _operation is not None:
+        full_audit._operation_known_paths(root, known, _operation=_operation)
+    if _inputs is not None:
+        require(known == _inputs.known_paths(_input_owner, root),
+                'owned dependency input paths changed')
     found, pending = set(), [MODULE]
     while pending:
         name = pending.pop()
@@ -285,7 +305,8 @@ def dependency_inventory(root):
             continue
         require(name in known, 'missing maintained dependency: '+name)
         found.add(name)
-        text = (root/name).read_bytes().decode('utf-8')
+        text = (((root/name).read_bytes() if _operation is None else full_audit._observe_bytes(root, name, (root/name).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+                _inputs.text_utf8(_input_owner, root, name))
         for imported in affected.imported_names(text):
             pending.extend(affected.resolve(imported, name, known))
     return found
@@ -449,7 +470,7 @@ def verify_score_live(text):
                 'live score helper/caller operation graph changed: '+name)
 
 
-def verify_score_caller_inventory(root):
+def verify_score_caller_inventory(root, *, _inputs=None, _input_owner=None, _operation=None):
     """Keep the borrowed helper's caller-supplied FP/scale preconditions closed.
 
     This new name has its own production census; historical protected-name
@@ -457,12 +478,19 @@ def verify_score_caller_inventory(root):
     The existing census includes package re-exports and nested namespaces.
     """
     root = Path(root)
+    _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
+    paths = (guard.production_mojo_paths(root) if _inputs is None else
+             (root / path for path in _inputs.production_paths(_input_owner, root)))
+    if _inputs is None and _operation is not None:
+        paths = full_audit._operation_production_paths(root, paths, _operation=_operation)
     found = {}
-    for path in guard.production_mojo_paths(root):
-        rel = path.relative_to(root)
+    for path in paths:
+        rel = (full_audit._relative_path(path, root)
+               if _inputs is not None or _operation is not None else path.relative_to(root))
         if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
             continue
-        text = path.read_text()
+        text = ((path.read_text() if _operation is None else full_audit._observe_text(root, rel.as_posix(), path.read_text(), _operation=_operation)) if _inputs is None else
+                _inputs.text_default(_input_owner, root, rel.as_posix()))
         if '_winner_seed_update_score' not in text:
             continue
         count = sum(token.type == tokenize.NAME and token.string == '_winner_seed_update_score'
@@ -512,13 +540,17 @@ def score_successor_source(root):
     return text
 
 
-def verify_score(root):
+def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
     """Verify all five exact edges and live helper/caller/dependency premises."""
     root = Path(root)
-    record = read_record(root)
-    text = (root/MODULE).read_bytes().decode('utf-8')
+    _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
+    record = (read_record(root, **({} if _operation is None else {'_operation': _operation})) if _inputs is None else
+              read_record(root, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation})))
+    text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+            _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))
     for path, expected in SCORE_TESTS.items():
-        require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+        require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else
+                               _inputs.raw(_input_owner, root, path)).hexdigest() == expected,
                 'score-helper numerical fixture changed: '+path)
     frontier = score_predecessor_source(text)
     support = frontier_predecessor_source(frontier)
@@ -526,11 +558,19 @@ def verify_score(root):
     middle = optional_predecessor_source(optional)
     prior_edge = verify_source(middle, record)
     require(prior_edge is not None, 'score edge must follow all preceding edges')
-    _verify_bound_inputs(root, record)
-    verify_score_caller_inventory(root)
-    verify_premises(root, record, after=True, optional=True, support=True,
-                    frontier=True, score=True)
-    require((root/MODULE).read_bytes().decode('utf-8') == text,
+    if _inputs is None:
+        _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': _operation}))
+        verify_score_caller_inventory(root, **({} if _operation is None else {'_operation': _operation}))
+        verify_premises(root, record, after=True, optional=True, support=True,
+                        frontier=True, score=True, **({} if _operation is None else {'_operation': _operation}))
+    else:
+        _verify_bound_inputs(root, record, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
+        verify_score_caller_inventory(root, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
+        verify_premises(root, record, after=True, optional=True, support=True,
+                        frontier=True, score=True, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
+    final_text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+                  _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))
+    require(final_text == text,
             'Map changed during score-helper verification')
     endpoints = ((AFTER_SHA256, AFTER_TOKEN_SHA256),
                  (OPTIONAL_AFTER_SHA256, OPTIONAL_AFTER_TOKEN_SHA256),
@@ -548,13 +588,30 @@ def verify_score(root):
             'after_token_sha256': SCORE_AFTER_TOKEN_SHA256, 'edges': edges}
 
 
-def _verify_bound_inputs(root, record):
-    require(dependency_inventory(root) == {MODULE, *record['unchanged_inputs']},
+def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _operation=None):
+    _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
+    dependencies = (dependency_inventory(root, **({} if _operation is None else {'_operation': _operation})) if _inputs is None else
+                    dependency_inventory(root, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation})))
+    require(dependencies == {MODULE, *record['unchanged_inputs']},
             'live import or package-resolution closure changed')
+    cleanup_edges = {}
+    if any(path in full_audit.SOURCE_PATHS
+           and expected != full_audit.AFTER_SHA256[path]
+           and hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else
+                              _inputs.raw(_input_owner, root, path)).hexdigest() == full_audit.AFTER_SHA256[path]
+           for path, expected in record['unchanged_inputs'].items()):
+        cleanup_edges = (full_audit.verified_edges(root, **({} if _operation is None else {'_operation': _operation})) if _inputs is None else
+                         _inputs.exact_edges(_input_owner, root))
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests',
                   'after_correctness_tests'):
         for path, expected in record[group].items():
-            require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+            if group == 'unchanged_inputs' and path in cleanup_edges:
+                edge = cleanup_edges[path]
+                require(expected == edge['before_sha256'],
+                        'full-audit edge does not extend the immutable count input: ' + path)
+                expected = edge['after_sha256']
+            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else
+                              _inputs.raw(_input_owner, root, path)).hexdigest() == expected,
                     'historical record, live dependency or regression fixture changed: '+path)
 
 
@@ -583,18 +640,21 @@ def verify_optional(root):
             'edges': [prior_edge, local_edge]}
 
 
-def verify_premises(root, record, *, after, optional=False, support=False, frontier=False, score=False):
+def verify_premises(root, record, *, after, optional=False, support=False, frontier=False, score=False,
+                    _inputs=None, _input_owner=None, _operation=None):
     """Check each actual operation graph independently of whole-file pins."""
     root = Path(root)
+    _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
     require(not score or frontier, 'score premises require frontier edge')
     require(not frontier or support, 'frontier premises require the support edge')
     require(not support or (after and optional),
             'support premises require both preceding edges')
-    # Read actual source on every call. Only exact-text lexical computation
-    # is memoized; no filesystem snapshot, comparison or admission is cached.
+    # Defaults read actual source on every call. The explicit owned score path
+    # reads its actual captured successor, never a historical inverse.
     snapshots = {}
     for path, expected in record['layout_routing'].items():
-        text = (root/path).read_bytes().decode('utf-8')
+        text = (((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path))
         if score and path == MODULE:
             verify_score_live(text)
             expected = SCORE_ROUTING_SHA256
@@ -604,7 +664,8 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
     for item in record['premise_declarations']:
         path = item['path']
         if path not in snapshots:
-            text = (root/path).read_bytes().decode('utf-8')
+            text = (((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path))
             snapshots[path] = (text, _function_spans(text))
         text, spans = snapshots[path]
         actual = declaration(text,item['name'],tuple(item['owner']),spans=spans)
@@ -622,16 +683,19 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
     if optional:
         require(after, 'optional premises require the count successor')
         for path, name, owner, expected in OPTIONAL_EXTRA_PREMISES:
-            actual = declaration((root/path).read_bytes().decode('utf-8'), name, owner)
+            actual = declaration((((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path)), name, owner)
             require(source.token_sha256(actual) == expected,
                     'live optional-guard premise changed: '+path+':'+'.'.join((*owner,name)))
     if support:
         for path, name, owner, expected in SUPPORT_EXTRA_PREMISES:
-            actual = declaration((root/path).read_bytes().decode('utf-8'), name, owner)
+            actual = declaration((((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path)), name, owner)
             require(source.token_sha256(actual) == expected,
                     'live support-guard premise changed: '+path+':'+'.'.join((*owner,name)))
     # These statements are read from the real after body, never the inverse.
-    text = (root/MODULE).read_bytes().decode('utf-8')
+    text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
+            _inputs.text_utf8(_input_owner, root, MODULE))
     actual = guard.declaration(text, '_try_winner_seed', ())
     previous = score_predecessor_source(text) if score else text
     previous = frontier_predecessor_source(previous) if frontier else previous
@@ -646,13 +710,13 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
             'live fresh-environment guard or ordered debits changed')
 
 
-def verify(root):
+def verify(root, *, _operation=None):
     """Verify the exact edge, live arithmetic dependencies and regression input."""
     root = Path(root)
-    record = read_record(root)
-    text = (root/MODULE).read_bytes().decode('utf-8')
+    record = read_record(root, **({} if _operation is None else {'_operation': _operation}))
+    text = ((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8')
     if sha(text) == SCORE_AFTER_SHA256:
-        return verify_score(root)
+        return verify_score(root, **({} if _operation is None else {'_operation': _operation}))
     if sha(text) == FRONTIER_AFTER_SHA256:
         return verify_frontier(root)
     if sha(text) == SUPPORT_AFTER_SHA256:
@@ -662,31 +726,34 @@ def verify(root):
     edge = verify_source(text, record)
     if edge is None:
         return None
-    _verify_bound_inputs(root, record)
-    verify_premises(root, record, after=True)
+    _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': _operation}))
+    verify_premises(root, record, after=True, **({} if _operation is None else {'_operation': _operation}))
     # A caller must not project a source different from the one just verified.
-    require((root/MODULE).read_bytes().decode('utf-8') == text, 'Map changed during verification')
+    require(((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') == text, 'Map changed during verification')
     return edge
 
 
-def historical_source(root):
+def historical_source(root, *, _operation=None):
     """Return this named predecessor only after exact after-edge verification."""
     root = Path(root)
-    text = (root/MODULE).read_bytes().decode('utf-8')
+    if _operation is not None:
+        full_audit._operation_check(_operation, root)
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    text = full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8')
     if sha(text) == BEFORE_SHA256:
         return text
     require(sha(text) in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256},
             'unknown Map cannot use a predecessor')
-    require(verify(root) is not None, 'after Map did not activate its reviewed edge')
-    require((root/MODULE).read_bytes().decode('utf-8') == text, 'Map changed during reconstruction')
+    require(verify(root, **operation_args) is not None, 'after Map did not activate its reviewed edge')
+    require(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8') == text, 'Map changed during reconstruction')
     middle = score_predecessor_source(text) if sha(text) == SCORE_AFTER_SHA256 else text
     middle = frontier_predecessor_source(middle) if sha(middle) == FRONTIER_AFTER_SHA256 else middle
     middle = support_predecessor_source(middle) if sha(middle) == SUPPORT_AFTER_SHA256 else middle
     middle = optional_predecessor_source(middle) if sha(middle) == OPTIONAL_AFTER_SHA256 else middle
-    return predecessor_source(middle, read_record(root))
+    return predecessor_source(middle, read_record(root, **operation_args))
 
 
-def reviewed_text(root, path, text):
+def reviewed_text(root, path, text, *, _operation=None):
     """Project a token-equivalent view of the verified physical after Map.
 
     Comments in a caller's text view do not change the physical compiler
@@ -695,7 +762,7 @@ def reviewed_text(root, path, text):
     on each call. Only explicitly named physical endpoints are admitted.
     """
     require(str(path) == MODULE, 'wrong supplied Map path')
-    physical = (Path(root)/MODULE).read_bytes()
+    physical = ((Path(root)/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), _operation=_operation))
     digest = hashlib.sha256(physical).hexdigest()
     require(digest in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256},
             'supplied after view needs the exact physical after Map')
@@ -706,8 +773,8 @@ def reviewed_text(root, path, text):
                        else AFTER_TOKEN_SHA256)
     require(source.token_sha256(text) == expected_tokens,
             'unreviewed supplied Map source')
-    require(verify(root) is not None, 'after Map did not activate its reviewed edge')
-    require((Path(root)/MODULE).read_bytes() == physical,
+    require(verify(root, **({} if _operation is None else {'_operation': _operation})) is not None, 'after Map did not activate its reviewed edge')
+    require(((Path(root)/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), _operation=_operation)) == physical,
             'Map changed during supplied-view verification')
     middle = physical.decode('utf-8')
     if digest == SCORE_AFTER_SHA256:
@@ -718,4 +785,4 @@ def reviewed_text(root, path, text):
         middle = support_predecessor_source(middle)
     if sha(middle) == OPTIONAL_AFTER_SHA256:
         middle = optional_predecessor_source(middle)
-    return predecessor_source(middle, read_record(root))
+    return predecessor_source(middle, read_record(root, **({} if _operation is None else {'_operation': _operation})))

@@ -13,12 +13,14 @@ from pathlib import Path
 
 if __package__:
     from . import source_contracts as source
+    from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
     from . import speed_parser_contracts as speed
     from . import runtime_boundary_contracts as boundary
     from . import render_actor_reuse_contracts as reuse
 else:
     import source_contracts as source
+    import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
     import speed_parser_contracts as speed
     import runtime_boundary_contracts as boundary
@@ -147,47 +149,68 @@ def verify_source(text, record):
 
 
 @source.lexical_memo_scope()
-def verify(root):
+def verify(root, *, _operation=None):
     """Check the real source, retained lineage, live consumers and tests."""
-    root = Path(root)
-    record = read_record(root)
-    edge = verify_source((root/MODULE).read_bytes().decode('utf-8'), record)
-    consumers = boundary.verify(root)
-    for path, reviewed in reuse.verify(root).items():
-        require(path not in consumers, 'duplicate reviewed consumer edge: ' + path)
-        consumers[path] = reviewed
-    for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
-        for path, expected in record[group].items():
-            actual = hashlib.sha256((root/path).read_bytes()).hexdigest()
-            if group == 'unchanged_inputs' and path == 'extensions/carla/map.mojo' and actual != expected:
-                if __package__:
-                    from . import seed_count_contracts as seed_count
+    _operation, _owns_operation = full_audit._operation_enter(root, 'border', _operation)
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    try:
+        root = Path(root)
+        record = read_record(root)
+        edge = verify_source(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8'), record)
+        consumers = boundary.verify(root, **operation_args)
+        for path, reviewed in reuse.verify(root, **operation_args).items():
+            require(path not in consumers, 'duplicate reviewed consumer edge: ' + path)
+            consumers[path] = reviewed
+        if any(path in full_audit.SOURCE_PATHS
+               and expected != full_audit.AFTER_SHA256[path]
+               and hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest() == full_audit.AFTER_SHA256[path]
+               for path, expected in record['unchanged_inputs'].items()):
+            for path, reviewed in full_audit.verified_edges(root, **operation_args).items():
+                require(path not in consumers, 'duplicate reviewed cleanup consumer edge: ' + path)
+                consumers[path] = reviewed
+        for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
+            for path, expected in record[group].items():
+                actual = hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest()
+                if group == 'unchanged_inputs' and path == 'extensions/carla/map.mojo' and actual != expected:
+                    if __package__:
+                        from . import seed_count_contracts as seed_count
+                    else:
+                        import seed_count_contracts as seed_count
+                    require(expected == seed_count.BEFORE_SHA256
+                            and actual in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
+                                          seed_count.SUPPORT_AFTER_SHA256,
+                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256},
+                            'unreviewed Map consumer variant')
+                    map_edge = seed_count.verify(root, **operation_args)
+                    require(map_edge is not None and map_edge['before_sha256'] == expected
+                            and map_edge['after_sha256'] == actual,
+                            'Map consumer edge does not extend the immutable parser record')
+                elif group == 'unchanged_inputs' and path in consumers:
+                    require(expected == consumers[path]['before_sha256']
+                            and actual == consumers[path]['after_sha256'],
+                            'runtime boundary consumer does not extend the record: ' + path)
                 else:
-                    import seed_count_contracts as seed_count
-                require(expected == seed_count.BEFORE_SHA256
-                        and actual in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
-                                      seed_count.SUPPORT_AFTER_SHA256,
-                                      seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256},
-                        'unreviewed Map consumer variant')
-                map_edge = seed_count.verify(root)
-                require(map_edge is not None and map_edge['before_sha256'] == expected
-                        and map_edge['after_sha256'] == actual,
-                        'Map consumer edge does not extend the immutable parser record')
-            elif group == 'unchanged_inputs' and path in consumers:
-                require(expected == consumers[path]['before_sha256']
-                        and actual == consumers[path]['after_sha256'],
-                        'runtime boundary consumer does not extend the record: ' + path)
-            else:
-                require(actual == expected,
-                        'historical record or live consumer changed: ' + path)
-    # These are ACTUAL live-root checks. Never project reconstructed parser or
-    # old consumer text into an existing arithmetic or speed-grammar checker.
-    for group in ('canonical_accumulation', 'support', 'optional_runtime'):
-        source.verify_group(root, group)
-    speed.verify(root)
-    if edge is not None:
-        for path, expected in record['after_correctness_tests'].items():
-            require((root/path).is_file()
-                    and hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
-                    'reviewed border regression suite missing or changed: ' + path)
-    return edge
+                    require(actual == expected,
+                            'historical record or live consumer changed: ' + path)
+        # These are ACTUAL live-root checks. Never project reconstructed parser or
+        # old consumer text into an existing arithmetic or speed-grammar checker.
+        for group in ('canonical_accumulation', 'support', 'optional_runtime'):
+            source.verify_group(root, group, **operation_args)
+        speed.verify(root, **operation_args)
+        if edge is not None:
+            for path, expected in record['after_correctness_tests'].items():
+                require((root/path).is_file()
+                        and hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest() == expected,
+                        'reviewed border regression suite missing or changed: ' + path)
+        if _owns_operation:
+            _operation.finish(root)
+        return edge
+    finally:
+        if _owns_operation:
+            _operation.close()
+
+
+def _verify_owned(root, *, _operation):
+    full_audit._operation_borrow(_operation, root, 'border')
+    return verify(root, _operation=_operation)
+

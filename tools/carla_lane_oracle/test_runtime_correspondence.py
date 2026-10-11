@@ -9,6 +9,7 @@ verify source-integrity detection, not production mathematical correctness.
 import hashlib
 import json
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import re
 import shutil
 import subprocess
@@ -18,6 +19,7 @@ import unittest
 from unittest.mock import patch
 
 import check_sampled_values as sampled
+import full_audit_cleanup_contracts as cleanup
 import check_runtime_support as runtime
 import heading_correspondence
 import sum2_guard_contracts
@@ -144,7 +146,11 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
 
     def exercise(self, case):
         name, gate, file, function, before, after = case
-        path = ROOT/'extensions/carla'/file
+        root = ROOT
+        if name == 'sample_negative_guard':
+            root = cleanup_fixtures.historical_root(self, ROOT)
+            sampled.verify(root)
+        path = root/'extensions/carla'/file
         original = path.read_text()
         if function:
             changed = replace_in_function(original, function, before, after)
@@ -158,7 +164,7 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         with patch.object(Path, 'read_text', read_changed):
             if gate == 'sampled':
                 with self.assertRaises((sampled.CheckError, SyntaxError)):
-                    sampled.verify(ROOT)
+                    sampled.verify(root)
             else:
                 with self.assertRaisesRegex(ValueError, 'runtime source dependency changed \\[' + gate + '\\]'):
                     contracts.verify_group(ROOT, gate)
@@ -170,24 +176,59 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         self.assertEqual(self.sampled_positive['additional_source_pairs'], 3)
         self.assertEqual(self.support_positive['repo_root'], str(ROOT))
 
-    def test_benign_comments_preserve_all_gates(self):
+    def test_benign_comment_semantics_and_split_read_rejection(self):
         read = Path.read_text
+        reached = set()
         def annotated(path, *args, **kwargs):
             text = read(path, *args, **kwargs)
-            return text + '\n# Benign source commentary\n' if path.suffix == '.mojo' else text
-        with patch.object(Path, 'read_text', annotated):
-            sampled.verify(ROOT)
-            runtime.verify(ROOT)
+            if path.suffix != '.mojo':
+                return text
+            changed = text + '\n# Benign source commentary\n'
+            if (path, text) not in reached:
+                # These are lexical positives for the actual consumed views,
+                # not a substitute for coherent full source admission.
+                for helper in (contracts.token_sha256,
+                               sum2_guard_contracts.declaration_routing,
+                               sum2_guard_contracts.protected_source_digest):
+                    self.assertEqual(helper(changed), helper(text))
+                reached.add((path, text))
+            return changed
+        message = ('full-audit cleanup successor: consumed operation text changed: '
+                   'extensions/carla/curve_rounded_line.mojo')
+        wrapped = 'unreviewed complete successor: ' + message
+        for verifier, error_type in ((sampled.verify, sampled.CheckError),
+                                     (runtime.verify, ValueError)):
+            reached.clear()
+            with self.subTest(verifier=verifier.__module__), \
+                    patch.object(Path, 'read_text', annotated):
+                with self.assertRaises(error_type) as raised:
+                    verifier(ROOT)
+            self.assertTrue(reached)
+            self.assertIn(ROOT/'extensions/carla/curve_rounded_line.mojo',
+                          {path for path, text in reached})
+            error = raised.exception
+            self.assertIs(type(error), error_type)
+            self.assertEqual(str(error), wrapped)
+            if verifier is sampled.verify:
+                error = error.__cause__
+                self.assertIs(type(error), ValueError)
+                self.assertEqual(str(error), wrapped)
+            self.assertIs(type(error.__cause__), cleanup._OperationCoherenceError)
+            self.assertEqual(str(error.__cause__), message)
+            self.assertIs(type(error.__cause__.__cause__), cleanup.ContractError)
+            self.assertEqual(str(error.__cause__.__cause__), message)
 
     def test_matched_wrong_full_and_value_blends_reject_reference(self):
         read = Path.read_text
-        paths = {ROOT/'extensions/carla/curve_bounds.mojo', ROOT/'extensions/carla'/TARGET}
+        root = cleanup_fixtures.historical_root(self, ROOT)
+        sampled.verify(root)
+        paths = {root/'extensions/carla/curve_bounds.mojo', root/'extensions/carla'/TARGET}
         def wrong(path, *args, **kwargs):
             text = read(path, *args, **kwargs)
             return text.replace('constant(one)', 'constant(two)', 1) if path in paths else text
         with patch.object(Path, 'read_text', wrong):
             with self.assertRaisesRegex(sampled.CheckError, 'reference module changed'):
-                sampled.verify(ROOT)
+                sampled.verify(root)
 
     def test_exact_dependency_schema_and_path_sets(self):
         original = json.loads(self.pin)
@@ -242,26 +283,33 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
                 contracts.verify_group(ROOT, 'stored_arithmetic')
 
     def test_cli_positive_negative_and_missing_inputs_normal_and_optimized(self):
-        with tempfile.TemporaryDirectory() as folder:
-            root = Path(folder)
-            paths = set(p for group in contracts.GROUP_PATHS.values() for p in group)
-            from reviewed_cleanup_contracts import PROTECTED_INPUTS
-            paths.update(PROTECTED_INPUTS)
-            paths.add('extensions/carla/lane_value_bounds.mojo')
-            paths.add(str(contracts.PINS))
-            paths.add('tools/carla_lane_oracle/spiral-moment-pins.json')
-            paths.add('tools/carla_lane_oracle/sum2-guard-pins.json')
-            paths.add('tools/carla_lane_oracle/winner-sign-query-migration.json')
-            paths.update(json.loads((ROOT/sum2_guard_contracts.PINS).read_text())['protected_inventory'])
-            for name in paths:
-                to = root/name; to.parent.mkdir(parents=True, exist_ok=True)
-                if name == seed_count.MODULE:
-                    # This partial fixture retains the historical dependencies.
-                    to.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
-                else:
-                    shutil.copyfile(ROOT/name, to)
+        with tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve()) as folder:
+            current = cleanup_fixtures.copy_current_root(
+                self, ROOT, destination=Path(folder)/'current')
+            historical = cleanup_fixtures.copy_current_root(
+                self, ROOT, destination=Path(folder)/'historical')
+            # The sampled historical control retains the exact same Map and
+            # four verified predecessors, now with the complete input closure.
+            (historical/seed_count.MODULE).write_bytes(
+                seed_count.historical_source(ROOT).encode('utf-8'))
+            predecessors = cleanup_fixtures.verified_predecessors(ROOT)
+            cleanup_fixtures.write_predecessors(historical, predecessors)
+            for name, raw in predecessors.items():
+                self.assertEqual((historical/name).read_bytes(), raw)
+            self.assertEqual(hashlib.sha256((historical/seed_count.MODULE).read_bytes()).hexdigest(),
+                             seed_count.BEFORE_SHA256)
+            # Runtime support's center extraction requires a complete current
+            # lane. The original CLI fixture copied its then-live lane too.
+            lane = 'extensions/carla/lane_refinement.mojo'
+            self.assertEqual(hashlib.sha256((current/lane).read_bytes()).hexdigest(),
+                             cleanup.AFTER_SHA256[lane])
+            self.assertEqual(hashlib.sha256((current/cleanup.MIGRATION).read_bytes()).hexdigest(),
+                             cleanup.MIGRATION_SHA256)
+            self.assertEqual((current/seed_count.MODULE).read_bytes(),
+                             (ROOT/seed_count.MODULE).read_bytes())
             for mode in ([], ['-O']):
                 for script in ('check_sampled_values.py', 'check_runtime_support.py'):
+                    root = historical if script == 'check_sampled_values.py' else current
                     command = [sys.executable, *mode, '-B', str(Path(__file__).parent/script), '--repo-root', str(root)]
                     positive = subprocess.run(command, capture_output=True, text=True)
                     self.assertEqual(positive.returncode, 0, positive.stdout+positive.stderr)

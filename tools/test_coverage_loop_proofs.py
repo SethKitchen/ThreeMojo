@@ -22,6 +22,8 @@ import cache_key
 import coverage_loop_proofs as loops
 import coverage_io
 import check_coverage_loop_proofs as native_check
+from carla_lane_oracle import full_audit_cleanup_contracts as full_audit
+from carla_lane_oracle import _full_audit_test_fixtures as audit_fixtures
 
 
 def source(expression, body='pass', ending='\n'):
@@ -750,10 +752,13 @@ class GuardedLoopTests(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root = Path(self.tmp.name)
         self.repo = Path(__file__).resolve().parents[1]
+        predecessors = audit_fixtures.verified_predecessors(self.repo)
         for relative in loops.GUARDED_LOOP_SOURCE_SHA256:
             destination = self.root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            if relative == 'extensions/carla/opendrive.mojo':
+            if relative in predecessors:
+                content = predecessors[relative]
+            elif relative == 'extensions/carla/opendrive.mojo':
                 # A before-source infrastructure checkout has no feature
                 # parser yet. Reconstruct only the immutable reviewed after
                 # fixture through the separate, source-bound parser contract.
@@ -1683,6 +1688,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
             path = root/name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes((self.repo/name).read_bytes())
+        audit_fixtures.write_predecessors(
+            root, audit_fixtures.verified_predecessors(self.repo))
         return root
 
     def test_actual_physical_state_keeps_live_hashes_and_all_true_obligations(self):
@@ -1801,23 +1808,132 @@ class MapSuccessorLoopTests(unittest.TestCase):
             self.seed.frontier_successor_source(self.repo),
             self.seed.score_successor_source(self.repo),
         )
+        predecessors = audit_fixtures.verified_predecessors(self.repo)
+        families = (
+            (self.seed.BEFORE_SHA256, True),
+            (self.seed.AFTER_SHA256, True),
+            (self.seed.OPTIONAL_AFTER_SHA256, True),
+            (self.seed.SUPPORT_AFTER_SHA256, True),
+            (self.seed.FRONTIER_AFTER_SHA256, True),
+            (self.seed.SCORE_AFTER_SHA256, False),
+        )
         target = self.repo/self.name
         read_bytes, read_text = Path.read_bytes, Path.read_text
-        for text in variants:
+        for text, (expected, historical) in zip(variants, families, strict=True):
+            self.assertEqual(loops.sha256(text.encode()), expected)
+            dependencies = predecessors if historical else {
+                name: read_bytes(self.repo/name) for name in full_audit.SOURCE_PATHS}
+            for name, raw in dependencies.items():
+                self.assertEqual(loops.sha256(raw),
+                                 (full_audit.BEFORE_SHA256 if historical else
+                                  full_audit.AFTER_SHA256)[name])
             for consumer in (winner, border):
                 for unknown in (False, True):
                     candidate = text + ('\n# unknown consumer source\n' if unknown else '')
+                    views = {self.repo/name: raw for name, raw in predecessors.items()} if historical else {}
+                    views[target] = candidate.encode()
                     with self.subTest(consumer=consumer.__name__,
                                       sha256=loops.sha256(text.encode()), unknown=unknown), \
                          patch.object(Path, 'read_bytes', lambda p, *a, **k:
-                                      candidate.encode() if p == target else read_bytes(p, *a, **k)), \
+                                      views[p] if p in views else read_bytes(p, *a, **k)), \
                          patch.object(Path, 'read_text', lambda p, *a, **k:
-                                      candidate if p == target else read_text(p, *a, **k)):
+                                      views[p].decode('utf-8') if p in views else read_text(p, *a, **k)):
                         if unknown:
                             with self.assertRaises(ValueError):
                                 consumer.verify(self.repo)
                         else:
                             consumer.verify(self.repo)
+
+    def test_eligible_constructor_failure_stays_failed_after_physical_restore(self):
+        from functools import wraps
+        root = audit_fixtures.copy_current_root(self, self.repo)
+        predecessors = audit_fixtures.verified_predecessors(self.repo)
+        current = {name: (root/name).read_bytes() for name in full_audit.SOURCE_PATHS}
+        road = root/'extensions/carla/road.mojo'
+        road_raw = road.read_bytes()
+        constructor = loops.construction_boundary_loops
+        bindings = full_audit.proof_bindings
+        cases = (
+            (self.seed.FRONTIER_AFTER_SHA256, self.seed.frontier_successor_source(self.repo),
+             predecessors, loops._MAP_FRONTIER_SUCCESSOR_LINES, 4055,
+             'unreviewed complete live endpoint: extensions/carla/curve_bounds.mojo'),
+            (self.seed.SCORE_AFTER_SHA256, self.seed.score_successor_source(self.repo),
+             current, loops._MAP_SCORE_SUCCESSOR_LINES, 4069,
+             'unchanged premise, record or fixture changed: extensions/carla/road.mojo'),
+        )
+        for digest, text, dependencies, correspondence, line, reason in cases:
+            with self.subTest(endpoint=digest):
+                self.assertEqual(loops.sha256(text.encode()), digest)
+                for name, raw in dependencies.items():
+                    (root/name).write_bytes(raw)
+                    self.assertEqual(loops.sha256(raw),
+                                     (full_audit.BEFORE_SHA256 if line == 4055 else
+                                      full_audit.AFTER_SHA256)[name])
+                (root/self.name).write_text(text)
+                road.write_bytes(road_raw + b'\n# eligible constructor admission control\n')
+                owners, results, failures = [], [], []
+
+                @wraps(bindings)
+                def checked_bindings(actual_root, **kwargs):
+                    try:
+                        return bindings(actual_root, **kwargs)
+                    except full_audit._OperationCoherenceError as error:
+                        failures.append((kwargs['_operation'], error))
+                        raise
+
+                @wraps(constructor)
+                def checked_constructor(actual_root, **kwargs):
+                    self.assertEqual(actual_root, root)
+                    operation = kwargs['_operation']
+                    owners.append(operation)
+                    result = constructor(actual_root, **kwargs)
+                    results.append(result)
+                    if len(owners) == 1:
+                        self.assertEqual(result, {})
+                        self.assertEqual(len(failures), 1)
+                        self.assertIs(failures[0][0], operation)
+                        error = failures[0][1]
+                        self.assertIs(type(error), full_audit._OperationCoherenceError)
+                        self.assertIs(type(error.__cause__), full_audit.ContractError)
+                        message = 'full-audit cleanup successor: ' + reason
+                        self.assertEqual(str(error), message)
+                        self.assertEqual(str(error.__cause__), message)
+                        frames = []
+                        for failure in (error, error.__cause__):
+                            trace = failure.__traceback__
+                            while trace is not None:
+                                frames.append(trace.tb_frame.f_code)
+                                trace = trace.tb_next
+                        self.assertIn(full_audit._InvariantInputs._admit.__code__, frames)
+                        self.assertIn(full_audit.verify.__code__, frames)
+                        self.assertTrue(operation._failed)
+                        self.assertEqual(operation._failure_reason, message)
+                        road.write_bytes(road_raw)
+                    return result
+
+                try:
+                    with patch.object(full_audit, 'proof_bindings', checked_bindings), \
+                            patch.object(loops, 'construction_boundary_loops', checked_constructor):
+                        self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+                        self.assertEqual(owners[0]._state, 'closed')
+                        self.assertTrue(owners[0]._failed)
+                        self.assertEqual(road.read_bytes(), road_raw)
+                        proof = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
+                finally:
+                    road.write_bytes(road_raw)
+                self.assertEqual(len(owners), 2)
+                self.assertIsNot(owners[0], owners[1])
+                self.assertEqual(owners[1]._state, 'closed')
+                self.assertFalse(owners[1]._failed)
+                self.assertEqual(len(failures), 1)
+                self.assertEqual(set(results[1]), {line})
+                self.assertEqual(set(proof), {*correspondence.values(), line})
+                self.assertEqual(proof[line]['proof_id'], 'construction-geometry-boundary-list')
+                for rule in self.rules:
+                    row = proof[correspondence[rule[1]]]
+                    self.assertEqual((row['required'], row['impossible'], row['proof_id']),
+                                     ('T', 'F', rule[5]))
+                    self.assertEqual(row['dependency_sha256'][self.name], digest)
 
     def test_current_lines_mask_only_the_false_loop_outcomes(self):
         proofs = self.assert_live_proofs(self.repo)
@@ -1948,19 +2064,10 @@ print('consumer verified',consumer,mode,','.join(sorted(loaded)))
         tools = fixture / 'tools'
         oracle = tools / 'carla_lane_oracle'
         oracle.mkdir(parents=True)
-        modules = (
-            'seed_count_contracts', 'sum2_guard_contracts', 'source_contracts',
-            'ideal_projection', 'cache_key_contracts', 'reviewed_cleanup_contracts',
-            'accepted_successor_contracts', 'coverage_invariant_contracts',
-            'curve_support_dispatch_contracts', 'frozen_arc_producer_contracts',
-            'grouped_table_contracts',
-        )
-        for name in modules:
-            shutil.copyfile(self.repo / 'tools/carla_lane_oracle' / (name+'.py'),
-                            oracle / (name+'.py'))
-        for name in ('coverage_loop_proofs', 'cache_key',
-                     'coverage_toolchain_identity', 'affected'):
-            shutil.copyfile(self.repo / 'tools' / (name+'.py'), tools / (name+'.py'))
+        # Match the complete checker closure used by consumer_script_probe.
+        for folder in ('tools', 'tools/carla_lane_oracle'):
+            for path in (self.repo/folder).glob('*.py'):
+                shutil.copyfile(path, fixture/folder/path.name)
         if internal_error:
             with (oracle / 'source_contracts.py').open('a') as output:
                 output.write('\nraise ModuleNotFoundError("oracle-inner-sentinel")\n')
@@ -2046,8 +2153,10 @@ check(sys.path == original_path, 'verification changed sys.path')
             command.append('-O')
         command.extend([str(script), str(root or self.repo), mode, str(shadow),
                         str(internal_error), str(rejected)])
+        # Reviewed import/source-verification allowance, aligned with the
+        # 30-second proof-consumer probes; native test budgets are separate.
         result = subprocess.run(command, cwd=cwd, check=False, capture_output=True,
-                                text=True, timeout=10)
+                                text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout
 
@@ -2100,6 +2209,8 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((self.repo/name).read_bytes())
 
+        audit_fixtures.write_predecessors(
+            self.root, audit_fixtures.verified_predecessors(self.repo))
         (self.root/self.map).write_text(seed.score_successor_source(self.repo) if self.score
                                          else seed.frontier_successor_source(self.repo))
 
@@ -2273,6 +2384,155 @@ class ScoreConstructionBoundaryLoopTests(ConstructionBoundaryLoopTests):
         self.assertEqual(self.proof(), {})
         self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'), {})
 
+
+
+
+class FullAuditCleanupLoopTests(unittest.TestCase):
+    """Current source edges retain their exact old theorems and required T."""
+
+    def setUp(self):
+        self.repo = Path(__file__).resolve().parents[1]
+
+    def current_root(self):
+        return audit_fixtures.copy_current_root(self, self.repo)
+
+    def test_complete_current_rows_keep_true_and_all_source_bindings(self):
+        expected = {
+            'extensions/carla/curve_sample_dispatch': {126},
+            'extensions/carla/lane_refinement': {146, 736, 1299, 1324},
+            'extensions/carla/junction_bounds': {706},
+            'extensions/carla/map': {*loops._MAP_SCORE_SUCCESSOR_LINES.values(), 4069},
+            'extensions/carla/rtree': {666},
+        }
+        for module, lines in expected.items():
+            with self.subTest(module=module):
+                proofs = loops.reviewed_nonempty_loops(self.repo, module)
+                self.assertEqual(set(proofs), lines)
+                for row in proofs.values():
+                    self.assertEqual((row['required'], row['impossible']), ('T', 'F'))
+                    bindings = row['dependency_sha256']
+                    self.assertEqual(bindings[full_audit.MIGRATION], full_audit.MIGRATION_SHA256)
+                    for name in full_audit.SOURCE_PATHS:
+                        self.assertEqual(bindings[name], full_audit.AFTER_SHA256[name])
+                    for name in full_audit.CHECKER_PATHS:
+                        self.assertEqual(bindings[name], loops.file_sha256(self.repo/name))
+                    for name in full_audit.NATIVE_WITNESSES:
+                        self.assertEqual(bindings[name], loops.file_sha256(self.repo/name))
+                    raw = f'B {module} {row["line"]}\nL {module} {row["line"]}\n'.encode()
+                    envelope = {'sha256': 'model', 'receipt': {
+                        'manifest_sha256': loops.sha256(raw),
+                        'proofs': [{'module': module, **row}]}}
+                    masked = loops.masked_manifest(raw, envelope)
+                    self.assertIn(f'R {module} {row["line"]} T '.encode(), masked)
+                    self.assertIn(f'L {module} {row["line"]}'.encode(), masked)
+
+        construction = loops.construction_boundary_loops(self.repo)
+        self.assertEqual(set(construction), {4069})
+        row = construction[4069]
+        self.assertEqual((row['required'], row['impossible'], row['minimum_cardinality']), ('T', 'F', 1))
+        self.assertEqual(len(loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256), 62)
+        for name in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256:
+            self.assertEqual(row['dependency_sha256'][name], loops.file_sha256(self.repo/name))
+
+    def test_source_witness_record_and_checker_mutations_revoke_then_restore(self):
+        root = self.current_root()
+        paths = (*full_audit.SOURCE_PATHS, full_audit.NATIVE_WITNESSES[0],
+                 full_audit.MIGRATION, full_audit.CHECKER_PATHS[0])
+        module = 'extensions/carla/curve_sample_dispatch'
+        self.assertEqual(set(loops.reviewed_nonempty_loops(root, module)), {126})
+        for name in paths:
+            path = root/name
+            original = path.read_bytes()
+            with self.subTest(path=name):
+                path.write_bytes(original + b'\n# changed bound input\n')
+                try:
+                    self.assertEqual(loops.reviewed_nonempty_loops(root, module), {})
+                    self.assertEqual(loops.construction_boundary_loops(root), {})
+                finally:
+                    path.write_bytes(original)
+        self.assertEqual(set(loops.reviewed_nonempty_loops(root, module)), {126})
+        self.assertEqual(set(loops.construction_boundary_loops(root)), {4069})
+
+    def test_mixed_historical_endpoint_cannot_keep_current_receipt(self):
+        root = self.current_root()
+        record = full_audit.verify(root, exact=True)
+        name = full_audit.SOURCE_PATHS[0]
+        path = root/name
+        original = path.read_bytes()
+        path.write_text(record['sources'][name]['before_source'])
+        try:
+            self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/lane_refinement'), {})
+            self.assertEqual(loops.construction_boundary_loops(root), {})
+        finally:
+            path.write_bytes(original)
+        self.assertEqual(set(loops.reviewed_nonempty_loops(root, 'extensions/carla/lane_refinement')),
+                         {146, 736, 1299, 1324})
+
+    def test_each_include_root_reaches_count_and_map_dependencies(self):
+        root = self.current_root()
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-loop-include-', dir=Path(tempfile.gettempdir()).resolve()) as name:
+            include = Path(name)
+            (include/'std.mojo').write_text('def hidden():\n    pass\n')
+            for module in ('extensions/carla/curve_sample_dispatch',
+                           'extensions/carla/lane_refinement',
+                           'extensions/carla/junction_bounds',
+                           'extensions/carla/map', 'extensions/carla/rtree'):
+                with self.subTest(module=module):
+                    self.assertEqual(loops.reviewed_nonempty_loops(root, module, include_roots=(include,)), {})
+
+    def test_instrumented_include_bytes_remain_bound_by_generation_origins(self):
+        root = self.current_root()
+        build = root/'coverage/build'
+        module = 'extensions/carla/curve_sample_dispatch.mojo'
+        generated = build/module
+        generated.parent.mkdir(parents=True)
+        generated.write_bytes((root/module).read_bytes() + b'\n# modeled instrumented bytes\n')
+        manifest = b'B extensions/carla/curve_sample_dispatch 126\n'
+        (build/'manifest.txt').write_bytes(manifest)
+        compiler = root/'.cache/model-mojo'
+        compiler.parent.mkdir(exist_ok=True)
+        compiler.write_bytes(b'modeled compiler identity; never executed\n')
+        command = [str(compiler)]
+        loops.begin_generation(root, build, 'Modeled compiler', '', mojo=command, sources=[module])
+        model_generation(root, build, names=(module,))
+        # Structural resolver admission deliberately permits instrumented bytes.
+        # The maintained producer-origin protocol is their byte authority.
+        full_audit.proof_bindings(root, include_roots=(build,))
+        loops.generation_origins(root, build, manifest, 'Modeled compiler', '', command)
+        original = generated.read_bytes()
+        generated.write_bytes(original + b'# altered after origin seal\n')
+        with self.assertRaises(ValueError):
+            loops.generation_origins(root, build, manifest, 'Modeled compiler', '', command)
+        generated.write_bytes(original)
+        origin = generated.with_name(generated.name + '.cov-origin')
+        raw = origin.read_bytes()
+        origin.write_bytes(raw + b'changed')
+        with self.assertRaises(ValueError):
+            loops.generation_origins(root, build, manifest, 'Modeled compiler', '', command)
+        origin.write_bytes(raw)
+        with self.assertRaises(ValueError):
+            loops.generation_origins(root, build, manifest + b'L extensions/carla/curve_sample_dispatch 126\n',
+                                     'Modeled compiler', '', command)
+        loops.generation_origins(root, build, manifest, 'Modeled compiler', '', command)
+
+    def test_mapped_row_requires_its_named_owner_and_expression(self):
+        root = self.current_root()
+        module = 'extensions/carla/lane_refinement'
+        path = root/(module + '.mojo')
+        original = path.read_text()
+        expression = 'road.sections[section].lanes'
+        self.assertEqual(loops._cleanup_loop_row(root, module, 145, expression), 146)
+        for old, new in [('def _axis_lane_minimum(', 'def _other_axis_minimum('),
+                         ('for current in road.sections[section].lanes:', 'for current in road.sections[0].lanes:')]:
+            with self.subTest(old=old):
+                self.assertIn(old, original)
+                path.write_text(original.replace(old, new, 1))
+                try:
+                    self.assertIsNone(loops._cleanup_loop_row(root, module, 145, expression))
+                finally:
+                    path.write_text(original)
+        self.assertIsNone(loops._cleanup_loop_row(root, module, 999, expression))
 
 if __name__ == '__main__':
     unittest.main()

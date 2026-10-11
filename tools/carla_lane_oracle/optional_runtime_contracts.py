@@ -16,9 +16,11 @@ try:
     import check_sampled_values as sampled
     import sum2_guard_contracts as guard
     import source_contracts
+    import full_audit_cleanup_contracts as full_audit
 except ModuleNotFoundError:
     from tools.carla_lane_oracle import check_sampled_values as sampled
     from tools.carla_lane_oracle import sum2_guard_contracts as guard, source_contracts
+    from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
 
 FOLLOWUP_ROOM = """
 def _objective_followup_room(
@@ -75,6 +77,11 @@ def require(condition, message):
 
 def body(root, module, name):
     text = (root / ('extensions/carla/' + module + '.mojo')).read_text()
+    return body_from_source(text, name)
+
+
+def body_from_source(text, name):
+    """Parse a supplied semantic fixture; this grants no source admission."""
     source = guard.declaration(text, name)
     # The historical AST adapter has no lane-search move arguments. Remove
     # only postfix move sigils before argument delimiters for this semantic
@@ -220,6 +227,36 @@ def verify_fresh_producer(run):
                  'exact station/scale ' + label + ' expansion memo and fresh fallback')
 
 
+def verify_search_semantics(run):
+    """Check retained historical run predicates without admitting a root.
+
+    Actual source admission must precede the exact center predecessor.
+    Historical AST fixtures can exercise diagnostics but grant no source edge.
+    """
+    verify_fresh_producer(run)
+    contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
+    contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
+    contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
+    expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',
+               'support receives same ideal and actual witness')
+    sequence(run, GROUPED_ADMISSION,
+             'grouped caller must retain recheck and prepaid original fallback')
+    expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
+               'one guarded grouped caller edge')
+    while_nodes = [item for item in run.body if isinstance(item, ast.While)]
+    require(len(while_nodes) == 1, 'one original search frontier loop')
+    statements = while_nodes[0].body
+    setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
+             and sampled.dump(item.test) == sampled.dump(ast.parse(
+                 'not sampled_checked', mode='eval').body)]
+    require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
+    preceding = statements[setup[0] - 1]
+    contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
+             'depth refusal precedes dispatch setup')
+    expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
+               'split predecessor preserves every stored owner station')
+
+
 def verify_semantics(root):
     helper = body(root, 'lane_refinement', '_same_cache_key')
     require(sampled.dump(helper.body) == sampled.dump(sampled.syntax_tree(
@@ -323,14 +360,7 @@ def verify_semantics(root):
         require(wanted in names and names.index(wanted) < loop,
                 'dispatch debit must precede optional attempts')
 
-    run = body(root, 'lane_refinement', '_run_lane_search')
     verify_no_containing_model_consumers(root)
-    verify_fresh_producer(run)
-    contains(run, 'var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None', 'cut lifetime is one search invocation')
-    contains(run, 'var best = certificate.s', 'incumbent is the validated actual certificate witness')
-    contains(run, 'var best_point = certificate.point.copy()', 'retain actual witness point')
-    expression(run, '_minimizer_support(domain, center, center_s, best, lo, hi)',
-               'support receives same ideal and actual witness')
     # The standalone helper remains reviewed and tested even though the
     # search solver no longer imports, captures, or restricts this model.
     room = body(root, 'curve_objective_model', '_objective_followup_room')
@@ -341,31 +371,12 @@ def verify_semantics(root):
     require(sampled.dump(recheck) == sampled.dump(sampled.unique_function(
         sampled.syntax_tree(RECHECK_ROOM), '_objective_recheck_room')),
         'complete integer cached-closure recheck admission')
-    sequence(run, GROUPED_ADMISSION,
-             'grouped caller must retain recheck and prepaid original fallback')
-    expression(run, '_try_grouped_lane_jet(road, section, lane, lo, hi, certificate.nodes, certificate.terms, max_nodes, max_terms)',
-               'one guarded grouped caller edge')
-    while_nodes = [item for item in run.body if isinstance(item, ast.While)]
-    require(len(while_nodes) == 1, 'one original search frontier loop')
-    statements = while_nodes[0].body
-    setup = [i for i, item in enumerate(statements) if isinstance(item, ast.If)
-             and sampled.dump(item.test) == sampled.dump(ast.parse(
-                 'not sampled_checked', mode='eval').body)]
-    require(len(setup) == 1 and setup[0] > 0, 'dispatch setup remains deferred in the original node')
-    preceding = statements[setup[0] - 1]
-    contains(preceding, 'if task[2] >= max_depth:\n    raise Error("Lane refinement exhausted its numerical accuracy limit")',
-             'depth refusal precedes dispatch setup')
-    expression(run, 'bitcast[DType.float64](bitcast[DType.uint64](split_at) - UInt64(1))',
-               'split predecessor preserves every stored owner station')
     fee = body(root, 'map', '_query_node_step_cost')
     contains(fee, 'var fixed = 26 if goal else 20', 'reviewed goal node fee')
     contains(fee, 'fixed += 16', 'stored dispatch logical fee')
     contains(fee, 'if witness:\n    fixed += 14', 'retained containing-model logical fee')
     contains(fee, 'if witness:\n    fixed += 26', 'witness frontier logical fee')
     contains(fee, 'return 100 * lanes + fixed', 'original profile record work convention')
-    # Only the exact additive default-false refusal is projected away. All
-    # historical complete reference graph digests remain unchanged.
-    sampled.reviewed_reference_tree((root / 'extensions/carla/curve_bounds.mojo').read_text())
     # The exact reviewed raw inverse establishes the same immediate bracket
     # without re-evaluating predecessors. Keep every outer admission above.
     try:
@@ -373,6 +384,13 @@ def verify_semantics(root):
     except ModuleNotFoundError:
         from tools.carla_lane_oracle import raw_cut_inverse_contracts as raw_inverse
     raw_inverse.verify_premises(root)
+    # Keep all live non-lane, absence, room, fee and raw-inverse premises.
+    # Only the complete live gate and exact center inverse admit a predecessor;
+    # current lane failures may differ diagnostically from historical fixtures.
+    previous = full_audit.reviewed_lane_before_center_text(root)
+    verify_search_semantics(body_from_source(previous, '_run_lane_search'))
+    # Retain the sampled-reference gate after raw-inverse diagnostics.
+    sampled.reviewed_reference_tree((root / 'extensions/carla/curve_bounds.mojo').read_text(), root)
     return {'status': 'PASS', 'new_modules': list(NEW_MODULES),
             'checked_error_edge': 'guarded raw -> grouped origin -> checked Sum2 leaf',
             'containing_model_consumers': 'absent from production; standalone helper retained',

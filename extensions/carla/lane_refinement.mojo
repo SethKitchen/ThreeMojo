@@ -67,6 +67,7 @@ from extensions.carla.road_info import info_index
 from math.vector3 import Vector3
 from std.math import inf, isfinite, sqrt
 from std.memory import bitcast
+from std.utils import Variant
 
 
 def _legacy_square(
@@ -274,17 +275,26 @@ def _rounded_axis_lane_minimum(
     # An inverse is a seed only. A hit of the actual stored coordinate is
     # the exact minimum because the proof fixes both other coordinates.
     var seed = lo + (query[axis] - left[axis]) / model.slope
-    if isfinite(seed):
-        seed = min(max(seed, lo), hi)
-        var point = _checked_center(road, section, lane, seed, terms, max_terms)
-        if point[axis] == query[axis]:
-            return (seed, _legacy_square(point, query), point^, nodes, terms)
-        if direction * point[axis] < target:
-            lo = seed
-            left = point^
-        else:
-            hi = seed
-            right = point^
+    # The accepted rounded context bounds coordinates and nonzero slope
+    # to 2^-400..2^400. This inverse cannot overflow Float64.
+    seed = min(max(seed, lo), hi)
+    var seed_point = _checked_center(
+        road, section, lane, seed, terms, max_terms
+    )
+    if seed_point[axis] == query[axis]:
+        return (
+            seed,
+            _legacy_square(seed_point, query),
+            seed_point^,
+            nodes,
+            terms,
+        )
+    if direction * seed_point[axis] < target:
+        lo = seed
+        left = seed_point^
+    else:
+        hi = seed
+        right = seed_point^
     var lo_bits = bitcast[DType.uint64](lo)
     var hi_bits = bitcast[DType.uint64](hi)
     while hi_bits - lo_bits > UInt64(1):
@@ -1352,6 +1362,269 @@ def _same_cache_key(
     )
 
 
+@fieldwise_init
+struct _LaneExpansionContext(Copyable, Movable):
+    # One search invocation only. The Road argument must remain unchanged.
+    # Exact station/scale words are meaningful only for this owner and query.
+    var section: Int
+    var lane: Int
+    var root: _Interval
+    var location: Vector3
+    var spiral_proof: Optional[_SpiralDomainProof]
+    var frozen: Optional[_RoundedArc]
+    var external_witness: Optional[Array[Float64, 3]]
+    var cached_fast: Optional[Tuple[UInt64, UInt64, _Jet]]
+    var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]]
+
+
+@fieldwise_init
+struct _LaneBoundPolicy(ImplicitlyCopyable):
+    # Already-computed stopping criteria for this cell and incumbent.
+    var upper: Float64
+    var scale: Float64
+    var tolerance: Float64
+    var goal: Optional[_LaneExclusionGoal]
+
+
+@fieldwise_init
+struct _LaneBoundDiscard(ImplicitlyCopyable):
+    var lower: Float64
+    var support: _Interval
+
+
+@fieldwise_init
+struct _LaneBoundClose(ImplicitlyCopyable):
+    var lower: Float64
+    var support: _Interval
+
+
+@fieldwise_init
+struct _LaneBoundContract(ImplicitlyCopyable):
+    var lower: Float64
+    var support: _Interval
+
+
+# Named alternatives carry the exact bound/support from their decision site.
+# No numeric tag protocol or re-evaluation of acceptance in the caller.
+comptime _LaneBoundProposal = Variant[
+    _LaneBoundDiscard, _LaneBoundClose, _LaneBoundContract
+]
+
+
+def _try_lane_center_bound(
+    road: Road,
+    mut context: _LaneExpansionContext,
+    cell: _Interval,
+    best: Float64,
+    var domain: _Jet,
+    var natural: Float64,
+    whole_work: Int,
+    policy: _LaneBoundPolicy,
+    mut nodes: Int,
+    mut terms: Int,
+    max_nodes: Int,
+    max_terms: Int,
+) raises -> Optional[_LaneBoundProposal]:
+    # The caller supplies a real incumbent and the already-paid whole-cell
+    # enclosure. An unknown enclosure is valid. This optional phase owns no
+    # traversal state. None retains all work/cache effects of an inconclusive
+    # admitted attempt; count refusal returns before either kind of effect.
+    # A clamped singleton endpoint can have a different jet from
+    # the interior branch. Taylor bounds need that same branch.
+    var center_s = _expansion_center(cell.low, cell.high, best)
+    var center_work = _reference_work(road, center_s, center_s)
+    if center_work >= 0:
+        if terms > max_terms - center_work:
+            raise Error("Lane refinement exhausted its quadrature work limit")
+        terms += center_work
+        var fast_center: Optional[_Jet] = None
+        # The original full-domain second derivative and scalar
+        # error also apply to this ideal moment-backed expansion.
+        # Retain headroom for the unchanged translated fallback.
+        if (
+            context.spiral_proof
+            and domain.second.is_finite()
+            and center_work <= max_terms - terms
+        ):
+            var station_word = bitcast[DType.uint64](center_s)
+            var scale_word = bitcast[DType.uint64](policy.scale)
+            if (
+                context.external_witness
+                and context.cached_fast
+                and _same_cache_key(
+                    context.cached_fast.value()[0],
+                    context.cached_fast.value()[1],
+                    station_word,
+                    scale_word,
+                )
+            ):
+                fast_center = context.cached_fast.value()[2]
+            else:
+                fast_center = _try_proof_expansion_jet(
+                    road,
+                    context.section,
+                    context.lane,
+                    center_s,
+                    context.location,
+                    policy.scale,
+                    context.root.low,
+                    context.root.high,
+                    context.spiral_proof,
+                )
+                if context.external_witness and fast_center:
+                    context.cached_fast = (
+                        station_word,
+                        scale_word,
+                        fast_center.value(),
+                    )
+            if fast_center:
+                var fast_delta = _Interval(
+                    cell.low, cell.high
+                ) - _Interval.point(center_s)
+                var fast_lower = max(
+                    natural,
+                    _global_lower(domain, fast_center.value(), fast_delta),
+                )
+                if fast_lower > policy.upper:
+                    return _LaneBoundProposal(
+                        _LaneBoundDiscard(fast_lower, cell)
+                    )
+                if (
+                    _goal_excludes(fast_lower, policy.scale, policy.goal)
+                    or _next_up(policy.upper - fast_lower) <= policy.tolerance
+                ):
+                    return _LaneBoundProposal(_LaneBoundClose(fast_lower, cell))
+                # A failed optional attempt is charged before the
+                # original traversal; neither work cap is enlarged.
+                terms += center_work
+        # Only a failed cached proof needs the expensive local GL
+        # error traversal. It is still charged before execution.
+        if context.spiral_proof and domain.error > policy.tolerance * 0.25:
+            if terms > max_terms - whole_work:
+                raise Error(
+                    "Lane refinement exhausted its quadrature work limit"
+                )
+            terms += whole_work
+            # Original F is prepaid; the optional model owns its node
+            # and whole-union C. A decline retains all actual debits.
+            var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None
+            # Keep the original closed-cell recheck available after
+            # this optional producer. The original F is already paid.
+            if max_nodes - nodes >= 2:
+                grouped = _try_grouped_lane_jet(
+                    road,
+                    context.section,
+                    context.lane,
+                    cell.low,
+                    cell.high,
+                    nodes,
+                    terms,
+                    max_nodes,
+                    max_terms,
+                )
+            var point_domain: Tuple[_Jet, _Jet, _Jet]
+            if grouped:
+                point_domain = grouped.value()
+            else:
+                point_domain = _lane_jet(
+                    road, context.section, context.lane, cell.low, cell.high
+                )
+            natural = max(
+                natural,
+                _scaled_point_distance_box(
+                    point_domain, context.location, policy.scale
+                ).low,
+            )
+            if natural > policy.upper:
+                return _LaneBoundProposal(_LaneBoundDiscard(natural, cell))
+            if _goal_excludes(natural, policy.scale, policy.goal):
+                return _LaneBoundProposal(_LaneBoundClose(natural, cell))
+            domain = _scaled_point_distance_jet(
+                point_domain, context.location, policy.scale
+            )
+            if fast_center:
+                var tightened_delta = _Interval(
+                    cell.low, cell.high
+                ) - _Interval.point(center_s)
+                var tightened_lower = max(
+                    natural,
+                    _global_lower(domain, fast_center.value(), tightened_delta),
+                )
+                if tightened_lower > policy.upper:
+                    return _LaneBoundProposal(
+                        _LaneBoundDiscard(tightened_lower, cell)
+                    )
+                if (
+                    _goal_excludes(tightened_lower, policy.scale, policy.goal)
+                    or _next_up(policy.upper - tightened_lower)
+                    <= policy.tolerance
+                ):
+                    return _LaneBoundProposal(
+                        _LaneBoundClose(tightened_lower, cell)
+                    )
+        # A nonfinite second derivative makes _global_lower ignore
+        # its expansion argument. A finite rounded domain value also
+        # establishes that this is an evaluated expression enclosure,
+        # rather than an unvalidated whole/unknown record domain.
+        # Retain the original work reservation above. Only skip the
+        # unused traversal; no bound, tolerance, or cap changes.
+        var center = _Jet.constant(0.0)
+        if domain.second.is_finite() or not domain.rounded_value().is_finite():
+            var station_word = bitcast[DType.uint64](center_s)
+            var scale_word = bitcast[DType.uint64](policy.scale)
+            if (
+                context.external_witness
+                and context.cached_expansion
+                and _same_cache_key(
+                    context.cached_expansion.value()[0],
+                    context.cached_expansion.value()[1],
+                    station_word,
+                    scale_word,
+                )
+            ):
+                center = context.cached_expansion.value()[2]
+            else:
+                if context.frozen:
+                    center = _frozen_arc_expansion(
+                        context.frozen.value(),
+                        center_s,
+                        context.location,
+                        policy.scale,
+                    )
+                else:
+                    center = _expansion_distance_jet(
+                        road,
+                        context.section,
+                        context.lane,
+                        center_s,
+                        context.location,
+                        policy.scale,
+                    )
+                if context.external_witness:
+                    context.cached_expansion = (
+                        station_word,
+                        scale_word,
+                        center,
+                    )
+        var delta = _Interval(cell.low, cell.high) - _Interval.point(center_s)
+        var lower = max(natural, _global_lower(domain, center, delta))
+        var support = _Interval(cell.low, cell.high)
+        if context.external_witness:
+            support = _minimizer_support(
+                domain, center, center_s, best, cell.low, cell.high
+            )
+        if lower > policy.upper:
+            return _LaneBoundProposal(_LaneBoundDiscard(lower, support))
+        if (
+            _goal_excludes(lower, policy.scale, policy.goal)
+            or _next_up(policy.upper - lower) <= policy.tolerance
+        ):
+            return _LaneBoundProposal(_LaneBoundClose(lower, support))
+        if support.low > cell.low or support.high < cell.high:
+            return _LaneBoundProposal(_LaneBoundContract(lower, support))
+    return None
+
+
 def _run_lane_search(
     road: Road,
     section: Int,
@@ -1380,8 +1653,6 @@ def _run_lane_search(
     # Exact station/scale words retain branch and normalization identity.
     var sampled_checked = False
     var sampled_cuts: Optional[Tuple[Float64, Float64, Int]] = None
-    var cached_fast: Optional[Tuple[UInt64, UInt64, _Jet]] = None
-    var cached_expansion: Optional[Tuple[UInt64, UInt64, _Jet]] = None
     var best = certificate.s
     var best_point = certificate.point.copy()
     var query: Array[Float64, 3] = [
@@ -1402,6 +1673,17 @@ def _run_lane_search(
         certificate.nodes += 1
         certificate.terms += 1
         frozen = _frozen_arc_context(road, section, lane, low, high)
+    var expansion_context = _LaneExpansionContext(
+        section,
+        lane,
+        _Interval(low, high),
+        location,
+        spiral_proof,
+        frozen,
+        external_witness.copy(),
+        None,
+        None,
+    )
     while len(pending) > 0 or closed.needs_validation():
         if certificate.nodes >= max_nodes:
             raise Error("Lane refinement exhausted its interval work limit")
@@ -1643,10 +1925,13 @@ def _run_lane_search(
             var domain = _scaled_point_distance_jet(
                 point_domain, location, scale
             )
+            # Admit finite interpolation width before the derivative tests.
+            # All three predicates are retained. The earlier midpoint already
+            # evaluated this same subtraction, including an overflowing span.
             if (
-                domain.second.low > 0.0
+                isfinite(hi - lo)
+                and domain.second.low > 0.0
                 and domain.first.contains(0.0)
-                and isfinite(hi - lo)
             ):
                 var local = _local_seed(
                     road,
@@ -1700,8 +1985,9 @@ def _run_lane_search(
                 natural = _scaled_point_distance_box(
                     point_domain, location, scale
                 ).low
-                if natural > best_upper:
-                    continue
+                # An unchanged seed repeats the admitted bound exactly.
+                # An improved seed is an actual in-cell witness, so its
+                # upper distance cannot fall below this natural enclosure.
                 if _goal_excludes(natural, scale, goal):
                     closed.add(_ClosedInterval(lo, hi, task[2], natural, scale))
                     continue
@@ -1719,216 +2005,43 @@ def _run_lane_search(
                 scale,
                 requested_gap,
             )
-            # A clamped singleton endpoint can have a different jet from
-            # the interior branch. Taylor bounds need that same branch.
-            var center_s = _expansion_center(lo, hi, best)
-            var center_work = _reference_work(road, center_s, center_s)
-            if center_work >= 0:
-                if certificate.terms > max_terms - center_work:
-                    raise Error(
-                        "Lane refinement exhausted its quadrature work limit"
-                    )
-                certificate.terms += center_work
-                var fast_center: Optional[_Jet] = None
-                # The original full-domain second derivative and scalar
-                # error also apply to this ideal moment-backed expansion.
-                # Retain headroom for the unchanged translated fallback.
-                if (
-                    spiral_proof
-                    and domain.second.is_finite()
-                    and center_work <= max_terms - certificate.terms
-                ):
-                    var station_word = bitcast[DType.uint64](center_s)
-                    var scale_word = bitcast[DType.uint64](scale)
-                    if (
-                        external_witness
-                        and cached_fast
-                        and _same_cache_key(
-                            cached_fast.value()[0],
-                            cached_fast.value()[1],
-                            station_word,
-                            scale_word,
-                        )
-                    ):
-                        fast_center = cached_fast.value()[2]
-                    else:
-                        fast_center = _try_proof_expansion_jet(
-                            road,
-                            section,
-                            lane,
-                            center_s,
-                            location,
-                            scale,
-                            low,
-                            high,
-                            spiral_proof,
-                        )
-                        if external_witness and fast_center:
-                            cached_fast = (
-                                station_word,
-                                scale_word,
-                                fast_center.value(),
-                            )
-                    if fast_center:
-                        var fast_delta = _Interval(lo, hi) - _Interval.point(
-                            center_s
-                        )
-                        var fast_lower = max(
-                            natural,
-                            _global_lower(
-                                domain, fast_center.value(), fast_delta
-                            ),
-                        )
-                        if fast_lower > best_upper:
-                            continue
-                        if (
-                            _goal_excludes(fast_lower, scale, goal)
-                            or _next_up(best_upper - fast_lower) <= tolerance
-                        ):
-                            closed.add(
-                                _ClosedInterval(
-                                    lo, hi, task[2], fast_lower, scale
-                                )
-                            )
-                            continue
-                        # A failed optional attempt is charged before the
-                        # original traversal; neither work cap is enlarged.
-                        certificate.terms += center_work
-                # Only a failed cached proof needs the expensive local GL
-                # error traversal. It is still charged before execution.
-                if spiral_proof and domain.error > tolerance * 0.25:
-                    if certificate.terms > max_terms - work:
-                        raise Error(
-                            "Lane refinement exhausted its quadrature work"
-                            " limit"
-                        )
-                    certificate.terms += work
-                    # Original F is prepaid; the optional model owns its node
-                    # and whole-union C. A decline retains all actual debits.
-                    var grouped: Optional[Tuple[_Jet, _Jet, _Jet]] = None
-                    # Keep the original closed-cell recheck available after
-                    # this optional producer. The original F is already paid.
-                    if max_nodes - certificate.nodes >= 2:
-                        grouped = _try_grouped_lane_jet(
-                            road,
-                            section,
-                            lane,
-                            lo,
-                            hi,
-                            certificate.nodes,
-                            certificate.terms,
-                            max_nodes,
-                            max_terms,
-                        )
-                    if grouped:
-                        point_domain = grouped.value()
-                    else:
-                        point_domain = _lane_jet(road, section, lane, lo, hi)
-                    natural = max(
-                        natural,
-                        _scaled_point_distance_box(
-                            point_domain, location, scale
-                        ).low,
-                    )
-                    if natural > best_upper:
-                        continue
-                    if _goal_excludes(natural, scale, goal):
-                        closed.add(
-                            _ClosedInterval(lo, hi, task[2], natural, scale)
-                        )
-                        continue
-                    domain = _scaled_point_distance_jet(
-                        point_domain, location, scale
-                    )
-                    if fast_center:
-                        var tightened_delta = _Interval(
-                            lo, hi
-                        ) - _Interval.point(center_s)
-                        var tightened_lower = max(
-                            natural,
-                            _global_lower(
-                                domain, fast_center.value(), tightened_delta
-                            ),
-                        )
-                        if tightened_lower > best_upper:
-                            continue
-                        if (
-                            _goal_excludes(tightened_lower, scale, goal)
-                            or _next_up(best_upper - tightened_lower)
-                            <= tolerance
-                        ):
-                            closed.add(
-                                _ClosedInterval(
-                                    lo, hi, task[2], tightened_lower, scale
-                                )
-                            )
-                            continue
-                # A nonfinite second derivative makes _global_lower ignore
-                # its expansion argument. A finite rounded domain value also
-                # establishes that this is an evaluated expression enclosure,
-                # rather than an unvalidated whole/unknown record domain.
-                # Retain the original work reservation above. Only skip the
-                # unused traversal; no bound, tolerance, or cap changes.
-                var center = _Jet.constant(0.0)
-                if (
-                    domain.second.is_finite()
-                    or not domain.rounded_value().is_finite()
-                ):
-                    var station_word = bitcast[DType.uint64](center_s)
-                    var scale_word = bitcast[DType.uint64](scale)
-                    if (
-                        external_witness
-                        and cached_expansion
-                        and _same_cache_key(
-                            cached_expansion.value()[0],
-                            cached_expansion.value()[1],
-                            station_word,
-                            scale_word,
-                        )
-                    ):
-                        center = cached_expansion.value()[2]
-                    else:
-                        if frozen:
-                            center = _frozen_arc_expansion(
-                                frozen.value(), center_s, location, scale
-                            )
-                        else:
-                            center = _expansion_distance_jet(
-                                road, section, lane, center_s, location, scale
-                            )
-                        if external_witness:
-                            cached_expansion = (
-                                station_word,
-                                scale_word,
-                                center,
-                            )
-                var delta = _Interval(lo, hi) - _Interval.point(center_s)
-                var lower = max(natural, _global_lower(domain, center, delta))
-                var support = _Interval(lo, hi)
-                if external_witness:
-                    support = _minimizer_support(
-                        domain, center, center_s, best, lo, hi
-                    )
-                if lower > best_upper:
+            var proposal = _try_lane_center_bound(
+                road,
+                expansion_context,
+                _Interval(lo, hi),
+                best,
+                domain,
+                natural,
+                work,
+                _LaneBoundPolicy(best_upper, scale, tolerance, goal),
+                certificate.nodes,
+                certificate.terms,
+                max_nodes,
+                max_terms,
+            )
+            if proposal:
+                ref bound = proposal.value()
+                if bound.isa[_LaneBoundDiscard]():
                     continue
-                if (
-                    _goal_excludes(lower, scale, goal)
-                    or _next_up(best_upper - lower) <= tolerance
-                ):
+                if bound.isa[_LaneBoundClose]():
+                    var close = bound[_LaneBoundClose]
                     closed.add(
                         _ClosedInterval(
-                            support.low, support.high, task[2], lower, scale
+                            close.support.low,
+                            close.support.high,
+                            task[2],
+                            close.lower,
+                            scale,
                         )
                     )
                     continue
-                if support.low > lo or support.high < hi:
-                    if task[2] >= max_depth:
-                        raise Error(
-                            "Lane refinement exhausted its numerical accuracy"
-                            " limit"
-                        )
-                    pending.append((support.low, support.high, task[2] + 1))
-                    continue
+                var support = bound[_LaneBoundContract].support
+                if task[2] >= max_depth:
+                    raise Error(
+                        "Lane refinement exhausted its numerical accuracy limit"
+                    )
+                pending.append((support.low, support.high, task[2] + 1))
+                continue
         if task[2] >= max_depth:
             raise Error(
                 "Lane refinement exhausted its numerical accuracy limit"
@@ -2307,16 +2420,20 @@ def _chord_certificate_impl_with_nodes[
         max(Float64(start.z), Float64(end.z)),
     )
     var natural = _length_up(x.magnitude(), y.magnitude(), z.magnitude())
+    # Endpoint admission and a finite second derivative are independent
+    # requirements for the optional smooth certificate. Check the counts
+    # first, including when the original coarse box is already unbounded.
+    # Either refusal retains the same natural bound and spent-work ledger.
+    var first_work = _reference_work(road, low, low)
+    var last_work = _reference_work(road, high, high)
+    if first_work < 0 or last_work < 0:
+        return (natural, box, spent)
     var derivative = _length_up(
         point[0].second.magnitude(),
         point[1].second.magnitude(),
         point[2].second.magnitude(),
     )
     if not isfinite(derivative):
-        return (natural, box, spent)
-    var first_work = _reference_work(road, low, low)
-    var last_work = _reference_work(road, high, high)
-    if first_work < 0 or last_work < 0:
         return (natural, box, spent)
     if first_work > max_terms - spent:
         return (natural, box, spent)

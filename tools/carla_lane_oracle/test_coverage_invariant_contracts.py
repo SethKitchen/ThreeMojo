@@ -4,6 +4,7 @@
 import hashlib
 import json
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import unittest
 import subprocess
 import sys
@@ -18,6 +19,23 @@ import border_parser_contracts as border
 ROOT = Path(__file__).resolve().parents[2]
 
 class CoverageInvariantContracts(unittest.TestCase):
+    def test_current_cleanup_adds_exactly_one_canonical_dependency(self):
+        result = winner.verify(ROOT)
+        self.assertEqual((result['reviewed_cleanup_successors'],
+                          result['canonical_dependencies_unchanged']), (20, 92))
+        historical = cleanup_fixtures.historical_root(self, ROOT)
+        path = historical/border.MODULE
+        original = path.read_text()
+        record = border.read_record(historical)
+        for text, expected in ((original, (19, 93)),
+                (border.predecessor_source(original, record), (18, 94))):
+            with self.subTest(expected=expected):
+                path.write_text(text)
+                result = winner.verify(historical)
+                self.assertEqual((result['reviewed_cleanup_successors'],
+                                  result['canonical_dependencies_unchanged']), expected)
+        path.write_text(original)
+
     def test_direct_and_qualified_package_verification(self):
         for setup in (
                 'sys.path = [str(Path.cwd()/"tools/carla_lane_oracle")] + '
@@ -27,16 +45,19 @@ class CoverageInvariantContracts(unittest.TestCase):
             command = ('import sys; from pathlib import Path; ' + setup
                        + '; result=invariant.verify(Path.cwd()); '
                        + 'sys.exit(0 if len(result["sources"]) == 4 else 1)')
+            # Reviewed import/source-verification allowance, aligned with the
+            # 30-second proof-consumer probes; native test budgets are separate.
             with self.subTest(import_mode=setup):
                 subprocess.run([sys.executable, '-c', command], cwd=ROOT,
-                               check=True, capture_output=True, text=True, timeout=10)
+                               check=True, capture_output=True, text=True, timeout=30)
 
     def test_live_scope_and_retained_historical_counts(self):
         record = invariant.verify(ROOT)
-        result = winner.verify(ROOT)
+        historical = cleanup_fixtures.historical_root(self, ROOT)
+        result = winner.verify(historical)
         # Four reviewed #333 runtime boundary edges join each state.
         expected = {border.BEFORE_SHA256: (18, 94), border.AFTER_SHA256: (19, 93)}
-        parser_sha = hashlib.sha256((ROOT/border.MODULE).read_bytes()).hexdigest()
+        parser_sha = hashlib.sha256((historical/border.MODULE).read_bytes()).hexdigest()
         self.assertIn(parser_sha, expected)
         self.assertEqual((result['reviewed_cleanup_successors'],
                           result['canonical_dependencies_unchanged']), expected[parser_sha])

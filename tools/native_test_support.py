@@ -22,6 +22,7 @@ import tempfile
 
 FIXTURES = {
     'tests/test_carla_sum2_environment.mojo': ('tools/fixtures/carla_sum2_fp_state.c',),
+    'tests/test_carla_junction_endpoint_refusals.mojo': ('tools/fixtures/carla_sum2_fp_state.c',),
 }
 C_FLAGS = ('-std=c11', '-O2', '-fPIC', '-Wall', '-Wextra', '-Werror')
 

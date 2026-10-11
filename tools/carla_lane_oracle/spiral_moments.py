@@ -334,7 +334,7 @@ def verify_inputs(root):
             else:
                 import check_sampled_values as sampled
             try:
-                sampled.reviewed_reference_tree(source)
+                sampled.reviewed_reference_tree(source, root)
             except sampled.CheckError as error:
                 raise CheckError(
                     'source routing changed: ' + name + ': ' + str(error)) from error

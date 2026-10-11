@@ -389,6 +389,75 @@ def _entry(count: Int) -> Int64:
     return Int64(count)
 
 
+def pack_surface(
+    surface: SurfaceField,
+) -> Tuple[List[Float32], List[Int64]]:
+    """Copy a surface and its mips into one array and a level table.
+
+    Args:
+        surface: The resolved ocean surface.
+
+    Returns:
+        The texels, base grid first, and the level table.
+    """
+    var texels = List[Float32]()
+    var table: List[Int64] = [_entry(surface.surface_levels())]
+    for level in range(surface.surface_levels() + 1):  # pragma: no branch
+        table.append(_entry(surface.surface_side(level)))
+        table.append(_entry(len(texels)))
+        if level == 0:
+            texels.extend(surface.field.samples.copy())
+        else:
+            texels.extend(surface.mips[level - 1].samples.copy())
+    return (texels^, table^)
+
+
+def pack_caustics(
+    caustics: CausticField,
+) -> Tuple[List[Float32], List[Int64]]:
+    """Copy a caustic texture and its mips into one array and a table.
+
+    Args:
+        caustics: The caustic texture.
+
+    Returns:
+        The texels, base texture first, and the level table.
+    """
+    var texels = caustics.samples.copy()
+    texels.extend(caustics.mip_px.copy())
+    var base = len(caustics.samples)
+    var table: List[Int64] = [_entry(caustics.caustic_levels())]
+    table.append(_entry(caustics.n))
+    table.append(0)
+    for level in range(len(caustics.mip_n)):  # pragma: no branch
+        table.append(_entry(caustics.mip_n[level]))
+        table.append(_entry(base + caustics.mip_off[level]))
+    return (texels^, table^)
+
+
+def pack_pebbles(bed: PebbleBed) -> Tuple[List[Float32], List[Int64]]:
+    """Copy the pebble photograph and its mips into one array and a table.
+
+    Args:
+        bed: The pebble photograph.
+
+    Returns:
+        The texels, base level first, and the level table.
+    """
+    var texels = bed.pixels.copy()
+    texels.extend(bed.mip_px.copy())
+    var base = len(bed.pixels)
+    var table: List[Int64] = [_entry(bed.pebble_levels())]
+    table.append(_entry(bed.width))
+    table.append(_entry(bed.height))
+    table.append(0)
+    for level in range(len(bed.mip_w)):  # pragma: no branch
+        table.append(_entry(bed.mip_w[level]))
+        table.append(_entry(bed.mip_h[level]))
+        table.append(_entry(base + bed.mip_off[level]))
+    return (texels^, table^)
+
+
 struct WaterPack(Movable):
     """Flat copies of every texture one water frame reads.
 
@@ -442,45 +511,24 @@ struct WaterPack(Movable):
             caustics: The caustic texture.
             bed: The pebble photograph.
         """
-        self.surface = List[Float32]()
-        self.surface_table = [_entry(surface.surface_levels())]
-        for level in range(surface.surface_levels() + 1):  # pragma: no branch
-            var side = surface.surface_side(level)
-            self.surface_table.append(_entry(side))
-            self.surface_table.append(_entry(len(self.surface)))
-            if level == 0:
-                self.surface.extend(surface.field.samples.copy())
-            else:
-                self.surface.extend(surface.mips[level - 1].samples.copy())
+        var packed_surface = pack_surface(surface)
+        self.surface = packed_surface[0].copy()
+        self.surface_table = packed_surface[1].copy()
         self.surface_patch = surface.surface_patch()
         self.ripple = ripples.normal.copy()
         self.ripple_side = ripples.n
         self.ripple_size = ripples.size
         self.ripple_center_x = ripples.center_x
         self.ripple_center_z = ripples.center_z
-        self.caustic = caustics.samples.copy()
-        self.caustic.extend(caustics.mip_px.copy())
-        var base = len(caustics.samples)
-        self.caustic_table = [_entry(caustics.caustic_levels())]
-        self.caustic_table.append(_entry(caustics.n))
-        self.caustic_table.append(0)
-        for level in range(len(caustics.mip_n)):  # pragma: no branch
-            self.caustic_table.append(_entry(caustics.mip_n[level]))
-            self.caustic_table.append(_entry(base + caustics.mip_off[level]))
+        var packed_caustics = pack_caustics(caustics)
+        self.caustic = packed_caustics[0].copy()
+        self.caustic_table = packed_caustics[1].copy()
         self.caustic_patch = caustics.patch
         self.caustic_shift_x = caustics.shift_x
         self.caustic_shift_z = caustics.shift_z
-        self.pebble = bed.pixels.copy()
-        self.pebble.extend(bed.mip_px.copy())
-        base = len(bed.pixels)
-        self.pebble_table = [_entry(bed.pebble_levels())]
-        self.pebble_table.append(_entry(bed.width))
-        self.pebble_table.append(_entry(bed.height))
-        self.pebble_table.append(0)
-        for level in range(len(bed.mip_w)):  # pragma: no branch
-            self.pebble_table.append(_entry(bed.mip_w[level]))
-            self.pebble_table.append(_entry(bed.mip_h[level]))
-            self.pebble_table.append(_entry(base + bed.mip_off[level]))
+        var packed_bed = pack_pebbles(bed)
+        self.pebble = packed_bed[0].copy()
+        self.pebble_table = packed_bed[1].copy()
 
     def surface_view(self) -> SurfaceView[AddressSpace.GENERIC]:
         """Read the packed surface in host memory.

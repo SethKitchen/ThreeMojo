@@ -9,6 +9,7 @@ import json
 import math
 import os
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import shutil
 import struct
 import sys
@@ -123,6 +124,7 @@ class RoundingTests(unittest.TestCase):
 class TableTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
+        cls.cleanup_sources = cleanup_fixtures.verified_predecessors(m.ROOT)
         cls.constants, cls.pins = m.verify_inputs(m.ROOT)
         cls.rows = m.derive_coefficients(cls.constants)
         cls.source = m.generate_source(cls.rows)
@@ -131,7 +133,7 @@ class TableTests(unittest.TestCase):
         cls.historical_map = seed_count.historical_source(m.ROOT).encode('utf-8')
 
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
+        self.temp = tempfile.TemporaryDirectory(dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)/'repo'
         paths = {m.PINS, m.DATA, m.source_contracts.PINS,
@@ -151,6 +153,8 @@ class TableTests(unittest.TestCase):
                 destination.write_bytes(self.historical_map)
             else:
                 shutil.copyfile(m.ROOT/path, destination)
+
+        cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
 
     def change(self, path, before, after):
         target = self.root/path

@@ -6,12 +6,15 @@ This standalone verifier grants no coverage exclusion. Central migration and
 independent approval must compose this proposal into aggregate tooling.
 """
 import hashlib
+import io
 import json
 if __package__:
     from . import source_contracts as source
+    from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
 else:
     import source_contracts as source
+    import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
 
 MIGRATION = 'tools/carla_lane_oracle/rounded-line-singleton-migration.json'
@@ -56,6 +59,16 @@ def _verify_dependency(path, text, expected):
     words.verify_dependency(path, text, expected)
 
 
+def _lane_text(root):
+    """Compare actual text/byte views without imposing a historical file pin."""
+    path = root/'extensions/carla/lane_refinement.mojo'
+    text = path.read_text()
+    with io.TextIOWrapper(io.BytesIO(path.read_bytes()), encoding='utf-8', newline=None) as reader:
+        require(source.token_sha256(text) == source.token_sha256(reader.read()),
+                'consumer lane source text/bytes disagree')
+    return text
+
+
 def verify_premises(root):
     record = read_record(root)
     # Whole module tokens bind imports, declaration owners and local names.
@@ -64,10 +77,22 @@ def verify_premises(root):
         if guard.significant(actual) != guard.significant(item['source']):
             _verify_dependency(path, actual, item['token_sha256'])
     for path, expected in record['import_scopes'].items():
-        actual = (root/path).read_text().split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+        text = _lane_text(root) if path == 'extensions/carla/lane_refinement.mojo' else (root/path).read_text()
+        actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
+        if (path == 'extensions/carla/lane_refinement.mojo'
+                and guard.significant(actual) != guard.significant(expected)):
+            # Only a changed consumed scope requests complete current admission.
+            text = full_audit.reviewed_text(root, path, text)
+            actual = text.split('\ndef ',1)[0].split('\n@',1)[0].split('\nstruct ',1)[0]
         require(guard.significant(actual) == guard.significant(expected), 'consumer import scope changed: ' + path)
     for item in record['declarations']:
-        actual = guard.declaration((root/item['path']).read_text(), item['name'], tuple(item['owner']))
+        selected = (item['path'], item['name'], tuple(item['owner'])) == (
+            'extensions/carla/lane_refinement.mojo', '_rounded_axis_lane_minimum', ())
+        text = _lane_text(root) if selected else (root/item['path']).read_text()
+        actual = guard.declaration(text, item['name'], tuple(item['owner']))
+        if selected and guard.significant(actual) != guard.significant(item['source']):
+            text = full_audit.reviewed_text(root, item['path'], text)
+            actual = guard.declaration(text, item['name'], tuple(item['owner']))
         require(guard.significant(actual) == guard.significant(item['source']),
                 'consumer/reference declaration changed: ' + item['name'])
     return record

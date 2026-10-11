@@ -14,6 +14,10 @@ import os
 from pathlib import Path
 import textwrap
 import tokenize
+import sys
+
+# Executed module identity for source-proof receipts, before local import cycles.
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
 
 if __package__:
     from . import (
@@ -78,6 +82,47 @@ PROTECTED_MODULES = {'curve_sum2', 'spiral_domain_proof', 'curve_bounds',
     'spiral_grouped_lane', 'spiral_grouped_roundoff_proof'}
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, mode='default'):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, mode=mode)
+
+
+def _observe_bytes(root, path, payload, *, _operation=None):
+    if _operation is None:
+        return payload
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_bytes(root, path, payload, _operation=_operation)
+
+
+def _checked_production_paths(root, paths, *, _operation=None):
+    if _operation is None:
+        return paths
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    # The original sorted census is complete before its first source read.
+    return tuple(full_audit._operation_production_paths(
+        root, paths, _operation=_operation))
+
+
 @lru_cache(maxsize=256)
 def protected_source_digest(text):
     # Fast negative filter only. Positive classification always uses tokens,
@@ -125,15 +170,29 @@ def production_mojo_paths(root):
 
 
 def protected_inventory(root, *, verified_lane_predecessor=None,
-                        verified_map_predecessor=None):
+                        verified_map_predecessor=None,
+                        verified_cleanup_predecessors=None, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    if verified_cleanup_predecessors:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        require(set(verified_cleanup_predecessors) == set(full_audit.SOURCE_PATHS),
+                'wrong fixed cleanup predecessor inventory')
     result = {}
-    for path in sorted(production_mojo_paths(root)):
+    for path in _checked_production_paths(
+            root, sorted(production_mojo_paths(root)), _operation=_operation):
         relative = path.relative_to(root)
         if relative.parts[0] in NONPRODUCTION or any(
                 part.startswith('.')
                 for part in relative.parts):
             continue
-        text = path.read_text()
+        text = _observe_text(root, relative.as_posix(), path.read_text(),
+                             _operation=_operation)
+        if verified_cleanup_predecessors and relative.as_posix() in verified_cleanup_predecessors:
+            text = verified_cleanup_predecessors[relative.as_posix()]
         if relative.as_posix() == cache_key.MODULE and verified_lane_predecessor is not None:
             text = verified_lane_predecessor
         if relative.as_posix() == 'extensions/carla/map.mojo' and verified_map_predecessor is not None:
@@ -293,8 +352,13 @@ def _winner_seed_live_observables(text):
     return first, debits
 
 
-def verify(root):
-    pins = json.loads((root / PINS).read_text(), object_pairs_hook=source_contracts.unique_keys)
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    pins = json.loads(_observe_text(root, PINS, (root / PINS).read_text(),
+                                    _operation=_operation),
+                      object_pairs_hook=source_contracts.unique_keys)
     require(set(pins) == {'schema', 'source_manifest_sha256', 'format_manifest_sha256',
                           'public_doc_migration_sha256', 'final_source_freeze_sha256',
                           'containing_model_removal_sha256', 'winner_sign_migration_sha256',
@@ -314,9 +378,28 @@ def verify(root):
             hashlib.sha256((root/'tools/carla_lane_oracle/winner-sign-query-migration.json').read_bytes()).hexdigest() == WINNER_SIGN_MIGRATION_SHA256,
             'unreviewed winner/sign-query source migration')
     require(set(pins['callers']) == set(CALLERS), 'wrong Sum2 guard caller modules')
-    helper = (root/'extensions/carla/curve_sum2.mojo').read_text()
+    helper = _observe_text(
+        root, 'extensions/carla/curve_sum2.mojo',
+        (root/'extensions/carla/curve_sum2.mojo').read_text(), _operation=_operation)
     require(significant(helper) == significant(pins['helper_source']),
             'Sum2 complete guard/helper token graph changed')
+    # This fixed CALLERS-only discriminator is not partial source admission.
+    # Actual changed callers require the complete live cleanup endpoint.
+    try:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        cleanup_predecessors = full_audit.reviewed_sum2_callers(root, **operation_args)
+    except (ValueError, OSError) as error:
+        # Only direct failures in the two fixed caller files have source_path.
+        # A transitive gate failure must not be attributed to a particular caller.
+        caller = {
+            'extensions/carla/curve_bounds.mojo': 'curve_bounds',
+            'extensions/carla/lane_refinement.mojo': 'lane_refinement',
+        }.get(getattr(error, 'source_path', None), 'cleanup caller dependencies')
+        raise ValueError('Sum2 complete guarded caller changed or routing changed: '
+                         + caller + ' (' + str(error) + ')') from error
     count = 0
     verified_lane_predecessor = None
     verified_map_predecessor = None
@@ -325,10 +408,13 @@ def verify(root):
         require(set(record) == {'routing', 'functions'} and set(record['functions']) == set(names),
                 'wrong Sum2 guard caller function set: ' + module)
         path = 'extensions/carla/' + module + '.mojo'
-        text = (root / path).read_text()
+        text = _observe_text(root, path, (root / path).read_text(),
+                             _operation=_operation)
+        if path != cache_key.MODULE and path in cleanup_predecessors:
+            text = cleanup_predecessors[path]
         if path == cache_key.MODULE:
             try:
-                text = cache_key.reviewed_text(root, path, text)
+                text = cache_key.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                  + module + ' (' + str(error) + ')') from error
@@ -342,13 +428,15 @@ def verify(root):
                         from . import seed_count_contracts as seed_count
                     else:
                         import seed_count_contracts as seed_count
-                    text = seed_count.reviewed_text(root, path, text)
+                    text = seed_count.reviewed_text(root, path, text, **operation_args)
                 except (ValueError, OSError) as error:
                     raise ValueError('Sum2 complete guarded caller changed or routing changed: '
                                      + module + ' (' + str(error) + ')') from error
                 # Read and validate the physical extraction before normalizing
                 # its upper RHS. Historical reconstruction alone is insufficient.
-                live_map = (root/path).read_bytes().decode('utf-8')
+                live_map = _observe_bytes(
+                    root, path, (root/path).read_bytes(),
+                    _operation=_operation).decode('utf-8')
                 live_observables = (
                     seed_count.score_live_observables(live_map)
                     if seed_count.sha(live_map) == seed_count.SCORE_AFTER_SHA256
@@ -382,9 +470,11 @@ def verify(root):
                 require(any(start <= index < end for start, end in spans + import_spans),
                         'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
     require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor,
-                                verified_map_predecessor=verified_map_predecessor) == pins['protected_inventory'],
+                                verified_map_predecessor=verified_map_predecessor,
+                                verified_cleanup_predecessors=cleanup_predecessors,
+                                **operation_args) == pins['protected_inventory'],
             'global protected-helper use/import inventory changed')
-    reviewed_cleanup_contracts.verify(root)
+    reviewed_cleanup_contracts.verify(root, **operation_args)
     return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,
             'volatile_loads': 3, 'probe_sum2_calls': 4,
             'unsupported_paths': 'raise, infinity, unknown Jet, or absent optional proof as bound by each caller',

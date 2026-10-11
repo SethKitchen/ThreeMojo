@@ -392,3 +392,175 @@ def _capsule_geometry[
                 best,
             )
     return best
+
+
+def _point_hit(
+    best: _SweepHit,
+    point: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    other: SIMD[DType.float64, 4],
+    fraction: Float64,
+    flip: Bool,
+) -> _SweepHit:
+    # Keep an earlier approaching contact of `point`, moving by `travel`,
+    # with the fixed point `other`. The normal runs from `other` to the
+    # moving point, or the other way when `flip` is set.
+    if fraction > 1 or fraction >= best.fraction:
+        return best
+    var normal = point + travel * fraction - other
+    # A contact point lies the summed radius from the other one.
+    normal /= sqrt(_wide_dot(normal, normal))
+    if not _approaches(travel, normal):
+        return best
+    return _SweepHit(fraction, -normal if flip else normal)
+
+
+def _point_segment(
+    best: _SweepHit,
+    point: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    start: SIMD[DType.float64, 4],
+    axis: SIMD[DType.float64, 4],
+    radius: Float64,
+    flip: Bool,
+) -> _SweepHit:
+    # A point moving by `travel` against the segment start + u axis, u in
+    # [0, 1], grown by `radius`: its two end spheres and, for a segment
+    # of some length, its cylinder.
+    var found = _point_hit(
+        best, point, travel, start, _root(point - start, travel, radius), flip
+    )
+    var square = _wide_dot(axis, axis)
+    if square == 0:
+        return found
+    var end = start + axis
+    found = _point_hit(
+        found, point, travel, end, _root(point - end, travel, radius), flip
+    )
+    var offset = point - start
+    var along = _wide_dot(offset, axis) / square
+    var delta = _wide_dot(travel, axis) / square
+    var fraction = _root(offset - axis * along, travel - axis * delta, radius)
+    var coordinate = along + fraction * delta
+    if coordinate >= 0 and coordinate <= 1:
+        found = _point_hit(
+            found, point, travel, start + axis * coordinate, fraction, flip
+        )
+    return found
+
+
+def _sweep_segments(
+    a: SIMD[DType.float64, 4],
+    a_axis: SIMD[DType.float64, 4],
+    b: SIMD[DType.float64, 4],
+    b_axis: SIMD[DType.float64, 4],
+    travel: SIMD[DType.float64, 4],
+    radius: Float64,
+) -> _SweepHit:
+    """Sweep segment A, moving by `travel`, against fixed segment B.
+
+    Each segment is a start and an axis to its other end; an axis of zero
+    is a sphere's center. The contact distance is `radius`, the two shapes'
+    radii summed. Two capsules that only translate first touch at an end
+    of one against the other, or at their interiors. The normal runs from
+    B toward A.
+
+    Args:
+        a: The start of segment A.
+        a_axis: From A's start to its other end.
+        b: The start of segment B.
+        b_axis: From B's start to its other end.
+        travel: A's motion relative to B over the interval.
+        radius: The summed radii.
+
+    Returns:
+        The earliest approaching contact, or the fraction 2 for none.
+    """
+    var best = _SweepHit(2, SIMD[DType.float64, 4](0))
+    # Each end of A against B, then each end of B against A, where B
+    # moves by -travel. Those normals run from A, so they are flipped.
+    best = _point_segment(best, a, travel, b, b_axis, radius, False)
+    best = _point_segment(best, a + a_axis, travel, b, b_axis, radius, False)
+    best = _point_segment(best, b, -travel, a, a_axis, radius, True)
+    best = _point_segment(best, b + b_axis, -travel, a, a_axis, radius, True)
+    # The interiors meet across the plane that both axes span. Parallel
+    # axes meet first at an end, which the cases above cover.
+    var cross = _wide_cross(a_axis, b_axis)
+    var cross_sq = _wide_dot(cross, cross)
+    if cross_sq == 0:
+        return best
+    var unit = cross / sqrt(cross_sq)
+    var gap = _wide_dot(a - b, unit)
+    var rate = _wide_dot(travel, unit)
+    var fraction = Float64(2)
+    if abs(gap) <= radius:
+        fraction = 0
+    elif gap * rate < 0:
+        var target = radius if gap > 0 else -radius
+        fraction = (target - gap) / rate
+    if fraction > 1:
+        return best
+    var at = a + travel * fraction
+    var params = _segment_parameters(at, a_axis, b, b_axis, cross_sq)
+    if min(params[0], params[1]) < 0 or max(params[0], params[1]) > 1:
+        return best
+    return _point_hit(
+        best,
+        a + a_axis * params[0],
+        travel,
+        b + b_axis * params[1],
+        fraction,
+        False,
+    )
+
+
+def _segment_gap(
+    a: SIMD[DType.float64, 4],
+    a_axis: SIMD[DType.float64, 4],
+    b: SIMD[DType.float64, 4],
+    b_axis: SIMD[DType.float64, 4],
+) -> Tuple[Float64, SIMD[DType.float64, 4]]:
+    """Return the distance between two segments and the unit normal from B
+    toward A at their closest points.
+
+    Ericson's clamped closest points of two segments, where either can be
+    a single point.
+
+    Args:
+        a: The start of segment A.
+        a_axis: From A's start to its other end.
+        b: The start of segment B.
+        b_axis: From B's start to its other end.
+
+    Returns:
+        The distance and the normal. The normal is zero when they meet.
+    """
+    var r = a - b
+    var aa = _wide_dot(a_axis, a_axis)
+    var bb = _wide_dot(b_axis, b_axis)
+    var f = _wide_dot(b_axis, r)
+    var s = Float64(0)
+    var t = Float64(0)
+    if aa == 0 and bb > 0:
+        t = min(max(f / bb, Float64(0)), Float64(1))
+    elif aa > 0:
+        var c = _wide_dot(a_axis, r)
+        if bb == 0:
+            s = min(max(-c / aa, Float64(0)), Float64(1))
+        else:
+            var ab = _wide_dot(a_axis, b_axis)
+            var denominator = aa * bb - ab * ab
+            if denominator > 0:
+                s = min(max((ab * f - c * bb) / denominator, Float64(0)), Float64(1))
+            t = (ab * s + f) / bb
+            if t < 0:
+                t = 0
+                s = min(max(-c / aa, Float64(0)), Float64(1))
+            elif t > 1:
+                t = 1
+                s = min(max((ab - c) / aa, Float64(0)), Float64(1))
+    var gap = a + a_axis * s - (b + b_axis * t)
+    var distance = sqrt(_wide_dot(gap, gap))
+    if distance == 0:
+        return (distance, SIMD[DType.float64, 4](0))
+    return (distance, gap / distance)

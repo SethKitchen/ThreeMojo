@@ -3840,6 +3840,7 @@ def _emit_wide_line(
     render_scale: Int,
     coverage: LineCoverage,
     casters_only: Bool,
+    workers: Int = 1,
 ) raises:
     """Build a wide line's triangles in camera space and append them.
 
@@ -3868,6 +3869,9 @@ def _emit_wide_line(
             which a width in pixels is multiplied by.
         coverage: The solid or feathered hashed coverage rule.
         casters_only: Whether these samples populate a light depth map.
+        workers: How many threads may build the triangles. A line of
+            fewer than two runs of `WIDE_RUN_SEGMENTS` segments builds on
+            one.
 
     Raises:
         Error: If the material is not `BASIC`, carries a map, an alpha
@@ -3990,33 +3994,223 @@ def _emit_wide_line(
         TextureFrames(),
         0,
     )
-    var no_planes = List[Plane]()
     var each = 6
     if strand:
         each = 18 + 18 * cap_steps(half + Float32(render_scale) * 0.5)
     elif not dashed:
         each += 6 * cap_steps(half)
-    corners.reserve(len(corners) + segments * each)
-    for segment in range(segments):
+    # Each point in the world once, so every run reads the same values.
+    var placed = List[Vector3](capacity=segments * 2)
+    for vertex in range(first_vertex, first_vertex + segments * 2):
+        placed.append(world.transform_point(positions.vector3(vertex)))
+    var setup = _WideRun(
+        first_vertex,
+        placed^,
+        colors^,
+        along^,
+        view,
+        to_screen,
+        from_screen,
+        to_world,
+        near,
+        far,
+        sides.copy(),
+        any_of.copy(),
+        render_scale,
+        width.world_units,
+        half,
+        strand,
+        dashed,
+        dash,
+        gap,
+        paint,
+    )
+    var tasks = min(workers, segments // WIDE_RUN_SEGMENTS)
+    if tasks <= 1:
+        corners.reserve(len(corners) + segments * each)
+        _wide_segments(corners, setup, 0, segments)
+        return
+    # Disjoint runs of segments, each into a list of its own, joined in
+    # segment order: the same corners as one run, as `_emit_jobs` keeps.
+    var outputs = List[_Slim]()
+    var failures = List[String]()
+    for _ in range(tasks):  # pragma: no branch
+        outputs.append(_Slim())
+        failures.append(String())
+    var group = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        group.create_task(
+            _wide_task(
+                Pointer(to=setup).unsafe_origin_cast[MutAnyOrigin](),
+                outputs.unsafe_ptr()
+                .unsafe_offset(task)
+                .unsafe_origin_cast[MutAnyOrigin](),
+                failures.unsafe_ptr()
+                .unsafe_offset(task)
+                .unsafe_origin_cast[MutAnyOrigin](),
+                task * segments // tasks,
+                (task + 1) * segments // tasks,
+            )
+        )
+    group.wait()
+    # The tasks read `setup` through a pointer the compiler cannot see.
+    # This read keeps it alive until every task has finished.
+    _ = len(setup.placed)
+    # The earliest run that failed holds the earliest segment that did.
+    for task in range(tasks):  # pragma: no branch
+        if failures[task]:
+            raise Error(failures[task])
+    # A draw shares one surface per facing. Each run made its own, at
+    # most one a facing, from its first corner that faced that way. Keep
+    # the earliest run's for each facing, in the order one run makes
+    # them, and let every corner name the kept one. A run whose every
+    # segment was cut away holds none.
+    var kept = List[Int](length=2 * tasks, fill=-1)
+    for task in range(tasks):  # pragma: no branch
+        for own in range(len(outputs[task].surfaces)):
+            kept[2 * task + own] = _adopt(corners, outputs[task], own)
+    # Place each run's corners in parallel, as `_emit_jobs` does: one
+    # copy each, with each corner's surface renamed to the kept one.
+    var starts = List[Int](length=tasks, fill=len(corners))
+    for task in range(1, tasks):  # pragma: no branch
+        starts[task] = starts[task - 1] + len(outputs[task - 1])
+    corners.corners.resize(
+        unsafe_uninit_length=starts[tasks - 1] + len(outputs[tasks - 1])
+    )
+    var copies = TaskGroup()
+    for task in range(tasks):  # pragma: no branch
+        copies.create_task(
+            _place_renamed(
+                outputs[task]
+                .corners.unsafe_ptr()
+                .unsafe_origin_cast[MutAnyOrigin](),
+                corners.corners.unsafe_ptr()
+                .unsafe_offset(starts[task])
+                .unsafe_origin_cast[MutAnyOrigin](),
+                len(outputs[task]),
+                kept[2 * task],
+                kept[2 * task + 1],
+            )
+        )
+    copies.wait()
+    # The copies read the runs through pointers the compiler cannot see.
+    _ = len(outputs)
+
+
+# A run holds at least this many segments, so a short line stays serial.
+comptime WIDE_RUN_SEGMENTS = 1024
+
+
+struct _WideRun(Movable):
+    """What every segment of one wide line reads: its placed points, its
+    colors and distances, the camera, the clip planes and the paint."""
+
+    var first_vertex: Int
+    var placed: List[Vector3]
+    var colors: List[FloatColor]
+    var along: List[Float32]
+    var view: Matrix4
+    var to_screen: Matrix4
+    var from_screen: Matrix4
+    var to_world: Matrix4
+    var near: Float32
+    var far: Float32
+    var sides: List[Plane]
+    var any_of: List[Plane]
+    var render_scale: Int
+    var world_units: Bool
+    var half: Float32
+    var strand: Bool
+    var dashed: Bool
+    var dash: Float32
+    var gap: Float32
+    var paint: _Paint
+
+    def __init__(
+        out self,
+        first_vertex: Int,
+        var placed: List[Vector3],
+        var colors: List[FloatColor],
+        var along: List[Float32],
+        view: Matrix4,
+        to_screen: Matrix4,
+        from_screen: Matrix4,
+        to_world: Matrix4,
+        near: Float32,
+        far: Float32,
+        var sides: List[Plane],
+        var any_of: List[Plane],
+        render_scale: Int,
+        world_units: Bool,
+        half: Float32,
+        strand: Bool,
+        dashed: Bool,
+        dash: Float32,
+        gap: Float32,
+        paint: _Paint,
+    ):
+        self.first_vertex = first_vertex
+        self.placed = placed^
+        self.colors = colors^
+        self.along = along^
+        self.view = view
+        self.to_screen = to_screen
+        self.from_screen = from_screen
+        self.to_world = to_world
+        self.near = near
+        self.far = far
+        self.sides = sides^
+        self.any_of = any_of^
+        self.render_scale = render_scale
+        self.world_units = world_units
+        self.half = half
+        self.strand = strand
+        self.dashed = dashed
+        self.dash = dash
+        self.gap = gap
+        self.paint = paint
+
+
+async def _wide_task(
+    setup: Pointer[_WideRun, MutAnyOrigin],
+    corners: MutPointer[_Slim, MutAnyOrigin],
+    failure: MutPointer[String, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    # A task cannot raise. Its error goes back to `_emit_wide_line`.
+    try:
+        _wide_segments(corners[], setup[], first, past)
+    except error:
+        failure[] = String(error)
+
+
+def _wide_segments(
+    mut corners: _Slim, run: _WideRun, first: Int, past: Int
+) raises:
+    """Append the triangles of segments `first` up to `past`."""
+    var no_planes = List[Plane]()
+    for segment in range(first, past):
         var ends = List[ClipVertex]()
         for side in range(2):  # pragma: no branch
-            var vertex = first_vertex + segment * 2 + side
-            var placed = world.transform_point(positions.vector3(vertex))
+            var point = segment * 2 + side
+            var vertex = run.first_vertex + point
+            var placed = run.placed[point]
             ends.append(
                 ClipVertex(
-                    view.transform_point(placed),
-                    colors[vertex],
+                    run.view.transform_point(placed),
+                    run.colors[vertex],
                     Vector3(0, 0, 1),
                     0,
                     0,
                     placed,
-                    line_distance=along[vertex],
+                    line_distance=run.along[vertex],
                 )
             )
         # Cut to the view depth only. The sides and the clipping planes
         # cut the triangles below, so a cap past the edge of the image is
         # cut where the image ends rather than moved inside it.
-        var kept = clip_segment(ends[0], ends[1], near, far, no_planes)
+        var kept = clip_segment(ends[0], ends[1], run.near, run.far, no_planes)
         if len(kept) < 2:
             continue
         var start = kept[0]
@@ -4024,42 +4218,82 @@ def _emit_wide_line(
         var ribbon = _Ribbon(
             start,
             end,
-            width.world_units,
-            half,
-            to_screen,
-            from_screen,
-            to_world,
+            run.world_units,
+            run.half,
+            run.to_screen,
+            run.from_screen,
+            run.to_world,
         )
-        if strand:
+        if run.strand:
             _emit_strand_segment(
                 ribbon,
-                paint,
+                run.paint,
                 corners,
                 start,
                 end,
-                render_scale,
-                near,
-                far,
-                sides,
-                any_of,
+                run.render_scale,
+                run.near,
+                run.far,
+                run.sides,
+                run.any_of,
             )
             continue
         var spans = dash_spans(
-            start.line_distance, end.line_distance, dash, gap
+            start.line_distance, end.line_distance, run.dash, run.gap
         )
         for piece in range(len(spans) // 2):
-            var first = _between(start, end, spans[piece * 2])
-            var second = _between(start, end, spans[piece * 2 + 1])
-            var a = ribbon.corner(first, -1, 0)
-            var b = ribbon.corner(first, 1, 0)
-            var c = ribbon.corner(second, 1, 0)
-            var d = ribbon.corner(second, -1, 0)
-            _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
-            _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
-        if dashed:
+            var a_at = _between(start, end, spans[piece * 2])
+            var b_at = _between(start, end, spans[piece * 2 + 1])
+            var a = ribbon.corner(a_at, -1, 0)
+            var b = ribbon.corner(a_at, 1, 0)
+            var c = ribbon.corner(b_at, 1, 0)
+            var d = ribbon.corner(b_at, -1, 0)
+            _emit_clipped(
+                run.paint,
+                corners,
+                a,
+                b,
+                c,
+                run.near,
+                run.far,
+                run.sides,
+                run.any_of,
+            )
+            _emit_clipped(
+                run.paint,
+                corners,
+                a,
+                c,
+                d,
+                run.near,
+                run.far,
+                run.sides,
+                run.any_of,
+            )
+        if run.dashed:
             continue
-        _emit_cap(ribbon, paint, corners, start, -1, near, far, sides, any_of)
-        _emit_cap(ribbon, paint, corners, end, 1, near, far, sides, any_of)
+        _emit_cap(
+            ribbon,
+            run.paint,
+            corners,
+            start,
+            -1,
+            run.near,
+            run.far,
+            run.sides,
+            run.any_of,
+        )
+        _emit_cap(
+            ribbon,
+            run.paint,
+            corners,
+            end,
+            1,
+            run.near,
+            run.far,
+            run.sides,
+            run.any_of,
+        )
 
 
 def _line_corner(
@@ -4969,6 +5203,58 @@ async def _place_corners(
     var index = 0
     while index < count:
         destination[unsafe_offset=index].surface += shift
+        index += 1
+
+
+def _adopt(mut corners: _Slim, run: _Slim, own: Int) -> Int:
+    """Return the surface that stands for a run's surface `own`.
+
+    The run is a part of the current draw that was built in a list of its
+    own. When the draw has no surface yet for that facing, the run's
+    surface becomes it, as `_Slim.append` makes one.
+
+    Args:
+        corners: The frame's list, which the draw is appended to.
+        run: The part of the draw.
+        own: A surface of the run, by its index there.
+
+    Returns:
+        The surface of `corners` that the run's corners name.
+    """
+    var turned = own == run.back_surface
+    var surface = corners.back_surface if turned else corners.front_surface
+    if surface < 0:
+        surface = len(corners.surfaces)
+        corners.surfaces.append(run.surfaces[own])
+        if turned:
+            corners.back_surface = surface
+        else:
+            corners.front_surface = surface
+    return surface
+
+
+async def _place_renamed(
+    source: MutPointer[Corner, MutAnyOrigin],
+    destination: MutPointer[Corner, MutAnyOrigin],
+    count: Int,
+    first: Int,
+    second: Int,
+):
+    """Copy one run's corners into their place, renaming its surfaces.
+
+    Args:
+        source: The run's own corners.
+        destination: Where its corners go in the frame's list.
+        count: How many corners it holds.
+        first: The frame's surface that the run's surface 0 becomes.
+        second: The frame's surface that the run's surface 1 becomes.
+    """
+    unsafe_memcpy(dest=destination, src=source, count=count)
+    # A run whose every segment was cut away holds none.
+    var index = 0
+    while index < count:
+        var own = destination[unsafe_offset=index].surface
+        destination[unsafe_offset=index].surface = first if own == 0 else second
         index += 1
 
 
@@ -6171,6 +6457,7 @@ struct Renderer(Movable):
                     self.render_scale,
                     scene.wide_lines[draws[slot].wide_line].coverage,
                     casters_only,
+                    self.workers,
                 )
                 _note_span(
                     spans,

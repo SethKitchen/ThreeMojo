@@ -24,13 +24,33 @@ TESTS = ('tests/test_carla_render_reuse.mojo', 'tests/test_carla_model_cache.moj
 PROTECTED_INPUTS = (MIGRATION, *MODULES, *TESTS)
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_bytes(root, path, payload, *, _operation=None):
+    if _operation is None:
+        return payload
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_bytes(root, path, payload, _operation=_operation)
+
+
 def require(value, message):
     if not value:
         raise ValueError('reviewed render actor reuse successor: ' + message)
 
 
-def verify(root):
+def verify(root, *, _operation=None):
     """Return each reviewed edge by path once the live sources match it."""
+    if _operation is not None:
+        _check_operation(root, _operation)
     raw = (root/MIGRATION).read_bytes()
     require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact edge')
     record = json.loads(raw, object_pairs_hook=source.unique_keys)
@@ -44,7 +64,8 @@ def verify(root):
         require(set(edge) == {'before_sha256', 'after_sha256', 'before_token_sha256',
                               'after_token_sha256'}
                 and edge['before_sha256'] != edge['after_sha256'], 'malformed edge: ' + path)
-        actual = (root/path).read_bytes()
+        actual = _observe_bytes(root, path, (root/path).read_bytes(),
+                                _operation=_operation)
         require(hashlib.sha256(actual).hexdigest() == edge['after_sha256']
                 and source.token_sha256(actual.decode('utf-8')) == edge['after_token_sha256'],
                 'unreviewed render actor consumer: ' + path)

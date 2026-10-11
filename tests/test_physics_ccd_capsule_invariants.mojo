@@ -161,15 +161,16 @@ def _overlapping_reach(brute: Bool) raises -> PhysicsWorld:
     return world^
 
 
-def test_actual_reachable_regions_must_be_disjoint() raises:
+def test_capsules_with_overlapping_reach_step_together() raises:
+    # The actual tips' reachable regions overlap, so the two capsules form
+    # one group. The tree and the full scan agree on the step.
     var indexed = _overlapping_reach(False)
     var brute = _overlapping_reach(True)
-    _failure_pair(indexed, brute, 0.001)
+    _step_pair(indexed, brute, 0.001)
     _assert_tree(indexed)
-    with assert_raises(contains="reachable regions must be disjoint"):
-        indexed.step(Duration(0.001))
-    with assert_raises(contains="reachable regions must be disjoint"):
-        brute.step(Duration(0.001))
+    assert_true(
+        indexed.bodies[2].position.z - indexed.bodies[1].position.z > 200
+    )
 
 
 def _overlap_world(

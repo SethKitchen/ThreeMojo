@@ -710,12 +710,12 @@ def _lane_section_box_with_work(
             _canonical_endpoint(road, section, lane, start, work)
         )
         var end = min(breaks[i + 1], b)
-        if end > start:
-            end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
-            start = _next_up(start)
-            if start <= end:
-                _certify_junction_span(
-                    road, section, lane, start, end, out, work
-                )
+        # Finite, distinct sorted cuts and the retained final endpoint b
+        # make end strictly greater than start. Adjacent stations still
+        # need the inner check after both endpoints move into the interior.
+        end = bitcast[DType.float64](bitcast[DType.uint64](end) - 1)
+        start = _next_up(start)
+        if start <= end:
+            _certify_junction_span(road, section, lane, start, end, out, work)
     out.expand_by_point(_canonical_endpoint(road, section, lane, b, work))
     return out

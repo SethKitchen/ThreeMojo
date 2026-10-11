@@ -86,7 +86,7 @@ The water is an endless plane at the given height. It repeats the ocean patch. T
 
 `set_sun` lights the water from a scene's directional light. Pass the light's position minus its target. The direction must be finite and above the horizon. The default is Clearwater's sun. The sun lights the reflections, the bed and the caustics.
 
-The water shades the pebble bed under the surface, not the scene's geometry under the water. It has no GPU path, and it does not establish a frame rate. See [issue 300](https://github.com/SethKitchen/ThreeMojo/issues/300).
+The water shades the pebble bed under the surface, not the scene's geometry under the water. `compose` shades on the CPU. See [Shade it on a GPU](#shade-it-on-a-gpu) for the GPU shading path.
 
 ## Pictures
 
@@ -115,6 +115,22 @@ Texture coordinates name texel centers at `(i + 0.5) / n`, as in WebGL. Bilinear
 
 Underwater absorption and ripple lookup follow the refracted sun direction. The sun is not treated as vertical when it is near the horizon. Invalid spectrum and glare sizes are refused before their grids are allocated.
 
+## Shade it on a GPU
+
+`GpuWater` in `extensions/water/gpu.mojo` runs `lit_radiance` with one thread for each pixel. It needs MAX and an NVIDIA CUDA GPU, and it refuses a machine without one. It was run on a TITAN RTX, and CI builds it for sm_80. Apple Metal is not a supported target: no Metal check covers this kernel.
+
+Make one with the pebble photograph, which it copies to the device once. Then use the same calls as `WaterScene`:
+
+- `draw(scene, width, height, view, sway, pitch)` draws a whole picture. Bloom, glare and grading run on the CPU.
+- `compose(scene, image, world, camera, water_level)` composes water into a rendered scene. It shades on the GPU before it changes the image, so a failed frame leaves the image whole. The depth test and the write run on the CPU.
+- `radiance(scene, look, width, height)` returns the linear radiance, three floats a pixel.
+
+Each frame copies the surface, the ripple window and the caustics to the device. It waits for the device on every exit, success or failure, before it frees its host copies. Dropping a `GpuWater` waits for the device, then frees its buffers and its context.
+
+The GPU result is not bit-identical to the CPU result. The device fuses multiplies and adds, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. `tests/test_gpu_water.mojo` requires every value to be finite. It requires 98 percent of values within 1 percent of the CPU, 99.5 percent within 10 percent, and none beyond 2.
+
+See [the GPU water report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-gpu-300.md). On that GPU a 1920 x 1080 shade takes about 41 to 76 milliseconds. A whole water frame takes about 255 milliseconds, because bloom, glare and grading take about 154 on the CPU. A composed scene takes about 247. The depth pass, the highlight and blur passes, and the grade and write run on every logical core.
+
 ## Shader storage
 
 `lit_radiance` shades one view ray. It reads every texture through four traits: `SurfaceTexels`, `RippleTexels`, `CausticTexels` and `PebbleTexels`. The water fields implement them, so `draw` and `compose` call it directly.
@@ -129,6 +145,8 @@ This extension draws a CPU still. It is not a shared scene-water object or a val
 
 ## Cost
 
-`draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test in pixel order first. It then shades only the pixels that pass, in parallel.
+`draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test first, by disjoint runs of rows. It then shades only the pixels that pass, in parallel.
+
+Set `WaterScene.workers` to control how each pass is cut into tasks. Zero, the default, sizes the cut for every logical core. One runs each pass serially, as one task. A larger count makes more tasks, but the shared thread pool decides how many run at once, so the count is not a thread limit. Every count draws the same picture.
 
 On an AMD Ryzen 9 5900X, a 1920 x 1080 `draw` takes about 1.7 seconds. On one thread it took about 18 seconds. One `advance` takes about 12 milliseconds. The CPU path therefore cannot reach 60 frames per second at that size. See [the water cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-cost-300.md) and `bench/water_bench.mojo`.

@@ -34,6 +34,25 @@ def verify_text(module, interval, geometry, trig):
             if not valid:raise ValueError('Constant outside finite proof bound: '+name)
     return {'status':'PASS','finite_bound_exponent':410,'count_domain':[1,64],'source_token_sha256':EXPECTED}
 
-def verify(root):
+def verify(root, *, _operation=None):
     root=Path(root)
-    return verify_text((root/MODULE).read_text(),(root/INTERVAL).read_text(),(root/'extensions/carla/geometry.mojo').read_text(),(root/'extensions/carla/curve_trig.mojo').read_text())
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+    module = (root/MODULE).read_text()
+    if _operation is not None:
+        module = full_audit._observe_text(root, MODULE, module, _operation=_operation)
+    interval = (root/INTERVAL).read_text()
+    if _operation is not None:
+        interval = full_audit._observe_text(root, INTERVAL, interval, _operation=_operation)
+    geometry = (root/'extensions/carla/geometry.mojo').read_text()
+    if _operation is not None:
+        geometry = full_audit._observe_text(
+            root, 'extensions/carla/geometry.mojo', geometry, _operation=_operation)
+    trig = (root/'extensions/carla/curve_trig.mojo').read_text()
+    if _operation is not None:
+        trig = full_audit._observe_text(
+            root, 'extensions/carla/curve_trig.mojo', trig, _operation=_operation)
+    return verify_text(module, interval, geometry, trig)
