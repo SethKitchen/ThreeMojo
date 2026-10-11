@@ -349,6 +349,9 @@ class _EvidenceReducer:
                 raise ValueError(f'Malformed evaluation outcome: {record!r}')
             if not delimiter or not module or not number.isdigit() or int(number) < 1:
                 raise ValueError(f'Malformed evaluation decision ID: {record!r}')
+            if b'?' in vector:
+                raise ValueError('Inconsistent repeated truth conversion; '
+                                 f'MC/DC cannot be certified: {record!r}')
             if not colon or len(vector) < 2 or any(value not in b'TF-' for value in vector) or not set(vector) & set(b'TF'):
                 raise ValueError(f'Malformed evaluation vector: {record!r}')
             key = (decision, vector, outcome)

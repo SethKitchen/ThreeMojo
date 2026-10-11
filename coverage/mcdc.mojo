@@ -162,7 +162,7 @@ def parse_traces(text: String) raises -> List[DecisionTrace]:
         One trace per decision that recorded at least one evaluation.
 
     Raises:
-        Error: If a probe payload is malformed.
+        Error: If a probe payload is malformed or an evaluation is inconsistent.
     """
     var records = text.splitlines()
     if len(records) > 0 and not text.endswith("\n"):
@@ -221,7 +221,8 @@ struct TraceParser(Movable):
             raw: One captured stderr line.
 
         Raises:
-            Error: If a record is malformed or needs a version 2 recapture.
+            Error: If a record is malformed, needs a version 2 recapture, or
+            holds an operand whose repeated truth conversions disagreed.
         """
         var line = String(raw.strip())
         if line.startswith(EVALUATION_PREFIX):
@@ -248,6 +249,12 @@ struct TraceParser(Movable):
                     observed = True
                 elif cp == "-":
                     values.append(MASKED)
+                elif cp == "?":
+                    raise Error(
+                        "Inconsistent repeated truth conversion; MC-DC cannot"
+                        " be certified: "
+                        + line
+                    )
                 else:
                     raise Error("Malformed evaluation operand: " + line)
             if not observed:

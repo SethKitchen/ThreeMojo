@@ -97,6 +97,14 @@ class CoverageRecordCacheTests(unittest.TestCase):
                 self.assertNotIn(record, reducer._accepted_records)
         self.compare([b'COVEVAL2:m:4:T:TT;\n', *bad] * 3)
 
+    def test_inconsistent_repeated_truth_conversion_is_refused(self):
+        reducer = coverage_io.Reducer(lambda value: self.fail('inconsistent vector written'))
+        for record in (b'COVEVAL2:m:4:F:?-;\n', b'COVEVAL2:m:4:T:F?;\n'):
+            with self.subTest(record=record), self.assertRaisesRegex(
+                    ValueError, 'Inconsistent repeated truth conversion'):
+                reducer.feed(record)
+            self.assertNotIn(record, reducer._accepted_records)
+
     def test_repeated_diagnostics_never_enter_cache(self):
         records = [b'hello\n', b'COVBRANCH:unparsed\n', b' COVBRANCH: \n',
                    b'COVBRANCH:\n', b'COVEVAL:old\n', b'\n', b'no newline',
