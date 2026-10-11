@@ -533,11 +533,14 @@ comptime _REFINE_SAMPLES = 33
 
 def _refine[
     F: DistanceField, G: DistanceField
-](a: F, b: G, center: Vector3, half: Float32) -> Tuple[Vector3, Float32, Int]:
+](a: F, b: G, center: Vector3, half: Float32) -> Tuple[
+    Vector3, Float32, Int, Int
+]:
     # Search a cube for the smallest max(a, b); count common-interior samples.
     var best = center
     var value = max(a.distance(center), b.distance(center))
     var hits = 0
+    var hit_weight_eighths = 0
     var spacing = 2 * half / Float32(_REFINE_SAMPLES - 1)
     for iz in range(_REFINE_SAMPLES):
         for iy in range(_REFINE_SAMPLES):
@@ -551,10 +554,17 @@ def _refine[
                 var fb = b.distance(p)
                 if fa < 0 and fb < 0:
                     hits += 1
+                    # Endpoint samples own half a cell on each boundary
+                    # axis. The weights cover this cube, without adding a
+                    # full cell beyond each of its six faces.
+                    var wx = 1 if ix == 0 or ix == _REFINE_SAMPLES - 1 else 2
+                    var wy = 1 if iy == 0 or iy == _REFINE_SAMPLES - 1 else 2
+                    var wz = 1 if iz == 0 or iz == _REFINE_SAMPLES - 1 else 2
+                    hit_weight_eighths += wx * wy * wz
                 if max(fa, fb) < value:
                     value = max(fa, fb)
                     best = p
-    return (best, value, hits)
+    return (best, value, hits, hit_weight_eighths)
 
 
 def localize_pair[
@@ -676,7 +686,9 @@ def localize_pair[
         + ',"local_overlap_samples":'
         + String(coarse[2])
         + ',"local_overlap_volume_m3":'
-        + String(Float64(coarse[2]) * spacing * spacing * spacing)
+        + String(Float64(coarse[3]) * 0.125 * spacing * spacing * spacing)
+        + ',"local_overlap_volume_method":"endpoint-weighted coarse cube'
+        ' samples"'
     )
 
 
