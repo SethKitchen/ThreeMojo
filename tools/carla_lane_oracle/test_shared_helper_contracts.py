@@ -183,11 +183,13 @@ class SharedHelperIntegrationControls(unittest.TestCase):
             with self.subTest(path=name):
                 with self.changed(name, read(self.root/name) + b'\n# changed\n'):
                     with self.assertRaises(ValueError): cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
+                failure = OSError('helper input unreadable')
                 def unreadable(path, *args, **kwargs):
-                    if path == self.root/name: raise OSError('helper input unreadable')
+                    if path == self.root/name: raise failure
                     return read(path, *args, **kwargs)
-                with patch.object(Path, 'read_bytes', unreadable), self.assertRaises(ValueError):
+                with patch.object(Path, 'read_bytes', unreadable), self.assertRaises(OSError) as caught:
                     cleanup.shared_helper_proof_bindings(self.root, paths=helpers.SOURCE_PATHS)
+                self.assertIs(caught.exception, failure)
 
     def test_new_helper_resolver_package_symlink_and_extra_import_reject(self):
         for name in ('loaders/utf8.mojopkg', 'render/color_math.mojopkg',
