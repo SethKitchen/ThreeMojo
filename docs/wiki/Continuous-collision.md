@@ -13,7 +13,7 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be a dynamic sphere, a dynamic capsule, a kinematic sphere or a motionless static triangle mesh. A dynamic shape can sit off its body's origin and its mass center, by at most 10000 meters. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
+An enabled collider must be a dynamic sphere or capsule, a dynamic box or hull that cannot turn, a kinematic sphere or a static mesh. A static mesh must not move. A dynamic shape can sit off its body's origin and its mass center, by at most 10000 meters. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
 
 The tensor can be anisotropic. Each pair of mirrored off-diagonal elements must be exactly equal. A tensor computed as `R M Rᵀ` in Float32 can round each pair differently. Set each pair to its mean before you give the tensor to the body.
 
@@ -33,7 +33,7 @@ In a kinematic sphere's frame, an impact cannot add energy. So each impact with 
 
 A dynamic sphere that a kinematic sphere drives into a static mesh has no impulse that can open both contacts. The step then raises an error and rolls back.
 
-The mode refuses colliding boxes, convex hulls, kinematic capsules, kinematic shapes off their body or mass center, spinning kinematic spheres and static primitives. It also refuses a turning body that can reach another moving body. General convex CCD remains unsupported. This feature does not turn a box chassis into a continuous collider.
+The mode refuses boxes and hulls that can turn, kinematic capsules, kinematic shapes off their body or mass center, spinning kinematic spheres and static primitives. It also refuses a turning body, box or hull that can reach another moving body. Rotating convex CCD remains unsupported, so a turning box chassis is not a continuous collider.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.
 
@@ -105,6 +105,16 @@ The mass center moves at a constant velocity and the body turns at a constant sp
 The reach bound of a turning body adds |ω| times its farthest segment end from the mass center. |ω| is bounded by its energy, its mass and the trace of its inverse inertia.
 
 `ccd_max_substeps` limits the sub-steps of each turning body in each step. The default is 256, and valid limits are 1 through 65536. Exhausting it, or the impact limit, rolls the step back. A shape that turns quickly near a surface, for example a lying capsule spun about the vertical, needs many sub-steps.
+
+## Boxes and hulls
+
+A box or hull whose inverse inertia is zero in every element, with no spin and no spin push, only translates. It is swept exactly against static triangles by the separating-axis test over time. Its shape can sit off its body's origin.
+
+The solid and a triangle overlap exactly when their projections overlap on every candidate axis. These are the solid's face normals, the triangle's normal, and the cross product of each solid edge with each triangle edge. Along each axis the solid's interval moves linearly. So the two overlap along that axis during one interval of time.
+
+The first contact is the latest entry over all axes, when it comes before the earliest exit. Its normal is the axis that entered last. A solid that already touches or overlaps a triangle uses the axis of least overlap instead. So a box that rests on a floor and slides does not close on it, and takes no impulse.
+
+The mesh stays one-sided: a triangle that the solid starts wholly behind does not catch it. An impact is a linear impulse with restitution and Coulomb friction. A box or hull must be alone in its group. Its reach bound uses its farthest corner, which also sets its radius-relative precision limits.
 
 ## Tessellated-floor limitation
 

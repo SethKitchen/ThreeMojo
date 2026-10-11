@@ -369,7 +369,7 @@ def test_budgets_and_neighbors_fail_closed() raises:
         Quaternion.identity(),
     )
     _ = pair.add_body(ball^)
-    with assert_raises(contains="turning bodies must not reach"):
+    with assert_raises(contains="must not reach another moving body"):
         pair.step(Duration(0.01))
 
 

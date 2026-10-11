@@ -757,3 +757,110 @@ def _turning_step(
         elif rate < 0:
             limit = min(limit, room / -rate)
     return limit
+
+
+def _project(
+    points: List[SIMD[DType.float64, 4]], axis: SIMD[DType.float64, 4]
+) -> Tuple[Float64, Float64]:
+    # The interval that points cover along an axis.
+    var low = _wide_dot(points[0], axis)
+    var high = low
+    # A triangle or a solid has three points at least.
+    for k in range(1, len(points)):  # pragma: no branch
+        var value = _wide_dot(points[k], axis)
+        low = min(low, value)
+        high = max(high, value)
+    return (low, high)
+
+
+def _sweep_convex_triangle(
+    vertices: List[SIMD[DType.float64, 4]],
+    faces: List[SIMD[DType.float64, 4]],
+    edges: List[SIMD[DType.float64, 4]],
+    travel: SIMD[DType.float64, 4],
+    triangle: Triangle,
+) -> _SweepHit:
+    """Sweep a translating convex solid against the front of a triangle.
+
+    The separating-axis test over time: the solid and the triangle overlap
+    exactly when their projections overlap on every candidate axis. These
+    are the solid's face normals, the triangle's normal, and each cross
+    product of a solid edge with a triangle edge. Along each axis the
+    solid's interval moves linearly, so it overlaps during one interval of
+    time. The first contact is the latest entry, when it comes before the
+    earliest exit. Its normal is the axis that entered last; a solid that
+    already overlaps uses the axis of least overlap instead.
+
+    Args:
+        vertices: The solid's corners at the start, in the world.
+        faces: The solid's unit face normals.
+        edges: The solid's edge directions.
+        travel: The solid's motion over the interval.
+        triangle: The triangle, with a nonzero normal.
+
+    Returns:
+        The earliest approaching contact, or the fraction 2 for none.
+    """
+    var miss = _SweepHit(2, SIMD[DType.float64, 4](0))
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var face = _wide_cross(b - a, c - a)
+    face /= sqrt(_wide_dot(face, face))
+    if _project(vertices, face)[1] < _wide_dot(a, face):
+        # The mesh stays one-sided: a solid wholly behind is not caught.
+        return miss
+    var corners = List[SIMD[DType.float64, 4]]()
+    corners.append(a)
+    corners.append(b)
+    corners.append(c)
+    var axes = faces.copy()
+    axes.append(face)
+    for edge in edges:  # pragma: no branch
+        for k in range(3):  # pragma: no branch
+            axes.append(_wide_cross(edge, corners[(k + 1) % 3] - corners[k]))
+    var entry = Float64(-1e300)
+    var leave = Float64(1e300)
+    var normal = SIMD[DType.float64, 4](0)
+    # The axis of least overlap now, and the way it separates the solid.
+    var depth = Float64(1e300)
+    var shallow = SIMD[DType.float64, 4](0)
+    for axis in axes:  # pragma: no branch
+        var square = _wide_dot(axis, axis)
+        if square == 0:
+            # Parallel edges give no axis.
+            continue
+        var unit = axis / sqrt(square)
+        var solid = _project(vertices, unit)
+        var flat = _project(corners, unit)
+        var up = flat[1] - solid[0]
+        var down = solid[1] - flat[0]
+        if min(up, down) < depth:
+            depth = min(up, down)
+            shallow = unit if up < down else -unit
+        var rate = _wide_dot(travel, unit)
+        if rate == 0:
+            if solid[1] < flat[0] or solid[0] > flat[1]:
+                return miss
+            continue
+        # The solid's interval reaches the triangle's at `first` and
+        # passes it at `last`.
+        var first = (flat[0] - solid[1]) / rate
+        var last = (flat[1] - solid[0]) / rate
+        if rate < 0:
+            first = (flat[1] - solid[0]) / rate
+            last = (flat[0] - solid[1]) / rate
+        if first > entry:
+            entry = first
+            # From the triangle toward the solid, against its motion.
+            normal = -unit if rate > 0 else unit
+        leave = min(leave, last)
+    if entry == -1e300 or entry > leave or entry > 1 or leave < 0:
+        return miss
+    if entry <= 0:
+        # Already touching or overlapping: every entry is past, and the
+        # contact pushes out along the axis of least overlap.
+        normal = shallow
+    if not _approaches(travel, normal):
+        return miss
+    return _SweepHit(max(entry, Float64(0)), normal)
