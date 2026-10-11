@@ -1,0 +1,81 @@
+test_current_actual_stream_reads_reject_changed_short_wrong_and_failed_chunks (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_actual_stream_reads_reject_changed_short_wrong_and_failed_chunks) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_current_caught_guarded_read_failure_discards_existing_map_rows (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_caught_guarded_read_failure_discards_existing_map_rows) ... ok
+test_current_consumed_text_and_bytes_refuse_before_semantic_use (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_consumed_text_and_bytes_refuse_before_semantic_use) ... ok
+test_current_decorated_border_has_one_own_lifetime (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_decorated_border_has_one_own_lifetime) ... ok
+test_current_direct_and_arbitrary_borrow_routes_refuse (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_direct_and_arbitrary_borrow_routes_refuse) ... ok
+test_current_direct_private_misuse_rejects_and_finally_closes (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_direct_private_misuse_rejects_and_finally_closes) ... ok
+test_current_duplicate_proof_conflict_remains_an_error (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_duplicate_proof_conflict_remains_an_error) ... ok
+test_current_each_exact_demand_rechecks_four_immutable_endpoints (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_each_exact_demand_rechecks_four_immutable_endpoints) ... ok
+test_current_finalizer_rejects_persistent_bytes_and_new_source_census (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_finalizer_rejects_persistent_bytes_and_new_source_census) ... ok
+test_current_foreign_root_thread_and_cwd_poison_the_owner (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_foreign_root_thread_and_cwd_poison_the_owner) ... 
+  test_current_foreign_root_thread_and_cwd_poison_the_owner (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_foreign_root_thread_and_cwd_poison_the_owner) (fault='root') ... ERROR
+
+======================================================================
+ERROR: test_current_foreign_root_thread_and_cwd_poison_the_owner (test_invariant_operation_inputs.BoundedOwnerCurrentControls.test_current_foreign_root_thread_and_cwd_poison_the_owner) (fault='root')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/accepted_successor_contracts.py", line 175, in _verify_current_for_pin_pair
+    _, observed_current_admission = line._verify_for_pin_pair(root, **operation_args)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/rounded_line_selector_contracts.py", line 162, in _verify_for_pin_pair
+    record, observed_current_admission = _verify_premises(
+                                         ^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/rounded_line_selector_contracts.py", line 218, in _verify_premises
+    raw = full_audit._observe_bytes(root, name, physical.read_bytes(), _operation=_operation)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1355, in _observe_bytes
+    return _operation_observe(_operation, root, path, value, 'bytes')
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1342, in _operation_observe
+    _operation_fail(operation, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1128, in _operation_fail
+    raise error
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1339, in _operation_observe
+    operation._observe(root, str(path), value, mode)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1537, in _observe
+    _operation_fail(self, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1128, in _operation_fail
+    raise error
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1521, in _observe
+    self._check_owner(root)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1433, in _check_owner
+    _operation_fail(self, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1128, in _operation_fail
+    raise error
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1413, in _check_owner
+    raise _OperationCoherenceError(self._failure_reason or 'invalid operation inputs')
+full_audit_cleanup_contracts._OperationCoherenceError: full-audit cleanup successor: cache input root or working directory changed
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/test_invariant_operation_inputs.py", line 507, in test_current_foreign_root_thread_and_cwd_poison_the_owner
+    invariant.verify(self.root)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 88, in verify
+    _predecessor_pin_pair(root, _operation=_operation))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 179, in _predecessor_pin_pair
+    followup._predecessor_pin_pair(root, _operation=_operation))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/coverage_followup_contracts.py", line 188, in _predecessor_pin_pair
+    runtime_payload, guard_payload = accepted._predecessor_pin_pair(root, _operation=_operation)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/accepted_successor_contracts.py", line 281, in _predecessor_pin_pair
+    record, observed_current_admission = _verify_current_for_pin_pair(root, _operation=_operation)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24/tools/carla_lane_oracle/accepted_successor_contracts.py", line 179, in _verify_current_for_pin_pair
+    raise ValueError(
+ValueError: unreviewed complete successor: full-audit cleanup successor: cache input root or working directory changed
+
+----------------------------------------------------------------------
+Ran 10 tests in 141.200s
+
+FAILED (errors=1)

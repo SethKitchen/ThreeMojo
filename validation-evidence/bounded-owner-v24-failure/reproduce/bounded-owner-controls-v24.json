@@ -1,0 +1,48 @@
+{
+  "pause_request_file": "bounded-owner-controls-v24.pause",
+  "phase": "bounded-owner-controls-v24",
+  "scope": "Fresh fail-fast normal/optimized execution of original8 controls plus19 real-owner and3 synthetic additions on exact v24. Original1800s module/10800s window caps, zero skips. Remaining per-site observation and helper maintenance controls are separate and unqualified.",
+  "seal": "CANDIDATE-V24-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24",
+  "source_seal_sha256": "fbc9cb60f5ee9320a9ec81b3bfe0c57bdb3ed331b3a93f7ec75268c651f95525",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v",
+        "-f"
+      ],
+      "expected_tests": 30,
+      "label": "normal-bounded-owner-controls",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v",
+        "-f"
+      ],
+      "expected_tests": 30,
+      "label": "optimized-bounded-owner-controls",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

@@ -1,0 +1,44 @@
+{
+  "config_sha256": "c81babf26ee2cd01b9807b698aedd1a937ffe2a76bd52de3e3f2bb966e5141f2",
+  "configured_but_unrun_stage_labels": [
+    "optimized-bounded-owner-controls"
+  ],
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phase": "bounded-owner-controls-v24",
+  "result_sha256": "647570afdfd08a1b6b5dc8f4e338dd99f046321899ab753f58b3efb78c73d810",
+  "schema": 1,
+  "source_seal_sha256": "fbc9cb60f5ee9320a9ec81b3bfe0c57bdb3ed331b3a93f7ec75268c651f95525",
+  "stage": {
+    "adopted_reaped": [],
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "tools/carla_lane_oracle",
+      "-p",
+      "test_invariant_operation_inputs.py",
+      "-v",
+      "-f"
+    ],
+    "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24",
+    "label": "normal-bounded-owner-controls",
+    "leader_reaped": true,
+    "log_sha256": "538e312d514ffeb5c1923a6f2f6c3a9b8ef4bdbebca8d80b8187081cb3a2b349",
+    "pgid": 8,
+    "pid": 8,
+    "remaining_owned_descendants": [],
+    "returncode": 1,
+    "seconds": 141.83296330300072,
+    "single_cpu": 0,
+    "source_seal_sha256": "fbc9cb60f5ee9320a9ec81b3bfe0c57bdb3ed331b3a93f7ec75268c651f95525",
+    "stage_timeout_seconds": 1800,
+    "started": "2026-10-11T04:22:40.418348+00:00",
+    "timed_out": false
+  },
+  "stage_result_sha256": "507e42a7d3a931b035f36d291e146e9146fd4e2ada97d511793f73fc807d9190",
+  "start_sha256": "7d615ca0a70b010484c91e227895c6c6db11ff341f06d6533be1b0f6f14698dd",
+  "supervisor_console_sha256": "3e5de569d5c2870dd4a425ff7e58c5ed156f91254d97e81459abbfd1217c5a77"
+}

@@ -1,0 +1,43 @@
+{
+  "elapsed_seconds": 145.1747752270021,
+  "failure": "RuntimeError('Stage failed: normal-bounded-owner-controls')",
+  "finished": "2026-10-11T04:25:04.064648+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "Fresh fail-fast normal/optimized execution of original8 controls plus19 real-owner and3 synthetic additions on exact v24. Original1800s module/10800s window caps, zero skips. Remaining per-site observation and helper maintenance controls are separate and unqualified.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": false,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v",
+        "-f"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v24",
+      "label": "normal-bounded-owner-controls",
+      "leader_reaped": true,
+      "log_sha256": "538e312d514ffeb5c1923a6f2f6c3a9b8ef4bdbebca8d80b8187081cb3a2b349",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 141.83296330300072,
+      "single_cpu": 0,
+      "source_seal_sha256": "fbc9cb60f5ee9320a9ec81b3bfe0c57bdb3ed331b3a93f7ec75268c651f95525",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T04:22:40.418348+00:00",
+      "timed_out": false
+    }
+  ]
+}
