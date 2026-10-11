@@ -1,0 +1,23 @@
+# Car-sized boxes under CCD (#635)
+revision: claude/635-685-728 at c5323fc0 plus bench/physics_ccd_box_bench.mojo
+build: mojo build -I . --Werror -o boxb bench/physics_ccd_box_bench.mojo
+run: three times
+mojo: Mojo 1.1.0 (8189361e)
+cpu: AMD Ryzen 9 5900X, one thread
+os: Linux 6.18.33.1-microsoft-standard-WSL2, WSL 2
+
+scene,ccd,triangles,boxes,mean_step_ms,max_step_ms,least_gap_m
+box,False,2048,1,0.0071693500000000005,0.008345,-0.20098096132278442
+box,True,2048,1,0.0320081,0.039744,0.020098090171813965
+box-fleet,False,8192,64,0.8128488000000003,0.965889,-0.20098096132278442
+box-fleet,True,8192,64,2.3360338499999997,2.42166,0.020098090171813965
+scene,ccd,triangles,boxes,mean_step_ms,max_step_ms,least_gap_m
+box,False,2048,1,0.007179300000000002,0.008476,-0.20098096132278442
+box,True,2048,1,0.03262970000000001,0.040806,0.020098090171813965
+box-fleet,False,8192,64,0.8243325499999999,1.006715,-0.20098096132278442
+box-fleet,True,8192,64,2.3242716499999996,2.392907,0.020098090171813965
+scene,ccd,triangles,boxes,mean_step_ms,max_step_ms,least_gap_m
+box,False,2048,1,0.0071804500000000005,0.008346,-0.20098096132278442
+box,True,2048,1,0.04277225,0.227764,0.020098090171813965
+box-fleet,False,8192,64,0.80484405,0.959336,-0.20098096132278442
+box-fleet,True,8192,64,2.33605385,2.917343,0.020098090171813965
