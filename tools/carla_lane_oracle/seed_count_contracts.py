@@ -635,7 +635,11 @@ def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _oper
     _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
     dependencies = (dependency_inventory(root, **({} if _operation is None else {'_operation': _operation})) if _inputs is None else
                     dependency_inventory(root, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation})))
-    require(dependencies == {MODULE, *record['unchanged_inputs']},
+    helper_edges = full_audit.shared_helper_edges(root,
+        paths=('extensions/carla/curve_distance.mojo', 'loaders/xml.mojo'), _inputs=_inputs,
+        _input_owner=_input_owner, _operation=_operation)
+    helper_closure = ({'loaders/utf8.mojo'} if 'loaders/xml.mojo' in helper_edges else set())
+    require(dependencies == {MODULE, *record['unchanged_inputs']} | helper_closure,
             'live import or package-resolution closure changed')
     cleanup_edges = {}
     if any(path in full_audit.SOURCE_PATHS
@@ -645,6 +649,10 @@ def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _oper
            for path, expected in record['unchanged_inputs'].items()):
         cleanup_edges = (full_audit.verified_edges(root, **({} if _operation is None else {'_operation': _operation})) if _inputs is None else
                          _inputs.exact_edges(_input_owner, root))
+    for path, edge in helper_edges.items():
+        if path in record['unchanged_inputs']:
+            require(path not in cleanup_edges, 'duplicate shared-helper count input: ' + path)
+            cleanup_edges[path] = edge
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests',
                   'after_correctness_tests'):
         for path, expected in record[group].items():
