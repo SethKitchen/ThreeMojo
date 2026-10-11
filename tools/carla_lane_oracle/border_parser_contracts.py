@@ -17,12 +17,14 @@ if __package__:
     from . import speed_parser_contracts as speed
     from . import runtime_boundary_contracts as boundary
     from . import render_actor_reuse_contracts as reuse
+    from . import consumer_successor_ledger as ledger
 else:
     import source_contracts as source
     import sum2_guard_contracts as guard
     import speed_parser_contracts as speed
     import runtime_boundary_contracts as boundary
     import render_actor_reuse_contracts as reuse
+    import consumer_successor_ledger as ledger
 
 MODULE = 'extensions/carla/opendrive.mojo'
 MIGRATION = 'tools/carla_lane_oracle/border-parser-successor.json'
@@ -156,6 +158,8 @@ def verify(root):
     for path, reviewed in reuse.verify(root).items():
         require(path not in consumers, 'duplicate reviewed consumer edge: ' + path)
         consumers[path] = reviewed
+    # Later reviewed consumer edges come from one pinned ledger (#703).
+    consumers = ledger.extend(consumers, root)
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
         for path, expected in record[group].items():
             actual = hashlib.sha256((root/path).read_bytes()).hexdigest()

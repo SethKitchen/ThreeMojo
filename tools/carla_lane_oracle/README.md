@@ -69,6 +69,26 @@ Fraction arithmetic. It also checks the positive nonterminal sampling step
 that rounds to unchanged s. Its separate source pin covers the relevant
 methods and fixture helper. It does not replace native refusal regressions.
 
+## Reviewed consumer edges
+
+The border-parser and winner-sign records pin most files in `extensions/carla/` as unchanged inputs. To change one of these consumers, add a reviewed edge to `consumer-successor-ledger.json` ([issue 703](https://github.com/SethKitchen/ThreeMojo/issues/703)). Do not write a new contract module for the change.
+
+1. Change the consumer and its correctness tests.
+2. Append one edge to `edges`. Give the issue, the consumer path, the source and token digests before and after, and the digest of each bound correctness test. Get the token digests from `source_contracts.token_sha256`.
+3. Write the new digest of the ledger file in `LEDGER_SHA256` in `consumer_successor_ledger.py`.
+4. In this directory, run `python3 -m unittest test_consumer_successor_ledger test_border_parser_contracts test_winner_sign_contracts`.
+
+An edge must start at the previous edge of the same consumer. The first edge must start at the digest that each record pins, or at the end of a successor that the record knows. The live source must be the end of the last edge, and the bound tests of the last edge must not change.
+
+The ledger refuses these changes:
+
+- a ledger that does not match `LEDGER_SHA256`;
+- an edge for `map.mojo` or `opendrive.mojo`, which have contracts of their own;
+- an edge for a file that neither record pins;
+- an edge with no bound correctness test.
+
+The earlier edges in `runtime-boundary-successor.json` and `render-actor-reuse-successor.json` stay as they are.
+
 ## Runtime checks
 
 The portable runtime checks are independent, fail-closed contracts:

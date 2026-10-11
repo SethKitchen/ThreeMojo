@@ -170,6 +170,13 @@ def verify(root):
         require(path not in successors, 'duplicate render actor reuse edge')
         successors[path] = edge
 
+    # Later reviewed consumer edges come from one pinned ledger (#703).
+    if __package__:
+        from . import consumer_successor_ledger as ledger
+    else:
+        import consumer_successor_ledger as ledger
+    successors = ledger.extend(successors, root)
+
     for path, expected in record['canonical_source_unchanged'].items():
         if path in successors:
             require(expected == successors[path]['before_sha256'],

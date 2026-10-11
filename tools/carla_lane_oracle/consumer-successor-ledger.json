@@ -1,0 +1,5 @@
+{
+  "schema": 1,
+  "scope": "Reviewed edges for Map consumers that the border-parser and winner-sign records pin (#703). Append one edge for each reviewed consumer change, and update LEDGER_SHA256 in consumer_successor_ledger.py. The edges of one consumer chain in order. Every other consumer change remains fail-closed.",
+  "edges": []
+}
