@@ -704,6 +704,10 @@ def _live_function_code(value):
     return getattr(value, '__code__', None)
 
 
+_LIVE_FUNCTION_CODE = _live_function_code
+_LIVE_FUNCTION_CODE_CODE = _live_function_code.__code__
+
+
 def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
@@ -1041,6 +1045,22 @@ def _cache_verify_frame(frame, *, include_aliases=False):
     namespace = frame.f_globals if frame is not None else {}
     if include_aliases is True and _different_alias_leaf(namespace.get('__file__'), ('cache_key_contracts.py',)):
         return False
+    # A real helper frame cannot be an unwrapped verify alias. Elide only
+    # lexical path construction; every stack walk and live owner check remains.
+    if (include_aliases is True and type(frame) is types.FrameType
+            and type(namespace) is dict and os.name == 'posix' and Path is pathlib.Path
+            and type(namespace.get('__file__')) is str
+            and namespace['__file__'].startswith('/')
+            and type(__file__) is str and __file__.startswith('/')
+            and __file__.rsplit('/', 1)[-1] not in ('', '.', '..')
+            and _live_function_code is _LIVE_FUNCTION_CODE
+            and _live_function_code.__code__ is _LIVE_FUNCTION_CODE_CODE):
+        candidate = namespace.get('verify')
+        if (candidate is None or (type(candidate) is types.FunctionType
+                and type(candidate.__dict__) is dict
+                and '__wrapped__' not in candidate.__dict__
+                and frame.f_code is not candidate.__code__)):
+            return False
     return (include_aliases and type(namespace.get('__file__')) is str
             and Path(namespace['__file__']).absolute() == Path(__file__).absolute().with_name('cache_key_contracts.py')
             and frame.f_code is _live_function_code(namespace.get('verify')))
@@ -1273,8 +1293,19 @@ def _operation_fail(operation, error):
 def _owner_module(kind):
     if kind in ('map_loops', 'rtree_loops'):
         return None
-    name = {'invariant': 'coverage_invariant_contracts',
-            'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
+    if type(kind) is str:
+        if kind == 'invariant':
+            name = 'coverage_invariant_contracts'
+        elif kind == 'winner':
+            name = 'winner_sign_contracts'
+        elif kind == 'border':
+            name = 'border_parser_contracts'
+        else:
+            name = None
+    else:
+        # Exotic keys retain dictionary hashing and equality behavior.
+        name = {'invariant': 'coverage_invariant_contracts',
+                'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
     return sys.modules.get((__package__ + '.' if __package__ else '') + name) if name else None
 
 
