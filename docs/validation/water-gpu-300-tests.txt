@@ -1,0 +1,26 @@
+# GPU water device tests (#300)
+revision: 474ab090 (exported with git archive, run from the export)
+build: mojo build -I . --Werror tests/test_gpu_water.mojo -o /tmp/tgw300
+run: /tmp/tgw300
+date: 2026-10-11T00:01:46Z
+mojo: Mojo 1.1.0 (8189361e)
+max: 26.6.0
+gpu: NVIDIA TITAN RTX, 591.86, 24576 MiB
+cpu: AMD Ryzen 9 5900X 12-Core Processor, 24 logical cores
+os: Linux 6.18.33.1-microsoft-standard-WSL2, WSL 2
+gpu temperature before: 39 C
+
+
+Running 8 tests for /home/tron/300-exact/tests/test_gpu_water.mojo 
+    PASS [ 736.253 ] test_gpu_radiance_matches_the_cpu_frame
+    PASS [ 20.915 ] test_gpu_radiance_follows_reset_and_lighting
+    PASS [ 45.555 ] test_gpu_draw_matches_the_cpu_draw
+    PASS [ 14.753 ] test_gpu_compose_matches_the_cpu_compose
+    PASS [ 24.762 ] test_a_failed_frame_leaves_the_gpu_and_the_image_usable
+    PASS [ 437.065 ] test_gpu_resources_stay_bounded_and_are_released
+    PASS [ 7.515 ] test_gpu_water_releases_after_construction_and_failure
+    PASS [ 17.271 ] test_a_failed_construction_releases_and_the_next_one_works
+--------
+Summary [ 1304.093 ] 8 tests run: 8 passed , 0 failed , 0 skipped 
+
+exit status: 0

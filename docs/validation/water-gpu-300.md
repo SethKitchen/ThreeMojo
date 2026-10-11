@@ -16,7 +16,7 @@ Hardware: NVIDIA TITAN RTX (24 GiB, driver 591.86) and AMD Ryzen 9 5900X (12 cor
 
 ## Results
 
-The depth pass, the highlight and blur passes, and the grade-and-write pass run disjoint runs of rows on every logical core ([issue 733](https://github.com/SethKitchen/ThreeMojo/issues/733)). Each pixel has one writer and the serial arithmetic, and tests compare each pass with one serial pass bit for bit. The glare pass stays serial.
+The depth pass, the highlight and blur passes, and the grade-and-write pass run disjoint runs of rows on every logical core ([issue 733](https://github.com/SethKitchen/ThreeMojo/issues/733)). Each pixel has one writer and the serial arithmetic. `WaterScene.workers` sets the thread count, and one worker runs each pass as one task over every row. A test draws `FRAME`, `LINEAR` and `GLARE` and composes a scene on one worker and on every core. It requires the same pixels, depths and drawn count. Other tests compare each pass with one serial pass bit for bit. The glare pass stays serial.
 
 Radiance only, in milliseconds:
 
@@ -49,18 +49,20 @@ A 1920 x 1080 composed scene, in milliseconds as p50 / p95 / max:
 | Grade and write | 10.1 / 10.3 / 10.3 | 10.5 / 11.4 / 11.4 |
 | Whole frame | 247 / 281 / 281 | 836 / 849 / 849 |
 
-Before the row passes ran in parallel, the same run gave 382 ms for bloom, glare and grading, 621 ms for the depth pass and 115 ms for the grade and write. The GPU water frame took 515 ms and the GPU composed scene 971 ms.
+An earlier run gives a before observation. That run, at commit `d06143b1`, came before the row passes ran in parallel. It gave 382 ms for bloom, glare and grading, 621 ms for the depth pass and 115 ms for the grade and write. Its GPU water frame took 515 ms and its GPU composed scene 971 ms. Its full output is `water-gpu-300-bench.txt` at that commit.
+
+The row passes explain the changes in the CPU stages. GPU shading also changed between the two runs, from 76 to 41 ms in the water frame and from 85 to 44 ms in the composed scene. The kernel did not change, so the row passes do not explain the whole frame gain.
 
 Opening the device and copying the photograph took 634 milliseconds once.
 
 ## Agreement with the CPU
 
-`tests/test_gpu_water.mojo` has seven device tests. Each radiance comparison divides the difference by the larger of the CPU value and 0.01, so it is relative for bright values and absolute near black. Every value on both paths must be finite.
+`tests/test_gpu_water.mojo` has eight device tests. Their output, with the revision, the command and the hardware, is in [water-gpu-300-tests.txt](water-gpu-300-tests.txt). Each radiance comparison divides the difference by the larger of the CPU value and 0.01, so it is relative for bright values and absolute near black. Every value on both paths must be finite.
 
 - Radiance at 96 x 64 and at 97 x 61, which leaves partial tiles, at two pitches: at least 98 percent of values within 1 percent, at least 99.5 percent within 10 percent, and none beyond 2. Measured at 96 x 64: 98.7 and 99.0 percent within 1 percent, and 99.913 percent within 10 percent at both pitches. The worst value differed by 0.47.
 - After `set_sun` and after `reset`, with active ripples: the same bounds.
 - A whole `FRAME` at 64 x 48: at most 2 percent of pixels differ by more than 2 of 255 in a channel. `CAUSTICS` does not shade, and every channel of every pixel matches exactly.
-- A composed scene at 40 x 30: the same water pixels and depths as the CPU. Every pixel that is not water keeps the scene's color exactly. At most 2 percent of water pixels differ by more than 2 of 255 in a channel.
+- A composed scene at 40 x 30: the same water pixels and depths as the CPU. Every pixel that is not water keeps the scene's color exactly. At most 2 percent of the water pixels differ by more than 2 of 255 in a channel. The test divides by the count of water pixels, not by the count of all pixels.
 
 The device fuses multiplies and adds where the host does not, and its math functions round differently. A last-bit change can flip an anisotropic tap count, a mip clamp or a noise band. That is why a few values differ a lot.
 
@@ -68,7 +70,17 @@ The device fuses multiplies and adds where the host does not, and its math funct
 
 A copy reads its host list until it completes. `GpuWater` waits for the device on every exit, success or failure, before the host lists of a frame or of the photograph can be freed. Then it re-raises the original error.
 
-`GpuWater.compose` shades on the GPU before it changes the image. If shading fails, the image and its depths are unchanged. A test makes a frame fail after its uploads are queued: the next frame still matches the CPU, and a failed composition leaves the image as it was, after which a retry draws the same water as the CPU.
+`GpuWater.compose` shades on the GPU before it changes the image. If shading fails, the image and its depths are unchanged. A test makes a frame fail after its uploads are queued. The next frame still matches the CPU. A failed composition leaves the image as it was. A retry then gives the same pixels, depths and drawn count as a first composition of a fresh image.
+
+A second test makes the constructor fail after the photograph's first copy is queued. The failed construction releases its buffer and its context: free device memory returns within 1 MiB. The next construction then shades as the CPU does. The test does this twice.
+
+### Supported failures
+
+`GpuWater` recovers from the errors that it raises on the host: a refused image size, and the failures that the tests inject. After one of these, the object and the device stay usable.
+
+A CUDA error that the driver reports is fatal. Restart the process after one. `GpuWater` does not try to recover a context, and no test exhausts device memory.
+
+The cleanup relies on one guarantee of the pinned MAX 26.6.0: [`DeviceContext.synchronize`](https://max.modular.com/stable/api/mojo/max/gpu/host/device_context/DeviceContext/#synchronize) waits until the queued work completes. CUDA can also report an earlier asynchronous error from that call ([CUDA stream management](https://docs.nvidia.com/cuda/cuda-driver-api/cuda_driver_api/group__CUDA__STREAM.html)). So an error from `synchronize` does not show that a copy is still in progress. It shows a fatal device error.
 
 ## Resources
 
@@ -80,7 +92,7 @@ A copy reads its host list until it completes. `GpuWater` waits for the device o
 - the output: 12 bytes a pixel, 24.9 MB at 1920 x 1080;
 - the level tables and the frame values: under 1 KB.
 
-So a 1920 x 1080 frame holds at most about 28.3 MB of device storage beyond the photograph. Its host lists match that size.
+So a 1920 x 1080 frame holds at most about 28.3 MB of device storage beyond the photograph. The host keeps a mirrored staging payload of the same size: the packed lists that the copies read, and the list that the output is copied back to. This is not the peak host memory of a whole frame, which also holds the CPU stages' images.
 
 The resource tests read free device memory after each frame, never inside one. These readings are post-frame watermarks, not in-frame peaks; the in-frame peak is the bound above. Over two rounds of 60 frames at 64 x 48, 97 x 61 and 128 x 72, with a `reset` and a refused frame, free memory ends within 1 MiB of where warm-up left it, the post-frame readings stay within 16 MiB of it, and resident host memory grows by under 32 MiB. After an object is dropped, free device memory returns within 1 MiB of where it was before the object. This also holds for an object dropped with no frame, and for one dropped after a failed frame. Repeated whole `draw` calls are not part of these tests.
 
