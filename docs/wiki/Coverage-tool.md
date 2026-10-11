@@ -104,7 +104,7 @@ These operands fail compilation with a coverage diagnostic:
 
 - A retained implicitly copyable custom operand. A same-type operator copies it, and a proxy cannot make that copy.
 - A temporary custom operand with a user-defined move constructor. The proxy would run it one more time.
-- An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence.
+- An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence. This includes a wrap from an empty `Optional[T]` into a present `Optional[Optional[T]]`.
 
 Do not omit the source or its obligations to bypass these limits.
 
@@ -114,7 +114,7 @@ The pinned reflection API names types without their origin parameters. A same-ty
 
 [Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) adds custom compound operands. An independent Python model of the native semantics supplies the expected results for 17 decision trees. The trees combine one-type and two-type operators, `not`, temporary and retained operands, `Bool` operands and a conditional-expression operand. Each tree runs with 16 truth assignments and 5 throwing positions, with stable truth tests and with truth tests that change at each conversion. The check compares the exact sequence of operand creation, conversion and destruction, the condition and decision hits, and the vectors. The reducer and the report must refuse each `?` vector.
 
-More native controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They also compare a retained operand without a pinned lifetime, a temporary that cannot move, and pure one-type operators. One generic function runs with one operand type and with two operand types, so each instantiation gets its own check. Six more programs compile natively and must fail with the coverage diagnostic.
+More native controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They also compare a retained operand without a pinned lifetime, a temporary that cannot move, and pure one-type operators. One generic function runs with one operand type and with two operand types, so each instantiation gets its own check. Ten more programs compile natively and must fail with the coverage diagnostic. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
 
 Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body.
 
