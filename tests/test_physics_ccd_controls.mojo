@@ -457,6 +457,37 @@ def test_a_box_sliding_flat_on_the_floor_takes_no_impulse() raises:
             assert_true(event.normal_impulse == Vector3(0, 0, 0))
 
 
+def test_a_box_sliding_onto_a_triangle_at_its_face_plane_takes_no_impulse() raises:
+    # The triangle covers y >= 0 on z = 0. The box starts off it with its
+    # bottom face exactly on the face plane and slides 1 m sideways onto
+    # it. The face-normal axis has no travel and only touches, so it
+    # separates the box from the triangle for the whole step.
+    for friction in [Float32(0), Float32(0.5)]:
+        var world = _world(False)
+        _ = world.add_body(
+            _mesh(
+                [
+                    Triangle(
+                        Vector3(-10, 0, 0), Vector3(10, 0, 0), Vector3(0, 10, 0)
+                    )
+                ],
+                friction=friction,
+            )
+        )
+        _ = world.add_body(
+            _shape(
+                _BOX, Vector3(0, -1, 0.5), Vector3(0, 100, 0), friction=friction
+            )
+        )
+        world.step(Duration(0.01))
+        ref slid = world.bodies[1]
+        assert_true(slid.linear_velocity == Vector3(0, 100, 0))
+        assert_almost_equal(slid.position.y, 0, atol=1e-6)
+        assert_equal(slid.position.z, 0.5)
+        for event in world.events:
+            assert_true(event.normal_impulse == Vector3(0, 0, 0))
+
+
 def _edge_world(side: Float32) raises -> PhysicsWorld:
     # The triangle covers y >= 0 on z = 0, so its edge lies on y = 0. The
     # box's +y face is at y = side. The box falls 0.3 m past the plane.
