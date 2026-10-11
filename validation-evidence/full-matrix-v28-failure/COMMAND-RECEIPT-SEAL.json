@@ -1,0 +1,2430 @@
+{
+  "actual_stage_labels": [
+    "00-normal-test_accepted_successor_contracts",
+    "00-optimized-test_accepted_successor_contracts",
+    "01-normal-test_border_parser_contracts",
+    "01-optimized-test_border_parser_contracts",
+    "02-normal-test_cache_key_contracts",
+    "02-optimized-test_cache_key_contracts",
+    "03-normal-test_coverage_followup_contracts",
+    "03-optimized-test_coverage_followup_contracts",
+    "04-normal-test_coverage_invariant_contracts",
+    "04-optimized-test_coverage_invariant_contracts",
+    "05-normal-test_curve_support_dispatch_contracts",
+    "05-optimized-test_curve_support_dispatch_contracts",
+    "06-normal-test_distance_validation_contracts",
+    "06-optimized-test_distance_validation_contracts",
+    "07-normal-test_envelope_budget_contracts",
+    "07-optimized-test_envelope_budget_contracts",
+    "08-normal-test_frozen_arc_producer_contracts"
+  ],
+  "actual_supervisor_console_sha256": "04cc1a74a87bc5f6ca63333ac6fa53e4a5b2074595a61b4865bb273d58de7b8c",
+  "config_sha256": "b078e691b04f3e2acfee6c1ddcd4f0ca934b500062593bb72d24592e882e7f5a",
+  "fresh_discovery_result_sha256": "983724ca988e0cabee988c5f8dc4c2cf47613f5afe73c9dd4d743729d5c6a9c1",
+  "inventory_sha256": "0996f6650319b26da030bcfccf85868e2eba6b755a46063bec9daabfd796a2f9",
+  "kind": "derived-command-and-receipt-index",
+  "published_binding_sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+  "result_sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844",
+  "schema": 1,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "unrun_stages": [
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_frozen_arc_producer_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "08-optimized-test_frozen_arc_producer_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_grouped_table_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "09-normal-test_grouped_table_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_grouped_table_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "09-optimized-test_grouped_table_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_grouped_y_finiteness_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "10-normal-test_grouped_y_finiteness_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_grouped_y_finiteness_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "10-optimized-test_grouped_y_finiteness_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_grouped_y_projection_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 8,
+      "label": "11-normal-test_grouped_y_projection_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_grouped_y_projection_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 8,
+      "label": "11-optimized-test_grouped_y_projection_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 42,
+      "label": "12-normal-test_invariant_operation_inputs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 42,
+      "label": "12-optimized-test_invariant_operation_inputs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_lane_control_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "13-normal-test_lane_control_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_lane_control_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "13-optimized-test_lane_control_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_lane_order_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "14-normal-test_lane_order_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_lane_order_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "14-optimized-test_lane_order_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_lexical_memo_scope.py",
+        "-v"
+      ],
+      "expected_tests": 14,
+      "label": "15-normal-test_lexical_memo_scope",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_lexical_memo_scope.py",
+        "-v"
+      ],
+      "expected_tests": 14,
+      "label": "15-optimized-test_lexical_memo_scope",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_moment_finiteness_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "16-normal-test_moment_finiteness_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_moment_finiteness_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "16-optimized-test_moment_finiteness_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_optional_runtime_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 95,
+      "label": "17-normal-test_optional_runtime_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_optional_runtime_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 95,
+      "label": "17-optimized-test_optional_runtime_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 33,
+      "label": "18-normal-test_paired_pin_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 33,
+      "label": "18-optimized-test_paired_pin_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_production_inventory_paths.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "19-normal-test_production_inventory_paths",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_production_inventory_paths.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "19-optimized-test_production_inventory_paths",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_raw_cut_inverse_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "20-normal-test_raw_cut_inverse_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_raw_cut_inverse_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "20-optimized-test_raw_cut_inverse_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_render_actor_reuse_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "21-normal-test_render_actor_reuse_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_render_actor_reuse_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "21-optimized-test_render_actor_reuse_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_reviewed_cleanup_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "22-normal-test_reviewed_cleanup_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_reviewed_cleanup_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "22-optimized-test_reviewed_cleanup_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_rounded_line_selector_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "23-normal-test_rounded_line_selector_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_rounded_line_selector_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "23-optimized-test_rounded_line_selector_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_rounded_line_singleton_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "24-normal-test_rounded_line_singleton_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_rounded_line_singleton_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "24-optimized-test_rounded_line_singleton_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_runtime_boundary_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "25-normal-test_runtime_boundary_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_runtime_boundary_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "25-optimized-test_runtime_boundary_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_runtime_correspondence.py",
+        "-v"
+      ],
+      "expected_tests": 91,
+      "label": "26-normal-test_runtime_correspondence",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_runtime_correspondence.py",
+        "-v"
+      ],
+      "expected_tests": 91,
+      "label": "26-optimized-test_runtime_correspondence",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sample_blend_migration.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "27-normal-test_sample_blend_migration",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sample_blend_migration.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "27-optimized-test_sample_blend_migration",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_seed_count_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 68,
+      "label": "28-normal-test_seed_count_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_seed_count_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 68,
+      "label": "28-optimized-test_seed_count_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_selection_finiteness_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "29-normal-test_selection_finiteness_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_selection_finiteness_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "29-optimized-test_selection_finiteness_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_speed_parser_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "30-normal-test_speed_parser_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_speed_parser_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "30-optimized-test_speed_parser_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_spiral_moments.py",
+        "-v"
+      ],
+      "expected_tests": 52,
+      "label": "31-normal-test_spiral_moments",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_spiral_moments.py",
+        "-v"
+      ],
+      "expected_tests": 52,
+      "label": "31-optimized-test_spiral_moments",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_stored_arithmetic_proofs.py",
+        "-v"
+      ],
+      "expected_tests": 13,
+      "label": "32-normal-test_stored_arithmetic_proofs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_stored_arithmetic_proofs.py",
+        "-v"
+      ],
+      "expected_tests": 13,
+      "label": "32-optimized-test_stored_arithmetic_proofs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_stored_word_dependency_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "33-normal-test_stored_word_dependency_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_stored_word_dependency_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "33-optimized-test_stored_word_dependency_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sum2_correspondence.py",
+        "-v"
+      ],
+      "expected_tests": 64,
+      "label": "34-normal-test_sum2_correspondence",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sum2_correspondence.py",
+        "-v"
+      ],
+      "expected_tests": 64,
+      "label": "34-optimized-test_sum2_correspondence",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sum2_environment.py",
+        "-v"
+      ],
+      "expected_tests": 53,
+      "label": "35-normal-test_sum2_environment",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sum2_environment.py",
+        "-v"
+      ],
+      "expected_tests": 53,
+      "label": "35-optimized-test_sum2_environment",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sum2_oracle.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "36-normal-test_sum2_oracle",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_sum2_oracle.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "36-optimized-test_sum2_oracle",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_trig_word_dependency.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "37-normal-test_trig_word_dependency",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_trig_word_dependency.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "37-optimized-test_trig_word_dependency",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_winner_sign_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "38-normal-test_winner_sign_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_winner_sign_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "38-optimized-test_winner_sign_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_affected_coverage.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "39-normal-test_affected_coverage",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_affected_coverage.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "39-optimized-test_affected_coverage",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_affected_diagnostics.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "40-normal-test_affected_diagnostics",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_affected_diagnostics.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "40-optimized-test_affected_diagnostics",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_affected_roots.py",
+        "-v"
+      ],
+      "expected_tests": 13,
+      "label": "41-normal-test_affected_roots",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_affected_roots.py",
+        "-v"
+      ],
+      "expected_tests": 13,
+      "label": "41-optimized-test_affected_roots",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_pair_example.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "42-normal-test_anatomy_pair_example",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_pair_example.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "42-optimized-test_anatomy_pair_example",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_pair_inventory.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "43-normal-test_anatomy_pair_inventory",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_pair_inventory.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "43-optimized-test_anatomy_pair_inventory",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_report_binding.py",
+        "-v"
+      ],
+      "expected_tests": 10,
+      "label": "44-normal-test_anatomy_report_binding",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_report_binding.py",
+        "-v"
+      ],
+      "expected_tests": 10,
+      "label": "44-optimized-test_anatomy_report_binding",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_validity.py",
+        "-v"
+      ],
+      "expected_tests": 12,
+      "label": "45-normal-test_anatomy_validity",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_anatomy_validity.py",
+        "-v"
+      ],
+      "expected_tests": 12,
+      "label": "45-optimized-test_anatomy_validity",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_build_tools.py",
+        "-v"
+      ],
+      "expected_tests": 28,
+      "label": "46-normal-test_build_tools",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_build_tools.py",
+        "-v"
+      ],
+      "expected_tests": 28,
+      "label": "46-optimized-test_build_tools",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_ci_policy.py",
+        "-v"
+      ],
+      "expected_tests": 21,
+      "label": "47-normal-test_ci_policy",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_ci_policy.py",
+        "-v"
+      ],
+      "expected_tests": 21,
+      "label": "47-optimized-test_ci_policy",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_ci_scope.py",
+        "-v"
+      ],
+      "expected_tests": 37,
+      "label": "48-normal-test_ci_scope",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_ci_scope.py",
+        "-v"
+      ],
+      "expected_tests": 37,
+      "label": "48-optimized-test_ci_scope",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_hit_profile.py",
+        "-v"
+      ],
+      "expected_tests": 28,
+      "label": "49-normal-test_coverage_hit_profile",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_hit_profile.py",
+        "-v"
+      ],
+      "expected_tests": 28,
+      "label": "49-optimized-test_coverage_hit_profile",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_lifecycle.py",
+        "-v"
+      ],
+      "expected_tests": 42,
+      "label": "50-normal-test_coverage_lifecycle",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_lifecycle.py",
+        "-v"
+      ],
+      "expected_tests": 42,
+      "label": "50-optimized-test_coverage_lifecycle",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_loop_proofs.py",
+        "-v"
+      ],
+      "expected_tests": 125,
+      "label": "51-normal-test_coverage_loop_proofs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_loop_proofs.py",
+        "-v"
+      ],
+      "expected_tests": 125,
+      "label": "51-optimized-test_coverage_loop_proofs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_process_group.py",
+        "-v"
+      ],
+      "expected_tests": 11,
+      "label": "52-normal-test_coverage_process_group",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_process_group.py",
+        "-v"
+      ],
+      "expected_tests": 11,
+      "label": "52-optimized-test_coverage_process_group",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_record_cache.py",
+        "-v"
+      ],
+      "expected_tests": 41,
+      "label": "53-normal-test_coverage_record_cache",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_record_cache.py",
+        "-v"
+      ],
+      "expected_tests": 41,
+      "label": "53-optimized-test_coverage_record_cache",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_scheduling.py",
+        "-v"
+      ],
+      "expected_tests": 11,
+      "label": "54-normal-test_coverage_scheduling",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_scheduling.py",
+        "-v"
+      ],
+      "expected_tests": 11,
+      "label": "54-optimized-test_coverage_scheduling",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_toolchain_identity.py",
+        "-v"
+      ],
+      "expected_tests": 11,
+      "label": "55-normal-test_coverage_toolchain_identity",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_coverage_toolchain_identity.py",
+        "-v"
+      ],
+      "expected_tests": 11,
+      "label": "55-optimized-test_coverage_toolchain_identity",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_example_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "56-normal-test_example_inputs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_example_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "56-optimized-test_example_inputs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_humanoid_fidelity.py",
+        "-v"
+      ],
+      "expected_tests": 16,
+      "label": "57-normal-test_humanoid_fidelity",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_humanoid_fidelity.py",
+        "-v"
+      ],
+      "expected_tests": 16,
+      "label": "57-optimized-test_humanoid_fidelity",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_carla_oracle.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "58-normal-test_make_carla_oracle",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_carla_oracle.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "58-optimized-test_make_carla_oracle",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_coverage_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "59-normal-test_make_coverage_inputs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_coverage_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "59-optimized-test_make_coverage_inputs",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_cpu_cache.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "60-normal-test_make_cpu_cache",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_cpu_cache.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "60-optimized-test_make_cpu_cache",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_gpu_compile.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "61-normal-test_make_gpu_compile",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_gpu_compile.py",
+        "-v"
+      ],
+      "expected_tests": 6,
+      "label": "61-optimized-test_make_gpu_compile",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_helper_inventory.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "62-normal-test_make_helper_inventory",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_make_helper_inventory.py",
+        "-v"
+      ],
+      "expected_tests": 3,
+      "label": "62-optimized-test_make_helper_inventory",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_native_test_support.py",
+        "-v"
+      ],
+      "expected_tests": 26,
+      "label": "63-normal-test_native_test_support",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_native_test_support.py",
+        "-v"
+      ],
+      "expected_tests": 26,
+      "label": "63-optimized-test_native_test_support",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_renderer_cap_loop.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "64-normal-test_renderer_cap_loop",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_renderer_cap_loop.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "64-optimized-test_renderer_cap_loop",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_additional_loops.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "65-normal-test_reviewed_additional_loops",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_additional_loops.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "65-optimized-test_reviewed_additional_loops",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_count_loop.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "66-normal-test_reviewed_count_loop",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_count_loop.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "66-optimized-test_reviewed_count_loop",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_moment_loops.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "67-normal-test_reviewed_moment_loops",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_moment_loops.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "67-optimized-test_reviewed_moment_loops",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_moment_nonempty.py",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "68-normal-test_reviewed_moment_nonempty",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_moment_nonempty.py",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "68-optimized-test_reviewed_moment_nonempty",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_small_loops.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "69-normal-test_reviewed_small_loops",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_reviewed_small_loops.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "69-optimized-test_reviewed_small_loops",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_sampled_values.py",
+        "-v"
+      ],
+      "expected_tests": 27,
+      "label": "70-normal-test_sampled_values",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_sampled_values.py",
+        "-v"
+      ],
+      "expected_tests": 27,
+      "label": "70-optimized-test_sampled_values",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_shared_physics_dependencies.py",
+        "-v"
+      ],
+      "expected_tests": 1,
+      "label": "71-normal-test_shared_physics_dependencies",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_shared_physics_dependencies.py",
+        "-v"
+      ],
+      "expected_tests": 1,
+      "label": "71-optimized-test_shared_physics_dependencies",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_half_reference.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "72-normal-test_spiral_half_reference",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_half_reference.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "72-optimized-test_spiral_half_reference",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_sum2_reference.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "73-normal-test_spiral_sum2_reference",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_sum2_reference.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "73-optimized-test_spiral_sum2_reference",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_suite_key.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "74-normal-test_suite_key",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_suite_key.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "74-optimized-test_suite_key",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_test_environment.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "75-normal-test_test_environment",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_test_environment.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "75-optimized-test_test_environment",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 95,
+      "label": "76-normal-test_full_audit_cleanup_contracts",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 95,
+      "label": "76-optimized-test_full_audit_cleanup_contracts",
+      "seconds": 1800
+    }
+  ]
+}

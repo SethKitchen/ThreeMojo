@@ -1,0 +1,132 @@
+{
+  "files": [
+    {
+      "bytes": 49460,
+      "kind": "derived-command-and-unrun-stage-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "638c82312a5ca18091d9137a6fbfa52400b9308faf4fadaab90a9500ee9e4b12"
+    },
+    {
+      "bytes": 404915,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "e7ac89023b786c801e10d25ca33d4d45e85ebae8a1be20c948c5cdda52dc4cbb"
+    },
+    {
+      "bytes": 2565,
+      "kind": "scope-and-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/README.md",
+      "path": "README.md",
+      "sha256": "63a3f18d50e66496174e94b8c8181e58a0759a06fc3e0dd687008d347f8abf26"
+    },
+    {
+      "bytes": 8893,
+      "kind": "derived-failure-count-and-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "3515bf8e101fd35d0a775cb1749445c8d4aa5cfe08eef2677f90782be18a0163"
+    },
+    {
+      "bytes": 5094,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/actual/full-python-matrix-final-v28/08-normal-test_frozen_arc_producer_contracts.log",
+      "path": "actual/full-python-matrix-final-v28/08-normal-test_frozen_arc_producer_contracts.log",
+      "sha256": "59dfe69d7f2279fe843752fc7eba51b728312a5f5ac49c90472b8e0cb055bdf1"
+    },
+    {
+      "bytes": 807,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/actual/full-python-matrix-final-v28/FAILURE.json",
+      "path": "actual/full-python-matrix-final-v28/FAILURE.json",
+      "sha256": "471f0d05991568288056cf6e66f8f375c76b48e626ab4671f2c71f36c91e6e5a"
+    },
+    {
+      "bytes": 18919,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/actual/full-python-matrix-final-v28/RESULT.json",
+      "path": "actual/full-python-matrix-final-v28/RESULT.json",
+      "sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/actual/full-python-matrix-final-v28/SDK-AFTER.json",
+      "path": "actual/full-python-matrix-final-v28/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/actual/full-python-matrix-final-v28/SDK-BEFORE.json",
+      "path": "actual/full-python-matrix-final-v28/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/actual/full-python-matrix-final-v28/WINDOW-START.json",
+      "path": "actual/full-python-matrix-final-v28/WINDOW-START.json",
+      "sha256": "75223564d6ae1823842c9bdaac2e5a57e5baed77f7f7772a99dfe00919059c63"
+    },
+    {
+      "bytes": 2392029,
+      "kind": "lossless-all-original-phase-files-raw-logs-source-and-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "638c0e5d0b2c8ca68f070f0b922a7812a1bbd954de471c888dec6c5d6d07610a"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 23651,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/reproduce/build_full_matrix_v28_failure_packet.py",
+      "path": "reproduce/build_full_matrix_v28_failure_packet.py",
+      "sha256": "70bedac524a40cc1a46ed613a3e4319c0173796c05080799def6a3151f26d02c"
+    },
+    {
+      "bytes": 1418,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/reproduce/discover_python_module_v2.py",
+      "path": "reproduce/discover_python_module_v2.py",
+      "sha256": "702838da94b1f8b6e868e85dba87932288d1fd5af501e515882eafdc53c96bfe"
+    },
+    {
+      "bytes": 55288,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/reproduce/full-python-matrix-final-v28.json",
+      "path": "reproduce/full-python-matrix-final-v28.json",
+      "sha256": "b078e691b04f3e2acfee6c1ddcd4f0ca934b500062593bb72d24592e882e7f5a"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 7101,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/reproduce/source/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "sha256": "c9f5790f7912b00a708a7ef5c218cc9419439469c1be33e0226d62409b3e91a8"
+    }
+  ],
+  "schema": 1,
+  "scope": "The original final v28 matrix stopped at stage 17 of 154. Sixteen complete stages passed 110 test executions. The failed normal frozen-arc module ran five methods: four passed and one failed a diagnostic-string assertion after rejecting the runtime-pin mutation. All 137 later stages, with 2559 expected executions, were unrun in this attempt."
+}

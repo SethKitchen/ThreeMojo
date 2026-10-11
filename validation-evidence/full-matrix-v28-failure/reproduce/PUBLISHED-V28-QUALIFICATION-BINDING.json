@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-11T05:35:37.962159+00:00",
+  "independent_tree_audit_sha256": "e01a5974ecf26c2c5f3ba538db0181abf4ce9ed8113dc21d384e0193d625a5ba",
+  "inventory_sha256": "0996f6650319b26da030bcfccf85868e2eba6b755a46063bec9daabfd796a2f9",
+  "manifest_sha256": "f8b88ea60f5501f400e8d39e653b9ed3280bed679b42c62d97490b5a6b660c20",
+  "matrix_config_sha256": "b078e691b04f3e2acfee6c1ddcd4f0ca934b500062593bb72d24592e882e7f5a",
+  "published_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "published_parent": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "published_tree": "d2c9f94523b9c03aa94b04eaad774f73f147cd74",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "status": "Fetched commit/tree/parent verified. Fresh matrix body execution remains pending at binding creation; no readiness claim."
+}

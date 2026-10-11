@@ -1,0 +1,219 @@
+{
+  "completed_passing_stages": 16,
+  "config_sha256": "b078e691b04f3e2acfee6c1ddcd4f0ca934b500062593bb72d24592e882e7f5a",
+  "configured_module_count": 77,
+  "configured_stage_count": 154,
+  "configured_test_executions_both_modes": 2674,
+  "configured_test_executions_per_mode": 1337,
+  "evidence_policy": "Original bytes and separately labeled derived summary only. No private review notes, source edits, tests/native execution, uploads or rewritten failure receipts.",
+  "failed_method": "FrozenArcProducerContracts.test_manifest_and_runtime_pin_refresh_cannot_authorize_change",
+  "failed_module_errors": 0,
+  "failed_module_failures": 1,
+  "failed_module_passing_methods": 4,
+  "failed_module_reported_methods": 5,
+  "failed_module_skips_observed": 0,
+  "failed_stage": "08-normal-test_frozen_arc_producer_contracts",
+  "failed_stage_returncode": 1,
+  "failed_stage_seconds": 25.56149632299639,
+  "failed_stage_timed_out": false,
+  "failed_subtest_path": "tools/carla_lane_oracle/runtime-source-pins.json",
+  "failure_interpretation": "The complete original traceback proves this runtime-pin mutation was rejected and the asserted diagnostic did not match. This does not waive the assertion, establish full behavior equivalence, or qualify any unrun test.",
+  "failure_kind": "assertRaisesRegex expected unreviewed runtime pin, but rejection raised unreviewed complete successor wrapping the full-audit unchanged-record rejection",
+  "finished": "2026-10-11T05:52:19.473115+00:00",
+  "fresh_discovery": {
+    "meaning": "Fresh discovery establishes expected IDs/counts, not test-body passes.",
+    "phase": "python-discovery-final-v28",
+    "result_sha256": "983724ca988e0cabee988c5f8dc4c2cf47613f5afe73c9dd4d743729d5c6a9c1",
+    "stages_completed": 154,
+    "test_bodies_executed": false,
+    "test_count_per_mode": 1337
+  },
+  "frozen_source_payload_count": 107,
+  "inventory_sha256": "0996f6650319b26da030bcfccf85868e2eba6b755a46063bec9daabfd796a2f9",
+  "later_diagnostic_continuation": "Excluded. Any later diagnostic continuation has separate receipts and cannot change this original failed result or make its unrun stages passed.",
+  "original_caps": {
+    "authority_child_seconds": 120,
+    "native_runtime_gate_metadata_seconds": 5,
+    "other_watchdogs": "Preserved exact source policy; no limit changed by this packet.",
+    "per_module_seconds": 1800,
+    "two_named_import_verification_watchdogs_seconds": 30,
+    "whole_window_seconds": 10800
+  },
+  "original_phase_file_counts": {
+    "full-python-matrix-final-v28": 59,
+    "python-discovery-final-v28": 623
+  },
+  "passing_executions_in_complete_stages": 110,
+  "published_binding_sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+  "qualification_limit": "No full Python matrix, paired native, maintained coverage, hosted CI or issue-completion pass is established.",
+  "remaining_owned_descendants": [],
+  "reproduction_boundary": "Preserves every original matrix/discovery phase file and raw merged log, both actual supervisor consoles, executed supervisor/discovery program, prepared configs/plans/inventory, exact publication/source seals, all31 delta source files and all77 selected test modules plus SDK support/runtime record. Requires the exact published repository and pinned SDK to reproduce; their entire unchanged images are not distributed.",
+  "result_sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844",
+  "schema": 1,
+  "scope": "The original final v28 matrix stopped at stage 17 of 154. Sixteen complete stages passed 110 test executions. The failed normal frozen-arc module ran five methods: four passed and one failed a diagnostic-string assertion after rejecting the runtime-pin mutation. All 137 later stages, with 2559 expected executions, were unrun in this attempt.",
+  "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "sequence_completed": false,
+  "source_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "source_tree": "d2c9f94523b9c03aa94b04eaad774f73f147cd74",
+  "stage_timings": [
+    {
+      "configured_expected_tests": 4,
+      "label": "00-normal-test_accepted_successor_contracts",
+      "reported_tests": 4,
+      "returncode": 0,
+      "seconds": 22.546180998004274,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 4,
+      "label": "00-optimized-test_accepted_successor_contracts",
+      "reported_tests": 4,
+      "returncode": 0,
+      "seconds": 24.04848321100144,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 14,
+      "label": "01-normal-test_border_parser_contracts",
+      "reported_tests": 14,
+      "returncode": 0,
+      "seconds": 67.14720180199947,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 14,
+      "label": "01-optimized-test_border_parser_contracts",
+      "reported_tests": 14,
+      "returncode": 0,
+      "seconds": 73.16583270700357,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 12,
+      "label": "02-normal-test_cache_key_contracts",
+      "reported_tests": 12,
+      "returncode": 0,
+      "seconds": 19.043364780998672,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 12,
+      "label": "02-optimized-test_cache_key_contracts",
+      "reported_tests": 12,
+      "returncode": 0,
+      "seconds": 20.552586391997465,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 4,
+      "label": "03-normal-test_coverage_followup_contracts",
+      "reported_tests": 4,
+      "returncode": 0,
+      "seconds": 173.52473591099988,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 4,
+      "label": "03-optimized-test_coverage_followup_contracts",
+      "reported_tests": 4,
+      "returncode": 0,
+      "seconds": 169.9636729180056,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 6,
+      "label": "04-normal-test_coverage_invariant_contracts",
+      "reported_tests": 6,
+      "returncode": 0,
+      "seconds": 165.86968858399632,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 6,
+      "label": "04-optimized-test_coverage_invariant_contracts",
+      "reported_tests": 6,
+      "returncode": 0,
+      "seconds": 171.32719772499695,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 3,
+      "label": "05-normal-test_curve_support_dispatch_contracts",
+      "reported_tests": 3,
+      "returncode": 0,
+      "seconds": 16.539674049003224,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 3,
+      "label": "05-optimized-test_curve_support_dispatch_contracts",
+      "reported_tests": 3,
+      "returncode": 0,
+      "seconds": 17.535453994998534,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 6,
+      "label": "06-normal-test_distance_validation_contracts",
+      "reported_tests": 6,
+      "returncode": 0,
+      "seconds": 0.5031198090000544,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 6,
+      "label": "06-optimized-test_distance_validation_contracts",
+      "reported_tests": 6,
+      "returncode": 0,
+      "seconds": 1.0039812890026951,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 6,
+      "label": "07-normal-test_envelope_budget_contracts",
+      "reported_tests": 6,
+      "returncode": 0,
+      "seconds": 6.017258861997107,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 6,
+      "label": "07-optimized-test_envelope_budget_contracts",
+      "reported_tests": 6,
+      "returncode": 0,
+      "seconds": 6.515952829999151,
+      "status": "PASS_COMPLETE_STAGE",
+      "timed_out": false
+    },
+    {
+      "configured_expected_tests": 5,
+      "label": "08-normal-test_frozen_arc_producer_contracts",
+      "reported_tests": 5,
+      "returncode": 1,
+      "seconds": 25.56149632299639,
+      "status": "FAIL_ONE_DIAGNOSTIC_ASSERTION",
+      "timed_out": false
+    }
+  ],
+  "status": "FAILED_ORIGINAL_FULL_MATRIX_V28_NOT_A_QUALIFICATION_PASS",
+  "total_window_seconds": 1001.4566625619991,
+  "unrun_expected_executions": 2559,
+  "unrun_stage_count": 137
+}
