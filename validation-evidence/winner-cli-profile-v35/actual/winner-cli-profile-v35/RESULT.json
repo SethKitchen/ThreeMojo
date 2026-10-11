@@ -1,0 +1,36 @@
+{
+  "elapsed_seconds": 87.10178653299226,
+  "failure": null,
+  "finished": "2026-10-11T13:48:51.323261+00:00",
+  "known_process_count": 2,
+  "remaining_owned_descendants": [],
+  "scope": "DIAGNOSTIC ONLY: one profiled exact maintained normal CLI winner child on immutable v35. Preserved 30-second qualification failures remain failures. Single120-second outer stage;100-second profiling alarm and112-second driver child watchdog permit bounded evidence/cleanup. No acceptance credit or timeout-policy change.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-profile-v35-protocol/driver.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-profile-v35"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+      "label": "v35-normal-cli-winner-profile",
+      "leader_reaped": true,
+      "log_sha256": "7e21d40579b568c28bc3dad5d9f8460395bd97a0035b9cab492911a0d5f8ea11",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 83.49132143199677,
+      "single_cpu": 0,
+      "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+      "stage_timeout_seconds": 120,
+      "started": "2026-10-11T13:47:26.191392+00:00",
+      "timed_out": false
+    }
+  ]
+}

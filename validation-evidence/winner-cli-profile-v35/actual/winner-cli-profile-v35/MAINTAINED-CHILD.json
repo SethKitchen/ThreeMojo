@@ -1,0 +1,30 @@
+{
+  "consumer": "winner_sign_contracts",
+  "cwd": "/tmp/optional-consumer-import-95dzpt0u/unrelated-cwd",
+  "fixture": "/tmp/optional-consumer-import-95dzpt0u",
+  "maintained_argv": [
+    "/tmp/optional-consumer-import-95dzpt0u/tools/probe_consumers.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+    "winner_sign_contracts",
+    "cli",
+    "False",
+    "False",
+    "False"
+  ],
+  "mode": "normal",
+  "original_command": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-E",
+    "-B",
+    "/tmp/optional-consumer-import-95dzpt0u/tools/probe_consumers.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+    "winner_sign_contracts",
+    "cli",
+    "False",
+    "False",
+    "False"
+  ],
+  "root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+  "script": "/tmp/optional-consumer-import-95dzpt0u/tools/probe_consumers.py",
+  "script_sha256": "0b71d278982ad68ab5c2f719eaef50d99019ceaacbffed05cd5586fb115e17d9"
+}

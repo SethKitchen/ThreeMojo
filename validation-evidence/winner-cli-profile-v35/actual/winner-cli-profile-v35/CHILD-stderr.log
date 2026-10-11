@@ -1,0 +1,28 @@
+Timeout (0:00:50)!
+Thread 0x00007fd09121e740 (most recent call first):
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 1167 in __new__
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 385 in with_segments
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 1223 in absolute
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/pathlib.py", line 1195 in cwd
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 947 in _check_context
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1417 in _check_owner
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1436 in _check
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1628 in _check
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1016 in raw
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1640 in raw
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1022 in text_default
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1646 in text_default
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/cache_key_contracts.py", line 118 in inventory
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/cache_key_contracts.py", line 232 in verify
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/cache_key_contracts.py", line 246 in predecessor_source
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/cache_key_contracts.py", line 270 in reviewed_text
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/lane_order_contracts.py", line 125 in verify
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/coverage_followup_contracts.py", line 122 in verify
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/coverage_followup_contracts.py", line 128 in accepts_predecessor_source
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 96 in verify
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 119 in _verify_owned
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/carla_lane_oracle/winner_sign_contracts.py", line 103 in verify
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/contextlib.py", line 81 in inner
+  File "/tmp/optional-consumer-import-95dzpt0u/tools/probe_consumers.py", line 16 in <module>
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-profile-v35-protocol/profile_child.py", line 62 in <module>
+  File "<string>", line 6 in <module>

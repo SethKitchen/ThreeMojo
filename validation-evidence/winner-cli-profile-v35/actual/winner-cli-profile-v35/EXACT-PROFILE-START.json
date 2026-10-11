@@ -1,0 +1,38 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-E",
+    "-B",
+    "-c",
+    "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-profile-v35-protocol/profile_child.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='35f771217ff71d6a8926f4fc6ca2cf9b3e98d77082e573110a36ba60c93d0cdd': raise RuntimeError('Profiler source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-profile-v35','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-profile-v35/MAINTAINED-CHILD.json','146aaa7ec224e825783cdcc92c97b8df551c1d8a990567ba6624dca2f8af2c55']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+  ],
+  "cwd": "/tmp/optional-consumer-import-95dzpt0u/unrelated-cwd",
+  "diagnostic_only": true,
+  "driver_child_cap_seconds": 112,
+  "driver_sha256": "f5aacc65696f58bed07cbbf676660505affac39721988cf030d72c1ec84ff306",
+  "fixture_source_seal_sha256": "c26ac411494c0b56cea87bd5bc82902f0108801c83ee1ba689d2ceddb7d6da0f",
+  "helper_sha256": "6d5cdb6ebf49bc9dd8b76a5f038a09437f86b229ed859d4a5c4e73cdb628cce7",
+  "maintained_argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-E",
+    "-B",
+    "/tmp/optional-consumer-import-95dzpt0u/tools/probe_consumers.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+    "winner_sign_contracts",
+    "cli",
+    "False",
+    "False",
+    "False"
+  ],
+  "maintained_child_cap_seconds": 30,
+  "outer_supervisor_cap_seconds": 120,
+  "payload_sha256": "146aaa7ec224e825783cdcc92c97b8df551c1d8a990567ba6624dca2f8af2c55",
+  "profile_work_cap_seconds": 100,
+  "profiler_sha256": "35f771217ff71d6a8926f4fc6ca2cf9b3e98d77082e573110a36ba60c93d0cdd",
+  "qualification_passed": false,
+  "scope": "One normal CLI winner profile diagnostic; maintained30s failures remain failures",
+  "script_sha256": "0b71d278982ad68ab5c2f719eaef50d99019ceaacbffed05cd5586fb115e17d9",
+  "sdk_before_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+  "test_source_sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+}

@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-profile-v35-protocol/driver.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-profile-v35"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+  "label": "v35-normal-cli-winner-profile",
+  "pgid": 8,
+  "pid": 8,
+  "single_cpu": 0,
+  "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+  "stage_timeout_seconds": 120,
+  "started": "2026-10-11T13:47:26.191392+00:00"
+}

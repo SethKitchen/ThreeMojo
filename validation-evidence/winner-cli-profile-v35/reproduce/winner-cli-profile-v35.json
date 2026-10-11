@@ -1,0 +1,25 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/WINNER-CLI-PROFILE-V35-PROTOCOL-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-profile-v35-protocol"
+    }
+  ],
+  "phase": "winner-cli-profile-v35",
+  "scope": "DIAGNOSTIC ONLY: one profiled exact maintained normal CLI winner child on immutable v35. Preserved 30-second qualification failures remain failures. Single120-second outer stage;100-second profiling alarm and112-second driver child watchdog permit bounded evidence/cleanup. No acceptance credit or timeout-policy change.",
+  "seal": "CANDIDATE-V35-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-profile-v35-protocol/driver.py",
+        "{evidence}"
+      ],
+      "label": "v35-normal-cli-winner-profile",
+      "seconds": 120
+    }
+  ],
+  "window_seconds": 150
+}

@@ -1,0 +1,160 @@
+{
+  "files": [
+    {
+      "bytes": 9095,
+      "kind": "derived-command-cap-and-receipt-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "b4f4a55e6139af7c611282ea06b6410f2da9099afaaea12439a2871be858d206"
+    },
+    {
+      "bytes": 12777,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "1c809f0fe8dd864e41cae1d96fdf91ffe33cd5a7d7eaf7659b770841f3863410"
+    },
+    {
+      "bytes": 2479,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/README.md",
+      "path": "README.md",
+      "sha256": "4e78a43d28d5836c94913d61d37e4017220b0b10654d6cf5d451826c0e11afff"
+    },
+    {
+      "bytes": 5074,
+      "kind": "derived-completed-diagnostic-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "eaf2d6779c738fe77477f014469f297dd1966e26a68985f4522c873a916b1126"
+    },
+    {
+      "bytes": 2284,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35.supervisor.log",
+      "path": "actual/winner-cli-profile-v35.supervisor.log",
+      "sha256": "9549db47ba01a78717df70204661b0ec38121c054d6a5fe778f3df9d11efbad6"
+    },
+    {
+      "bytes": 3332,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/CHILD-stderr.log",
+      "path": "actual/winner-cli-profile-v35/CHILD-stderr.log",
+      "sha256": "3628f785e24fcdeb92c7419e238211e53a0a4ab061a547f8bc7b05606d3bc15c"
+    },
+    {
+      "bytes": 2998,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/CHILD-stdout.log",
+      "path": "actual/winner-cli-profile-v35/CHILD-stdout.log",
+      "sha256": "8c38b472857aa0cbfe21761c5e657bd4607a2730d176f775d562de6c63ec8605"
+    },
+    {
+      "bytes": 2916,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/EXACT-PROFILE-RESULT.json",
+      "path": "actual/winner-cli-profile-v35/EXACT-PROFILE-RESULT.json",
+      "sha256": "65c6ae65a2213835f45dffb5ca2a121e47b2f08301632c657b881ecd1d64d6dd"
+    },
+    {
+      "bytes": 2377,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/EXACT-PROFILE-START.json",
+      "path": "actual/winner-cli-profile-v35/EXACT-PROFILE-START.json",
+      "sha256": "d3a3cb2cdadf93b0ee267d25ab60540f1ae2623f39f8fd6cef65df8b42b522d7"
+    },
+    {
+      "bytes": 1040,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/MAINTAINED-CHILD.json",
+      "path": "actual/winner-cli-profile-v35/MAINTAINED-CHILD.json",
+      "sha256": "146aaa7ec224e825783cdcc92c97b8df551c1d8a990567ba6624dca2f8af2c55"
+    },
+    {
+      "bytes": 1615,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/RESULT.json",
+      "path": "actual/winner-cli-profile-v35/RESULT.json",
+      "sha256": "380b86448d34aeca2ae7664f9f9733859570bb3b52c19d36c94798c365faa517"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/SDK-AFTER.json",
+      "path": "actual/winner-cli-profile-v35/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/SDK-BEFORE.json",
+      "path": "actual/winner-cli-profile-v35/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/WINDOW-START.json",
+      "path": "actual/winner-cli-profile-v35/WINDOW-START.json",
+      "sha256": "8a1a1d11f651af687ce27ba1ea8f765e6d7350a8212718aca237051e4c305c9a"
+    },
+    {
+      "bytes": 895,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/v35-normal-cli-winner-profile-RESULT.json",
+      "path": "actual/winner-cli-profile-v35/v35-normal-cli-winner-profile-RESULT.json",
+      "sha256": "7242dc38e0532406b6b1b4be8044941a9f51f0f032b63cb2a370e9d7c8e4f399"
+    },
+    {
+      "bytes": 652,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/v35-normal-cli-winner-profile-START.json",
+      "path": "actual/winner-cli-profile-v35/v35-normal-cli-winner-profile-START.json",
+      "sha256": "5ab67d918757f91f834a5fb7c8f4f0242ca7d2a4507179eb6d2a707b8deeec89"
+    },
+    {
+      "bytes": 2784,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/actual/winner-cli-profile-v35/v35-normal-cli-winner-profile.log",
+      "path": "actual/winner-cli-profile-v35/v35-normal-cli-winner-profile.log",
+      "sha256": "7e21d40579b568c28bc3dad5d9f8460395bd97a0035b9cab492911a0d5f8ea11"
+    },
+    {
+      "bytes": 1365661,
+      "kind": "lossless-original-profile-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "0232f4ef3c149213a17ebccefacade060bc8b43983e9e65f7bdd5bfcee3f4a58"
+    },
+    {
+      "bytes": 5175,
+      "kind": "unchanged-hash-bound-safe-decoder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 1010,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "sha256": "9f7159cc980b51da7be9ed5b3822cbb0a8c88977794200cf6b24315f9c4a8e2c"
+    },
+    {
+      "bytes": 30679,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/reproduce/build_winner_cli_profile_v35_packet.py",
+      "path": "reproduce/build_winner_cli_profile_v35_packet.py",
+      "sha256": "0303806ee48a21bcd913cf81f286ff059416dd87de5f1b34394f6030760791f9"
+    },
+    {
+      "bytes": 1081,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-profile-v35-terminal-packet/reproduce/winner-cli-profile-v35.json",
+      "path": "reproduce/winner-cli-profile-v35.json",
+      "sha256": "396f03afe2320cf05950be381b8dc21a90255e74c6af62d48177f4df9c6e1015"
+    }
+  ],
+  "schema": 1,
+  "scope": "One completed normal CLI winner diagnostic profile on v35; no overall qualification, maintained 30-second acceptance, performance improvement, timeout-policy approval, native/coverage/CI readiness, merge readiness, or issue completion."
+}
