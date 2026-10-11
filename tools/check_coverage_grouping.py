@@ -650,6 +650,12 @@ def optional_probe(index: Int, state: Cell) raises -> Optional[Probe]:
     return None
 
 
+def nested_optional(full: Bool) -> Optional[Optional[Int]]:
+    if full:
+        return Optional[Int](None)
+    return None
+
+
 def depth(count: Int, state: Cell) raises -> Int:
     if probe(0, state) and (probe(1, state) or flag(2, state)) and count > 0:
         return 1 + depth(count - 1, state)
@@ -694,6 +700,11 @@ def controls(mask: Int, changing: Bool) raises:
     if (maybe or other) and (number or flag(1, state)) or String("x") and List[Int](length=mask, fill=0):
         state[].log += "|S"
     state[].log += "|"
+    if nested_optional(mask % 2 == 0) or nested_optional(mask % 3 == 0):
+        state[].log += "|N"
+    if nested_optional(mask % 2 == 0) and nested_optional(mask % 3 == 0):
+        state[].log += "|D"
+    state[].log += "|"
     var copied = Copied(mask % 2 == 0)
     if copied:
         state[].log += "|K"
@@ -736,6 +747,57 @@ def test_controls() raises:
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 '''
+
+def nested_optional_rejections():
+    """Model selection before an inner Optional wraps into the result type.
+
+    Both operators first test the original left operand. The selected inner
+    Optional becomes present in the outer result, even when it was empty.
+    Construction logs also prove which right operands were short-circuited.
+    """
+    prelude = '''def inner(full: Bool) -> Optional[Int]:
+    print("MAKE inner")
+    if full:
+        return 0
+    return None
+
+
+def outer(full: Bool) -> Optional[Optional[Int]]:
+    print("MAKE outer")
+    if full:
+        return Optional[Int](None)
+    return None
+'''
+    cases = {}
+    for first, second in (("inner", "outer"), ("outer", "inner")):
+        for operator in ("and", "or"):
+            source = prelude + f'''
+
+def main():
+    for mask in range(4):
+        print("CASE", mask)
+        var left = (mask & 1) != 0
+        var right = (mask & 2) != 0
+        if {first}(left) {operator} {second}(right):
+            print("T")
+        else:
+            print("F")
+'''
+            expected = []
+            for mask in range(4):
+                left, right = bool(mask & 1), bool(mask & 2)
+                expected += [f"CASE {mask}", f"MAKE {first}"]
+                short = left if operator == "or" else not left
+                selected, present = (first, left) if short else (second, right)
+                if not short:
+                    expected.append(f"MAKE {second}")
+                expected.append("T" if selected == "inner" or present else "F")
+            cases[f"nested-optional-{first}-{operator}"] = (source, "\n".join(expected) + "\n")
+    return cases
+
+
+NESTED_OPTIONAL_REJECTIONS = nested_optional_rejections()
+
 
 # Unsupported operands must fail compilation with the coverage diagnostic.
 TRUTH_REJECTED = {
@@ -819,6 +881,8 @@ def main():
     else:
         print("F")
 ''', 'an implicit conversion between operand types'),
+    **{name: (source, 'an implicit conversion between operand types')
+       for name, (source, _) in NESTED_OPTIONAL_REJECTIONS.items()},
     'implicit-join': ('''struct Lifted(Movable, Boolable):
     var value: Bool
 
@@ -940,6 +1004,9 @@ def check_custom_truth(work, native, rewritten, build, mojo):
         result = run([mojo, 'build', '-Werror', '-I', str(native), str(native / f'{name}.mojo'),
                       '-o', str(work / name)])
         native_output = run([str(work / name)], timeout=5).stdout
+        if name in NESTED_OPTIONAL_REJECTIONS:
+            assert native_output == NESTED_OPTIONAL_REJECTIONS[name][1], (
+                name, native_output, NESTED_OPTIONAL_REJECTIONS[name][1])
         run([str(build), str(rewritten), f'{name}.mojo'], cwd=native)
         rejected = subprocess.run([mojo, 'build', '-Werror', '-I', str(rewritten),
                                    str(rewritten / f'{name}.mojo'), '-o', str(work / 'rejected')],
