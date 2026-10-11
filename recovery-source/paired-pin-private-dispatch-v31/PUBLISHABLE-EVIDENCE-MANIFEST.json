@@ -1,0 +1,24 @@
+{
+  "all_other_3836_source_files_unchanged": true,
+  "base_source_seal_sha256": "e595593ff7afaef3a4e04d6cbb24ec5343a0178ba11ea421e6a6c5ee455c4c38",
+  "candidate": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31",
+  "delta_count": 1,
+  "files": [
+    {
+      "before_sha256": "c581c353a2cfbacec9a012ed8e41bc89529733d22e436555bcb228377703be9d",
+      "bytes": 56096,
+      "git_blob": "868ecb2f40bf01afb09e73544ae0c6af3c65d194",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "aeeaebc260194cb6450b30c533e2c43128ac9aaa2475d105e58c73d4692d21f3"
+    }
+  ],
+  "mojo_and_genuine_report_unchanged": true,
+  "private_predecessor": "candidate-v30",
+  "published_base_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "review_sha256": "27c01faa7084afc9ecda536ec70cb91cd11b03c80d3af5eeec9fb469ad51a3a5",
+  "schema": 1,
+  "source_seal_sha256": "a6cb4394fecbeefdcb4615b43621c481db32f9dbf72c83e04e64283ac7f83456",
+  "status": "Reviewed test-only repair; fresh focused execution pending. No full-matrix or native/coverage claim."
+}
