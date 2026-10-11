@@ -1,0 +1,36 @@
+{
+  "elapsed_seconds": 36.05428192499676,
+  "failure": null,
+  "finished": "2026-10-11T03:43:50.385809+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "One explicitly authorized current-v21 diagnostic profile with58s inner/60s outer after exactplain12.5319s completion and failedoriginal10s qualification. Same underlyingcommand andfrozencandidate, noqualification/capchange. Profilersource readonce/hashchecked/compiledfromidenticalbytes. Rawcodeidentities beforepstats; stop evenifcensored.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_invariant_child_v21.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='0ca7300861c6f2d905dcd44ad0f5b4a5213e0194bf9d2bbb27ad4d93d0095655': raise RuntimeError('Profiler source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-complete-profile-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-profile-command-v21.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+      "label": "bounded-current-cost-profile",
+      "leader_reaped": true,
+      "log_sha256": "029b682c29e054bafaf96ec391c66307dd7ee65d85b93ef29973cd4a20d8d7be",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 33.08384382800432,
+      "single_cpu": 0,
+      "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+      "stage_timeout_seconds": 60,
+      "started": "2026-10-11T03:43:16.001446+00:00",
+      "timed_out": false
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "pause_request_file": "invariant-input-complete-profile-v21.pause",
+  "phase": "invariant-input-complete-profile-v21",
+  "scope": "One explicitly authorized current-v21 diagnostic profile with58s inner/60s outer after exactplain12.5319s completion and failedoriginal10s qualification. Same underlyingcommand andfrozencandidate, noqualification/capchange. Profilersource readonce/hashchecked/compiledfromidenticalbytes. Rawcodeidentities beforepstats; stop evenifcensored.",
+  "seal": "CANDIDATE-V21-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+  "stages": [
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_invariant_child_v21.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='0ca7300861c6f2d905dcd44ad0f5b4a5213e0194bf9d2bbb27ad4d93d0095655': raise RuntimeError('Profiler source changed')\nsys.argv=[str(p),'{evidence}','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-profile-command-v21.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "label": "bounded-current-cost-profile",
+      "seconds": 60
+    }
+  ],
+  "window_seconds": 180
+}

@@ -1,0 +1,35 @@
+{
+  "config_sha256": "2c429ce8905cb24a3bd0682b3a616813a7c7b1db35138848513bd2e28f38352c",
+  "kind": "derived-actual-command-and-receipt-binding",
+  "profiler_source_sha256": "0ca7300861c6f2d905dcd44ad0f5b4a5213e0194bf9d2bbb27ad4d93d0095655",
+  "result_sha256": "8850c61677e8ea412cf750b8d6e24eb4ddcf059af32760ec95181b711c42f4d7",
+  "schema": 1,
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+  "stage": {
+    "adopted_reaped": [],
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+      "-B",
+      "-c",
+      "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_invariant_child_v21.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='0ca7300861c6f2d905dcd44ad0f5b4a5213e0194bf9d2bbb27ad4d93d0095655': raise RuntimeError('Profiler source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-complete-profile-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-profile-command-v21.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+    ],
+    "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+    "label": "bounded-current-cost-profile",
+    "leader_reaped": true,
+    "log_sha256": "029b682c29e054bafaf96ec391c66307dd7ee65d85b93ef29973cd4a20d8d7be",
+    "pgid": 8,
+    "pid": 8,
+    "remaining_owned_descendants": [],
+    "returncode": 0,
+    "seconds": 33.08384382800432,
+    "single_cpu": 0,
+    "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+    "stage_timeout_seconds": 60,
+    "started": "2026-10-11T03:43:16.001446+00:00",
+    "timed_out": false
+  },
+  "stage_result_sha256": "abd192666442d97741d664ff3dc41f7f9b52eaabcde1b9c93f60344570580d58",
+  "start_sha256": "48cf574a8ff3e5116e694fd6c34d0ea94b4411774afdd6281ff304df3da8abda",
+  "underlying_command": "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)",
+  "underlying_command_sha256": "d55db19bde4a4d8d2ab0650a10de312d0d5249d74d672674f411d973f724e7c9"
+}

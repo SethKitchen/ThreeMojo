@@ -1,0 +1,244 @@
+{
+  "files": [
+    {
+      "bytes": 7912,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "f5b7644d4cfe9cf49fd44ab2476101364066c7482e938f3cf21b6071cfc87a4c"
+    },
+    {
+      "bytes": 39652,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "9199d1ee680f72e399ccbf940830e90dbb13f529327aff031991df2480c7acbf"
+    },
+    {
+      "bytes": 2237,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/README.md",
+      "path": "README.md",
+      "sha256": "216fe882f0b51f3a669cac63530c7b29222676c5018389f3b8532761d84de234"
+    },
+    {
+      "bytes": 4245,
+      "kind": "derived-failure-and-censoring-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "c4637c46c17c51e81b9879592777a659b3a3dbef761d1e59ea72ddacf6bd8a57"
+    },
+    {
+      "bytes": 1695,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-cold-probes-v21/RESULT.json",
+      "path": "actual/invariant-input-cold-probes-v21/RESULT.json",
+      "sha256": "447a4753da128075f0d366b526525917849a9baa0cb07fe7d41b664ddb167212"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-cold-probes-v21/SDK-AFTER.json",
+      "path": "actual/invariant-input-cold-probes-v21/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-cold-probes-v21/SDK-BEFORE.json",
+      "path": "actual/invariant-input-cold-probes-v21/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-cold-probes-v21/WINDOW-START.json",
+      "path": "actual/invariant-input-cold-probes-v21/WINDOW-START.json",
+      "sha256": "4c56c030e48bf39252a190be720324c752dee6900cbd7041e155f87b96ff476b"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-cold-probes-v21/normal-direct.log",
+      "path": "actual/invariant-input-cold-probes-v21/normal-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1664,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-plain-diagnostic-v21/RESULT.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/RESULT.json",
+      "sha256": "882560091d6595d664bb6d07221f224060ac8d31a2b8f2da71c006de68b25006"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-plain-diagnostic-v21/SDK-AFTER.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-plain-diagnostic-v21/SDK-BEFORE.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-plain-diagnostic-v21/WINDOW-START.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/WINDOW-START.json",
+      "sha256": "43b81eb4559314fb07158140e7945ef3597519d7c7268baddeced9600602c9c1"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic.log",
+      "path": "actual/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3754,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/owner-classifier-focused-controls-v21/RESULT.json",
+      "path": "actual/owner-classifier-focused-controls-v21/RESULT.json",
+      "sha256": "4e9225f3c96b927d9a419e7e64d466f13af4a6b8551449bb52b04f20dccc70d0"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/owner-classifier-focused-controls-v21/SDK-AFTER.json",
+      "path": "actual/owner-classifier-focused-controls-v21/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/owner-classifier-focused-controls-v21/SDK-BEFORE.json",
+      "path": "actual/owner-classifier-focused-controls-v21/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/owner-classifier-focused-controls-v21/WINDOW-START.json",
+      "path": "actual/owner-classifier-focused-controls-v21/WINDOW-START.json",
+      "sha256": "a00dbdcce49d7f5963b4e426a66d5a78302ddc34b196f22b2c51e17b25187bb6"
+    },
+    {
+      "bytes": 270,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/owner-classifier-focused-controls-v21/normal-classifier-controls.log",
+      "path": "actual/owner-classifier-focused-controls-v21/normal-classifier-controls.log",
+      "sha256": "4d95c981c65de724c93a50910cd4b3de2c4de6fdf3427e7b6a494819db1c5e69"
+    },
+    {
+      "bytes": 273,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/actual/owner-classifier-focused-controls-v21/optimized-classifier-controls.log",
+      "path": "actual/owner-classifier-focused-controls-v21/optimized-classifier-controls.log",
+      "sha256": "ae47591db49f292415764011d318d56eac8beefed886dd183ec9008e9b966815"
+    },
+    {
+      "bytes": 1256105,
+      "kind": "lossless-original-raw-receipts-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "cbc8c373c9689a8861e2ab111fb2ec11dc658eb409d834b677380f01efa0d115"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419400,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/CANDIDATE-V19-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V19-SOURCE-SEAL.json",
+      "sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e"
+    },
+    {
+      "bytes": 419400,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/CANDIDATE-V21-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V21-SOURCE-SEAL.json",
+      "sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc"
+    },
+    {
+      "bytes": 15353,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "367ba38b8dce2a7334d10cf5eda12b178edc52eea4fbc43c1b16f4b62a952afd"
+    },
+    {
+      "bytes": 21612,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/build_owner_classifier_v21_packet.py",
+      "path": "reproduce/build_owner_classifier_v21_packet.py",
+      "sha256": "d18a4485ae88789d4d04cf3876f2843a0681375d17a7f945b48f594a546ddc19"
+    },
+    {
+      "bytes": 22389,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/classifier_equivalence_controls.py",
+      "path": "reproduce/classifier_equivalence_controls.py",
+      "sha256": "51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4"
+    },
+    {
+      "bytes": 2256,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/invariant-input-cold-probes-v21.json",
+      "path": "reproduce/invariant-input-cold-probes-v21.json",
+      "sha256": "c7b226471c25785b62f0c3d0884c4b39f5878dc143bce2f3847d6d7a1323f1f1"
+    },
+    {
+      "bytes": 2469,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/invariant-input-cold-probes-v21.supervisor.log",
+      "path": "reproduce/invariant-input-cold-probes-v21.supervisor.log",
+      "sha256": "b4df046d7e2e3a5e8f49944f81fd68f91ed261cfd7e02861896f2e48fb34042f"
+    },
+    {
+      "bytes": 1148,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/invariant-input-plain-diagnostic-v21.json",
+      "path": "reproduce/invariant-input-plain-diagnostic-v21.json",
+      "sha256": "44b8e3b569016dc816fe7db3b5e9b9dd4ce1e6bc59d98f7892cc27563bc5d52f"
+    },
+    {
+      "bytes": 2455,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/invariant-input-plain-diagnostic-v21.supervisor.log",
+      "path": "reproduce/invariant-input-plain-diagnostic-v21.supervisor.log",
+      "sha256": "916eab50c676656f8059bd80be1b7ca55d0921328826be636c520e706085daf1"
+    },
+    {
+      "bytes": 2621,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/owner-classifier-focused-controls-v21.json",
+      "path": "reproduce/owner-classifier-focused-controls-v21.json",
+      "sha256": "0c1b1ed73f7aeea41d89268e4b9575bff30e57390986e04819ffd7f7361f8fd0"
+    },
+    {
+      "bytes": 6208,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/owner-classifier-focused-controls-v21.supervisor.log",
+      "path": "reproduce/owner-classifier-focused-controls-v21.supervisor.log",
+      "sha256": "b9c16db8191bf9edb1ea693abaed15107a3cf4424ed6de4b3c719f8cb88a690a"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-owner-classifier-v21-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    }
+  ],
+  "schema": 1,
+  "scope": "Focused synthetic-frame classifier equivalence passes only. Original 10-second real cold gate fails. Separate identical-body 30-second plain diagnostic completes above ten seconds. No original-cap, lifecycle, readiness or broader qualification claim."
+}

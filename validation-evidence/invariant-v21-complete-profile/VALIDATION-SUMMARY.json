@@ -1,0 +1,89 @@
+{
+  "command_sha256": "d55db19bde4a4d8d2ab0650a10de312d0d5249d74d672674f411d973f724e7c9",
+  "diagnostic": {
+    "full_audit_verify_calls_observed": 1,
+    "inner_work_cap_seconds": 58,
+    "module_bindings": 317,
+    "observed_entry_details": {
+      "_InvariantInputs.finish": {
+        "calls": 1,
+        "code": {
+          "bytecode_sha256": "d98bcf2f909a0f49f17b6ee105198d48604cfe423b5b9770ef51e041f08d72e6",
+          "filename": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+          "kind": "code",
+          "line": 1547,
+          "name": "finish",
+          "object_id": 827947616,
+          "qualname": "_InvariantInputs.finish"
+        },
+        "id": 359,
+        "recursive_calls": 0,
+        "self_seconds": 7.564000000000001e-06,
+        "total_seconds": 1.856680635
+      },
+      "verify": {
+        "calls": 1,
+        "code": {
+          "bytecode_sha256": "cf3297adfc8d4604c89f91ae19b6df53c08a5206143df1290129ee20bdb326a9",
+          "filename": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+          "kind": "code",
+          "line": 1708,
+          "name": "verify",
+          "object_id": 832497744,
+          "qualname": "verify"
+        },
+        "id": 419,
+        "recursive_calls": 0,
+        "self_seconds": 0.031064399000000003,
+        "total_seconds": 5.315894809
+      }
+    },
+    "operation_finish_calls_observed": 1,
+    "outer_stage_cap_seconds": 60,
+    "profile_report_elapsed_seconds": 32.86734985699877,
+    "profiler_binding": "The original launcher reads the profiler once, checks SHA-256, and compiles those same checked bytes. This packet includes that exact source.",
+    "raw_code_entries": 916,
+    "raw_code_object_identities_preserved": true,
+    "raw_scope_wording": "The original profiler template says Partial diagnostic profile. Its actual status in this run is completed; the bytes remain unchanged.",
+    "returncode": 0,
+    "scheduled_stack_snapshot_seconds": 29,
+    "stack_header_meaning": "The Timeout (0:00:29) header is the scheduled faulthandler traceback; the stage was not timed out. Completion and exit 0 are preserved in the actual receipts.",
+    "status": "completed",
+    "supervised_stage_elapsed_seconds": 33.08384382800432,
+    "timed_out": false,
+    "timing_limit": "The 32.867-second report includes profiling/instrumentation and report preparation. The supervised stage is 33.084 seconds. Neither is an original 10-second qualification pass.",
+    "whole_window_cap_seconds": 180,
+    "whole_window_elapsed_seconds": 36.05428192499676
+  },
+  "evidence_policy": "All twelve original phase files, raw code identities, binary pstats, checked profiler, config/command, supervisor and source/SDK seals are byte-preserved. Binary content is losslessly base64 encoded and never loaded. No private reviews/design notes, unrelated source, rerun, candidate edit or upload.",
+  "exact_frozen_source_manifest_paths": 29,
+  "existing_three_phase_packet": "Preserved unchanged; only its exact manifest is copied here as context.",
+  "existing_three_phase_packet_manifest_sha256": "6f90590d2b1e513134126d002b7383ee065ad08359ad741b172d24bb9df3d262",
+  "original_cold_gate": {
+    "observed_stage_seconds": 10.061513043001469,
+    "result_sha256": "447a4753da128075f0d366b526525917849a9baa0cb07fe7d41b664ddb167212",
+    "returncode": -9,
+    "same_underlying_command_and_source": true,
+    "stage_cap_seconds": 10,
+    "status": "FAILED",
+    "timed_out": true,
+    "unrun": [
+      "normal-package",
+      "optimized-direct",
+      "optimized-package"
+    ]
+  },
+  "profiler_source_sha256": "0ca7300861c6f2d905dcd44ad0f5b4a5213e0194bf9d2bbb27ad4d93d0095655",
+  "pstats_sha256": "ccc6a5e1426890ef2df0176cf48dad6a745c83b988527b04d6dea3ef395764c8",
+  "raw_profile_sha256": "7eb398e5b7549a421023b9a9a11e54bdf8be0f69e13c378ecb63bbafff9ea199",
+  "remaining_owned_descendants": [],
+  "reproduction_boundary": "Includes all 29 frozen manifest paths and the referenced SDK-identity/cache-key helper source, full source seal, exact profiler and command/config. Unchanged full repository and SDK executable payloads are bound by receipts but not distributed; this is not a self-contained SDK image.",
+  "result_sha256": "8850c61677e8ea412cf750b8d6e24eb4ddcf059af32760ec95181b711c42f4d7",
+  "schema": 1,
+  "scope": "One completed profiled diagnostic with 58-second inner and 60-second outer bounds. The original maintained 10-second cold gate remains failed. No qualification, readiness or cap-relaxation claim.",
+  "source_manifest_sha256": "367ba38b8dce2a7334d10cf5eda12b178edc52eea4fbc43c1b16f4b62a952afd",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+  "status": "COMPLETED_V21_PROFILE_DIAGNOSTIC_ONLY_ORIGINAL_10S_GATE_FAILED",
+  "stream_capture": "Original stdout and stderr share the merged stage log; separate streams were not recorded or invented."
+}

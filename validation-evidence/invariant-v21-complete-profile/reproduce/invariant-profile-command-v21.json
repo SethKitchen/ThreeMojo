@@ -1,0 +1,5 @@
+{
+  "command": "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)",
+  "command_sha256": "d55db19bde4a4d8d2ab0650a10de312d0d5249d74d672674f411d973f724e7c9",
+  "route": "exact-normal-direct-invariant"
+}
