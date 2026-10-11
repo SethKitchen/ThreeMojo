@@ -68,9 +68,14 @@ def box_corners(transform: CarlaTransform, box: BoundingBox) -> List[Vector3]:
 
 
 struct LaneInvasionEvent(Copyable, Movable):
-    """The markings a vehicle crossed in one tick, `LaneInvasionEvent`."""
+    """The markings a vehicle crossed in one tick, `LaneInvasionEvent`.
+
+    The `timestamp` field keeps CARLA's raw Float64 seconds. The
+    constructor takes a `Duration64`, and `elapsed` is the typed view.
+    """
 
     var frame: Int
+    # The snapshot's elapsed simulated seconds, in Float64.
     var timestamp: Float64
     # The parent vehicle's pose.
     var transform: CarlaTransform
@@ -79,22 +84,47 @@ struct LaneInvasionEvent(Copyable, Movable):
     def __init__(
         out self,
         frame: Int,
-        timestamp: Float64,
+        timestamp: Duration64,
         transform: CarlaTransform,
         var crossed_lane_markings: List[LaneMarking],
-    ):
-        """Create an event.
+    ) raises:
+        """Create an event without narrowing its time.
 
         Args:
             frame: The snapshot's frame.
-            timestamp: The snapshot's elapsed seconds.
+            timestamp: The snapshot's elapsed time, kept in Float64.
             transform: The parent's pose.
             crossed_lane_markings: What was crossed, corner by corner.
+
+        Raises:
+            Error: If the time is not finite or is negative.
         """
         self.frame = frame
-        self.timestamp = timestamp
+        self.timestamp = timestamp.value
         self.transform = transform
         self.crossed_lane_markings = crossed_lane_markings^
+        self.check()
+
+    def check(self) raises:
+        """Check the mutable time field before a boundary reads it.
+
+        Raises:
+            Error: If the time is not finite or is negative.
+        """
+        if not (isfinite(self.timestamp) and self.timestamp >= 0):
+            raise Error("A lane invasion time must be finite and nonnegative")
+
+    def elapsed(self) raises -> Duration64:
+        """Return the snapshot's elapsed time.
+
+        Returns:
+            The unchanged Float64 time as a Duration64.
+
+        Raises:
+            Error: If the mutable time field is not finite or is negative.
+        """
+        self.check()
+        return Duration64(self.timestamp)
 
 
 struct LaneInvasionSensor(Copyable, Movable):
@@ -161,4 +191,4 @@ struct LaneInvasionSensor(Copyable, Movable):
             crossed.extend(map.calculate_crossed_lanes(previous[i], next[i]))
         if len(crossed) == 0:
             return None
-        return LaneInvasionEvent(frame, timestamp.value, transform, crossed^)
+        return LaneInvasionEvent(frame, timestamp, transform, crossed^)

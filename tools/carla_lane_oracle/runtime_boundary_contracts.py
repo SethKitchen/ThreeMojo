@@ -6,7 +6,9 @@ The border-parser and winner-sign records pin these Map consumers as
 unchanged live inputs. This record admits one reviewed edge for each: its
 historical digest before, and its exact source and token digests after. The
 bound correctness tests and compile-fail fixtures must also be unchanged.
-Any other consumer change still fails closed in both records.
+The runtime view record can extend an edge by one exact reviewed step; the
+composed edge still starts at the historical digest. Any other consumer
+change still fails closed in both records.
 """
 import hashlib
 import json
@@ -65,12 +67,26 @@ def verify(root, *, _operation=None):
             and record['issue'] == 333 and set(record['edges']) == set(MODULES),
             'unexpected successor scope')
     require(set(record['correctness_tests']) == set(TESTS), 'unexpected correctness test set')
+    if __package__:
+        from . import runtime_view_contracts as view
+    else:
+        import runtime_view_contracts as view
+    steps = view.steps(root)
+    require(set(steps) <= set(MODULES), 'runtime view step outside the boundary scope')
     edges = {}
     for path in MODULES:
         edge = record['edges'][path]
         require(set(edge) == {'before_sha256', 'after_sha256', 'before_token_sha256',
                               'after_token_sha256'}
                 and edge['before_sha256'] != edge['after_sha256'], 'malformed edge: ' + path)
+        if path in steps:
+            # A later reviewed step starts exactly where this edge ends.
+            step = steps[path]
+            require(step['before_sha256'] == edge['after_sha256']
+                    and step['before_token_sha256'] == edge['after_token_sha256'],
+                    'runtime view step does not extend the edge: ' + path)
+            edge = {**edge, 'after_sha256': step['after_sha256'],
+                    'after_token_sha256': step['after_token_sha256']}
         actual = _observe_bytes(root, path, (root/path).read_bytes(),
                                 _operation=_operation)
         require(hashlib.sha256(actual).hexdigest() == edge['after_sha256']

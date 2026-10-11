@@ -48,6 +48,9 @@ almost every file in `extensions/carla/` as an unchanged live consumer.
 | `DVSCamera.simulate(image, elapsed)` | `Duration64`, this change |
 | `LaneInvasionSensor.tick(map, frame, timestamp, transform)` | `Duration64`, this change |
 | `World.get_traffic_lights_from_waypoint(waypoint, distance)` | `Length64`, this change |
+| `LaneInvasionEvent(frame, timestamp, transform, markings)` | `Duration64`; refuses a nonfinite or negative time |
+| `LaneInvasionEvent.timestamp` | Raw field that mirrors CARLA; `elapsed()` is the checked typed view |
+| `SensorMeasurement.timestamp` | Raw field that the header writes; `elapsed()` is the checked typed view |
 | `World.elapsed_seconds`, `World.delta_seconds` | Raw fields that mirror CARLA; `Timestamp` is the typed view |
 | `Navigation.delta_seconds`, `Navigation.time_to_unblock` | Internal crowd state |
 | `ALSM.current_time`, `ALSM.elapsed_last_actor_destruction` | Internal traffic manager state |
@@ -65,6 +68,19 @@ tick's nanoseconds to `Float32`, and the port does the same.
 Nine compile-fail fixtures check that each boundary refuses a raw
 `Float64`, the wrong dimension and the `Float32` quantity.
 
+The lane invasion event and the sensor measurement were the last runtime
+time records with only a raw field. The event constructor now takes a
+`Duration64`. Each record keeps its raw Float64 field and has an `elapsed`
+view that checks the field before it returns a `Duration64`. A measurement
+also refuses a nonfinite or negative world time before it writes its
+header. `tests/test_carla_event_time_quantity.mojo` checks the exact bits
+of large, tiny and signed-zero times, a one-microsecond step at about
+1.2e8 seconds, and the header round trip. Four more compile-fail fixtures
+check the event constructor and the typed view. The lane oracle accepts
+these two source changes only as the exact steps in
+`tools/carla_lane_oracle/runtime-view-successor.json`. Each step starts at
+the after digest of the runtime boundary edge for the same file.
+
 ## Pinned OpenDRIVE and map geometry
 
 `map_builder.mojo`, `road_info.mojo`, `map.mojo`, `road.mojo`,
@@ -78,9 +94,34 @@ One numerical defect is in this group. `CubicPolynomial(3.5, 0, 0, 1, s=1e6)`
 re-expands its coefficients about zero, as CARLA does. At `x = 1e6` the
 expanded terms cancel, and `evaluate` returns 0 instead of 3.5. A typed
 `Length64` alone does not fix it. The fix keeps the local coefficients and
-evaluates at `x - s`. That changes the computed bits for every road, so it
-needs new oracle pins. Its migration and the typed map queries belong in
-one coordinated successor change.
+evaluates at `x - s`. That changes the computed bits of every record that
+starts at a nonzero `s`, so it needs new oracle pins. Its migration and the
+typed map queries belong in one coordinated successor change. That change
+is still open.
+
+The fix is not a local edit, for two reasons:
+
+- The certificates read the expanded coefficients. `curve_bounds.mojo`
+  (`_polynomial_jet`), `lane_value_bounds.mojo` (`_polynomial_value`),
+  `junction_bounds.mojo` (`_polynomial_bounds` and its interval form) and
+  `Road`'s line-center cubic in `road.mojo` enclose the value of the
+  expanded cubic. A conditioned `evaluate` returns 3.5 where that
+  enclosure holds only 0, so these bounds must move to the local form in
+  the same change. Otherwise they are unsound.
+- Thirteen lane oracle records pin `polynomial.mojo`, by whole-file digest,
+  token digest, embedded source or selected method. They are
+  `border-parser-successor.json`, `canonical-source-correspondence.json`,
+  `frozen-arc-producer-migration.json`, `full-audit-cleanup-successor.json`,
+  `optional-runtime-migration.json`, `rounded-line-singleton-migration.json`,
+  `runtime-source-pins.json`, `seed-count-successor.json`,
+  `spiral-graph-correspondence.json`, `sum2-correspondence-migration.json`,
+  `supported-source.json`, `translated-parameter-source.json` and
+  `winner-sign-query-migration.json`. `tools/coverage_loop_proofs.py` pins
+  it too. Three records state that `__init__`, `evaluate` and `tangent`
+  are byte-identical to the reviewed proof sources. A conditioned
+  evaluation makes that statement false, so each record needs a reviewed
+  successor, not a new digest. Each of the thirteen records also pins
+  `road.mojo` or a certificate module.
 
 ## Geodesy and V2X
 
@@ -113,7 +154,8 @@ field for the arithmetic. `WeatherParameters`, `RgbCameraSettings`,
 
 ## Remaining acceptance work
 
-- The pinned map group, together with the conditioned cubic evaluation.
+- The pinned map group, together with the conditioned cubic evaluation
+  and the certificate modules that read its coefficients.
 - Typed constructors for the user-supplied configuration records.
 - A reviewed classification of each candidate in the scan.
 - The traffic manager's `ActorId` input audit, which the issue lists as
