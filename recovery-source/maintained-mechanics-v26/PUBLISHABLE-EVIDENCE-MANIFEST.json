@@ -1,0 +1,29 @@
+{
+  "backup_delta_parent_manifest": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/public-error-implementation-v25/SOURCE-UPLOAD-MANIFEST.json",
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v26",
+  "delta_from_v25": [
+    {
+      "after_sha256": "a65207f101084b01f1a764836359df68a7aed605e7fc76b3be8c7478081125f0",
+      "before_sha256": "a24b9ead2d8ed2ae3f05785ebbf3233773c473e595a7214216dc1f568ac54f1d",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "files": [
+    {
+      "before_sha256": null,
+      "bytes": 93494,
+      "git_blob": "70e82e2c4246049e5ff15563a7167920a7207c43",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v26/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "a65207f101084b01f1a764836359df68a7aed605e7fc76b3be8c7478081125f0",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v26/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "Three reviewed classifier/lexical mechanics controls appended; all30 existing methods and production/proof bytes equal v25. Fresh execution required.",
+  "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a",
+  "status": "source_only_unqualified"
+}
