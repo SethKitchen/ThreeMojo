@@ -1,0 +1,283 @@
+{
+  "interrupted": [
+    "70-normal-test_sampled_values"
+  ],
+  "never_launched": [
+    "70-optimized-test_sampled_values",
+    "71-normal-test_shared_physics_dependencies",
+    "71-optimized-test_shared_physics_dependencies",
+    "72-normal-test_spiral_half_reference",
+    "72-optimized-test_spiral_half_reference",
+    "73-normal-test_spiral_sum2_reference",
+    "73-optimized-test_spiral_sum2_reference",
+    "74-normal-test_suite_key",
+    "74-optimized-test_suite_key",
+    "75-normal-test_test_environment",
+    "75-optimized-test_test_environment",
+    "76-normal-test_full_audit_cleanup_contracts",
+    "76-optimized-test_full_audit_cleanup_contracts"
+  ],
+  "original_result_sha256": "ddcd0576ed61827896eac96a52ae44a7d98cbb9f202137d7a38ecb887838359b",
+  "stages": [
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_sampled_values.py",
+        "-v"
+      ],
+      "expected_tests": 27,
+      "label": "70-normal-test_sampled_values",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_sampled_values.py",
+        "-v"
+      ],
+      "expected_tests": 27,
+      "label": "70-optimized-test_sampled_values",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_shared_physics_dependencies.py",
+        "-v"
+      ],
+      "expected_tests": 1,
+      "label": "71-normal-test_shared_physics_dependencies",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_shared_physics_dependencies.py",
+        "-v"
+      ],
+      "expected_tests": 1,
+      "label": "71-optimized-test_shared_physics_dependencies",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_half_reference.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "72-normal-test_spiral_half_reference",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_half_reference.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "72-optimized-test_spiral_half_reference",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_sum2_reference.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "73-normal-test_spiral_sum2_reference",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_spiral_sum2_reference.py",
+        "-v"
+      ],
+      "expected_tests": 7,
+      "label": "73-optimized-test_spiral_sum2_reference",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_suite_key.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "74-normal-test_suite_key",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_suite_key.py",
+        "-v"
+      ],
+      "expected_tests": 5,
+      "label": "74-optimized-test_suite_key",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_test_environment.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "75-normal-test_test_environment",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools",
+        "-p",
+        "test_test_environment.py",
+        "-v"
+      ],
+      "expected_tests": 4,
+      "label": "75-optimized-test_test_environment",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 95,
+      "label": "76-normal-test_full_audit_cleanup_contracts",
+      "seconds": 1800
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 95,
+      "label": "76-optimized-test_full_audit_cleanup_contracts",
+      "seconds": 1800
+    }
+  ],
+  "status": "Proposed exact inventory only; independent config/runner review and root window approval pending."
+}

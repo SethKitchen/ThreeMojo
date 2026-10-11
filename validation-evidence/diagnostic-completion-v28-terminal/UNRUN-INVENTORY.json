@@ -1,0 +1,32 @@
+{
+  "boundary": "These expected method counts are not executed-test counts. A last incomplete launch is explicitly distinguished from an unlaunched stage.",
+  "expected_methods": 95,
+  "kind": "derived-exact-supervisor-unrun-suffix",
+  "schema": 1,
+  "stage_count": 1,
+  "stages": [
+    {
+      "actual_artifacts": [],
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_full_audit_cleanup_contracts.py",
+        "-v"
+      ],
+      "disposition": "not launched",
+      "expected_methods": 95,
+      "label": "76-optimized-test_full_audit_cleanup_contracts",
+      "mode": 1,
+      "module": "tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py",
+      "position_one_based": 14,
+      "supervisor_marks_unrun": true
+    }
+  ]
+}

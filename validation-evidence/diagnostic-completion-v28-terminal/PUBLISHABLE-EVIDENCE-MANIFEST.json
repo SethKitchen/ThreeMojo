@@ -1,0 +1,125 @@
+{
+  "files": [
+    {
+      "bytes": 21534,
+      "kind": "derived-command-binding-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "c0dc3818923bee0fd08f37f22fab51e3ce36ae4a4e42e93f2129c2e2bf670db1"
+    },
+    {
+      "bytes": 32692,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "545abea6b442c429c6989c5e01f452fa865b09b4d80248ab1e714026c010e426"
+    },
+    {
+      "bytes": 2765,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/README.md",
+      "path": "README.md",
+      "sha256": "1487f70da666712991dd66895a94d6471a5cddd1d98c7c3924e55890ac86a5f0"
+    },
+    {
+      "bytes": 950,
+      "kind": "derived-explicit-unrun-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/UNRUN-INVENTORY.json",
+      "path": "UNRUN-INVENTORY.json",
+      "sha256": "a41c542b11991e439f92c9f67aa286e3f3931f5c6729c74de14584ccc30c8f65"
+    },
+    {
+      "bytes": 13630,
+      "kind": "derived-diagnostic-only-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "c6d31763c039048ce1035afc2e186d786e165ea959fd3eccac6e2ea229437740"
+    },
+    {
+      "bytes": 821,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/actual/terminal-completion/FAILURE.json",
+      "path": "actual/terminal-completion/FAILURE.json",
+      "sha256": "ee85cdc4d8b04f6b99d7c8dcbc2ef77ab62ed5004f63ff7230635d9fea7dd25a"
+    },
+    {
+      "bytes": 15207,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/actual/terminal-completion/RESULT.json",
+      "path": "actual/terminal-completion/RESULT.json",
+      "sha256": "0e76f5398b6bb4244b9b7f65c76408d26e40ccfaf7b1b35d31589f07fbc3d493"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/actual/terminal-completion/SDK-AFTER.json",
+      "path": "actual/terminal-completion/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/actual/terminal-completion/SDK-BEFORE.json",
+      "path": "actual/terminal-completion/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/actual/terminal-completion/WINDOW-START.json",
+      "path": "actual/terminal-completion/WINDOW-START.json",
+      "sha256": "1ad51fbd31e53be06d185fee146f6e66c4195e694b177eef4cdf22b5d741afd0"
+    },
+    {
+      "bytes": 917029,
+      "kind": "lossless-original-terminal-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "37f8215e176199f860645ec0864a482912350efe990da6ef030aefb4aded3142"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 6077,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/reproduce/DIAGNOSTIC-COMPLETION-14-STAGE-INVENTORY.json",
+      "path": "reproduce/DIAGNOSTIC-COMPLETION-14-STAGE-INVENTORY.json",
+      "sha256": "2b29b4ff8e64832e7684f82176a34347f5f0fb9bc9c4e9297ce1ae953f15e7aa"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 37088,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/reproduce/build_diagnostic_completion_v28_terminal_packet.py",
+      "path": "reproduce/build_diagnostic_completion_v28_terminal_packet.py",
+      "sha256": "7346a6fc957a944eaa9d2aa5a90a9fc5ae455a2ab6df0e5157fe10753a4a8650"
+    },
+    {
+      "bytes": 7952,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/reproduce/full-python-diagnostic-completion-v28.json",
+      "path": "reproduce/full-python-diagnostic-completion-v28.json",
+      "sha256": "7aa23228e0b9ea130fe3c25fe376e5210c105beb761793bab4a40fa2300a1d39"
+    },
+    {
+      "bytes": 18048,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-completion-v28-terminal-packet/reproduce/run_diagnostic_completion_v28.py",
+      "path": "reproduce/run_diagnostic_completion_v28.py",
+      "sha256": "df6da89f3b8c3c6790c2c2c1eb414cf3677674165203a30c8224d632f26a3b84"
+    }
+  ],
+  "schema": 1,
+  "scope": "Terminal evidence for the separate fourteen-stage v28 diagnostic completion only. Collection completion, even with all stages passing, does not establish passing qualification. Both prior failed attempts and later repaired candidates remain separate."
+}

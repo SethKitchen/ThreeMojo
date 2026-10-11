@@ -1,0 +1,563 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 2686704,
+    "json_sha256": "fb33c05254b6d45723f1ab0dc055da7c09553da66bfb88122e1040139a48c91f",
+    "members": 52,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 22134,
+      "kind": "complete-actual-terminal-supervisor-console",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/full-python-diagnostic-completion-v28.supervisor.log",
+      "path": "actual/full-python-diagnostic-completion-v28.supervisor.log",
+      "sha256": "17351089be7234ca64ec9a81d9ee96dbfbde8fb27582bbb38d1bdcb615b2a0cd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 884,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/70-normal-test_sampled_values-RESULT.json",
+      "path": "actual/terminal-completion/70-normal-test_sampled_values-RESULT.json",
+      "sha256": "7db708166743428312495978686d8d1fdc282b828de03fc5b566a12d77ac8d90",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 570,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/70-normal-test_sampled_values-START.json",
+      "path": "actual/terminal-completion/70-normal-test_sampled_values-START.json",
+      "sha256": "6747ded3127543e9d156cbfb05195f35f11220802fd112453712d5233c7a286f",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9154,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/70-normal-test_sampled_values.log",
+      "path": "actual/terminal-completion/70-normal-test_sampled_values.log",
+      "sha256": "07dbbdbe6610b899a9fdfbd9a6b5cd25b723c7d4fb242ab34e564dd58b48ba7b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 899,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/70-optimized-test_sampled_values-RESULT.json",
+      "path": "actual/terminal-completion/70-optimized-test_sampled_values-RESULT.json",
+      "sha256": "9912fef2bf220e4570ff5600b85f0cb040fafd5e4608f8281d176279c5c3b104",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 585,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/70-optimized-test_sampled_values-START.json",
+      "path": "actual/terminal-completion/70-optimized-test_sampled_values-START.json",
+      "sha256": "c8420168401f2d74606a52c44c7a3770795e1d49b51a4ed94586d1b47d3471fd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9154,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/70-optimized-test_sampled_values.log",
+      "path": "actual/terminal-completion/70-optimized-test_sampled_values.log",
+      "sha256": "7580be2ee8e26ee62917a17204204a5cb4594dc136635c8ab19a2a52903f4dcd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 911,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/71-normal-test_shared_physics_dependencies-RESULT.json",
+      "path": "actual/terminal-completion/71-normal-test_shared_physics_dependencies-RESULT.json",
+      "sha256": "3a93c3af20cf90f88db36407aa0d714ceb3c2d6219398cc866741f3337413734",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 598,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/71-normal-test_shared_physics_dependencies-START.json",
+      "path": "actual/terminal-completion/71-normal-test_shared_physics_dependencies-START.json",
+      "sha256": "db8d216e3be185cf298da1bf94a7d1405ed6979590a1bdfa265313f2bc335202",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 257,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/71-normal-test_shared_physics_dependencies.log",
+      "path": "actual/terminal-completion/71-normal-test_shared_physics_dependencies.log",
+      "sha256": "2e7356b61e53fecb3901d48b1b1b097d44f7144bc314b8dddcecb7943f07d213",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 924,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/71-optimized-test_shared_physics_dependencies-RESULT.json",
+      "path": "actual/terminal-completion/71-optimized-test_shared_physics_dependencies-RESULT.json",
+      "sha256": "fd591acbaf12119708dfeaa67937ecd3ea1248f097d58f3990bba3dd3794c015",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 611,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/71-optimized-test_shared_physics_dependencies-START.json",
+      "path": "actual/terminal-completion/71-optimized-test_shared_physics_dependencies-START.json",
+      "sha256": "9c31c43529a90da6424f6fc5c87ab83230b9b5e63d80d345fd142f7ff088a48b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 257,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/71-optimized-test_shared_physics_dependencies.log",
+      "path": "actual/terminal-completion/71-optimized-test_shared_physics_dependencies.log",
+      "sha256": "2e7356b61e53fecb3901d48b1b1b097d44f7144bc314b8dddcecb7943f07d213",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 899,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/72-normal-test_spiral_half_reference-RESULT.json",
+      "path": "actual/terminal-completion/72-normal-test_spiral_half_reference-RESULT.json",
+      "sha256": "c96a352d209b981490242f697f5ee186e2cadb5933c4d8769966b2b5485ee14b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 586,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/72-normal-test_spiral_half_reference-START.json",
+      "path": "actual/terminal-completion/72-normal-test_spiral_half_reference-START.json",
+      "sha256": "a21e2541c7d403528995a463df79816c52820f92ec9bb94363eddc13fc9894f5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 800,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/72-normal-test_spiral_half_reference.log",
+      "path": "actual/terminal-completion/72-normal-test_spiral_half_reference.log",
+      "sha256": "e5addf4e10cd8a301fd21368384aa741e1c681106df2195582be59bba9b788f2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 912,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/72-optimized-test_spiral_half_reference-RESULT.json",
+      "path": "actual/terminal-completion/72-optimized-test_spiral_half_reference-RESULT.json",
+      "sha256": "6e2bba7ff04d20d9321fe0774ff7dfce0e55de8a1eef3124697e9d0424ae032b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 599,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/72-optimized-test_spiral_half_reference-START.json",
+      "path": "actual/terminal-completion/72-optimized-test_spiral_half_reference-START.json",
+      "sha256": "ca54732752d473cf11d87a91a818a03717b616ff6bff39ff71bde6ea12a5870e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 800,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/72-optimized-test_spiral_half_reference.log",
+      "path": "actual/terminal-completion/72-optimized-test_spiral_half_reference.log",
+      "sha256": "ca1c63275dc0616aabdc8e2911ba9f80898493a1cd17adf2cfb833b46c8877c4",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 899,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/73-normal-test_spiral_sum2_reference-RESULT.json",
+      "path": "actual/terminal-completion/73-normal-test_spiral_sum2_reference-RESULT.json",
+      "sha256": "b8b247d1fba490c9a180b212f7cc15a9d131bc21dd5f26facea792f5ebee3d27",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 586,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/73-normal-test_spiral_sum2_reference-START.json",
+      "path": "actual/terminal-completion/73-normal-test_spiral_sum2_reference-START.json",
+      "sha256": "a9244d6543e70b94612a57bf94448fc6651728ba0b94141890702ddd1977b912",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1265,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/73-normal-test_spiral_sum2_reference.log",
+      "path": "actual/terminal-completion/73-normal-test_spiral_sum2_reference.log",
+      "sha256": "359f2c94dbcf0deb9f9f5f83e096be81208181bed536c63b699352cf01718f2c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 912,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/73-optimized-test_spiral_sum2_reference-RESULT.json",
+      "path": "actual/terminal-completion/73-optimized-test_spiral_sum2_reference-RESULT.json",
+      "sha256": "2cb8b1078791d43d5903063840e5d7ef64d5a792ad42d18f0a49d6733aac2f92",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 599,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/73-optimized-test_spiral_sum2_reference-START.json",
+      "path": "actual/terminal-completion/73-optimized-test_spiral_sum2_reference-START.json",
+      "sha256": "01c4d918ae22f06f0527bf7a222a3f30fc0d3ddb75cca79e3eac705ea0df1b76",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1265,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/73-optimized-test_spiral_sum2_reference.log",
+      "path": "actual/terminal-completion/73-optimized-test_spiral_sum2_reference.log",
+      "sha256": "553858f6376afd9753290cf4707f5a5f6455f94716e321c15102f4957450564a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 875,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/74-normal-test_suite_key-RESULT.json",
+      "path": "actual/terminal-completion/74-normal-test_suite_key-RESULT.json",
+      "sha256": "e3c005c4054591aa130d81d6d48f524224c276b4f907af81165cd75d1ea0d307",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 562,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/74-normal-test_suite_key-START.json",
+      "path": "actual/terminal-completion/74-normal-test_suite_key-START.json",
+      "sha256": "2a9de16f761ab910e2a2294970700fad0197e174c6044edb6e415570eb231140",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 724,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/74-normal-test_suite_key.log",
+      "path": "actual/terminal-completion/74-normal-test_suite_key.log",
+      "sha256": "862823318963077e64b45e797fef748b65d36d14524a75707705cb6a87426dc2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 887,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/74-optimized-test_suite_key-RESULT.json",
+      "path": "actual/terminal-completion/74-optimized-test_suite_key-RESULT.json",
+      "sha256": "726b7695b5b5a63ccf000ee0f09b2bb2772619b8c2d5fb059479916bf1825a13",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 575,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/74-optimized-test_suite_key-START.json",
+      "path": "actual/terminal-completion/74-optimized-test_suite_key-START.json",
+      "sha256": "9497a13bd40f8142b45defe3db9b15a537b5071a0f524b39cc92501b9d1f55b8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 724,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/74-optimized-test_suite_key.log",
+      "path": "actual/terminal-completion/74-optimized-test_suite_key.log",
+      "sha256": "e3b04b8d20aaaa125e7fb1eef35fef3314905fe808cbd707582a672af3f1811e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 889,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/75-normal-test_test_environment-RESULT.json",
+      "path": "actual/terminal-completion/75-normal-test_test_environment-RESULT.json",
+      "sha256": "12b5d0809b2bccebb987f5a74d81cfbee0af0171a843ab5c4774ee5b4631c2ba",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 576,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/75-normal-test_test_environment-START.json",
+      "path": "actual/terminal-completion/75-normal-test_test_environment-START.json",
+      "sha256": "42ed129e242e58cdcb06ec55bc8c59d1cce90babadeb24fe3349b892c5f08b5c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1236,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/75-normal-test_test_environment.log",
+      "path": "actual/terminal-completion/75-normal-test_test_environment.log",
+      "sha256": "0d5e4e3c8389680797c7a6869a58a633a61a51c94818ab842d167a60e200e2c4",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 902,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/75-optimized-test_test_environment-RESULT.json",
+      "path": "actual/terminal-completion/75-optimized-test_test_environment-RESULT.json",
+      "sha256": "b8bf7fade6db510fb74589c744e8d4f7edc920754e8090c6175b048cc57d9dff",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 589,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/75-optimized-test_test_environment-START.json",
+      "path": "actual/terminal-completion/75-optimized-test_test_environment-START.json",
+      "sha256": "190202089b24a48f4830a7895deb8392d3cc19f8d8e113dafba3565406a33085",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1236,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/75-optimized-test_test_environment.log",
+      "path": "actual/terminal-completion/75-optimized-test_test_environment.log",
+      "sha256": "f870b6ee8286a1cb10a31d108bf8ae9fdb6bb518caf0741d113325492d0c8257",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 864,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/76-normal-test_full_audit_cleanup_contracts-RESULT.json",
+      "path": "actual/terminal-completion/76-normal-test_full_audit_cleanup_contracts-RESULT.json",
+      "sha256": "37fbc056cee15f33f3067e6d7059a9c815ab1c039b2f9f4fe348d835bb9f0224",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 620,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/76-normal-test_full_audit_cleanup_contracts-START.json",
+      "path": "actual/terminal-completion/76-normal-test_full_audit_cleanup_contracts-START.json",
+      "sha256": "17c5d3b9a8028d8a060bf866916efec7edd55ef700a0faba5a8c3634f97157b8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 17639,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/76-normal-test_full_audit_cleanup_contracts.log",
+      "path": "actual/terminal-completion/76-normal-test_full_audit_cleanup_contracts.log",
+      "sha256": "4e5b2afbede85bc9565f73e69086853d83d140835d30f2a0cc390b2ace8716e8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 821,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/FAILURE.json",
+      "path": "actual/terminal-completion/FAILURE.json",
+      "sha256": "ee85cdc4d8b04f6b99d7c8dcbc2ef77ab62ed5004f63ff7230635d9fea7dd25a",
+      "storage": "readable",
+      "transport_path": "actual/terminal-completion/FAILURE.json"
+    },
+    {
+      "bytes": 15207,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/RESULT.json",
+      "path": "actual/terminal-completion/RESULT.json",
+      "sha256": "0e76f5398b6bb4244b9b7f65c76408d26e40ccfaf7b1b35d31589f07fbc3d493",
+      "storage": "readable",
+      "transport_path": "actual/terminal-completion/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/SDK-AFTER.json",
+      "path": "actual/terminal-completion/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/terminal-completion/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/SDK-BEFORE.json",
+      "path": "actual/terminal-completion/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/terminal-completion/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/SOURCE-SEAL.json",
+      "path": "actual/terminal-completion/SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 370,
+      "kind": "original-terminal-stage-log-receipt-or-collection-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-completion-v28/WINDOW-START.json",
+      "path": "actual/terminal-completion/WINDOW-START.json",
+      "sha256": "1ad51fbd31e53be06d185fee146f6e66c4195e694b177eef4cdf22b5d741afd0",
+      "storage": "readable",
+      "transport_path": "actual/terminal-completion/WINDOW-START.json"
+    },
+    {
+      "bytes": 175847,
+      "kind": "original-fresh-discovery-receipt-linked-by-inventory",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/python-discovery-final-v28/RESULT.json",
+      "path": "provenance/discovery/RESULT.json",
+      "sha256": "983724ca988e0cabee988c5f8dc4c2cf47613f5afe73c9dd4d743729d5c6a9c1",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7633,
+      "kind": "separate-failed-packet-identity-reference-not-recursive-payload",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-full-matrix-v28-failure-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "path": "provenance/original-failed-matrix/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "sha256": "383041f192e2537a1071baec1fb691d52490fb187f84350ce05843fcd61f4a78",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 18919,
+      "kind": "separate-original-qualification-failure",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-matrix-final-v28/RESULT.json",
+      "path": "provenance/original-failed-matrix/RESULT.json",
+      "sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 55288,
+      "kind": "separate-original-qualification-config",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/full-python-matrix-final-v28.json",
+      "path": "provenance/original-failed-matrix/config.json",
+      "sha256": "b078e691b04f3e2acfee6c1ddcd4f0ca934b500062593bb72d24592e882e7f5a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 6679,
+      "kind": "separate-prior-packet-identity-reference-not-recursive-payload",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-diagnostic-continuation-v28-terminal-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "path": "provenance/prior-terminal-continuation/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "sha256": "f917e27571429d65c6a5447c8dced41d61df63a97ac2b11899a84cc454a08de2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 134456,
+      "kind": "separate-prior-failed-diagnostic-receipt",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/RESULT.json",
+      "path": "provenance/prior-terminal-continuation/RESULT.json",
+      "sha256": "ddcd0576ed61827896eac96a52ae44a7d98cbb9f202137d7a38ecb887838359b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2165,
+      "kind": "sealed-prior-sdk-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/SDK-AFTER.json",
+      "path": "provenance/prior-terminal-continuation/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 53516,
+      "kind": "separate-prior-diagnostic-config",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/full-python-diagnostic-continuation-v28.json",
+      "path": "provenance/prior-terminal-continuation/config.json",
+      "sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 11833,
+      "kind": "separate-prior-diagnostic-supervisor",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_diagnostic_continuation_v28.py",
+      "path": "provenance/prior-terminal-continuation/supervisor.py",
+      "sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-protocol-inventory-source-or-published-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 6077,
+      "kind": "exact-reviewed-interrupted-and-unlaunched-plan",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/DIAGNOSTIC-COMPLETION-14-STAGE-INVENTORY.json",
+      "path": "reproduce/DIAGNOSTIC-COMPLETION-14-STAGE-INVENTORY.json",
+      "sha256": "2b29b4ff8e64832e7684f82176a34347f5f0fb9bc9c4e9297ce1ae953f15e7aa",
+      "storage": "readable",
+      "transport_path": "reproduce/DIAGNOSTIC-COMPLETION-14-STAGE-INVENTORY.json"
+    },
+    {
+      "bytes": 616420,
+      "kind": "exact-protocol-inventory-source-or-published-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/FINAL-PYTHON-EXPECTED-INVENTORY-V28.json",
+      "path": "reproduce/FINAL-PYTHON-EXPECTED-INVENTORY-V28.json",
+      "sha256": "0996f6650319b26da030bcfccf85868e2eba6b755a46063bec9daabfd796a2f9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 848,
+      "kind": "exact-protocol-inventory-source-or-published-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 7952,
+      "kind": "exact-protocol-inventory-source-or-published-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/full-python-diagnostic-completion-v28.json",
+      "path": "reproduce/full-python-diagnostic-completion-v28.json",
+      "sha256": "7aa23228e0b9ea130fe3c25fe376e5210c105beb761793bab4a40fa2300a1d39",
+      "storage": "readable",
+      "transport_path": "reproduce/full-python-diagnostic-completion-v28.json"
+    },
+    {
+      "bytes": 18048,
+      "kind": "exact-protocol-inventory-source-or-published-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_diagnostic_completion_v28.py",
+      "path": "reproduce/run_diagnostic_completion_v28.py",
+      "sha256": "df6da89f3b8c3c6790c2c2c1eb414cf3677674165203a30c8224d632f26a3b84",
+      "storage": "readable",
+      "transport_path": "reproduce/run_diagnostic_completion_v28.py"
+    }
+  ],
+  "original_member_bytes": 2061423,
+  "original_member_count": 61,
+  "schema": 1
+}
