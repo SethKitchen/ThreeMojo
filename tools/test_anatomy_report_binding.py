@@ -157,6 +157,24 @@ class AnatomyReportBindingTests(unittest.TestCase):
             (root/'pkg/bound.mojo').write_text('def value() -> Int:\n    return 4\n')
             self.assertNotEqual(av.source_digest(root), before)
 
+    def test_each_alias_spacing_binds_its_module(self):
+        # Pinned Mojo 1.1.0 compiles all six forms. Each one alone must
+        # bind the module it imports.
+        forms = ('import pkg.bound as renamed', 'import pkg.bound\tas renamed',
+                 'import pkg.bound as\trenamed', 'from pkg import bound as renamed',
+                 'from pkg import bound\tas renamed', 'from pkg import bound as\trenamed')
+        for form in forms:
+            with self.subTest(form=form), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder)
+                _fixture(root)
+                (root/'pkg/__init__.mojo').write_text('')
+                (root/'tools/anatomy_probe.mojo').write_text(
+                    form + '\n\n\ndef main():\n    pass\n')
+                self.assertIn('pkg/bound.mojo', av.bound_paths(root))
+                before = av.source_digest(root)
+                (root/'pkg/bound.mojo').write_text('def value() -> Int:\n    return 5\n')
+                self.assertNotEqual(av.source_digest(root), before)
+
     def test_plain_imports_and_symbols_are_kept_apart(self):
         source = 'import pkg.bound as bound, helper\nfrom pkg import *\nimport a.b; import c\n'
         self.assertEqual(av.imports_of(source), [
