@@ -15842,6 +15842,7 @@ struct _IntegerNodeKernels:
         code: MutPointer[Float32, MutAnyOrigin],
         starts: MutPointer[Int32, MutAnyOrigin],
         roots: Int32,
+        textured: Int32,
     ):
         from max.gpu import global_idx
 
@@ -15856,7 +15857,7 @@ struct _IntegerNodeKernels:
             Vector3(0, 0, 0),
             Vector3(0, 0, 0),
             Vector3(0, 0, 0),
-            False,
+            textured != 0,
         )
         var result = _integer_run_code(
             source,
@@ -15946,6 +15947,7 @@ def test_exact_integer_node_words_survive_cpu_and_gpu_registers() raises:
         device_code.unsafe_ptr(),
         device_starts.unsafe_ptr(),
         Int32(len(roots)),
+        Int32(0),
         grid_dim=((len(roots) + 31) // 32,),
         block_dim=(32,),
     )
@@ -15977,7 +15979,7 @@ def test_exact_integer_node_words_survive_cpu_and_gpu_registers() raises:
 def test_gpu_rejects_nonfinite_explicit_gradients_before_sampling() raises:
     """Keep invalid runtime gradients out of both texture samplers."""
     from materials.nodes import FRAGMENT_NODE
-    from std.math import nan
+    from std.math import isfinite, nan
 
     if skipped_for_lack_of_a_gpu("nonfinite explicit texture gradients"):
         return
@@ -15999,20 +16001,25 @@ def test_gpu_rejects_nonfinite_explicit_gradients_before_sampling() raises:
     with offsets.map_to_host() as host:
         host[0] = starts[0]
         host[1] = starts[1]
-    var invalid: List[Float32] = [
+    # The finite value is the control: it shows that texture reads are on.
+    # Without them, the node returns 1 before it checks its gradients.
+    var values: List[Float32] = [
+        Float32(0.25),
         nan[DType.float32](),
         inf[DType.float32](),
         -inf[DType.float32](),
     ]
+    var none = Vector3(0, 0, 0)
+    var inputs = _IntegerNodeInputs(0, 0, none, none, none, none, True)
     for component in range(3):
-        for bad in invalid:
+        for value in values:
             program.set_uniform("uv", Vector2(0.5, 0.5))
             program.set_uniform("dx", Vector2(0, 0))
             program.set_uniform("dy", Vector2(0, 0))
             var name = "uv" if component == 0 else (
                 "dx" if component == 1 else "dy"
             )
-            program.set_uniform(name, Vector2(bad, 0.5))
+            program.set_uniform(name, Vector2(value, 0.5))
             with code.map_to_host() as host:
                 for at in range(len(program.code)):
                     host[at] = program.code[at]
@@ -16021,15 +16028,18 @@ def test_gpu_rejects_nonfinite_explicit_gradients_before_sampling() raises:
                 code.unsafe_ptr(),
                 offsets.unsafe_ptr(),
                 Int32(1),
+                Int32(1),
                 grid_dim=(1,),
                 block_dim=(1,),
             )
             context.synchronize()
             var source = _IntegerProgramSource(Pointer(to=program))
             var cpu = _integer_run_code(
-                source, Int(starts[0]), Int(starts[1]), source.vertex
+                source, Int(starts[0]), Int(starts[1]), inputs
             )
+            # Both samplers read opaque white, which is 1.0 in every lane.
+            var expected = UInt32(0x3F800000) if isfinite(value) else UInt32(0)
             with output.map_to_host() as host:
                 for lane in range(4):
-                    assert_equal(bitcast[DType.uint32](cpu[lane]), UInt32(0))
-                    assert_equal(host[lane], UInt32(0))
+                    assert_equal(bitcast[DType.uint32](cpu[lane]), expected)
+                    assert_equal(host[lane], expected)
