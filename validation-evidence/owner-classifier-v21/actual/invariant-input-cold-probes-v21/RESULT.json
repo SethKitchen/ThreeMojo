@@ -1,0 +1,35 @@
+{
+  "elapsed_seconds": 12.950722125002358,
+  "failure": "RuntimeError('Stage failed: normal-direct')",
+  "finished": "2026-10-11T03:34:53.748512+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "Exact maintained 10-second invariant import-plus-verify cold commands on reviewed v21. Stop on first failure. Normal direct/package preserve the original bodies; explicit optimized variants are additional. Broader owners and newly proposed controls remain unqualified.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": false,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+      "label": "normal-direct",
+      "leader_reaped": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pgid": 7,
+      "pid": 7,
+      "remaining_owned_descendants": [],
+      "returncode": -9,
+      "seconds": 10.061513043001469,
+      "single_cpu": 0,
+      "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+      "stage_timeout_seconds": 10,
+      "started": "2026-10-11T03:34:42.228036+00:00",
+      "timed_out": true
+    }
+  ]
+}

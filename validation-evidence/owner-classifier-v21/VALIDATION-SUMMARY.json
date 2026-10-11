@@ -1,0 +1,68 @@
+{
+  "all_phase_remaining_owned_descendants": [],
+  "all_phase_source_sdk_unchanged": true,
+  "baseline_core_sha256": "e86bdc939aec95fe579ce38cd9ca6c5c9b287a0623003d5d5679719b56d139b5",
+  "baseline_source_seal_sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e",
+  "checked_harness_sha256": "51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4",
+  "classifier_controls": {
+    "harness_binding": "Each original stage reads the external harness once, checks its exact SHA-256, and compiles those same bytes. The checked revision is preserved; the unexecuted rejected revision is omitted.",
+    "modes": {
+      "normal": {
+        "always_active_checks": 941,
+        "designated_measured_negative_path_elisions": 6,
+        "equivalent_differentials": 291,
+        "optimize": 0,
+        "report_sha256": "88b75e12d03cf0f9b30c3b10a79ba6d69525ed76ececd08751ac305d7467b222"
+      },
+      "optimized": {
+        "always_active_checks": 941,
+        "designated_measured_negative_path_elisions": 6,
+        "equivalent_differentials": 291,
+        "optimize": 1,
+        "report_sha256": "b99afbf75c85f98ef8894bd3cc24cf8ac653e220268c780a9b8647ef4fb5bc77"
+      }
+    },
+    "result_sha256": "4e9225f3c96b927d9a419e7e64d466f13af4a6b8551449bb52b04f20dccc70d0",
+    "scope_limit": "Real canonical code/global identities are carried by synthetic frame records. Classifier differential equivalence is covered; real owner lifecycle, source admission and maintained cold-watchdog qualification are not.",
+    "stage_cap_seconds": 30,
+    "status": "PASS_CLASSIFIER_ONLY",
+    "window_cap_seconds": 180
+  },
+  "cold_probe": {
+    "cap_seconds": 10,
+    "executed": "normal-direct",
+    "observed_stage_seconds": 10.061513043001469,
+    "result_sha256": "447a4753da128075f0d366b526525917849a9baa0cb07fe7d41b664ddb167212",
+    "returncode": -9,
+    "status": "FAILED_ORIGINAL_10_SECOND_BOUND",
+    "timed_out": true,
+    "unrun": [
+      "normal-package",
+      "optimized-direct",
+      "optimized-package"
+    ],
+    "window_cap_seconds": 300
+  },
+  "evidence_policy": "All files from all three terminal phase directories, actual configs/commands/supervisor output, source/SDK seals, checked harness, 29 frozen v21 source paths and bound v19 baseline core are preserved byte-for-byte. Derived summaries are separate. No rejected harness revision, internal notes/reviews, secrets, broad unrelated source, executable payloads, candidate edits, reruns or uploads.",
+  "exact_frozen_v21_source_paths": 29,
+  "plain_diagnostic": {
+    "argv_and_cwd_exactly_equal_to_failed_cold_command": true,
+    "limit": "The exact same normal-direct body and frozen source complete with exit 0 under the separately authorized 30-second diagnostic cap. The observed stage duration exceeds ten seconds. This does not relax, replace or pass the original 10-second qualification gate.",
+    "observed_stage_seconds": 12.531899080997391,
+    "profiler_or_instrumentation": false,
+    "result_sha256": "882560091d6595d664bb6d07221f224060ac8d31a2b8f2da71c006de68b25006",
+    "returncode": 0,
+    "stage_cap_seconds": 30,
+    "status": "COMPLETED_SEPARATE_30_SECOND_DIAGNOSTIC_NOT_10_SECOND_PASS",
+    "timed_out": false,
+    "window_cap_seconds": 120
+  },
+  "proposal_core_sha256": "8a22685850e469f0d21a1865c41ef70b9e6d8780f2887cf6e99251ba09454c51",
+  "schema": 1,
+  "scope": "Focused synthetic-frame classifier equivalence passes only. Original 10-second real cold gate fails. Separate identical-body 30-second plain diagnostic completes above ten seconds. No original-cap, lifecycle, readiness or broader qualification claim.",
+  "source_manifest_sha256": "367ba38b8dce2a7334d10cf5eda12b178edc52eea4fbc43c1b16f4b62a952afd",
+  "source_manifest_time_boundary": "The original source-only/unqualified manifest is preserved unchanged. Later receipts retain their distinct control, failure and diagnostic outcomes.",
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+  "status": "V21_CLASSIFIER_CONTROLS_PASS_COLD_GATE_FAIL_PLAIN_DIAGNOSTIC_COMPLETES",
+  "stream_capture": "Original logs combine stdout and stderr. Empty cold and plain logs are preserved; separate streams were not recorded or invented."
+}

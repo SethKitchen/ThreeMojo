@@ -1,0 +1,142 @@
+{
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phases": [
+    {
+      "config_sha256": "0c1b1ed73f7aeea41d89268e4b9575bff30e57390986e04819ffd7f7361f8fd0",
+      "configured_but_unrun_labels": [],
+      "phase": "owner-classifier-focused-controls-v21",
+      "result_sha256": "4e9225f3c96b927d9a419e7e64d466f13af4a6b8551449bb52b04f20dccc70d0",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-c",
+              "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-implementation-v21/classifier_equivalence_controls.py')\nraw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4': raise RuntimeError('Classifier harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/normal-CONTROLS.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+            "label": "normal-classifier-controls",
+            "leader_reaped": true,
+            "log_sha256": "4d95c981c65de724c93a50910cd4b3de2c4de6fdf3427e7b6a494819db1c5e69",
+            "pgid": 7,
+            "pid": 7,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 1.0041355210050824,
+            "single_cpu": 0,
+            "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+            "stage_timeout_seconds": 30,
+            "started": "2026-10-11T03:34:27.781551+00:00",
+            "timed_out": false
+          },
+          "stage_result_sha256": "ff2f875fda7ee436d657cc3d75c6b6b366bfdd946e62f3e6de1f2e984366278f",
+          "start_sha256": "22cd13e9d3758bb7b1d0d36806e1f94fc221fd83fead833de854f4887fe147af"
+        },
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-O",
+              "-B",
+              "-c",
+              "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-implementation-v21/classifier_equivalence_controls.py')\nraw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4': raise RuntimeError('Classifier harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/optimized-CONTROLS.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+            "label": "optimized-classifier-controls",
+            "leader_reaped": true,
+            "log_sha256": "ae47591db49f292415764011d318d56eac8beefed886dd183ec9008e9b966815",
+            "pgid": 8,
+            "pid": 8,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 1.0036942229999113,
+            "single_cpu": 0,
+            "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+            "stage_timeout_seconds": 30,
+            "started": "2026-10-11T03:34:31.136140+00:00",
+            "timed_out": false
+          },
+          "stage_result_sha256": "128a51249907c009298db3138a6c7e0428f88209cc45a3a5c4e158dbf6a061ba",
+          "start_sha256": "b526acc3652461ee96cca7803c8925068969c8c56bcbf1add9b8523f6954029f"
+        }
+      ]
+    },
+    {
+      "config_sha256": "c7b226471c25785b62f0c3d0884c4b39f5878dc143bce2f3847d6d7a1323f1f1",
+      "configured_but_unrun_labels": [
+        "normal-package",
+        "optimized-direct",
+        "optimized-package"
+      ],
+      "phase": "invariant-input-cold-probes-v21",
+      "result_sha256": "447a4753da128075f0d366b526525917849a9baa0cb07fe7d41b664ddb167212",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-c",
+              "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+            "label": "normal-direct",
+            "leader_reaped": true,
+            "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pgid": 7,
+            "pid": 7,
+            "remaining_owned_descendants": [],
+            "returncode": -9,
+            "seconds": 10.061513043001469,
+            "single_cpu": 0,
+            "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+            "stage_timeout_seconds": 10,
+            "started": "2026-10-11T03:34:42.228036+00:00",
+            "timed_out": true
+          },
+          "stage_result_sha256": "2602de79b1479256966375fee77875abb5d4f637c149f7490c945ce6b6122eff",
+          "start_sha256": "8dff20891e9811b3b329bbe9f9834b176be342ff3813e10a7b1f83d9c755aff8"
+        }
+      ]
+    },
+    {
+      "config_sha256": "44b8e3b569016dc816fe7db3b5e9b9dd4ce1e6bc59d98f7892cc27563bc5d52f",
+      "configured_but_unrun_labels": [],
+      "phase": "invariant-input-plain-diagnostic-v21",
+      "result_sha256": "882560091d6595d664bb6d07221f224060ac8d31a2b8f2da71c006de68b25006",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-c",
+              "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+            "label": "normal-direct-plain-diagnostic",
+            "leader_reaped": true,
+            "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pgid": 8,
+            "pid": 8,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 12.531899080997391,
+            "single_cpu": 0,
+            "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+            "stage_timeout_seconds": 30,
+            "started": "2026-10-11T03:36:31.895809+00:00",
+            "timed_out": false
+          },
+          "stage_result_sha256": "1f01af77dacf12ef2f6dbbf79a66b490eaf03a7822fff09914558c9e9c0be388",
+          "start_sha256": "aae8cdd1a3327b64fd274f3d6890dc0490d9ff03ed91b94c4d81c1284c643419"
+        }
+      ]
+    }
+  ],
+  "schema": 1,
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc"
+}

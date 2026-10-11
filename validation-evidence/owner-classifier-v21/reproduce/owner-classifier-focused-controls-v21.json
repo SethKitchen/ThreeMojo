@@ -1,0 +1,38 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V19-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19"
+    }
+  ],
+  "pause_request_file": "owner-classifier-focused-controls-v21.pause",
+  "phase": "owner-classifier-focused-controls-v21",
+  "scope": "Always-active normal/optimized classifier differential controls over real canonical code/globals and synthetic frame records; exact source and baseline seals. This is classifier validation only, not real owner lifecycle, source qualification or an original cold-watchdog pass. The outside harness is read once, hash checked, and those identical bytes are compiled.",
+  "seal": "CANDIDATE-V21-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-implementation-v21/classifier_equivalence_controls.py')\nraw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4': raise RuntimeError('Classifier harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','{evidence}/normal-CONTROLS.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "label": "normal-classifier-controls",
+      "seconds": 30
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-implementation-v21/classifier_equivalence_controls.py')\nraw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4': raise RuntimeError('Classifier harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21','{evidence}/optimized-CONTROLS.json']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "label": "optimized-classifier-controls",
+      "seconds": 30
+    }
+  ],
+  "window_seconds": 180
+}

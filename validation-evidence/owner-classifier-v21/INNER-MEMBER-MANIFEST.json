@@ -1,0 +1,716 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 2940691,
+    "json_sha256": "48d1e4e4ae623930692f9281f7ac73d4292bae0d47cc7c6e691b8be67d3becf5",
+    "members": 51,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 745,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/FAILURE.json",
+      "path": "actual/invariant-input-cold-probes-v21/FAILURE.json",
+      "sha256": "79b2228ede51071e4b1c0141c618b4fb31609a925bdd6a2c64354842f1b01868",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 204,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/LATEST.json",
+      "path": "actual/invariant-input-cold-probes-v21/LATEST.json",
+      "sha256": "e656b7f6a1e22b611788b79182231e09b9f4a1aaf4c3201b6fcddbf893b62dcf",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3192,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/PROCESSES.jsonl",
+      "path": "actual/invariant-input-cold-probes-v21/PROCESSES.jsonl",
+      "sha256": "dcdca7f889bcbbec678bb7b2d211f7483b2392963436c057c63f4fc8b78d95b2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1695,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/RESULT.json",
+      "path": "actual/invariant-input-cold-probes-v21/RESULT.json",
+      "sha256": "447a4753da128075f0d366b526525917849a9baa0cb07fe7d41b664ddb167212",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-cold-probes-v21/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/SDK-AFTER.json",
+      "path": "actual/invariant-input-cold-probes-v21/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-cold-probes-v21/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/SDK-BEFORE.json",
+      "path": "actual/invariant-input-cold-probes-v21/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-cold-probes-v21/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419400,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/SOURCE-SEAL.json",
+      "path": "actual/invariant-input-cold-probes-v21/SOURCE-SEAL.json",
+      "sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 369,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/WINDOW-START.json",
+      "path": "actual/invariant-input-cold-probes-v21/WINDOW-START.json",
+      "sha256": "4c56c030e48bf39252a190be720324c752dee6900cbd7041e155f87b96ff476b",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-cold-probes-v21/WINDOW-START.json"
+    },
+    {
+      "bytes": 988,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/normal-direct-RESULT.json",
+      "path": "actual/invariant-input-cold-probes-v21/normal-direct-RESULT.json",
+      "sha256": "2602de79b1479256966375fee77875abb5d4f637c149f7490c945ce6b6122eff",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 744,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/normal-direct-START.json",
+      "path": "actual/invariant-input-cold-probes-v21/normal-direct-START.json",
+      "sha256": "8dff20891e9811b3b329bbe9f9834b176be342ff3813e10a7b1f83d9c755aff8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 0,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v21/normal-direct.log",
+      "path": "actual/invariant-input-cold-probes-v21/normal-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-cold-probes-v21/normal-direct.log"
+    },
+    {
+      "bytes": 221,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/LATEST.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/LATEST.json",
+      "sha256": "54e754504ad759c9960759ae0923c80c4f506ee29d62928d7546349fcd65790d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4225,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/PROCESSES.jsonl",
+      "path": "actual/invariant-input-plain-diagnostic-v21/PROCESSES.jsonl",
+      "sha256": "7f12cbca78fe45c8fa8f85df44b6396dfd60cb574e1e951e6841e8782f50609c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1664,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/RESULT.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/RESULT.json",
+      "sha256": "882560091d6595d664bb6d07221f224060ac8d31a2b8f2da71c006de68b25006",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-plain-diagnostic-v21/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/SDK-AFTER.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-plain-diagnostic-v21/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/SDK-BEFORE.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-plain-diagnostic-v21/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419400,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/SOURCE-SEAL.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/SOURCE-SEAL.json",
+      "sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 369,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/WINDOW-START.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/WINDOW-START.json",
+      "sha256": "43b81eb4559314fb07158140e7945ef3597519d7c7268baddeced9600602c9c1",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-plain-diagnostic-v21/WINDOW-START.json"
+    },
+    {
+      "bytes": 1005,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic-RESULT.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic-RESULT.json",
+      "sha256": "1f01af77dacf12ef2f6dbbf79a66b490eaf03a7822fff09914558c9e9c0be388",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 761,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic-START.json",
+      "path": "actual/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic-START.json",
+      "sha256": "aae8cdd1a3327b64fd274f3d6890dc0490d9ff03ed91b94c4d81c1284c643419",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 0,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic.log",
+      "path": "actual/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-plain-diagnostic-v21/normal-direct-plain-diagnostic.log"
+    },
+    {
+      "bytes": 220,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/LATEST.json",
+      "path": "actual/owner-classifier-focused-controls-v21/LATEST.json",
+      "sha256": "d296f536d4605fd6a3d830dd0d012c705f9868850c302067daa22140710333ca",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 666,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/PROCESSES.jsonl",
+      "path": "actual/owner-classifier-focused-controls-v21/PROCESSES.jsonl",
+      "sha256": "ed683d9d3e1b1e69b1d44059c1f28ade5059c7a7081758f77c773648b11133a8",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3754,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/RESULT.json",
+      "path": "actual/owner-classifier-focused-controls-v21/RESULT.json",
+      "sha256": "4e9225f3c96b927d9a419e7e64d466f13af4a6b8551449bb52b04f20dccc70d0",
+      "storage": "readable",
+      "transport_path": "actual/owner-classifier-focused-controls-v21/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/SDK-AFTER.json",
+      "path": "actual/owner-classifier-focused-controls-v21/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/owner-classifier-focused-controls-v21/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/SDK-BEFORE.json",
+      "path": "actual/owner-classifier-focused-controls-v21/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/owner-classifier-focused-controls-v21/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419400,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/SOURCE-SEAL.json",
+      "path": "actual/owner-classifier-focused-controls-v21/SOURCE-SEAL.json",
+      "sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 369,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/WINDOW-START.json",
+      "path": "actual/owner-classifier-focused-controls-v21/WINDOW-START.json",
+      "sha256": "a00dbdcce49d7f5963b4e426a66d5a78302ddc34b196f22b2c51e17b25187bb6",
+      "storage": "readable",
+      "transport_path": "actual/owner-classifier-focused-controls-v21/WINDOW-START.json"
+    },
+    {
+      "bytes": 107418,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/normal-CONTROLS.json",
+      "path": "actual/owner-classifier-focused-controls-v21/normal-CONTROLS.json",
+      "sha256": "88b75e12d03cf0f9b30c3b10a79ba6d69525ed76ececd08751ac305d7467b222",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1438,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/normal-classifier-controls-RESULT.json",
+      "path": "actual/owner-classifier-focused-controls-v21/normal-classifier-controls-RESULT.json",
+      "sha256": "ff2f875fda7ee436d657cc3d75c6b6b366bfdd946e62f3e6de1f2e984366278f",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1194,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/normal-classifier-controls-START.json",
+      "path": "actual/owner-classifier-focused-controls-v21/normal-classifier-controls-START.json",
+      "sha256": "22cd13e9d3758bb7b1d0d36806e1f94fc221fd83fead833de854f4887fe147af",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 270,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/normal-classifier-controls.log",
+      "path": "actual/owner-classifier-focused-controls-v21/normal-classifier-controls.log",
+      "sha256": "4d95c981c65de724c93a50910cd4b3de2c4de6fdf3427e7b6a494819db1c5e69",
+      "storage": "readable",
+      "transport_path": "actual/owner-classifier-focused-controls-v21/normal-classifier-controls.log"
+    },
+    {
+      "bytes": 107418,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/optimized-CONTROLS.json",
+      "path": "actual/owner-classifier-focused-controls-v21/optimized-CONTROLS.json",
+      "sha256": "b99afbf75c85f98ef8894bd3cc24cf8ac653e220268c780a9b8647ef4fb5bc77",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1454,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/optimized-classifier-controls-RESULT.json",
+      "path": "actual/owner-classifier-focused-controls-v21/optimized-classifier-controls-RESULT.json",
+      "sha256": "128a51249907c009298db3138a6c7e0428f88209cc45a3a5c4e158dbf6a061ba",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1210,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/optimized-classifier-controls-START.json",
+      "path": "actual/owner-classifier-focused-controls-v21/optimized-classifier-controls-START.json",
+      "sha256": "b526acc3652461ee96cca7803c8925068969c8c56bcbf1add9b8523f6954029f",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 273,
+      "kind": "original-receipt-log-or-controls-report",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/owner-classifier-focused-controls-v21/optimized-classifier-controls.log",
+      "path": "actual/owner-classifier-focused-controls-v21/optimized-classifier-controls.log",
+      "sha256": "ae47591db49f292415764011d318d56eac8beefed886dd183ec9008e9b966815",
+      "storage": "readable",
+      "transport_path": "actual/owner-classifier-focused-controls-v21/optimized-classifier-controls.log"
+    },
+    {
+      "bytes": 419400,
+      "kind": "original-supervisor-or-source-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V19-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V19-SOURCE-SEAL.json",
+      "sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e",
+      "storage": "readable",
+      "transport_path": "reproduce/CANDIDATE-V19-SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 419400,
+      "kind": "original-supervisor-or-source-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V21-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V21-SOURCE-SEAL.json",
+      "sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+      "storage": "readable",
+      "transport_path": "reproduce/CANDIDATE-V21-SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 15353,
+      "kind": "exact-29-path-frozen-source-manifest",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-implementation-v21/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "367ba38b8dce2a7334d10cf5eda12b178edc52eea4fbc43c1b16f4b62a952afd",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json"
+    },
+    {
+      "bytes": 22389,
+      "kind": "exact-command-hash-checked-executed-harness",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-implementation-v21/classifier_equivalence_controls.py",
+      "path": "reproduce/classifier_equivalence_controls.py",
+      "sha256": "51b73077e56122ccfe5707a4ff66708abafcf4c0aafbdcdccfc13d247f8b59d4",
+      "storage": "readable",
+      "transport_path": "reproduce/classifier_equivalence_controls.py"
+    },
+    {
+      "bytes": 2256,
+      "kind": "original-config-or-supervisor-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-cold-probes-v21.json",
+      "path": "reproduce/invariant-input-cold-probes-v21.json",
+      "sha256": "c7b226471c25785b62f0c3d0884c4b39f5878dc143bce2f3847d6d7a1323f1f1",
+      "storage": "readable",
+      "transport_path": "reproduce/invariant-input-cold-probes-v21.json"
+    },
+    {
+      "bytes": 2469,
+      "kind": "original-config-or-supervisor-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-cold-probes-v21.supervisor.log",
+      "path": "reproduce/invariant-input-cold-probes-v21.supervisor.log",
+      "sha256": "b4df046d7e2e3a5e8f49944f81fd68f91ed261cfd7e02861896f2e48fb34042f",
+      "storage": "readable",
+      "transport_path": "reproduce/invariant-input-cold-probes-v21.supervisor.log"
+    },
+    {
+      "bytes": 1148,
+      "kind": "original-config-or-supervisor-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-plain-diagnostic-v21.json",
+      "path": "reproduce/invariant-input-plain-diagnostic-v21.json",
+      "sha256": "44b8e3b569016dc816fe7db3b5e9b9dd4ce1e6bc59d98f7892cc27563bc5d52f",
+      "storage": "readable",
+      "transport_path": "reproduce/invariant-input-plain-diagnostic-v21.json"
+    },
+    {
+      "bytes": 2455,
+      "kind": "original-config-or-supervisor-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-plain-diagnostic-v21.supervisor.log",
+      "path": "reproduce/invariant-input-plain-diagnostic-v21.supervisor.log",
+      "sha256": "916eab50c676656f8059bd80be1b7ca55d0921328826be636c520e706085daf1",
+      "storage": "readable",
+      "transport_path": "reproduce/invariant-input-plain-diagnostic-v21.supervisor.log"
+    },
+    {
+      "bytes": 2621,
+      "kind": "original-config-or-supervisor-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-focused-controls-v21.json",
+      "path": "reproduce/owner-classifier-focused-controls-v21.json",
+      "sha256": "0c1b1ed73f7aeea41d89268e4b9575bff30e57390986e04819ffd7f7361f8fd0",
+      "storage": "readable",
+      "transport_path": "reproduce/owner-classifier-focused-controls-v21.json"
+    },
+    {
+      "bytes": 6208,
+      "kind": "original-config-or-supervisor-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/owner-classifier-focused-controls-v21.supervisor.log",
+      "path": "reproduce/owner-classifier-focused-controls-v21.supervisor.log",
+      "sha256": "b9c16db8191bf9edb1ea693abaed15107a3cf4424ed6de4b3c719f8cb88a690a",
+      "storage": "readable",
+      "transport_path": "reproduce/owner-classifier-focused-controls-v21.supervisor.log"
+    },
+    {
+      "bytes": 10102,
+      "kind": "original-supervisor-or-source-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "storage": "readable",
+      "transport_path": "reproduce/run_checkpoint_matrix.py"
+    },
+    {
+      "bytes": 101296,
+      "kind": "exact-report-bound-classifier-baseline-core",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "path": "reproduce/source/baseline-v19/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "e86bdc939aec95fe579ce38cd9ca6c5c9b287a0623003d5d5679719b56d139b5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8205,
+      "kind": "exact-supervisor-sdk-identity-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/coverage_toolchain_identity.py",
+      "path": "reproduce/source/support/tools/coverage_toolchain_identity.py",
+      "sha256": "4fe6f947fc6cba35449287ed1398f7a8a37489be1f7aa5120fbe130e0391be22",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14377,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/accepted_successor_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/accepted_successor_contracts.py",
+      "sha256": "7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 11490,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/border_parser_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/border_parser_contracts.py",
+      "sha256": "af588e9cb66dcdd1171b580fefcc1328f2ae2783a1fc2a7123edc00e8835ada3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14234,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/cache_key_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/cache_key_contracts.py",
+      "sha256": "886e1a7b195de42a2c517a7493344662e0287f14ed5416381232125b92bc6300",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8956,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "sha256": "37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8759,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "sha256": "b5068eff6fcfccd7596512559c793b7c038f2f9e56703ba0fe371be98b8b8dc9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7144,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/curve_support_dispatch_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/curve_support_dispatch_contracts.py",
+      "sha256": "a8cd6c22250e1d6e344e92be696fdcbfdc1aedc3610dc2a47371f1c9aa56d544",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1613,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/distance_validation_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/distance_validation_contracts.py",
+      "sha256": "9ef55060a56090ce22fe6cb7885da42f9bc3dfdfbd41ff557ce1cc9f48bc5355",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3155,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/envelope_budget_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/envelope_budget_contracts.py",
+      "sha256": "1a7572fa44663a0ba5e6b7cd43b2a918acad15812fce288a42294f05dbcbf577",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8056,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "3291ab50a099183be3c209b5bc2533c02aa3cc597808bb59e57062105735878a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 102186,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "8a22685850e469f0d21a1865c41ef70b9e6d8780f2887cf6e99251ba09454c51",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2528,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/grouped_table_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/grouped_table_contracts.py",
+      "sha256": "387e50ed7b5198fbc6ff28ed27cc328db18a3844c506fd6e04b10d05d9757734",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4499,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/grouped_y_finiteness_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/grouped_y_finiteness_contracts.py",
+      "sha256": "ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4785,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/lane_control_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/lane_control_contracts.py",
+      "sha256": "49c14afe71986a766c1beae8ffc9ae162c7eec2b668478e59191492b5977d4ba",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7614,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/lane_order_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/lane_order_contracts.py",
+      "sha256": "e03387cb3a379f643717d689da70de33292182e64d3655d84ec88314159671cb",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2975,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/moment_finiteness_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/moment_finiteness_contracts.py",
+      "sha256": "1acbd5e02d05c7d249d3a84526204fe98eb1c7d963da81b8b0d273f9c2868067",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 5339,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/raw_cut_inverse_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/raw_cut_inverse_contracts.py",
+      "sha256": "ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3348,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/render_actor_reuse_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/render_actor_reuse_contracts.py",
+      "sha256": "d9d3104a9c28d999c4d2675b4209eaf0adf7ef362f684e10f52533c25c740d1d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14542,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/reviewed_cleanup_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/reviewed_cleanup_contracts.py",
+      "sha256": "3ee8a27ecc528e7029aded89fe9c729d7623bc6ff8c70d4ba4a45b7258b1bb7a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 15245,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/rounded_line_selector_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/rounded_line_selector_contracts.py",
+      "sha256": "57b2a082e75de6cb7acc2d20eed8dd187071f7da29614e84c567431f9b00328a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3981,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/runtime_boundary_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/runtime_boundary_contracts.py",
+      "sha256": "247b16a9259d2d09f8df9a2005152ca2b7d89bc36e6cc56ee4e71b2c1209a426",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 50855,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/seed_count_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/seed_count_contracts.py",
+      "sha256": "27c11abdec365b9dcbac4417a1f9ee245015355234d9ddabc97e6ce279cad33e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 5508,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/selection_finiteness_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/selection_finiteness_contracts.py",
+      "sha256": "2d62d03b9059a207cdb74c2c49d7cb02b863f8b2c34012dc3483a543dd000424",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12704,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/source_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/source_contracts.py",
+      "sha256": "857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2883,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/speed_parser_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/speed_parser_contracts.py",
+      "sha256": "d74202da98032569528f7d21de0f26cea896c227c29477a9e3fb01055cbdab99",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 24282,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "sha256": "870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 20369,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "d346635b988f7e71f20611006b8be6f51d0b28d35be7e1c6f77650d15467f3bc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 13690,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/winner_sign_contracts.py",
+      "path": "reproduce/source/v21/tools/carla_lane_oracle/winner_sign_contracts.py",
+      "sha256": "a5608b4e55ad51d4711a63d91503b5f33ad760ce900e5d9005916ff20d421418",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 86771,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/coverage_loop_proofs.py",
+      "path": "reproduce/source/v21/tools/coverage_loop_proofs.py",
+      "sha256": "2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 135551,
+      "kind": "exact-frozen-v21-manifest-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/test_coverage_loop_proofs.py",
+      "path": "reproduce/source/v21/tools/test_coverage_loop_proofs.py",
+      "sha256": "ea2249433f0d4ff3b276bd1ec934ca1b3f455af9db69f8170e09f54cffe70c7f",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 3123797,
+  "original_member_count": 78,
+  "schema": 1
+}
