@@ -1,0 +1,28 @@
+test_maintained_normal_cli_probe (__main__.ExactWinnerCli.test_maintained_normal_cli_probe) ... ERROR
+
+======================================================================
+ERROR: test_maintained_normal_cli_probe (__main__.ExactWinnerCli.test_maintained_normal_cli_probe)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py", line 25, in test_maintained_normal_cli_probe
+    output = case.consumer_script_probe('winner_sign_contracts', 'cli')
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/test_coverage_loop_proofs.py", line 1924, in consumer_script_probe
+    result=subprocess.run(command,cwd=cwd,capture_output=True,text=True,timeout=30)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python', '-E', '-B', '/tmp/optional-consumer-import-_gw6_e7c/tools/probe_consumers.py', '/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28', 'winner_sign_contracts', 'cli', 'False', 'False', 'False']' timed out after 30 seconds
+
+----------------------------------------------------------------------
+Ran 1 test in 30.068s
+
+FAILED (errors=1)

@@ -1,0 +1,194 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 1699885,
+    "json_sha256": "6fe79eefc4edd33280eee9535c377ea49c9146e664f01b8c418ec4c3dcffc5f7",
+    "members": 10,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 4286,
+      "kind": "complete-original-terminal-supervisor-console",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v28-v35.supervisor.log",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35.supervisor.log",
+      "sha256": "ec3ee40729047352631925bce8a5329c7bbf9c031b1b52cd771eb081d07be87a",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35.supervisor.log"
+    },
+    {
+      "bytes": 2870,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/RESULT.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/RESULT.json",
+      "sha256": "2ce6faeb70c769d44428d82280f13ddf79ef95c64dc4f7ee4eced4d888fce226",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/SDK-AFTER.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/SDK-BEFORE.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/SOURCE-SEAL.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/SOURCE-SEAL.json",
+      "sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 369,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/WINDOW-START.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/WINDOW-START.json",
+      "sha256": "f0b24171ca7a82c14f95985815f774d3f13df605c245be6bdd555d7b29941a65",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35/WINDOW-START.json"
+    },
+    {
+      "bytes": 1019,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner-RESULT.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner-RESULT.json",
+      "sha256": "a85231dd62329b1d5c37cfe73754e8319af99fbf766ea5997d694089bc1a5681",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 706,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner-START.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner-START.json",
+      "sha256": "546485d227b208353ae341492cf68eca89605765b9f1799a514e5ba23905da51",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2435,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner.log",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner.log",
+      "sha256": "ccec9a7437e6aecd02116060be097e9bf534f4e04fd38995ca071f676c41692d",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner.log"
+    },
+    {
+      "bytes": 1021,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner-RESULT.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner-RESULT.json",
+      "sha256": "0587589275d6d667ab08346ed3bb9bfca2a8045b64180eb39392c86aaab7bbe3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 708,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner-START.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner-START.json",
+      "sha256": "da6174e9f077fc39898df01b2f2c13bd524b055c55a9eba0773fb8987c73be93",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1542,
+      "kind": "complete-original-terminal-paired-evidence",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner.log",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner.log",
+      "sha256": "df27d8b1438e9227fbb08b82fbb4034db61e03c30517ef3ea02d79b755ac8e1d",
+      "storage": "readable",
+      "transport_path": "actual/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner.log"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V35-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V35-SOURCE-SEAL.json",
+      "sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 848,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 1010,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "sha256": "9f7159cc980b51da7be9ed5b3822cbb0a8c88977794200cf6b24315f9c4a8e2c",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 85,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/WINNER-CLI-PAIRED-DIAGNOSTIC-PROTOCOL-SEAL.json",
+      "path": "reproduce/WINNER-CLI-PAIRED-DIAGNOSTIC-PROTOCOL-SEAL.json",
+      "sha256": "a9b8365038e16fd1e6f0a277652b4727bccc22277f737341e3ef41b72600123c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 10102,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2124,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v28-v35.json",
+      "path": "reproduce/winner-cli-paired-diagnostic-v28-v35.json",
+      "sha256": "22c2b4e421724f4e655c0ea84c23a871c0add9fe1ca507cd685733f9fc76e1e7",
+      "storage": "readable",
+      "transport_path": "reproduce/winner-cli-paired-diagnostic-v28-v35.json"
+    },
+    {
+      "bytes": 1307,
+      "kind": "exact-ordinary-protocol-seal-or-publication-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+      "path": "reproduce/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+      "sha256": "2a84aebc0d803d443854ad0d80fddc9c12c01a953229b5336b809bde37986fcb",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 1293346,
+  "original_member_count": 20,
+  "schema": 1
+}

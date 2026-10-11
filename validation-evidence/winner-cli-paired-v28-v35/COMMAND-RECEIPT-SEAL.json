@@ -1,0 +1,98 @@
+{
+  "config_sha256": "22c2b4e421724f4e655c0ea84c23a871c0add9fe1ca507cd685733f9fc76e1e7",
+  "kind": "derived-command-and-cap-index",
+  "maintained_child_cap_seconds": 30,
+  "schema": 1,
+  "stages": [
+    {
+      "actual": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+          "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "expected_tests": 1,
+        "label": "v28-normal-cli-winner",
+        "leader_reaped": true,
+        "log_sha256": "ccec9a7437e6aecd02116060be097e9bf534f4e04fd38995ca071f676c41692d",
+        "pgid": 8,
+        "pid": 8,
+        "remaining_owned_descendants": [],
+        "returncode": 1,
+        "seconds": 30.719158348991186,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+        "stage_timeout_seconds": 45,
+        "started": "2026-10-11T13:34:06.096481+00:00",
+        "test_count": 1,
+        "timed_out": false
+      },
+      "planned": {
+        "accept_nonzero": true,
+        "command": [
+          "{python}",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+          "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "expected_tests": 1,
+        "label": "v28-normal-cli-winner",
+        "seconds": 45
+      },
+      "position_one_based": 1
+    },
+    {
+      "actual": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+          "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+        "expected_tests": 1,
+        "label": "v35-normal-cli-winner",
+        "leader_reaped": true,
+        "log_sha256": "df27d8b1438e9227fbb08b82fbb4034db61e03c30517ef3ea02d79b755ac8e1d",
+        "pgid": 10,
+        "pid": 10,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 30.582695589007926,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+        "stage_timeout_seconds": 45,
+        "started": "2026-10-11T13:34:39.184858+00:00",
+        "test_count": 1,
+        "timed_out": false
+      },
+      "planned": {
+        "accept_nonzero": true,
+        "command": [
+          "{python}",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+          "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+        "expected_tests": 1,
+        "label": "v35-normal-cli-winner",
+        "seconds": 45
+      },
+      "position_one_based": 2
+    }
+  ],
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+  "window_seconds": 120
+}

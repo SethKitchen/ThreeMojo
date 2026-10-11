@@ -1,0 +1,7 @@
+test_maintained_normal_cli_probe (__main__.ExactWinnerCli.test_maintained_normal_cli_probe) ... consumer verified winner_sign_contracts cli carla_lane_oracle.accepted_successor_contracts,carla_lane_oracle.border_parser_contracts,carla_lane_oracle.cache_key_contracts,carla_lane_oracle.coverage_followup_contracts,carla_lane_oracle.coverage_invariant_contracts,carla_lane_oracle.curve_support_dispatch_contracts,carla_lane_oracle.distance_validation_contracts,carla_lane_oracle.envelope_budget_contracts,carla_lane_oracle.frozen_arc_producer_contracts,carla_lane_oracle.full_audit_cleanup_contracts,carla_lane_oracle.grouped_table_contracts,carla_lane_oracle.grouped_y_finiteness_contracts,carla_lane_oracle.ideal_projection,carla_lane_oracle.lane_control_contracts,carla_lane_oracle.lane_order_contracts,carla_lane_oracle.moment_finiteness_contracts,carla_lane_oracle.raw_cut_inverse_contracts,carla_lane_oracle.render_actor_reuse_contracts,carla_lane_oracle.reviewed_cleanup_contracts,carla_lane_oracle.rounded_line_selector_contracts,carla_lane_oracle.rounded_line_singleton_contracts,carla_lane_oracle.runtime_boundary_contracts,carla_lane_oracle.seed_count_contracts,carla_lane_oracle.selection_finiteness_contracts,carla_lane_oracle.source_contracts,carla_lane_oracle.speed_parser_contracts,carla_lane_oracle.spiral_moments,carla_lane_oracle.sum2_contracts,carla_lane_oracle.sum2_guard_contracts,carla_lane_oracle.winner_sign_contracts
+ok
+
+----------------------------------------------------------------------
+Ran 1 test in 29.796s
+
+OK

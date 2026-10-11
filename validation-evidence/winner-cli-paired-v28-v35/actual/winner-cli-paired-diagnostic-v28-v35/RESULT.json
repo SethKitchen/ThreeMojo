@@ -1,0 +1,67 @@
+{
+  "elapsed_seconds": 68.92440830801206,
+  "failure": null,
+  "finished": "2026-10-11T13:35:12.196266+00:00",
+  "known_process_count": 4,
+  "remaining_owned_descendants": [],
+  "scope": "DIAGNOSTIC ONLY: one exact maintained normal CLI winner probe each on immutable v28/v35; original30-second child cap, identical maintained fixture/setup/command generation. Each parent stage has45 seconds. Collect both outcomes; nonzero stages remain failures, no qualification or timeout-policy approval.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 1,
+      "label": "v28-normal-cli-winner",
+      "leader_reaped": true,
+      "log_sha256": "ccec9a7437e6aecd02116060be097e9bf534f4e04fd38995ca071f676c41692d",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 30.719158348991186,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+      "stage_timeout_seconds": 45,
+      "started": "2026-10-11T13:34:06.096481+00:00",
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+        "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+      "expected_tests": 1,
+      "label": "v35-normal-cli-winner",
+      "leader_reaped": true,
+      "log_sha256": "df27d8b1438e9227fbb08b82fbb4034db61e03c30517ef3ea02d79b755ac8e1d",
+      "pgid": 10,
+      "pid": 10,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 30.582695589007926,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+      "stage_timeout_seconds": 45,
+      "started": "2026-10-11T13:34:39.184858+00:00",
+      "test_count": 1,
+      "timed_out": false
+    }
+  ]
+}

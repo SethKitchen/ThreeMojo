@@ -1,0 +1,125 @@
+{
+  "files": [
+    {
+      "bytes": 3968,
+      "kind": "derived-exact-command-and-cap-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "d54050732e68e5c45c4d056bfccbd95ed671901617da5d29e95f69e68c30a839"
+    },
+    {
+      "bytes": 10477,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "8f4fb8138abdb7f78347d663c2508d4cd4b31f40437abe1a9fb19efed46f7c7a"
+    },
+    {
+      "bytes": 2066,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/README.md",
+      "path": "README.md",
+      "sha256": "236f62a2128291581afe599b1b63f23189f375841bf3ec05b186f86e4b6f5c10"
+    },
+    {
+      "bytes": 6388,
+      "kind": "derived-mixed-diagnostic-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "2b2108c01ce16385b1db7f050f0e7ab20336e1ef44f407bcbe2d2fbd360173b5"
+    },
+    {
+      "bytes": 4286,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35.supervisor.log",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35.supervisor.log",
+      "sha256": "ec3ee40729047352631925bce8a5329c7bbf9c031b1b52cd771eb081d07be87a"
+    },
+    {
+      "bytes": 2870,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35/RESULT.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/RESULT.json",
+      "sha256": "2ce6faeb70c769d44428d82280f13ddf79ef95c64dc4f7ee4eced4d888fce226"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35/SDK-AFTER.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35/SDK-BEFORE.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35/WINDOW-START.json",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/WINDOW-START.json",
+      "sha256": "f0b24171ca7a82c14f95985815f774d3f13df605c245be6bdd555d7b29941a65"
+    },
+    {
+      "bytes": 2435,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner.log",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v28-normal-cli-winner.log",
+      "sha256": "ccec9a7437e6aecd02116060be097e9bf534f4e04fd38995ca071f676c41692d"
+    },
+    {
+      "bytes": 1542,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/actual/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner.log",
+      "path": "actual/winner-cli-paired-diagnostic-v28-v35/v35-normal-cli-winner.log",
+      "sha256": "df27d8b1438e9227fbb08b82fbb4034db61e03c30517ef3ea02d79b755ac8e1d"
+    },
+    {
+      "bytes": 911289,
+      "kind": "lossless-original-paired-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "71f8e5106efdaf65e7566426e6bcaee323a66e5347909fb5dc4044daee61fa6c"
+    },
+    {
+      "bytes": 5175,
+      "kind": "hash-bound-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 1010,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V35-QUALIFICATION-BINDING.json",
+      "sha256": "9f7159cc980b51da7be9ed5b3822cbb0a8c88977794200cf6b24315f9c4a8e2c"
+    },
+    {
+      "bytes": 23833,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/reproduce/build_winner_cli_paired_diagnostic_packet.py",
+      "path": "reproduce/build_winner_cli_paired_diagnostic_packet.py",
+      "sha256": "5df5314e06c645083916afd54026fc9063925775d2ac458dd299a9472bc213a4"
+    },
+    {
+      "bytes": 2124,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-winner-cli-paired-diagnostic-v28-v35-packet/reproduce/winner-cli-paired-diagnostic-v28-v35.json",
+      "path": "reproduce/winner-cli-paired-diagnostic-v28-v35.json",
+      "sha256": "22c2b4e421724f4e655c0ea84c23a871c0add9fe1ca507cd685733f9fc76e1e7"
+    }
+  ],
+  "schema": 1,
+  "scope": "One terminal diagnostic paired normal CLI winner probe on immutable v28/v35. No overall qualification, timeout-policy approval, native/coverage/CI readiness, merge readiness, or issue-completion claim."
+}

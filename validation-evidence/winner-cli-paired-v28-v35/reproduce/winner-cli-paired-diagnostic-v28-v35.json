@@ -1,0 +1,47 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/WINNER-CLI-PAIRED-DIAGNOSTIC-PROTOCOL-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol"
+    }
+  ],
+  "phase": "winner-cli-paired-diagnostic-v28-v35",
+  "scope": "DIAGNOSTIC ONLY: one exact maintained normal CLI winner probe each on immutable v28/v35; original30-second child cap, identical maintained fixture/setup/command generation. Each parent stage has45 seconds. Collect both outcomes; nonzero stages remain failures, no qualification or timeout-policy approval.",
+  "seal": "CANDIDATE-V35-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+  "stages": [
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 1,
+      "label": "v28-normal-cli-winner",
+      "seconds": 45
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/winner-cli-paired-diagnostic-v35-protocol/probe.py",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+        "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+      "expected_tests": 1,
+      "label": "v35-normal-cli-winner",
+      "seconds": 45
+    }
+  ],
+  "window_seconds": 120
+}
