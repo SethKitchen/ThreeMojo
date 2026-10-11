@@ -1037,24 +1037,13 @@ struct PhysicsWorld(Movable):
         var indexed = (
             not self._ccd_brute_force and len(self._ccd_index.nodes) > 0
         )
-        # One query covers the step: the reach of _ccd_separation.
+        # An impulse can turn spin into translation, changing the reach.
+        # Query again after each impact; between impacts the velocities
+        # stay fixed, so this segment's endpoint-speed bound is sufficient.
         var candidates = List[Int]()
         var near = len(self._triangles)
-        if indexed:
-            var spin = angular + turning
-            var speed = sqrt(_wide_dot(velocity, velocity)) + sqrt(
-                _wide_dot(spin, spin)
-            ) * self._ccd_lever(i)
-            _ = self._ccd_index.query(
-                center,
-                SIMD[DType.float64, 4](0),
-                self._ccd_lever(i)
-                + radius
-                + Float64(h) * speed
-                + Float64(self.margin),
-                candidates,
-            )
-            near = len(candidates)
+        var refresh = indexed
+        var lever = self._ccd_lever(i)
         var remaining = Float64(h)
         var steps = 0
         var count = 0
@@ -1063,6 +1052,21 @@ struct PhysicsWorld(Movable):
                 raise Error("CCD sub-step limit exhausted; step rolled back")
             steps += 1
             var spin = angular + turning
+            if refresh:
+                var speed = (
+                    sqrt(_wide_dot(velocity, velocity))
+                    + sqrt(_wide_dot(spin, spin)) * lever
+                )
+                _ = self._ccd_index.query(
+                    center,
+                    SIMD[DType.float64, 4](0),
+                    lever + radius + remaining * speed + Float64(self.margin),
+                    candidates,
+                )
+                # Equal-time closing contacts keep triangle insertion order.
+                sort(candidates)
+                near = len(candidates)
+                refresh = False
             var ends = self._ccd_ends(i, rotation)
             var at = (center + ends[0], center + ends[1])
             var speeds = (
@@ -1136,6 +1140,7 @@ struct PhysicsWorld(Movable):
                         _ccd_narrow(normal * impulse),
                     )
                 )
+                refresh = indexed
                 continue
             center += velocity * step
             rotation = _ccd_turn(rotation, spin, step)
