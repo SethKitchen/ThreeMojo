@@ -32,6 +32,7 @@ from extensions.carla.road_info import (
     info_index,
 )
 from math.vector3 import Vector3
+from std.math import inf
 from std.memory import bitcast
 from std.testing import (
     TestSuite,
@@ -768,10 +769,11 @@ def test_sign_query_keeps_a_positive_sub_epsilon_projection() raises:
     assert_false(work.exhausted)
 
 
-def test_sign_query_refuses_nan_projection_from_finite_long_segment() raises:
+def test_sign_query_projects_a_finite_long_segment() raises:
     # The ordinary straight-road producer keeps one finite stored segment.
     # Its Float32 squared length overflows, while projecting its own start
     # gives t == 0 and therefore the legacy projection computes 0 * inf.
+    # The road-s step (#302) squares the chord in Float64, so it is finite.
     var road = _road()
     road.length = 1e20
     road.info.geometries[0].geometry.length = 1e20
@@ -784,6 +786,17 @@ def test_sign_query_refuses_nan_projection_from_finite_long_segment() raises:
         query, query, map._carla_segments[0].end
     )[0].value
     assert_true(delta != delta)
+    var work = _MapBuildWork(MapBuildBudget())
+    var found = map._closest_lane_with_build_work(query, LANE_DRIVING, work)
+    assert_equal(found.value().s, map._carla_segments[0].first.s)
+    assert_false(work.exhausted)
+
+
+def test_sign_query_refuses_nan_projection_from_nonfinite_segment() raises:
+    # Only the stored end is made infinite. Its chord fraction is NaN.
+    var map = _one_lane_many_equal_sections(1)
+    var query = map._carla_segments[0].start
+    map._carla_segments[0].end.x = inf[DType.float32]()
     var work = _MapBuildWork(MapBuildBudget())
     with assert_raises(contains="A step needs a positive distance"):
         _ = map._closest_lane_with_build_work(query, LANE_DRIVING, work)

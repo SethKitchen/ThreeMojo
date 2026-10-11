@@ -91,6 +91,38 @@ The game example also writes scene extras. It checks the complete expected
 record after loading, before animation or rendering. A missing or changed
 record is an error. Delete the stale bake to build a new one.
 
+## Bake fingerprints and stale-bake checks
+
+A bake record holds three fingerprints. A changed spec or quality option
+changes a fingerprint.
+
+| Field | Fingerprint of |
+|---|---|
+| `spec_fingerprint` | The complete canonical inputs: stature, sex, athleticism and all 43 genes |
+| `visual_settings_fingerprint` | The triangle budget, details, hair, materials and facial recipe |
+| `recipe_digest` | The complete recipe, with revisions, units, frame and transform |
+
+Each fingerprint is the 64-bit FNV-1a hash of normalized JSON text. It is
+sixteen lowercase hexadecimal digits. It is not a cryptographic hash.
+
+The recipe records `canonical_to_local_rest` as a column-major 4x4 matrix.
+The game path uses the identity matrix. Translations are in meters.
+
+Schema version 2 adds the fingerprints and the matrix. A version 1 bake
+is refused as stale.
+
+Use these checks after you load a bake:
+
+- `stored_provenance` recomputes each fingerprint from the stored recipe.
+  It refuses a missing, incomplete or edited record.
+- `require_current_spec` compares the exact canonical inputs with a spec.
+  It ignores visual settings and revisions.
+- `require_bake_provenance` names a changed spec or changed settings first.
+  It then compares the complete record.
+
+A stale bake raises an error. It never represents a changed spec silently.
+These checks do not hash the mesh bytes. Use a content digest for that.
+
 These recipe revisions are semantic versions. They are not verified
 upstream commits or content hashes. A producer must change its recipe
 revision when its source, topology, rig or mapping changes. Custom material
@@ -173,7 +205,7 @@ It does not test physiological validity or convergence.
 | Separate visual and engineering capabilities | Typed native gate; game and bake records fail closed | A validated engineering coupling could add a capability only with independent evidence |
 | Retain canonical SI geometry, labels and properties | Immutable caller-supplied part snapshots retain the full #289 report | Generate and verify complete canonical part meshes and region correspondence from library fields; whole-body property coverage is absent |
 | Identity, jaw, weights and LOD mappings | Explicit unsupported maps, source/topology invalidation and two dental identities | Tested coupled maps, including eye fit and tissue clearance |
-| Bake provenance and stale-spec checks | Game roots and example scene extras retain exact spec/options/frame recipes; offline manifests bind artifact bytes | Pin and verify converted source/model inputs and license manifests under #303; generic exporters cannot detect arbitrary post-build scene edits |
+| Bake provenance and stale-spec checks | Game roots and example scene extras retain exact spec/options/frame recipes, an explicit transform and spec, settings and recipe fingerprints; loaded bakes are refused when stale or edited; offline manifests bind artifact bytes | Pin and verify converted source/model inputs and license manifests under #303; generic exporters cannot detect arbitrary post-build scene edits |
 | Frames, full tensors and reference points | Tested offline proper-rotation and parallel-axis adapter | Native whole-body export integration when canonical part generation is available |
 | Round trips and extreme identities | Synthetic glTF recipe round trips, immutable SI data, full-tensor analytic controls, all extreme gene recipes, stale assets and unsupported paths | Anatomical correspondence, eye/dental fit and tissue-clearance fixtures with approved source assets |
 

@@ -2703,9 +2703,30 @@ struct _Paint(ImplicitlyCopyable):
             b: The second.
             c: The third.
         """
-        var one = self.raster(a)
-        var two = self.raster(b)
-        var three = self.raster(c)
+        self.emit_raster(
+            corners, self.raster(a), self.raster(b), self.raster(c)
+        )
+
+    def emit_raster(
+        self,
+        mut corners: _Slim,
+        var one: RasterVertex,
+        var two: RasterVertex,
+        var three: RasterVertex,
+    ):
+        """Append one projected triangle, unless its facing rejects it.
+
+        `emit` without the projection. A caller that shares a corner
+        between triangles, as a strand ribbon and its round caps do, can
+        project each corner once with `raster` and pass the result here.
+        The result equals `emit` on the unprojected corners.
+
+        Args:
+            corners: The frame's raster vertices, appended to.
+            one: The first corner, from `raster`.
+            two: The second.
+            three: The third.
+        """
         # The polygon offset, added to the screen depths here, where the
         # triangle is first on the screen, so both backends receive the
         # moved depths and agree without a rule of their own. `NO_OFFSET`
@@ -3487,6 +3508,96 @@ def _emit_clipped(
         )
 
 
+struct _Placed(Movable):
+    """One corner in camera space and the same corner projected by a
+    draw's `_Paint.raster`, so that triangles sharing it project it once.
+    """
+
+    var clip: ClipVertex
+    var screen: RasterVertex
+
+    def __init__(out self, paint: _Paint, var clip: ClipVertex):
+        """Project `clip` with `paint` and keep both.
+
+        Args:
+            paint: What every corner of the draw carries.
+            clip: The corner, in camera space.
+        """
+        self.screen = paint.raster(clip)
+        self.clip = clip^
+
+
+def _same_place(a: RasterVertex, b: RasterVertex) -> Bool:
+    """Return True if two projected corners are at one place on the image.
+
+    Args:
+        a: One corner, from `_Paint.raster`.
+        b: Another.
+
+    Returns:
+        True if their pixel coordinates are equal.
+    """
+    return a.x == b.x and a.y == b.y
+
+
+def _emit_placed(
+    paint: _Paint,
+    mut corners: _Slim,
+    a: _Placed,
+    b: _Placed,
+    c: _Placed,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+) raises:
+    """Clip one triangle of projected corners and append what is left.
+
+    `_emit_clipped` with the projection already done: a triangle that
+    needs no cut reuses its corners' projections, and one that does is
+    cut and projected as `_emit_clipped` does.
+
+    A triangle that needs no cut and has two corners at the same place on
+    the image is left out. Its area is zero, so neither rasterizer
+    draws a sample of it: `_Coverage` and the device kernel both skip a
+    triangle of zero area. A one-pixel strand makes many of these: its
+    inner feather radius is zero, so its middle strip and two of the
+    three triangles in each step of its caps collapse onto the center
+    line. The image and the depths are the same; the frame holds fewer
+    corners.
+
+    Args:
+        paint: What every corner of the draw carries.
+        corners: The frame's raster vertices, appended to.
+        a: The first corner.
+        b: The second.
+        c: The third.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+        sides: The planes that each cut.
+        any_of: The clipping planes of which a kept point needs one.
+
+    Raises:
+        Error: If the clipper does.
+    """
+    if _whole_in_view(a.clip, b.clip, c.clip, near, far, sides, any_of):
+        if (
+            _same_place(a.screen, b.screen)
+            or _same_place(b.screen, c.screen)
+            or _same_place(c.screen, a.screen)
+        ):
+            return
+        # A polygon offset moves the projected depth, which `emit` does
+        # in the same arithmetic as the projection. Such a draw projects
+        # the triangle again, so its depths stay the same to the last bit.
+        if paint.offset.factor == 0 and paint.offset.units == 0:
+            paint.emit_raster(corners, a.screen, b.screen, c.screen)
+            return
+    _emit_clipped(
+        paint, corners, a.clip, b.clip, c.clip, near, far, sides, any_of
+    )
+
+
 def _between(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
     """Return the point a fraction `t` of the way along a wide segment.
 
@@ -3705,15 +3816,29 @@ def _emit_cap(
 
 def _strand_corner(
     ribbon: _Ribbon,
+    paint: _Paint,
     end: ClipVertex,
     side: Float32,
     ahead: Float32,
     alpha: Float32,
-) -> ClipVertex:
-    """Return a ribbon corner with the coverage folded into its alpha."""
+) -> _Placed:
+    """Return a ribbon corner with the coverage folded into its alpha,
+    projected once for every triangle that shares it.
+
+    Args:
+        ribbon: The segment's directions.
+        paint: What every corner of the draw carries.
+        end: The end the corner is about.
+        side: How far across, in half widths.
+        ahead: How far along, in half widths.
+        alpha: The coverage, multiplied into the color's alpha.
+
+    Returns:
+        The corner and its projection.
+    """
     var corner = ribbon.corner(end, side, ahead)
     corner.color.a *= alpha
-    return corner
+    return _Placed(paint, corner^)
 
 
 def _strand_profile(
@@ -3740,6 +3865,7 @@ def _emit_strand_cap(
     paint: _Paint,
     mut corners: _Slim,
     end: ClipVertex,
+    profile: SIMD[DType.float32, 4],
     outward: Float32,
     scale: Int,
     near: Float32,
@@ -3747,30 +3873,38 @@ def _emit_strand_cap(
     sides: List[Plane],
     any_of: List[Plane],
 ) raises:
-    """Append a round cap with the same feather as the ribbon sides."""
-    var profile = _strand_profile(ribbon, end, scale)
-    var center = _strand_corner(ribbon, end, 0, 0, profile[2])
+    """Append a round cap with the same feather as the ribbon sides.
+
+    Each corner is placed and projected once, and the fan's triangles
+    share them.
+    """
+    var center = _strand_corner(ribbon, paint, end, 0, 0, profile[2])
     var steps = cap_steps(ribbon.radius(end) + Float32(scale) * 0.5)
     var turn = Float32(pi) / Float32(steps)
-    var inner = _strand_corner(ribbon, end, profile[0], 0, profile[2])
-    var outer = _strand_corner(ribbon, end, profile[1], 0, 0)
+    var inner = _strand_corner(ribbon, paint, end, profile[0], 0, profile[2])
+    var outer = _strand_corner(ribbon, paint, end, profile[1], 0, 0)
     for step in range(1, steps + 1):
         var angle = turn * Float32(step)
         var side = cos(angle)
         var ahead = outward * sin(angle)
         var next_inner = _strand_corner(
-            ribbon, end, side * profile[0], ahead * profile[0], profile[2]
+            ribbon,
+            paint,
+            end,
+            side * profile[0],
+            ahead * profile[0],
+            profile[2],
         )
         var next_outer = _strand_corner(
-            ribbon, end, side * profile[1], ahead * profile[1], 0
+            ribbon, paint, end, side * profile[1], ahead * profile[1], 0
         )
-        _emit_clipped(
+        _emit_placed(
             paint, corners, center, inner, next_inner, near, far, sides, any_of
         )
-        _emit_clipped(
+        _emit_placed(
             paint, corners, inner, outer, next_outer, near, far, sides, any_of
         )
-        _emit_clipped(
+        _emit_placed(
             paint,
             corners,
             inner,
@@ -3781,8 +3915,8 @@ def _emit_strand_cap(
             sides,
             any_of,
         )
-        inner = next_inner
-        outer = next_outer
+        inner = next_inner^
+        outer = next_outer^
 
 
 def _emit_strand_segment(
@@ -3797,7 +3931,11 @@ def _emit_strand_segment(
     sides: List[Plane],
     any_of: List[Plane],
 ) raises:
-    """Append a filtered ribbon and caps, sampled by the shared alpha hash."""
+    """Append a filtered ribbon and caps, sampled by the shared alpha hash.
+
+    The ribbon's eight corners are placed and projected once each, and
+    its six triangles share them.
+    """
     var first = _strand_profile(ribbon, start, scale)
     var second = _strand_profile(ribbon, end, scale)
     var a_side = SIMD[DType.float32, 4](
@@ -3808,22 +3946,54 @@ def _emit_strand_segment(
     )
     var a_alpha = SIMD[DType.float32, 4](0, first[2], first[2], 0)
     var b_alpha = SIMD[DType.float32, 4](0, second[2], second[2], 0)
+    var a = _strand_corner(ribbon, paint, start, a_side[0], 0, a_alpha[0])
+    var d = _strand_corner(ribbon, paint, end, b_side[0], 0, b_alpha[0])
     for strip in range(3):
-        var a = _strand_corner(ribbon, start, a_side[strip], 0, a_alpha[strip])
         var b = _strand_corner(
-            ribbon, start, a_side[strip + 1], 0, a_alpha[strip + 1]
+            ribbon,
+            paint,
+            start,
+            a_side[strip + 1],
+            0,
+            a_alpha[strip + 1],
         )
         var c = _strand_corner(
-            ribbon, end, b_side[strip + 1], 0, b_alpha[strip + 1]
+            ribbon,
+            paint,
+            end,
+            b_side[strip + 1],
+            0,
+            b_alpha[strip + 1],
         )
-        var d = _strand_corner(ribbon, end, b_side[strip], 0, b_alpha[strip])
-        _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
-        _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
+        _emit_placed(paint, corners, a, b, c, near, far, sides, any_of)
+        _emit_placed(paint, corners, a, c, d, near, far, sides, any_of)
+        a = b^
+        d = c^
     _emit_strand_cap(
-        ribbon, paint, corners, start, -1, scale, near, far, sides, any_of
+        ribbon,
+        paint,
+        corners,
+        start,
+        first,
+        -1,
+        scale,
+        near,
+        far,
+        sides,
+        any_of,
     )
     _emit_strand_cap(
-        ribbon, paint, corners, end, 1, scale, near, far, sides, any_of
+        ribbon,
+        paint,
+        corners,
+        end,
+        second,
+        1,
+        scale,
+        near,
+        far,
+        sides,
+        any_of,
     )
 
 
@@ -4050,6 +4220,7 @@ def _emit_wide_line(
                 .unsafe_origin_cast[MutAnyOrigin](),
                 task * segments // tasks,
                 (task + 1) * segments // tasks,
+                each,
             )
         )
     group.wait()
@@ -4177,9 +4348,13 @@ async def _wide_task(
     failure: MutPointer[String, MutAnyOrigin],
     first: Int,
     past: Int,
+    each: Int,
 ):
     # A task cannot raise. Its error goes back to `_emit_wide_line`.
     try:
+        # Room for every corner of an uncut run, as the serial path
+        # reserves, so the run's list does not grow and copy itself.
+        corners[].reserve((past - first) * each)
         _wide_segments(corners[], setup[], first, past)
     except error:
         failure[] = String(error)

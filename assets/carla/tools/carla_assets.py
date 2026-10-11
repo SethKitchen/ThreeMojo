@@ -18,6 +18,7 @@ Commands:
     python3 assets/carla/tools/carla_assets.py verify [ID ...] [--strict]
     python3 assets/carla/tools/carla_assets.py credits [--all] [--output FILE]
     python3 assets/carla/tools/carla_assets.py stage-render --output NEW_DIRECTORY RENDER_FILE [RENDER_FILE ...]
+    python3 assets/carla/tools/carla_assets.py stage-archive --output NEW_DIRECTORY ID [ID ...]
 
 Rules the fetch keeps:
 
@@ -101,7 +102,7 @@ class FetchError(RuntimeError):
 
 
 class StageError(RuntimeError):
-    """A rendered distribution could not be staged safely."""
+    """A render or archive distribution could not be staged safely."""
 
 
 def _is_sum(value):
@@ -556,6 +557,64 @@ def _stage_write(directory, name, source):
         os.close(fd)
 
 
+def _stage_snapshot(inputs, manifest_path):
+    """Read, parse and check one manifest snapshot.
+
+    Args:
+        inputs: The `ExitStack` that keeps the manifest input open.
+        manifest_path: The manifest to read once.
+    Returns:
+        The exact manifest bytes and the checked manifest parsed from them.
+    Raises:
+        StageError: The manifest is not a regular, non-symlink file.
+        ManifestError: The manifest does not keep its rules.
+        OSError: The manifest cannot be read.
+        ValueError: The manifest is not UTF-8 JSON.
+    """
+    manifest_file = inputs.enter_context(_stage_source(Path(manifest_path)))
+    manifest_bytes = manifest_file.read()
+    manifest = json.loads(manifest_bytes.decode('utf-8'))
+    check_manifest(manifest)
+    return manifest_bytes, manifest
+
+
+def _stage_output(output, stage):
+    """Create a new output directory and let `stage` fill it.
+
+    Args:
+        output: A directory that must not already exist. Its parent must.
+        stage: A function that takes the open directory descriptor.
+    Returns:
+        None.
+    Raises:
+        OSError: The output directory cannot be created.
+        StageError: Staging fails after the directory exists. All partial
+            output is kept, and the message names its path.
+    """
+    # No output exists until every input and output name has been checked.
+    # mkdir and O_EXCL refuse a destination that appears after preflight.
+    output.mkdir()
+    identity = None
+    directory = None
+    try:
+        identity = output.lstat()
+        directory = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        if not os.path.samestat(identity, os.fstat(directory)):
+            raise StageError(f'{output}: output changed while opening it')
+        stage(directory)
+        if not os.path.samestat(output.lstat(), identity):
+            raise StageError(f'{output}: output changed while staging it')
+    except BaseException as error:
+        # An inode check followed by unlink is not atomic: another process
+        # could replace the checked name before deletion. Retain all output
+        # on failure rather than risk deleting files this call did not make.
+        raise StageError(f'{error}; staging incomplete; retained output at '
+                         f'{output.absolute()} for manual inspection') from error
+    finally:
+        if directory is not None:
+            os.close(directory)
+
+
 def stage_render(manifest_path, output, render_files):
     """Copy named renders and one manifest snapshot into a new directory.
 
@@ -576,10 +635,7 @@ def stage_render(manifest_path, output, render_files):
     if output.exists() or output.is_symlink():
         raise StageError(f'{output}: output already exists')
     with ExitStack() as inputs:
-        manifest_file = inputs.enter_context(_stage_source(Path(manifest_path)))
-        manifest_bytes = manifest_file.read()
-        manifest = json.loads(manifest_bytes.decode('utf-8'))
-        check_manifest(manifest)
+        manifest_bytes, manifest = _stage_snapshot(inputs, manifest_path)
         attribution = credits(manifest, everything=True).encode('utf-8')
         sources = []
         names = {'manifest.json', 'attribution.md'}
@@ -599,31 +655,150 @@ def stage_render(manifest_path, output, render_files):
             sources.append((path.name, source))
         if not sources:
             raise StageError('at least one render file is required')
-        # No output exists until every input and output name has been checked.
-        # mkdir and O_EXCL refuse a destination that appears after preflight.
-        output.mkdir()
-        identity = None
-        directory = None
-        try:
-            identity = output.lstat()
-            directory = os.open(output, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-            if not os.path.samestat(identity, os.fstat(directory)):
-                raise StageError(f'{output}: output changed while opening it')
+
+        def stage(directory):
             for name, source in sources:
                 _stage_write(directory, name, source)
             _stage_write(directory, 'manifest.json', io.BytesIO(manifest_bytes))
             _stage_write(directory, 'ATTRIBUTION.md', io.BytesIO(attribution))
-            if not os.path.samestat(output.lstat(), identity):
-                raise StageError(f'{output}: output changed while staging it')
-        except BaseException as error:
-            # An inode check followed by unlink is not atomic: another process
-            # could replace the checked name before deletion. Retain all output
-            # on failure rather than risk deleting files this call did not make.
-            raise StageError(f'{error}; staging incomplete; retained output at '
-                             f'{output.absolute()} for manual inspection') from error
-        finally:
-            if directory is not None:
-                os.close(directory)
+
+        _stage_output(output, stage)
+
+
+class _HashingReader:
+    """A reader that hashes the bytes a copy takes from its source."""
+
+    def __init__(self, source):
+        """Wrap an open binary source.
+
+        Args:
+            source: The binary stream to read.
+        """
+        self.source = source
+        self.digest = hashlib.sha256()
+
+    def read(self, size=-1):
+        """Read and hash up to `size` bytes.
+
+        Args:
+            size: The most bytes to read, or -1 for the rest.
+        Returns:
+            The bytes read.
+        """
+        block = self.source.read(size)
+        self.digest.update(block)
+        return block
+
+
+def _stage_claim(claimed, parts):
+    """Reserve one output file path and its parent directories.
+
+    Args:
+        claimed: The case-folded paths already reserved, mapped to their
+            kind and spelling.
+        parts: The path components of the new output file.
+    Returns:
+        None.
+    Raises:
+        StageError: The path, or one of its parents, clashes with another
+            output regardless of case.
+    """
+    for depth in range(1, len(parts) + 1):
+        kind = 'file' if depth == len(parts) else 'directory'
+        key = tuple(part.casefold() for part in parts[:depth])
+        wanted = (kind, parts[:depth])
+        if key in claimed and (kind == 'file' or claimed[key] != wanted):
+            raise StageError(f'{"/".join(parts)}: the output path clashes with another '
+                             'staged or reserved path')
+        claimed[key] = wanted
+
+
+def stage_archive(manifest_path, cache, output, ids):
+    """Copy the pinned archives of named entries, one manifest snapshot and
+    their attribution into a new directory.
+
+    Each archive keeps its cache path under the new directory, so the
+    directory can serve as a cache root for `fetch --offline`.
+
+    Args:
+        manifest_path: The manifest whose sums pin the archives.
+        cache: The cache root that holds the archives.
+        output: A directory that must not already exist.
+        ids: Explicit entry ids; each entry must have at least one archive.
+    Returns:
+        None. The new directory contains the exact archive and manifest
+        bytes, plus the attribution of the named entries generated from
+        that manifest snapshot.
+    Raises:
+        StageError: An id repeats, an entry has no archive, an archive is
+            unpinned, a sum differs, paths collide, inputs change identity,
+            or staging is incomplete.
+        ManifestError: The manifest does not keep its rules, or an id is
+            not in it.
+        OSError: An input cannot be read or an output cannot be created.
+        ValueError: The selected manifest is not UTF-8 JSON.
+    """
+    output = Path(output)
+    if output.exists() or output.is_symlink():
+        raise StageError(f'{output}: output already exists')
+    with ExitStack() as inputs:
+        manifest_bytes, manifest = _stage_snapshot(inputs, manifest_path)
+        if not ids:
+            raise StageError('at least one entry id is required')
+        if len(set(ids)) != len(ids):
+            raise StageError('each entry id must be named once')
+        entries = _selected_entries(manifest, ids)
+        attribution = credits({'entries': entries}, everything=True).encode('utf-8')
+        claimed = {}
+        for name in ('manifest.json', 'ATTRIBUTION.md'):
+            _stage_claim(claimed, (name,))
+        sources = []
+        for entry in entries:
+            archives = [item for item in entry['files'] if item['role'] == 'archive']
+            if not archives:
+                raise StageError(f'{entry["id"]}: the entry has no archive to stage')
+            for item in archives:
+                expected = item.get('sha256')
+                if expected is None:
+                    raise StageError(f'{item["path"]}: the archive has no pinned sha256')
+                parts = PurePosixPath(item['path']).parts
+                _stage_claim(claimed, parts)
+                path = Path(cache) / item['path']
+                source = inputs.enter_context(_stage_source(path))
+                reader = _HashingReader(source)
+                while reader.read(CHUNK):
+                    pass
+                found = reader.digest.hexdigest()
+                if found != expected:
+                    raise StageError(f'{path}: sha256 {found} does not match the pinned {expected}')
+                source.seek(0)
+                sources.append((parts, source, expected))
+
+        def stage(directory):
+            folders = {(): directory}
+            try:
+                for parts, source, expected in sources:
+                    for depth in range(1, len(parts)):
+                        if parts[:depth] not in folders:
+                            parent = folders[parts[:depth - 1]]
+                            os.mkdir(parts[depth - 1], dir_fd=parent)
+                            folders[parts[:depth]] = os.open(
+                                parts[depth - 1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
+                                dir_fd=parent)
+                    reader = _HashingReader(source)
+                    _stage_write(folders[parts[:-1]], parts[-1], reader)
+                    found = reader.digest.hexdigest()
+                    if found != expected:
+                        raise StageError(f'{"/".join(parts)}: sha256 {found} changed from the '
+                                         f'pinned {expected} while staging it')
+                _stage_write(directory, 'manifest.json', io.BytesIO(manifest_bytes))
+                _stage_write(directory, 'ATTRIBUTION.md', io.BytesIO(attribution))
+            finally:
+                for key, descriptor in folders.items():
+                    if key:
+                        os.close(descriptor)
+
+        _stage_output(output, stage)
 
 
 def status(manifest, cache):
@@ -661,12 +836,23 @@ def main(argv=None):
     stager = commands.add_parser('stage-render', help='copy named renders and credits into a new directory')
     stager.add_argument('--output', type=Path, required=True)
     stager.add_argument('render_files', type=Path, nargs='+')
+    packer = commands.add_parser('stage-archive',
+                                 help='copy pinned archives, the manifest and credits into a new directory')
+    packer.add_argument('--output', type=Path, required=True)
+    packer.add_argument('ids', nargs='+')
     args = parser.parse_args(argv)
     if args.command == 'stage-render':
         try:
             stage_render(args.manifest, args.output, args.render_files)
         except (OSError, ValueError, StageError) as error:
             print(f'stage-render: {error}', file=sys.stderr)
+            return 1
+        return 0
+    if args.command == 'stage-archive':
+        try:
+            stage_archive(args.manifest, args.cache, args.output, args.ids)
+        except (OSError, ValueError, StageError) as error:
+            print(f'stage-archive: {error}', file=sys.stderr)
             return 1
         return 0
     manifest = load_manifest(args.manifest)

@@ -965,6 +965,248 @@ class StageRenderTests(unittest.TestCase):
         self.assertEqual({p for p in self.fixture.root.rglob('*')}, before | {destination})
 
 
+def zip_of(**members):
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w') as bundle:
+        for name, data in members.items():
+            bundle.writestr(name, data)
+    return buffer.getvalue()
+
+
+class StageArchiveTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Fixture()
+        self.addCleanup(self.fixture.close)
+        self.output = self.fixture.root / 'package'
+        self.manifest_path = self.fixture.root / 'custom-manifest.json'
+        # A real CARLA entry keeps its credit, release and changes. Its
+        # archive is a small fixture with the same member names, so no
+        # CARLA bytes are needed.
+        real = next(e for e in tool.load_manifest()['entries'] if e['id'] == 'carla.vehicle.audi.a2')
+        self.carla = copy.deepcopy(real)
+        self.car = zip_of(**{member['member']: member['path'].encode()
+                             for member in self.carla['files'][0]['extract']})
+        self.wheel = zip_of(**{'wheel.gltf': b'{"wheel": 1}'})
+        self.scan = zip_of(**{'Scan_Color.jpg': b'color texels'})
+        self.carla['files'][0]['sha256'] = _sum(self.car)
+        self.carla['files'][0]['url'] = None
+        self.free = texture_entry(None, None, 'scan', 'unused.jpg')
+        self.free['files'] = [{
+            'role': 'archive', 'url': None, 'sha256': _sum(self.scan), 'path': 'scan.zip',
+            'extract': [{'role': 'albedo', 'member': 'Scan_Color.jpg', 'path': 'scan/color.jpg'}],
+        }]
+        self.other = texture_entry('https://example.org/other.jpg', None, 'other', 'other.jpg')
+        self.other.update(title='Unselected Entry')
+        self.manifest = manifest_of(self.carla, self.free, self.other)
+        self.write_manifest()
+        self.archives = {self.carla['files'][0]['path']: self.car, 'scan.zip': self.scan}
+        for path, data in self.archives.items():
+            target = self.fixture.cache / path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+
+    def write_manifest(self):
+        self.manifest_bytes = (json.dumps(self.manifest, indent=4) + '\r\n').encode()
+        self.manifest_path.write_bytes(self.manifest_bytes)
+
+    def run_stage(self, *ids):
+        error = io.StringIO()
+        with redirect_stderr(error):
+            result = tool.main(['--manifest', str(self.manifest_path),
+                                '--cache', str(self.fixture.cache), 'stage-archive',
+                                '--output', str(self.output),
+                                *(ids or ('carla.vehicle.audi.a2', 'scan'))])
+        return result, error.getvalue()
+
+    def tree(self, root):
+        return {path.relative_to(root).as_posix(): path.read_bytes()
+                for path in root.rglob('*') if path.is_file()}
+
+    def test_exact_pinned_archives_manifest_and_selected_credits(self):
+        before = self.tree(self.fixture.root)
+        self.assertEqual(self.run_stage(), (0, ''))
+        staged = self.tree(self.output)
+        self.assertEqual(set(staged), {*self.archives, 'manifest.json', 'ATTRIBUTION.md'})
+        for path, data in self.archives.items():
+            self.assertEqual(staged[path], data)
+        self.assertEqual(staged['manifest.json'], self.manifest_bytes)
+        attribution = staged['ATTRIBUTION.md'].decode()
+        self.assertEqual(attribution, tool.credits(
+            {'entries': [self.carla, self.free]}, everything=True))
+        for text in ('CARLA Team (Computer Vision Center)', 'Audi A2 (CARLA)',
+                     'https://creativecommons.org/licenses/by/4.0/',
+                     'https://github.com/carla-simulator/carla/releases/tag/0.9.16',
+                     self.carla['changes'], '"scan" by A. Scanner'):
+            self.assertIn(text, attribution)
+        self.assertNotIn('Unselected Entry', attribution)
+        self.assertEqual(self.tree(self.fixture.root),
+                         {**before, **{f'package/{k}': v for k, v in staged.items()}})
+
+    def test_package_is_a_cache_root_for_offline_recovery(self):
+        self.assertEqual(self.run_stage()[0], 0)
+        common = ['--manifest', str(self.output / 'manifest.json'), '--cache', str(self.output)]
+        with redirect_stdout(io.StringIO()) as out, \
+                patch.object(tool.urllib.request, 'urlopen', side_effect=AssertionError('network')):
+            self.assertEqual(tool.main([*common, 'fetch', '--offline', 'carla.vehicle.audi.a2', 'scan']), 0)
+            self.assertEqual(tool.main([*common, 'verify', '--strict', 'carla.vehicle.audi.a2', 'scan']), 0)
+        self.assertNotIn('mismatch', out.getvalue())
+        self.assertEqual((self.output / 'scan/color.jpg').read_bytes(), b'color texels')
+
+    def test_no_network_fetch_extract_or_process_is_needed(self):
+        def forbidden(*args, **kwargs):
+            self.fail('staging invoked a network, fetch, extract or process entry point')
+        with patch.object(tool, 'fetch', side_effect=forbidden), \
+                patch.object(tool, '_download', side_effect=forbidden), \
+                patch.object(tool, '_extract', side_effect=forbidden), \
+                patch.object(tool, 'save_manifest', side_effect=forbidden), \
+                patch.object(tool.urllib.request, 'urlopen', side_effect=forbidden), \
+                patch.object(subprocess, 'run', side_effect=forbidden), \
+                patch.object(subprocess, 'Popen', side_effect=forbidden):
+            self.assertEqual(self.run_stage(), (0, ''))
+
+    def test_shared_folders_hold_several_archives(self):
+        self.carla['files'].append({
+            'role': 'archive', 'url': None, 'sha256': _sum(self.wheel),
+            'path': 'carla/vehicles/wheel.zip',
+            'extract': [{'role': 'support', 'member': 'wheel.gltf', 'path': 'carla/wheel.gltf'}],
+        })
+        self.write_manifest()
+        (self.fixture.cache / 'carla/vehicles/wheel.zip').write_bytes(self.wheel)
+        self.assertEqual(self.run_stage('carla.vehicle.audi.a2')[0], 0)
+        self.assertEqual(set(self.tree(self.output)),
+                         {self.carla['files'][0]['path'], 'carla/vehicles/wheel.zip',
+                          'manifest.json', 'ATTRIBUTION.md'})
+
+    def test_different_missing_unpinned_or_linked_archives_create_no_output(self):
+        archive = self.fixture.cache / 'scan.zip'
+        archive.write_bytes(zip_of(**{'Scan_Color.jpg': b'rebuilt texels'}))
+        result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('does not match the pinned', error)
+        self.assertFalse(self.output.exists())
+        archive.unlink()
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertFalse(self.output.exists())
+        archive.symlink_to(self.fixture.cache / self.carla['files'][0]['path'])
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertFalse(self.output.exists())
+        archive.unlink()
+        archive.write_bytes(self.scan)
+        self.free['files'][0]['sha256'] = None
+        self.free['files'][0]['url'] = 'https://example.org/scan.zip'
+        self.write_manifest()
+        result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('no pinned sha256', error)
+        self.assertFalse(self.output.exists())
+
+    def test_bad_selections_and_manifests_create_no_output(self):
+        for ids in (('missing.entry',), ('scan', 'scan'), ('other',)):
+            with self.subTest(ids=ids):
+                result, error = self.run_stage(*ids)
+                self.assertEqual(result, 1)
+                self.assertTrue(error)
+                self.assertFalse(self.output.exists())
+        with self.assertRaisesRegex(tool.StageError, 'at least one'):
+            tool.stage_archive(self.manifest_path, self.fixture.cache, self.output, [])
+        for data in (b'{broken', b'\xff', b'{}'):
+            self.manifest_path.write_bytes(data)
+            self.assertEqual(self.run_stage()[0], 1)
+        self.assertFalse(self.output.exists())
+        for args in (['stage-archive'], ['stage-archive', '--output', str(self.output)],
+                     ['stage-archive', 'scan']):
+            with self.subTest(args=args), redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as raised:
+                    tool.main(args)
+                self.assertEqual(raised.exception.code, 2)
+
+    def test_reserved_and_case_insensitive_path_clashes_are_refused(self):
+        for first, second in (('MANIFEST.JSON', None), ('attribution.md', None),
+                              ('Carla/a.zip', 'carla/b.zip'), ('a.zip', 'A.ZIP/b.zip'),
+                              ('a/b.zip', 'A/B.ZIP')):
+            with self.subTest(paths=(first, second)):
+                self.free['files'][0]['path'] = first
+                (self.fixture.cache / first).parent.mkdir(parents=True, exist_ok=True)
+                (self.fixture.cache / first).write_bytes(self.scan)
+                self.manifest['entries'] = [self.free]
+                if second:
+                    extra = copy.deepcopy(self.free)
+                    extra.update(id='second')
+                    extra['files'][0]['path'] = second
+                    extra['files'][0]['extract'][0]['path'] = 'second/color.jpg'
+                    self.manifest['entries'].append(extra)
+                self.write_manifest()
+                result, error = self.run_stage(*(('scan', 'second') if second else ('scan',)))
+                self.assertEqual(result, 1)
+                self.assertIn('clashes', error)
+                self.assertFalse(self.output.exists())
+
+    def test_existing_destinations_and_missing_parents_are_refused(self):
+        self.output.mkdir()
+        (self.output / 'user.txt').write_bytes(b'user content')
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertEqual(self.tree(self.output), {'user.txt': b'user content'})
+        self.output = self.fixture.root / 'dangling'
+        self.output.symlink_to(self.fixture.root / 'absent')
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertTrue(self.output.is_symlink())
+        self.output = self.fixture.root / 'absent' / 'nested'
+        self.assertEqual(self.run_stage()[0], 1)
+        self.assertFalse(self.output.parent.exists())
+
+    def test_archive_changed_after_preflight_is_reported_and_retained(self):
+        original_write = tool._stage_write
+        archive = self.fixture.cache / 'scan.zip'
+
+        def change_archive(directory, name, source):
+            if name == 'scan.zip':
+                with open(archive, 'r+b') as stream:
+                    stream.write(b'XX')
+            original_write(directory, name, source)
+
+        with patch.object(tool, '_stage_write', change_archive):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('changed from the pinned', error)
+        self.assertIn('staging incomplete', error)
+        self.assertIn(str(self.output.absolute()), error)
+        self.assertEqual(set(self.tree(self.output)), {self.carla['files'][0]['path'], 'scan.zip'})
+        self.assertFalse((self.output / 'manifest.json').exists())
+
+    def test_late_failures_retain_partial_output_and_never_overwrite(self):
+        original_open = os.open
+
+        def fail_open(path, *args, **kwargs):
+            if path == 'ATTRIBUTION.md':
+                raise OSError('injected output creation failure')
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(tool.os, 'open', fail_open):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual((self.output / 'manifest.json').read_bytes(), self.manifest_bytes)
+        self.assertEqual((self.output / 'scan.zip').read_bytes(), self.scan)
+        self.assertFalse((self.output / 'ATTRIBUTION.md').exists())
+
+        self.output = self.fixture.root / 'racing'
+        original_mkdir = os.mkdir
+
+        def racing_folder(name, *args, **kwargs):
+            original_mkdir(name, *args, **kwargs)
+            if 'dir_fd' not in kwargs:
+                return
+            os.rmdir(name, dir_fd=kwargs['dir_fd'])
+            os.symlink(str(self.fixture.source), name, dir_fd=kwargs['dir_fd'])
+
+        with patch.object(tool.os, 'mkdir', racing_folder):
+            result, error = self.run_stage()
+        self.assertEqual(result, 1)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual(list(self.fixture.source.iterdir()), [])
+        self.assertTrue((self.output / 'carla').is_symlink())
+
+
 class CreditTests(unittest.TestCase):
     def test_committed_attribution_matches_every_manifest_entry(self):
         manifest = tool.load_manifest()

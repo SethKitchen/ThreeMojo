@@ -984,12 +984,15 @@ def test_closest_waypoints() raises:
     _same(
         map.closest_waypoint_on_road(Vector3(20, 1, 0)).value(), 1, 0, -1, 20.0
     )
-    _same(
-        map.closest_waypoint_on_road(Vector3(70, 10, 0)).value(),
-        11,
-        0,
-        -1,
-        15.603252062536761,
+    # Road 11 is an arc of radius 20 m. Lane -1 runs at radius 18.25 m, so
+    # a chord is 0.9125 of its road-s span. The radial foot of (70, 10) is
+    # at s = 5 pi = 15.70796. CARLA's step by chord distance gives
+    # 15.603252062536761. The chord-fraction step is nearer (#302).
+    var arc_foot = map.closest_waypoint_on_road(Vector3(70, 10, 0)).value()
+    _same(arc_foot, 11, 0, -1, 15.661168630361392)
+    assert_true(
+        abs(arc_foot.s - 15.707963267948966)
+        < abs(15.603252062536761 - 15.707963267948966)
     )
     _same(
         map.closest_waypoint_on_road(
