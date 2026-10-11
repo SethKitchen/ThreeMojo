@@ -20,7 +20,7 @@ import zipfile
 from contextlib import redirect_stderr, redirect_stdout
 from email.message import Message
 from unittest.mock import patch
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 
 import carla_assets as tool
 
@@ -147,12 +147,60 @@ class ManifestTests(unittest.TestCase):
 
     def test_a_town_passes(self):
         town = {
-            'id': 'carla.town.town02', 'kind': 'town', 'license': 'CC-BY-4.0', 'author': 'B',
+            'id': 'town02', 'kind': 'town', 'license': 'CC-BY-4.0', 'author': 'B',
             'source': 'https://example.org/town', 'provenance': 'p',
             'files': [{'role': 'model', 'url': 'https://example.org/t.gltf',
                        'sha256': None, 'path': 't.gltf'}],
         }
-        tool.check_manifest(manifest_of(town, bindings={'town.Town02': 'carla.town.town02'}))
+        tool.check_manifest(manifest_of(town, bindings={'town.Town02': 'town02'}))
+
+    def test_every_repository_carla_entry_keeps_attribution_and_integrity(self):
+        # Issue #309: each converted CARLA archive keeps its exact sum, its
+        # upstream release, its changes, the CARLA Team credit and the
+        # CC BY 4.0 link, whatever host serves it.
+        manifest = tool.load_manifest()
+        carla = [e for e in manifest['entries'] if e['id'].startswith('carla.')]
+        self.assertEqual(len(carla), 47)
+        self.assertEqual(sum(e['kind'] == 'model' for e in carla), 41)
+        self.assertEqual(sum(e['kind'] == 'town' for e in carla), 6)
+        attribution = tool.credits(manifest)
+        for entry in carla:
+            with self.subTest(entry=entry['id']):
+                self.assertEqual(entry['license'], 'CC-BY-4.0')
+                self.assertEqual(entry['author'], 'CARLA Team (Computer Vision Center)')
+                release = tool.CARLA_RELEASE.fullmatch(entry['source'])
+                self.assertIsNotNone(release)
+                self.assertIn('CARLA ' + release.group(1), entry['provenance'])
+                self.assertTrue(entry['changes'].strip())
+                archives = [f for f in entry['files'] if f['role'] == 'archive']
+                self.assertEqual(len(archives), 1)
+                self.assertTrue(tool._is_sum(archives[0]['sha256']))
+                self.assertIn(f'"{entry["title"]}" by CARLA Team (Computer Vision Center), '
+                              f'{entry["source"]}, CC BY 4.0 '
+                              '(https://creativecommons.org/licenses/by/4.0/). '
+                              f'Changes: {entry["changes"]}', attribution)
+
+    def test_a_carla_entry_that_loses_credit_release_changes_or_sum_is_refused(self):
+        good = copy.deepcopy(next(e for e in tool.load_manifest()['entries']
+                                  if e['id'] == 'carla.vehicle.audi.a2'))
+        tool.check_manifest(manifest_of(good))
+        changes = [
+            lambda e: e.update(license='CC0-1.0'),
+            lambda e: e.update(author='Someone Else'),
+            lambda e: e.update(source='https://carla.org/'),
+            lambda e: e.update(source='https://github.com/carla-simulator/carla/releases/tag/latest'),
+            lambda e: e.update(provenance='A CARLA vehicle.'),
+            lambda e: e.update(source='https://github.com/carla-simulator/carla/releases/tag/0.9.15'),
+            lambda e: e.pop('changes'),
+            lambda e: e.update(changes=' '),
+            lambda e: e.update(changes=7),
+            lambda e: e['files'][0].update(sha256=None),
+        ]
+        for index, change in enumerate(changes):
+            entry = copy.deepcopy(good)
+            change(entry)
+            with self.subTest(index=index), self.assertRaises(tool.ManifestError):
+                tool.check_manifest(manifest_of(entry))
 
     def test_a_file_not_hosted_yet_passes_with_its_sum(self):
         tool.check_manifest(manifest_of(texture_entry(None, _sum(b'scan'))))
@@ -509,6 +557,48 @@ class RecoveryTests(unittest.TestCase):
                             tool.fetch(self.manifest, self.fixture.cache)
                     self.assertEqual(list(self.fixture.cache.iterdir()), [])
                     self.assertEqual(self.manifest, self.original)
+
+    def test_drive_interstitial_pages_are_named_as_web_pages_even_if_mislabeled(self):
+        # Drive sends a page, not the file, for a file it does not share,
+        # for a used-up download quota and for its virus-scan confirmation.
+        pages = (b'<!DOCTYPE html><html><title>Google Drive - Virus scan warning</title>',
+                 b'\n  <html><body>Google Drive - Quota exceeded</body></html>',
+                 b'<HTML><title>Sign in - Google Accounts</title>')
+        for body in pages:
+            response = io.BytesIO(body)
+            response.headers = Message()
+            response.headers['Content-Type'] = 'application/octet-stream'
+            with self.subTest(body=body):
+                with patch.object(tool.urllib.request, 'urlopen', return_value=response):
+                    with self.assertRaisesRegex(tool.FetchError, 'web page.*quota'):
+                        tool.fetch(self.manifest, self.fixture.cache)
+                self.assertEqual(list(self.fixture.cache.iterdir()), [])
+                self.assertEqual(self.manifest, self.original)
+
+    def test_a_proxy_that_refuses_the_tunnel_is_not_tried_again(self):
+        # urllib wraps the refusal: <urlopen error Tunnel connection failed: 403 Forbidden>.
+        for error in (URLError(OSError('Tunnel connection failed: 403 Forbidden')),
+                      OSError('Tunnel connection failed: 407 Proxy Authentication Required')):
+            with self.subTest(error=error), \
+                    patch.object(tool.urllib.request, 'urlopen', side_effect=error) as opener, \
+                    patch.object(tool.time, 'sleep') as sleeper:
+                with self.assertRaisesRegex(tool.FetchError, 'Tunnel connection failed: 40'):
+                    tool.fetch(self.manifest, self.fixture.cache)
+                opener.assert_called_once()
+                sleeper.assert_not_called()
+                self.assertEqual(list(self.fixture.cache.iterdir()), [])
+
+    def test_a_dropped_connection_is_tried_again_then_verified(self):
+        response = io.BytesIO(self.data)
+        response.headers = Message()
+        response.headers['Content-Type'] = 'application/zip'
+        effects = [ConnectionResetError('reset'), response]
+        with patch.object(tool.urllib.request, 'urlopen', side_effect=effects) as opener, \
+                patch.object(tool.time, 'sleep') as sleeper:
+            self.assertEqual(tool.fetch(self.manifest, self.fixture.cache)[0][2], 'fetched')
+        self.assertEqual(opener.call_count, 2)
+        sleeper.assert_called_once()
+        self.assertEqual(self.extracted.read_bytes(), b'original pixels')
 
     def test_synthetic_clean_cache_download_verifies_before_extracting(self):
         response = io.BytesIO(self.data)

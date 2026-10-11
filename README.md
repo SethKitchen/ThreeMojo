@@ -125,7 +125,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Project tools
 
-- [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
+- [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives; a public download of all 47 remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 <details>
 <summary>Implemented: 12</summary>

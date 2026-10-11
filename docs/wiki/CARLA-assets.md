@@ -183,8 +183,7 @@ python3 assets/carla/tools/carla_assets.py credits --all --output assets/carla/A
 ```
 
 `make test-tools` checks that the catalog still matches the manifest.
-Hosting durability is tracked in [#309](https://github.com/SethKitchen/ThreeMojo/issues/309).
-The current share links are not a durable distribution guarantee.
+Google Drive hosts the archives. See "Publish the converted archives".
 
 ## Stage renders for sharing
 
@@ -226,7 +225,6 @@ Use a new directory for the next attempt.
 This command does not render, export, download, or inspect the asset cache.
 It does not change archive checksums or create sidecars beside source renders.
 The existing `credits` command is unchanged.
-Staging a distribution does not provide a hosted mirror or close #309.
 
 ## Stage archives for sharing
 
@@ -276,33 +274,64 @@ The command also refuses these selections:
 - Two output paths that differ only in case, and the names `manifest.json` and `ATTRIBUTION.md`.
 
 This command does not download, extract, upload or host files.
-Staging archives does not provide a hosted mirror or close #309.
+To publish the package, see "Publish the converted archives".
 
-## Hosting work still required
+## Publish the converted archives
 
-Offline recovery does not provide a hosted mirror.
-[#309](https://github.com/SethKitchen/ThreeMojo/issues/309) remains open.
-Before publishing converted archives, the owner must approve these details:
+The CARLA archives are on Google Drive. The owner chose Google Drive as the
+maintainer-controlled destination. Seth Kitchen is the authorized publisher.
+Only he uploads archives, changes their sharing, and approves a manifest URL.
 
-- The maintainer who can publish and the maintainer-controlled destination.
-- The exact source archives and their existing pinned checksums.
-- Measured archive sizes, total transfer size, and permitted storage and bandwidth costs.
-- Public download access and the manifest and attribution packaged with the archives.
+The folder holds 47 archives: 41 vehicles and 6 towns, 968,072,352 bytes in all.
+The largest is Town10HD, 204,022,674 bytes.
+[The hosting check](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/carla-asset-hosting-309.md)
+gives the size, sharing and checksum result of each archive.
 
-Use `stage-archive` to package the manifest and attribution with the approved archives.
+To publish an archive, the publisher does these steps:
 
-The manifest does not record archive sizes.
-The vehicle estimates below do not measure all six town packages.
-An authorized publisher needs access to the source bytes and an upload-capable
-account or tool at the approved destination.
-Offline recovery does not grant that access or authorize an upload.
-Do not create a release or change credentials to bypass this step.
+1. Put the exact pinned archive in the cache.
+   A rebuilt archive can have a different checksum. Do not use a rebuilt archive in place of a pinned one.
+2. Package the archive with its manifest and attribution:
 
-After setup, test a real download into an empty cache.
-Verify its archive and extracted members against the unchanged manifest.
-Test permission failures, quota responses and HTML error pages at the selected host.
-The tool's synthetic tests cover these responses without downloading assets.
-They do not prove a live host is durable or accessible.
+   ```sh
+   python3 assets/carla/tools/carla_assets.py stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2
+   ```
+
+   The command fails when the archive bytes do not match the pinned sum.
+3. Upload the archive from the package to the Google Drive folder.
+   Keep its file name. For example, `vehicle.audi.a2.zip`.
+4. Set the link sharing of the file to "Anyone with the link" and the role to "Viewer".
+5. Put the share link in the manifest. For a vehicle, use
+   `manifest_vehicles.py --urls`. For a town, use `manifest_towns.py --urls`.
+   See "Host the vehicle zips". Do not change the sum.
+6. Verify the checksum with a download into an empty cache:
+
+   ```sh
+   python3 assets/carla/tools/carla_assets.py --cache /tmp/carla-check fetch carla.vehicle.audi.a2
+   python3 assets/carla/tools/carla_assets.py --cache /tmp/carla-check verify --strict carla.vehicle.audi.a2
+   ```
+
+   Both commands must return 0. The `/tmp/carla-check` directory must not exist before step 6.
+7. Run `check` and the tool tests. Then commit the manifest and `ATTRIBUTION.md` together.
+
+`check` refuses a CARLA entry, an id that starts with `carla.`, that loses one of these:
+
+- The CC-BY-4.0 license, which `credits` writes with its link, https://creativecommons.org/licenses/by/4.0/.
+- The author `CARLA Team (Computer Vision Center)`.
+- A source that is a CARLA release page, such as `https://github.com/carla-simulator/carla/releases/tag/0.9.16`.
+- A provenance note that names the same release, such as `CARLA 0.9.16`.
+- A `changes` note.
+- A pinned SHA-256 sum for each file.
+
+The tool stops, and keeps no bytes, when Drive does not send the file:
+
+- An HTTP error, such as `403` for a file that is not shared, or `429` for too many requests.
+- A web page in place of the file, such as a sign-in page, a quota page or a virus-scan page.
+  The tool asks for `confirm=t`, which skips the virus-scan page.
+- A proxy that refuses the connection. The tool does not try again.
+- Bytes whose sum differs from the manifest.
+
+A dropped connection is tried again, up to five times.
 
 ## The CARLA vehicles
 
@@ -337,8 +366,8 @@ The zips are too large to commit. Each one is a file in a shared Google Drive fo
 
 To add the URLs after you rebuild the zips:
 
-1. Obtain the owner's approval described in "Hosting work still required".
-   Upload each approved zip. Share it with the approved download audience.
+1. Upload each zip to the Google Drive folder, as "Publish the converted archives" tells.
+   Only the authorized publisher uploads.
 2. Write a JSON file that maps each zip name to its share link:
 
    ```json
@@ -351,7 +380,7 @@ To add the URLs after you rebuild the zips:
    python3 assets/carla/tools/export/manifest_vehicles.py --urls urls.json
    ```
 
-The fetch tool changes a Google Drive share link into Drive's download link. When a host sends a web page in place of the file, the tool stops with an error. Drive does this for a file that is not shared.
+The fetch tool changes a Google Drive share link into Drive's download link. When a host sends a web page in place of the file, the tool stops with an error. Drive does this for a file that is not shared, and for a file whose download quota is used up.
 
 ## Rebuild the vehicle zips
 
