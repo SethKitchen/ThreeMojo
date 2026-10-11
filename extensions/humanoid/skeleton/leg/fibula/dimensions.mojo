@@ -260,12 +260,11 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         """Return how far `point` lies outside the fibula, in meters.
 
         Negative is inside. Zero is the surface. The fibula gives way to
-        the tibia where the two authored solids overlap. Outside the
-        authored fibula, the value is the authored one.
+        the tibia where the two authored solids overlap. The difference
+        applies outside the authored fibula too, so its buried surface
+        does not remain a zero set.
         """
         var d = self.shape_distance(point)
-        if d >= 0:
-            return d
         return max(d, -self.tibia.distance(point + self.tibia_offset))
 
     def shape_distance(self, point: Vector3) -> Float32:
