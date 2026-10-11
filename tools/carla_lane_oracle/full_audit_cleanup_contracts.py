@@ -23,6 +23,12 @@ import threading
 import tokenize
 
 
+# Only the genuine original builtin can use the two-candidate expansion.
+# An injected callable retains the original generator and short-circuit protocol.
+_BUILTIN_ALL = (all if type(all) is types.BuiltinFunctionType
+                and all.__name__ == 'all' and all.__module__ == 'builtins' else None)
+
+
 class ContractError(ValueError, RuntimeError):
     """A missing or changed premise prevents source admission."""
 
@@ -1282,9 +1288,20 @@ def _operation_frame_kind(frame, *, include_aliases=False):
     if (type(filename) is str and filename.startswith('/')
             and type(__file__) is str and __file__.startswith('/')):
         candidates = (namespace.get('verify'), namespace.get('reviewed_nonempty_loops'))
-        if all(value is None or (type(value) is types.FunctionType
-                and '__wrapped__' not in value.__dict__
-                and frame.f_code is not value.__code__) for value in candidates):
+        candidate_all = all
+        if _BUILTIN_ALL is not None and candidate_all is _BUILTIN_ALL:
+            first, second = candidates
+            negative = (first is None or (type(first) is types.FunctionType
+                        and '__wrapped__' not in first.__dict__
+                        and frame.f_code is not first.__code__)) and (
+                        second is None or (type(second) is types.FunctionType
+                        and '__wrapped__' not in second.__dict__
+                        and frame.f_code is not second.__code__))
+        else:
+            negative = candidate_all(value is None or (type(value) is types.FunctionType
+                       and '__wrapped__' not in value.__dict__
+                       and frame.f_code is not value.__code__) for value in candidates)
+        if negative:
             return None
         # Preserve the original plain branch and exotic-dictionary protocols.
         if type(namespace) is dict:
