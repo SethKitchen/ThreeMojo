@@ -1,0 +1,244 @@
+{
+  "files": [
+    {
+      "bytes": 16002,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "89057e99d6c1a240154007c31cc25eb5e75a7b943e689b1803bc7a754962745e"
+    },
+    {
+      "bytes": 49490,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "0eec1c615addcf3cd6333d2d260310d44799633abd3bd811268e4b9600b1bf00"
+    },
+    {
+      "bytes": 2335,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/README.md",
+      "path": "README.md",
+      "sha256": "9f415d67f5049e4da8cd42b34e11e445036e9587a48d3848cb86082f17cbc49d"
+    },
+    {
+      "bytes": 4651,
+      "kind": "derived-policy-and-control-subset-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "5daf7f2c5357b2dcf16dba97780007935c196c82bb5123dd1140dae2a60a5505"
+    },
+    {
+      "bytes": 2621,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/bounded-operation-synthetic-v23/RESULT.json",
+      "path": "actual/bounded-operation-synthetic-v23/RESULT.json",
+      "sha256": "36c2d628342829c9d81799a047da1fb3bf4d9930f95f18d3acc657bda772b315"
+    },
+    {
+      "bytes": 1680,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/bounded-operation-synthetic-v23/normal-synthetic-input-controls.log",
+      "path": "actual/bounded-operation-synthetic-v23/normal-synthetic-input-controls.log",
+      "sha256": "9417ca6c2539690ef4d592a6cae9bce6214abc233d8eb58bccc9ec007b1d5849"
+    },
+    {
+      "bytes": 1680,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/bounded-operation-synthetic-v23/optimized-synthetic-input-controls.log",
+      "path": "actual/bounded-operation-synthetic-v23/optimized-synthetic-input-controls.log",
+      "sha256": "1b7c3f9e7d327b29aef56ba0746a6cef74947d1453320fa3d96900fa7087ec50"
+    },
+    {
+      "bytes": 4705,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/RESULT.json",
+      "path": "actual/invariant-input-policy-probes-v23/RESULT.json",
+      "sha256": "962b9e2deb77258faa6094dc7a189a81782b0d5ddb8a0af8c7b46f23ecd56e16"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/SDK-AFTER.json",
+      "path": "actual/invariant-input-policy-probes-v23/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/SDK-BEFORE.json",
+      "path": "actual/invariant-input-policy-probes-v23/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/normal-direct.log",
+      "path": "actual/invariant-input-policy-probes-v23/normal-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/normal-package.log",
+      "path": "actual/invariant-input-policy-probes-v23/normal-package.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/optimized-direct.log",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/invariant-input-policy-probes-v23/optimized-package.log",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-package.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 5326,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/qualification-policy-maintained-tests-v23/RESULT.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/RESULT.json",
+      "sha256": "c35635a9e0664034a94a3d67b5db13add6dfabb2c95af4466a0458b07aa54afd"
+    },
+    {
+      "bytes": 1303,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/qualification-policy-maintained-tests-v23/normal-clean-import-methods.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-clean-import-methods.log",
+      "sha256": "1755ac01f592da2fb1a1389a22113174da49072f54b2067bb429978c5c3ef07c"
+    },
+    {
+      "bytes": 237,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/qualification-policy-maintained-tests-v23/normal-invariant-import-method.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-invariant-import-method.log",
+      "sha256": "9caba490570564251a5251fa2e6a23a23f349bd1f885de54f24b6bd0ceec2c7c"
+    },
+    {
+      "bytes": 1303,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/qualification-policy-maintained-tests-v23/optimized-clean-import-methods.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-clean-import-methods.log",
+      "sha256": "45504a887f186f918fd708dfa0c47c40e2907ed1c9bc1efbc0efd57e5ab2eee6"
+    },
+    {
+      "bytes": 237,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/actual/qualification-policy-maintained-tests-v23/optimized-invariant-import-method.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-invariant-import-method.log",
+      "sha256": "eebec40210cd3440f7f07deadce867f09e3fb3941a5cfc3bb0a67ca2af618ea2"
+    },
+    {
+      "bytes": 1515177,
+      "kind": "lossless-original-phase-receipts-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "c8ccc0024c219d89f774339998463629425456be3daeddb63dd2396419fd0015"
+    },
+    {
+      "bytes": 1623,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/context/prior-v22-original-10s-failure/RESULT.json",
+      "path": "context/prior-v22-original-10s-failure/RESULT.json",
+      "sha256": "f4f6808ea03a62c31cd1b89cfdf0cc5ebd4d3102e158e9ddb5be5abbf04c421d"
+    },
+    {
+      "bytes": 12640,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/context/prior-v22-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "path": "context/prior-v22-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "sha256": "193f3f25ad34577e925b05f80887ecfeea4f0612bdc12bc665f9c612644ad52f"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419528,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/CANDIDATE-V23-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V23-SOURCE-SEAL.json",
+      "sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7"
+    },
+    {
+      "bytes": 17171,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "a1a5c2cfbaecbdec07676467e4e5fe3f337470084c709ded33fd429f371df6c7"
+    },
+    {
+      "bytes": 1319,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/bounded-operation-synthetic-v23.json",
+      "path": "reproduce/bounded-operation-synthetic-v23.json",
+      "sha256": "78d6598dbc8166dfcd9374760636acfcd33b22f13d24db8d42d464b605d95a86"
+    },
+    {
+      "bytes": 3709,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/bounded-operation-synthetic-v23.supervisor.log",
+      "path": "reproduce/bounded-operation-synthetic-v23.supervisor.log",
+      "sha256": "f5440a234427345edbe4e0f87c88570d211c772ee5348983415daceb059ad0f7"
+    },
+    {
+      "bytes": 21684,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/build_qualification_policy_v23_packet.py",
+      "path": "reproduce/build_qualification_policy_v23_packet.py",
+      "sha256": "919e3ced54983a7fe0aadaaa6160815354e52b7182ce3ae50866382860ad6667"
+    },
+    {
+      "bytes": 2230,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/invariant-input-policy-probes-v23.json",
+      "path": "reproduce/invariant-input-policy-probes-v23.json",
+      "sha256": "3dec3a298c0c0bba35e833a95c803657b4c81eb6a0ccbc3d7e01f581251bb1c1"
+    },
+    {
+      "bytes": 7699,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/invariant-input-policy-probes-v23.supervisor.log",
+      "path": "reproduce/invariant-input-policy-probes-v23.supervisor.log",
+      "sha256": "0c871647242f132b812496e48626cd2895d3ad50915318253061f78611d09bd4"
+    },
+    {
+      "bytes": 2652,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/qualification-policy-maintained-tests-v23.json",
+      "path": "reproduce/qualification-policy-maintained-tests-v23.json",
+      "sha256": "d1f9947db4576e69eef44c3305b23aa26e31dc770d16971c59759d585abe270f"
+    },
+    {
+      "bytes": 8281,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/qualification-policy-maintained-tests-v23.supervisor.log",
+      "path": "reproduce/qualification-policy-maintained-tests-v23.supervisor.log",
+      "sha256": "4fa8a81db597321228e9bf62ac4996ed64bfa0a5864743f9339f47d4cc092d17"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1797,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-qualification-policy-v23-packet/reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2"
+    }
+  ],
+  "schema": 1,
+  "scope": "Fresh four-mode probes under the explicit new 30-second policy, five affected maintained methods per mode, and eight existing synthetic methods per mode passed. Proposed real lifecycle/per-site additions, full matrix, native coverage and full completion are not qualified."
+}

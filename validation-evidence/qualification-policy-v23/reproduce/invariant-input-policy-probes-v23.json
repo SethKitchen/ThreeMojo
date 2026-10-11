@@ -1,0 +1,49 @@
+{
+  "pause_request_file": "invariant-input-policy-probes-v23.pause",
+  "phase": "invariant-input-policy-probes-v23",
+  "scope": "Fresh direct/package normal/optimized cold commands under explicitly reviewed 30-second import/source-verification policy. Does not relabel the failed original 10-second gates. All proof/source/coverage/native requirements remain pending.",
+  "seal": "CANDIDATE-V23-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+  "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "label": "normal-direct",
+      "seconds": 30
+    },
+    {
+      "command": [
+        "{python}",
+        "-c",
+        "import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "label": "normal-package",
+      "seconds": 30
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "label": "optimized-direct",
+      "seconds": 30
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-c",
+        "import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "label": "optimized-package",
+      "seconds": 30
+    }
+  ],
+  "window_seconds": 300
+}

@@ -1,0 +1,878 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 3205470,
+    "json_sha256": "872ba7d2f9960f7d417a70938726c74ebd7bf3a463abb3893a2e7790f896d020",
+    "members": 69,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 227,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/LATEST.json",
+      "path": "actual/bounded-operation-synthetic-v23/LATEST.json",
+      "sha256": "4755cc534c1f5a3a3c45ffe1ea59719fe7dc89cb1266f55aa65066301a6a3b0c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1385,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/PROCESSES.jsonl",
+      "path": "actual/bounded-operation-synthetic-v23/PROCESSES.jsonl",
+      "sha256": "d7afb69f49b4ae20a93c225231112fe8daab596f55bb0584c412cbd7a2e54a94",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2621,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/RESULT.json",
+      "path": "actual/bounded-operation-synthetic-v23/RESULT.json",
+      "sha256": "36c2d628342829c9d81799a047da1fb3bf4d9930f95f18d3acc657bda772b315",
+      "storage": "readable",
+      "transport_path": "actual/bounded-operation-synthetic-v23/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/SDK-AFTER.json",
+      "path": "actual/bounded-operation-synthetic-v23/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/SDK-BEFORE.json",
+      "path": "actual/bounded-operation-synthetic-v23/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/SOURCE-SEAL.json",
+      "path": "actual/bounded-operation-synthetic-v23/SOURCE-SEAL.json",
+      "sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/WINDOW-START.json",
+      "path": "actual/bounded-operation-synthetic-v23/WINDOW-START.json",
+      "sha256": "80624792a1b0fc866298579fc570e7db00dbed985dd3ed5815dbe6e14e81bb77",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 914,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/normal-synthetic-input-controls-RESULT.json",
+      "path": "actual/bounded-operation-synthetic-v23/normal-synthetic-input-controls-RESULT.json",
+      "sha256": "acead50e7c999205171775cd8ba981a5c948164214331ac92f74754e85aa7a9e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 602,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/normal-synthetic-input-controls-START.json",
+      "path": "actual/bounded-operation-synthetic-v23/normal-synthetic-input-controls-START.json",
+      "sha256": "66aa3a70f99bb7fecc9c77a1899875ebefc92ad3ff1bf2cb5b8a015c911693b7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1680,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/normal-synthetic-input-controls.log",
+      "path": "actual/bounded-operation-synthetic-v23/normal-synthetic-input-controls.log",
+      "sha256": "9417ca6c2539690ef4d592a6cae9bce6214abc233d8eb58bccc9ec007b1d5849",
+      "storage": "readable",
+      "transport_path": "actual/bounded-operation-synthetic-v23/normal-synthetic-input-controls.log"
+    },
+    {
+      "bytes": 930,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/optimized-synthetic-input-controls-RESULT.json",
+      "path": "actual/bounded-operation-synthetic-v23/optimized-synthetic-input-controls-RESULT.json",
+      "sha256": "16a6a0678d1e003351a7fca83d426ec6b16291941d2adaa79608bb8c1b35db7d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 617,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/optimized-synthetic-input-controls-START.json",
+      "path": "actual/bounded-operation-synthetic-v23/optimized-synthetic-input-controls-START.json",
+      "sha256": "bcac01a34006a0ad3ab08c8715199dee597e180c1bd022c13106c4d960270656",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1680,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/bounded-operation-synthetic-v23/optimized-synthetic-input-controls.log",
+      "path": "actual/bounded-operation-synthetic-v23/optimized-synthetic-input-controls.log",
+      "sha256": "1b7c3f9e7d327b29aef56ba0746a6cef74947d1453320fa3d96900fa7087ec50",
+      "storage": "readable",
+      "transport_path": "actual/bounded-operation-synthetic-v23/optimized-synthetic-input-controls.log"
+    },
+    {
+      "bytes": 210,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/LATEST.json",
+      "path": "actual/invariant-input-policy-probes-v23/LATEST.json",
+      "sha256": "6153d84fc0cf5d6cacb590498f0f6970b08478be80bf37d7b9c14aefcd1c6d51",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 15150,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/PROCESSES.jsonl",
+      "path": "actual/invariant-input-policy-probes-v23/PROCESSES.jsonl",
+      "sha256": "43ff75f281af44921403611c51156d86fa4ba92c5c854c7f901d2e72c0457e8e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4705,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/RESULT.json",
+      "path": "actual/invariant-input-policy-probes-v23/RESULT.json",
+      "sha256": "962b9e2deb77258faa6094dc7a189a81782b0d5ddb8a0af8c7b46f23ecd56e16",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/SDK-AFTER.json",
+      "path": "actual/invariant-input-policy-probes-v23/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/SDK-BEFORE.json",
+      "path": "actual/invariant-input-policy-probes-v23/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/SOURCE-SEAL.json",
+      "path": "actual/invariant-input-policy-probes-v23/SOURCE-SEAL.json",
+      "sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 369,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/WINDOW-START.json",
+      "path": "actual/invariant-input-policy-probes-v23/WINDOW-START.json",
+      "sha256": "c15c23282444c5fe4a07ba44b2f677e8212651bfa679bb7ff6bfb7bb5d04eab3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 988,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/normal-direct-RESULT.json",
+      "path": "actual/invariant-input-policy-probes-v23/normal-direct-RESULT.json",
+      "sha256": "6e108079420fd70dd818c67f6cc4dbc4823ac46e575375fa8935001f51ba6af7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 744,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/normal-direct-START.json",
+      "path": "actual/invariant-input-policy-probes-v23/normal-direct-START.json",
+      "sha256": "58fcfdecc45226a243bd432a5019f65953fa52e6a3f62335f8819cebfebee6e5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 0,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/normal-direct.log",
+      "path": "actual/invariant-input-policy-probes-v23/normal-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/normal-direct.log"
+    },
+    {
+      "bytes": 895,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/normal-package-RESULT.json",
+      "path": "actual/invariant-input-policy-probes-v23/normal-package-RESULT.json",
+      "sha256": "2d6b86811e983c1bfb7c1464678eb42225dbec95a990387a3434e2b4b8d44a45",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 651,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/normal-package-START.json",
+      "path": "actual/invariant-input-policy-probes-v23/normal-package-START.json",
+      "sha256": "e2b9744ed3948e1f66d08aae117df7f6c1c5f8b7bd86d5deb8e7229c370d9b12",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 0,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/normal-package.log",
+      "path": "actual/invariant-input-policy-probes-v23/normal-package.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/normal-package.log"
+    },
+    {
+      "bytes": 1003,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/optimized-direct-RESULT.json",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-direct-RESULT.json",
+      "sha256": "585d25764b0619a64379690f511b4ae57193d586824ac7d9878e9cb4e40e1311",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 759,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/optimized-direct-START.json",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-direct-START.json",
+      "sha256": "8fae10cf3b3be08bb979897d8b93f3893ec8600f2e5b1fcae18654ea285bc54c",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 0,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/optimized-direct.log",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/optimized-direct.log"
+    },
+    {
+      "bytes": 910,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/optimized-package-RESULT.json",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-package-RESULT.json",
+      "sha256": "f13966886d7ec43e1f71ed11856fd61de5c7559106cb63355b1898acce668be2",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 666,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/optimized-package-START.json",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-package-START.json",
+      "sha256": "3ac5675b8a03b3368842c05f7dfda5168be804bed8dc8de49e84e8b081fcb81e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 0,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-policy-probes-v23/optimized-package.log",
+      "path": "actual/invariant-input-policy-probes-v23/optimized-package.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "storage": "readable",
+      "transport_path": "actual/invariant-input-policy-probes-v23/optimized-package.log"
+    },
+    {
+      "bytes": 223,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/LATEST.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/LATEST.json",
+      "sha256": "2eb3e6005c8d28186eabf50a717ba4a91af75f29c7cc606f91795634c02a8806",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 56167,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/PROCESSES.jsonl",
+      "path": "actual/qualification-policy-maintained-tests-v23/PROCESSES.jsonl",
+      "sha256": "cbcfad4e2d1a6326c0617f2e55bc36a1673e7a4734a743de127258eb93c1c940",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 5326,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/RESULT.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/RESULT.json",
+      "sha256": "c35635a9e0664034a94a3d67b5db13add6dfabb2c95af4466a0458b07aa54afd",
+      "storage": "readable",
+      "transport_path": "actual/qualification-policy-maintained-tests-v23/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/SDK-AFTER.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/SDK-BEFORE.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/SOURCE-SEAL.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/SOURCE-SEAL.json",
+      "sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/WINDOW-START.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/WINDOW-START.json",
+      "sha256": "f044de7fdb3af2f525083eccf4d4df06ddba529ecaef0a2c8a5313a7f17b6cda",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1195,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/normal-clean-import-methods-RESULT.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-clean-import-methods-RESULT.json",
+      "sha256": "74f64fe1f1de22cf2d78383190e72746d2cd115a74eabb7f98d3bbcf9e9d9ade",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 883,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/normal-clean-import-methods-START.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-clean-import-methods-START.json",
+      "sha256": "8d385e87c44dd02bc6cdcfe99fc76b8d4d43c81187deed932b19d5ae002ae595",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1303,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/normal-clean-import-methods.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-clean-import-methods.log",
+      "sha256": "1755ac01f592da2fb1a1389a22113174da49072f54b2067bb429978c5c3ef07c",
+      "storage": "readable",
+      "transport_path": "actual/qualification-policy-maintained-tests-v23/normal-clean-import-methods.log"
+    },
+    {
+      "bytes": 928,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/normal-invariant-import-method-RESULT.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-invariant-import-method-RESULT.json",
+      "sha256": "49cace49c08cf63fdaa571ffefb43c439bd0a89341614774e7471a8ee4b759d4",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 615,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/normal-invariant-import-method-START.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-invariant-import-method-START.json",
+      "sha256": "282268d82c3f7ae9f7049b02b1592ce8e766d8e49201d411f7458e2b4361a1f4",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 237,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/normal-invariant-import-method.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/normal-invariant-import-method.log",
+      "sha256": "9caba490570564251a5251fa2e6a23a23f349bd1f885de54f24b6bd0ceec2c7c",
+      "storage": "readable",
+      "transport_path": "actual/qualification-policy-maintained-tests-v23/normal-invariant-import-method.log"
+    },
+    {
+      "bytes": 1208,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/optimized-clean-import-methods-RESULT.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-clean-import-methods-RESULT.json",
+      "sha256": "acb1bb8b90597802ab30abfc4c718eb67d24d78fca8958a7af61f1f5284fda4e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 896,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/optimized-clean-import-methods-START.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-clean-import-methods-START.json",
+      "sha256": "7fde0395e980d74bf8a4c3f8bc1d2c195e3a262ed351075fb22cfaa642582827",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1303,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/optimized-clean-import-methods.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-clean-import-methods.log",
+      "sha256": "45504a887f186f918fd708dfa0c47c40e2907ed1c9bc1efbc0efd57e5ab2eee6",
+      "storage": "readable",
+      "transport_path": "actual/qualification-policy-maintained-tests-v23/optimized-clean-import-methods.log"
+    },
+    {
+      "bytes": 942,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/optimized-invariant-import-method-RESULT.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-invariant-import-method-RESULT.json",
+      "sha256": "42bd87b469c9b82baf66e5820e9f476fc0a9ed743ecc88a448c2207f48c170ea",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 630,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/optimized-invariant-import-method-START.json",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-invariant-import-method-START.json",
+      "sha256": "7aa9ca9797cab6717bc939bed99c676c72aefd30abb2aaf033eb2f72718ee046",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 237,
+      "kind": "original-phase-receipt-or-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/qualification-policy-maintained-tests-v23/optimized-invariant-import-method.log",
+      "path": "actual/qualification-policy-maintained-tests-v23/optimized-invariant-import-method.log",
+      "sha256": "eebec40210cd3440f7f07deadce867f09e3fb3941a5cfc3bb0a67ca2af618ea2",
+      "storage": "readable",
+      "transport_path": "actual/qualification-policy-maintained-tests-v23/optimized-invariant-import-method.log"
+    },
+    {
+      "bytes": 2184,
+      "kind": "original-prior-10-second-command-config",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-cold-probes-v22.json",
+      "path": "context/prior-v22-original-10s-failure/CONFIG.json",
+      "sha256": "68be7d37cf05540e8a8de316657bcb7f65f78c6dbbef9db1f8a8dbe50fe0ca20",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1623,
+      "kind": "original-v22-failure-not-a-v23-pass",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-cold-probes-v22/RESULT.json",
+      "path": "context/prior-v22-original-10s-failure/RESULT.json",
+      "sha256": "f4f6808ea03a62c31cd1b89cfdf0cc5ebd4d3102e158e9ddb5be5abbf04c421d",
+      "storage": "readable",
+      "transport_path": "context/prior-v22-original-10s-failure/RESULT.json"
+    },
+    {
+      "bytes": 419400,
+      "kind": "original-prior-v22-source-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V22-SOURCE-SEAL.json",
+      "path": "context/prior-v22-original-10s-failure/SOURCE-SEAL.json",
+      "sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12640,
+      "kind": "original-separate-prior-failure-packet-reference",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "path": "context/prior-v22-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "sha256": "193f3f25ad34577e925b05f80887ecfeea4f0612bdc12bc665f9c612644ad52f",
+      "storage": "readable",
+      "transport_path": "context/prior-v22-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-supervisor-or-frozen-source-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V23-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V23-SOURCE-SEAL.json",
+      "sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "storage": "readable",
+      "transport_path": "reproduce/CANDIDATE-V23-SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 17171,
+      "kind": "exact-frozen-31-path-source-manifest",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/qualification-policy-implementation-v23/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "a1a5c2cfbaecbdec07676467e4e5fe3f337470084c709ded33fd429f371df6c7",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json"
+    },
+    {
+      "bytes": 1319,
+      "kind": "actual-command-config-or-original-supervisor-console-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/bounded-operation-synthetic-v23.json",
+      "path": "reproduce/bounded-operation-synthetic-v23.json",
+      "sha256": "78d6598dbc8166dfcd9374760636acfcd33b22f13d24db8d42d464b605d95a86",
+      "storage": "readable",
+      "transport_path": "reproduce/bounded-operation-synthetic-v23.json"
+    },
+    {
+      "bytes": 3709,
+      "kind": "actual-command-config-or-original-supervisor-console-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/bounded-operation-synthetic-v23.supervisor.log",
+      "path": "reproduce/bounded-operation-synthetic-v23.supervisor.log",
+      "sha256": "f5440a234427345edbe4e0f87c88570d211c772ee5348983415daceb059ad0f7",
+      "storage": "readable",
+      "transport_path": "reproduce/bounded-operation-synthetic-v23.supervisor.log"
+    },
+    {
+      "bytes": 2230,
+      "kind": "actual-command-config-or-original-supervisor-console-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-policy-probes-v23.json",
+      "path": "reproduce/invariant-input-policy-probes-v23.json",
+      "sha256": "3dec3a298c0c0bba35e833a95c803657b4c81eb6a0ccbc3d7e01f581251bb1c1",
+      "storage": "readable",
+      "transport_path": "reproduce/invariant-input-policy-probes-v23.json"
+    },
+    {
+      "bytes": 7699,
+      "kind": "actual-command-config-or-original-supervisor-console-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-input-policy-probes-v23.supervisor.log",
+      "path": "reproduce/invariant-input-policy-probes-v23.supervisor.log",
+      "sha256": "0c871647242f132b812496e48626cd2895d3ad50915318253061f78611d09bd4",
+      "storage": "readable",
+      "transport_path": "reproduce/invariant-input-policy-probes-v23.supervisor.log"
+    },
+    {
+      "bytes": 2652,
+      "kind": "actual-command-config-or-original-supervisor-console-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/qualification-policy-maintained-tests-v23.json",
+      "path": "reproduce/qualification-policy-maintained-tests-v23.json",
+      "sha256": "d1f9947db4576e69eef44c3305b23aa26e31dc770d16971c59759d585abe270f",
+      "storage": "readable",
+      "transport_path": "reproduce/qualification-policy-maintained-tests-v23.json"
+    },
+    {
+      "bytes": 8281,
+      "kind": "actual-command-config-or-original-supervisor-console-output",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/qualification-policy-maintained-tests-v23.supervisor.log",
+      "path": "reproduce/qualification-policy-maintained-tests-v23.supervisor.log",
+      "sha256": "4fa8a81db597321228e9bf62ac4996ed64bfa0a5864743f9339f47d4cc092d17",
+      "storage": "readable",
+      "transport_path": "reproduce/qualification-policy-maintained-tests-v23.supervisor.log"
+    },
+    {
+      "bytes": 10102,
+      "kind": "exact-supervisor-or-frozen-source-seal",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "storage": "readable",
+      "transport_path": "reproduce/run_checkpoint_matrix.py"
+    },
+    {
+      "bytes": 1797,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/docs/validation/full-audit-721-qualification-policy.md",
+      "path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2",
+      "storage": "readable",
+      "transport_path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md"
+    },
+    {
+      "bytes": 14377,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/accepted_successor_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/accepted_successor_contracts.py",
+      "sha256": "7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 11490,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/border_parser_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/border_parser_contracts.py",
+      "sha256": "af588e9cb66dcdd1171b580fefcc1328f2ae2783a1fc2a7123edc00e8835ada3",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14343,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/cache_key_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/cache_key_contracts.py",
+      "sha256": "99b947f241fa5459ecfbb890e277519e6735ff6a53e4d97a29e220b69acc78d0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8956,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "sha256": "37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8759,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "sha256": "b5068eff6fcfccd7596512559c793b7c038f2f9e56703ba0fe371be98b8b8dc9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7144,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/curve_support_dispatch_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/curve_support_dispatch_contracts.py",
+      "sha256": "a8cd6c22250e1d6e344e92be696fdcbfdc1aedc3610dc2a47371f1c9aa56d544",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1613,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/distance_validation_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/distance_validation_contracts.py",
+      "sha256": "9ef55060a56090ce22fe6cb7885da42f9bc3dfdfbd41ff557ce1cc9f48bc5355",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3155,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/envelope_budget_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/envelope_budget_contracts.py",
+      "sha256": "1a7572fa44663a0ba5e6b7cd43b2a918acad15812fce288a42294f05dbcbf577",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8056,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "3291ab50a099183be3c209b5bc2533c02aa3cc597808bb59e57062105735878a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 103293,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2528,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/grouped_table_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/grouped_table_contracts.py",
+      "sha256": "387e50ed7b5198fbc6ff28ed27cc328db18a3844c506fd6e04b10d05d9757734",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4499,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/grouped_y_finiteness_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/grouped_y_finiteness_contracts.py",
+      "sha256": "ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 4785,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/lane_control_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/lane_control_contracts.py",
+      "sha256": "49c14afe71986a766c1beae8ffc9ae162c7eec2b668478e59191492b5977d4ba",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 7700,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/lane_order_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/lane_order_contracts.py",
+      "sha256": "9506f15b1c1bea70203ceee978544742b27f5ee4cc9639679a3d23a38d366b35",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2975,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/moment_finiteness_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/moment_finiteness_contracts.py",
+      "sha256": "1acbd5e02d05c7d249d3a84526204fe98eb1c7d963da81b8b0d273f9c2868067",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 5339,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/raw_cut_inverse_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/raw_cut_inverse_contracts.py",
+      "sha256": "ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3348,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/render_actor_reuse_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/render_actor_reuse_contracts.py",
+      "sha256": "d9d3104a9c28d999c4d2675b4209eaf0adf7ef362f684e10f52533c25c740d1d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14542,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/reviewed_cleanup_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/reviewed_cleanup_contracts.py",
+      "sha256": "3ee8a27ecc528e7029aded89fe9c729d7623bc6ff8c70d4ba4a45b7258b1bb7a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 15245,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/rounded_line_selector_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/rounded_line_selector_contracts.py",
+      "sha256": "57b2a082e75de6cb7acc2d20eed8dd187071f7da29614e84c567431f9b00328a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 3981,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/runtime_boundary_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/runtime_boundary_contracts.py",
+      "sha256": "247b16a9259d2d09f8df9a2005152ca2b7d89bc36e6cc56ee4e71b2c1209a426",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 50964,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/seed_count_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/seed_count_contracts.py",
+      "sha256": "f87c9eef3bb9204c5dcb0eb4bdbedbc6651b8da26a8d9de7ebfb55cffe5098f5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 5508,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/selection_finiteness_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/selection_finiteness_contracts.py",
+      "sha256": "2d62d03b9059a207cdb74c2c49d7cb02b863f8b2c34012dc3483a543dd000424",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12704,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/source_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/source_contracts.py",
+      "sha256": "857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2883,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/speed_parser_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/speed_parser_contracts.py",
+      "sha256": "d74202da98032569528f7d21de0f26cea896c227c29477a9e3fb01055cbdab99",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 24282,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "sha256": "870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 6872,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/test_coverage_invariant_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_coverage_invariant_contracts.py",
+      "sha256": "4299769d632b5a209893e825a0e29d6867efaf797bfa358e0d7c16a2b727d5e5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 20369,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "d346635b988f7e71f20611006b8be6f51d0b28d35be7e1c6f77650d15467f3bc",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 13690,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/winner_sign_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/winner_sign_contracts.py",
+      "sha256": "a5608b4e55ad51d4711a63d91503b5f33ad760ce900e5d9005916ff20d421418",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 86771,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/coverage_loop_proofs.py",
+      "path": "reproduce/source/tools/coverage_loop_proofs.py",
+      "sha256": "2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8205,
+      "kind": "exact-supervisor-sdk-identity-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/coverage_toolchain_identity.py",
+      "path": "reproduce/source/tools/coverage_toolchain_identity.py",
+      "sha256": "4fe6f947fc6cba35449287ed1398f7a8a37489be1f7aa5120fbe130e0391be22",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 135702,
+      "kind": "exact-frozen-v23-source-or-policy-addendum",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/test_coverage_loop_proofs.py",
+      "path": "reproduce/source/tools/test_coverage_loop_proofs.py",
+      "sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 2906528,
+  "original_member_count": 96,
+  "schema": 1
+}

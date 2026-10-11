@@ -1,0 +1,13 @@
+test_original_public_ast_and_root_only_signatures_stay_frozen (test_invariant_operation_inputs.OperationAdapterAstControls.test_original_public_ast_and_root_only_signatures_stay_frozen) ... ok
+test_private_copies_preserve_original_predicates_constants_and_order (test_invariant_operation_inputs.OperationAdapterAstControls.test_private_copies_preserve_original_predicates_constants_and_order) ... ok
+test_projection_rejects_semantic_and_observation_drift (test_invariant_operation_inputs.OperationAdapterAstControls.test_projection_rejects_semantic_and_observation_drift) ... ok
+test_private_pair_consumed_and_final_b_stop_before_json (test_invariant_operation_inputs.OperationAdapterFakeFrameControls.test_private_pair_consumed_and_final_b_stop_before_json) ... ok
+test_private_pair_positive_result_and_read_order_match_public (test_invariant_operation_inputs.OperationAdapterFakeFrameControls.test_private_pair_positive_result_and_read_order_match_public) ... ok
+test_private_selector_consumed_b_stops_before_declaration (test_invariant_operation_inputs.OperationAdapterFakeFrameControls.test_private_selector_consumed_b_stops_before_declaration) ... ok
+test_private_selector_positive_result_and_physical_read_order_match_public (test_invariant_operation_inputs.OperationAdapterFakeFrameControls.test_private_selector_positive_result_and_physical_read_order_match_public) ... ok
+test_private_selector_supplied_comments_keep_token_equivalence (test_invariant_operation_inputs.OperationAdapterFakeFrameControls.test_private_selector_supplied_comments_keep_token_equivalence) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.916s
+
+OK

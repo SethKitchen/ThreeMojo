@@ -1,0 +1,85 @@
+{
+  "additional_fresh_probe_commands": 4,
+  "all_phase_remaining_owned_descendants": [],
+  "all_phase_source_sdk_unchanged": true,
+  "console_and_stream_capture": "All three actual aggregate supervisor logs are preserved. They emit stage records before final test-inventory annotations; final/stage JSON preserves those annotations. Stage stdout/stderr are merged in the original logs, including empty probe output.",
+  "evidence_policy": "All original files from all three terminal phase directories, actual root supervisor logs/configs, checked supervisor source, full source/SDK seals, 31-path manifest and source bytes including policy addendum are preserved. Prior v22 evidence remains separate and unchanged. No private reviews/design notes, secrets, broad unrelated source, candidate edits, tests/native reruns or external upload.",
+  "exact_frozen_source_manifest_paths": 31,
+  "existing_synthetic_subset": {
+    "limit": "The existing eight synthetic methods only. Separately proposed real owner lifecycle and per-site additions are not executed or qualified here.",
+    "method_executions": 16,
+    "methods_per_mode": 8,
+    "module_cap_seconds": 1800,
+    "result_sha256": "36c2d628342829c9d81799a047da1fb3bf4d9930f95f18d3acc657bda772b315",
+    "skips": 0,
+    "window_cap_seconds": 10800
+  },
+  "fresh_policy_probes": {
+    "all_modes_executed": true,
+    "all_returncodes_zero": true,
+    "mode_timings_seconds": {
+      "normal-direct": 17.869888813002035,
+      "normal-package": 11.042756770999404,
+      "optimized-direct": 10.022503983003844,
+      "optimized-package": 11.020867838000413
+    },
+    "passed_commands": 4,
+    "result_sha256": "962b9e2deb77258faa6094dc7a189a81782b0d5ddb8a0af8c7b46f23ecd56e16",
+    "stage_cap_seconds": 30,
+    "window_cap_seconds": 300
+  },
+  "maintained_method_subset": {
+    "limit": "Only the five named affected maintained methods per mode; not the full Python matrix.",
+    "method_executions": 10,
+    "method_groups": {
+      "clean_import_methods": 4,
+      "invariant_direct_and_package_method": 1
+    },
+    "methods_per_mode": 5,
+    "module_cap_seconds": 1800,
+    "result_sha256": "c35635a9e0664034a94a3d67b5db13add6dfabb2c95af4466a0458b07aa54afd",
+    "skips": 0,
+    "window_cap_seconds": 10800
+  },
+  "passed_stages": 10,
+  "policy_addendum_path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+  "policy_addendum_sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2",
+  "policy_boundary": {
+    "changed_harness_sites": [
+      "CoverageInvariantContracts.test_direct_and_qualified_package_verification",
+      "MapSuccessorLoopTests.clean_import_probe"
+    ],
+    "limit": "This is an explicit new policy/source version with fresh execution receipts. Earlier original-limit failures remain failures; no claim is made that they passed or were merely diagnostic.",
+    "new_import_source_verification_subprocess_seconds": 30,
+    "prior_allowance_seconds": 10,
+    "sealed_delta_from_v22": [
+      "docs/validation/full-audit-721-qualification-policy.md",
+      "tools/carla_lane_oracle/test_coverage_invariant_contracts.py",
+      "tools/test_coverage_loop_proofs.py"
+    ]
+  },
+  "prior_v22_failure": {
+    "boundary": "Included only as clearly separated prior evidence context. It is never relabeled as a new-policy v23 pass.",
+    "observed_stage_seconds": 10.060284039005637,
+    "original_stage_cap_seconds": 10,
+    "result_sha256": "f4f6808ea03a62c31cd1b89cfdf0cc5ebd4d3102e158e9ddb5be5abbf04c421d",
+    "returncode": -9,
+    "separate_packet_manifest_sha256": "193f3f25ad34577e925b05f80887ecfeea4f0612bdc12bc665f9c612644ad52f",
+    "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+    "status": "FAILED_ORIGINAL_10_SECOND_GATE_UNCHANGED",
+    "timed_out": true
+  },
+  "remaining_qualification": [
+    "proposed real lifecycle/per-site additions",
+    "full Python matrix",
+    "native controls and maintained coverage",
+    "exact-head hosted CI",
+    "overall issue completion"
+  ],
+  "schema": 1,
+  "scope": "Fresh four-mode probes under the explicit new 30-second policy, five affected maintained methods per mode, and eight existing synthetic methods per mode passed. Proposed real lifecycle/per-site additions, full matrix, native coverage and full completion are not qualified.",
+  "source_manifest_sha256": "a1a5c2cfbaecbdec07676467e4e5fe3f337470084c709ded33fd429f371df6c7",
+  "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+  "status": "PASSED_V23_EXPLICIT_POLICY_AND_EXISTING_CONTROL_SUBSETS",
+  "unittest_method_executions": 26
+}

@@ -1,0 +1,103 @@
+{
+  "elapsed_seconds": 56.94039823899948,
+  "failure": null,
+  "finished": "2026-10-11T04:13:19.259565+00:00",
+  "known_process_count": 4,
+  "remaining_owned_descendants": [],
+  "scope": "Fresh direct/package normal/optimized cold commands under explicitly reviewed 30-second import/source-verification policy. Does not relabel the failed original 10-second gates. All proof/source/coverage/native requirements remain pending.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+      "label": "normal-direct",
+      "leader_reaped": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 17.869888813002035,
+      "single_cpu": 0,
+      "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:12:23.685712+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-c",
+        "import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+      "label": "normal-package",
+      "leader_reaped": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pgid": 9,
+      "pid": 9,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 11.042756770999404,
+      "single_cpu": 0,
+      "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:12:43.681850+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+      "label": "optimized-direct",
+      "leader_reaped": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pgid": 10,
+      "pid": 10,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 10.022503983003844,
+      "single_cpu": 0,
+      "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:12:55.698875+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-c",
+        "import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+      "label": "optimized-package",
+      "leader_reaped": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pgid": 11,
+      "pid": 11,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 11.020867838000413,
+      "single_cpu": 0,
+      "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:13:06.715314+00:00",
+      "timed_out": false
+    }
+  ]
+}

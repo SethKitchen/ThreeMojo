@@ -1,0 +1,46 @@
+{
+  "pause_request_file": "bounded-operation-synthetic-v23.pause",
+  "phase": "bounded-operation-synthetic-v23",
+  "scope": "The existing eight synthetic bounded-input regression methods, both interpreter modes, unchanged source and original module/window caps. Does not qualify the separately proposed real lifecycle/per-site tests.",
+  "seal": "CANDIDATE-V23-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+  "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 8,
+      "label": "normal-synthetic-input-controls",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v"
+      ],
+      "expected_tests": 8,
+      "label": "optimized-synthetic-input-controls",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

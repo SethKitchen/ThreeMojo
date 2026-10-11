@@ -1,0 +1,216 @@
+{
+  "files": [
+    {
+      "bytes": 8008,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "e904b631ab990949ecbe799de4b7936bf7e40f1e46cb431cbe83032ee1f0974f"
+    },
+    {
+      "bytes": 37625,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "b2bb2aeb5a472ae5d93a45a8d3c55d739344998d115f3f6877ff187989a08b9a"
+    },
+    {
+      "bytes": 2348,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/README.md",
+      "path": "README.md",
+      "sha256": "671618f4a1193aff6db043b9b6157bad647608b6b6e279fe9d6d9ead907296e4"
+    },
+    {
+      "bytes": 5133,
+      "kind": "derived-helper-controls-cold-failure-and-plain-diagnostic-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "4b4487683bb493189e74239ea44802203530c87353c38dd62ff97e79371c2dc6"
+    },
+    {
+      "bytes": 1623,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-cold-probes-v22/RESULT.json",
+      "path": "actual/invariant-input-cold-probes-v22/RESULT.json",
+      "sha256": "f4f6808ea03a62c31cd1b89cfdf0cc5ebd4d3102e158e9ddb5be5abbf04c421d"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-cold-probes-v22/SDK-AFTER.json",
+      "path": "actual/invariant-input-cold-probes-v22/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-cold-probes-v22/SDK-BEFORE.json",
+      "path": "actual/invariant-input-cold-probes-v22/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-cold-probes-v22/WINDOW-START.json",
+      "path": "actual/invariant-input-cold-probes-v22/WINDOW-START.json",
+      "sha256": "f540029fff5b896e29ebfe3af1a9afb8c244f17ce0fdde9ffd527bb5ec1039a5"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-cold-probes-v22/normal-direct.log",
+      "path": "actual/invariant-input-cold-probes-v22/normal-direct.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 1647,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-plain-diagnostic-v22/RESULT.json",
+      "path": "actual/invariant-input-plain-diagnostic-v22/RESULT.json",
+      "sha256": "d176df112b5f315313c9a3cc057e907684f3f06b03f9b8add5779f41dd4a0bdf"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-plain-diagnostic-v22/SDK-AFTER.json",
+      "path": "actual/invariant-input-plain-diagnostic-v22/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-plain-diagnostic-v22/SDK-BEFORE.json",
+      "path": "actual/invariant-input-plain-diagnostic-v22/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-plain-diagnostic-v22/WINDOW-START.json",
+      "path": "actual/invariant-input-plain-diagnostic-v22/WINDOW-START.json",
+      "sha256": "5db16a6752b66306e75d2e950dcca344a6b6dce3fd748cae791f353c2fd8e054"
+    },
+    {
+      "bytes": 0,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/invariant-input-plain-diagnostic-v22/normal-direct-plain-diagnostic.log",
+      "path": "actual/invariant-input-plain-diagnostic-v22/normal-direct-plain-diagnostic.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3726,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/lexical-relative-focused-controls-v22/RESULT.json",
+      "path": "actual/lexical-relative-focused-controls-v22/RESULT.json",
+      "sha256": "4621782f9ea97222ca237ff6f250b7595e607eaa71f37ee2c744100a9fb76ce6"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/lexical-relative-focused-controls-v22/SDK-AFTER.json",
+      "path": "actual/lexical-relative-focused-controls-v22/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/lexical-relative-focused-controls-v22/SDK-BEFORE.json",
+      "path": "actual/lexical-relative-focused-controls-v22/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/lexical-relative-focused-controls-v22/WINDOW-START.json",
+      "path": "actual/lexical-relative-focused-controls-v22/WINDOW-START.json",
+      "sha256": "762208455d88bf3dc2ab7fcc27e7184d474755b408d925fac5e41c1d814ed0d0"
+    },
+    {
+      "bytes": 526,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/lexical-relative-focused-controls-v22/normal-lexical-controls.log",
+      "path": "actual/lexical-relative-focused-controls-v22/normal-lexical-controls.log",
+      "sha256": "bbd66623458d9e43cffe4ffdcf30d2b471a9da9a32f7eb65917f34c9259cfebb"
+    },
+    {
+      "bytes": 526,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/actual/lexical-relative-focused-controls-v22/optimized-lexical-controls.log",
+      "path": "actual/lexical-relative-focused-controls-v22/optimized-lexical-controls.log",
+      "sha256": "1631116a014fbc9d7a0c49c39db48f4fe4875b04ecd298b405ab9b987cef5672"
+    },
+    {
+      "bytes": 1229397,
+      "kind": "lossless-original-raw-receipts-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "ca6340dcc6e784c68512f1f3e6a7f9801d6b90ffb531c6b165b495a26aa9c9c7"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419400,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/CANDIDATE-V22-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V22-SOURCE-SEAL.json",
+      "sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3"
+    },
+    {
+      "bytes": 16485,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "e5e35b83cdc8bf25f137ca6feb74450fbc25e6fd4f27d633a2a36ae7da3d1588"
+    },
+    {
+      "bytes": 22385,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/build_lexical_relative_v22_packet.py",
+      "path": "reproduce/build_lexical_relative_v22_packet.py",
+      "sha256": "e2ce6ec97211e808dbcc02f73d32b7096938f3ccdfeec9398126360be7a80a94"
+    },
+    {
+      "bytes": 2184,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/invariant-input-cold-probes-v22.json",
+      "path": "reproduce/invariant-input-cold-probes-v22.json",
+      "sha256": "68be7d37cf05540e8a8de316657bcb7f65f78c6dbbef9db1f8a8dbe50fe0ca20"
+    },
+    {
+      "bytes": 1131,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/invariant-input-plain-diagnostic-v22.json",
+      "path": "reproduce/invariant-input-plain-diagnostic-v22.json",
+      "sha256": "8f75993e5a2ba65dedf8ee17d75f8621a36f083737effbdcdf6fd01854113b3c"
+    },
+    {
+      "bytes": 2361,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/lexical-relative-focused-controls-v22.json",
+      "path": "reproduce/lexical-relative-focused-controls-v22.json",
+      "sha256": "85f28f8d69e9d1e90ba34ceac5537ce118e3a1dbb98c3230c3dee8af08f50e77"
+    },
+    {
+      "bytes": 19575,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/relative_path_equivalence_controls.py",
+      "path": "reproduce/relative_path_equivalence_controls.py",
+      "sha256": "97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-lexical-relative-v22-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    }
+  ],
+  "schema": 1,
+  "scope": "Helper-only lexical differential controls pass. Original maintained 10-second real cold gate fails. Separate same-body/source 30-second plain diagnostic completes above ten seconds. No original-cap, operation-level, readiness or broader qualification claim."
+}

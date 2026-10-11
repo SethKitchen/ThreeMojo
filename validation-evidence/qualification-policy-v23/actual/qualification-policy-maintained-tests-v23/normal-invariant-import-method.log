@@ -1,0 +1,6 @@
+test_direct_and_qualified_package_verification (__main__.CoverageInvariantContracts.test_direct_and_qualified_package_verification) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 20.742s
+
+OK

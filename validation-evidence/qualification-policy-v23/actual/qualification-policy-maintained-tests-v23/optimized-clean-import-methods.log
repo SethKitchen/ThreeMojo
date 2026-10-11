@@ -1,0 +1,13 @@
+test_clean_cli_admits_named_rules_without_ambient_root_imports (__main__.MapSuccessorLoopTests.test_clean_cli_admits_named_rules_without_ambient_root_imports) ... ok
+test_package_and_direct_modes_keep_canonical_dependency_identity (__main__.MapSuccessorLoopTests.test_package_and_direct_modes_keep_canonical_dependency_identity) ... ok
+test_internal_dependency_importerror_propagates_without_fallback (__main__.MapSuccessorLoopTests.test_internal_dependency_importerror_propagates_without_fallback) ... ok
+test_clean_cli_unknown_successor_keeps_both_loop_outcomes_required (__main__.MapSuccessorLoopTests.test_clean_cli_unknown_successor_keeps_both_loop_outcomes_required) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 35.901s
+
+OK
