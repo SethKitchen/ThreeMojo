@@ -1,0 +1,180 @@
+{
+  "base_published_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "cleanup_boundary": "Selected leaders were reaped and their receipts report no remaining owned descendants. No live overall process state is asserted.",
+  "completed_prefix_disclosure": "Only terminal configuration positions40/41 are packaged. This is not the full completed-prefix inventory. Collection-level RESULT, LATEST, PROCESSES, SDK-AFTER, ongoing console and handoff files are neither read nor copied.",
+  "config_sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+  "configured_continuation_stage_count": 137,
+  "count_boundary": "Unittest Ran68 counts methods, while failures328 counts failure records including subtests. Do not subtract328 from68 or label328 separate failed methods/subtests. Both modes were parsed independently from their own raw logs.",
+  "evidence_policy": "Actual original bytes and separately labeled summaries/index only. No live ongoing files, private notes, tests/native execution, candidate edits, uploads or invented receipts.",
+  "failure_interpretation": "All328 failure records in each mode show a raised full-audit ContractError for changed extensions/carla/map.mojo that does not match the expected target path. This is an earlier/wrong-target rejection, not a mutation accepted without an exception. It does not establish that the intended dependency control was reached or validated. The four errors also preserve the Map rejection, three directly and one wrapped by canonical_accumulation source validation.",
+  "original_failure_boundary": "Original full-matrix failure stays failed. Diagnostic accept_nonzero collects these failures without converting them to passes. Later repair/focused results are excluded.",
+  "original_window": {
+    "absolute_deadline_utc": "2026-10-11T08:35:38.016452+00:00",
+    "clamped_seconds_recorded_at_start": 9158.74437,
+    "configured_seconds": 10800,
+    "original_failed_matrix_result_sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844"
+  },
+  "other_135_stage_outcomes": "Outside this packet; no pass/fail/unrun or completion status assigned.",
+  "per_mode_actual_diagnostics": [
+    {
+      "earlier_map_regex_mismatch_records": 328,
+      "error_final_messages": {
+        "FrontierReservationSuccessorTests.test_separate_frontier_edge_retains_all_four_predecessors": "full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo",
+        "OptionalSeedGuardSuccessorTests.test_separate_exact_edge_preserves_old_record_and_all_test_pins": "full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo",
+        "OptionalSeedGuardSuccessorTests.test_unchanged_consumer_routes_and_ordered_observables": "ValueError: runtime source dependency changed [canonical_accumulation]: extensions/carla/curve_bounds.mojo (full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo)",
+        "SupportSeedGuardSuccessorTests.test_distinct_edge_reconstructs_every_published_endpoint": "full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo"
+      },
+      "error_records": 4,
+      "errors_by_method": {
+        "FrontierReservationSuccessorTests.test_separate_frontier_edge_retains_all_four_predecessors": 1,
+        "OptionalSeedGuardSuccessorTests.test_separate_exact_edge_preserves_old_record_and_all_test_pins": 1,
+        "OptionalSeedGuardSuccessorTests.test_unchanged_consumer_routes_and_ordered_observables": 1,
+        "SupportSeedGuardSuccessorTests.test_distinct_edge_reconstructs_every_published_endpoint": 1
+      },
+      "failure_records": 328,
+      "failures_by_method": {
+        "FrontierReservationSuccessorTests.test_frontier_edge_rechecks_every_bound_dependency_record_and_test": 82,
+        "OptionalSeedGuardSuccessorTests.test_new_edge_rechecks_all_prior_dependencies_records_and_test_bytes": 82,
+        "SeedCountSuccessorTests.test_after_count_suite_is_required_and_mutations_reject": 1,
+        "SeedCountSuccessorTests.test_each_historical_record_and_live_dependency_is_exact": 81,
+        "SupportSeedGuardSuccessorTests.test_new_edge_checks_all_pinned_dependencies_records_and_native_tests": 82
+      },
+      "log_bytes": 498953,
+      "log_sha256": "a4df1bb14bb27fc705e5933b317c11a043422f1caf9ab51dcef54a53f8c07998",
+      "methods_run": 68,
+      "methods_with_errors": 4,
+      "methods_with_failure_records": 5,
+      "missing_rejection_records": 0,
+      "mode": "normal",
+      "ordinary_method_failure_records": 1,
+      "passing_methods": 59,
+      "subtest_failure_records": 327
+    },
+    {
+      "earlier_map_regex_mismatch_records": 328,
+      "error_final_messages": {
+        "FrontierReservationSuccessorTests.test_separate_frontier_edge_retains_all_four_predecessors": "full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo",
+        "OptionalSeedGuardSuccessorTests.test_separate_exact_edge_preserves_old_record_and_all_test_pins": "full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo",
+        "OptionalSeedGuardSuccessorTests.test_unchanged_consumer_routes_and_ordered_observables": "ValueError: runtime source dependency changed [canonical_accumulation]: extensions/carla/curve_bounds.mojo (full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo)",
+        "SupportSeedGuardSuccessorTests.test_distinct_edge_reconstructs_every_published_endpoint": "full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: unchanged premise, record or fixture changed: extensions/carla/map.mojo"
+      },
+      "error_records": 4,
+      "errors_by_method": {
+        "FrontierReservationSuccessorTests.test_separate_frontier_edge_retains_all_four_predecessors": 1,
+        "OptionalSeedGuardSuccessorTests.test_separate_exact_edge_preserves_old_record_and_all_test_pins": 1,
+        "OptionalSeedGuardSuccessorTests.test_unchanged_consumer_routes_and_ordered_observables": 1,
+        "SupportSeedGuardSuccessorTests.test_distinct_edge_reconstructs_every_published_endpoint": 1
+      },
+      "failure_records": 328,
+      "failures_by_method": {
+        "FrontierReservationSuccessorTests.test_frontier_edge_rechecks_every_bound_dependency_record_and_test": 82,
+        "OptionalSeedGuardSuccessorTests.test_new_edge_rechecks_all_prior_dependencies_records_and_test_bytes": 82,
+        "SeedCountSuccessorTests.test_after_count_suite_is_required_and_mutations_reject": 1,
+        "SeedCountSuccessorTests.test_each_historical_record_and_live_dependency_is_exact": 81,
+        "SupportSeedGuardSuccessorTests.test_new_edge_checks_all_pinned_dependencies_records_and_native_tests": 82
+      },
+      "log_bytes": 498953,
+      "log_sha256": "c364dc114e02da8f74c6391dfde23fc7ef0b2ad6bb11ebf7905ed8f3e7d5348e",
+      "methods_run": 68,
+      "methods_with_errors": 4,
+      "methods_with_failure_records": 5,
+      "missing_rejection_records": 0,
+      "mode": "optimized",
+      "ordinary_method_failure_records": 1,
+      "passing_methods": 59,
+      "subtest_failure_records": 327
+    }
+  ],
+  "qualification_limit": "No passing seed-count module, completed continuation, full matrix, native/coverage, hosted CI or issue completion.",
+  "reproduction_boundary": "Six complete terminal stage files, including two498953-byte merged logs, constant source/SDK/window bindings, exact diagnostic protocol/inventory/publication binding, original failure deadline input and thirteen relevant sealed source/record files. Entire unchanged repository and installed SDK are not distributed.",
+  "schema": 1,
+  "scope": "Each selected normal/optimized seed-count run executed68methods:59methods passed,5methods produced328failure records and4other methods errored, zero skips. Of328failures,327are subtest failures and1is an ordinary method failure. Both stages returned1 without timeout under1800-second caps. No module or collection pass.",
+  "sdk_before_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "selected_config_positions_one_based": [
+    40,
+    41
+  ],
+  "selected_pair_total": {
+    "error_records": 8,
+    "failure_records": 656,
+    "method_executions_with_errors": 8,
+    "method_executions_with_failure_records": 10,
+    "methods_run": 136,
+    "ordinary_method_failure_records": 2,
+    "passing_methods": 118,
+    "subtest_failure_records": 654
+  },
+  "selected_stage_results": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_seed_count_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 68,
+      "label": "28-normal-test_seed_count_contracts",
+      "leader_reaped": true,
+      "log_sha256": "a4df1bb14bb27fc705e5933b317c11a043422f1caf9ab51dcef54a53f8c07998",
+      "pgid": 164,
+      "pid": 164,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 694.0250926910012,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T07:19:46.949806+00:00",
+      "test_count": 68,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_seed_count_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 68,
+      "label": "28-optimized-test_seed_count_contracts",
+      "leader_reaped": true,
+      "log_sha256": "c364dc114e02da8f74c6391dfde23fc7ef0b2ad6bb11ebf7905ed8f3e7d5348e",
+      "pgid": 167,
+      "pid": 167,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 684.6023757479998,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T07:31:23.185704+00:00",
+      "test_count": 68,
+      "timed_out": false
+    }
+  ],
+  "source_context": "Sealed test fixtures overlay historical Map endpoint bytes through Path.read_bytes. Sealed seed._verify_bound_inputs can enter full_audit.verified_edges before its per-record/dependency checks. These source and traceback facts explain the observed earlier boundary without rerunning fixtures or repairing tests.",
+  "source_sdk_check_boundary": "Terminal post-run count annotations are written only after the exact supervisor returns through source/SDK post-stage checks. This is a disclosed control-flow inference, not an invented final after-receipt.",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "source_tree": "d2c9f94523b9c03aa94b04eaad774f73f147cd74",
+  "status": "TWO_TERMINAL_SEED_COUNT_DIAGNOSTIC_FAILURES_NOT_QUALIFICATION",
+  "supervisor_sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+}

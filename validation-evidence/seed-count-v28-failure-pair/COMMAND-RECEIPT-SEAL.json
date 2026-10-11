@@ -1,0 +1,83 @@
+{
+  "config_sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+  "kind": "derived-selected-commands-and-binding-index",
+  "schema": 1,
+  "scope": "Selected terminal pair only; no aggregate continuation status.",
+  "selected_stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_seed_count_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 68,
+      "label": "28-normal-test_seed_count_contracts",
+      "leader_reaped": true,
+      "log_sha256": "a4df1bb14bb27fc705e5933b317c11a043422f1caf9ab51dcef54a53f8c07998",
+      "pgid": 164,
+      "pid": 164,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 694.0250926910012,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T07:19:46.949806+00:00",
+      "test_count": 68,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_seed_count_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 68,
+      "label": "28-optimized-test_seed_count_contracts",
+      "leader_reaped": true,
+      "log_sha256": "c364dc114e02da8f74c6391dfde23fc7ef0b2ad6bb11ebf7905ed8f3e7d5348e",
+      "pgid": 167,
+      "pid": 167,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 684.6023757479998,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T07:31:23.185704+00:00",
+      "test_count": 68,
+      "timed_out": false
+    }
+  ],
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stage_files_sha256": {
+    "28-normal-test_seed_count_contracts-RESULT.json": "1084458e4bd1535ab0584e8ba5d5d88b877ef0bb467a0d367182623681bc719f",
+    "28-normal-test_seed_count_contracts-START.json": "435c218baefaa9ecac61cbeee538ed8aaf5a18acb8053c429f85250b0f0913af",
+    "28-normal-test_seed_count_contracts.log": "a4df1bb14bb27fc705e5933b317c11a043422f1caf9ab51dcef54a53f8c07998",
+    "28-optimized-test_seed_count_contracts-RESULT.json": "5ec639ab401fa24bb8f11adacbfc6b58c72e88e00c2a485fe0a92474d7339e74",
+    "28-optimized-test_seed_count_contracts-START.json": "2150964290879752466c2d60d8fd334362299b9658429e6d5a713c69bd50a99a",
+    "28-optimized-test_seed_count_contracts.log": "c364dc114e02da8f74c6391dfde23fc7ef0b2ad6bb11ebf7905ed8f3e7d5348e"
+  },
+  "supervisor_sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+}

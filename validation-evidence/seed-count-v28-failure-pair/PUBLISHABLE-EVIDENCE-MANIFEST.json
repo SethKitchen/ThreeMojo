@@ -1,0 +1,125 @@
+{
+  "files": [
+    {
+      "bytes": 3319,
+      "kind": "derived-selected-command-binding-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "16a67275e0a577cc69061fb6c1834bf26cc282cd3b230c418ac23e64af5ead28"
+    },
+    {
+      "bytes": 14896,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "71f5c5bbbd9af7937bf20790cd3f2a56c3b9b490e47ab44c839bc4e2e914b35b"
+    },
+    {
+      "bytes": 3039,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/README.md",
+      "path": "README.md",
+      "sha256": "1e78e34a5e3ec7e540f6203a02302f8d94b8899195b015e98923e1e9c2043fa8"
+    },
+    {
+      "bytes": 11822,
+      "kind": "derived-selected-error-pair-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "0ed6a4e4d448a9626e84da4e9c490df3ff0880641f7f14a78888bdab75368b56"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "path": "actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 376,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/actual/constant-continuation-bindings/WINDOW-START.json",
+      "path": "actual/constant-continuation-bindings/WINDOW-START.json",
+      "sha256": "d87934d76871e7ba07167d30214cfc93a7c6746be3574d26e21abc4d74c63cc4"
+    },
+    {
+      "bytes": 918,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/actual/selected-terminal-stages/28-normal-test_seed_count_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/28-normal-test_seed_count_contracts-RESULT.json",
+      "sha256": "1084458e4bd1535ab0584e8ba5d5d88b877ef0bb467a0d367182623681bc719f"
+    },
+    {
+      "bytes": 604,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/actual/selected-terminal-stages/28-normal-test_seed_count_contracts-START.json",
+      "path": "actual/selected-terminal-stages/28-normal-test_seed_count_contracts-START.json",
+      "sha256": "435c218baefaa9ecac61cbeee538ed8aaf5a18acb8053c429f85250b0f0913af"
+    },
+    {
+      "bytes": 931,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/actual/selected-terminal-stages/28-optimized-test_seed_count_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/28-optimized-test_seed_count_contracts-RESULT.json",
+      "sha256": "5ec639ab401fa24bb8f11adacbfc6b58c72e88e00c2a485fe0a92474d7339e74"
+    },
+    {
+      "bytes": 617,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/actual/selected-terminal-stages/28-optimized-test_seed_count_contracts-START.json",
+      "path": "actual/selected-terminal-stages/28-optimized-test_seed_count_contracts-START.json",
+      "sha256": "2150964290879752466c2d60d8fd334362299b9658429e6d5a713c69bd50a99a"
+    },
+    {
+      "bytes": 1375665,
+      "kind": "lossless-original-source-and-constant-bindings",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "98e8eb0ab263c0cc279b523ee07e2da71c870375393ee6c7fd3855dc2f76e155"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 21943,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/reproduce/build_seed_count_failure_pair_v28_packet.py",
+      "path": "reproduce/build_seed_count_failure_pair_v28_packet.py",
+      "sha256": "2983d32bb161190ec5a5e76bc0910cb7d5e062bb819e6e3a2ad88b3d738641ac"
+    },
+    {
+      "bytes": 53516,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/reproduce/full-python-diagnostic-continuation-v28.json",
+      "path": "reproduce/full-python-diagnostic-continuation-v28.json",
+      "sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3"
+    },
+    {
+      "bytes": 11833,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/reproduce/run_diagnostic_continuation_v28.py",
+      "path": "reproduce/run_diagnostic_continuation_v28.py",
+      "sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+    },
+    {
+      "bytes": 76824,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-seed-count-v28-failure-pair-packet/reproduce/source/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "sha256": "a21f8aea5148be3a97b233201782393ee919a142742fcfe5b7aae929d8f281ff"
+    }
+  ],
+  "schema": 1,
+  "scope": "Each selected normal/optimized seed-count run executed68methods:59methods passed,5methods produced328failure records and4other methods errored, zero skips. Of328failures,327are subtest failures and1is an ordinary method failure. Both stages returned1 without timeout under1800-second caps. No module or collection pass."
+}
