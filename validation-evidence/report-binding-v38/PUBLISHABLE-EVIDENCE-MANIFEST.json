@@ -1,0 +1,94 @@
+{
+  "files": [
+    {
+      "bytes": 5145,
+      "path": "SUMMARY.json",
+      "sha256": "9f59617e842b0debc97bec46aa353d6b91104cfeebdbd77a5a22e50e1d214cf4",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/SUMMARY.json"
+    },
+    {
+      "bytes": 24163,
+      "path": "actual/REPORT-BINDING-RESULT.json",
+      "sha256": "9bcb88746936e2a9003b65b8cbdbba3324c59d3d542ea0dc07ad0bfd13bd9652",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/REPORT-BINDING-RESULT.json"
+    },
+    {
+      "bytes": 1869,
+      "path": "actual/RESULT.json",
+      "sha256": "2671274cc0362a0bf4b258942e1b17e8ca917356c4209744a6416825cdcf94a6",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "path": "actual/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "path": "actual/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 420072,
+      "path": "actual/SOURCE-SEAL.json",
+      "sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/SOURCE-SEAL.json"
+    },
+    {
+      "bytes": 369,
+      "path": "actual/WINDOW-START.json",
+      "sha256": "def863edb16a8968f023e55cae14802b28228bb668ae5154c051fed703a25362",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/WINDOW-START.json"
+    },
+    {
+      "bytes": 1370,
+      "path": "actual/fresh-current-report-binding-RESULT.json",
+      "sha256": "1bf300c0b2ae14476feb51a48330e1361dceb585500da4d4d1cbbb12dff865ed",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/fresh-current-report-binding-RESULT.json"
+    },
+    {
+      "bytes": 1127,
+      "path": "actual/fresh-current-report-binding-START.json",
+      "sha256": "0c1d7f42e761510e352449a87cad56ab0a05ab8fc16a45c08cb14eecba5af913",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/fresh-current-report-binding-START.json"
+    },
+    {
+      "bytes": 111,
+      "path": "actual/fresh-current-report-binding.log",
+      "sha256": "4871d500e8bfbd17ecce13a3117f8fd3dad5e23fc7d5c8abc10e83022a8e38e9",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/fresh-current-report-binding.log"
+    },
+    {
+      "bytes": 2977,
+      "path": "actual/supervisor-console.log",
+      "sha256": "6f937f7e8d7115a17a3be59f0a60ab930a7ba848985e527f99b1c0a20cd06d34",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/actual/supervisor-console.log"
+    },
+    {
+      "bytes": 1157,
+      "path": "reproduce/config.json",
+      "sha256": "9bef82d727db7eb51115b7b5fe257d4ae48c778251a062ee4b55caa24b86b062",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/reproduce/config.json"
+    },
+    {
+      "bytes": 10102,
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/reproduce/run_checkpoint_matrix.py"
+    },
+    {
+      "bytes": 3823,
+      "path": "reproduce/verify_report_binding_v38.py",
+      "sha256": "5f74af609555631fbe3aa199f87b1a963edfaaf5a542d8da11c3a309750a1a9d",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet/reproduce/verify_report_binding_v38.py"
+    }
+  ],
+  "original_count": 13,
+  "packet": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-report-binding-v38-packet",
+  "payload_count": 14,
+  "qualification": false,
+  "schema": 1,
+  "status": "PUBLISHABLE_REPRODUCIBLE_EVIDENCE_FRESH_REPORT_BINDING_ONLY"
+}

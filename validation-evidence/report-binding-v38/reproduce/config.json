@@ -1,0 +1,23 @@
+{
+  "phase": "anatomy-report-binding-v38",
+  "scope": "Fresh report-input closure binding on exact v38; no regeneration or full qualification",
+  "seal": "CANDIDATE-V38-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v38",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-c",
+        "from pathlib import Path; import hashlib,sys; p=Path(sys.argv[1]); b=p.read_bytes(); expected=sys.argv[2];\nif hashlib.sha256(b).hexdigest()!=expected: raise RuntimeError('Reviewed verifier bytes differ')\nsys.argv=[str(p),sys.argv[3]]; exec(compile(b,str(p),'exec'),{'__name__':'__main__','__file__':str(p)});\nif p.read_bytes()!=b: raise RuntimeError('Verifier bytes changed during execution')",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/verify_report_binding_v38.py",
+        "5f74af609555631fbe3aa199f87b1a963edfaaf5a542d8da11c3a309750a1a9d",
+        "{evidence}"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v38",
+      "label": "fresh-current-report-binding",
+      "seconds": 180
+    }
+  ],
+  "window_seconds": 300
+}

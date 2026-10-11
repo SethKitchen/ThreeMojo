@@ -1,0 +1,19 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-c",
+    "from pathlib import Path; import hashlib,sys; p=Path(sys.argv[1]); b=p.read_bytes(); expected=sys.argv[2];\nif hashlib.sha256(b).hexdigest()!=expected: raise RuntimeError('Reviewed verifier bytes differ')\nsys.argv=[str(p),sys.argv[3]]; exec(compile(b,str(p),'exec'),{'__name__':'__main__','__file__':str(p)});\nif p.read_bytes()!=b: raise RuntimeError('Verifier bytes changed during execution')",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/verify_report_binding_v38.py",
+    "5f74af609555631fbe3aa199f87b1a963edfaaf5a542d8da11c3a309750a1a9d",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/anatomy-report-binding-v38"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v38",
+  "label": "fresh-current-report-binding",
+  "pgid": 8,
+  "pid": 8,
+  "single_cpu": 0,
+  "source_seal_sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-11T14:36:01.391536+00:00"
+}
