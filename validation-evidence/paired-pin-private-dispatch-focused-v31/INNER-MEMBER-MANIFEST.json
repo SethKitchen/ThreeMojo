@@ -1,0 +1,289 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 2513185,
+    "json_sha256": "212944f73f3a5c82d7386c67943bc5a3c0671f9a21e11f5f5d768438a9791cdb",
+    "members": 18,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 336,
+      "kind": "byte-exact-selected-completed-handoff-record",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/LANE-HANDOFFS.jsonl",
+      "path": "actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "sha256": "0dd5710b70c996c3dfe557c609d97c5066340026ec1b303fd140c5e49bb85b8b",
+      "source_selection": {
+        "byte_offset": 657,
+        "bytes": 336,
+        "line_number": 3
+      },
+      "storage": "readable",
+      "transport_path": "actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl"
+    },
+    {
+      "bytes": 228,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/LATEST.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/LATEST.json",
+      "sha256": "6b65cab536d1a823f373e2c2541d9d21a977423cedfc866199b764a3ce3419f0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 525,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/PROCESSES.jsonl",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/PROCESSES.jsonl",
+      "sha256": "5ff2433b293416aac98d0e52387ae625e2df6885e1e9652777311c1e3a72293b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 2952,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/RESULT.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/RESULT.json",
+      "sha256": "22c057bd1a34286f417e1361637edefc04084ff053bd6a3bc881b21b35cff99f",
+      "storage": "readable",
+      "transport_path": "actual/paired-pin-private-dispatch-focused-v31/RESULT.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/SDK-AFTER.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/paired-pin-private-dispatch-focused-v31/SDK-AFTER.json"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/SDK-BEFORE.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/paired-pin-private-dispatch-focused-v31/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/SOURCE-SEAL.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/SOURCE-SEAL.json",
+      "sha256": "a6cb4394fecbeefdcb4615b43621c481db32f9dbf72c83e04e64283ac7f83456",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/WINDOW-START.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/WINDOW-START.json",
+      "sha256": "920ccff9ebb9668d03ab700e350650bbeea9fe45e5b09f0345c6bf72428b9b86",
+      "storage": "readable",
+      "transport_path": "actual/paired-pin-private-dispatch-focused-v31/WINDOW-START.json"
+    },
+    {
+      "bytes": 1051,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch-RESULT.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch-RESULT.json",
+      "sha256": "a4ce9b214f40e579ccf262aca84573f6eed2a73e145728ac03f963dda4d3ac3b",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 738,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch-START.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch-START.json",
+      "sha256": "2e3839305da78ba06458cdae0fdbae7e25e51dcbad350686459a02491496a33e",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 422,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch.log",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch.log",
+      "sha256": "b66c9386f0b7ca69d99f9fd4a94ea58131acc98f50ca54fcc73d4a8f23c65d8f",
+      "storage": "readable",
+      "transport_path": "actual/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch.log"
+    },
+    {
+      "bytes": 1064,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch-RESULT.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch-RESULT.json",
+      "sha256": "8c51de27941eb5b8d380ad13a4cbb6f9ae029548e11a067c5df1e48df0a1aaf5",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 751,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch-START.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch-START.json",
+      "sha256": "0b337c030b6528d6b713f4e5fab6b1a2aa37644bba44c6c13454a6aa7889c725",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 422,
+      "kind": "original-completed-focused-phase",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch.log",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch.log",
+      "sha256": "b66c9386f0b7ca69d99f9fd4a94ea58131acc98f50ca54fcc73d4a8f23c65d8f",
+      "storage": "readable",
+      "transport_path": "actual/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch.log"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V30-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V30-SOURCE-SEAL.json",
+      "sha256": "e595593ff7afaef3a4e04d6cbb24ec5343a0178ba11ea421e6a6c5ee455c4c38",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 419528,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V31-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V31-SOURCE-SEAL.json",
+      "sha256": "a6cb4394fecbeefdcb4615b43621c481db32f9dbf72c83e04e64283ac7f83456",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 1253,
+      "kind": "original-source-only-repair-manifest",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/paired-pin-private-dispatch-implementation-v31/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "848ef0105a364eb1b4331fa4dad0b389666fe4e36fca300cce371ea1c3537a40",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json"
+    },
+    {
+      "bytes": 848,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 2094,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/paired-pin-private-dispatch-focused-v31.json",
+      "path": "reproduce/paired-pin-private-dispatch-focused-v31.json",
+      "sha256": "2b9d63b82b200380e6fb8eb00d7727f3120fc279067a879214409014eb54bc93",
+      "storage": "readable",
+      "transport_path": "reproduce/paired-pin-private-dispatch-focused-v31.json"
+    },
+    {
+      "bytes": 4215,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/paired-pin-private-dispatch-focused-v31.supervisor.log",
+      "path": "reproduce/paired-pin-private-dispatch-focused-v31.supervisor.log",
+      "sha256": "a7e7803a4befbd322cb2faa0b847ad49d9d31411b19c793fda558d9ad82e05df",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 10102,
+      "kind": "exact-supervisor-command-console-or-source-baseline-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+      "storage": "readable",
+      "transport_path": "reproduce/run_checkpoint_matrix.py"
+    },
+    {
+      "bytes": 54195,
+      "kind": "exact-shared-before-test-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v30/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "path": "reproduce/source-before-v30-and-v28/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "c581c353a2cfbacec9a012ed8e41bc89529733d22e436555bcb228377703be9d",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 56096,
+      "kind": "exact-revised-test-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "path": "reproduce/source-v31/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "aeeaebc260194cb6450b30c533e2c43128ac9aaa2475d105e58c73d4692d21f3",
+      "storage": "readable",
+      "transport_path": "reproduce/source-v31/tools/carla_lane_oracle/test_paired_pin_contracts.py"
+    },
+    {
+      "bytes": 3173,
+      "kind": "exact-unchanged-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+      "path": "reproduce/unchanged-source/tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+      "sha256": "fd3e8cc23b1250c3c1be811be11d4b49a8ccaebcf5fb419737d4fe4da3767953",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8956,
+      "kind": "exact-unchanged-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "path": "reproduce/unchanged-source/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "sha256": "37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8759,
+      "kind": "exact-unchanged-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "path": "reproduce/unchanged-source/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "sha256": "b5068eff6fcfccd7596512559c793b7c038f2f9e56703ba0fe371be98b8b8dc9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 9002,
+      "kind": "exact-unchanged-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "path": "reproduce/unchanged-source/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "143ce9c367283e8100c6bc2c7b344fc5d5e54af346266f9f337fc6580eb7026f",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 103293,
+      "kind": "exact-unchanged-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "path": "reproduce/unchanged-source/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8205,
+      "kind": "exact-unchanged-helper-fixture-or-sdk-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31/tools/coverage_toolchain_identity.py",
+      "path": "reproduce/unchanged-source/tools/coverage_toolchain_identity.py",
+      "sha256": "4fe6f947fc6cba35449287ed1398f7a8a37489be1f7aa5120fbe130e0391be22",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 1961493,
+  "original_member_count": 30,
+  "schema": 1
+}

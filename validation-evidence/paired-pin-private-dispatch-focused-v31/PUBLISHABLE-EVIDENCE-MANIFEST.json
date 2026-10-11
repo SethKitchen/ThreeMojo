@@ -1,0 +1,146 @@
+{
+  "files": [
+    {
+      "bytes": 3054,
+      "kind": "derived-command-and-baseline-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "6def5c93e330f6abfd21107d5c9cf35dd49dd22c3b3a1cfd7584a17654f11404"
+    },
+    {
+      "bytes": 823,
+      "kind": "derived-specific-completed-record-extraction",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/COMPLETED-HANDOFF-SNAPSHOT-PROVENANCE.json",
+      "path": "COMPLETED-HANDOFF-SNAPSHOT-PROVENANCE.json",
+      "sha256": "92d21c64e3ee0a7d07d06e8573a5619c82cca4e20b4aca7b7d68e0209d42ad99"
+    },
+    {
+      "bytes": 15962,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "247bbd21a567d38d375bdf3f8ed5a802fa477afdb74f597ddbb989daab195626"
+    },
+    {
+      "bytes": 2838,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/README.md",
+      "path": "README.md",
+      "sha256": "e67eca91e6e1c61a0e95f79a58cf807fdc46278e8a7098f60b7e9753b8fd0f87"
+    },
+    {
+      "bytes": 6329,
+      "kind": "derived-focused-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "4d26a677cf06578b792d6114c0ea1445b28f4e7c92395474ca7d85f1ed49d0e2"
+    },
+    {
+      "bytes": 336,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "path": "actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "sha256": "0dd5710b70c996c3dfe557c609d97c5066340026ec1b303fd140c5e49bb85b8b"
+    },
+    {
+      "bytes": 2952,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/paired-pin-private-dispatch-focused-v31/RESULT.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/RESULT.json",
+      "sha256": "22c057bd1a34286f417e1361637edefc04084ff053bd6a3bc881b21b35cff99f"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/paired-pin-private-dispatch-focused-v31/SDK-AFTER.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/paired-pin-private-dispatch-focused-v31/SDK-BEFORE.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/paired-pin-private-dispatch-focused-v31/WINDOW-START.json",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/WINDOW-START.json",
+      "sha256": "920ccff9ebb9668d03ab700e350650bbeea9fe45e5b09f0345c6bf72428b9b86"
+    },
+    {
+      "bytes": 422,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch.log",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/normal-paired-pin-private-dispatch.log",
+      "sha256": "b66c9386f0b7ca69d99f9fd4a94ea58131acc98f50ca54fcc73d4a8f23c65d8f"
+    },
+    {
+      "bytes": 422,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/actual/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch.log",
+      "path": "actual/paired-pin-private-dispatch-focused-v31/optimized-paired-pin-private-dispatch.log",
+      "sha256": "b66c9386f0b7ca69d99f9fd4a94ea58131acc98f50ca54fcc73d4a8f23c65d8f"
+    },
+    {
+      "bytes": 1295613,
+      "kind": "lossless-original-receipts-source-and-bindings",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "c5d6555ccdfcefe1b2e1036f7ba8d8782ebb72cbac78f3b8fcdc90788ad712d1"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 1253,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "848ef0105a364eb1b4331fa4dad0b389666fe4e36fca300cce371ea1c3537a40"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 20315,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/reproduce/build_paired_pin_private_dispatch_focused_v31_packet.py",
+      "path": "reproduce/build_paired_pin_private_dispatch_focused_v31_packet.py",
+      "sha256": "e1892cc562b81752b85e75ae9a4d6d612e42d3c83e72db9cf8c4210d78b218ea"
+    },
+    {
+      "bytes": 2094,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/reproduce/paired-pin-private-dispatch-focused-v31.json",
+      "path": "reproduce/paired-pin-private-dispatch-focused-v31.json",
+      "sha256": "2b9d63b82b200380e6fb8eb00d7727f3120fc279067a879214409014eb54bc93"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 56096,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-paired-pin-private-dispatch-focused-v31-packet/reproduce/source-v31/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "path": "reproduce/source-v31/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "aeeaebc260194cb6450b30c533e2c43128ac9aaa2475d105e58c73d4692d21f3"
+    }
+  ],
+  "schema": 1,
+  "scope": "The two revised paired-pin synthetic methods passed normally and optimized, four executions, zero skips. This test-only correction atop v30 does not qualify the complete33-method module, real source admission, full matrix, native suite or coverage."
+}

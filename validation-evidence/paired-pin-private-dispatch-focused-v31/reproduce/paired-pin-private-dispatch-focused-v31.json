@@ -1,0 +1,64 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V30-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v30"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28"
+    }
+  ],
+  "pause_request_file": "paired-pin-private-dispatch-v31.pause",
+  "phase": "paired-pin-private-dispatch-focused-v31",
+  "scope": "Only two revised paired-pin synthetic methods in each mode on isolated test correction atop v30. Full 33-method module, full matrix and native/coverage remain separate. Immutable v28 diagnostic continuation remains failed and separate.",
+  "seal": "CANDIDATE-V31-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v31",
+  "source_seal_sha256": "a6cb4394fecbeefdcb4615b43621c481db32f9dbf72c83e04e64283ac7f83456",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-k",
+        "test_fixed_shape_order_signatures_and_single_freshness",
+        "-k",
+        "test_each_owner_initial_phase_uses_one_fresh_pair",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "normal-paired-pin-private-dispatch",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-k",
+        "test_fixed_shape_order_signatures_and_single_freshness",
+        "-k",
+        "test_each_owner_initial_phase_uses_one_fresh_pair",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "optimized-paired-pin-private-dispatch",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}
