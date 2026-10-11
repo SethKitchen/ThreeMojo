@@ -30,8 +30,10 @@ The OpenDRIVE reader turns border-only lanes into width records, so this
 correction covers them through their widths. See
 [CARLA lane borders](CARLA-lane-borders). Superelevation, crossfall, shape and
 lane-height geometry remain outside this centerline model.
-[Issue #302](https://github.com/SethKitchen/ThreeMojo/issues/302) tracks the
-separate nearest-waypoint and index consistency work.
+Nearest-waypoint stations on offset and widening lanes are a separate
+correction. See
+[Differences from CARLA](CARLA-maps#differences-from-carla) and
+[issue #302](https://github.com/SethKitchen/ThreeMojo/issues/302).
 
 ## Tangent calculation
 
