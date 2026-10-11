@@ -1,0 +1,39 @@
+{
+  "commit": "b58696822061877236383642380068fb61346b54",
+  "tree": "097409976c4c3bc628b09642044c4de0dd756a34",
+  "archive_files": 3949,
+  "archive_mismatches": [],
+  "donor_status_before": "",
+  "mojo_version": "Mojo 1.1.0 (8189361e)",
+  "python_version": "3.12.14 (main, Sep 29 2026, 15:01:18) [Clang 22.1.3 ]",
+  "sdk_payload_receipt_matches": {
+    "modular/bin/lld": true,
+    "modular/bin/modular-crashpad-handler": true,
+    "modular/bin/mojo": true,
+    "modular/lib/libAsyncRTRuntimeGlobals.so": true,
+    "modular/lib/libKGENCompilerRTShared.so": true,
+    "modular/lib/libMSupportGlobals.so": true,
+    "modular/lib/mojo/std.mojoc": true,
+    "mojo/_entrypoints.py": true,
+    "mojo/_package_root.py": true,
+    "mojo/importer.py": true,
+    "mojo/notebook.py": true,
+    "mojo/paths.py": true,
+    "mojo/run.py": true
+  },
+  "mojo_sha256": "be444a046291b9e120394a7bc2836192fd2c82c9d5bd1c2960b79a9f4859466e",
+  "launcher_sha256": "3fac98f9fd60ffadb359baf0ce795cd5f03b4a4197fd0523efe554242c33462b",
+  "python_sha256": "5ebcd7993f0e40cb4b16e15d2c4c3c343ecad419966299b8e8f6f9e6a36bf779",
+  "maintained_test_seconds": 5,
+  "compile_outer_budget_seconds": 300,
+  "gpu_claim": false,
+  "explicit_sdk_environment": {
+    "MODULAR_TELEMETRY_ENABLED": "false",
+    "XDG_DATA_HOME": "/workspace/scratch/c2bcdb1ca387/wide-line-qualification-b586968/xdg-data",
+    "HOME": "/workspace/scratch/c2bcdb1ca387/wide-line-qualification-b586968/home",
+    "XDG_CACHE_HOME": "/workspace/scratch/c2bcdb1ca387/wide-line-qualification-b586968/xdg-cache",
+    "MODULAR_CACHE_DIR": "/workspace/scratch/c2bcdb1ca387/wide-line-qualification-b586968/modular-cache"
+  },
+  "donor_status_after": "",
+  "source_files_unchanged_after": true
+}

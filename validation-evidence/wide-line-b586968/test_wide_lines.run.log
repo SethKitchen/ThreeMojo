@@ -1,0 +1,41 @@
+
+Running 36 tests for /workspace/scratch/c2bcdb1ca387/wide-line-qualification-b586968/src/tests/test_wide_lines.mojo 
+    PASS [ 0.001 ] test_a_line_width_is_positive_and_finite
+    PASS [ 0.004 ] test_line_material_carries_three_js_defaults
+    PASS [ 0.013 ] test_a_material_refuses_a_width_it_cannot_draw
+    PASS [ 0.004 ] test_a_wide_line_names_three_ids
+    PASS [ 0.013 ] test_a_segments_geometry_keeps_its_pairs_and_colors
+    PASS [ 0.005 ] test_a_path_geometry_repeats_its_inner_points
+    PASS [ 0.001 ] test_a_cap_is_finer_the_bigger_it_is
+    PASS [ 0.002 ] test_dash_spans_follow_the_fold
+    PASS [ 0.008 ] test_a_scene_takes_a_wide_line_on_one_of_its_nodes
+    PASS [ 0.278 ] test_a_line_in_pixels_is_as_wide_as_asked
+    PASS [ 0.120 ] test_a_supersampled_line_keeps_its_width_in_output_pixels
+    PASS [ 0.080 ] test_a_line_in_the_world_is_as_wide_as_asked
+    PASS [ 0.203 ] test_a_dashed_line_is_cut_and_has_no_caps
+    PASS [ 0.074 ] test_a_wide_line_carries_its_vertex_colors
+    PASS [ 0.135 ] test_a_segment_of_no_length_is_a_round_dot
+    PASS [ 0.179 ] test_a_solid_line_keeps_round_caps_at_every_width
+    PASS [ 0.133 ] test_thin_round_caps_cover_pixels_beyond_the_segment_ends
+    PASS [ 0.068 ] test_a_segment_pointing_at_the_eye_is_a_disc_in_the_world
+    PASS [ 1.903 ] test_a_segment_is_cut_at_the_near_plane_and_the_image_edge
+    PASS [ 0.052 ] test_a_wide_line_is_sorted_and_culled_like_a_mesh
+    PASS [ 0.014 ] test_a_line_with_nothing_to_draw_draws_nothing
+    PASS [ 0.046 ] test_a_wide_line_refuses_what_it_cannot_draw
+    PASS [ 0.029 ] test_a_one_pixel_line_refuses_a_width_or_an_offset
+    PASS [ 0.001 ] test_a_wide_line_hit_kind_is_valid
+    PASS [ 0.017 ] test_a_pick_in_pixels_strikes_within_half_the_width
+    PASS [ 0.005 ] test_a_pick_in_pixels_trims_a_segment_at_the_near_plane
+    PASS [ 0.003 ] test_a_pick_in_pixels_ignores_a_segment_beyond_the_far_plane
+    PASS [ 0.003 ] test_a_pick_in_pixels_measures_a_dot_as_a_point
+    PASS [ 0.007 ] test_a_pick_in_the_world_strikes_within_half_the_width
+    PASS [ 0.007 ] test_a_pick_skips_a_hidden_or_empty_line_and_refuses_nonsense
+    PASS [ 0.004 ] test_wide_segment_ranges_count_complete_pairs
+    PASS [ 0.097 ] test_a_wide_line_draws_the_range_with_original_colors
+    PASS [ 0.008 ] test_a_wide_line_picks_only_the_range_with_original_segment_ids
+    PASS [ 0.074 ] test_a_wide_line_starts_pairing_at_an_odd_draw_slot
+    PASS [ 0.066 ] test_a_ranged_wide_dash_keeps_its_full_geometry_distance
+    PASS [ 0.003 ] test_a_wide_line_picker_refuses_indexed_points
+--------
+Summary [ 3.672 ] 36 tests run: 36 passed , 0 failed , 0 skipped 
+
