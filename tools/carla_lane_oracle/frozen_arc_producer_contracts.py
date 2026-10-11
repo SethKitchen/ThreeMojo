@@ -21,6 +21,25 @@ PROTECTED_INPUTS = (MIGRATION, SOURCE_PATH, 'extensions/carla/polynomial.mojo',
                     'extensions/carla/road.mojo')
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, mode='default'):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, mode=mode)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError('frozen ARC producer contract: ' + message)
@@ -69,7 +88,9 @@ def verify_runtime_pin_successor(root, prior_digest):
             'runtime predecessor reconstruction failed')
 
 
-def verify_premises(root):
+def verify_premises(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
     # This scoped check deliberately does not inspect the complete-file hash.
     # Mutation controls invoke it directly to test producer and Box obligations.
     if __package__:
@@ -78,22 +99,29 @@ def verify_premises(root):
         import sum2_guard_contracts as guard
     record = read_record(root)
     for item in record['function_sources']:
-        actual = guard.declaration((root/item['path']).read_text(),
+        actual = guard.declaration(_observe_text(
+            root, item['path'], (root/item['path']).read_text(), _operation=_operation),
                                    item['name'], tuple(item['owner']))
         require(guard.significant(actual) == guard.significant(item['source']),
                 'complete producer/Box function changed: ' + item['name'])
-    arc = (root/'extensions/carla/curve_rounded_arc.mojo').read_text()
+    arc = _observe_text(root, 'extensions/carla/curve_rounded_arc.mojo',
+                        (root/'extensions/carla/curve_rounded_arc.mojo').read_text(),
+                        _operation=_operation)
     require(guard.declaration_routing(arc) == record['rounded_arc_routing'],
             'RoundedArc/Box field layout, imports, or declaration owners changed')
     return len(record['function_sources'])
 
 
-def verify(root):
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
-    _, guard_payload = _verified_pin_pair(root, record['runtime_pins_before_sha256'])
+    _, guard_payload = _verified_pin_pair(root, record['runtime_pins_before_sha256'], **operation_args)
     require(hashlib.sha256(guard_payload).hexdigest() ==
             record['guard_pins_unchanged_sha256'], 'guard pin lineage changed')
-    require(source.token_sha256((root/SOURCE_PATH).read_text()) ==
+    require(source.token_sha256(_observe_text(
+        root, SOURCE_PATH, (root/SOURCE_PATH).read_text(), _operation=_operation)) ==
             record['source_successor']['after_token_sha256'],
             'complete frozen ARC successor changed')
     if __package__:
@@ -101,8 +129,10 @@ def verify(root):
     else:
         import reviewed_cleanup_contracts as cleanup
     for path, expected in record['premise_dependencies'].items():
-        cleanup.verify_dependency(path, (root/path).read_text(), expected['token_sha256'])
-    verify_premises(root)
+        cleanup.verify_dependency(path, _observe_text(
+            root, path, (root/path).read_text(), _operation=_operation),
+            expected['token_sha256'])
+    verify_premises(root, **operation_args)
     return record
 
 
@@ -126,8 +156,10 @@ def _runtime_pin_predecessor(payload, record, prior_digest):
     return predecessor
 
 
-def _verified_pin_pair(root, prior_digest):
+def _verified_pin_pair(root, prior_digest, *, _operation=None):
     """Reconstruct frozen runtime bytes and retain the invariant guard bytes."""
+    if _operation is not None:
+        _check_operation(root, _operation)
     record = read_record(root)
     require(prior_digest == record['runtime_pins_before_sha256'],
             'runtime pin predecessor differs from accepted cleanup')
@@ -135,6 +167,8 @@ def _verified_pin_pair(root, prior_digest):
         from . import coverage_invariant_contracts as invariant
     else:
         import coverage_invariant_contracts as invariant
-    runtime_payload, guard_payload = invariant.predecessor_pin_pair(root)
+    runtime_payload, guard_payload = (invariant.predecessor_pin_pair(root)
+        if _operation is None else
+        invariant._predecessor_pin_pair(root, _operation=_operation))
     runtime_predecessor = _runtime_pin_predecessor(runtime_payload, record, prior_digest)
     return runtime_predecessor, guard_payload

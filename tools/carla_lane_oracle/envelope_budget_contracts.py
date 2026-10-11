@@ -9,7 +9,13 @@ else:
 MODULE='extensions/carla/curve_bounds.mojo'
 EXPECTED='9bc62290a6bdeca43c4d695a0f0ce6592d69f49386d83ce7342b667c73680fce'
 
-def verify_text(text, *, root=None):
+def verify_text(text, *, root=None, _operation=None):
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        text = full_audit._observe_text(root, MODULE, text, _operation=_operation)
     checked = text
     if source_contracts.token_sha256(text) != EXPECTED:
         if __package__:
@@ -18,7 +24,7 @@ def verify_text(text, *, root=None):
             import full_audit_cleanup_contracts as full_audit
         actual_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
         try:
-            checked = full_audit.reviewed_text(actual_root, MODULE, text)
+            checked = full_audit.reviewed_text(actual_root, MODULE, text, _operation=_operation)
         except (ValueError, OSError) as error:
             raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
     if source_contracts.token_sha256(checked)!=EXPECTED:
@@ -32,7 +38,8 @@ def verify_text(text, *, root=None):
         raise ValueError('Intervening span can access budget parameters')
     return {'status':'PASS','source_token_sha256':EXPECTED,'intervening_counter_uses':0,'retained_capacity_and_debit':True}
 
-def verify(root):return verify_text((Path(root)/MODULE).read_text(), root=root)
+def verify(root, *, _operation=None):
+    return verify_text((Path(root)/MODULE).read_text(), root=root, _operation=_operation)
 
 
 def historical_function(text, *, root=None):

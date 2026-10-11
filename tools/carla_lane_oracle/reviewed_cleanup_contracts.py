@@ -54,6 +54,25 @@ PROTECTED_INPUTS = (*cache_key.PROTECTED_INPUTS, *accepted.PROTECTED_INPUTS, MIG
                     'extensions/carla/spiral_roundoff_proof.mojo')
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, mode='default'):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, mode=mode)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError('reviewed cleanup source contract: ' + message)
@@ -93,16 +112,21 @@ def ordered(text, fragments, label):
         previous = matches[0]
 
 
-def verify_premises(root):
+def verify_premises(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
     # Import here so the enclosing guard can call this verifier without a
     # module initialization cycle. Its lexical parser checks actual owners.
     if __package__:
         from . import sum2_guard_contracts as guard
     else:
         import sum2_guard_contracts as guard
-    line = (root/SOURCE_PATHS[0]).read_text()
-    arc = (root/SOURCE_PATHS[1]).read_text()
-    junction = (root/SOURCE_PATHS[2]).read_text()
+    line = _observe_text(root, SOURCE_PATHS[0],
+                         (root/SOURCE_PATHS[0]).read_text(), _operation=_operation)
+    arc = _observe_text(root, SOURCE_PATHS[1],
+                         (root/SOURCE_PATHS[1]).read_text(), _operation=_operation)
+    junction = _observe_text(root, SOURCE_PATHS[2],
+                         (root/SOURCE_PATHS[2]).read_text(), _operation=_operation)
     line_context = guard.declaration(line, '_rounded_line_axis_context', ())
     ordered(line_context, (
         'road._check_lane(section, lane)',
@@ -243,13 +267,16 @@ def verify_dependency(path, text, expected):
     require(matches, 'unchanged premise dependency changed: ' + path)
 
 
-def verify(root):
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
-    _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'])
+    _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'], **operation_args)
     require(hashlib.sha256(guard_payload).hexdigest() == record['guard_pins_after_sha256'],
             'unreviewed dependency pin successor: sum2-guard-pins.json')
     for path, transition in record['sources'].items():
-        text = accepted.predecessor_text(root, path) if path in accepted.SOURCE_PATHS else (root/path).read_text()
+        text = accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else _observe_text(root, path, (root/path).read_text(), _operation=_operation)
         if (path == 'extensions/carla/junction_bounds.mojo'
                 and source.token_sha256(text) != transition['after_token_sha256']):
             try:
@@ -257,14 +284,19 @@ def verify(root):
                     from . import full_audit_cleanup_contracts as full_audit
                 else:
                     import full_audit_cleanup_contracts as full_audit
-                text = full_audit.reviewed_text(root, path, text)
+                text = full_audit.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('reviewed cleanup source contract: unreviewed complete successor: ' + path) from error
         require(source.token_sha256(text) == transition['after_token_sha256'],
                 'unreviewed complete successor: ' + path)
     for path, expected in record['premise_dependencies'].items():
-        verify_dependency(path, (root/path).read_text(), expected['token_sha256'])
-    verify_premises(root)
-    frozen.verify(root)
-    invariant.verify(root)
+        verify_dependency(path, _observe_text(
+            root, path, (root/path).read_text(), _operation=_operation),
+            expected['token_sha256'])
+    verify_premises(root, **operation_args)
+    frozen.verify(root, **operation_args)
+    if _operation is None:
+        invariant.verify(root)
+    else:
+        invariant._verify_owned(root, _operation=_operation)
     return record

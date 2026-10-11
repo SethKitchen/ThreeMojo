@@ -151,24 +151,56 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
-def file_sha256(path):
+def file_sha256(path, *, _operation=None, _root=None):
     digest = hashlib.sha256()
-    with Path(path).open('rb') as stream:
-        for piece in iter(lambda: stream.read(1 << 20), b''):
-            digest.update(piece)
+    chunks = []
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, _root)
+
+    def checked_piece(piece):
+        # Validate EOF too: a non-builtin empty value can equal iter's sentinel.
+        if _operation is not None:
+            cleanup._operation_check(_operation, _root)
+            if type(piece) is not bytes:
+                cleanup._operation_fail(_operation, ValueError('Non-byte coverage source stream'))
+            chunks.append(piece)
+        return piece
+
+    try:
+        with Path(path).open('rb') as stream:
+            for piece in iter(lambda: checked_piece(stream.read(1 << 20)), b''):
+                digest.update(piece)
+        if _operation is not None:
+            cleanup._observe_bytes(_root, Path(path).relative_to(_root).as_posix(),
+                                   b''.join(chunks), _operation=_operation)
+    except (OSError, ValueError, TypeError) as error:
+        if _operation is not None:
+            cleanup._operation_fail(_operation, error)
+        raise
     return digest.hexdigest()
 
 
-def relative_source(root, name):
+def relative_source(root, name, *, _operation=None):
     """Accept only existing, root-contained, ordinary relative source names."""
-    relative = PurePosixPath(name)
-    if (not name or relative.is_absolute() or '..' in relative.parts
-            or relative.as_posix() != name or '\\' in name or ':' in name):
-        raise ValueError('Invalid coverage source identity: ' + repr(name))
-    path = root / name
-    if not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
-        raise ValueError('Missing or escaped coverage source: ' + name)
-    return path
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
+    try:
+        relative = PurePosixPath(name)
+        if (not name or relative.is_absolute() or '..' in relative.parts
+                or relative.as_posix() != name or '\\' in name or ':' in name):
+            raise ValueError('Invalid coverage source identity: ' + repr(name))
+        path = root / name
+        if not path.is_file() or not path.resolve().is_relative_to(root.resolve()):
+            raise ValueError('Missing or escaped coverage source: ' + name)
+        if _operation is not None:
+            cleanup._operation_check(_operation, root)
+        return path
+    except (OSError, ValueError, TypeError) as error:
+        if _operation is not None:
+            cleanup._operation_fail(_operation, error)
+        raise
 
 
 def manifest_records(raw):
@@ -611,7 +643,7 @@ DENSITY_REPAIRED_RULES = (
 )
 
 
-def _density_stdlib_unshadowed(root):
+def _density_stdlib_unshadowed(root, *, _operation=None):
     """Refuse unreviewed project std resolver surfaces, including packages.
 
     SDK payloads are bound separately. The project's standard virtualenv and
@@ -619,8 +651,13 @@ def _density_stdlib_unshadowed(root):
     A project directory symlink could hide an additional resolver surface;
     conservatively refuse it instead of following it outside the checked tree.
     """
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
     root = Path(root)
     if not root.is_dir():
+        if _operation is not None:
+            cleanup._operation_fail(_operation, ValueError('Missing coverage resolver root'))
         return False
 
     def unreadable(error):
@@ -628,18 +665,28 @@ def _density_stdlib_unshadowed(root):
 
     try:
         for directory, folders, files in os.walk(root, onerror=unreadable):
+            if _operation is not None:
+                cleanup._operation_check(_operation, root)
             base = Path(directory)
             # Refuse alternate/unknown suffixes as well as .mojo, .mojoc and
             # .mojopkg. This includes Mojo's alternate source-file suffix.
             if any(name.casefold() == 'std' or name.casefold().startswith('std.')
                    for name in (*folders, *files)):
+                if _operation is not None:
+                    cleanup._operation_fail(_operation, ValueError('Shadowed coverage std resolver'))
                 return False
             folders[:] = [name for name in folders if name not in cache_key.SKIP
                           and (base / name).relative_to(root) != Path('coverage/build')]
             if any((base / name).is_symlink() for name in folders):
+                if _operation is not None:
+                    cleanup._operation_fail(_operation, ValueError('Symlinked coverage resolver directory'))
                 return False
-    except (OSError, ValueError):
+    except (OSError, ValueError) as error:
+        if _operation is not None:
+            cleanup._operation_fail(_operation, error)
         return False
+    if _operation is not None:
+        cleanup._operation_check(_operation, root)
     return True
 
 
@@ -754,14 +801,19 @@ _CLEANUP_LOOP_ROWS = {
 }
 
 
-def _cleanup_current_bindings(root, *, include_roots=()):
+def _cleanup_current_bindings(root, *, include_roots=(), _operation=None):
     """Bind current cleanup dependencies of a transitive historical Map edge."""
     from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    stream_args = {} if _operation is None else {'_operation': _operation, '_root': root}
+    cleanup._operation_check(_operation, root)
+    if _operation is not None and include_roots != ():
+        cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
     for name in cleanup.SOURCE_PATHS:
-        path = relative_source(root, name)
-        if file_sha256(path) != cleanup.BEFORE_SHA256[name]:
+        path = relative_source(root, name, **operation_args)
+        if file_sha256(path, **stream_args) != cleanup.BEFORE_SHA256[name]:
             # A partial/mixed/unknown current view cannot produce a receipt.
-            return cleanup.proof_bindings(root, include_roots=include_roots)
+            return cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
     return {}
 
 
@@ -790,12 +842,34 @@ def _cleanup_loop_row(root, module, historical_line, expression):
     return None
 
 
-def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
+def _coverage_observe_bytes(root, name, value, *, _operation=None):
+    if _operation is None:
+        return value
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    return cleanup._observe_bytes(root, name, value, _operation=_operation)
+
+
+def _coverage_observe_text(root, name, value, *, _operation=None):
+    if _operation is None:
+        return value
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    return cleanup._observe_text(root, name, value, _operation=_operation)
+
+
+def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=None):
     """Verify fixed historical bindings without admitting arbitrary successors."""
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
+        if _operation is not None and include_roots != ():
+            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
     actual = {}
     for name, expected in bindings.items():
-        path = relative_source(root, name)
+        path = relative_source(root, name, **operation_args)
         raw = path.read_bytes()
+        if _operation is not None:
+            cleanup._observe_bytes(root, name, raw, _operation=_operation)
         digest = sha256(raw)
         if (name == DENSITY_SOURCE and expected == DENSITY_BEFORE_SHA256
                 and digest == DENSITY_AFTER_SHA256):
@@ -824,20 +898,27 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
                                       seed_count.FRONTIER_AFTER_SHA256,
                                       seed_count.SCORE_AFTER_SHA256}:
                 return None
-            predecessor = seed_count.historical_source(root).encode('utf-8')
-            if sha256(predecessor) != expected or path.read_bytes() != raw:
+            predecessor = seed_count.historical_source(root, **operation_args).encode('utf-8')
+            if sha256(predecessor) != expected or _coverage_observe_bytes(
+                    root, name, path.read_bytes(), _operation=_operation) != raw:
                 return None
-            actual.update(_cleanup_current_bindings(root, include_roots=include_roots))
+            actual.update(_cleanup_current_bindings(root, include_roots=include_roots, **operation_args))
         actual[name] = digest
     return actual
 
 
-def _historical_reviewed_nonempty_loops(root, module, *, include_roots=()):
+def _historical_reviewed_nonempty_loops(root, module, *, include_roots=(), _operation=None):
     """Return only named source-reviewed nonempty iterator proofs.
 
     A mismatch retains both outcomes. Constants require a new source review;
     they are never derived from the current files or automatically refreshed.
     """
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
+        if _operation is not None and include_roots != ():
+            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
     rule = REVIEWED_LOOP_RULES.get(module)
     if rule is None:
         return {}
@@ -846,18 +927,28 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=()):
         if module == 'extensions/carla/rtree':
             # Fail closed on any newly introduced private frontier caller.
             # This is a fixed census, not inference about arbitrary callers.
+            paths = cache_key.input_paths(Path(root))
+            if _operation is not None:
+                paths = tuple(paths)
+                cleanup._operation_known_paths(root, frozenset(
+                    path.as_posix() for path in paths if path.suffix == '.mojo'),
+                    _operation=_operation)
             callers = {
-                path.as_posix() for path in cache_key.input_paths(Path(root))
+                path.as_posix() for path in paths
                 if path.suffix == '.mojo'
                 and re.search(r'\b_nearest_(?:begin|next)\b',
-                              relative_source(root, path.as_posix()).read_text())
+                              _coverage_observe_text(root, path.as_posix(),
+                                  relative_source(root, path.as_posix(), **operation_args).read_text(),
+                                  _operation=_operation))
             }
             if callers != set(bindings):
                 return {}
-        actual = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots)
+        actual = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots, **operation_args)
         if actual is None:
             return {}
-    except (OSError, ValueError, ImportError):
+    except (OSError, ValueError, ImportError) as error:
+        if _operation is not None and isinstance(error, (OSError, UnicodeError)):
+            cleanup._operation_fail(_operation, error)
         return {}
     return {line: {
         'line': line, 'kind': kind, 'cardinality': minimum,
@@ -867,15 +958,21 @@ def _historical_reviewed_nonempty_loops(root, module, *, include_roots=()):
     } for line, kind, minimum, maximum, expression, proof_id in sites}
 
 
-def guarded_loop_proof(root, rule, *, include_roots=()):
+def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
     """Verify one explicit theorem without enabling its sibling rules."""
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
+        if _operation is not None and include_roots != ():
+            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
     module, line, kind, maximum, expression, proof_id, extras, callers = rule
     bindings = {
         name: GUARDED_LOOP_SOURCE_SHA256[name]
         for name in (module + '.mojo', *extras)
     }
     try:
-        actual_bindings = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots)
+        actual_bindings = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots, **operation_args)
         if actual_bindings is None:
             return None
         if (module == 'extensions/carla/map'
@@ -929,7 +1026,9 @@ def guarded_loop_proof(root, rule, *, include_roots=()):
                 }
                 if actual != set(expected):
                     return None
-    except (OSError, ValueError, ImportError):
+    except (OSError, ValueError, ImportError) as error:
+        if _operation is not None and isinstance(error, (OSError, UnicodeError)):
+            cleanup._operation_fail(_operation, error)
         return None
     cardinality = maximum if kind in {'literal-range', 'literal-list'} else 1
     return {
@@ -1013,7 +1112,7 @@ CONSTRUCTION_BOUNDARY_SOURCE_SHA256 = {'extensions/__init__.mojo': '5f3ace6c2d61
 CONSTRUCTION_BOUNDARY_LINE = 4055
 
 
-def _construction_boundary_callers(root):
+def _construction_boundary_callers(root, *, _operation=None):
     """Resolve Map references, not a repository-wide same-name count.
 
     Every member reference outside the pinned Map is unvalidated. Bare calls
@@ -1023,10 +1122,21 @@ def _construction_boundary_callers(root):
     declaration cannot replace the concrete Map method or establish its proof.
     """
     from carla_lane_oracle import source_contracts, sum2_guard_contracts
-    for path in cache_key.input_paths(Path(root)):
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    paths = cache_key.input_paths(Path(root))
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
+        paths = tuple(paths)
+        cleanup._operation_known_paths(root, frozenset(
+            path.as_posix() for path in paths if path.suffix == '.mojo'),
+            _operation=_operation)
+    for path in paths:
         if path.suffix != '.mojo' or path.as_posix() == 'extensions/carla/map.mojo':
             continue
-        text = relative_source(root, path.as_posix()).read_text()
+        text = relative_source(root, path.as_posix(), **operation_args).read_text()
+        if _operation is not None:
+            cleanup._observe_text(root, path.as_posix(), text, _operation=_operation)
         if '_add_segment' not in text:
             continue
         tokens = [token for token in source_contracts.tokens(text)
@@ -1056,10 +1166,17 @@ def _construction_boundary_callers(root):
     return True
 
 
-def construction_boundary_loops(root, *, include_roots=()):
+def construction_boundary_loops(root, *, include_roots=(), _operation=None):
     """Admit only the exact final endpoint and the reviewed typed call graph."""
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    stream_args = {} if _operation is None else {'_operation': _operation, '_root': root}
+    if _operation is not None:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        cleanup._operation_check(_operation, root)
+        if _operation is not None and include_roots != ():
+            cleanup._operation_fail(_operation, ValueError('Unowned coverage include roots'))
     try:
-        actual = {name: file_sha256(relative_source(root, name))
+        actual = {name: file_sha256(relative_source(root, name, **operation_args), **stream_args)
                   for name in CONSTRUCTION_BOUNDARY_SOURCE_SHA256}
         from carla_lane_oracle import seed_count_contracts
         # Preserve the immutable frontier table and verify the complete new
@@ -1073,22 +1190,22 @@ def construction_boundary_loops(root, *, include_roots=()):
         cleanup_bindings = {}
         if actual != expected:
             from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
-            cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots)
-            edges = cleanup.verified_edges(root, include_roots=include_roots)
+            cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
+            edges = cleanup.verified_edges(root, include_roots=include_roots, **operation_args)
             for name, edge in edges.items():
                 if name in expected and expected[name] == edge['before_sha256']:
                     expected[name] = edge['after_sha256']
         if actual != expected:
             return {}
-        if seed_count_contracts.dependency_inventory(root) != set(actual):
+        if seed_count_contracts.dependency_inventory(root, **operation_args) != set(actual):
             return {}
         # Preserve the final endpoint's independently bound source/data edge.
         if score:
-            seed_count_contracts.verify_score(root)
+            seed_count_contracts.verify_score(root, **operation_args)
             actual.update(seed_count_contracts.SCORE_TESTS)
         else:
             seed_count_contracts.verify_frontier(root)
-        record = seed_count_contracts.read_record(root)
+        record = seed_count_contracts.read_record(root, **operation_args)
         actual.update(cleanup_bindings)
         actual[seed_count_contracts.MIGRATION] = seed_count_contracts.MIGRATION_SHA256
         for group in ('historical_records', 'unchanged_correctness_tests',
@@ -1097,10 +1214,12 @@ def construction_boundary_loops(root, *, include_roots=()):
         # Include generated-source roots when validating a receipt, and forbid
         # local std shadows changing List/Int semantics at either resolution root.
         for location in (root, *include_roots):
-            if (not _density_stdlib_unshadowed(location)
-                    or not _construction_boundary_callers(location)):
+            if (not _density_stdlib_unshadowed(location, **operation_args)
+                    or not _construction_boundary_callers(location, **operation_args)):
                 return {}
-    except (OSError, ValueError, ImportError, UnicodeError):
+    except (OSError, ValueError, ImportError, UnicodeError) as error:
+        if _operation is not None and isinstance(error, (OSError, UnicodeError)):
+            cleanup._operation_fail(_operation, error)
         return {}
     return {line: {
         'line': line,
@@ -1114,23 +1233,42 @@ def construction_boundary_loops(root, *, include_roots=()):
 
 def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
-    result = _historical_reviewed_nonempty_loops(root, module, include_roots=include_roots)
-    if module == 'renderers/renderer':
-        result.update(strand_cap_loops(root, include_roots=include_roots))
-    if module == 'extensions/carla/map':
-        result.update(construction_boundary_loops(root, include_roots=include_roots))
-    if module + '.mojo' == DENSITY_SOURCE:
-        result.update(repaired_density_loops(root, include_roots=include_roots))
-    for rule in GUARDED_LOOP_RULES:
-        if rule[0] != module:
-            continue
-        proof = guarded_loop_proof(root, rule, include_roots=include_roots)
-        if proof is None:
-            continue
-        if proof['line'] in result:
-            raise ValueError('Conflicting reviewed loop proof: ' + module)
-        result[proof['line']] = proof
-    return result
+    _operation, owns_operation = None, False
+    coherence_errors = ()
+    bounded = include_roots == () and module in ('extensions/carla/map', 'extensions/carla/rtree')
+    if bounded:
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        coherence_errors = (cleanup._OperationCoherenceError,)
+    try:
+        if bounded:
+            kind = 'map_loops' if module == 'extensions/carla/map' else 'rtree_loops'
+            _operation, owns_operation = cleanup._operation_enter(
+                root, kind, module=module, include_roots=include_roots)
+        operation_args = {} if _operation is None else {'_operation': _operation}
+        result = _historical_reviewed_nonempty_loops(root, module, include_roots=include_roots, **operation_args)
+        if module == 'renderers/renderer':
+            result.update(strand_cap_loops(root, include_roots=include_roots))
+        if module == 'extensions/carla/map':
+            result.update(construction_boundary_loops(root, include_roots=include_roots, **operation_args))
+        if module + '.mojo' == DENSITY_SOURCE:
+            result.update(repaired_density_loops(root, include_roots=include_roots))
+        for rule in GUARDED_LOOP_RULES:
+            if rule[0] != module:
+                continue
+            proof = guarded_loop_proof(root, rule, include_roots=include_roots, **operation_args)
+            if proof is None:
+                continue
+            if proof['line'] in result:
+                raise ValueError('Conflicting reviewed loop proof: ' + module)
+            result[proof['line']] = proof
+        if owns_operation:
+            _operation.finish(root)
+        return result
+    except coherence_errors:
+        return {}
+    finally:
+        if owns_operation:
+            _operation.close()
 
 
 def _counts(records):

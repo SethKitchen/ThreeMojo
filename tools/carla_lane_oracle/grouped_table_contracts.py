@@ -33,13 +33,23 @@ def verify_text(module, geometry):
     if not all(math.isfinite(x) and -1<x<1 for x in n):raise ValueError('Invalid stored node')
     return {'status':'PASS','consumer_sha256':EXPECTED,'runtime_arithmetic':'unchanged after impossible table refusals','coverage_waiver':False}
 
-def verify(root):
+def verify(root, *, _operation=None):
     root=Path(root)
     text=(root/MODULE).read_text()
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        text = full_audit._observe_text(root, MODULE, text, _operation=_operation)
     if token_sha256(text)!=TOKEN_SHA256:
         if __package__:
             from . import selection_finiteness_contracts as selection
         else:
             import selection_finiteness_contracts as selection
-        text=selection.predecessor_text(root,MODULE)
-    return verify_text(text,(root/'extensions/carla/geometry.mojo').read_text())
+        text=selection.predecessor_text(root,MODULE, _operation=_operation)
+    geometry = (root/'extensions/carla/geometry.mojo').read_text()
+    if _operation is not None:
+        geometry = full_audit._observe_text(
+            root, 'extensions/carla/geometry.mojo', geometry, _operation=_operation)
+    return verify_text(text, geometry)

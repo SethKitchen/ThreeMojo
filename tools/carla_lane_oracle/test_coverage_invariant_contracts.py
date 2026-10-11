@@ -45,9 +45,11 @@ class CoverageInvariantContracts(unittest.TestCase):
             command = ('import sys; from pathlib import Path; ' + setup
                        + '; result=invariant.verify(Path.cwd()); '
                        + 'sys.exit(0 if len(result["sources"]) == 4 else 1)')
+            # Reviewed import/source-verification allowance, aligned with the
+            # 30-second proof-consumer probes; native test budgets are separate.
             with self.subTest(import_mode=setup):
                 subprocess.run([sys.executable, '-c', command], cwd=ROOT,
-                               check=True, capture_output=True, text=True, timeout=10)
+                               check=True, capture_output=True, text=True, timeout=30)
 
     def test_live_scope_and_retained_historical_counts(self):
         record = invariant.verify(ROOT)

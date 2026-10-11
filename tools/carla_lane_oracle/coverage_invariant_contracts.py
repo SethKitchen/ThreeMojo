@@ -74,26 +74,49 @@ def predecessor_pins(root, filename):
             'historical pin reconstruction failed: ' + filename)
     return original
 
-def verify(root):
-    record = read_record(root)
-    predecessor_pin_pair(root)
-    for path, item in record['sources'].items():
-        matches = source.token_sha256((root/path).read_text()) == item['after_token_sha256']
-        if not matches:
-            if __package__:
-                from . import coverage_followup_contracts as followup
-            else:
-                import coverage_followup_contracts as followup
-            matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'])
-        require(matches, 'complete successor changed: ' + path)
-    curve.verify(root)
-    grouped.verify(root)
+def verify(root, *, _operation=None):
     if __package__:
-        from . import lane_control_contracts as lane
+        from . import full_audit_cleanup_contracts as full_audit
     else:
-        import lane_control_contracts as lane
-    lane.verify(root)
-    return record
+        import full_audit_cleanup_contracts as full_audit
+    _operation, _owns_operation = full_audit._operation_enter(root, 'invariant', _operation)
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    try:
+        with source.lexical_memo_scope():
+            record = read_record(root)
+            (predecessor_pin_pair(root) if _operation is None else
+             _predecessor_pin_pair(root, _operation=_operation))
+            for path, item in record['sources'].items():
+                matches = source.token_sha256(full_audit._observe_text(root, path, (root/path).read_text(), _operation=_operation)) == item['after_token_sha256']
+                if not matches:
+                    if __package__:
+                        from . import coverage_followup_contracts as followup
+                    else:
+                        import coverage_followup_contracts as followup
+                    matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'], **operation_args)
+                require(matches, 'complete successor changed: ' + path)
+            curve.verify(root, **operation_args)
+            grouped.verify(root, **operation_args)
+            if __package__:
+                from . import lane_control_contracts as lane
+            else:
+                import lane_control_contracts as lane
+            lane.verify(root, **operation_args)
+            if _owns_operation:
+                _operation.finish(root)
+            return record
+    finally:
+        if _owns_operation:
+            _operation.close()
+
+
+def _verify_owned(root, *, _operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_borrow(_operation, root, 'invariant')
+    return verify(root, _operation=_operation)
 
 
 def _pin_predecessor(payload, record, filename):
@@ -117,6 +140,20 @@ def _pin_predecessor(payload, record, filename):
 
 
 def predecessor_pin_pair(root):
+    """Reconstruct the independently verified historical pin pair.
+
+    Args:
+        root: Root whose physical records and current sources must be checked.
+    Returns:
+        Runtime then guard historical pin bytes, without borrowed authority.
+    Raises:
+        ValueError: A record, source, or predecessor reconstruction is invalid.
+        OSError: A required physical input cannot be read.
+    """
+    return _predecessor_pin_pair(root)
+
+
+def _predecessor_pin_pair(root, *, _operation=None):
     """Reconstruct the fixed pair from two separately checked record reads.
 
     Args:
@@ -138,7 +175,8 @@ def predecessor_pin_pair(root):
         from . import coverage_followup_contracts as followup
     else:
         import coverage_followup_contracts as followup
-    runtime_payload, guard_payload = followup.predecessor_pin_pair(root)
+    runtime_payload, guard_payload = (followup.predecessor_pin_pair(root) if _operation is None else
+                                    followup._predecessor_pin_pair(root, _operation=_operation))
     runtime_predecessor = _pin_predecessor(runtime_payload, runtime_item, filenames[0])
     guard_predecessor = _pin_predecessor(guard_payload, guard_item, filenames[1])
     return runtime_predecessor, guard_predecessor

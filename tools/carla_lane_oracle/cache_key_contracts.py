@@ -59,30 +59,44 @@ def inventory_entry(text):
     return {'routing': guard.declaration_routing(text), 'uses': uses} if uses else None
 
 
-def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None):
+def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=None, _operation=None):
+    operation_args = {} if _operation is None else {'_operation': _operation}
     # Reuse the established production boundary, including nested namespaces
     # and __init__ re-exports. Do not normalize identifier ordinals.
     if __package__:
         from . import sum2_guard_contracts as guard
     else:
         import sum2_guard_contracts as guard
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        full_audit._operation_check(_operation, root)
     if _inputs is not None or _input_owner is not None:
         if __package__:
             from . import full_audit_cleanup_contracts as full_audit
         else:
             import full_audit_cleanup_contracts as full_audit
-        require(type(_inputs) is full_audit._CacheInputs and _input_owner is not None,
+        require(type(_inputs) in (full_audit._CacheInputs, full_audit._BorrowedCacheInputs)
+                and _input_owner is not None,
                 'invalid owned inventory inputs')
         _inputs._check(_input_owner, root)
     paths = (guard.production_mojo_paths(root) if _inputs is None else
              (Path(root) / path for path in _inputs.production_paths(_input_owner, root)))
+    if _inputs is None and _operation is not None:
+        paths = full_audit._operation_production_paths(root, paths, _operation=_operation)
     result = {}
     for path in sorted(paths):
-        rel = path.relative_to(root)
+        rel = (full_audit._relative_path(path, root)
+               if _inputs is not None or _operation is not None else path.relative_to(root))
         if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
             continue
         if _inputs is None:
             text = path.read_text()
+            if _operation is not None:
+                text = full_audit._observe_text(root, rel.as_posix(), text,
+                        _operation=_operation, supplied=rel.as_posix() == 'extensions/carla/map.mojo')
         elif rel.as_posix() == 'extensions/carla/map.mojo':
             # Keep the supplied text observation distinct from physical bytes.
             try:
@@ -114,6 +128,8 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                 import seed_count_contracts as seed_count
             if _inputs is None:
                 physical = path.read_bytes()
+                if _operation is not None:
+                    physical = full_audit._observe_bytes(root, rel.as_posix(), physical, _operation=_operation)
             physical_digest = hashlib.sha256(physical).hexdigest()
             supplied_tokens = source.token_sha256(text)
             if (physical_digest == seed_count.SCORE_AFTER_SHA256
@@ -125,8 +141,10 @@ def inventory(root, *, verified_lane_source=None, _inputs=None, _input_owner=Non
                 # Qualify the actual helper/caller and dependencies before
                 # mapping identifier ordinals to the exact preceding graph.
                 if _inputs is None:
-                    seed_count.verify_score(root)
+                    seed_count.verify_score(root, **operation_args)
                     after = path.read_bytes()
+                    if _operation is not None:
+                        after = full_audit._observe_bytes(root, rel.as_posix(), after, _operation=_operation)
                 else:
                     seed_count.verify_score(root, _inputs=_inputs, _input_owner=_input_owner)
                     after = _inputs.observe_bytes(_input_owner, root, rel.as_posix())
@@ -167,8 +185,19 @@ def reverse_exact(text, record):
     return text
 
 
-def verify(root):
+def verify(root, *, _operation=None):
     root = Path(root)
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        full_audit._operation_check(_operation, root)
+        if not full_audit._cache_verify_frame(sys._getframe()):
+            # An unsupported alias remains a wholly fresh independent call.
+            _operation = None
+            operation_args = {}
     record = read_record(root)
     for name, expected in record['preserved_records'].items():
         require(hashlib.sha256((root / 'tools/carla_lane_oracle' / name).read_bytes()).hexdigest() == expected,
@@ -177,6 +206,8 @@ def verify(root):
     _inputs = None
     try:
         current = (root / MODULE).read_text()
+        if _operation is not None:
+            current = full_audit._observe_text(root, MODULE, current, _operation=_operation, supplied=True)
         if source.token_sha256(current) != AFTER_TOKEN_SHA256:
             try:
                 if __package__:
@@ -184,11 +215,11 @@ def verify(root):
                 else:
                     import full_audit_cleanup_contracts as full_audit
                 if full_audit._cache_verify_frame(sys._getframe()):
-                    current, _inputs = full_audit._cache_lane_inputs(root, current, _input_owner)
+                    current, _inputs = full_audit._cache_lane_inputs(root, current, _input_owner, **operation_args)
                 else:
                     # Unsupported import aliases preserve the complete fresh
                     # public path; they cannot acquire or borrow an input view.
-                    current = full_audit.reviewed_text(root, MODULE, current)
+                    current = full_audit.reviewed_text(root, MODULE, current, **operation_args)
             except (ValueError, OSError) as error:
                 raise ContractError('cache-key successor: ' + str(error)) from error
         require(source.token_sha256(current) == AFTER_TOKEN_SHA256,
@@ -197,8 +228,8 @@ def verify(root):
         # established comment/whitespace compatibility of the historical gates.
         # Full tokens retain indentation, boundaries, qualifiers and operations.
         reverse_exact(record['after'], record)
-        observed = (inventory(root, verified_lane_source=current) if _inputs is None else
-                    inventory(root, verified_lane_source=current, _inputs=_inputs, _input_owner=_input_owner))
+        observed = (inventory(root, verified_lane_source=current, **operation_args) if _inputs is None else
+                    inventory(root, verified_lane_source=current, _inputs=_inputs, _input_owner=_input_owner, **operation_args))
         require(observed == record['inventory'],
                 'production helper/caller inventory changed')
         # Complete module tokens retain imports, builtin name resolution, types,
@@ -211,26 +242,32 @@ def verify(root):
             _inputs.close(_input_owner)
 
 
-def predecessor_source(root):
-    record = verify(root)
+def predecessor_source(root, *, _operation=None):
+    record = verify(root, **({} if _operation is None else {'_operation': _operation}))
     return reverse_exact(record['after'], record)
 
 
-def reviewed_text(root, path, text):
+def reviewed_text(root, path, text, *, _operation=None):
     """Only this named module and this verified edge can obtain a projection."""
     if __package__:
         from . import full_audit_cleanup_contracts as full_audit
     else:
         import full_audit_cleanup_contracts as full_audit
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is not None:
+        full_audit._operation_check(_operation, root)
     if str(path) != MODULE:
-        return full_audit.reviewed_text(root, path, text) if str(path) in full_audit.SOURCE_PATHS else text
+        return full_audit.reviewed_text(root, path, text, **operation_args) if str(path) in full_audit.SOURCE_PATHS else text
     if source.token_sha256(text) == BEFORE_TOKEN_SHA256:
         return text
-    require(source.token_sha256(text) == source.token_sha256((Path(root)/MODULE).read_text()),
+    observed = (Path(root)/MODULE).read_text()
+    if _operation is not None:
+        observed = full_audit._observe_text(root, MODULE, observed, _operation=_operation, supplied=True)
+    require(source.token_sha256(text) == source.token_sha256(observed),
             'unreviewed supplied lane source')
     # predecessor_source performs fresh complete live admission before either
     # historical edge. Do not qualify the same source twice here.
-    return predecessor_source(root)
+    return predecessor_source(root, **operation_args)
 
 
 if __name__ == '__main__':

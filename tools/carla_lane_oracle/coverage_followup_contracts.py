@@ -38,6 +38,24 @@ PROTECTED_INPUTS = (*cache_key.PROTECTED_INPUTS, MIGRATION, *SOURCE_PATHS,
     'tests/_reference_roundoff_selection.mojo',
     'tests/_reference_grouped_selection.mojo')
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(root, path, text, _operation=_operation)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError('coverage followup successor: ' + message)
@@ -77,11 +95,17 @@ def predecessor_pins(root, filename):
             'historical pin reconstruction failed')
     return payload
 
-def verify(root):
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
     record = read_record(root)
-    predecessor_pin_pair(root)
+    operation_args = {} if _operation is None else {'_operation': _operation}
+    if _operation is None:
+        predecessor_pin_pair(root)
+    else:
+        _predecessor_pin_pair(root, _operation=_operation)
     for path,item in record['sources'].items():
-        require(source.token_sha256(accepted.predecessor_text(root, path) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, (root/path).read_text())) == item['after_token_sha256'],
+        require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],
                 'complete successor changed: ' + path)
     if __package__:
         from . import raw_cut_inverse_contracts as raw
@@ -95,11 +119,13 @@ def verify(root):
         import envelope_budget_contracts as budget
         import lane_order_contracts as order
         import selection_finiteness_contracts as selection
-    raw.verify(root); moment.verify(root); budget.verify(root); order.verify(root); selection.verify(root)
+    raw.verify(root, **operation_args); moment.verify(root, **operation_args); budget.verify(root, **operation_args); order.verify(root, **operation_args); selection.verify(root, **operation_args)
     return record
 
-def accepts_predecessor_source(root,path,expected):
-    record = verify(root)
+def accepts_predecessor_source(root,path,expected, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    record = verify(root, **({} if _operation is None else {'_operation': _operation}))
     return path in record['sources'] and record['sources'][path]['before_token_sha256'] == expected
 
 
@@ -133,6 +159,22 @@ def predecessor_pin_pair(root):
         ValueError: A record, inner qualification, or pin reconstruction fails.
         OSError: A required input cannot be read.
     """
+    return _predecessor_pin_pair(root)
+
+
+def _predecessor_pin_pair(root, *, _operation=None):
+    """Reconstruct the fixed pair from two separately checked record reads.
+
+    Args:
+        root: Root whose record observations precede one fresh inner pair.
+    Returns:
+        A tuple of runtime then guard historical bytes, with no admission data.
+    Raises:
+        ValueError: A record, inner qualification, or pin reconstruction fails.
+        OSError: A required input cannot be read.
+    """
+    if _operation is not None:
+        _check_operation(root, _operation)
     filenames = ('runtime-source-pins.json', 'sum2-guard-pins.json')
     runtime_record = read_record(root)
     require(tuple(runtime_record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
@@ -140,7 +182,10 @@ def predecessor_pin_pair(root):
     guard_record = read_record(root)
     require(tuple(guard_record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
     guard_item = guard_record['pin_files'][filenames[1]]
-    runtime_payload, guard_payload = accepted.predecessor_pin_pair(root)
+    if _operation is None:
+        runtime_payload, guard_payload = accepted.predecessor_pin_pair(root)
+    else:
+        runtime_payload, guard_payload = accepted._predecessor_pin_pair(root, _operation=_operation)
     runtime_predecessor = _pin_predecessor(runtime_payload, runtime_item, filenames[0])
     guard_predecessor = _pin_predecessor(guard_payload, guard_item, filenames[1])
     return runtime_predecessor, guard_predecessor

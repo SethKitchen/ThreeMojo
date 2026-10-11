@@ -14,13 +14,35 @@ RECORD_SHA256 = '73d95d594e740205bad4cd900288a68d9f82897474fdc33e4d6043a15679017
 PREDECESSOR_SHA256 = '33d33ba0e481e3eca3b17ae0d02457ab53bae906430b0dca58abcfa876756315'
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, supplied=False):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, supplied=supplied)
+
+
 def require(ok, message):
     if not ok:
         raise RuntimeError(message)
 
 
-def verify(root):
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
     root = Path(root)
+    operation_args = {} if _operation is None else {'_operation': _operation}
     path = root / 'tools/carla_lane_oracle/lane-control-migration.json'
     raw = path.read_bytes()
     require(hashlib.sha256(raw).hexdigest() == RECORD_SHA256,
@@ -31,13 +53,13 @@ def verify(root):
             'lane-control predecessor changed')
     require(hashlib.sha256(record['after_source'].encode()).hexdigest()
             == record['after_sha256'], 'lane-control successor record changed')
-    current = (root / record['module']).read_text()
+    current = _observe_text(root, record['module'], (root / record['module']).read_text(), _operation=_operation)
     if token_sha256(current) != token_sha256(record['after_source']):
         if __package__:
             from . import lane_order_contracts as order
         else:
             import lane_order_contracts as order
-        current = order.predecessor_source(root)
+        current = order.predecessor_source(root, **operation_args)
 
     require(token_sha256(current) == token_sha256(record['after_source']),
             'lane-control successor module changed')
@@ -47,24 +69,28 @@ def verify(root):
                 == token_sha256(item['before']), 'lane-control before declaration drift')
         require(token_sha256(declaration(current, name, ()))
                 == token_sha256(item['after']), 'lane-control after declaration drift')
-        test = (root / 'tests/test_carla_lane_control_successor.mojo').read_text()
+        test = _observe_text(root, 'tests/test_carla_lane_control_successor.mojo',
+                             (root / 'tests/test_carla_lane_control_successor.mojo').read_text(),
+                             _operation=_operation)
         frozen = declaration(test, '_reference' + name, ())
         expected = item['before'].replace('def ' + name + '(', 'def _reference' + name + '(', 1)
         require(token_sha256(frozen) == token_sha256(expected),
                 'lane-control frozen predecessor changed')
     for item in record['premises']:
-        actual = declaration((root / item['path']).read_text(), item['name'], ())
+        actual = declaration(_observe_text(root, item['path'], (root / item['path']).read_text(), _operation=_operation), item['name'], ())
         require(token_sha256(actual) == token_sha256(item['source']),
                 'lane-control guarded premise changed: ' + item['name'])
     for rel, expected in record['producer_modules'].items():
-        require(token_sha256((root / rel).read_text()) == token_sha256(expected),
+        require(token_sha256(_observe_text(root, rel, (root / rel).read_text(), _operation=_operation)) == token_sha256(expected),
                 'lane-control IEEE producer module changed: ' + rel)
     return record
 
 
-def accepts_predecessor(root, path, name, owner, expected_source):
+def accepts_predecessor(root, path, name, owner, expected_source, *, _operation=None):
     """Delegate only an exact historical declaration to this reviewed successor."""
-    record = verify(root)
+    if _operation is not None:
+        _check_operation(root, _operation)
+    record = verify(root, **({} if _operation is None else {'_operation': _operation}))
     if owner:
         return False
     for item in record['declarations']:

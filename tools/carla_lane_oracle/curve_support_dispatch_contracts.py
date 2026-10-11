@@ -22,6 +22,25 @@ PROTECTED_INPUTS = (MIGRATION, *SOURCE_PATHS, 'extensions/carla/curve_interval.m
                     'extensions/carla/map.mojo', 'extensions/carla/lane_refinement.mojo')
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, supplied=False):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, supplied=supplied)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError('curve support/dispatch contract: ' + message)
@@ -38,9 +57,11 @@ def read_record(root):
 
 
 
-def reviewed_source(root, path, expected):
+def reviewed_source(root, path, expected, *, _operation=None):
     """Compose the exact raw inverse theorem with this retained outer proof."""
-    text = (root/path).read_text()
+    if _operation is not None:
+        _check_operation(root, _operation)
+    text = _observe_text(root, path, (root/path).read_text(), _operation=_operation)
     if source.token_sha256(text) == expected:
         return text
     require(path == 'extensions/carla/curve_sample_dispatch.mojo',
@@ -49,26 +70,29 @@ def reviewed_source(root, path, expected):
         from . import raw_cut_inverse_contracts as raw
     else:
         import raw_cut_inverse_contracts as raw
-    record = raw.verify(root)
+    record = raw.verify(root, **({} if _operation is None else {'_operation': _operation}))
     require(record['before_token_sha256'] == expected, 'raw predecessor edge mismatch')
     return record['before_source']
 
-def verify_premises(root):
+def verify_premises(root, *, _operation=None):
     # Deliberately independent of complete-module successor digest checks.
     # Bind operation graphs, local guards, full caller bodies, and declarations.
+    if _operation is not None:
+        _check_operation(root, _operation)
     if __package__:
         from . import sum2_guard_contracts as guard
     else:
         import sum2_guard_contracts as guard
     record = read_record(root)
+    operation_args = {} if _operation is None else {'_operation': _operation}
     for path, item in record['sources'].items():
-        require(guard.significant(reviewed_source(root,path,item['after_token_sha256'])) ==
+        require(guard.significant(reviewed_source(root,path,item['after_token_sha256'], **operation_args)) ==
                 guard.significant(item['after_source']), 'successor operations changed: ' + path)
     for path, item in record['premise_modules'].items():
-        require(guard.significant((root/path).read_text()) ==
+        require(guard.significant(_observe_text(root, path, (root/path).read_text(), _operation=_operation)) ==
                 guard.significant(item['source']), 'interval/environment premise changed: ' + path)
     for item in record['premise_functions']:
-        text = (root/item['path']).read_text()
+        text = _observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation)
         actual = guard.declaration(text, item['name'], tuple(item['owner']))
         matched = guard.significant(actual) == guard.significant(item['source'])
         if not matched and (item['path'], item['name'], tuple(item['owner'])) == (
@@ -78,7 +102,7 @@ def verify_premises(root):
                     from . import seed_count_contracts as seed_count
                 else:
                     import seed_count_contracts as seed_count
-                predecessor = seed_count.reviewed_text(root, item['path'], text)
+                predecessor = seed_count.reviewed_text(root, item['path'], text, **operation_args)
                 actual = guard.declaration(predecessor, item['name'], ())
                 matched = guard.significant(actual) == guard.significant(item['source'])
             except (ValueError, OSError) as error:
@@ -90,23 +114,26 @@ def verify_premises(root):
                 else:
                     import lane_control_contracts as lane
                 matched = lane.accepts_predecessor(root, item['path'], item['name'],
-                                                  tuple(item['owner']), item['source'])
+                                                  tuple(item['owner']), item['source'], **operation_args)
             except RuntimeError as error:
                 require(False, 'reviewed lane caller premise changed: ' + str(error))
         require(matched, 'index or guarded caller premise changed: ' + item['name'])
     for item in record['reference_functions']:
-        actual = guard.declaration((root/item['path']).read_text(), item['name'], ())
+        actual = guard.declaration(_observe_text(root, item['path'], (root/item['path']).read_text(), _operation=_operation), item['name'], ())
         require(source.token_sha256(actual) == item['token_sha256'],
                 'native predecessor reference changed: ' + item['name'])
     return record
 
 
-def verify(root):
+def verify(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
     record = read_record(root)
+    operation_args = {} if _operation is None else {'_operation': _operation}
     for path, item in record['sources'].items():
-        require(source.token_sha256(reviewed_source(root,path,item['after_token_sha256'])) == item['after_token_sha256'],
+        require(source.token_sha256(reviewed_source(root,path,item['after_token_sha256'], **operation_args)) == item['after_token_sha256'],
                 'complete successor changed: ' + path)
-    verify_premises(root)
+    verify_premises(root, **operation_args)
     return record
 
 

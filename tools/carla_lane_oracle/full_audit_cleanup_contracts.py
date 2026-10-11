@@ -14,7 +14,7 @@ import io
 import json
 import types
 import os
-from pathlib import Path
+from pathlib import Path, PosixPath
 import stat
 import struct
 import sys
@@ -120,8 +120,8 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
- 'tools/carla_lane_oracle/source_contracts.py': '62817c97a3dd0f7a2fd6d30caf6ab3441ae455968bd2192a963570750547c3fd',
- 'tools/carla_lane_oracle/sum2_guard_contracts.py': '328f0d8313d0a0f5f82b6ad276db29515dff1c4a911a6096d4d39d623ee0e017'}
+ 'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
+ 'tools/carla_lane_oracle/sum2_guard_contracts.py': '870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -733,11 +733,32 @@ def _regular(root, relative):
     return path
 
 
+def _relative_path(path, root):
+    """Accelerate ordinary POSIX lexical prefixes; defer uncertain layouts."""
+    if (os.name == 'posix' and type(root) is PosixPath
+            and type(path) is PosixPath):
+        # Path can retain lazy str-subclass payloads. Inspect only builtin
+        # storage before parsing; unsupported pathlib layouts use the fallback.
+        root_raw = getattr(root, '_raw_paths', None)
+        path_raw = getattr(path, '_raw_paths', None)
+        if (type(root_raw) is list and type(path_raw) is list
+                and all(type(part) is str for part in root_raw)
+                and all(type(part) is str for part in path_raw)):
+            root_parts = root.parts
+            path_parts = path.parts
+            if (root_parts and path_parts
+                    and root_parts[0] == path_parts[0] == '/'
+                    and '..' not in root_parts and '..' not in path_parts
+                    and path_parts[:len(root_parts)] == root_parts):
+                return PosixPath(*path_parts[len(root_parts):])
+    return path.relative_to(root)
+
+
 def inventory(root, *, _snapshots=None, _production=None):
     """Fresh whole-production census, including new packages and re-exports."""
     result = {}
     for path in sorted(guard.production_mojo_paths(Path(root))):
-        relative = path.relative_to(root).as_posix()
+        relative = _relative_path(path, root).as_posix()
         if _production is not None:
             _production.add(relative)
         path = _regular(root, relative)
@@ -814,12 +835,12 @@ def resolver_unshadowed(root, paths):
     inert = {'docs/wiki/Math.md', 'docs/wiki/Units.md', 'docs/wiki/Extensions.md'}
     try:
         for folder, directories, files in os.walk(root, followlinks=False):
-            relative_dir = Path(folder).relative_to(root).as_posix()
+            relative_dir = _relative_path(Path(folder), root).as_posix()
             directories[:] = [name for name in directories if name not in SKIP
                               and (Path(relative_dir) / name).as_posix() != 'coverage/build']
             for name in directories + files:
                 path = Path(folder) / name
-                relative = path.relative_to(root).as_posix()
+                relative = _relative_path(path, root).as_posix()
                 folded = relative.casefold()
                 stem = str(Path(relative).with_suffix('')).casefold()
                 # Namespace roots remain protected at every actual lookup root.
@@ -854,6 +875,19 @@ def native_support_mapping(root, *, raw=None):
     return {path: list(values) for path, values in ast.literal_eval(entries[0].value).items()}
 
 
+def _different_alias_leaf(filename, expected_names):
+    """Reject only lexical filenames that cannot match any owner alias."""
+    if (os.name != 'posix' or type(filename) is not str
+            or type(__file__) is not str
+            or not filename.startswith('/') or not __file__.startswith('/')):
+        return False
+    leaf = filename.rsplit('/', 1)[-1]
+    core_leaf = __file__.rsplit('/', 1)[-1]
+    if leaf in ('', '.', '..') or core_leaf in ('', '.', '..'):
+        return False
+    return leaf not in expected_names
+
+
 def _cache_verify_frame(frame, *, include_aliases=False):
     """Recognize supported owners; aliases may only block outer borrowing."""
     name = (__package__ + '.cache_key_contracts') if __package__ else 'cache_key_contracts'
@@ -870,6 +904,8 @@ def _cache_verify_frame(frame, *, include_aliases=False):
     # An importlib alias can run the public fresh path without being registered
     # in sys.modules. It is still a distinct operation, never an outer borrower.
     namespace = frame.f_globals if frame is not None else {}
+    if include_aliases is True and _different_alias_leaf(namespace.get('__file__'), ('cache_key_contracts.py',)):
+        return False
     return (include_aliases and type(namespace.get('__file__')) is str
             and Path(namespace['__file__']).absolute() == Path(__file__).absolute().with_name('cache_key_contracts.py')
             and frame.f_code is _live_function_code(namespace.get('verify')))
@@ -1079,7 +1115,576 @@ class _CacheInputs:
         raise ContractError('full-audit cleanup successor: cache input views cannot be serialized')
 
 
-def _cache_lane_inputs(root, supplied_text, owner):
+class _OperationCoherenceError(ContractError):
+    """An observed input/context failure invalidates the enclosing operation."""
+
+
+def _operation_fail(operation, error):
+    if operation is None:
+        raise error
+    if type(operation) is _InvariantInputs:
+        operation._invalidate(error)
+    if isinstance(error, _OperationCoherenceError):
+        raise error
+    failure = _OperationCoherenceError(str(error))
+    if hasattr(error, 'source_path'):
+        failure.source_path = error.source_path
+    raise failure from error
+
+
+def _owner_module(kind):
+    if kind in ('map_loops', 'rtree_loops'):
+        return None
+    name = {'invariant': 'coverage_invariant_contracts',
+            'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
+    return sys.modules.get((__package__ + '.' if __package__ else '') + name) if name else None
+
+
+def _operation_frame_kind(frame, *, include_aliases=False):
+    if frame is None:
+        return None
+    namespace = frame.f_globals
+    filename = namespace.get('__file__')
+    # Pure negative filter only for exact builtin absolute spellings and plain
+    # functions. Relative paths, decorated/cyclic/exotic values keep full checks.
+    if (type(filename) is str and filename.startswith('/')
+            and type(__file__) is str and __file__.startswith('/')):
+        candidates = (namespace.get('verify'), namespace.get('reviewed_nonempty_loops'))
+        if all(value is None or (type(value) is types.FunctionType
+                and '__wrapped__' not in value.__dict__
+                and frame.f_code is not value.__code__) for value in candidates):
+            return None
+    for kind in ('invariant', 'winner', 'border'):
+        module = _owner_module(kind)
+        if (module is not None and namespace is vars(module)
+                and frame.f_code is _live_function_code(getattr(module, 'verify', None))):
+            return kind
+    for name in ('coverage_loop_proofs', 'tools.coverage_loop_proofs'):
+        module = sys.modules.get(name)
+        if (module is not None and namespace is vars(module)
+                and frame.f_code is _live_function_code(getattr(module, 'reviewed_nonempty_loops', None))):
+            return {'extensions/carla/map': 'map_loops',
+                    'extensions/carla/rtree': 'rtree_loops'}.get(frame.f_locals.get('module'), 'other_loops')
+    if not include_aliases or type(filename) is not str:
+        return None
+    if _different_alias_leaf(filename, ('coverage_invariant_contracts.py', 'winner_sign_contracts.py',
+                                         'border_parser_contracts.py', 'coverage_loop_proofs.py')):
+        return None
+    for kind, name in (('invariant', 'coverage_invariant_contracts.py'),
+                       ('winner', 'winner_sign_contracts.py'),
+                       ('border', 'border_parser_contracts.py')):
+        if (Path(filename).absolute() == Path(__file__).absolute().with_name(name)
+                and frame.f_code is _live_function_code(namespace.get('verify'))):
+            return 'alias_' + kind
+    if (Path(filename).absolute() == Path(__file__).absolute().parent.parent / 'coverage_loop_proofs.py'
+            and frame.f_code is _live_function_code(namespace.get('reviewed_nonempty_loops'))):
+        return 'alias_loops'
+    return None
+
+
+def _invariant_verify_frame(frame, *, include_aliases=False):
+    kind = _operation_frame_kind(frame, include_aliases=include_aliases)
+    return kind == 'invariant' or (include_aliases and kind == 'alias_invariant')
+
+
+def _private_operation_wrapper(frame, kind, operation):
+    """Return only the exact explicit child wrapper; never skip arbitrary frames."""
+    if kind not in ('invariant', 'border') or operation._kind != 'winner':
+        return None
+    module = _owner_module(kind)
+    if module is None or frame.f_globals is not vars(module):
+        return None
+    public = getattr(module, 'verify', None)
+    private = getattr(module, '_verify_owned', None)
+    caller = frame.f_back
+    if kind == 'border':
+        import contextlib
+        wrapped = getattr(public, '__wrapped__', None)
+        inner_code = next((value for value in contextlib.ContextDecorator.__call__.__code__.co_consts
+                           if isinstance(value, types.CodeType) and value.co_name == 'inner'), None)
+        if (type(public) is not types.FunctionType or type(wrapped) is not types.FunctionType
+                or public.__code__ is not inner_code or public.__globals__ is not vars(contextlib)
+                or caller is None or caller.f_code is not inner_code
+                or caller.f_globals is not vars(contextlib)
+                or caller.f_locals.get('func') is not wrapped
+                or frame.f_code is not wrapped.__code__ or frame.f_globals is not wrapped.__globals__):
+            return None
+        manager = caller.f_locals.get('self')
+        if (type(manager) is not contextlib._GeneratorContextManager
+                or manager.func is not getattr(source.lexical_memo_scope, '__wrapped__', None)
+                or manager.args != () or manager.kwds != {}):
+            return None
+        caller = caller.f_back
+    if (type(private) is not types.FunctionType or caller is None
+            or caller.f_globals is not vars(module) or caller.f_code is not private.__code__
+            or frame.f_locals.get('_operation') is not operation
+            or caller.f_locals.get('_operation') is not operation):
+        return None
+    for local in (frame.f_locals, caller.f_locals):
+        if str(Path(local.get('root')).absolute()) != operation._root:
+            return None
+    return caller
+
+
+def _operation_borrow(operation, root, kind):
+    try:
+        require(type(operation) is _InvariantInputs and kind in ('invariant', 'border'),
+                'invalid explicit operation borrower')
+        _operation_check(operation, root)
+        module = _owner_module(kind)
+        frame = sys._getframe(1)
+        require(module is not None and frame.f_globals is vars(module)
+                and frame.f_code is getattr(module, '_verify_owned').__code__
+                and frame.f_locals.get('_operation') is operation
+                and str(Path(frame.f_locals.get('root')).absolute()) == operation._root
+                and operation._kind == 'winner', 'invalid private operation wrapper')
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        _operation_fail(operation, error)
+
+
+def _operation_enter(root, kind, _operation=None, *, module=None, include_roots=()):
+    """Enter a fresh public owner or its exact explicitly bound private child."""
+    frame = sys._getframe(1)
+    try:
+        if kind is None or include_roots != ():
+            require(_operation is None, 'unsupported context cannot borrow operation inputs')
+            return None, False
+        require(kind in ('invariant', 'winner', 'border', 'map_loops', 'rtree_loops'),
+                'unknown bounded operation kind')
+        actual = _operation_frame_kind(frame)
+        if _operation is not None:
+            require(type(_operation) is _InvariantInputs and actual == kind
+                    and _private_operation_wrapper(frame, kind, _operation) is not None,
+                    'operation argument requires its exact private wrapper')
+            _operation_check(_operation, root)
+            return _operation, False
+        if actual != kind:
+            return None, False
+        if kind in ('map_loops', 'rtree_loops'):
+            expected = 'extensions/carla/map' if kind == 'map_loops' else 'extensions/carla/rtree'
+            require(module == expected and frame.f_locals.get('module') == expected
+                    and frame.f_locals.get('include_roots') == (),
+                    'loop input owner context differs from its public invocation')
+        return _InvariantInputs(root, frame, kind), True
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
+        if (_operation is None and kind in ('map_loops', 'rtree_loops')
+                and _operation_frame_kind(frame) == kind):
+            raise _OperationCoherenceError(str(error)) from error
+        _operation_fail(_operation, error)
+
+
+def _invariant_operation(root):
+    """Compatibility entry for the previously reviewed invariant-only owner."""
+    frame = sys._getframe(1)
+    if not _invariant_verify_frame(frame):
+        return None
+    return _InvariantInputs(root, frame, 'invariant')
+
+
+def _operation_text(raw, mode):
+    require(type(raw) is bytes, 'operation input is not builtin bytes')
+    if mode == 'utf8':
+        return raw.decode('utf-8')
+    require(mode in ('default', 'physical', 'supplied_default', 'supplied_physical'),
+            'unknown operation text mode')
+    encoding = None if mode in ('default', 'supplied_default') else 'utf-8'
+    with io.TextIOWrapper(io.BytesIO(raw), encoding=encoding, newline=None) as reader:
+        return reader.read()
+
+
+def _operation_check(operation, root):
+    try:
+        if operation is not None:
+            require(type(operation) is _InvariantInputs, 'invalid operation input owner')
+            operation._check_owner(root)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(operation, error)
+
+
+def _operation_production_paths(root, discovered, *, _operation=None):
+    if _operation is None:
+        return discovered
+    _operation_check(_operation, root)
+
+    def checked_paths():
+        try:
+            paths = set()
+            for path in discovered:
+                _operation_check(_operation, root)
+                paths.add(_relative_path(Path(path), root).as_posix())
+                yield path
+            _operation._discovery(root, frozenset(paths), 'production')
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(_operation, error)
+
+    return checked_paths()
+
+
+def _operation_known_paths(root, discovered, *, _operation=None):
+    try:
+        if _operation is not None:
+            _operation_check(_operation, root)
+            _operation._discovery(root, frozenset(discovered), 'known')
+        return discovered
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
+def _operation_observe(operation, root, path, value, mode):
+    """Check an original-callsite observation; this function performs no read."""
+    try:
+        if operation is None:
+            return value
+        require(type(operation) is _InvariantInputs, 'invalid operation input owner')
+        operation._observe(root, str(path), value, mode)
+        return value
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(operation, error)
+
+
+def _operation_record(operation, root, *, exact=False, include_roots=(), expected_lane_raw=None):
+    try:
+        require(type(operation) is _InvariantInputs and include_roots == (),
+                'invalid private operation projection')
+        return operation._admit(root, exact=exact, expected_lane_raw=expected_lane_raw)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(operation, error)
+
+
+def _observe_bytes(root, path, value, *, _operation=None):
+    return _operation_observe(_operation, root, path, value, 'bytes')
+
+
+def _observe_text(root, path, value, *, _operation=None, mode='default',
+                  supplied=False, _checked_raw=None):
+    try:
+        if _operation is None:
+            return value
+        require(type(supplied) is bool and mode in ('default', 'physical', 'utf8'),
+                'invalid operation text observation mode')
+        if _checked_raw is not None:
+            require(type(value) is str, 'operation text is not builtin str: ' + str(path))
+            checked = _operation_text(_checked_raw, mode)
+            require((source.token_sha256(value) == source.token_sha256(checked))
+                    if supplied else value == checked,
+                    'checked physical and supplied views differ: ' + str(path))
+            _operation_observe(_operation, root, path, _checked_raw, 'bytes')
+        actual_mode = 'supplied_' + mode if supplied else mode
+        return _operation_observe(_operation, root, path, value, actual_mode)
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
+class _InvariantInputs(_CacheInputs):
+    """One explicit bounded invocation; source data, never a transferable PASS."""
+
+    def __init__(self, root, owner_frame, kind):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code in (_live_function_code(_invariant_operation), _live_function_code(_operation_enter))
+                and caller.f_back is owner_frame and _operation_frame_kind(owner_frame) == kind,
+                'bounded inputs require their direct owner factory')
+        super().__init__(object(), root, owner_frame)
+        self._kind = kind
+        self._failed = False
+        self._failure_reason = None
+        self._observations = []
+        self._discoveries = []
+        self._capturing = False
+
+    def _invalidate(self, error):
+        self._failed = True
+        self._failure_reason = str(error)
+        self._state = 'invalid'
+        self._raw = types.MappingProxyType({})
+        self._record_raw = None
+        self._known = frozenset()
+        self._production = frozenset()
+        self._entries = ()
+        self._native_contexts = ()
+        self._resolver_paths = frozenset()
+        self._executing = types.MappingProxyType({})
+        self._observations = []
+        self._discoveries = []
+
+    def _check_owner(self, root):
+        try:
+            if self._failed:
+                raise _OperationCoherenceError(self._failure_reason or 'invalid operation inputs')
+            require(type(self) is _InvariantInputs and self._stamp == id(self)
+                    and self._state in ('pending', 'active')
+                    and self._thread == threading.get_ident(), 'inactive bounded input owner')
+            self._check_context(root)
+            frame = sys._getframe(1)
+            while frame is not None:
+                kind = _operation_frame_kind(frame, include_aliases=True)
+                if kind is not None:
+                    if frame is self._owner_frame:
+                        require(kind == self._kind and frame.f_locals.get('_operation') is self,
+                                'operation owner binding changed')
+                        return
+                    wrapper = _private_operation_wrapper(frame, kind, self)
+                    require(wrapper is not None, 'nearer independent operation blocks borrowing')
+                    frame = wrapper.f_back
+                else:
+                    frame = frame.f_back
+            require(False, 'operation owner is no longer active')
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
+
+    def _check(self, owner, root):
+        self._check_owner(root)
+        require(owner is self._owner and self._state == 'active',
+                'inactive or foreign invariant input view')
+
+    def _check_pending(self, root):
+        self._check_owner(root)
+        require(self._state == 'pending' and self._capturing and not self._raw
+                and self._record_raw is None, 'invalid pending invariant capture')
+        frame = sys._getframe(1)
+        while frame is not None and not (frame.f_globals is globals()
+                and frame.f_code is _live_function_code(verify)):
+            frame = frame.f_back
+        factory = frame.f_back if frame is not None else None
+        require(factory is not None and factory.f_globals is globals()
+                and factory.f_code is _InvariantInputs._admit.__code__
+                and factory.f_locals.get('self') is self,
+                'invariant capture was not issued by its explicit owner')
+
+    def _publish(self, root, snapshots, authority_raw, known, production,
+                 entries, resolver_paths, executing):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code is _live_function_code(verify),
+                'invariant publication requires the full gate')
+        # The base publication also checks its direct caller. Keep this exact
+        # publication body local rather than weakening the existing cache path.
+        self._check_pending(root)
+        require(type(authority_raw) is bytes and sha(authority_raw) == MIGRATION_SHA256,
+                'invalid captured authority bytes')
+        image = dict(snapshots)
+        for path, raw in image.items():
+            require(type(path) is str and Path(path).as_posix() == path
+                    and bool(Path(path).parts) and not Path(path).is_absolute()
+                    and '..' not in Path(path).parts and type(raw) is bytes,
+                    'invalid captured input bytes or path')
+        require(set(known) <= image.keys() and set(production) <= image.keys()
+                and set(SOURCE_PATHS) <= image.keys(), 'incomplete captured input image')
+        self._raw = types.MappingProxyType(image)
+        self._record_raw = authority_raw
+        self._known = frozenset(known)
+        self._production = frozenset(production)
+        self._entries = tuple(entries)
+        self._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
+        self._resolver_paths = frozenset(resolver_paths)
+        self._executing = types.MappingProxyType(dict(executing))
+        self._state = 'active'
+        for path, value, mode in self._observations:
+            self._match(root, path, value, mode)
+        self._observations.clear()
+        for paths, kind in self._discoveries:
+            self._discovery(root, paths, kind)
+        self._discoveries.clear()
+
+    def _discovery(self, root, paths, kind):
+        try:
+            self._check_owner(root)
+            require(kind in ('production', 'known'), 'unknown operation discovery kind')
+            require(all(type(path) is str for path in paths), 'invalid operation discovered path')
+            if self._state == 'pending':
+                self._discoveries.append((frozenset(paths), kind))
+            else:
+                expected = self._production if kind == 'production' else self._known
+                require(paths == expected, 'consumed operation path census changed: ' + kind)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
+
+    def _match(self, root, path, value, mode):
+        require(path in self._raw or path == MIGRATION,
+                'unlisted operation input: ' + path)
+        _regular(root, path)
+        raw = self._record_raw if path == MIGRATION else self._raw[path]
+        if mode == 'bytes':
+            require(type(value) is bytes and value == raw,
+                    'consumed operation bytes changed: ' + path)
+        else:
+            text = _operation_text(raw, mode)
+            require(type(value) is str, 'operation text is not builtin str: ' + path)
+            if mode.startswith('supplied_'):
+                require(source.token_sha256(value) == source.token_sha256(text),
+                        'supplied and captured source views differ: ' + path)
+            else:
+                require(value == text, 'consumed operation text changed: ' + path)
+
+    def _observe(self, root, path, value, mode):
+        try:
+            self._check_owner(root)
+            require(type(path) is str and path and Path(path).as_posix() == path
+                    and not Path(path).is_absolute() and '..' not in Path(path).parts,
+                    'invalid operation observation path')
+            require(mode in ('bytes', 'default', 'physical', 'utf8',
+                             'supplied_default', 'supplied_physical'),
+                    'unknown operation observation mode')
+            require(type(value) is (bytes if mode == 'bytes' else str),
+                    'non-builtin operation observation')
+            if self._state == 'pending':
+                # Historical operations retain their existing physical path policy.
+                # Actual current acquisition must reconcile every prior value.
+                self._observations.append((path, value, mode))
+            else:
+                self._match(root, path, value, mode)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
+
+    def _admit(self, root, *, exact=False, expected_lane_raw=None):
+        try:
+            self._check_owner(root)
+            require(type(exact) is bool, 'invalid operation exactness request')
+            if expected_lane_raw is not None:
+                self._observe(root, SOURCE_PATHS[2], expected_lane_raw, 'bytes')
+            if self._state == 'pending':
+                self._capturing = True
+                try:
+                    verify(root, _expected_lane_raw=expected_lane_raw, _capture=self)
+                except BaseException:
+                    self.close()
+                    raise
+                finally:
+                    self._capturing = False
+            self._check(self._owner, root)
+            if exact:
+                for path in SOURCE_PATHS:
+                    require(sha(self.raw(self._owner, root, path)) == AFTER_SHA256[path],
+                            'unreviewed exact operation endpoint: ' + path)
+            return json.loads(self._record_raw, object_pairs_hook=source.unique_keys)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
+
+    def checkpoint(self, owner, root):
+        # Private demand points keep lifetime checks; the whole-image sweep is
+        # owned once by finish(), before the outer public result can escape.
+        self._check(owner, root)
+
+    def finish(self, root):
+        try:
+            self._check_owner(root)
+            try:
+                if self._state == 'active':
+                    _CacheInputs.checkpoint(self, self._owner, root)
+            except BaseException:
+                self.close()
+                raise
+            self._state = 'finished'
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self, error)
+
+    def close(self):
+        require(type(self) is _InvariantInputs and self._stamp == id(self),
+                'invalid invariant input disposal')
+        self._state = 'closed'
+        self._raw = types.MappingProxyType({})
+        self._record_raw = None
+        self._known = frozenset()
+        self._production = frozenset()
+        self._entries = ()
+        self._native_contexts = ()
+        self._resolver_paths = frozenset()
+        self._executing = types.MappingProxyType({})
+        self._observations.clear()
+        self._discoveries.clear()
+        self._owner_frame = None
+        self._capturing = False
+
+
+class _BorrowedCacheInputs(_CacheInputs):
+    """A cache.verify lease over its explicitly supplied operation image."""
+
+    def __init__(self, owner, root, owner_frame, operation):
+        caller = sys._getframe(1)
+        require(caller.f_globals is globals()
+                and caller.f_code is _live_function_code(_cache_lane_inputs)
+                and caller.f_back is owner_frame and _cache_verify_frame(owner_frame),
+                'borrowed cache inputs require the direct cache factory')
+        require(type(operation) is _InvariantInputs, 'invalid borrowed operation inputs')
+        operation._check(operation._owner, root)
+        super().__init__(owner, root, owner_frame)
+        self._operation = operation
+        self._raw = operation._raw
+        self._record_raw = operation._record_raw
+        self._known = operation._known
+        self._production = operation._production
+        self._entries = operation._entries
+        self._native_contexts = operation._native_contexts
+        self._resolver_paths = operation._resolver_paths
+        self._executing = operation._executing
+        self._state = 'active'
+
+    def _check(self, owner, root):
+        try:
+            require(type(self) is _BorrowedCacheInputs and self._stamp == id(self)
+                    and self._state == 'active' and owner is self._owner
+                    and self._thread == threading.get_ident(), 'inactive or foreign cache lease')
+            self._check_context(root)
+            self._operation._check(self._operation._owner, root)
+            frame = _nearest_cache_verify()
+            require(frame is self._owner_frame and frame is not None
+                    and frame.f_locals.get('_input_owner') is owner
+                    and frame.f_locals.get('_inputs') is self
+                    and frame.f_locals.get('_operation') is self._operation,
+                    'borrowed cache owner is not active')
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self._operation, error)
+
+    def raw(self, owner, root, path):
+        try:
+            return _CacheInputs.raw(self, owner, root, path)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self._operation, error)
+
+    def text_default(self, owner, root, path):
+        try:
+            return _CacheInputs.text_default(self, owner, root, path)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self._operation, error)
+
+    def text_utf8(self, owner, root, path):
+        try:
+            return _CacheInputs.text_utf8(self, owner, root, path)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self._operation, error)
+
+    def observe_bytes(self, owner, root, path):
+        try:
+            return _CacheInputs.observe_bytes(self, owner, root, path)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self._operation, error)
+
+    def exact_edges(self, owner, root):
+        try:
+            return _CacheInputs.exact_edges(self, owner, root)
+        except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+            _operation_fail(self._operation, error)
+
+    def checkpoint(self, owner, root):
+        self._check(owner, root)
+
+    def close(self, owner):
+        require(type(self) is _BorrowedCacheInputs and self._stamp == id(self)
+                and owner is self._owner, 'invalid cache lease disposal')
+        self._state = 'closed'
+        self._raw = types.MappingProxyType({})
+        self._record_raw = None
+        self._known = frozenset()
+        self._production = frozenset()
+        self._entries = ()
+        self._native_contexts = ()
+        self._resolver_paths = frozenset()
+        self._executing = types.MappingProxyType({})
+        self._operation = None
+        self._owner_frame = None
+
+
+def _cache_lane_inputs(root, supplied_text, owner, *, _operation=None):
     """Acquire only for the direct current cache.verify frame; no ambient view."""
     owner_frame = sys._getframe(1)
     require(_cache_verify_frame(owner_frame)
@@ -1098,14 +1703,22 @@ def _cache_lane_inputs(root, supplied_text, owner):
         require(type(raw) is bytes, 'expected lane observation is not bytes')
         require(digest == source.token_sha256(_physical_text(raw)),
                 'supplied and physical lane observation views differ')
-        _pending = _CacheInputs(owner, root, owner_frame)
-        record = verify(root, _expected_lane_raw=raw, _capture=_pending)
+        if _operation is None:
+            _pending = _CacheInputs(owner, root, owner_frame)
+            record = verify(root, _expected_lane_raw=raw, _capture=_pending)
+        else:
+            require(type(_operation) is _InvariantInputs, 'invalid borrowed cache operation')
+            _operation_observe(_operation, root, path, supplied_text, 'supplied_default')
+            record = _operation._admit(root, expected_lane_raw=raw)
+            _pending = _BorrowedCacheInputs(owner, root, owner_frame, _operation)
         item = record['sources'][path]
         predecessor = reverse_exact(path, item['after_source'], item)
         return predecessor, _pending
     except BaseException as error:
         if _pending is not None:
             _pending.close(owner)
+        if _operation is not None and isinstance(error, (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError)):
+            _operation_fail(_operation, error)
         if isinstance(error, ContractError):
             raise
         if isinstance(error, (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, SyntaxError)):
@@ -1118,7 +1731,7 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
     root = Path(root)
     try:
         if _capture is not None:
-            require(type(_capture) is _CacheInputs and not exact and include_roots == (),
+            require(type(_capture) in (_CacheInputs, _InvariantInputs) and not exact and include_roots == (),
                     'invalid cache input capture request')
             _capture._check_pending(root)
         executing = executing_checker_bindings()
@@ -1206,14 +1819,15 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         raise ContractError('full-audit cleanup successor: malformed or unreadable live input') from error
 
 
-def predecessor_source(root, path):
+def predecessor_source(root, path, *, _operation=None):
     require(path in SOURCE_PATHS, 'unlisted predecessor source request')
-    record = verify(root)
+    record = (verify(root) if _operation is None else
+              _operation_record(_operation, root))
     item = record['sources'][path]
     return reverse_exact(path, item['after_source'], item)
 
 
-def reviewed_text(root, path, text=None):
+def reviewed_text(root, path, text=None, *, _operation=None):
     """Keep historical views unchanged without granting current-root admission.
 
     Historical composed fixtures still face their original consumer checks.
@@ -1225,10 +1839,12 @@ def reviewed_text(root, path, text=None):
     if path not in SOURCE_PATHS or source.token_sha256(text) == BEFORE_TOKEN_SHA256[path]:
         return text
     require(source.token_sha256(text) == AFTER_TOKEN_SHA256[path], 'unreviewed supplied successor source: ' + path)
-    return predecessor_source(root, path)
+    if _operation is not None:
+        _observe_text(root, path, text, _operation=_operation, mode='physical', supplied=True)
+    return predecessor_source(root, path, _operation=_operation)
 
 
-def _reviewed_lane_observation(root, text, expected_raw):
+def _reviewed_lane_observation(root, text, expected_raw, *, _operation=None):
     """Project one physical lane observation and bind its intervening road read."""
     path = SOURCE_PATHS[2]
     try:
@@ -1243,7 +1859,10 @@ def _reviewed_lane_observation(root, text, expected_raw):
         road = 'extensions/carla/road.mojo'
         road_raw = _regular(root, road).read_bytes()
         require(type(road_raw) is bytes, 'road observation is not bytes')
-        record = verify(root, _expected_lane_raw=expected_raw)
+        _observe_bytes(root, road, road_raw, _operation=_operation)
+        _observe_text(root, path, text, _operation=_operation, mode='physical', supplied=True)
+        record = (verify(root, _expected_lane_raw=expected_raw) if _operation is None else
+                  _operation_record(_operation, root, expected_lane_raw=expected_raw))
         require(sha(road_raw) == record['unchanged_inputs'][road],
                 'road observation changed before current admission')
         item = record['sources'][path]
@@ -1277,7 +1896,7 @@ def reviewed_sources(root, texts):
     return result
 
 
-def reviewed_sum2_callers(root):
+def reviewed_sum2_callers(root, *, _operation=None):
     """Fixed CALLERS-only discriminator; current callers require the full gate.
 
     Historical callers do not acquire cleanup authority from an unrelated
@@ -1286,9 +1905,10 @@ def reviewed_sum2_callers(root):
     for path, functions in SUM2_CALLER_SHA256.items():
         try:
             physical = _regular(root, path)
-            raw = physical.read_bytes()
+            raw = _observe_bytes(root, path, physical.read_bytes(), _operation=_operation)
             text = _physical_text(raw)
-            supplied = physical.read_text(encoding='utf-8')
+            supplied = _observe_text(root, path, physical.read_text(encoding='utf-8'),
+                                    _operation=_operation, mode='physical', supplied=True, _checked_raw=raw)
             require(source.token_sha256(supplied) == source.token_sha256(text),
                     'Sum2 caller supplied and physical views differ: ' + path)
             changed = any(declaration_sha256(text, name) not in expected
@@ -1298,15 +1918,19 @@ def reviewed_sum2_callers(root):
                         'unrecognized complete Sum2 caller source: ' + path)
         except ContractError as error:
             error.source_path = path
+            if _operation is not None:
+                _operation_fail(_operation, error)
             raise
         except (OSError, UnicodeError, ValueError, TypeError) as error:
             wrapped = ContractError('full-audit cleanup successor: unreadable Sum2 caller: ' + path)
             wrapped.source_path = path
+            if _operation is not None:
+                _operation_fail(_operation, wrapped)
             raise wrapped from error
         if changed:
             # A later dependency failure is deliberately not attributed to
             # this direct caller by the discriminator's error wrapper.
-            record = verify(root)
+            record = (verify(root) if _operation is None else _operation_record(_operation, root))
             return {p: reverse_exact(p, item['after_source'], item)
                     for p, item in record['sources'].items()}
     return {}
@@ -1320,8 +1944,9 @@ def reviewed_lane_before_center_text(root, text=None):
     return reverse_center_exact(item['after_source'], item)
 
 
-def verified_edges(root, *, include_roots=()):
-    record = verify(root, exact=True, include_roots=include_roots)
+def verified_edges(root, *, include_roots=(), _operation=None):
+    record = (verify(root, exact=True, include_roots=include_roots) if _operation is None else
+              _operation_record(_operation, root, exact=True, include_roots=include_roots))
     return {path: {'path': path, **{field: item[field] for field in
             ('before_sha256', 'after_sha256', 'before_token_sha256', 'after_token_sha256')}}
             for path, item in record['sources'].items()}
@@ -1338,15 +1963,19 @@ def extends_digest(root, path, before, after, *, include_roots=()):
     return edge['before_sha256'] == before and edge['after_sha256'] == after
 
 
-def proof_bindings(root, *, include_roots=()):
-    executing = executing_checker_bindings(root)
-    record = verify(root, exact=True, include_roots=include_roots)
-    require(executing_checker_bindings(root) == executing, 'receipt checker changed during verification')
-    result = {MIGRATION: MIGRATION_SHA256, **executing}
-    result.update({path: item['after_sha256'] for path, item in record['sources'].items()})
-    for group in BOUND_GROUPS:
-        result.update(record[group])
-    return result
+def proof_bindings(root, *, include_roots=(), _operation=None):
+    try:
+        executing = executing_checker_bindings(root)
+        record = (verify(root, exact=True, include_roots=include_roots) if _operation is None else
+                  _operation_record(_operation, root, exact=True, include_roots=include_roots))
+        require(executing_checker_bindings(root) == executing, 'receipt checker changed during verification')
+        result = {MIGRATION: MIGRATION_SHA256, **executing}
+        result.update({path: item['after_sha256'] for path, item in record['sources'].items()})
+        for group in BOUND_GROUPS:
+            result.update(record[group])
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
 
 
 if __name__ == '__main__':

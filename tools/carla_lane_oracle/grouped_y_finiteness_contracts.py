@@ -21,9 +21,18 @@ def verify_text(modules):
                 raise ValueError('Y-finiteness premise, graph, writes or ordering changed: ' + name) from error
     return {'status': 'PASS', 'maximum_accumulator_exponent': 947, 'origin_error_refusal_unchanged': True, 'y_call_and_writes_retained': True}
 
-def verify(root):
+def verify(root, *, _operation=None):
     root = Path(root)
-    return verify_text({p: (root/p).read_text() for p in EXPECTED})
+    if _operation is not None:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+    modules = {p: (root/p).read_text() for p in EXPECTED}
+    if _operation is not None:
+        modules = {p: full_audit._observe_text(root, p, text, _operation=_operation)
+                   for p, text in modules.items()}
+    return verify_text(modules)
 
 MODULE = 'extensions/carla/spiral_grouped_roundoff_proof.mojo'
 RECORD = 'tools/carla_lane_oracle/grouped-y-successor-record.json'
@@ -31,7 +40,7 @@ RECORD_SHA256 = '4b72cd07de22d61d70c7aa489e566cd25468189b6a60b5e105fa26ea726e685
 PREDECESSOR_TOKEN_SHA256 = 'a8f3beca23c8d6a84d01f5eebecb0a01cd2102aad4e226ed6a782722733a86b7'
 
 
-def predecessor_text(root, path):
+def predecessor_text(root, path, *, _operation=None):
     """Verify all actual Y premises before restoring its exact prior module."""
     import hashlib
     import json
@@ -40,7 +49,7 @@ def predecessor_text(root, path):
         raise ValueError('Y projection permits only its exact grouped module')
     # Never call selection or another historical projection from here. The
     # actual five-file graph must pass before any record can provide text.
-    verify(root)
+    verify(root, _operation=_operation)
     payload = (root / RECORD).read_bytes()
     if hashlib.sha256(payload).hexdigest() != RECORD_SHA256:
         raise ValueError('Unreviewed grouped Y successor record')

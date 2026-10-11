@@ -124,6 +124,25 @@ def _lexical_string(function, arguments, dependencies=()):
     return result
 
 
+def _check_operation(root, operation):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    full_audit._operation_check(operation, root)
+
+
+def _observe_text(root, path, text, *, _operation=None, mode='default'):
+    if _operation is None:
+        return text
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    return full_audit._observe_text(
+        root, path, text, _operation=_operation, mode=mode)
+
+
 def require(condition, message):
     if not condition:
         raise ValueError(message)
@@ -176,8 +195,12 @@ def unique_keys(pairs):
     return result
 
 
-def read_pins(root):
-    pins = json.loads((root / PINS).read_text(encoding='utf-8'),
+def read_pins(root, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    pins = json.loads(_observe_text(
+        root, PINS, (root / PINS).read_text(encoding='utf-8'),
+        _operation=_operation, mode='physical'),
                       object_pairs_hook=unique_keys)
     require(isinstance(pins, dict) and set(pins) == {'schema', 'groups', 'qualifiers'},
             'wrong runtime source pin keys')
@@ -199,12 +222,17 @@ def read_pins(root):
     return pins
 
 
-def verify_group(root, group):
+def verify_group(root, group, *, _operation=None):
+    if _operation is not None:
+        _check_operation(root, _operation)
+    operation_args = {} if _operation is None else {'_operation': _operation}
     require(group in GROUP_PATHS, 'unknown runtime dependency group: ' + str(group))
-    pins = read_pins(root)
+    pins = read_pins(root, **operation_args)
     result = {}
     for path in GROUP_PATHS[group]:
-        text = (root / path).read_text(encoding='utf-8')
+        text = _observe_text(
+            root, path, (root / path).read_text(encoding='utf-8'),
+            _operation=_operation, mode='physical')
         checked = text
         if (path in (PREFIX + 'curve_bounds.mojo', PREFIX + 'lane_value_bounds.mojo',
                      PREFIX + 'junction_bounds.mojo')
@@ -214,7 +242,7 @@ def verify_group(root, group):
             else:
                 import full_audit_cleanup_contracts as full_audit
             try:
-                checked = full_audit.reviewed_text(root, path, text)
+                checked = full_audit.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error
@@ -224,7 +252,7 @@ def verify_group(root, group):
             else:
                 import cache_key_contracts as cache_key
             try:
-                checked = cache_key.predecessor_source(root)
+                checked = cache_key.predecessor_source(root, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error
@@ -234,7 +262,7 @@ def verify_group(root, group):
             else:
                 import seed_count_contracts as seed_count
             try:
-                checked = seed_count.reviewed_text(root, path, text)
+                checked = seed_count.reviewed_text(root, path, text, **operation_args)
             except (ValueError, OSError) as error:
                 raise ValueError('runtime source dependency changed [' + group + ']: ' + path
                                  + ' (' + str(error) + ')') from error

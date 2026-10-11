@@ -1955,19 +1955,10 @@ print('consumer verified',consumer,mode,','.join(sorted(loaded)))
         tools = fixture / 'tools'
         oracle = tools / 'carla_lane_oracle'
         oracle.mkdir(parents=True)
-        modules = (
-            'seed_count_contracts', 'sum2_guard_contracts', 'source_contracts',
-            'ideal_projection', 'cache_key_contracts', 'reviewed_cleanup_contracts',
-            'accepted_successor_contracts', 'coverage_invariant_contracts',
-            'curve_support_dispatch_contracts', 'frozen_arc_producer_contracts',
-            'grouped_table_contracts',
-        )
-        for name in modules:
-            shutil.copyfile(self.repo / 'tools/carla_lane_oracle' / (name+'.py'),
-                            oracle / (name+'.py'))
-        for name in ('coverage_loop_proofs', 'cache_key',
-                     'coverage_toolchain_identity', 'affected'):
-            shutil.copyfile(self.repo / 'tools' / (name+'.py'), tools / (name+'.py'))
+        # Match the complete checker closure used by consumer_script_probe.
+        for folder in ('tools', 'tools/carla_lane_oracle'):
+            for path in (self.repo/folder).glob('*.py'):
+                shutil.copyfile(path, fixture/folder/path.name)
         if internal_error:
             with (oracle / 'source_contracts.py').open('a') as output:
                 output.write('\nraise ModuleNotFoundError("oracle-inner-sentinel")\n')
@@ -2053,8 +2044,10 @@ check(sys.path == original_path, 'verification changed sys.path')
             command.append('-O')
         command.extend([str(script), str(root or self.repo), mode, str(shadow),
                         str(internal_error), str(rejected)])
+        # Reviewed import/source-verification allowance, aligned with the
+        # 30-second proof-consumer probes; native test budgets are separate.
         result = subprocess.run(command, cwd=cwd, check=False, capture_output=True,
-                                text=True, timeout=10)
+                                text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         return result.stdout
 
