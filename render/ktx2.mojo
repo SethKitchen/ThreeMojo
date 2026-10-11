@@ -61,6 +61,7 @@ three.js finds no target for UASTC HDR with alpha, so this reader
 refuses them too.
 """
 
+from core.binary import little_endian_u32
 from render.compressed_texture import (
     R11_EAC_FORMAT,
     RED_GREEN_RGTC2_FORMAT,
@@ -382,23 +383,14 @@ def identifier() -> List[UInt8]:
     ]
 
 
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian word at `at`; the caller has checked the
-    length."""
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
-
-
 def _u64(bytes: List[UInt8], at: Int) raises -> Int:
     """Return the little-endian eight-byte number at `at`, refusing one
     past the top of an `Int`; the caller has checked the length."""
     if bytes[at + 7] >= 0x80:
         raise Error("KTX2: an offset or a length is too large")
-    return _u32(bytes, at) | (_u32(bytes, at + 4) << 32)
+    return little_endian_u32(bytes, at) | (
+        little_endian_u32(bytes, at + 4) << 32
+    )
 
 
 def _outside(offset: Int, length: Int, size: Int) -> Bool:
@@ -832,8 +824,8 @@ def _read_descriptor(bytes: List[UInt8], mut container: KTX2Container) raises:
         Error: If the descriptor does not fit in the file, or is shorter
             than a basic block.
     """
-    var offset = _u32(bytes, 48)
-    var length = _u32(bytes, 52)
+    var offset = little_endian_u32(bytes, 48)
+    var length = little_endian_u32(bytes, 52)
     # The total size word, then the basic block's first six words.
     if length < 28 or _outside(offset, length, len(bytes)):
         raise Error("KTX2: the data format descriptor is missing or cut short")
@@ -876,8 +868,8 @@ def _has_animation_key(bytes: List[UInt8]) raises -> Bool:
             file, or has an entry that is too short, runs past the end or
             has no end to its key.
     """
-    var offset = _u32(bytes, 56)
-    var left = _u32(bytes, 60)
+    var offset = little_endian_u32(bytes, 56)
+    var left = little_endian_u32(bytes, 60)
     if left == 0:
         if offset != 0:
             raise Error("KTX2: the key and value data has no length")
@@ -887,7 +879,7 @@ def _has_animation_key(bytes: List[UInt8]) raises -> Bool:
     var at = offset
     var found = False
     while left > 4:
-        var size = _u32(bytes, at)
+        var size = little_endian_u32(bytes, at)
         at += 4
         left -= 4
         if size < 2 or left < size:
@@ -941,14 +933,14 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
                 "KTX2: the file does not start with the KTX 2.0 identifier"
             )
     var container = KTX2Container()
-    container.vk_format = VkFormat(_u32(bytes, 12))
-    container.width = _u32(bytes, 20)
-    container.height = _u32(bytes, 24)
-    var depth = _u32(bytes, 28)
-    container.layers = max(1, _u32(bytes, 32))
-    container.faces = _u32(bytes, 36)
-    container.levels = max(1, _u32(bytes, 40))
-    container.supercompression = Supercompression(_u32(bytes, 44))
+    container.vk_format = VkFormat(little_endian_u32(bytes, 12))
+    container.width = little_endian_u32(bytes, 20)
+    container.height = little_endian_u32(bytes, 24)
+    var depth = little_endian_u32(bytes, 28)
+    container.layers = max(1, little_endian_u32(bytes, 32))
+    container.faces = little_endian_u32(bytes, 36)
+    container.levels = max(1, little_endian_u32(bytes, 40))
+    container.supercompression = Supercompression(little_endian_u32(bytes, 44))
     _read_descriptor(bytes, container)
     if (
         container.color_model >= FIRST_UNKNOWN_BASIS_MODEL

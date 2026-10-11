@@ -35,6 +35,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from math.rounded_product import rounded_product
 from math.norm import (
     _ordinary_squared,
     length2,
@@ -448,9 +449,15 @@ def find_edge_intersection(
     # Each product is rounded before the difference, as in JavaScript, so
     # that an edge that ends on the first edge's start gives a `t1` of
     # exactly zero.
-    var nom1 = _product(x4 - x3, y1 - y3) - _product(y4 - y3, x1 - x3)
-    var nom2 = _product(x2 - x1, y1 - y3) - _product(y2 - y1, x1 - x3)
-    var denom = _product(y4 - y3, x2 - x1) - _product(x4 - x3, y2 - y1)
+    var nom1 = rounded_product(x4 - x3, y1 - y3) - rounded_product(
+        y4 - y3, x1 - x3
+    )
+    var nom2 = rounded_product(x2 - x1, y1 - y3) - rounded_product(
+        y2 - y1, x1 - x3
+    )
+    var denom = rounded_product(y4 - y3, x2 - x1) - rounded_product(
+        x4 - x3, y2 - y1
+    )
     var t1 = nom1 / denom
     var t2 = nom2 / denom
     var ends: List[SvgVector] = [b0, b1]
@@ -485,13 +492,6 @@ def _misses(denom: Float64, nom1: Float64, t1: Float64, t2: Float64) -> Bool:
     """Return True when two edges are parallel apart, or do not reach each
     other: three.js's first test, NaN comparisons and all."""
     return (denom == 0 and nom1 != 0) or t1 <= 0 or t1 >= 1 or t2 < 0 or t2 > 1
-
-
-@no_inline
-def _product(a: Float64, b: Float64) -> Float64:
-    """Return `a * b` rounded, where the compiler cannot fuse it into a
-    multiply-add."""
-    return a * b
 
 
 def _add_intersections(

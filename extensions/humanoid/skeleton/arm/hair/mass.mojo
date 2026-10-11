@@ -22,12 +22,12 @@ from extensions.humanoid.skeleton.arm.hair.dimensions import (
     arm_hair_field,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     hair_tissue,
 )
 from extensions.humanoid.spec import HumanoidSpec
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def arm_hair_mass(spec: HumanoidSpec, part: ArmHair) raises -> SoftMass:
@@ -67,7 +67,4 @@ def arm_hair_mass_from_dimensions(
     """
     tissue.validate()
     var volume = arm_hair_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

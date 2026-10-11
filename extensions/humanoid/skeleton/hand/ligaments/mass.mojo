@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.hand.ligaments.dimensions import (
     hand_ligament_tissue,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
 )
@@ -33,7 +34,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def hand_ligament_occupancy(
@@ -101,7 +101,4 @@ def hand_ligament_mass_from_dimensions(
     """
     tissue.validate()
     var volume = hand_ligament_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

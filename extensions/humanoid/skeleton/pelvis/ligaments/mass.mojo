@@ -26,6 +26,7 @@ from extensions.humanoid.skeleton.pelvis.muscles.dimensions import (
     pelvis_muscle_dimensions,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
 )
@@ -34,7 +35,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
     classify_soft,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def pelvis_ligament_occupancy(
@@ -106,7 +106,4 @@ def pelvis_ligament_mass_from_dimensions(
     """
     tissue.validate()
     var volume = PelvisLigamentField(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

@@ -34,6 +34,8 @@ and prolog order are checked. DTD contents and namespace constraints are
 not validated. Encoding declarations do not change the input encoding.
 """
 
+from loaders.utf8 import append_utf8
+
 # What `XmlDocument.child` returns when there is no such child, and what
 # the root element's parent is.
 comptime NO_ELEMENT = -1
@@ -372,24 +374,6 @@ def _is_space(byte: Int) -> Bool:
     return byte == 32 or byte == 9 or byte == 10 or byte == 13
 
 
-def _append_utf8(mut out: List[UInt8], point: Int):
-    """Append a code point as UTF-8."""
-    if point < 0x80:
-        out.append(UInt8(point))
-    elif point < 0x800:
-        out.append(UInt8(0xC0 | (point >> 6)))
-        out.append(UInt8(0x80 | (point & 0x3F)))
-    elif point < 0x10000:
-        out.append(UInt8(0xE0 | (point >> 12)))
-        out.append(UInt8(0x80 | ((point >> 6) & 0x3F)))
-        out.append(UInt8(0x80 | (point & 0x3F)))
-    else:
-        out.append(UInt8(0xF0 | (point >> 18)))
-        out.append(UInt8(0x80 | ((point >> 12) & 0x3F)))
-        out.append(UInt8(0x80 | ((point >> 6) & 0x3F)))
-        out.append(UInt8(0x80 | (point & 0x3F)))
-
-
 def _is_character(point: Int) -> Bool:
     """Return True if a character reference names a character XML allows:
     a permitted whitespace, BMP character or supplementary character."""
@@ -709,7 +693,7 @@ struct _Parser(Movable):
             out.append(39)
         elif word.startswith("#"):
             var point = self.code_point(word, start)
-            _append_utf8(out, point)
+            append_utf8(out, point)
         else:
             self.at = start
             raise Error(self.where() + "an entity that is not known: " + word)

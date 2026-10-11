@@ -27,6 +27,7 @@ needs -- a byte offset, a count, an index -- exactly, up to fifty-three
 bits. `integer` refuses a number with a fraction.
 """
 
+from loaders.utf8 import append_utf8
 from std.math import isfinite
 
 comptime _HEX = "0123456789abcdef"
@@ -606,7 +607,7 @@ struct _Parser(Movable):
                     point = 0x10000 + ((point - 0xD800) << 10) + (low - 0xDC00)
                 elif point >= 0xDC00 and point <= 0xDFFF:
                     raise Error(self.where() + "a lone low surrogate")
-                _append_utf8(out, point)
+                append_utf8(out, point)
             else:
                 raise Error(self.where() + "unknown escape")
         return String(unsafe_from_utf8=out)
@@ -645,21 +646,3 @@ struct _Parser(Movable):
         if not isfinite(value):
             raise Error(self.where() + "a number beyond a Float64")
         return value
-
-
-def _append_utf8(mut out: List[UInt8], point: Int):
-    """Append a code point as UTF-8."""
-    if point < 0x80:
-        out.append(UInt8(point))
-    elif point < 0x800:
-        out.append(UInt8(0xC0 | (point >> 6)))
-        out.append(UInt8(0x80 | (point & 0x3F)))
-    elif point < 0x10000:
-        out.append(UInt8(0xE0 | (point >> 12)))
-        out.append(UInt8(0x80 | ((point >> 6) & 0x3F)))
-        out.append(UInt8(0x80 | (point & 0x3F)))
-    else:
-        out.append(UInt8(0xF0 | (point >> 18)))
-        out.append(UInt8(0x80 | ((point >> 12) & 0x3F)))
-        out.append(UInt8(0x80 | ((point >> 6) & 0x3F)))
-        out.append(UInt8(0x80 | (point & 0x3F)))

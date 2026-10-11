@@ -25,6 +25,7 @@ from extensions.humanoid.skeleton.pelvis.nerves.dimensions import (
     pelvis_nerve_distance,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     nerve_tissue,
@@ -34,7 +35,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
     classify_soft,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def pelvis_nerve_occupancy(
@@ -102,7 +102,4 @@ def pelvis_nerve_mass_from_dimensions(
     var volume = tube_chain_volume(
         PelvisNerveField(dimensions, part, RIGHT).chain
     )
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

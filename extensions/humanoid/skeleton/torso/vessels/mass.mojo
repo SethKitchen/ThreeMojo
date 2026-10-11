@@ -15,6 +15,7 @@ one side's. The display minimum radius is not used.
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     vessel_tissue,
@@ -34,7 +35,6 @@ from extensions.humanoid.skeleton.torso.vessels.dimensions import (
     torso_vessel_field,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def torso_vessel_occupancy(
@@ -100,7 +100,4 @@ def torso_vessel_mass_from_dimensions(
     """
     tissue.validate()
     var volume = torso_vessel_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

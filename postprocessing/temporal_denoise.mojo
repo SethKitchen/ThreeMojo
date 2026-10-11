@@ -39,6 +39,7 @@ The specular mode, which reprojects the hit point along the ray length an
 SSR pass leaves in alpha, is not ported.
 """
 
+from render.color_math import floor_channels
 from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -330,13 +331,6 @@ def _load(colors: LightView, x: Int, y: Int) -> FloatColor:
     )
 
 
-def _floor0(color: FloatColor) -> FloatColor:
-    """Return a color with its negative channels raised to zero."""
-    return FloatColor(
-        max(color.r, 0), max(color.g, 0), max(color.b, 0), max(color.a, 0)
-    )
-
-
 # --- TemporalReprojectNode ---------------------------------------------------
 
 
@@ -457,7 +451,7 @@ def _history_tap(
     matches: three.js's `sampleBilinearTap`. The color is already weighed.
     """
     var slot = inputs.slot(x, y)
-    var color = _floor0(inputs.history[slot])
+    var color = floor_channels(inputs.history[slot])
     var depth = inputs.previous_depth[slot]
     var u = (Float32(min(max(x, 0), inputs.width - 1)) + 0.5) / Float32(
         inputs.width
@@ -630,7 +624,7 @@ def temporal_reproject_pixel(
     var depth = inputs.depth[slot]
     if depth >= 1:
         return FloatColor(0, 0, 0, 1)
-    var input = _floor0(inputs.signal[slot])
+    var input = floor_channels(inputs.signal[slot])
     var flicker = settings.flicker_suppression
     # `collectNeighborhood`: the pixel and its eight neighbors.
     var m1 = _dampened(input, flicker)
@@ -640,7 +634,7 @@ def temporal_reproject_pixel(
     )
     var view = LightView(inputs.signal, w, h)
     for at in range(8):  # pragma: no branch
-        var near = _floor0(
+        var near = floor_channels(
             _load(view, x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1]))
         )
         var c = _dampened(near, flicker)
@@ -987,7 +981,7 @@ def _neighborhood(
     for at in range(5):  # pragma: no branch
         var sample = center
         if at > 0:
-            sample = _floor0(
+            sample = floor_channels(
                 inputs.sample(
                     inputs.raw,
                     u + du[at] / Float32(inputs.width),
@@ -1040,7 +1034,7 @@ def recurrent_denoise_pixel(
         return FloatColor(0, 0, 0, 1)
     var normal = inputs.normal(u, v)
     var world_normal = inverse_view_normal(normal, inputs.view)
-    var texel = _floor0(inputs.sample(inputs.history, u, v))
+    var texel = floor_channels(inputs.sample(inputs.history, u, v))
     var here = view_position(u, v, depth, inputs.projection_inverse)
     var turn = analytic_noise(x, y, settings.frame_id) * 2 * Float32(pi)
     var c = cos(turn)
@@ -1048,7 +1042,7 @@ def recurrent_denoise_pixel(
     var frames = 1 / texel.a
     var variance = max(1 / pow(frames, 1 - settings.strength), Float32(0.05))
     var aggressivity = 1 - variance
-    var raw = _floor0(inputs.sample(inputs.raw, u, v))
+    var raw = floor_channels(inputs.sample(inputs.raw, u, v))
     var view_z = abs(here.z)
     var stats = _neighborhood(inputs, u, v, raw, settings)
     var rl = stats[0]
@@ -1107,8 +1101,8 @@ def recurrent_denoise_pixel(
         var at = screen_position(there_point, inputs.projection)
         var su = min(max(1 - abs(1 - abs(at.x)), 0), 1)
         var sv = min(max(1 - abs(1 - abs(at.y)), 0), 1)
-        var neighbor = _floor0(inputs.sample(inputs.history, su, sv))
-        var raw_neighbor = _floor0(inputs.sample(inputs.raw, su, sv))
+        var neighbor = floor_channels(inputs.sample(inputs.history, su, sv))
+        var raw_neighbor = floor_channels(inputs.sample(inputs.raw, su, sv))
         var n_depth = inputs.depth_at(su, sv)
         var there = view_position(su, sv, n_depth, inputs.projection_inverse)
         var n_view_z = abs(there.z)
@@ -1235,7 +1229,7 @@ def temporal_denoise(
     if settings.history_width != w or settings.history_height != h:
         settings.history = List[FloatColor](capacity=count)
         for slot in range(count):  # pragma: no branch
-            settings.history.append(_floor0(raw[slot]))
+            settings.history.append(floor_channels(raw[slot]))
         settings.history_width = w
         settings.history_height = h
         settings.previous_depth = view.depth.copy()
