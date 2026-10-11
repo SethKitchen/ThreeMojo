@@ -1,0 +1,59 @@
+{
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23",
+  "delta_from_v22": [
+    {
+      "after_sha256": "4299769d632b5a209893e825a0e29d6867efaf797bfa358e0d7c16a2b727d5e5",
+      "before_sha256": "4af5fa418f53323b669be405b22bf3f6a368ec19df1eb4af4e323ae5f7fcf194",
+      "path": "tools/carla_lane_oracle/test_coverage_invariant_contracts.py"
+    },
+    {
+      "after_sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "before_sha256": "ea2249433f0d4ff3b276bd1ec934ca1b3f455af9db69f8170e09f54cffe70c7f",
+      "path": "tools/test_coverage_loop_proofs.py"
+    },
+    {
+      "after_sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2",
+      "before_sha256": null,
+      "path": "docs/validation/full-audit-721-qualification-policy.md"
+    }
+  ],
+  "files": [
+    {
+      "before_sha256": null,
+      "bytes": 1797,
+      "git_blob": "18eafa7583927bf28e6f2673bcdadb2e633973b6",
+      "mode": "100644",
+      "path": "docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/docs/validation/full-audit-721-qualification-policy.md",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/docs/validation/full-audit-721-qualification-policy.md"
+    },
+    {
+      "before_sha256": "4af5fa418f53323b669be405b22bf3f6a368ec19df1eb4af4e323ae5f7fcf194",
+      "bytes": 6872,
+      "git_blob": "5dbd58b40d19b79dc0d1502fca03f2d83725840f",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_coverage_invariant_contracts.py",
+      "sha256": "4299769d632b5a209893e825a0e29d6867efaf797bfa358e0d7c16a2b727d5e5",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/test_coverage_invariant_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/carla_lane_oracle/test_coverage_invariant_contracts.py"
+    },
+    {
+      "before_sha256": "ef25eb5b8c590bb79359e8f44eb8f74884e4c05239f1dac2173f2bd32e1bcc9a",
+      "bytes": 135702,
+      "git_blob": "a6917a263760b3551a4614b9b2893a7ae53d5896",
+      "mode": "100644",
+      "path": "tools/test_coverage_loop_proofs.py",
+      "sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/test_coverage_loop_proofs.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v23/tools/test_coverage_loop_proofs.py"
+    }
+  ],
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "Explicit two-site Python import/source-verification subprocess allowance 10 to 30 seconds, plus qualification-policy addendum. All proof/production/record/theorem bytes identical to v22. Earlier original-limit failures remain failed.",
+  "source_seal_sha256": "568961570d775e5b35bfbdec45a6b3530baa7422794a76a8b2ee59887e45dda7",
+  "status": "source_only_unqualified",
+  "backup_delta_parent": "bdadbc9eac766b8d6e07863b7629420974a8dee9"
+}
