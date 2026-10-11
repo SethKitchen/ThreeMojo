@@ -18,8 +18,12 @@ partition in its own R-tree. `closest_waypoint_on_road`, `waypoint` and
 the sign check at load use it with CARLA's algorithm: the nearest segment,
 then a step along the lane to the point's foot. These queries do not use
 the certified search budget. Input validation, lane stepping and canonical
-pose evaluation can still raise errors. They keep CARLA's approximations:
-the step treats distance along the segment chord as road s.
+pose evaluation can still raise errors. They keep CARLA's partition, but
+they correct one CARLA approximation. CARLA steps by the plan distance along
+the segment chord, as if it were road s. A lane offset, a lane width or a
+curve can make the chord longer or shorter than its road-s span. A sloped
+lane then misses points on its center. This port steps by the foot's plan
+fraction of the chord times the chord's road-s span (#302).
 
 **The certified index.** `certified_closest_waypoint_on_road` and
 `certified_waypoint` use a second index. It starts with CARLA's partition
@@ -47,9 +51,9 @@ its incumbent; the API does not promise the first station on that plateau.
 The public `segment_count` and `segment` methods expose this accuracy-driven
 index. Its partition and count can change when the geometry requires more
 subdivision. Lane order and index tie rules remain deterministic. The
-certified queries correct curved lane offsets and the treatment of lane
-distance as road s. They cost more and can raise where CARLA's query
-answers, so they are not the default.
+certified queries also correct the chord error of curved lane offsets.
+They cost more and can raise where CARLA's query answers, so they are not
+the default.
 
 The R-tree, full-center bounds, and optional sampled-curve box covers belong
 to the same construction snapshot. Queries do not update these proofs.
@@ -143,7 +147,6 @@ from extensions.carla.lane_refinement import (
 )
 from extensions.carla.speed_limits import opendrive_speed, NUMERIC_SPEED_LIMIT
 from extensions.carla.math import (
-    distance_segment_to_point,
     make_unit_vector,
     vector_angle,
 )
@@ -1113,6 +1116,32 @@ def segment_distance_2d(
     )
 
 
+def _chord_station_delta(
+    location: Vector3, start: Vector3, end: Vector3, span: Float64
+) -> Float64:
+    # The default query's step along the lane, in road s. CARLA steps by the
+    # plan distance along the chord (`Math::DistanceSegmentToPoint`). That
+    # distance is not road s when a lane offset, a lane width or a curve
+    # changes the lane's plan speed (#302). This uses the foot's plan
+    # fraction of the chord times the chord's road-s span instead. Float64
+    # holds the square of any finite Float32 chord. A nonfinite chord gives
+    # NaN, which the callers refuse or return as before.
+    var dx = Float64(end.x) - Float64(start.x)
+    var dy = Float64(end.y) - Float64(start.y)
+    var l2 = dx * dx + dy * dy
+    if l2 == 0.0:
+        return 0.0
+    var px = Float64(location.x) - Float64(start.x)
+    var py = Float64(location.y) - Float64(start.y)
+    var t = (px * dx + py * dy) / l2
+    # Clamp without min and max, so that a NaN fraction stays NaN.
+    if t < 0.0:
+        t = 0.0
+    elif t > 1.0:
+        t = 1.0
+    return t * span
+
+
 # --- the map ------------------------------------------------------------------
 
 
@@ -2034,8 +2063,11 @@ struct Map(Movable):
         """Return the waypoint nearest a point, `GetClosestWaypointOnRoad`.
 
         CARLA finds the nearest segment of a lane of the given types, then
-        steps from the segment's start by the distance along it to the
-        point's foot. The segments are CARLA's heading and length partition.
+        steps from the segment's start toward the point's foot. The step is
+        the foot's plan fraction of the segment times the segment's road-s
+        span. CARLA steps by the plan distance itself; that is not road s
+        on a lane with a sloped or curved offset (#302). The segments are
+        CARLA's heading and length partition.
         For the certified nearest center, use
         `certified_closest_waypoint_on_road`.
 
@@ -2057,12 +2089,11 @@ struct Map(Movable):
         if len(found) == 0:
             return None
         ref segment = self._carla_segments[found[0].start_value]
-        var along = distance_segment_to_point(
-            location, segment.start, segment.end
-        )
         var start = segment.first
         var end = segment.second
-        var delta = Float64(along[0].value)
+        var delta = _chord_station_delta(
+            location, segment.start, segment.end, abs(end.s - start.s)
+        )
         var forward = self.is_positive_direction(start)
         var final_s = start.s + delta if forward else start.s - delta
         var past = final_s >= end.s if forward else final_s <= end.s
@@ -2672,10 +2703,9 @@ struct Map(Movable):
             raise Error(
                 "CARLA query segment must stay in one finite lane section"
             )
-        var along = distance_segment_to_point(
-            location, segment.start, segment.end
+        var delta = _chord_station_delta(
+            location, segment.start, segment.end, abs(end.s - start.s)
         )
-        var delta = Float64(along[0].value)
         # The default query resolves this metadata twice (direction and
         # next). Reuse the same checked location and preserve its arithmetic.
         var at = self._locate_with_work(start, work)
