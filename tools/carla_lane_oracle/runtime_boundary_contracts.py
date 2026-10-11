@@ -77,7 +77,7 @@ def verify(root, *, _operation=None):
         from . import runtime_view_contracts as view
     else:
         import runtime_view_contracts as view
-    steps = view.steps(root)
+    steps = view.steps(root, _operation=_operation)
     require(set(steps) <= set(MODULES), 'runtime view step outside the boundary scope')
     edges = {}
     for path in MODULES:
