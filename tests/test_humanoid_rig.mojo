@@ -21,6 +21,12 @@ from extensions.humanoid.rig.clips import (
     walk_clip,
     wave_clip,
 )
+from extensions.humanoid.skeleton.head.hair.styles import GROWN
+from extensions.humanoid.sources import (
+    CONVERTED_MANIFEST,
+    converted_sources,
+    game_source_paths,
+)
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,
     ENGINEERING_USE,
@@ -362,7 +368,8 @@ def test_a_game_humanoid_is_built_bound_and_light() raises:
         game_build_settings(3000, 12, 8, 8, guides=12, followers=1),
         String(CANONICAL_RECIPE),
         String(GAME_RECIPE),
-        "unverified-converted-ICTF-THRS",
+        String(CONVERTED_MANIFEST),
+        converted_sources(game_source_paths(12, GROWN)),
     )
     require_bake_provenance(scene.get(person.root).user_data, expected)
     assert_equal(len(person.bones), JOINT_COUNT)

@@ -6,24 +6,30 @@
 """Separate a humanoid's visual recipe from engineering capabilities.
 
 The versioned recipe retains canonical SI inputs, not canonical geometry
-or physical properties. It cannot certify anatomy, correspondence or an
-asset's source. Visual realism never grants an engineering capability.
-A producer must change its revision when its geometry or mapping changes.
+or physical properties. `extensions.humanoid.canonical` keeps those in a
+separate record. The recipe can record converted sources that were
+verified against their pinned manifest; see `extensions.humanoid.sources`.
+It cannot certify anatomy or correspondence. Visual realism never grants
+an engineering capability. A producer must change its revision when its
+geometry or mapping changes.
 """
 
+from core.buffer_geometry import POSITION, BufferGeometry
 from core.user_data import UserData, user_data_of
 from extensions.humanoid.athleticism import Athleticism
 from extensions.humanoid.genome import GENE_COUNT, Genome
 from extensions.humanoid.sex import Sex
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from loaders.json import parse_json
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT
 from std.math import isfinite
 from std.memory import bitcast
 from units.si import Length, METER
 
 comptime FIDELITY_KEY = "threemojo_humanoid_fidelity"
 # Version 2 adds the transform matrix and the content fingerprints.
-comptime FIDELITY_SCHEMA = 2
+# Version 3 adds the converted sources, verified against their manifest.
+comptime FIDELITY_SCHEMA = 3
 comptime FINGERPRINT_ALGORITHM = (
     "fnv1a-64 over normalized UTF-8 JSON; not cryptographic"
 )
@@ -167,12 +173,114 @@ def json_fingerprint(text: String) -> String:
     var hash = _FNV_OFFSET
     for byte in text.as_bytes():  # pragma: no branch
         hash = (hash ^ UInt64(byte)) * _FNV_PRIME
+    return _hex64(hash)
+
+
+def _hex64(hash: UInt64) -> String:
+    """Return a 64-bit hash as sixteen lowercase hexadecimal digits."""
     var hex = materialize[_HEX]()
     var digits = String()
     for at in range(16):  # pragma: no branch
         var nibble = Int((hash >> UInt64(60 - 4 * at)) & 0xF)
         digits += hex[nibble]
     return digits^
+
+
+def _mix_word(hash: UInt64, word: UInt32) -> UInt64:
+    """Mix four little-endian bytes of a word into an FNV-1a hash."""
+    var mixed = hash
+    for shift in range(4):  # pragma: no branch
+        var byte = UInt64((word >> UInt32(8 * shift)) & 0xFF)
+        mixed = (mixed ^ byte) * _FNV_PRIME
+    return mixed
+
+
+def _mix_attribute(
+    hash: UInt64, geometry: BufferGeometry, name: String
+) raises -> UInt64:
+    """Mix every component's exact Float32 bits of one attribute."""
+    ref attribute = geometry.attribute_view(name)
+    var mixed = _mix_word(hash, UInt32(attribute.count()))
+    for vertex in range(attribute.count()):  # pragma: no branch
+        for component in range(attribute.item_size):  # pragma: no branch
+            mixed = _mix_word(
+                mixed,
+                bitcast[DType.uint32](attribute.component(vertex, component)),
+            )
+    return mixed
+
+
+def topology_fingerprint(geometry: BufferGeometry) raises -> String:
+    """Return the fingerprint of a mesh's vertex count and index list.
+
+    Args:
+        geometry: A mesh with a `position` attribute.
+
+    Returns:
+        Sixteen lowercase hexadecimal digits.
+
+    Raises:
+        Error: If the mesh has no position attribute.
+    """
+    ref positions = geometry.attribute_view(String(POSITION))
+    var topology = _mix_word(_FNV_OFFSET, UInt32(positions.count()))
+    for index in geometry.index:
+        topology = _mix_word(topology, UInt32(index))
+    return _hex64(topology)
+
+
+def geometry_fingerprint(geometry: BufferGeometry) raises -> UserData:
+    """Return exact fingerprints of a mesh's topology and vertex data.
+
+    Each fingerprint is a 64-bit FNV-1a hash over little-endian words.
+    `topology` covers the vertex count and the index list. `positions`
+    covers the exact Float32 bits of every position. `skin` covers the
+    skin indices and weights, or is `"none"`. `morphs` covers every morph
+    target's positions, or is `"none"`. Normals, texture coordinates and
+    colors are not covered. These hashes detect changed bytes; they are
+    not cryptographic.
+
+    Args:
+        geometry: A mesh with a `position` attribute.
+
+    Returns:
+        Vertex and triangle counts and the four fingerprints.
+
+    Raises:
+        Error: If the mesh has no position attribute or a skin attribute
+            is missing its partner.
+    """
+    ref positions = geometry.attribute_view(String(POSITION))
+    var record = UserData()
+    record.set_number("vertices", Float64(positions.count()))
+    record.set_number("triangles", Float64(geometry.triangle_count()))
+    record.set_string("topology", topology_fingerprint(geometry))
+    record.set_string(
+        "positions",
+        _hex64(_mix_attribute(_FNV_OFFSET, geometry, String(POSITION))),
+    )
+    var skinned = geometry.has_attribute(String(SKIN_INDEX))
+    if skinned != geometry.has_attribute(String(SKIN_WEIGHT)):
+        raise Error("A skinned mesh needs both skin indices and weights")
+    if skinned:
+        var skin = _mix_attribute(_FNV_OFFSET, geometry, String(SKIN_INDEX))
+        skin = _mix_attribute(skin, geometry, String(SKIN_WEIGHT))
+        record.set_string("skin", _hex64(skin))
+    else:
+        record.set_string("skin", "none")
+    record.set_number("morph_targets", Float64(geometry.morph_count()))
+    if geometry.morph_count() > 0:
+        var morphs = _FNV_OFFSET
+        for target in range(geometry.morph_count()):  # pragma: no branch
+            for vertex in range(positions.count()):  # pragma: no branch
+                var moved = geometry.morph_position(target, vertex)
+                morphs = _mix_word(morphs, bitcast[DType.uint32](moved.x))
+                morphs = _mix_word(morphs, bitcast[DType.uint32](moved.y))
+                morphs = _mix_word(morphs, bitcast[DType.uint32](moved.z))
+        record.set_string("morphs", _hex64(morphs))
+    else:
+        record.set_string("morphs", "none")
+    return record^
 
 
 def _normalized(text: String) raises -> String:
@@ -228,12 +336,14 @@ def humanoid_provenance(
     canonical_revision: String,
     visual_revision: String,
     asset_revision: String,
+    sources: UserData = UserData(),
 ) raises -> UserData:
     """Return a fail-closed creation recipe for glTF node or scene extras.
 
-    Revisions identify the producer's source and topology. They are caller
-    assertions, not verified hashes or proof of a license. Use an explicit
-    unknown marker when the converted asset has no pinned source manifest.
+    Revisions identify the producer's recipes. They are caller assertions,
+    not verified hashes. `sources` from `converted_sources` binds the
+    converted inputs to their pinned manifest by SHA-256. An empty
+    `sources` records the inputs as unverified.
     Local coordinates are meters, right-handed, y-up, pelvis-origin.
     The canonical-to-local-rest transform is an explicit identity matrix.
     Parent and animation transforms remain in glTF nodes and channels.
@@ -246,13 +356,15 @@ def humanoid_provenance(
         canonical_revision: Canonical source or recipe revision.
         visual_revision: Visual topology, rig and mapping revision.
         asset_revision: Converted model revision or an unknown marker.
+        sources: Verified converted sources, or empty for none.
 
     Returns:
         A versioned record with an exact recipe fingerprint and explicit
         unsupported physical capabilities. No physical model is embedded.
 
     Raises:
-        Error: If the spec or any revision is missing or invalid.
+        Error: If the spec or any revision is missing or invalid, or if
+            nonempty sources lack their manifest or asset entries.
     """
     if canonical_revision == "":
         raise Error("Fidelity provenance needs a canonical revision")
@@ -260,11 +372,21 @@ def humanoid_provenance(
         raise Error("Fidelity provenance needs a visual revision")
     if asset_revision == "":
         raise Error("Fidelity provenance needs an asset revision")
+    var verified = sources.count() > 0
+    if verified:
+        for key in [
+            "manifest",
+            "manifest_sha256",
+            "assets",
+        ]:  # pragma: no branch
+            if not sources.has(key):
+                raise Error("Fidelity sources need their manifest and assets")
     var recipe = UserData()
     recipe.set_number("schema_version", FIDELITY_SCHEMA)
     recipe.set_string("canonical_revision", canonical_revision)
     recipe.set_string("visual_revision", visual_revision)
     recipe.set_string("asset_revision", asset_revision)
+    recipe.set_json("converted_sources", sources.to_json())
     recipe.set_json("canonical_inputs", canonical_inputs(spec).to_json())
     recipe.set_json("visual_settings", visual_settings.to_json())
     recipe.set_string("length_unit", "meter")
@@ -299,7 +421,7 @@ def humanoid_provenance(
     record.set_boolean("engineering_use", False)
     record.set_boolean("canonical_geometry_embedded", False)
     record.set_boolean("physical_properties_embedded", False)
-    record.set_boolean("source_manifest_verified", False)
+    record.set_boolean("source_manifest_verified", verified)
     record.set_string(
         "identity_mapping",
         "visual-only; canonical skull and tissue coupling unsupported",
@@ -414,6 +536,7 @@ def stored_provenance(stored: UserData) raises -> UserData:
         "canonical_revision",
         "visual_revision",
         "asset_revision",
+        "converted_sources",
         "canonical_inputs",
         "visual_settings",
         "length_unit",
@@ -445,12 +568,15 @@ def stored_provenance(stored: UserData) raises -> UserData:
     var inputs = user_data_of(input_document, input_document.root())
     var settings_document = parse_json(recipe.json("visual_settings"))
     var settings = user_data_of(settings_document, settings_document.root())
+    var sources_document = parse_json(recipe.json("converted_sources"))
+    var sources = user_data_of(sources_document, sources_document.root())
     var expected = humanoid_provenance(
         _spec_from_canonical(inputs),
         settings,
         recipe.string("canonical_revision"),
         recipe.string("visual_revision"),
         recipe.string("asset_revision"),
+        sources,
     )
     if record.to_json() != expected.to_json():
         raise Error("Humanoid bake provenance is stale or changed; rebuild it")

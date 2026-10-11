@@ -50,6 +50,8 @@ positions keep the same welds and triangle neighbors.
 3. From each patch, the nearness spreads along the triangles' edges.
 4. A vertex weighs each bone by the inverse fourth power of that distance plus 3 cm. The four heaviest bones keep their weights, which add up to one.
 
+`add_game_humanoid` then calls `exact_skin_weights`. It snaps each weight to a whole multiple of 2^-20. The rounding remainder goes to the largest weight, so the four weights sum to exactly one. A glTF loader normalizes the weights again, and every bit stays the same. So the content record of a bake survives a load. See [Humanoid fidelity](Humanoid-fidelity).
+
 A limb's bones never turn the far side of the midline. Each hand is turned only by its own forearm and hand. The body's skin is not turned by the hands, whose own meshes draw them.
 
 The thighs touch, so the skin over them is one surface. For a game the body's skin is meshed with a slot between the legs, about 3 cm wide and rounded. `body_skin_mesh(..., parted=)` cuts it. `part_legs` then gives each leg its own triangles below the crotch.

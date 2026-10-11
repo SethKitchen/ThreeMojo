@@ -46,7 +46,13 @@ from extensions.humanoid.genome import (
     Genome,
 )
 from extensions.humanoid.rig.game import add_game_humanoid, game_build_settings
-from extensions.humanoid.skeleton.head.hair.styles import HairStyle
+from extensions.humanoid.bake import CONTENT_KEY, require_bake_content
+from extensions.humanoid.skeleton.head.hair.styles import GROWN, HairStyle
+from extensions.humanoid.sources import (
+    CONVERTED_MANIFEST,
+    converted_sources,
+    game_source_paths,
+)
 from extensions.humanoid.sex import MALE, Sex
 from extensions.humanoid.spec import HumanoidSpec
 from core.user_data import user_data_of
@@ -156,6 +162,52 @@ def test_invalid_specs_and_missing_revisions_are_refused() raises:
         _ = humanoid_provenance(_spec(), settings, "canonical", "", "asset")
     with assert_raises(contains="asset revision"):
         _ = humanoid_provenance(_spec(), settings, "canonical", "visual", "")
+
+
+def test_verified_sources_bind_the_recipe() raises:
+    var sources = converted_sources(game_source_paths(0, GROWN))
+    var settings = game_build_settings(10000)
+    var record = humanoid_provenance(
+        _spec(),
+        settings,
+        String(CANONICAL_RECIPE),
+        String(GAME_RECIPE),
+        String(CONVERTED_MANIFEST),
+        sources,
+    )
+    assert_true(record.boolean("source_manifest_verified"))
+    assert_false(record.boolean("engineering_use"))
+    assert_equal(stored_provenance(_stored(record)).to_json(), record.to_json())
+    var recipe = _parsed(record.json("recipe"))
+    assert_equal(recipe.json("converted_sources"), sources.to_json())
+    # An unverified bake does not stand for a verified recipe.
+    with assert_raises(contains="stale or changed"):
+        require_bake_provenance(_stored(_provenance(_spec())), record)
+    # A changed source changes the recipe, so the old bake is stale.
+    var changed = sources.copy()
+    changed.set_string("manifest_sha256", "changed")
+    var other = humanoid_provenance(
+        _spec(),
+        settings,
+        String(CANONICAL_RECIPE),
+        String(GAME_RECIPE),
+        String(CONVERTED_MANIFEST),
+        changed,
+    )
+    assert_true(other.string("recipe_digest") != record.string("recipe_digest"))
+    with assert_raises(contains="stale or changed"):
+        require_bake_provenance(_stored(other), record)
+    var edited = record.copy()
+    edited.set_boolean("source_manifest_verified", False)
+    with assert_raises(contains="stale or changed"):
+        _ = stored_provenance(_stored(edited))
+    for key in ["manifest", "manifest_sha256", "assets"]:
+        var partial = sources.copy()
+        _ = partial.remove(key)
+        with assert_raises(contains="manifest and assets"):
+            _ = humanoid_provenance(
+                _spec(), settings, "canonical", "visual", "asset", partial
+            )
 
 
 def test_stale_inputs_options_and_capability_edits_are_refused() raises:
@@ -512,7 +564,8 @@ def test_real_game_humanoid_glb_retains_recipe_and_visual_positions() raises:
         game_build_settings(3000, 12, 8, 8),
         String(CANONICAL_RECIPE),
         String(GAME_RECIPE),
-        "unverified-converted-ICTF-THRS",
+        String(CONVERTED_MANIFEST),
+        converted_sources(game_source_paths(0, GROWN)),
     )
     require_bake_provenance(scene.get(person.root).user_data, expected)
     var options = GltfExportOptions()
@@ -529,8 +582,14 @@ def test_real_game_humanoid_glb_retains_recipe_and_visual_positions() raises:
             var data = loaded_scene.get(node).user_data.copy()
             if data.has(String(FIDELITY_KEY)):
                 require_bake_provenance(data, expected)
+                assert_true(data.has(String(CONTENT_KEY)))
+                # The loaded mesh bytes and mappings match the build.
+                require_bake_content(
+                    loaded_scene, loaded_assets, node, expected
+                )
                 contracts += 1
     assert_equal(contracts, 1)
+    assert_true(expected.boolean("source_manifest_verified"))
     assert_equal(len(loaded_scene.skinned_meshes), len(person.skins))
     for index in range(len(person.skins)):
         ref before = assets.geometries.get(
