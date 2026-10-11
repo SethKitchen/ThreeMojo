@@ -1,0 +1,21 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v16",
+  "seal": "CANDIDATE-V16-SOURCE-SEAL.json",
+  "phase": "anatomy-report-binding-v16",
+  "window_seconds": 1800,
+  "scope": "Fresh read-only binding and full-pair accounting for the actual generated report, outside frozen source. No metadata repin or inherited report reuse.",
+  "stages": [
+    {
+      "label": "verify-genuine-report",
+      "seconds": 180,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/verify_generated_report_v16.py",
+        "{evidence}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/anatomy-report-generation-v16"
+      ]
+    }
+  ],
+  "pause_request_file": "native-lane-v16.pause"
+}

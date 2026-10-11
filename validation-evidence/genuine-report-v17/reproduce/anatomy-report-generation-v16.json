@@ -1,0 +1,41 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v16",
+  "seal": "CANDIDATE-V16-SOURCE-SEAL.json",
+  "phase": "anatomy-report-generation-v16",
+  "window_seconds": 10800,
+  "scope": "Genuine combined anatomy report on exact reviewed integration1fc19133 plus43 reviewed CARLA repair paths. Unmodified producer,full134-component/8911-pair scope, original600s build/5s per measurement,1800s supervisor stage. Output/probe/provenance outside frozen source; this generation is not final regression/native coverage qualification.",
+  "stages": [
+    {
+      "label": "generate-full-report",
+      "seconds": 1800,
+      "command": [
+        "{python}",
+        "-B",
+        "tools/anatomy_validity.py",
+        "--build",
+        "--mojo",
+        "{mojo}",
+        "--probe",
+        "{evidence}/anatomy-probe",
+        "--output",
+        "{evidence}/generated-anatomy-report.json",
+        "--steps-mm",
+        "20",
+        "10",
+        "5",
+        "--stature-m",
+        "1.8288",
+        "--sex",
+        "male",
+        "--side",
+        "right",
+        "--athleticism",
+        "untoned",
+        "--use",
+        "template-estimate",
+        "--pair-scope",
+        "full"
+      ]
+    }
+  ]
+}

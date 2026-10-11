@@ -1,0 +1,17 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/verify_generated_report_v16.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/anatomy-report-binding-v16",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/anatomy-report-generation-v16"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v16",
+  "label": "verify-genuine-report",
+  "pgid": 7,
+  "pid": 7,
+  "single_cpu": 0,
+  "source_seal_sha256": "478fbee7e6e2fa274df78090c6d83bcd16ad1e550bd9e25f77e4a7b4883c2eed",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-11T01:16:40.109564+00:00"
+}

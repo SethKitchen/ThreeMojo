@@ -1,0 +1,10 @@
+{
+  "source_sha256": "b7760adf675a458b38f4da764dba619869b48b70f92434f9ee49ce986dbc5d96",
+  "toolchain": "Mojo 1.1.0 (8189361e)",
+  "flags": [
+    "--Werror",
+    "--num-threads",
+    "1"
+  ],
+  "binary_sha256": "80f8f6801610a06874caeac9246a2cb5ce99f3503caf790f2c042daa3ec8e1f8"
+}

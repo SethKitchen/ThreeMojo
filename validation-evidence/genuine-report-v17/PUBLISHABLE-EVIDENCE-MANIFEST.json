@@ -1,0 +1,279 @@
+{
+  "files": [
+    {
+      "bytes": 329,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/LANE-CHECKPOINT.json",
+      "path": "actual/anatomy-report-generation-v16/LANE-CHECKPOINT.json",
+      "sha256": "412db971925faecfa396e9cf2eb529e4f55b5f57394dceb78a550dbeff09a233"
+    },
+    {
+      "bytes": 313,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/LANE-HANDOFFS.jsonl",
+      "path": "actual/anatomy-report-generation-v16/LANE-HANDOFFS.jsonl",
+      "sha256": "ecb649e3352f8f14c3a090f23030f636240e935ae4712e235b432b0203e182a5"
+    },
+    {
+      "bytes": 211,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/LATEST.json",
+      "path": "actual/anatomy-report-generation-v16/LATEST.json",
+      "sha256": "16a1eef3ff49e391000b229b506b798837b1bc010ae0d30e99aecebecb70411b"
+    },
+    {
+      "bytes": 23480,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/PROCESSES.jsonl",
+      "path": "actual/anatomy-report-generation-v16/PROCESSES.jsonl",
+      "sha256": "1b826b006134f4c984ebfab0022a1d5372de4b3f3010775a069af5f7d9622e04"
+    },
+    {
+      "bytes": 2177,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/RESULT.json",
+      "path": "actual/anatomy-report-generation-v16/RESULT.json",
+      "sha256": "a0aee8bb50ba8a4875096988fe0e0f95b1897aa3f266b113128939034ad9d08d"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/SDK-AFTER.json",
+      "path": "actual/anatomy-report-generation-v16/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/SDK-BEFORE.json",
+      "path": "actual/anatomy-report-generation-v16/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 419268,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/SOURCE-SEAL.json",
+      "path": "actual/anatomy-report-generation-v16/SOURCE-SEAL.json",
+      "sha256": "478fbee7e6e2fa274df78090c6d83bcd16ad1e550bd9e25f77e4a7b4883c2eed"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/WINDOW-START.json",
+      "path": "actual/anatomy-report-generation-v16/WINDOW-START.json",
+      "sha256": "5f183ba3c7040b6f24f74f3d6201d110a790229bcd874009e0d05cd98bb7232f"
+    },
+    {
+      "bytes": 505229,
+      "kind": "losslessly-encoded-actual-output",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/anatomy-probe.gz.b64",
+      "path": "actual/anatomy-report-generation-v16/anatomy-probe.gz.b64",
+      "sha256": "a2b71d58e6966dd07615cf0647fe1c8afa9510076f97502c4d763ead151216a2"
+    },
+    {
+      "bytes": 280,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/anatomy-probe.provenance.json",
+      "path": "actual/anatomy-report-generation-v16/anatomy-probe.provenance.json",
+      "sha256": "add19804d7a22babc76b9b73ee64b30b380db744943baa6ee6c91d3566ac029a"
+    },
+    {
+      "bytes": 1348,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/generate-full-report-RESULT.json",
+      "path": "actual/anatomy-report-generation-v16/generate-full-report-RESULT.json",
+      "sha256": "a56c6e8d720499074c31a1784eb057b1b457fb1b78a4515e724072cc2f1d3feb"
+    },
+    {
+      "bytes": 1104,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/generate-full-report-START.json",
+      "path": "actual/anatomy-report-generation-v16/generate-full-report-START.json",
+      "sha256": "ecb22261727636abce80cf9b025971406751fe3d74ccc5eb0638536f7a7b1177"
+    },
+    {
+      "bytes": 187,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/generate-full-report.log",
+      "path": "actual/anatomy-report-generation-v16/generate-full-report.log",
+      "sha256": "1457911296beb834ae28c4fbbe6ced9befa78e8765577449c1ea8e350e8ff593"
+    },
+    {
+      "bytes": 414253,
+      "kind": "losslessly-encoded-actual-output",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-generation-v16/generated-anatomy-report.json.gz.b64",
+      "path": "actual/anatomy-report-generation-v16/generated-anatomy-report.json.gz.b64",
+      "sha256": "fe27e17cd4fd5a79cdcc9c02c3e46e7880ae174f418126df712299aead7f670f"
+    },
+    {
+      "bytes": 1231,
+      "kind": "actual-protocol-or-supervisor-output",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/anatomy-report-generation-v16.json",
+      "path": "reproduce/anatomy-report-generation-v16.json",
+      "sha256": "61caf56bf797f0640c9f58b7941abc8c8ff7521154073f9d50a30bc770441ff4"
+    },
+    {
+      "bytes": 3035,
+      "kind": "actual-protocol-or-supervisor-output",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/anatomy-report-generation-v16.supervisor.log",
+      "path": "reproduce/anatomy-report-generation-v16.supervisor.log",
+      "sha256": "c5ca20e20deca4b671211bd2d371c1791ad115ffcdb31d7bcc874229185b88df"
+    },
+    {
+      "bytes": 212,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/LATEST.json",
+      "path": "actual/anatomy-report-binding-v16/LATEST.json",
+      "sha256": "3cd6d180eba934fdbd996621584d548a2a19ecd59a9a340931308fef4581035a"
+    },
+    {
+      "bytes": 960,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/PROCESSES.jsonl",
+      "path": "actual/anatomy-report-binding-v16/PROCESSES.jsonl",
+      "sha256": "fa84171142d607d3163534fb59397d2ba929e6f1012278b34e440636783413f8"
+    },
+    {
+      "bytes": 24660,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/REPORT-BINDING-RESULT.json",
+      "path": "actual/anatomy-report-binding-v16/REPORT-BINDING-RESULT.json",
+      "sha256": "3807443877d95bce90db3af9c03dd9da8c165a18de2757ac55365d2deea2343d"
+    },
+    {
+      "bytes": 1535,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/RESULT.json",
+      "path": "actual/anatomy-report-binding-v16/RESULT.json",
+      "sha256": "132415a75071a40b2fa582077588a1dbfc9dcf867a28ea1e1db934056832df09"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/SDK-AFTER.json",
+      "path": "actual/anatomy-report-binding-v16/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/SDK-BEFORE.json",
+      "path": "actual/anatomy-report-binding-v16/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 419268,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/SOURCE-SEAL.json",
+      "path": "actual/anatomy-report-binding-v16/SOURCE-SEAL.json",
+      "sha256": "478fbee7e6e2fa274df78090c6d83bcd16ad1e550bd9e25f77e4a7b4883c2eed"
+    },
+    {
+      "bytes": 370,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/WINDOW-START.json",
+      "path": "actual/anatomy-report-binding-v16/WINDOW-START.json",
+      "sha256": "58bcf4362e2de6f7760ebbc68e4b582e272b8d10d242918c8b530a055c8cc352"
+    },
+    {
+      "bytes": 982,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/verify-genuine-report-RESULT.json",
+      "path": "actual/anatomy-report-binding-v16/verify-genuine-report-RESULT.json",
+      "sha256": "165afaac13065024869918afab4631b9478fb3f8b17f2339c5bc910606d00001"
+    },
+    {
+      "bytes": 738,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/verify-genuine-report-START.json",
+      "path": "actual/anatomy-report-binding-v16/verify-genuine-report-START.json",
+      "sha256": "9db611a1833c20811749547e32a90b22341eba872f4bfecb5f595932e104a418"
+    },
+    {
+      "bytes": 120,
+      "kind": "original-supervisor-receipt-raw-log-or-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/actual/anatomy-report-binding-v16/verify-genuine-report.log",
+      "path": "actual/anatomy-report-binding-v16/verify-genuine-report.log",
+      "sha256": "1e54b71569b3cbcec6ace2ed1d165e29abda82c07caf1f42526e693c9c107343"
+    },
+    {
+      "bytes": 788,
+      "kind": "actual-protocol-or-supervisor-output",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/anatomy-report-binding-v16.json",
+      "path": "reproduce/anatomy-report-binding-v16.json",
+      "sha256": "ed61ee712bc2b710551f4717e0ca34145ac3f9527e171a9aa900f1e61595edf7"
+    },
+    {
+      "bytes": 2279,
+      "kind": "actual-protocol-or-supervisor-output",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/anatomy-report-binding-v16.supervisor.log",
+      "path": "reproduce/anatomy-report-binding-v16.supervisor.log",
+      "sha256": "5474e9b84bd7112aff78467e8ff5ec6e6fb4e1500a23837377469cfde747ab64"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-harness-or-source-installation-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 7836,
+      "kind": "executed-harness-or-source-installation-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/verify_generated_report_v16.py",
+      "path": "reproduce/verify_generated_report_v16.py",
+      "sha256": "754960db936f46d5af11efc39f48f49841f8b6c54c9bcea0a66ae8be91e27ab6"
+    },
+    {
+      "bytes": 419268,
+      "kind": "executed-harness-or-source-installation-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/CANDIDATE-V17-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V17-SOURCE-SEAL.json",
+      "sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21"
+    },
+    {
+      "bytes": 668,
+      "kind": "executed-harness-or-source-installation-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/V17-REPORT-INSTALLATION.json",
+      "path": "reproduce/V17-REPORT-INSTALLATION.json",
+      "sha256": "81cbcfa90693c2f6bb691f359ceeff6cab17b802cc359a1b15d50a18dacf86a0"
+    },
+    {
+      "bytes": 887,
+      "kind": "executed-harness-or-source-installation-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/GENUINE-REPORT-V17-OVERLAY.json",
+      "path": "reproduce/GENUINE-REPORT-V17-OVERLAY.json",
+      "sha256": "6d4e88d88b8827684b5eeac65b26396a29276bdaf2430f221de07ff5d8fb7f87"
+    },
+    {
+      "bytes": 46413,
+      "kind": "exact-consumed-source",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/source/tools/anatomy_validity.py",
+      "path": "reproduce/source/tools/anatomy_validity.py",
+      "sha256": "d1162cc96da47e1875c084f533eb8c0b31cb5f8968ee3c8b6f542af80de4d48a"
+    },
+    {
+      "bytes": 22511,
+      "kind": "exact-consumed-source",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/reproduce/source/tools/humanoid_fidelity.py",
+      "path": "reproduce/source/tools/humanoid_fidelity.py",
+      "sha256": "85839d8958c054ea73361e20c728bc2d4d52d57c348e037020499c8e9770b4bd"
+    },
+    {
+      "bytes": 2471,
+      "kind": "derived-scope-limited-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "67c5632c2cd7a1aa9e1fe6cc56ccd161a03d366e4cd2cedacfa03de5fa45249b"
+    },
+    {
+      "bytes": 737,
+      "kind": "byte-preserving-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-genuine-report-v17-packet/decode_actual_outputs.py",
+      "path": "decode_actual_outputs.py",
+      "sha256": "3b62305bb80478ad05eb078116a082aaf49ade7aae01ba216f7b491876567656"
+    }
+  ],
+  "schema": 1,
+  "scope": "Actual genuine full anatomy report generation and independent source/probe/receipt binding. This evidence does not qualify the pending final Python body matrix, paired native controls, maintained coverage, hosted CI or issue completion."
+}

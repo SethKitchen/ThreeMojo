@@ -1,0 +1,15 @@
+{
+  "binding_result_sha256": "132415a75071a40b2fa582077588a1dbfc9dcf867a28ea1e1db934056832df09",
+  "files": [
+    {
+      "before_sha256": "76813ae7b6368b8b7abc2f183a165c85df9cbfb3e911be1bd78e1cccbda2c947",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/anatomy-report-generation-v16/generated-anatomy-report.json",
+      "repository_path": "docs/validation/anatomy-template-report.json",
+      "sha256": "bd9409445d98517a99a84b2082ac9401f40332b2944828eee74de73496f74ca2"
+    }
+  ],
+  "generation_result_sha256": "a0aee8bb50ba8a4875096988fe0e0f95b1897aa3f266b113128939034ad9d08d",
+  "report_binding_sha256": "3807443877d95bce90db3af9c03dd9da8c165a18de2757ac55365d2deea2343d",
+  "schema": 1,
+  "scope": "Install exactly the genuine generated and independently bound report; no report metadata is rewritten. All other source bytes remain frozen."
+}
