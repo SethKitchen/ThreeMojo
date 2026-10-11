@@ -22,7 +22,7 @@ from extensions.humanoid.skeleton.leg.nerves.dimensions import NerveField
 from extensions.humanoid.skeleton.foot.nerves.dimensions import FootNerveField
 from extensions.humanoid.skeleton.leg.lymph.dimensions import LymphField
 from extensions.humanoid.skeleton.foot.lymph.dimensions import FootLymphField
-from tools.anatomy_pairs import _components, _Component, _batch, _work
+from tools.anatomy_pairs import _components, _Component, _batch, _work, _refine
 from extensions.humanoid.sex import MALE
 from extensions.humanoid.side import RIGHT, LEFT
 from extensions.humanoid.spec import HumanoidSpec
@@ -34,6 +34,7 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     foot_muscle_dimensions,
 )
 from math.vector3 import Vector3
+from std.math import max
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -42,6 +43,57 @@ from std.testing import (
     assert_raises,
 )
 from units.si import Length
+
+
+@fieldwise_init
+struct _ConstantField(DistanceField, ImplicitlyCopyable):
+    var value: Float32
+
+    def distance(self, point: Vector3) -> Float32:
+        _ = point
+        return self.value
+
+
+@fieldwise_init
+struct _BoundaryField(DistanceField, ImplicitlyCopyable):
+    var axes: Int
+    var sign: Float32
+    var threshold: Float32
+
+    def distance(self, point: Vector3) -> Float32:
+        var d = self.sign * point.x - self.threshold
+        if self.axes > 1:
+            d = max(d, self.sign * point.y - self.threshold)
+        if self.axes > 2:
+            d = max(d, self.sign * point.z - self.threshold)
+        return d
+
+
+def test_refinement_endpoint_weights_cover_only_the_searched_cube() raises:
+    var inside = _ConstantField(-1)
+    var outside = _ConstantField(1)
+    var half = Float32(0.125)
+    var full = _refine(inside, inside, Vector3(0, 0, 0), half)
+    var empty = _refine(inside, outside, Vector3(0, 0, 0), half)
+    assert_equal(full[2], 33 * 33 * 33)
+    assert_equal(full[3], 8 * 32 * 32 * 32)
+    assert_equal(empty[2], 0)
+    assert_equal(empty[3], 0)
+    var spacing = Float64(2 * half / 32)
+    var volume = Float64(full[3]) * 0.125 * spacing * spacing * spacing
+    assert_equal(volume, Float64(0.25) * 0.25 * 0.25)
+    # Only a boundary face, edge or corner is inside these fields.
+    # This distinguishes true endpoints from shifted equal-total weights.
+    var samples: List[Int] = [33 * 33, 33, 1]
+    var weights: List[Int] = [64 * 64, 64, 1]
+    for sign in [Float32(-1), Float32(1)]:
+        for axes in range(1, 4):
+            var boundary = _BoundaryField(
+                axes, sign, -half + Float32(spacing) * 0.5
+            )
+            var partial = _refine(boundary, inside, Vector3(0, 0, 0), half)
+            assert_equal(partial[2], samples[axes - 1])
+            assert_equal(partial[3], weights[axes - 1])
 
 
 def test_catalog_is_complete_canonical_and_in_one_frame() raises:
