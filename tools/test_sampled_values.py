@@ -10,6 +10,10 @@ import subprocess
 import sys
 import tempfile
 import unittest
+try:
+    from carla_lane_oracle import _full_audit_test_fixtures as cleanup_fixtures
+except ModuleNotFoundError:
+    from tools.carla_lane_oracle import _full_audit_test_fixtures as cleanup_fixtures
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT/'tools/carla_lane_oracle/check_sampled_values.py'
@@ -20,6 +24,7 @@ spec.loader.exec_module(m)
 
 class SampledValueCorrespondenceTests(unittest.TestCase):
     def setUp(self):
+        self.cleanup_sources = cleanup_fixtures.verified_predecessors(ROOT)
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         self.root = Path(self.directory.name)
@@ -49,6 +54,8 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
                 target.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
             else:
                 shutil.copyfile(ROOT/name, target)
+
+        cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
 
     def change(self, name, before, after):
         path = self.root/'extensions/carla'/name
@@ -124,6 +131,28 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
                     self.rejected()
                 finally:
                     path.write_bytes(original)
+
+    def test_complete_current_cleanup_correspondence_and_revocation(self):
+        cleanup = cleanup_fixtures.cleanup
+        root = cleanup_fixtures.copy_current_root(self, ROOT)
+        self.assertEqual(m.verify(root)['copied_functions'], 8)
+        self.assertEqual(m.verify(root)['dispatch_functions'], 6)
+        for mode in ([], ['-O']):
+            result = subprocess.run([sys.executable, *mode, '-B', str(SCRIPT),
+                                     '--repo-root', str(root)], capture_output=True)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        for name in (cleanup.MIGRATION, 'extensions/carla/map_search.mojo',
+                     *cleanup.SOURCE_PATHS):
+            path = root/name
+            original = path.read_bytes()
+            with self.subTest(missing_current_input=name):
+                try:
+                    path.unlink()
+                    with self.assertRaises((m.CheckError, OSError, ValueError)):
+                        m.verify(root)
+                finally:
+                    path.write_bytes(original)
+                self.assertEqual(m.verify(root)['copied_functions'], 8)
 
     def test_optimized_python_keeps_checks(self):
         result = subprocess.run([sys.executable, '-O', '-B', str(SCRIPT),

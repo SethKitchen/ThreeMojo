@@ -90,12 +90,7 @@ def verify_premises(root):
 
 def verify(root):
     record = read_record(root)
-    verify_runtime_pin_successor(root, record['runtime_pins_before_sha256'])
-    if __package__:
-        from . import coverage_invariant_contracts as invariant
-    else:
-        import coverage_invariant_contracts as invariant
-    guard_payload = invariant.predecessor_pins(root, 'sum2-guard-pins.json')
+    _, guard_payload = _verified_pin_pair(root, record['runtime_pins_before_sha256'])
     require(hashlib.sha256(guard_payload).hexdigest() ==
             record['guard_pins_unchanged_sha256'], 'guard pin lineage changed')
     require(source.token_sha256((root/SOURCE_PATH).read_text()) ==
@@ -109,3 +104,37 @@ def verify(root):
         cleanup.verify_dependency(path, (root/path).read_text(), expected['token_sha256'])
     verify_premises(root)
     return record
+
+
+def _runtime_pin_predecessor(payload, record, prior_digest):
+    require(hashlib.sha256(payload).hexdigest() == record['runtime_pins_after_sha256'],
+            'unreviewed runtime pin successor')
+    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
+    transitions = record['runtime_token_successors']
+    require(len(transitions) == 3 and
+            {(item['group'], item['path']) for item in transitions} == {
+                ('eligibility', SOURCE_PATH), ('optional_runtime', SOURCE_PATH),
+                ('translation', SOURCE_PATH)},
+            'wrong runtime successor placements')
+    for item in transitions:
+        require(pins['groups'][item['group']][item['path']] == item['after'],
+                'runtime successor token mismatch')
+        pins['groups'][item['group']][item['path']] = item['before']
+    predecessor = (json.dumps(pins, indent=2)+'\n').encode()
+    require(hashlib.sha256(predecessor).hexdigest() == prior_digest,
+            'runtime predecessor reconstruction failed')
+    return predecessor
+
+
+def _verified_pin_pair(root, prior_digest):
+    """Reconstruct frozen runtime bytes and retain the invariant guard bytes."""
+    record = read_record(root)
+    require(prior_digest == record['runtime_pins_before_sha256'],
+            'runtime pin predecessor differs from accepted cleanup')
+    if __package__:
+        from . import coverage_invariant_contracts as invariant
+    else:
+        import coverage_invariant_contracts as invariant
+    runtime_payload, guard_payload = invariant.predecessor_pin_pair(root)
+    runtime_predecessor = _runtime_pin_predecessor(runtime_payload, record, prior_digest)
+    return runtime_predecessor, guard_payload

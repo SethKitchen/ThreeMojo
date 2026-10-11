@@ -9,8 +9,19 @@ else:
 MODULE='extensions/carla/curve_bounds.mojo'
 EXPECTED='9bc62290a6bdeca43c4d695a0f0ce6592d69f49386d83ce7342b667c73680fce'
 
-def verify_text(text):
-    if source_contracts.token_sha256(text)!=EXPECTED:
+def verify_text(text, *, root=None):
+    checked = text
+    if source_contracts.token_sha256(text) != EXPECTED:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        actual_root = Path(root) if root is not None else Path(__file__).resolve().parents[2]
+        try:
+            checked = full_audit.reviewed_text(actual_root, MODULE, text)
+        except (ValueError, OSError) as error:
+            raise ValueError('Reviewed budget admission, routing or arithmetic changed') from error
+    if source_contracts.token_sha256(checked)!=EXPECTED:
         raise ValueError('Reviewed budget admission, routing or arithmetic changed')
     body=sum2_guard_contracts.declaration(text,'_try_lane_envelope_capture',())
     start=body.index('    var at = info_index(')
@@ -21,15 +32,17 @@ def verify_text(text):
         raise ValueError('Intervening span can access budget parameters')
     return {'status':'PASS','source_token_sha256':EXPECTED,'intervening_counter_uses':0,'retained_capacity_and_debit':True}
 
-def verify(root):return verify_text((Path(root)/MODULE).read_text())
+def verify(root):return verify_text((Path(root)/MODULE).read_text(), root=root)
 
 
-def historical_function(text):
+def historical_function(text, *, root=None):
     """Return the bound predecessor only after verifying the exact successor."""
     import hashlib
     import json
-    verify_text(text)
-    payload = Path(__file__).with_name('envelope-budget-contract.json').read_bytes()
+    verify_text(text, root=root)
+    record_path = (Path(root)/'tools/carla_lane_oracle/envelope-budget-contract.json'
+                   if root is not None else Path(__file__).with_name('envelope-budget-contract.json'))
+    payload = record_path.read_bytes()
     if hashlib.sha256(payload).hexdigest() != 'c43aa2bfdfb2a33575745eefb44b2f8ff0714a71a31ad750e8c4c0572fa7f2be':
         raise ValueError('Unreviewed envelope budget predecessor record')
     record = json.loads(payload, object_pairs_hook=source_contracts.unique_keys)

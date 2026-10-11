@@ -232,13 +232,21 @@ def primitive_graph(text):
 
 
 
-def reviewed_reference_tree(text):
+def reviewed_reference_tree(text, root=ROOT):
     """Retain the historical reference graph after one exact additive refusal.
 
     Default False preserves every existing call. True may return unknown
     before the unchanged GL fallback; it cannot perform unreserved work.
     The production tokens and grouped True caller are bound separately.
     """
+    try:
+        try:
+            import full_audit_cleanup_contracts as full_audit
+        except ModuleNotFoundError:
+            from tools.carla_lane_oracle import full_audit_cleanup_contracts as full_audit
+        text = full_audit.reviewed_text(root, 'extensions/carla/curve_bounds.mojo', text)
+    except (ValueError, OSError) as error:
+        raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
     tree = syntax_tree(text)
     # The reviewed no-counter-alias successor changes only optional admission.
     # Reconstruct its exact historical helper before the original projection;
@@ -248,7 +256,7 @@ def reviewed_reference_tree(text):
             import envelope_budget_contracts as budget
         except ModuleNotFoundError:
             from tools.carla_lane_oracle import envelope_budget_contracts as budget
-        previous = budget.historical_function(text)
+        previous = budget.historical_function(text, root=root)
     except ValueError as error:
         raise CheckError('reference module changed; renewed review required: curve_bounds.mojo: ' + str(error)) from error
     current = unique_function(tree, '_try_lane_envelope_capture')
@@ -291,7 +299,7 @@ def verify(root):
     require(set(REFERENCE_MODULE_GRAPHS) == {'curve_bounds.mojo', 'curve_trig.mojo', 'curve_interval.mojo'},
             'wrong reference-module closure')
     for filename, expected_hash in REFERENCE_MODULE_GRAPHS.items():
-        reference_graph = (dump(reviewed_reference_tree(texts[filename]))
+        reference_graph = (dump(reviewed_reference_tree(texts[filename], root))
                            if filename == 'curve_bounds.mojo' else graph(texts[filename]))
         actual = hashlib.sha256(reference_graph.encode()).hexdigest()
         require(actual == expected_hash, 'reference module changed; renewed review required: ' + filename)
@@ -317,7 +325,7 @@ def verify(root):
                         node.attr in ('first', 'second', 'derivatives')),
                     'derivative-field/flag read in stored helper: ' + helper)
     target_tree = syntax_tree(target)
-    reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds), 'curve_trig.mojo': syntax_tree(trig)}
+    reference_trees = {'curve_bounds.mojo': reviewed_reference_tree(bounds, root), 'curve_trig.mojo': syntax_tree(trig)}
     for key, expected_hash in SHARED_GRAPHS.items():
         filename, name = key.split(':', 1)
         node = unique_function(reference_trees[filename], name)

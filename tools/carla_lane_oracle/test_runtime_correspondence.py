@@ -9,6 +9,7 @@ verify source-integrity detection, not production mathematical correctness.
 import hashlib
 import json
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import re
 import shutil
 import subprocess
@@ -144,7 +145,11 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
 
     def exercise(self, case):
         name, gate, file, function, before, after = case
-        path = ROOT/'extensions/carla'/file
+        root = ROOT
+        if name == 'sample_negative_guard':
+            root = cleanup_fixtures.historical_root(self, ROOT)
+            sampled.verify(root)
+        path = root/'extensions/carla'/file
         original = path.read_text()
         if function:
             changed = replace_in_function(original, function, before, after)
@@ -158,7 +163,7 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
         with patch.object(Path, 'read_text', read_changed):
             if gate == 'sampled':
                 with self.assertRaises((sampled.CheckError, SyntaxError)):
-                    sampled.verify(ROOT)
+                    sampled.verify(root)
             else:
                 with self.assertRaisesRegex(ValueError, 'runtime source dependency changed \\[' + gate + '\\]'):
                     contracts.verify_group(ROOT, gate)
@@ -181,13 +186,15 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
 
     def test_matched_wrong_full_and_value_blends_reject_reference(self):
         read = Path.read_text
-        paths = {ROOT/'extensions/carla/curve_bounds.mojo', ROOT/'extensions/carla'/TARGET}
+        root = cleanup_fixtures.historical_root(self, ROOT)
+        sampled.verify(root)
+        paths = {root/'extensions/carla/curve_bounds.mojo', root/'extensions/carla'/TARGET}
         def wrong(path, *args, **kwargs):
             text = read(path, *args, **kwargs)
             return text.replace('constant(one)', 'constant(two)', 1) if path in paths else text
         with patch.object(Path, 'read_text', wrong):
             with self.assertRaisesRegex(sampled.CheckError, 'reference module changed'):
-                sampled.verify(ROOT)
+                sampled.verify(root)
 
     def test_exact_dependency_schema_and_path_sets(self):
         original = json.loads(self.pin)
@@ -260,6 +267,7 @@ class FixedRuntimeCandidateTests(unittest.TestCase):
                     to.write_bytes(seed_count.historical_source(ROOT).encode('utf-8'))
                 else:
                     shutil.copyfile(ROOT/name, to)
+            cleanup_fixtures.write_predecessors(root, cleanup_fixtures.verified_predecessors(ROOT))
             for mode in ([], ['-O']):
                 for script in ('check_sampled_values.py', 'check_runtime_support.py'):
                     command = [sys.executable, *mode, '-B', str(Path(__file__).parent/script), '--repo-root', str(root)]

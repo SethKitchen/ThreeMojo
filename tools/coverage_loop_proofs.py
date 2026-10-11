@@ -743,6 +743,53 @@ def strand_cap_loops(root, *, include_roots=()):
     }}
 
 
+# These are the same five retained theorems on the exact cleanup endpoint.
+# No new loop outcome is waived. The full source edge binds the loop body.
+_CLEANUP_LOOP_ROWS = {
+    ('extensions/carla/lane_refinement', 145): (146, '_axis_lane_minimum'),
+    ('extensions/carla/lane_refinement', 726): (736, '_lane_certificate_dominates_cells'),
+    ('extensions/carla/lane_refinement', 1289): (1299, '_continue_lane_certificate'),
+    ('extensions/carla/lane_refinement', 1314): (1324, '_continue_lane_certificate'),
+    ('extensions/carla/junction_bounds', 706): (706, '_lane_section_box_with_work'),
+}
+
+
+def _cleanup_current_bindings(root, *, include_roots=()):
+    """Bind current cleanup dependencies of a transitive historical Map edge."""
+    from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+    for name in cleanup.SOURCE_PATHS:
+        path = relative_source(root, name)
+        if file_sha256(path) != cleanup.BEFORE_SHA256[name]:
+            # A partial/mixed/unknown current view cannot produce a receipt.
+            return cleanup.proof_bindings(root, include_roots=include_roots)
+    return {}
+
+
+def _cleanup_loop_row(root, module, historical_line, expression):
+    """Confirm the mapped loop expression and its exact top-level owner."""
+    item = _CLEANUP_LOOP_ROWS.get((module, historical_line))
+    if item is None:
+        return None
+    line, expected_owner = item
+    statements = _statements(relative_source(root, module + '.mojo').read_text())
+    if statements is None:
+        return None
+    owner = None
+    for statement in statements:
+        words = [token.string for token in statement]
+        if statement[0].start[1] == 0:
+            owner = words[1] if len(words) > 1 and words[0] == 'def' else None
+        if statement[0].start[0] == line:
+            if (owner != expected_owner or len(words) < 5 or words[0] != 'for'
+                    or words[2] != 'in' or words[-1] != ':'):
+                return None
+            expected = _statements('for value in ' + expression + ':\n    pass\n')
+            if expected is None or words[3:-1] != [token.string for token in expected[0]][3:-1]:
+                return None
+            return line
+    return None
+
+
 def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
     """Verify fixed historical bindings without admitting arbitrary successors."""
     actual = {}
@@ -759,6 +806,15 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
             actual[name] = digest
             continue
         if digest != expected:
+            from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+            if (name in cleanup.SOURCE_PATHS
+                    and expected == cleanup.BEFORE_SHA256[name]
+                    and digest == cleanup.AFTER_SHA256[name]):
+                actual.update(cleanup.proof_bindings(root, include_roots=include_roots))
+                if path.read_bytes() != raw:
+                    return None
+                actual[name] = digest
+                continue
             if (name != 'extensions/carla/map.mojo'
                     or expected != GUARDED_LOOP_SOURCE_SHA256[name]):
                 return None
@@ -771,11 +827,12 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=()):
             predecessor = seed_count.historical_source(root).encode('utf-8')
             if sha256(predecessor) != expected or path.read_bytes() != raw:
                 return None
+            actual.update(_cleanup_current_bindings(root, include_roots=include_roots))
         actual[name] = digest
     return actual
 
 
-def _historical_reviewed_nonempty_loops(root, module):
+def _historical_reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Return only named source-reviewed nonempty iterator proofs.
 
     A mismatch retains both outcomes. Constants require a new source review;
@@ -797,7 +854,7 @@ def _historical_reviewed_nonempty_loops(root, module):
             }
             if callers != set(bindings):
                 return {}
-        actual = _reviewed_dependency_hashes(root, bindings)
+        actual = _reviewed_dependency_hashes(root, bindings, include_roots=include_roots)
         if actual is None:
             return {}
     except (OSError, ValueError, ImportError):
@@ -837,6 +894,11 @@ def guarded_loop_proof(root, rule, *, include_roots=()):
         if (module + '.mojo' == DENSITY_SOURCE
                 and actual_bindings[DENSITY_SOURCE] == DENSITY_AFTER_SHA256):
             line = _DENSITY_SUCCESSOR_LINES.get(line)
+            if line is None:
+                return None
+        if ((module, line) in _CLEANUP_LOOP_ROWS
+                and actual_bindings[module + '.mojo'] != bindings[module + '.mojo']):
+            line = _cleanup_loop_row(root, module, line, expression)
             if line is None:
                 return None
         if callers:
@@ -1008,6 +1070,14 @@ def construction_boundary_loops(root, *, include_roots=()):
         if score:
             expected[seed_count_contracts.MODULE] = seed_count_contracts.SCORE_AFTER_SHA256
             line = 4069
+        cleanup_bindings = {}
+        if actual != expected:
+            from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+            cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots)
+            edges = cleanup.verified_edges(root, include_roots=include_roots)
+            for name, edge in edges.items():
+                if name in expected and expected[name] == edge['before_sha256']:
+                    expected[name] = edge['after_sha256']
         if actual != expected:
             return {}
         if seed_count_contracts.dependency_inventory(root) != set(actual):
@@ -1019,6 +1089,7 @@ def construction_boundary_loops(root, *, include_roots=()):
         else:
             seed_count_contracts.verify_frontier(root)
         record = seed_count_contracts.read_record(root)
+        actual.update(cleanup_bindings)
         actual[seed_count_contracts.MIGRATION] = seed_count_contracts.MIGRATION_SHA256
         for group in ('historical_records', 'unchanged_correctness_tests',
                       'after_correctness_tests'):
@@ -1043,7 +1114,7 @@ def construction_boundary_loops(root, *, include_roots=()):
 
 def reviewed_nonempty_loops(root, module, *, include_roots=()):
     """Keep historical rules and independently admit each new exact theorem."""
-    result = _historical_reviewed_nonempty_loops(root, module)
+    result = _historical_reviewed_nonempty_loops(root, module, include_roots=include_roots)
     if module == 'renderers/renderer':
         result.update(strand_cap_loops(root, include_roots=include_roots))
     if module == 'extensions/carla/map':

@@ -109,3 +109,105 @@ def verify(root):
     for name in record['pin_files']:
         predecessor_pins(root, name)
     return record
+
+
+def _verify_current_for_pin_pair(root):
+    record = read_record(root)
+    for path, item in record['sources'].items():
+        require(source.token_sha256((root/path).read_text()) == item['after_token_sha256'],
+                'unreviewed complete successor: ' + path)
+        require(hashlib.sha256(item['before_complete_module'].encode()).hexdigest()
+                == item['before_sha256'], 'historical module changed: ' + path)
+    if __package__:
+        from . import rounded_line_selector_contracts as line
+        from . import distance_validation_contracts as distance
+        from . import grouped_y_finiteness_contracts as grouped
+    else:
+        import rounded_line_selector_contracts as line
+        import distance_validation_contracts as distance
+        import grouped_y_finiteness_contracts as grouped
+    try:
+        _, observed_current_admission = line._verify_for_pin_pair(root)
+        distance.verify(root)
+        grouped.verify(root)
+    except ValueError as error:
+        raise ValueError(
+            'unreviewed complete successor: ' + str(error)) from error
+    return record, observed_current_admission
+
+
+def _pin_predecessor(payload, record, filename):
+    require(hashlib.sha256(payload).hexdigest() == record['after_sha256'],
+            'unreviewed runtime pin successor: ' + filename)
+    pins = json.loads(payload, object_pairs_hook=source.unique_keys)
+    seen = set()
+    for change in record['transitions']:
+        pointer = tuple(change['pointer'])
+        require(pointer not in seen, 'duplicate pin placement')
+        seen.add(pointer)
+        ref = pins
+        for part in pointer[:-1]:
+            ref = ref[part]
+        require(ref[pointer[-1]] == change['after'], 'active pin placement mismatch')
+        ref[pointer[-1]] = change['before']
+    payload = (json.dumps(pins, indent=2)+'\n').encode()
+    require(hashlib.sha256(payload).hexdigest() == record['before_sha256'],
+            'historical pins failed reconstruction')
+    return payload
+
+
+def _read_current_pair_pin(root, filename):
+    if __package__:
+        from . import full_audit_cleanup_contracts as full_audit
+    else:
+        import full_audit_cleanup_contracts as full_audit
+    relative = 'tools/carla_lane_oracle/' + filename
+    try:
+        payload = full_audit._regular(root, relative).read_bytes()
+    except (OSError, UnicodeError) as error:
+        raise ValueError(
+            'accepted source successor: unreadable current paired pin: ' + filename) from error
+    require(type(payload) is bytes,
+            'current paired pin is not builtin bytes: ' + filename)
+    return payload
+
+
+def predecessor_pin_pair(root):
+    """Qualify once and reconstruct the fixed runtime/guard predecessor pair.
+
+    Args:
+        root: Root whose live sources and active pin bytes are checked afresh.
+    Returns:
+        A tuple of runtime then guard historical bytes, with no admission data.
+    Raises:
+        ValueError: A source, pin, path, or executing-checker contract fails.
+        OSError: An existing qualification or historical input cannot be read.
+    """
+    record, observed_current_admission = _verify_current_for_pin_pair(root)
+    filenames = ('runtime-source-pins.json', 'sum2-guard-pins.json')
+    require(tuple(record['pin_files']) == filenames, 'wrong fixed ordered pin pair')
+    runtime_name, guard_name = filenames
+    if observed_current_admission:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        runtime_raw = _read_current_pair_pin(root, runtime_name)
+    else:
+        runtime_raw = (root/'tools/carla_lane_oracle'/runtime_name).read_bytes()
+    runtime_payload = _pin_predecessor(
+        runtime_raw, record['pin_files'][runtime_name], runtime_name)
+    if observed_current_admission:
+        executing = full_audit.executing_checker_bindings()
+        guard_raw = _read_current_pair_pin(root, guard_name)
+    else:
+        guard_raw = (root/'tools/carla_lane_oracle'/guard_name).read_bytes()
+    guard_payload = _pin_predecessor(
+        guard_raw, record['pin_files'][guard_name], guard_name)
+    if observed_current_admission:
+        for filename, consumed_raw in ((runtime_name, runtime_raw), (guard_name, guard_raw)):
+            final_raw = _read_current_pair_pin(root, filename)
+            require(final_raw == consumed_raw, 'current paired pin changed: ' + filename)
+        full_audit.require(full_audit.executing_checker_bindings() == executing,
+                           'executing checker changed during paired pin projection')
+    return runtime_payload, guard_payload

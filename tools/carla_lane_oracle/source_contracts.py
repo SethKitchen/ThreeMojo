@@ -17,6 +17,10 @@ import json
 from pathlib import Path
 from threading import get_ident
 import tokenize
+import sys
+
+# Executed module identity for source-proof receipts, before local import cycles.
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
 
 PINS = Path('tools/carla_lane_oracle/runtime-source-pins.json')
 PREFIX = 'extensions/carla/'
@@ -202,6 +206,18 @@ def verify_group(root, group):
     for path in GROUP_PATHS[group]:
         text = (root / path).read_text(encoding='utf-8')
         checked = text
+        if (path in (PREFIX + 'curve_bounds.mojo', PREFIX + 'lane_value_bounds.mojo',
+                     PREFIX + 'junction_bounds.mojo')
+                and token_sha256(text) != pins['groups'][group][path]):
+            if __package__:
+                from . import full_audit_cleanup_contracts as full_audit
+            else:
+                import full_audit_cleanup_contracts as full_audit
+            try:
+                checked = full_audit.reviewed_text(root, path, text)
+            except (ValueError, OSError) as error:
+                raise ValueError('runtime source dependency changed [' + group + ']: ' + path
+                                 + ' (' + str(error) + ')') from error
         if path == PREFIX + 'lane_refinement.mojo' and token_sha256(text) != pins['groups'][group][path]:
             if __package__:
                 from . import cache_key_contracts as cache_key
@@ -231,5 +247,16 @@ def verify_group(root, group):
 def verify_qualifiers(root, filename, text):
     pins = read_pins(root)
     require(filename in QUALIFIER_FILES, 'unexpected qualifier path')
-    require(qualifier_sha256(text) == pins['qualifiers'][filename],
+    checked = text
+    if (filename in ('curve_bounds.mojo', 'lane_value_bounds.mojo')
+            and qualifier_sha256(text) != pins['qualifiers'][filename]):
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        try:
+            checked = full_audit.reviewed_text(root, PREFIX + filename, text)
+        except (ValueError, OSError) as error:
+            raise ValueError('lexical qualifier/specialization changed: ' + filename) from error
+    require(qualifier_sha256(checked) == pins['qualifiers'][filename],
             'lexical qualifier/specialization changed: ' + filename)

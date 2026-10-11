@@ -14,6 +14,10 @@ import os
 from pathlib import Path
 import textwrap
 import tokenize
+import sys
+
+# Executed module identity for source-proof receipts, before local import cycles.
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
 
 if __package__:
     from . import (
@@ -125,7 +129,15 @@ def production_mojo_paths(root):
 
 
 def protected_inventory(root, *, verified_lane_predecessor=None,
-                        verified_map_predecessor=None):
+                        verified_map_predecessor=None,
+                        verified_cleanup_predecessors=None):
+    if verified_cleanup_predecessors:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        require(set(verified_cleanup_predecessors) == set(full_audit.SOURCE_PATHS),
+                'wrong fixed cleanup predecessor inventory')
     result = {}
     for path in sorted(production_mojo_paths(root)):
         relative = path.relative_to(root)
@@ -134,6 +146,8 @@ def protected_inventory(root, *, verified_lane_predecessor=None,
                 for part in relative.parts):
             continue
         text = path.read_text()
+        if verified_cleanup_predecessors and relative.as_posix() in verified_cleanup_predecessors:
+            text = verified_cleanup_predecessors[relative.as_posix()]
         if relative.as_posix() == cache_key.MODULE and verified_lane_predecessor is not None:
             text = verified_lane_predecessor
         if relative.as_posix() == 'extensions/carla/map.mojo' and verified_map_predecessor is not None:
@@ -317,6 +331,23 @@ def verify(root):
     helper = (root/'extensions/carla/curve_sum2.mojo').read_text()
     require(significant(helper) == significant(pins['helper_source']),
             'Sum2 complete guard/helper token graph changed')
+    # This fixed CALLERS-only discriminator is not partial source admission.
+    # Actual changed callers require the complete live cleanup endpoint.
+    try:
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        cleanup_predecessors = full_audit.reviewed_sum2_callers(root)
+    except (ValueError, OSError) as error:
+        # Only direct failures in the two fixed caller files have source_path.
+        # A transitive gate failure must not be attributed to a particular caller.
+        caller = {
+            'extensions/carla/curve_bounds.mojo': 'curve_bounds',
+            'extensions/carla/lane_refinement.mojo': 'lane_refinement',
+        }.get(getattr(error, 'source_path', None), 'cleanup caller dependencies')
+        raise ValueError('Sum2 complete guarded caller changed or routing changed: '
+                         + caller + ' (' + str(error) + ')') from error
     count = 0
     verified_lane_predecessor = None
     verified_map_predecessor = None
@@ -326,6 +357,8 @@ def verify(root):
                 'wrong Sum2 guard caller function set: ' + module)
         path = 'extensions/carla/' + module + '.mojo'
         text = (root / path).read_text()
+        if path != cache_key.MODULE and path in cleanup_predecessors:
+            text = cleanup_predecessors[path]
         if path == cache_key.MODULE:
             try:
                 text = cache_key.reviewed_text(root, path, text)
@@ -382,7 +415,8 @@ def verify(root):
                 require(any(start <= index < end for start, end in spans + import_spans),
                         'unreviewed Sum2 helper binding/use: ' + module + ':' + token.string)
     require(protected_inventory(root, verified_lane_predecessor=verified_lane_predecessor,
-                                verified_map_predecessor=verified_map_predecessor) == pins['protected_inventory'],
+                                verified_map_predecessor=verified_map_predecessor,
+                                verified_cleanup_predecessors=cleanup_predecessors) == pins['protected_inventory'],
             'global protected-helper use/import inventory changed')
     reviewed_cleanup_contracts.verify(root)
     return {'status': 'PASS', 'guarded_modules': len(CALLERS), 'complete_caller_declarations': count,

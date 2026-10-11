@@ -43,6 +43,9 @@ import re
 import subprocess
 import sys
 
+# Executed module identity for source-proof receipts, before local import cycles.
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Trees that hold no source this script needs, or copies of it.

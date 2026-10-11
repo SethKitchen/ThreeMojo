@@ -17,9 +17,11 @@ from pathlib import Path
 
 if __package__:
     from . import source_contracts as source
+    from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
 else:
     import source_contracts as source
+    import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
 
 def _sibling_tool(name):
@@ -195,8 +197,17 @@ def sha(text):
     return hashlib.sha256(text.encode('utf-8')).hexdigest()
 
 
-def read_record(root):
-    payload = (Path(root)/MIGRATION).read_bytes()
+def _check_inputs(root, inputs, owner):
+    require((inputs is None) == (owner is None), 'incomplete owned input binding')
+    if inputs is not None:
+        require(type(inputs) is full_audit._CacheInputs, 'invalid owned input view')
+        inputs._check(owner, root)
+
+
+def read_record(root, *, _inputs=None, _input_owner=None):
+    _check_inputs(root, _inputs, _input_owner)
+    payload = ((Path(root)/MIGRATION).read_bytes() if _inputs is None else
+               _inputs.raw(_input_owner, root, MIGRATION))
     require(hashlib.sha256(payload).hexdigest() == MIGRATION_SHA256,
             'immutable successor record changed')
     record = json.loads(payload, object_pairs_hook=source.unique_keys)
@@ -274,10 +285,14 @@ def verify_source(text, record):
             'before_token_sha256': BEFORE_TOKEN_SHA256, 'after_token_sha256': AFTER_TOKEN_SHA256}
 
 
-def dependency_inventory(root):
+def dependency_inventory(root, *, _inputs=None, _input_owner=None):
     """Resolve the actual maintained import closure, including package files."""
     root = Path(root)
+    _check_inputs(root, _inputs, _input_owner)
     known = {path.as_posix() for path in cache_key.input_paths(root) if path.suffix == '.mojo'}
+    if _inputs is not None:
+        require(known == _inputs.known_paths(_input_owner, root),
+                'owned dependency input paths changed')
     found, pending = set(), [MODULE]
     while pending:
         name = pending.pop()
@@ -285,7 +300,8 @@ def dependency_inventory(root):
             continue
         require(name in known, 'missing maintained dependency: '+name)
         found.add(name)
-        text = (root/name).read_bytes().decode('utf-8')
+        text = ((root/name).read_bytes().decode('utf-8') if _inputs is None else
+                _inputs.text_utf8(_input_owner, root, name))
         for imported in affected.imported_names(text):
             pending.extend(affected.resolve(imported, name, known))
     return found
@@ -449,7 +465,7 @@ def verify_score_live(text):
                 'live score helper/caller operation graph changed: '+name)
 
 
-def verify_score_caller_inventory(root):
+def verify_score_caller_inventory(root, *, _inputs=None, _input_owner=None):
     """Keep the borrowed helper's caller-supplied FP/scale preconditions closed.
 
     This new name has its own production census; historical protected-name
@@ -457,12 +473,16 @@ def verify_score_caller_inventory(root):
     The existing census includes package re-exports and nested namespaces.
     """
     root = Path(root)
+    _check_inputs(root, _inputs, _input_owner)
+    paths = (guard.production_mojo_paths(root) if _inputs is None else
+             (root / path for path in _inputs.production_paths(_input_owner, root)))
     found = {}
-    for path in guard.production_mojo_paths(root):
+    for path in paths:
         rel = path.relative_to(root)
         if rel.parts[0] in guard.NONPRODUCTION or any(p.startswith('.') for p in rel.parts):
             continue
-        text = path.read_text()
+        text = (path.read_text() if _inputs is None else
+                _inputs.text_default(_input_owner, root, rel.as_posix()))
         if '_winner_seed_update_score' not in text:
             continue
         count = sum(token.type == tokenize.NAME and token.string == '_winner_seed_update_score'
@@ -512,13 +532,17 @@ def score_successor_source(root):
     return text
 
 
-def verify_score(root):
+def verify_score(root, *, _inputs=None, _input_owner=None):
     """Verify all five exact edges and live helper/caller/dependency premises."""
     root = Path(root)
-    record = read_record(root)
-    text = (root/MODULE).read_bytes().decode('utf-8')
+    _check_inputs(root, _inputs, _input_owner)
+    record = (read_record(root) if _inputs is None else
+              read_record(root, _inputs=_inputs, _input_owner=_input_owner))
+    text = ((root/MODULE).read_bytes().decode('utf-8') if _inputs is None else
+            _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))
     for path, expected in SCORE_TESTS.items():
-        require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+        require(hashlib.sha256((root/path).read_bytes() if _inputs is None else
+                               _inputs.raw(_input_owner, root, path)).hexdigest() == expected,
                 'score-helper numerical fixture changed: '+path)
     frontier = score_predecessor_source(text)
     support = frontier_predecessor_source(frontier)
@@ -526,11 +550,19 @@ def verify_score(root):
     middle = optional_predecessor_source(optional)
     prior_edge = verify_source(middle, record)
     require(prior_edge is not None, 'score edge must follow all preceding edges')
-    _verify_bound_inputs(root, record)
-    verify_score_caller_inventory(root)
-    verify_premises(root, record, after=True, optional=True, support=True,
-                    frontier=True, score=True)
-    require((root/MODULE).read_bytes().decode('utf-8') == text,
+    if _inputs is None:
+        _verify_bound_inputs(root, record)
+        verify_score_caller_inventory(root)
+        verify_premises(root, record, after=True, optional=True, support=True,
+                        frontier=True, score=True)
+    else:
+        _verify_bound_inputs(root, record, _inputs=_inputs, _input_owner=_input_owner)
+        verify_score_caller_inventory(root, _inputs=_inputs, _input_owner=_input_owner)
+        verify_premises(root, record, after=True, optional=True, support=True,
+                        frontier=True, score=True, _inputs=_inputs, _input_owner=_input_owner)
+    final_text = ((root/MODULE).read_bytes().decode('utf-8') if _inputs is None else
+                  _inputs.observe_bytes(_input_owner, root, MODULE).decode('utf-8'))
+    require(final_text == text,
             'Map changed during score-helper verification')
     endpoints = ((AFTER_SHA256, AFTER_TOKEN_SHA256),
                  (OPTIONAL_AFTER_SHA256, OPTIONAL_AFTER_TOKEN_SHA256),
@@ -548,13 +580,30 @@ def verify_score(root):
             'after_token_sha256': SCORE_AFTER_TOKEN_SHA256, 'edges': edges}
 
 
-def _verify_bound_inputs(root, record):
-    require(dependency_inventory(root) == {MODULE, *record['unchanged_inputs']},
+def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None):
+    _check_inputs(root, _inputs, _input_owner)
+    dependencies = (dependency_inventory(root) if _inputs is None else
+                    dependency_inventory(root, _inputs=_inputs, _input_owner=_input_owner))
+    require(dependencies == {MODULE, *record['unchanged_inputs']},
             'live import or package-resolution closure changed')
+    cleanup_edges = {}
+    if any(path in full_audit.SOURCE_PATHS
+           and expected != full_audit.AFTER_SHA256[path]
+           and hashlib.sha256((root/path).read_bytes() if _inputs is None else
+                              _inputs.raw(_input_owner, root, path)).hexdigest() == full_audit.AFTER_SHA256[path]
+           for path, expected in record['unchanged_inputs'].items()):
+        cleanup_edges = (full_audit.verified_edges(root) if _inputs is None else
+                         _inputs.exact_edges(_input_owner, root))
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests',
                   'after_correctness_tests'):
         for path, expected in record[group].items():
-            require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
+            if group == 'unchanged_inputs' and path in cleanup_edges:
+                edge = cleanup_edges[path]
+                require(expected == edge['before_sha256'],
+                        'full-audit edge does not extend the immutable count input: ' + path)
+                expected = edge['after_sha256']
+            require(hashlib.sha256((root/path).read_bytes() if _inputs is None else
+                              _inputs.raw(_input_owner, root, path)).hexdigest() == expected,
                     'historical record, live dependency or regression fixture changed: '+path)
 
 
@@ -583,18 +632,21 @@ def verify_optional(root):
             'edges': [prior_edge, local_edge]}
 
 
-def verify_premises(root, record, *, after, optional=False, support=False, frontier=False, score=False):
+def verify_premises(root, record, *, after, optional=False, support=False, frontier=False, score=False,
+                    _inputs=None, _input_owner=None):
     """Check each actual operation graph independently of whole-file pins."""
     root = Path(root)
+    _check_inputs(root, _inputs, _input_owner)
     require(not score or frontier, 'score premises require frontier edge')
     require(not frontier or support, 'frontier premises require the support edge')
     require(not support or (after and optional),
             'support premises require both preceding edges')
-    # Read actual source on every call. Only exact-text lexical computation
-    # is memoized; no filesystem snapshot, comparison or admission is cached.
+    # Defaults read actual source on every call. The explicit owned score path
+    # reads its actual captured successor, never a historical inverse.
     snapshots = {}
     for path, expected in record['layout_routing'].items():
-        text = (root/path).read_bytes().decode('utf-8')
+        text = ((root/path).read_bytes().decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path))
         if score and path == MODULE:
             verify_score_live(text)
             expected = SCORE_ROUTING_SHA256
@@ -604,7 +656,8 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
     for item in record['premise_declarations']:
         path = item['path']
         if path not in snapshots:
-            text = (root/path).read_bytes().decode('utf-8')
+            text = ((root/path).read_bytes().decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path))
             snapshots[path] = (text, _function_spans(text))
         text, spans = snapshots[path]
         actual = declaration(text,item['name'],tuple(item['owner']),spans=spans)
@@ -622,16 +675,19 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
     if optional:
         require(after, 'optional premises require the count successor')
         for path, name, owner, expected in OPTIONAL_EXTRA_PREMISES:
-            actual = declaration((root/path).read_bytes().decode('utf-8'), name, owner)
+            actual = declaration(((root/path).read_bytes().decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path)), name, owner)
             require(source.token_sha256(actual) == expected,
                     'live optional-guard premise changed: '+path+':'+'.'.join((*owner,name)))
     if support:
         for path, name, owner, expected in SUPPORT_EXTRA_PREMISES:
-            actual = declaration((root/path).read_bytes().decode('utf-8'), name, owner)
+            actual = declaration(((root/path).read_bytes().decode('utf-8') if _inputs is None else
+                    _inputs.text_utf8(_input_owner, root, path)), name, owner)
             require(source.token_sha256(actual) == expected,
                     'live support-guard premise changed: '+path+':'+'.'.join((*owner,name)))
     # These statements are read from the real after body, never the inverse.
-    text = (root/MODULE).read_bytes().decode('utf-8')
+    text = ((root/MODULE).read_bytes().decode('utf-8') if _inputs is None else
+            _inputs.text_utf8(_input_owner, root, MODULE))
     actual = guard.declaration(text, '_try_winner_seed', ())
     previous = score_predecessor_source(text) if score else text
     previous = frontier_predecessor_source(previous) if frontier else previous

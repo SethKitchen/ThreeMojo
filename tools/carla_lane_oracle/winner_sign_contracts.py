@@ -11,11 +11,13 @@ import tokenize
 
 if __package__:
     from . import source_contracts as source
+    from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
     from . import reviewed_cleanup_contracts as cleanup
     from . import frozen_arc_producer_contracts as frozen
 else:
     import source_contracts as source
+    import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
     import reviewed_cleanup_contracts as cleanup
     import frozen_arc_producer_contracts as frozen
@@ -169,6 +171,21 @@ def verify(root):
     for path, edge in reuse.verify(root).items():
         require(path not in successors, 'duplicate render actor reuse edge')
         successors[path] = edge
+
+    if any(hashlib.sha256((root/path).read_bytes()).hexdigest() == full_audit.AFTER_SHA256[path]
+           for path in full_audit.SOURCE_PATHS):
+        for path, edge in full_audit.verified_edges(root).items():
+            if path in successors:
+                require(successors[path]['after_sha256'] == edge['before_sha256'],
+                        'full-audit edge does not start at previous endpoint: ' + path)
+                transition = dict(edge)
+                transition['before_sha256'] = successors[path]['before_sha256']
+                transition['before_token_sha256'] = successors[path]['before_token_sha256']
+                successors[path] = transition
+            else:
+                require(record['canonical_source_unchanged'][path] == edge['before_sha256'],
+                        'full-audit edge does not start at canonical endpoint: ' + path)
+                successors[path] = edge
 
     for path, expected in record['canonical_source_unchanged'].items():
         if path in successors:

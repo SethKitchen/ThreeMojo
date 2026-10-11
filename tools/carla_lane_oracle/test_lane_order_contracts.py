@@ -1,5 +1,6 @@
 """Fail closed if any finite-order proof premise or routing changes."""
 from pathlib import Path
+import _full_audit_test_fixtures as cleanup_fixtures
 import shutil
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ import lane_order_contracts as contract
 class LaneOrderContracts(unittest.TestCase):
     def setUp(self):
         self.source = Path(__file__).resolve().parents[2]
+        self.cleanup_sources = cleanup_fixtures.verified_predecessors(self.source)
         self.temp = tempfile.TemporaryDirectory(prefix='lane-order-')
         self.root = Path(self.temp.name)
         record = contract.verify(self.source)
@@ -30,6 +32,8 @@ class LaneOrderContracts(unittest.TestCase):
                 dest.write_text(text)
             else:
                 shutil.copyfile(self.source / rel, dest)
+
+        cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
 
     def tearDown(self):
         self.temp.cleanup()

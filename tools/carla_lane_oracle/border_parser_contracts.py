@@ -13,12 +13,14 @@ from pathlib import Path
 
 if __package__:
     from . import source_contracts as source
+    from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
     from . import speed_parser_contracts as speed
     from . import runtime_boundary_contracts as boundary
     from . import render_actor_reuse_contracts as reuse
 else:
     import source_contracts as source
+    import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
     import speed_parser_contracts as speed
     import runtime_boundary_contracts as boundary
@@ -156,6 +158,13 @@ def verify(root):
     for path, reviewed in reuse.verify(root).items():
         require(path not in consumers, 'duplicate reviewed consumer edge: ' + path)
         consumers[path] = reviewed
+    if any(path in full_audit.SOURCE_PATHS
+           and expected != full_audit.AFTER_SHA256[path]
+           and hashlib.sha256((root/path).read_bytes()).hexdigest() == full_audit.AFTER_SHA256[path]
+           for path, expected in record['unchanged_inputs'].items()):
+        for path, reviewed in full_audit.verified_edges(root).items():
+            require(path not in consumers, 'duplicate reviewed cleanup consumer edge: ' + path)
+            consumers[path] = reviewed
     for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
         for path, expected in record[group].items():
             actual = hashlib.sha256((root/path).read_bytes()).hexdigest()

@@ -245,18 +245,23 @@ def verify_dependency(path, text, expected):
 
 def verify(root):
     record = read_record(root)
-    for filename, key in (
-            ('runtime-source-pins.json', 'runtime_pins_after_sha256'),
-            ('sum2-guard-pins.json', 'guard_pins_after_sha256')):
-        if filename == 'runtime-source-pins.json':
-            frozen.verify_runtime_pin_successor(root, record[key])
-            continue
-        payload = invariant.predecessor_pins(root, filename)
-        require(hashlib.sha256(payload).hexdigest() == record[key],
-                'unreviewed dependency pin successor: ' + filename)
+    _, guard_payload = frozen._verified_pin_pair(root, record['runtime_pins_after_sha256'])
+    require(hashlib.sha256(guard_payload).hexdigest() == record['guard_pins_after_sha256'],
+            'unreviewed dependency pin successor: sum2-guard-pins.json')
     for path, transition in record['sources'].items():
-        require(source.token_sha256(accepted.predecessor_text(root, path) if path in accepted.SOURCE_PATHS else (root/path).read_text()) ==
-                transition['after_token_sha256'], 'unreviewed complete successor: ' + path)
+        text = accepted.predecessor_text(root, path) if path in accepted.SOURCE_PATHS else (root/path).read_text()
+        if (path == 'extensions/carla/junction_bounds.mojo'
+                and source.token_sha256(text) != transition['after_token_sha256']):
+            try:
+                if __package__:
+                    from . import full_audit_cleanup_contracts as full_audit
+                else:
+                    import full_audit_cleanup_contracts as full_audit
+                text = full_audit.reviewed_text(root, path, text)
+            except (ValueError, OSError) as error:
+                raise ValueError('reviewed cleanup source contract: unreviewed complete successor: ' + path) from error
+        require(source.token_sha256(text) == transition['after_token_sha256'],
+                'unreviewed complete successor: ' + path)
     for path, expected in record['premise_dependencies'].items():
         verify_dependency(path, (root/path).read_text(), expected['token_sha256'])
     verify_premises(root)
