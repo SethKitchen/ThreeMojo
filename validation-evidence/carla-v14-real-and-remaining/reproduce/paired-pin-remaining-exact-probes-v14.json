@@ -1,0 +1,40 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "seal": "CANDIDATE-V14-SOURCE-SEAL.json",
+  "phase": "paired-pin-remaining-exact-probes-v14",
+  "window_seconds": 900,
+  "scope": "Remaining three exact maintained consumer children after the separately recorded optimizedproduction pass: normalproduction and normal/optimizedSum2. Identical command/import route,120s child/180s driver/900s window; source/SDK/fixture seals and cleanup. No repeated favorable-timing retry, fullmatrix or robustmargin claim.",
+  "stages": [
+    {
+      "label": "normal-test-production-inventory-paths",
+      "seconds": 180,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v14_normal-test-production-inventory-paths.py",
+        "{evidence}"
+      ]
+    },
+    {
+      "label": "normal-sum2-guard-contracts",
+      "seconds": 180,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v14_normal-sum2-guard-contracts.py",
+        "{evidence}"
+      ]
+    },
+    {
+      "label": "optimized-sum2-guard-contracts",
+      "seconds": 180,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v14_optimized-sum2-guard-contracts.py",
+        "{evidence}"
+      ]
+    }
+  ],
+  "pause_request_file": "native-lane-v14.pause"
+}

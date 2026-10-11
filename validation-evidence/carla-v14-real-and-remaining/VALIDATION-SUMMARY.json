@@ -1,0 +1,61 @@
+{
+  "caps": {
+    "exact_child_seconds": 120,
+    "exact_probe_stage_seconds": 180,
+    "exact_probe_window_seconds": 900,
+    "real_controls_stage_seconds": 1800,
+    "real_controls_window_seconds": 3900
+  },
+  "earlier_v14_fake_and_optimized_production_evidence_commit": "afe68f54596a3541a27533664acbbf8995687261",
+  "evidence_policy": "Original raw stdout/stderr, seals and supervisor receipts copied byte-for-byte. No reconstructed receipts, private review notes or internal coordination. Recorded absolute paths and times unchanged.",
+  "exact_children": {
+    "normal-sum2-guard-contracts": {
+      "limit_seconds": 120,
+      "margin_seconds": 38.639118576997134,
+      "passed": true,
+      "seconds": 81.36088142300287
+    },
+    "normal-test-production-inventory-paths": {
+      "limit_seconds": 120,
+      "margin_seconds": 29.227831848002097,
+      "passed": true,
+      "seconds": 90.7721681519979
+    },
+    "optimized-sum2-guard-contracts": {
+      "limit_seconds": 120,
+      "margin_seconds": 35.13874049199876,
+      "passed": true,
+      "seconds": 84.86125950800124
+    }
+  },
+  "maintained_command_sha256": "e5e8921dd23490f57605b35ba05559c0ec71c3c7b3d041643ffce35995ce6f0d",
+  "phases": {
+    "paired-pin-real-controls-v14": {
+      "result_sha256": "a180f575e596e6f7e0a35f6206ecedac513094651b534dde646de900ecebfcb9",
+      "stage_seconds": {
+        "current-controls-normal": 309.14555961899896,
+        "current-controls-optimized": 292.860160704
+      }
+    },
+    "paired-pin-remaining-exact-probes-v14": {
+      "result_sha256": "eb7fa8a348f29e800d86aab5d25e82cd6d8ef9f3b4b586ba431741695f077c1a",
+      "stage_seconds": {
+        "normal-sum2-guard-contracts": 89.20785357099885,
+        "normal-test-production-inventory-paths": 98.71244838100029,
+        "optimized-sum2-guard-contracts": 92.3332864949989
+      }
+    }
+  },
+  "prior_failed_evidence_commit": "26632cf87dbe745f82384c987f10574570eb6e44",
+  "real_control_scope": "Fresh current/historical source admission, pair outputs, live input/path mutation, rejection, checker replacement, public default preservation and output-only selector controls in normal and optimized modes.",
+  "real_test_executions": 34,
+  "schema": 1,
+  "scope": "Fresh34 real paired-pin current/historical controls and the remaining three exact maintained consumer children only. The earlier optimized production child observation is preserved separately. Broader preflight, full regression union, native paired controls, coverage, combined report and hosted CI remain pending.",
+  "source_base": "d06143b149ba31ab44afaa690c93289b57bc1778",
+  "source_checkpoint_commits": [
+    "bd990f50dd0135b8850789616bfd1e6b7cbd70c0",
+    "3473e6cde5eed93a97a77a5c0e8e1358ef1e1240"
+  ],
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "timing_limit": "One isolated exact observation per child route/mode only. Earlier v13 broader optimized-production timeout remains separate evidence. No paired benchmark, robust margin, full qualification, issue-completion or merge-readiness claim."
+}

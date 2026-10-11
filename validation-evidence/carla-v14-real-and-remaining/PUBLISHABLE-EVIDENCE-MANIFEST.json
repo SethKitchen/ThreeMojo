@@ -1,0 +1,332 @@
+{
+  "files": [
+    {
+      "bytes": 2825,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/RESULT.json",
+      "path": "paired-pin-real-controls-v14/RESULT.json",
+      "sha256": "a180f575e596e6f7e0a35f6206ecedac513094651b534dde646de900ecebfcb9"
+    },
+    {
+      "bytes": 419155,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/SOURCE-SEAL.json",
+      "path": "paired-pin-real-controls-v14/SOURCE-SEAL.json",
+      "sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/SDK-BEFORE.json",
+      "path": "paired-pin-real-controls-v14/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/SDK-AFTER.json",
+      "path": "paired-pin-real-controls-v14/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/WINDOW-START.json",
+      "path": "paired-pin-real-controls-v14/WINDOW-START.json",
+      "sha256": "1732a768a6500d33fd62060d481acf80dfa48f96fdf4bc7e35c3671cefe65cea"
+    },
+    {
+      "bytes": 618,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/current-controls-normal-START.json",
+      "path": "paired-pin-real-controls-v14/current-controls-normal-START.json",
+      "sha256": "de7c674ca7476b23cffe93d497734c8c324cce4a84c3559e4e855028eddb1823"
+    },
+    {
+      "bytes": 933,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/current-controls-normal-RESULT.json",
+      "path": "paired-pin-real-controls-v14/current-controls-normal-RESULT.json",
+      "sha256": "195bef7f6ae611d6e811b021a154bbcef8f82f047b5c54158bb81694652262e5"
+    },
+    {
+      "bytes": 3894,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/current-controls-normal.log",
+      "path": "paired-pin-real-controls-v14/current-controls-normal.log",
+      "sha256": "495427d8b8b4decb7881b49d07fad29080d067df1753ed737cb18a88b976b1fa"
+    },
+    {
+      "bytes": 633,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/current-controls-optimized-START.json",
+      "path": "paired-pin-real-controls-v14/current-controls-optimized-START.json",
+      "sha256": "4acec190a13d1961f027db4af7ba027cb47e894f7a43078a39593606c68baa84"
+    },
+    {
+      "bytes": 943,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/current-controls-optimized-RESULT.json",
+      "path": "paired-pin-real-controls-v14/current-controls-optimized-RESULT.json",
+      "sha256": "08b0719727fa7af6706258afdaa63e33840e2394a49eb29b8660b9429505bff8"
+    },
+    {
+      "bytes": 3894,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-real-controls-v14/current-controls-optimized.log",
+      "path": "paired-pin-real-controls-v14/current-controls-optimized.log",
+      "sha256": "60792646429ba45b7cdd7a8bb372d67440af900d15fd30c90d4182fd066cc168"
+    },
+    {
+      "bytes": 3698,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/RESULT.json",
+      "sha256": "eb7fa8a348f29e800d86aab5d25e82cd6d8ef9f3b4b586ba431741695f077c1a"
+    },
+    {
+      "bytes": 419155,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/SOURCE-SEAL.json",
+      "path": "paired-pin-remaining-exact-probes-v14/SOURCE-SEAL.json",
+      "sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/SDK-BEFORE.json",
+      "path": "paired-pin-remaining-exact-probes-v14/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/SDK-AFTER.json",
+      "path": "paired-pin-remaining-exact-probes-v14/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/WINDOW-START.json",
+      "path": "paired-pin-remaining-exact-probes-v14/WINDOW-START.json",
+      "sha256": "5d4789d1113aa900afdfba2dc9333dc57e2d72ff9bf44d1668d1481da2f3bdb3"
+    },
+    {
+      "bytes": 698,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths-START.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths-START.json",
+      "sha256": "a757b7765661784c421f432b28829e43d0eaca9c7de75bf80f39fedf8a17b7ea"
+    },
+    {
+      "bytes": 941,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths-RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths-RESULT.json",
+      "sha256": "2665b9d647172ff32eddbc986774cb4c317ec005f22e96eb8f1ca70d96ee9829"
+    },
+    {
+      "bytes": 2144,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths.log",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths.log",
+      "sha256": "8d57ee0e6071b6e1fd12f1237434a7a2094d673528e7ca041a1c546f70929ce5"
+    },
+    {
+      "bytes": 2206,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "sha256": "a0b79e49423aa95dfe21a4c4eafba4be118fd365f31a15ab8ecf171747b0cce1"
+    },
+    {
+      "bytes": 302199,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "3d3084554c606c28b223632003e922b2656c29357f742ce20103ce558bf9c8ab"
+    },
+    {
+      "bytes": 57,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/CHILD-stdout.log",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/CHILD-stdout.log",
+      "sha256": "e87964e614659431260e0cc08ff2119bfdaa133122705ac82a13d1bcb9440bbe"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/CHILD-stderr.log",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-test-production-inventory-paths/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3632,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/probe_owned_scope_v14_normal-test-production-inventory-paths.py",
+      "path": "reproduce/probe_owned_scope_v14_normal-test-production-inventory-paths.py",
+      "sha256": "d3f0c8bdcedc49acb9973fe5cc5d42f01deb2206e33872d473e3e4242934eb84"
+    },
+    {
+      "bytes": 678,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts-START.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts-START.json",
+      "sha256": "7073496943f0dfe60d2d6b732856a9b1ef63ea82a0a7c197e24988f7c988109d"
+    },
+    {
+      "bytes": 921,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts-RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts-RESULT.json",
+      "sha256": "c763435672c00fb6e0985c68ef5b015f25108acd66ee1d9dbda30248bc48d126"
+    },
+    {
+      "bytes": 2123,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts.log",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts.log",
+      "sha256": "1eb77500446532ecad4c95faa5d4c173e1a7010fb289126aabd422fa24aabab4"
+    },
+    {
+      "bytes": 2185,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "sha256": "00e22b531cebb5eed35617d39b3cb6366f66b02a9cd6ef1dc2963c5ac8a7ab9b"
+    },
+    {
+      "bytes": 302199,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "3d3084554c606c28b223632003e922b2656c29357f742ce20103ce558bf9c8ab"
+    },
+    {
+      "bytes": 46,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/CHILD-stdout.log",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/CHILD-stdout.log",
+      "sha256": "1cc1165c6a4d05e946ba1a44af4ad29b35b33241da2f7d5dd499011ea6f83bed"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/CHILD-stderr.log",
+      "path": "paired-pin-remaining-exact-probes-v14/normal-sum2-guard-contracts/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3599,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/probe_owned_scope_v14_normal-sum2-guard-contracts.py",
+      "path": "reproduce/probe_owned_scope_v14_normal-sum2-guard-contracts.py",
+      "sha256": "6ecf6bee5d4adf4df875788a663e8791e58d0bc0801e5365c35ee8614ed45287"
+    },
+    {
+      "bytes": 684,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts-START.json",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts-START.json",
+      "sha256": "83b743ddad76a0eb5d64e6be18fb5defb3b6da9e124a3afaa63fa21de492bed8"
+    },
+    {
+      "bytes": 926,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts-RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts-RESULT.json",
+      "sha256": "a1b1d1d196d424e043ffbf8ed37ba51286ebf12bc42aadf6c52adbd35e9c12b9"
+    },
+    {
+      "bytes": 2132,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts.log",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts.log",
+      "sha256": "91062fd3a089447a5ffd362f456505f3bd1f6571bbaf582efc30687c677ea2a9"
+    },
+    {
+      "bytes": 2198,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/EXACT-CHILD-RESULT.json",
+      "sha256": "29c19996f77ebb3461171da131742c9dcbcce8504809ca039526978ac76d2761"
+    },
+    {
+      "bytes": 302199,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "3d3084554c606c28b223632003e922b2656c29357f742ce20103ce558bf9c8ab"
+    },
+    {
+      "bytes": 46,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/CHILD-stdout.log",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/CHILD-stdout.log",
+      "sha256": "1cc1165c6a4d05e946ba1a44af4ad29b35b33241da2f7d5dd499011ea6f83bed"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/CHILD-stderr.log",
+      "path": "paired-pin-remaining-exact-probes-v14/optimized-sum2-guard-contracts/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3610,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/probe_owned_scope_v14_optimized-sum2-guard-contracts.py",
+      "path": "reproduce/probe_owned_scope_v14_optimized-sum2-guard-contracts.py",
+      "sha256": "4a95a086bebda57e6d8d843f8e4a239426ebc6033249d872c18d02bc8988b77e"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1412,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/paired-pin-real-controls-v14.json",
+      "path": "reproduce/paired-pin-real-controls-v14.json",
+      "sha256": "d1919790258e0075526ca299f9ac3f2f5831b52e842f6d4568c29bb6386af162"
+    },
+    {
+      "bytes": 1488,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/paired-pin-remaining-exact-probes-v14.json",
+      "path": "reproduce/paired-pin-remaining-exact-probes-v14.json",
+      "sha256": "b68b16d7ebae78d400ca7a2aec4ea24ad2198dc75675656f9047ec447bec9d59"
+    },
+    {
+      "bytes": 1502,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/OWNED-INPUT-PROBE-BINDING-V14.json",
+      "path": "reproduce/OWNED-INPUT-PROBE-BINDING-V14.json",
+      "sha256": "9fdf1d79062e8430522ad99023880b4d28420924fffba04b45fe13f64595b696"
+    },
+    {
+      "bytes": 525,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/reproduce/PAIRED-PIN-V14-NEXT-GATE-BINDING.json",
+      "path": "reproduce/PAIRED-PIN-V14-NEXT-GATE-BINDING.json",
+      "sha256": "b74c8f2446e5cb68c4b955be4606090d5e51f94d03ecfc2ff8dff66b9b994148"
+    },
+    {
+      "bytes": 3082,
+      "kind": "factual-scope-limited-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-real-and-remaining-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "974242de701781e255b4b4a8e3f7bdb7ff1b1f6427ecbd7d1e04fce1b43bacf2"
+    }
+  ],
+  "schema": 1,
+  "scope": "Fresh34 real paired-pin current/historical controls and the remaining three exact maintained consumer children only. The earlier optimized production child observation is preserved separately. Broader preflight, full regression union, native paired controls, coverage, combined report and hosted CI remain pending.",
+  "source_checkpoint_commits": [
+    "bd990f50dd0135b8850789616bfd1e6b7cbd70c0",
+    "3473e6cde5eed93a97a77a5c0e8e1358ef1e1240"
+  ]
+}

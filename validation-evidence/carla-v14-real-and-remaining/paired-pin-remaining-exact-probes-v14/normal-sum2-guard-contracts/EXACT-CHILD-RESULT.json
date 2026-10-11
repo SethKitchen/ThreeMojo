@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-c",
+    "import importlib, importlib.util, sys\nfrom pathlib import Path\nroot = Path(sys.argv[1])\nroute = sys.argv[2]\nsys.path.insert(0, str(root/'tools/carla_lane_oracle'))\nif route == 'sampled-spec':\n    spec = importlib.util.spec_from_file_location(\n        'sampled_consumer_first', root/'tools/carla_lane_oracle/check_sampled_values.py')\n    if spec is None or spec.loader is None:\n        raise RuntimeError('sampled consumer loader unavailable')\n    consumer = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(consumer)\nelse:\n    consumer = importlib.import_module(route)\nimport full_audit_cleanup_contracts as cleanup\ncleanup.verify(root, exact=True)\ncleanup.proof_bindings(root)\nif route == 'source_contracts':\n    consumer.verify_group(root, 'optional_runtime')\nelif route == 'test_accepted_successor_contracts':\n    consumer.prior.verify(root)\nelif route == 'test_production_inventory_paths':\n    consumer.cache.verify(root)\n    consumer.order.verify(root)\n    consumer.guard.verify(root)\nelse:\n    consumer.verify(root)\nprint('consumer-first accepted: ' + route)\n",
+    "/tmp/full-audit-physical-77irbl6e",
+    "sum2_guard_contracts"
+  ],
+  "child_cap_seconds": 120,
+  "command_sha256": "e5e8921dd23490f57605b35ba05559c0ec71c3c7b3d041643ffce35995ce6f0d",
+  "cwd": "/tmp/full-audit-physical-77irbl6e",
+  "driver_sha256": "6ecf6bee5d4adf4df875788a663e8791e58d0bc0801e5365c35ee8614ed45287",
+  "fixture_removed": true,
+  "fixture_source_seal_sha256": "3d3084554c606c28b223632003e922b2656c29357f742ce20103ce558bf9c8ab",
+  "fixture_unchanged": true,
+  "passed": true,
+  "returncode": 0,
+  "scope": "Exact maintained normal sum2_guard_contracts child; bounded focused control, not a replacement gate",
+  "seconds": 81.36088142300287,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stdout_sha256": "1cc1165c6a4d05e946ba1a44af4ad29b35b33241da2f7d5dd499011ea6f83bed",
+  "test_source_sha256": "b93851146773accc61cae8efb1075bec50896dbac1879baebda83456cbb85b10",
+  "timed_out": false
+}

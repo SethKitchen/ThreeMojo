@@ -1,0 +1,23 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/probe_owned_scope_v14_optimized-sum2-guard-contracts.py",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/paired-pin-remaining-exact-probes-v14"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "label": "optimized-sum2-guard-contracts",
+  "leader_reaped": true,
+  "log_sha256": "91062fd3a089447a5ffd362f456505f3bd1f6571bbaf582efc30687c677ea2a9",
+  "pgid": 12,
+  "pid": 12,
+  "remaining_owned_descendants": [],
+  "returncode": 0,
+  "seconds": 92.3332864949989,
+  "single_cpu": 0,
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "stage_timeout_seconds": 180,
+  "started": "2026-10-11T00:19:35.932833+00:00",
+  "timed_out": false
+}

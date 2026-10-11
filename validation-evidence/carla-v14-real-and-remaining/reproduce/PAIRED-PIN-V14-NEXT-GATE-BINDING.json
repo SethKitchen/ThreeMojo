@@ -1,0 +1,10 @@
+{
+  "broader_stages_equal_v13_failed_protocol": true,
+  "configurations": {
+    "focused-known-failures-v6.json": "ff0f4948fe3ec26c58dfc59fb162d5bd52b0d70e9c4b287c97bac4fa2315e5a3",
+    "paired-pin-remaining-exact-probes-v14.json": "b68b16d7ebae78d400ca7a2aec4ea24ad2198dc75675656f9047ec447bec9d59"
+  },
+  "remaining_probe_stages_are_exact_subset": true,
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "status": "Prepared only; execute after all17realcontrols bothmodes pass"
+}

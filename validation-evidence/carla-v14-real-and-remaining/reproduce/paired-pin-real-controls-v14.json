@@ -1,0 +1,49 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "seal": "CANDIDATE-V14-SOURCE-SEAL.json",
+  "phase": "paired-pin-real-controls-v14",
+  "window_seconds": 3900,
+  "pause_request_file": "native-lane-v14.pause",
+  "scope": "Fresh17 paired-pin real current/historical controls in each mode after exact optimizedproduction child89.910s pass. Real source/lookup/gate checks remain active;1800s module/3900s window and120s nested children unchanged, zero skips. Prior95 authority controls remain untouched; this selection does not replace full regression union or broader consumer preflight.",
+  "stages": [
+    {
+      "label": "current-controls-normal",
+      "seconds": 1800,
+      "expected_tests": 17,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-k",
+        "RealControls",
+        "-v"
+      ]
+    },
+    {
+      "label": "current-controls-optimized",
+      "seconds": 1800,
+      "expected_tests": 17,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-k",
+        "RealControls",
+        "-v"
+      ]
+    }
+  ]
+}

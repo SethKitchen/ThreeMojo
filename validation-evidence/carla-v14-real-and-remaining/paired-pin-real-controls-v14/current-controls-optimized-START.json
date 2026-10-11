@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-O",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_paired_pin_contracts.py",
+    "-k",
+    "RealControls",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "label": "current-controls-optimized",
+  "pgid": 19,
+  "pid": 19,
+  "single_cpu": 0,
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T00:11:14.658661+00:00"
+}
