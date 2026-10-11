@@ -1,0 +1,12 @@
+test_current_exact_correspondence (test_sampled_values.SampledValueCorrespondenceTests.test_current_exact_correspondence) ... ok
+test_type_flag_query_is_forbidden (test_sampled_values.SampledValueCorrespondenceTests.test_type_flag_query_is_forbidden) ... ok
+test_each_include_root_reaches_count_and_map_dependencies (test_coverage_loop_proofs.FullAuditCleanupLoopTests.test_each_include_root_reaches_count_and_map_dependencies) ... ok
+test_symlink_ancestor_of_actual_and_include_roots_rejects (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_symlink_ancestor_of_actual_and_include_roots_rejects) ... ok
+test_entry_namespace_symlinks_and_real_qualified_byte_mutation_reject (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_entry_namespace_symlinks_and_real_qualified_byte_mutation_reject) ... ok
+test_symlink_source_prefix_root_and_inert_exception_reject (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_symlink_source_prefix_root_and_inert_exception_reject) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 92.938s
+
+OK
+{"child_timeout_seconds": 1770, "command": ["/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python", "-O", "-B", "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py", "--child", "phase2", "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"], "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9", "elapsed_seconds": 94.0483676300064, "expected_tests": 6, "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b", "mode": "optimized", "phase": "phase2", "remaining_temporary_entries": [], "returncode": 0, "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos", "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e", "success": true, "work_removed": true}

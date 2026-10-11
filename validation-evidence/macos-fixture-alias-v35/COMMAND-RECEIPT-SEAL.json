@@ -1,0 +1,430 @@
+{
+  "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+  "kind": "derived-original-command-and-cap-index",
+  "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+  "original_commands_are_archival": true,
+  "schema": 1,
+  "scope": "Focused Linux TMPDIR-alias fixture controls only: phase 1 passed 4 tests per mode and phase 2 passed 6 tests per mode, 20 executions total on one source seal. No actual macOS-hosted, full-module, native, lexical-v37, performance, CI-readiness, merge-readiness, or issue-completion claim.",
+  "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+  "stages": [
+    {
+      "mode": "normal",
+      "original_inner_result": {
+        "child_timeout_seconds": 270,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "elapsed_seconds": 0.5177461919956841,
+        "expected_tests": 4,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "normal",
+        "phase": "phase1",
+        "remaining_temporary_entries": [],
+        "returncode": 0,
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": true,
+        "work_removed": true
+      },
+      "original_inner_start": {
+        "child_timeout_seconds": 270,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "expected_tests": 4,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "normal",
+        "phase": "phase1",
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": false
+      },
+      "original_outer_result": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "expected_tests": 4,
+        "label": "normal",
+        "leader_reaped": true,
+        "log_sha256": "7e25e6bcc6ad4b1af6aef7550120f74a28f66f9f2f7ec345d3fa974b9ced5c67",
+        "pgid": 8,
+        "pid": 8,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 1.005990963007207,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 300,
+        "started": "2026-10-11T14:21:11.957012+00:00",
+        "test_count": 4,
+        "timed_out": false
+      },
+      "original_outer_start": {
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "label": "normal",
+        "pgid": 8,
+        "pid": 8,
+        "single_cpu": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 300,
+        "started": "2026-10-11T14:21:11.957012+00:00"
+      },
+      "phase": "macos-fixture-alias-v35-phase1",
+      "planned_stage": {
+        "command": [
+          "{python}",
+          "-B",
+          "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase1",
+          "{evidence}"
+        ],
+        "expected_tests": 4,
+        "label": "normal",
+        "seconds": 300
+      }
+    },
+    {
+      "mode": "optimized",
+      "original_inner_result": {
+        "child_timeout_seconds": 270,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "elapsed_seconds": 0.7685892839945154,
+        "expected_tests": 4,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "optimized",
+        "phase": "phase1",
+        "remaining_temporary_entries": [],
+        "returncode": 0,
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": true,
+        "work_removed": true
+      },
+      "original_inner_start": {
+        "child_timeout_seconds": 270,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "expected_tests": 4,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "optimized",
+        "phase": "phase1",
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": false
+      },
+      "original_outer_result": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "expected_tests": 4,
+        "label": "optimized",
+        "leader_reaped": true,
+        "log_sha256": "a66fc5377a323b0c678aefdb9a2fa7ac58f9957ca744d5ba6805af505729bcc9",
+        "pgid": 10,
+        "pid": 10,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 1.0032968159939628,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 300,
+        "started": "2026-10-11T14:21:13.980739+00:00",
+        "test_count": 4,
+        "timed_out": false
+      },
+      "original_outer_start": {
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase1",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "label": "optimized",
+        "pgid": 10,
+        "pid": 10,
+        "single_cpu": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 300,
+        "started": "2026-10-11T14:21:13.980739+00:00"
+      },
+      "phase": "macos-fixture-alias-v35-phase1",
+      "planned_stage": {
+        "command": [
+          "{python}",
+          "-O",
+          "-B",
+          "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase1",
+          "{evidence}"
+        ],
+        "expected_tests": 4,
+        "label": "optimized",
+        "seconds": 300
+      }
+    },
+    {
+      "mode": "normal",
+      "original_inner_result": {
+        "child_timeout_seconds": 1770,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "elapsed_seconds": 94.09219334399677,
+        "expected_tests": 6,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "normal",
+        "phase": "phase2",
+        "remaining_temporary_entries": [],
+        "returncode": 0,
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": true,
+        "work_removed": true
+      },
+      "original_inner_start": {
+        "child_timeout_seconds": 1770,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "expected_tests": 6,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "normal",
+        "phase": "phase2",
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": false
+      },
+      "original_outer_result": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "expected_tests": 6,
+        "label": "normal",
+        "leader_reaped": true,
+        "log_sha256": "f46b873107a29e0bc3bb42cba26652cdf8b3bf4ac992745b3f802b1124fed6cc",
+        "pgid": 8,
+        "pid": 8,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 94.50029654100945,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T14:21:59.820193+00:00",
+        "test_count": 6,
+        "timed_out": false
+      },
+      "original_outer_start": {
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "label": "normal",
+        "pgid": 8,
+        "pid": 8,
+        "single_cpu": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T14:21:59.820193+00:00"
+      },
+      "phase": "macos-fixture-alias-v35-phase2",
+      "planned_stage": {
+        "command": [
+          "{python}",
+          "-B",
+          "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase2",
+          "{evidence}"
+        ],
+        "expected_tests": 6,
+        "label": "normal",
+        "seconds": 1800
+      }
+    },
+    {
+      "mode": "optimized",
+      "original_inner_result": {
+        "child_timeout_seconds": 1770,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "elapsed_seconds": 94.0483676300064,
+        "expected_tests": 6,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "optimized",
+        "phase": "phase2",
+        "remaining_temporary_entries": [],
+        "returncode": 0,
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": true,
+        "work_removed": true
+      },
+      "original_inner_start": {
+        "child_timeout_seconds": 1770,
+        "command": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "--child",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+        "expected_tests": 6,
+        "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+        "mode": "optimized",
+        "phase": "phase2",
+        "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "success": false
+      },
+      "original_outer_result": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "expected_tests": 6,
+        "label": "optimized",
+        "leader_reaped": true,
+        "log_sha256": "dfa38cbce3d6486eda7cd4b81c24943f95d79483f7859b1d66b7ac794d5f948f",
+        "pgid": 11,
+        "pid": 11,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 94.47292045601353,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T14:23:35.502957+00:00",
+        "test_count": 6,
+        "timed_out": false
+      },
+      "original_outer_start": {
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase2",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+        "label": "optimized",
+        "pgid": 11,
+        "pid": 11,
+        "single_cpu": 0,
+        "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T14:23:35.502957+00:00"
+      },
+      "phase": "macos-fixture-alias-v35-phase2",
+      "planned_stage": {
+        "command": [
+          "{python}",
+          "-O",
+          "-B",
+          "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+          "phase2",
+          "{evidence}"
+        ],
+        "expected_tests": 6,
+        "label": "optimized",
+        "seconds": 1800
+      }
+    }
+  ],
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+}

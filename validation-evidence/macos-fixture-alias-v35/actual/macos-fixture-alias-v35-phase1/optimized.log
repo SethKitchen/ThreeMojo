@@ -1,0 +1,10 @@
+test_real_regular_and_resolver_reject_only_tested_aliases_and_competitor (__main__.AliasParentControls.test_real_regular_and_resolver_reject_only_tested_aliases_and_competitor) ... ok
+test_shared_cyclic_duplicate_roots_keep_union_and_first_visit_order (test_full_audit_cleanup_contracts.NativeDependencyInventoryBatching.test_shared_cyclic_duplicate_roots_keep_union_and_first_visit_order) ... ok
+test_current_pair_reads_exact_order_and_checker_baseline (test_paired_pin_contracts.PairedPinFakeControls.test_current_pair_reads_exact_order_and_checker_baseline) ... ok
+test_preflight_retained_raw_requires_builtin_bytes_before_equality (test_full_audit_cleanup_contracts.CacheInputViewPreflight.test_preflight_retained_raw_requires_builtin_bytes_before_equality) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.086s
+
+OK
+{"child_timeout_seconds": 270, "command": ["/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python", "-O", "-B", "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py", "--child", "phase1", "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1"], "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9", "elapsed_seconds": 0.7685892839945154, "expected_tests": 4, "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b", "mode": "optimized", "phase": "phase1", "remaining_temporary_entries": [], "returncode": 0, "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos", "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e", "success": true, "work_removed": true}

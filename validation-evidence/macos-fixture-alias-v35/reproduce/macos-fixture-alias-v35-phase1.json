@@ -1,0 +1,41 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/MACOS-FIXTURE-ALIAS-PROTOCOL-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1"
+    }
+  ],
+  "pause_request_file": "macos-fixture-alias-v35.pause",
+  "phase": "macos-fixture-alias-v35-phase1",
+  "scope": "Reviewed Linux TMPDIR-alias controls only: one real _regular/resolver positive-negative control plus exactly three unchanged cheap methods per mode. No native, full-module, macOS-hosted, or lexical-v37 qualification claim.",
+  "seal": "CANDIDATE-V35-MACOS-SOURCE-SEAL.json",
+  "source": "candidate-v35-macos",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+        "phase1",
+        "{evidence}"
+      ],
+      "expected_tests": 4,
+      "label": "normal",
+      "seconds": 300
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+        "phase1",
+        "{evidence}"
+      ],
+      "expected_tests": 4,
+      "label": "optimized",
+      "seconds": 300
+    }
+  ],
+  "window_seconds": 650
+}

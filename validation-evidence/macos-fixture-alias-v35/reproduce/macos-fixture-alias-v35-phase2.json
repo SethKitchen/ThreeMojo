@@ -1,0 +1,41 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/MACOS-FIXTURE-ALIAS-PROTOCOL-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1"
+    }
+  ],
+  "pause_request_file": "macos-fixture-alias-v35.pause",
+  "phase": "macos-fixture-alias-v35-phase2",
+  "scope": "Only after phase1 normal and optimized pass on the same source seal: exactly six reviewer-selected unchanged real-fixture methods per mode under fresh-process aliased TMPDIR. No full modules/classes, native, hosted-macOS, or lexical-v37 claim.",
+  "seal": "CANDIDATE-V35-MACOS-SOURCE-SEAL.json",
+  "source": "candidate-v35-macos",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+        "phase2",
+        "{evidence}"
+      ],
+      "expected_tests": 6,
+      "label": "normal",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "{root}/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+        "phase2",
+        "{evidence}"
+      ],
+      "expected_tests": 6,
+      "label": "optimized",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 3700
+}

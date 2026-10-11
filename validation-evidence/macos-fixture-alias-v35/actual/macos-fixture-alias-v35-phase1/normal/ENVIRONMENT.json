@@ -1,0 +1,15 @@
+{
+  "TMPDIR": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1/normal/temporary-parent/alias",
+  "actual_alias_selected": true,
+  "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+  "expected_tests": 4,
+  "gettempdir": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1/normal/temporary-parent/alias",
+  "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+  "mode": "normal",
+  "phase": "phase1",
+  "pid": 9,
+  "ppid": 8,
+  "resolved_temp_parent": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase1/normal/temporary-parent/real",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+  "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e"
+}

@@ -1,0 +1,204 @@
+{
+  "actual_macos_host_qualified": false,
+  "alias_control_boundary": "Each of four modes uses a fresh child that selected lexical aliased TMPDIR. The additional real _regular/resolver positive-negative control runs only in phase 1, once per mode. Phase 2 runs its six fixed maintained selectors per mode.",
+  "assertion_boundary": "Exact maintained selectors and fixture source bytes are preserved. The dedicated phase-1 control passes explicit root/ancestor aliases directly into production rejection checks; this packet does not relax production admission or rewrite maintained assertions.",
+  "distinct_selected_cases": 10,
+  "driver_sha256": "2c6fd88a508f36b6c0ee35601f261613f69e396e124cecfe561700a247200da9",
+  "exclusions": "Polling LATEST/PROCESSES bytes, private review/design bytes, unrelated phases, SDK payload bytes, and all candidate source contents except the eight fixture files.",
+  "fixture_overlay": {
+    "base_commit": "19287a0b1564b9a628f15c96e7675c51413ca1a9",
+    "file_count": 8,
+    "files": [
+      {
+        "bytes": 3315,
+        "path": "tools/carla_lane_oracle/_full_audit_test_fixtures.py",
+        "sha256": "f49baa248d91c3150c39b239ed3f6fe8c26d340e34b1c9f89b8bfef6234886a4"
+      },
+      {
+        "bytes": 171593,
+        "path": "tools/carla_lane_oracle/test_full_audit_cleanup_contracts.py",
+        "sha256": "020659120c9b79052a4ae45e587e37d7ecda1f46a684a1239757ab610c92ad5a"
+      },
+      {
+        "bytes": 55718,
+        "path": "tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+        "sha256": "d24d5fd35f2b3cbb21b617116d3b18f1b3104864c1ce72d207880027b23e9a5a"
+      },
+      {
+        "bytes": 56152,
+        "path": "tools/carla_lane_oracle/test_paired_pin_contracts.py",
+        "sha256": "9c5ae9a6658ef277d725ad4bfa4a8c0992aef4b0c7175d1cb1823437383e7435"
+      },
+      {
+        "bytes": 24262,
+        "path": "tools/carla_lane_oracle/test_runtime_correspondence.py",
+        "sha256": "8231fb64a22f6d4df5fff5295c7795f84a549b408f405cde0814f0a6e9dde167"
+      },
+      {
+        "bytes": 38567,
+        "path": "tools/carla_lane_oracle/test_spiral_moments.py",
+        "sha256": "4412d9b135121dbe0cf8357524c92fe5419d3b31316b39f0d6da2df81e3a0d3b"
+      },
+      {
+        "bytes": 142205,
+        "path": "tools/test_coverage_loop_proofs.py",
+        "sha256": "02f76d4d139b739c1f4e4420d77f18a1247fb49cf4c6f9b3311a9209f809b3f5"
+      },
+      {
+        "bytes": 15515,
+        "path": "tools/test_sampled_values.py",
+        "sha256": "5ba7af72140d1a950bdec177123d3d0595b524833e55f42bf819fa3055d8e470"
+      }
+    ],
+    "original_manifest_status_preserved": "REVIEWED_TEST_FIXTURE_SOURCE_ONLY_FOCUSED_QUALIFICATION_PENDING",
+    "source_manifest_sha256": "4d0ea74f258bccf2a70ebf384105beb0af0299031665e47fcaa19520644a6abf"
+  },
+  "focused_controls_passed": true,
+  "full_module_qualification": false,
+  "kind": "derived-focused-linux-alias-fixture-summary",
+  "lexical_v37_qualification": false,
+  "manifest_sha256": "e1a7d0da100ca92891d2da13b695c92408bd984150294cd033bdc2dca9c6821b",
+  "native_qualification": false,
+  "overall_qualification_passed": false,
+  "phases": [
+    {
+      "child_cap_seconds": 270,
+      "config_sha256": "93dd94486174e9dbea234822d63d27917585f237a432c042c4070c6c3197d65d",
+      "console_sha256": "362b31594903b363a64df7b1546584ebea8ec8ce4cbb706184f5f5832f99b29e",
+      "elapsed_seconds": 5.765841318992898,
+      "executions": 8,
+      "finished": "2026-10-11T14:21:16.300435+00:00",
+      "modes": [
+        {
+          "actual_alias_selected": true,
+          "child_pid": 9,
+          "child_result_sha256": "a046d23a44c03bfa4007ccb63a27d2280820576d4671baf88c5ca32a779231b1",
+          "dedicated_alias_control": true,
+          "driver_pid": 8,
+          "environment_sha256": "ac3027dd2e676282c7501a80154788025046d498f5dbeae0a6230d12694e483c",
+          "inner_seconds": 0.5177461919956841,
+          "log_sha256": "7e25e6bcc6ad4b1af6aef7550120f74a28f66f9f2f7ec345d3fa974b9ced5c67",
+          "mode": "normal",
+          "outer_seconds": 1.005990963007207,
+          "selectors": [
+            "test_full_audit_cleanup_contracts.NativeDependencyInventoryBatching.test_shared_cyclic_duplicate_roots_keep_union_and_first_visit_order",
+            "test_paired_pin_contracts.PairedPinFakeControls.test_current_pair_reads_exact_order_and_checker_baseline",
+            "test_full_audit_cleanup_contracts.CacheInputViewPreflight.test_preflight_retained_raw_requires_builtin_bytes_before_equality"
+          ],
+          "success": true,
+          "tests_run": 4
+        },
+        {
+          "actual_alias_selected": true,
+          "child_pid": 11,
+          "child_result_sha256": "181d5bdceea4a0acd79cc9cd9cc8e04eb6fe1e1442a8c71ec2e5968ae60ac803",
+          "dedicated_alias_control": true,
+          "driver_pid": 10,
+          "environment_sha256": "12c42d86eb8ce7d2fdddac3b515eb36ff151358f55d910bcd50d4130c68df259",
+          "inner_seconds": 0.7685892839945154,
+          "log_sha256": "a66fc5377a323b0c678aefdb9a2fa7ac58f9957ca744d5ba6805af505729bcc9",
+          "mode": "optimized",
+          "outer_seconds": 1.0032968159939628,
+          "selectors": [
+            "test_full_audit_cleanup_contracts.NativeDependencyInventoryBatching.test_shared_cyclic_duplicate_roots_keep_union_and_first_visit_order",
+            "test_paired_pin_contracts.PairedPinFakeControls.test_current_pair_reads_exact_order_and_checker_baseline",
+            "test_full_audit_cleanup_contracts.CacheInputViewPreflight.test_preflight_retained_raw_requires_builtin_bytes_before_equality"
+          ],
+          "success": true,
+          "tests_run": 4
+        }
+      ],
+      "phase": "macos-fixture-alias-v35-phase1",
+      "result_sha256": "37d988838357d04c2d3f0b53463dd45bd8c0927fb2434f57b59e987c6824f05f",
+      "scope": "Reviewed Linux TMPDIR-alias controls only: one real _regular/resolver positive-negative control plus exactly three unchanged cheap methods per mode. No native, full-module, macOS-hosted, or lexical-v37 qualification claim.",
+      "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "stage_cap_seconds": 300,
+      "started": "2026-10-11T14:21:11.426244+00:00",
+      "window_cap_seconds": 650
+    },
+    {
+      "child_cap_seconds": 1770,
+      "config_sha256": "f85b9bbcc058e62a36393fc72051cacc46e00e04119f92f218b5aa09b5a1e78c",
+      "console_sha256": "917f40b5aae81aac3b39ed8e1e19ee1d9c10abc46f8ad35df0b01c76958b5447",
+      "elapsed_seconds": 193.79294284500065,
+      "executions": 12,
+      "finished": "2026-10-11T14:25:12.137929+00:00",
+      "modes": [
+        {
+          "actual_alias_selected": true,
+          "child_pid": 9,
+          "child_result_sha256": "9598c1f7b2340fccf2cfb9d29d46e8a544b9316382a2c98080e28d5c8436a34f",
+          "dedicated_alias_control": false,
+          "driver_pid": 8,
+          "environment_sha256": "e3e9bf6a338e304c01a6e2f8812418183e83b82693f3d98149f96ffe618184f3",
+          "inner_seconds": 94.09219334399677,
+          "log_sha256": "f46b873107a29e0bc3bb42cba26652cdf8b3bf4ac992745b3f802b1124fed6cc",
+          "mode": "normal",
+          "outer_seconds": 94.50029654100945,
+          "selectors": [
+            "test_sampled_values.SampledValueCorrespondenceTests.test_current_exact_correspondence",
+            "test_sampled_values.SampledValueCorrespondenceTests.test_type_flag_query_is_forbidden",
+            "test_coverage_loop_proofs.FullAuditCleanupLoopTests.test_each_include_root_reaches_count_and_map_dependencies",
+            "test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_symlink_ancestor_of_actual_and_include_roots_rejects",
+            "test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_entry_namespace_symlinks_and_real_qualified_byte_mutation_reject",
+            "test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_symlink_source_prefix_root_and_inert_exception_reject"
+          ],
+          "success": true,
+          "tests_run": 6
+        },
+        {
+          "actual_alias_selected": true,
+          "child_pid": 12,
+          "child_result_sha256": "01f9595fd400569248edfd177dbaf9e34d48f9a7777179b21f337a16b9429ebd",
+          "dedicated_alias_control": false,
+          "driver_pid": 11,
+          "environment_sha256": "7c1f337ffb472a7b244b16f66e148eed2b712164582ae924ae4100d6008d9838",
+          "inner_seconds": 94.0483676300064,
+          "log_sha256": "dfa38cbce3d6486eda7cd4b81c24943f95d79483f7859b1d66b7ac794d5f948f",
+          "mode": "optimized",
+          "outer_seconds": 94.47292045601353,
+          "selectors": [
+            "test_sampled_values.SampledValueCorrespondenceTests.test_current_exact_correspondence",
+            "test_sampled_values.SampledValueCorrespondenceTests.test_type_flag_query_is_forbidden",
+            "test_coverage_loop_proofs.FullAuditCleanupLoopTests.test_each_include_root_reaches_count_and_map_dependencies",
+            "test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_symlink_ancestor_of_actual_and_include_roots_rejects",
+            "test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_entry_namespace_symlinks_and_real_qualified_byte_mutation_reject",
+            "test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_symlink_source_prefix_root_and_inert_exception_reject"
+          ],
+          "success": true,
+          "tests_run": 6
+        }
+      ],
+      "phase": "macos-fixture-alias-v35-phase2",
+      "result_sha256": "a8d35defdd71e6764a1a733c8b226558f23aacccefb681ac2911061e12d776ed",
+      "scope": "Only after phase1 normal and optimized pass on the same source seal: exactly six reviewer-selected unchanged real-fixture methods per mode under fresh-process aliased TMPDIR. No full modules/classes, native, hosted-macOS, or lexical-v37 claim.",
+      "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "stage_cap_seconds": 1800,
+      "started": "2026-10-11T14:21:59.287202+00:00",
+      "window_cap_seconds": 3700
+    }
+  ],
+  "prior_hosted_failure": {
+    "bytes": 66956,
+    "errors": 10,
+    "exit_code": 2,
+    "failures": 1,
+    "head_commit": "7347189fe9ab82901dd691d82c21538aa946a593",
+    "job_id": 114482905701,
+    "path": "prior-hosted-failure/ci-macos-lint-7347189-job114482905701.log",
+    "scope": "Original earlier hosted macOS failure preserved separately and unchanged. It is not a run of the candidate-v35-macos controls or a current-head result. Focused Linux passes do not supersede or qualify this failure.",
+    "sha256": "4cf5b5bafd156f6fcd9d95b86c228bf934d82c3f7e9c23b72014f6e52ace7984",
+    "skips": 4,
+    "tested_merge_commit": "de9298895458871e1e1872c3c8f3e840f0495340",
+    "tests_run": 811
+  },
+  "private_review_bytes_included": false,
+  "protocol_seal_sha256": "538bb5e863d792a4b1cd8bb44bd66f1c48c069798b32ebdff630dbbb73972312",
+  "schema": 1,
+  "scope": "Focused Linux TMPDIR-alias fixture controls only: phase 1 passed 4 tests per mode and phase 2 passed 6 tests per mode, 20 executions total on one source seal. No actual macOS-hosted, full-module, native, lexical-v37, performance, CI-readiness, merge-readiness, or issue-completion claim.",
+  "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+  "stability_boundary": "Source/SDK stability, fresh-child selection, cleanup and descendant state are original terminal receipts, not new candidate/SDK/process or removed-fixture checks.",
+  "status": "FOCUSED_LINUX_ALIAS_CONTROLS_PASSED_ONLY",
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+  "total_test_executions": 20
+}

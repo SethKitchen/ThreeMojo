@@ -1,0 +1,68 @@
+{
+  "elapsed_seconds": 193.79294284500065,
+  "failure": null,
+  "finished": "2026-10-11T14:25:12.137929+00:00",
+  "known_process_count": 6,
+  "remaining_owned_descendants": [],
+  "scope": "Only after phase1 normal and optimized pass on the same source seal: exactly six reviewer-selected unchanged real-fixture methods per mode under fresh-process aliased TMPDIR. No full modules/classes, native, hosted-macOS, or lexical-v37 claim.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+        "phase2",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+      "expected_tests": 6,
+      "label": "normal",
+      "leader_reaped": true,
+      "log_sha256": "f46b873107a29e0bc3bb42cba26652cdf8b3bf4ac992745b3f802b1124fed6cc",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 94.50029654100945,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T14:21:59.820193+00:00",
+      "test_count": 6,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/macos-fixture-alias-v35-protocol/revision-1/driver.py",
+        "phase2",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/macos-fixture-alias-v35-phase2"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35-macos",
+      "expected_tests": 6,
+      "label": "optimized",
+      "leader_reaped": true,
+      "log_sha256": "dfa38cbce3d6486eda7cd4b81c24943f95d79483f7859b1d66b7ac794d5f948f",
+      "pgid": 11,
+      "pid": 11,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 94.47292045601353,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "e94ec30f91aaaded522a9c68cc014c8ee04b92749370322555983dc41ad4706e",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T14:23:35.502957+00:00",
+      "test_count": 6,
+      "timed_out": false
+    }
+  ]
+}

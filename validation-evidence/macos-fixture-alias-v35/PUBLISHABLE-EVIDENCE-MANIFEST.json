@@ -1,0 +1,181 @@
+{
+  "files": [
+    {
+      "bytes": 18783,
+      "kind": "derived-command-cap-and-receipt-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "6497c1496a6c123003e7d1ad0be08bd2860a8aec465f7f7bd24ffdd5e1a1e31b"
+    },
+    {
+      "bytes": 31875,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "64704338c7c9cdd9b15ec956cca1de1526983fac4b2c97d2f60de709debacd0c"
+    },
+    {
+      "bytes": 3632,
+      "kind": "focused-scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/README.md",
+      "path": "README.md",
+      "sha256": "8d65b10de28f258fc694075ffc5bc3f57aade3839a137e64cd732be1d7616cf7"
+    },
+    {
+      "bytes": 11669,
+      "kind": "derived-focused-only-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "cc3ebc98b2acd831e478fd19cc13b6cfb83f298b4aba9f6a6f979b1edf0c43ef"
+    },
+    {
+      "bytes": 4071,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1.supervisor.log",
+      "path": "actual/macos-fixture-alias-v35-phase1.supervisor.log",
+      "sha256": "362b31594903b363a64df7b1546584ebea8ec8ce4cbb706184f5f5832f99b29e"
+    },
+    {
+      "bytes": 2729,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/RESULT.json",
+      "path": "actual/macos-fixture-alias-v35-phase1/RESULT.json",
+      "sha256": "37d988838357d04c2d3f0b53463dd45bd8c0927fb2434f57b59e987c6824f05f"
+    },
+    {
+      "bytes": 1765,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/normal.log",
+      "path": "actual/macos-fixture-alias-v35-phase1/normal.log",
+      "sha256": "7e25e6bcc6ad4b1af6aef7550120f74a28f66f9f2f7ec345d3fa974b9ced5c67"
+    },
+    {
+      "bytes": 942,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/normal/CHILD-RESULT.json",
+      "path": "actual/macos-fixture-alias-v35-phase1/normal/CHILD-RESULT.json",
+      "sha256": "a046d23a44c03bfa4007ccb63a27d2280820576d4671baf88c5ca32a779231b1"
+    },
+    {
+      "bytes": 920,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/normal/ENVIRONMENT.json",
+      "path": "actual/macos-fixture-alias-v35-phase1/normal/ENVIRONMENT.json",
+      "sha256": "ac3027dd2e676282c7501a80154788025046d498f5dbeae0a6230d12694e483c"
+    },
+    {
+      "bytes": 1774,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/optimized.log",
+      "path": "actual/macos-fixture-alias-v35-phase1/optimized.log",
+      "sha256": "a66fc5377a323b0c678aefdb9a2fa7ac58f9957ca744d5ba6805af505729bcc9"
+    },
+    {
+      "bytes": 945,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/optimized/CHILD-RESULT.json",
+      "path": "actual/macos-fixture-alias-v35-phase1/optimized/CHILD-RESULT.json",
+      "sha256": "181d5bdceea4a0acd79cc9cd9cc8e04eb6fe1e1442a8c71ec2e5968ae60ac803"
+    },
+    {
+      "bytes": 934,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase1/optimized/ENVIRONMENT.json",
+      "path": "actual/macos-fixture-alias-v35-phase1/optimized/ENVIRONMENT.json",
+      "sha256": "12c42d86eb8ce7d2fdddac3b515eb36ff151358f55d910bcd50d4130c68df259"
+    },
+    {
+      "bytes": 4095,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2.supervisor.log",
+      "path": "actual/macos-fixture-alias-v35-phase2.supervisor.log",
+      "sha256": "917f40b5aae81aac3b39ed8e1e19ee1d9c10abc46f8ad35df0b01c76958b5447"
+    },
+    {
+      "bytes": 2752,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/RESULT.json",
+      "path": "actual/macos-fixture-alias-v35-phase2/RESULT.json",
+      "sha256": "a8d35defdd71e6764a1a733c8b226558f23aacccefb681ac2911061e12d776ed"
+    },
+    {
+      "bytes": 2013,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/normal.log",
+      "path": "actual/macos-fixture-alias-v35-phase2/normal.log",
+      "sha256": "f46b873107a29e0bc3bb42cba26652cdf8b3bf4ac992745b3f802b1124fed6cc"
+    },
+    {
+      "bytes": 1247,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/normal/CHILD-RESULT.json",
+      "path": "actual/macos-fixture-alias-v35-phase2/normal/CHILD-RESULT.json",
+      "sha256": "9598c1f7b2340fccf2cfb9d29d46e8a544b9316382a2c98080e28d5c8436a34f"
+    },
+    {
+      "bytes": 920,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/normal/ENVIRONMENT.json",
+      "path": "actual/macos-fixture-alias-v35-phase2/normal/ENVIRONMENT.json",
+      "sha256": "e3e9bf6a338e304c01a6e2f8812418183e83b82693f3d98149f96ffe618184f3"
+    },
+    {
+      "bytes": 2021,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/optimized.log",
+      "path": "actual/macos-fixture-alias-v35-phase2/optimized.log",
+      "sha256": "dfa38cbce3d6486eda7cd4b81c24943f95d79483f7859b1d66b7ac794d5f948f"
+    },
+    {
+      "bytes": 1250,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/optimized/CHILD-RESULT.json",
+      "path": "actual/macos-fixture-alias-v35-phase2/optimized/CHILD-RESULT.json",
+      "sha256": "01f9595fd400569248edfd177dbaf9e34d48f9a7777179b21f337a16b9429ebd"
+    },
+    {
+      "bytes": 934,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/actual/macos-fixture-alias-v35-phase2/optimized/ENVIRONMENT.json",
+      "path": "actual/macos-fixture-alias-v35-phase2/optimized/ENVIRONMENT.json",
+      "sha256": "7c1f337ffb472a7b244b16f66e148eed2b712164582ae924ae4100d6008d9838"
+    },
+    {
+      "bytes": 1176565,
+      "kind": "lossless-original-focused-alias-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "7fe8c59295f97fc6baed102e8001ad65bcc3bf07ef561a2d65aba1077aedcfe0"
+    },
+    {
+      "bytes": 5175,
+      "kind": "unchanged-hash-bound-safe-decoder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 46567,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/reproduce/build_macos_fixture_alias_v35_packet.py",
+      "path": "reproduce/build_macos_fixture_alias_v35_packet.py",
+      "sha256": "58ef0703d790590c0c1659f829e9c92ae195e71d83f314a653f7e603e4540e1e"
+    },
+    {
+      "bytes": 1276,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/reproduce/macos-fixture-alias-v35-phase1.json",
+      "path": "reproduce/macos-fixture-alias-v35-phase1.json",
+      "sha256": "93dd94486174e9dbea234822d63d27917585f237a432c042c4070c6c3197d65d"
+    },
+    {
+      "bytes": 1300,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-macos-fixture-alias-v35-packet/reproduce/macos-fixture-alias-v35-phase2.json",
+      "path": "reproduce/macos-fixture-alias-v35-phase2.json",
+      "sha256": "f85b9bbcc058e62a36393fc72051cacc46e00e04119f92f218b5aa09b5a1e78c"
+    }
+  ],
+  "schema": 1,
+  "scope": "Focused Linux TMPDIR-alias fixture controls only: phase 1 passed 4 tests per mode and phase 2 passed 6 tests per mode, 20 executions total on one source seal. No actual macOS-hosted, full-module, native, lexical-v37, performance, CI-readiness, merge-readiness, or issue-completion claim."
+}
