@@ -204,7 +204,8 @@ class SeedCountSuccessorTests(unittest.TestCase):
     def test_actual_after_graph_and_complete_import_closure(self):
         with self.live_after():
             seed.verify_premises(ROOT,self.record,after=True)
-            self.assertEqual(seed.dependency_inventory(ROOT), {MAP,*self.record['unchanged_inputs']})
+            self.assertEqual(seed.dependency_inventory(ROOT),
+                             {MAP, *self.record['unchanged_inputs'], 'loaders/utf8.mojo'})
         self.assertIn('extensions/carla/road.mojo',self.record['unchanged_inputs'])
         self.assertIn('extensions/carla/curve_trig.mojo',self.record['unchanged_inputs'])
         self.assertTrue(any(x['name']=='_uncertain' for x in self.record['premise_declarations']))
