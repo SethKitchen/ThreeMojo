@@ -1,0 +1,22 @@
+{
+  "base_candidate": "candidate-v33",
+  "base_source_seal_sha256": "5b34331e984e7abc56840d55e6115851d17e62337b1c6d90abb1b6701f465397",
+  "delta_count": 1,
+  "files": [
+    {
+      "before_git_blob": "2082a19b8506d802356e8330927b63b7f7441603",
+      "before_mode": "100644",
+      "before_sha256": "a63343dfe6e1106140d2a5d5ca155c650c776a87d5be44e8a7d093a8472c673a",
+      "bytes": 18390,
+      "git_blob": "7818ec79838a692e54208d2f684298b32c0c8374",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/sum2-declaration-fixture-proposal/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "sha256": "dd3ca4270118361c1d3d83387232d960aae5e5646bdf79590dc35d98f9273e3e"
+    }
+  ],
+  "schema": 1,
+  "scope": "One reviewed Sum2 test-only proposal source; no candidate tree is materialized by this manifest.",
+  "status": "Reviewed source-only checkpoint. Candidate installation and focused execution pending. No full-matrix, native, or coverage qualification claim.",
+  "test_method_count_delta": 0
+}
