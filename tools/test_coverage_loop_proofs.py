@@ -1842,19 +1842,13 @@ class MapSuccessorLoopTests(unittest.TestCase):
                     'unchanged_correctness_tests', 'after_correctness_tests'):
             names.update(record[key])
         names.update(loops.REVIEWED_LOOP_RULES['extensions/carla/rtree'][0])
-        # The shared-helper binding reads its contract and its package inputs,
-        # providers and tests, as the construction fixture does.
-        from carla_lane_oracle import shared_helper_contracts as helpers
-        names.update((
-            'tools/carla_lane_oracle/shared_helper_contracts.py',
-            'loaders/utf8.mojo', *helpers.PACKAGE_INPUTS, *helpers.PROVIDERS,
-            *helpers.TESTS))
         for name in names:
             path = root/name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes((self.repo/name).read_bytes())
         audit_fixtures.write_predecessors(
             root, audit_fixtures.verified_predecessors(self.repo))
+        audit_fixtures.copy_shared_helper_inputs(root, self.repo)
         return root
 
     def test_actual_physical_state_keeps_live_hashes_and_all_true_obligations(self):
@@ -1932,6 +1926,33 @@ class MapSuccessorLoopTests(unittest.TestCase):
                 path.write_bytes(original)
         if self.after:
             self.assert_live_proofs(root)
+
+    def test_shared_helper_fixture_inputs_are_bound_and_fail_closed(self):
+        root = self.fixture()
+        bindings = full_audit.shared_helper_proof_bindings(self.repo)
+        proofs = self.assert_live_proofs(root)
+        for line in (4055, 4069, 4099):
+            if line in proofs:
+                self.assertEqual({name: proofs[line]['dependency_sha256'][name]
+                                  for name in bindings}, bindings)
+        for name, digest in bindings.items():
+            path = root/name
+            original = path.read_bytes()
+            self.assertEqual(loops.sha256(original), digest)
+            for missing in (False, True):
+                with self.subTest(helper_input=name, missing=missing):
+                    try:
+                        if missing:
+                            path.unlink()
+                        else:
+                            path.write_bytes(original + b'\n# unreviewed helper input\n')
+                        self.assertEqual(loops.reviewed_nonempty_loops(
+                            root, 'extensions/carla/map'), {})
+                        self.assertEqual(loops.reviewed_nonempty_loops(
+                            root, 'extensions/carla/rtree'), {})
+                    finally:
+                        path.write_bytes(original)
+        self.assert_live_proofs(root)
 
     def test_all_seven_explicit_map_states_keep_eight_required_true_rows(self):
         root = self.fixture()
