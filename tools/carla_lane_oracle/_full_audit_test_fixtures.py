@@ -33,6 +33,23 @@ def write_predecessors(root, predecessors):
         target.write_bytes(raw)
 
 
+def copy_shared_helper_inputs(root, source):
+    """Copy the verified arithmetic helper closure into a partial fixture."""
+    bindings = cleanup.shared_helper_proof_bindings(source)
+    for name, digest in bindings.items():
+        raw = (Path(source)/name).read_bytes()
+        if cleanup.sha(raw) != digest:
+            raise AssertionError('shared-helper fixture source changed: ' + name)
+        target = Path(root)/name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+        if cleanup.sha(target.read_bytes()) != digest:
+            raise AssertionError('shared-helper fixture copy changed: ' + name)
+    if cleanup.shared_helper_proof_bindings(root) != bindings:
+        raise AssertionError('shared-helper fixture closure changed')
+    return bindings
+
+
 def copy_current_root(case, source, *, destination=None):
     """Copy the complete Mojo census and verifier inputs into a real root."""
     source = Path(source)
