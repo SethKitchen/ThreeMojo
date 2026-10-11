@@ -202,6 +202,28 @@ class ManifestTests(unittest.TestCase):
             with self.subTest(index=index), self.assertRaises(tool.ManifestError):
                 tool.check_manifest(manifest_of(entry))
 
+    def test_carla_provenance_matches_a_complete_release_name(self):
+        good = copy.deepcopy(next(e for e in tool.load_manifest()['entries']
+                                  if e['id'] == 'carla.vehicle.audi.a2'))
+        # A release prefix is not the same upstream release.
+        prefix = copy.deepcopy(good)
+        prefix['source'] = 'https://github.com/carla-simulator/carla/releases/tag/0.9.1'
+        with self.assertRaisesRegex(tool.ManifestError, 'provenance must name CARLA 0.9.1'):
+            tool.check_manifest(manifest_of(prefix))
+        for provenance in ('CARLA 0.9.160', 'CARLA 0.9.16.1', 'CARLA 0.9.16.rc1',
+                           'CARLA 0.9.16rc1', 'CARLA 0.9.16-rc1', 'CARLA 0.9.16+build.1',
+                           'NOTCARLA 0.9.16', 'CARLA 0.9.16_extra'):
+            entry = copy.deepcopy(good)
+            entry['provenance'] = provenance
+            with self.subTest(provenance=provenance), self.assertRaises(tool.ManifestError):
+                tool.check_manifest(manifest_of(entry))
+        for provenance in ('CARLA 0.9.16', "CARLA 0.9.16's own vehicle",
+                           'CARLA 0.9.16. Converted assets.', '(CARLA 0.9.16), converted.'):
+            entry = copy.deepcopy(good)
+            entry['provenance'] = provenance
+            with self.subTest(provenance=provenance):
+                tool.check_manifest(manifest_of(entry))
+
     def test_a_file_not_hosted_yet_passes_with_its_sum(self):
         tool.check_manifest(manifest_of(texture_entry(None, _sum(b'scan'))))
 
