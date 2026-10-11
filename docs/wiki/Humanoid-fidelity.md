@@ -1,6 +1,6 @@
 # Humanoid fidelity
 
-A rendered humanoid is not a validated engineering model. Visual detail and physical fidelity are separate choices.
+A rendered humanoid is not a validated engineering model. Visual detail and physical fidelity are separate choices. The software keeps them apart with four records: a creation recipe, a content record, mapping records and a canonical record.
 
 The anatomical templates provide named parts, dimensions, tissue properties and approximate masses. They do not establish accuracy for a real person. Engineering use requires independent geometry, material, load and solver validation.
 
@@ -12,9 +12,10 @@ The anatomical templates provide named parts, dimensions, tissue properties and 
 | Scanned head | ICT identity modes, facial topology and expression shapes | A visual surface fitted over a vault and neck proxy |
 | Game humanoid | Skin, nineteen animation joints, skin weights and clips | No tissue fields, mass model or constitutive simulation |
 | Decimated mesh | Fewer triangles, rebuilt normals and texture coordinates | Changed topology; most custom attributes and physical meaning are not preserved |
-| glTF bake | Supported visual geometry, materials, skeletons, morphs and animations | No automatic anatomical provenance, tissue model or engineering validation |
+| glTF bake | Visual geometry, materials, skeletons, morphs, animations, the creation recipe and the content record | No tissue model or engineering validation |
+| Canonical record | Versioned SI geometry fingerprints, tissue labels and sampled properties of named parts | Template estimates of the listed parts only; no whole-body or clinical claim |
 
-`Length` values enter the templates with units. Frames place geometry in meters. A `Vector3` position does not retain a unit tag or anatomical identity. A glTF file also does not store the original `HumanoidSpec` automatically.
+`Length` values enter the templates with units. Frames place geometry in meters. A `Vector3` position does not retain a unit tag or anatomical identity. A game bake stores the complete `HumanoidSpec` in its creation recipe. The canonical record is a separate document.
 
 ## Face identity and anatomy
 
@@ -24,7 +25,7 @@ The eight `FACE_SHAPE` controls follow a different path. They apply ICT identity
 
 `ScannedHead` fits a coarse surface over `HeadHull`. That hull represents the vault and neck. It does not test containment against every anatomical part. A shared frame does not prove correct tissue clearance or contact.
 
-Changing an identity requires separate checks of bone containment, eye fit, dental fit and tissue thickness. The software does not perform those engineering checks.
+Changing an identity requires separate checks of bone containment, eye fit, dental fit and tissue thickness. [Fit checks](#fit-checks) measure the geometric clearances. They show that the current identity path does not keep these fits.
 
 ## Expressions and teeth
 
@@ -55,7 +56,7 @@ The game builder does not currently combine the facial morph rig with its skinne
 
 The simplifier changes topology and vertex positions. It has no volume, mass, tissue-boundary or joint-clearance error limit. The game builder restores color and thinness by nearest-vertex transfer. This does not restore anatomical correspondence.
 
-The glTF exporter preserves supported visual attributes and supplied animations. It does not automatically export `thinness`, tissue fields, masses or solver parameters. Node and geometry `user_data` can carry explicit provenance through `extras`. The game builder now populates a fail-closed creation recipe; see below.
+The glTF exporter preserves supported visual attributes and supplied animations. It does not automatically export `thinness`, tissue fields, masses or solver parameters. Node and geometry `user_data` can carry explicit provenance through `extras`. The game builder writes a fail-closed creation recipe and a content record; see below.
 
 The game example checks the expected creation recipe before reusing a bake. Its filename alone is not a verified fingerprint of the spec or mesh budget.
 
@@ -108,8 +109,8 @@ sixteen lowercase hexadecimal digits. It is not a cryptographic hash.
 The recipe records `canonical_to_local_rest` as a column-major 4x4 matrix.
 The game path uses the identity matrix. Translations are in meters.
 
-Schema version 2 adds the fingerprints and the matrix. A version 1 bake
-is refused as stale.
+Schema version 2 adds the fingerprints and the matrix. Schema version 3
+adds `converted_sources`. A bake of an earlier version is refused as stale.
 
 Use these checks after you load a bake:
 
@@ -121,20 +122,158 @@ Use these checks after you load a bake:
   It then compares the complete record.
 
 A stale bake raises an error. It never represents a changed spec silently.
-These checks do not hash the mesh bytes. Use a content digest for that.
+The recipe checks do not hash the mesh bytes. The
+[content record](#bake-content-record) does.
 
-These recipe revisions are semantic versions. They are not verified
-upstream commits or content hashes. A producer must change its recipe
-revision when its source, topology, rig or mapping changes. Custom material
-IDs identify entries in the caller's store, not immutable material bytes.
-Converted ICTF and THRS source manifests remain unverified under #303.
-The record exposes that limit instead of inventing a source or license.
+The canonical, visual and asset revisions are semantic versions. A
+producer must change its recipe revision when its topology, rig or mapping
+changes. Custom material IDs identify entries in the caller's store, not
+immutable material bytes. The converted sources are verified hashes; see
+the next section.
 
 The record marks identity, expression/jaw, dental, skin-weight and LOD
 physical mappings as unsupported. It does not embed canonical geometry or
 physical properties. The game mesh remains a visual derivative.
-A recipe check does not prove that an externally edited asset still matches
-its recipe. Use a separate content digest for that check.
+
+## Verified converted sources
+
+`converted_sources` binds each converted input to its pinned manifest. The
+module is `extensions/humanoid/sources.mojo`. It reads
+`assets/converted-asset-manifest.json`, which #303 pins. See
+[Converted face and hair assets](Converted-assets).
+
+1. `game_source_paths` names the assets that a build reads. Every build
+   reads the face model. Strand guides of a scanned style also read that
+   style's hair file.
+2. The function computes the SHA-256 of each asset with `file_sha256`.
+3. The digest must equal the manifest's pinned SHA-256.
+4. The record copies the upstream repository, commit, format version and
+   license of each asset. It also records the manifest's own SHA-256.
+
+A changed asset, an unpinned asset or another manifest schema is an error.
+`add_game_humanoid` records the result in the recipe and sets
+`source_manifest_verified`. A consumer calls `converted_sources` again to
+build its expected recipe. So a changed source makes an old bake stale.
+
+`sha256_hex` is a FIPS 180-4 SHA-256 in Mojo. The tests check it against
+published test vectors. The check reads the files at build time. It does
+not prove that a later reader loads the same bytes.
+
+## Bake content record
+
+`add_game_humanoid` also writes a content record under
+`threemojo_humanoid_content`. The module is `extensions/humanoid/bake.mojo`.
+
+| Field | Contents |
+|---|---|
+| `recipe_digest` | The digest of the creation recipe that this content belongs to |
+| `meshes` | One `geometry_fingerprint` per skinned and rigid mesh under the root, sorted |
+| `content_digest` | The fingerprint of the complete mesh inventory |
+| `mappings` | One mapping record per named mapping |
+
+`geometry_fingerprint` hashes the exact Float32 bits of the positions, the
+index list, the skin indices and weights, and every morph target. Normals,
+texture coordinates and colors are not covered. The hash is FNV-1a over
+little-endian words. It detects changed bytes, not a deliberate forgery.
+
+`require_bake_content` checks a loaded humanoid:
+
+1. It applies `require_bake_provenance` to the root's extras.
+2. The content must belong to the expected recipe.
+3. It fingerprints every mesh under the root again. A changed vertex is an
+   error.
+4. Each mapping must match the expected source and the loaded topology.
+5. The complete record must equal a rebuilt record.
+
+A glTF round trip keeps every checked byte. The game builder snaps its skin
+weights so that the loader's normalization keeps them. See
+[Game humanoid](Game-humanoid#the-skin-and-its-weights).
+
+## Mappings and invalidation
+
+`extensions/humanoid/mapping.mojo` names each path from canonical data to a
+visual asset. `MappingKind` is a type with `is_valid`.
+
+| Kind | Source fingerprint | Topology fingerprint | Scope |
+|---|---|---|---|
+| `IDENTITY_MAP` | Face model SHA-256 | Scanned face part ranges | Genes weigh scanned identity modes; canonical bones do not follow |
+| `EXPRESSION_JAW_MAP` | Face model SHA-256 | Scanned face part ranges | Expressions move the scanned skin and mouth; the canonical mandible does not follow |
+| `EYE_MAP` | Face model SHA-256 | Scanned face part ranges | Identity mean shifts place the eyeballs; no orbit containment |
+| `DENTAL_MAP` | Face model SHA-256 | Scanned face part ranges | Two separate dentitions |
+| `SKIN_WEIGHT_MAP` | Rig revision and joint count | Mesh inventory topology | Animation weights; no tissue or load transfer |
+| `LOD_MAP` | Full-resolution topology | Mesh inventory topology | Visual decimation; canonical mass and contact geometry stay in the canonical record |
+
+`require_mapping` refuses a record when its source or topology fingerprint
+changed. It also refuses an edited record. So a changed face model, rig or
+mesh topology invalidates each mapping that indexes it.
+
+The level-of-detail source is the topology before decimation. A load check
+verifies the decimated topology. Only a rebuild can compute the source
+fingerprint again. Compare the stored record with a rebuilt one to check it.
+
+The dental record names two representations: the authored `BONES` teeth and
+the scanned `MOUTH` teeth. They stay separate until a tested correspondence
+exists. `require_physical_mapping` refuses every kind. No mapping carries a
+tested physical correspondence.
+
+## Canonical record
+
+`canonical_record(spec)` returns a versioned record of named canonical
+parts. The module is `extensions/humanoid/canonical.mojo`. It reads only
+the spec. No mesh budget, visual widening, material or bake enters it.
+
+| Part | Geometry | Physical properties |
+|---|---|---|
+| Skull, mandible, authored teeth | Isosurface mesh fingerprints and bounds in meters | Sampled bone-tissue mass and region volumes; the tensor is `null` |
+| Right and left eyeballs | Mesh fingerprints, center and radius in meters | `null`; no density is assigned |
+| Thigh, shank and foot of each leg | Integration bounds in meters | Mass, center and all six tensor entries about the center of mass, with region masses |
+
+Each part has a stable ID such as `head/skull` and tissue labels. Each part
+names its frame and origin. Head parts use the pelvis frame. Leg parts use
+the tibiofemoral leg frame of [Segment inertia](Segment-inertia).
+`CanonicalPart` is a type with `is_valid`.
+
+`require_canonical_record` evaluates the record again and compares every
+field. It refuses another schema, revision or spec, and any edited value.
+The game example stores the record in the scene extras beside the bake.
+It checks the record after each load.
+
+The record is independent of the visual derivative. A decimated build or a
+bake leaves its bytes unchanged. A different triangle budget cannot change a
+canonical mass or a contact-geometry fingerprint. The values remain template
+estimates. The record does not cover the whole body or establish
+convergence.
+
+## Fit checks
+
+`extensions/humanoid/fit.mojo` measures visual vertices against authored
+canonical fields. Each check returns a `FitReport` of signed distances in
+meters. A negative distance is inside the field.
+
+| Check | Samples | Field |
+|---|---|---|
+| `skin_bone_fit` | Fitted scanned skin above the scan floor | A head bone, such as the skull |
+| `eye_bone_fit` | Eyeball vertices | A head bone |
+| `dental_fit` | Scanned `MOUTH` teeth | The authored `BONES` teeth |
+
+`require_clearance` refuses a report whose minimum is below a clearance.
+`require_containment` refuses a report whose maximum exceeds a tolerance.
+
+These results apply to the six-foot template at this revision. The tests
+check the sign of each result:
+
+- The fitted skin clears the skull by about 0.25 mm. It is about 0.1 mm
+  inside the mandible at its closest vertex.
+- With every face-shape gene at +1, the skin enters the skull by about
+  1.3 mm and the mandible by about 9 mm.
+- With every gene at -1 at 2.5 m, the skin enters the skull by about 16 mm.
+- The eyeballs enter the authored skull field by about 6 mm. The identity
+  moves the eyes but not the skull.
+- Most scanned tooth vertices lie outside the authored teeth, up to about
+  27 mm away.
+
+So the identity, eye and dental mappings remain visual. These checks
+measure geometry only. They do not validate tissue thickness or contact.
 
 ## Independent canonical snapshots
 
@@ -200,15 +339,20 @@ It does not test physiological validity or convergence.
 
 ## Acceptance boundary for #297
 
-| Requirement | Implemented boundary | Exact remaining work |
-|---|---|---|
-| Separate visual and engineering capabilities | Typed native gate; game and bake records fail closed | A validated engineering coupling could add a capability only with independent evidence |
-| Retain canonical SI geometry, labels and properties | Immutable caller-supplied part snapshots retain the full #289 report | Generate and verify complete canonical part meshes and region correspondence from library fields; whole-body property coverage is absent |
-| Identity, jaw, weights and LOD mappings | Explicit unsupported maps, source/topology invalidation and two dental identities | Tested coupled maps, including eye fit and tissue clearance |
-| Bake provenance and stale-spec checks | Game roots and example scene extras retain exact spec/options/frame recipes, an explicit transform and spec, settings and recipe fingerprints; loaded bakes are refused when stale or edited; offline manifests bind artifact bytes | Pin and verify converted source/model inputs and license manifests under #303; generic exporters cannot detect arbitrary post-build scene edits |
-| Frames, full tensors and reference points | Tested offline proper-rotation and parallel-axis adapter | Native whole-body export integration when canonical part generation is available |
-| Round trips and extreme identities | Synthetic glTF recipe round trips, immutable SI data, full-tensor analytic controls, all extreme gene recipes, stale assets and unsupported paths | Anatomical correspondence, eye/dental fit and tissue-clearance fixtures with approved source assets |
+All six acceptance criteria of #297 are met. The contract keeps the visual
+derivative and the canonical data apart. It does not validate anatomy.
 
-This slice does not close #297. No measured anatomical parameter changes
-for appearance. No biomechanical, patient-specific or clinical calibration
-is claimed. Synthetic fixtures need no new asset downloads or licenses.
+| Requirement | Evidence |
+|---|---|
+| Separate visual and engineering capabilities | `HumanoidUse` gate; game and bake records fail closed |
+| Retain canonical SI geometry, labels and properties | `canonical_record` with eleven typed parts, independent of every visual setting; checked after decimation and a GLB round trip |
+| Identity, jaw, weights and LOD mappings | `MappingKind` records with source and topology fingerprints; `require_mapping` refuses changed sources and topologies; both dentitions stay named |
+| Bake provenance and stale-spec checks | Schema 3 recipe with revisions, units, handedness, origin, transform, fingerprints and verified source SHA-256 values; a content record of every checked mesh byte |
+| Frames, full tensors and reference points | Tested offline proper-rotation and parallel-axis adapter |
+| Round trips and extreme identities | GLB round trips of the recipe, content and canonical records; extreme-identity records and fit checks; refused unsupported paths |
+
+Global anatomical validation, constitutive models and mass convergence are
+out of scope for #297. No mapping has a tested physical correspondence, so
+engineering use stays refused. No measured anatomical parameter changes for
+appearance. No biomechanical, patient-specific or clinical calibration is
+claimed.

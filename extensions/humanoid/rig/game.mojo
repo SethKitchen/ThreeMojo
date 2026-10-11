@@ -28,6 +28,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION, BufferGeometry
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from extensions.humanoid.bake import CONTENT_KEY, bake_content
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,
     FIDELITY_KEY,
@@ -35,7 +36,14 @@ from extensions.humanoid.fidelity import (
     VISUAL_USE,
     HumanoidUse,
     humanoid_provenance,
+    json_fingerprint,
     require_humanoid_use,
+    topology_fingerprint,
+)
+from extensions.humanoid.sources import (
+    CONVERTED_MANIFEST,
+    converted_sources,
+    game_source_paths,
 )
 from core.user_data import UserData
 from extensions.humanoid.rig.joints import (
@@ -99,7 +107,7 @@ from materials.material import MaterialId
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.skeleton import bind_skeleton
-from objects.skinned_mesh import SkinnedMesh
+from objects.skinned_mesh import SKIN_WEIGHT, SkinnedMesh
 
 # The share of a triangle budget the body's skin takes, and the hair's
 # shell; each hand takes half of the rest.
@@ -265,6 +273,44 @@ def _budgeted(
 
 
 comptime _FACIAL_PART_MINIMUM = 4 * 32
+# Skin weights are whole multiples of this fraction.
+comptime WEIGHT_QUANTUM = 1 << 20
+
+
+def exact_skin_weights(mut part: BufferGeometry) raises:
+    """Snap each vertex's skin weights to sum to exactly one.
+
+    Each weight becomes a whole multiple of 2^-20. The rounding remainder
+    goes to the vertex's largest weight. The sum is then exactly one in
+    Float32 and Float64 arithmetic, so the normalization of a glTF loader
+    leaves every bit unchanged. A vertex whose weights are all zero gives
+    all of its weight to its first bone, as that normalization does. Each
+    weight moves by at most 2^-20 plus the remainder.
+
+    Args:
+        part: A mesh with four skin weights per vertex.
+
+    Raises:
+        Error: If the mesh has no skin weights.
+    """
+    var weights = part.clone_attribute(String(SKIN_WEIGHT)).data.copy()
+    for vertex in range(0, len(weights), 4):  # pragma: no branch
+        var units = List[Int](length=4, fill=0)
+        var total = 0
+        var largest = 0
+        for lane in range(4):  # pragma: no branch
+            units[lane] = Int(
+                round(Float64(weights[vertex + lane]) * WEIGHT_QUANTUM)
+            )
+            total += units[lane]
+            if units[lane] > units[largest]:
+                largest = lane
+        units[largest] += WEIGHT_QUANTUM - total
+        for lane in range(4):  # pragma: no branch
+            weights[vertex + lane] = Float32(
+                Float64(units[lane]) / Float64(WEIGHT_QUANTUM)
+            )
+    part.set_attribute(String(SKIN_WEIGHT), BufferAttribute(weights^, 4))
 
 
 def add_game_humanoid(
@@ -314,13 +360,16 @@ def add_game_humanoid(
             Insufficient budgets raise instead of dropping targets or exceeding it.
 
     Returns:
-        The humanoid: its rig, its bones and its meshes.
+        The humanoid: its rig, its bones and its meshes. Its root carries
+        the creation record under `FIDELITY_KEY` and the content record
+        under `CONTENT_KEY`.
 
     Raises:
         Error: If the spec, a detail, style or visual use is refused; if
             the budget is negative or cannot preserve the facial and body
-            requirements; if facial animation requests strand guides; or if
-            a scene node, mesh or geometry operation fails.
+            requirements; if facial animation requests strand guides; if a
+            converted asset does not match its pinned manifest; or if a
+            scene node, mesh or geometry operation fails.
     """
     require_humanoid_use(use)
     var settings = game_build_settings(
@@ -336,17 +385,16 @@ def add_game_humanoid(
         eye_paint,
         facial_animation,
     )
-    var node = Object3D()
-    node.user_data.set_json(
-        String(FIDELITY_KEY),
-        humanoid_provenance(
-            spec,
-            settings,
-            String(CANONICAL_RECIPE),
-            String(GAME_RECIPE),
-            "unverified-converted-ICTF-THRS",
-        ).to_json(),
+    var provenance = humanoid_provenance(
+        spec,
+        settings,
+        String(CANONICAL_RECIPE),
+        String(GAME_RECIPE),
+        String(CONVERTED_MANIFEST),
+        converted_sources(game_source_paths(guides, hair_style)),
     )
+    var node = Object3D()
+    node.user_data.set_json(String(FIDELITY_KEY), provenance.to_json())
     var gap = LEG_GAP * Float32(spec.stature.value) / 1.8288
     var body: BufferGeometry
     var facial_meshes = List[BufferGeometry]()
@@ -394,6 +442,16 @@ def add_game_humanoid(
     var whole = BufferGeometry()
     whole.set_attribute(String(POSITION), BufferAttribute(outline^, 3))
     var rig = humanoid_rig(spec, whole)
+    # The level of detail maps these full-resolution topologies.
+    var full = List[String]()
+    full.append(topology_fingerprint(body))
+    full.append(topology_fingerprint(right))
+    full.append(topology_fingerprint(left))
+    full.append(topology_fingerprint(shell))
+    sort(full)
+    var lod_source = json_fingerprint(
+        String('["') + String('","').join(full) + '"]'
+    )
     var remaining = triangles
     var reserve = 0
     if facial_animation and triangles > 0:
@@ -514,6 +572,7 @@ def add_game_humanoid(
         skin_weights(part, rig, allowed[k])
         if k == 0:
             part_legs(part, rig.at(HIPS).y - CROTCH * rig.stature / 1.8288)
+        exact_skin_weights(part)
         skins.append(len(scene.skinned_meshes))
         scene.add_skinned_mesh(
             SkinnedMesh(
@@ -560,6 +619,13 @@ def add_game_humanoid(
                 style=hair_style,
             )
         )
+    # The content record binds every mesh's bytes and each mapping.
+    var stand = scene.get(root)
+    stand.user_data.set_json(
+        String(CONTENT_KEY),
+        bake_content(scene, assets, root, provenance, lod_source).to_json(),
+    )
+    scene.set(root, stand^)
     return GameHumanoid(rig^, root, bones^, skins^, strands^, face^)
 
 

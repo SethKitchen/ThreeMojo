@@ -15,8 +15,11 @@ into the next. It prints how long the build, the bake and the load
 took, and how many frames a second it rendered.
 
 The optional second argument is the baked file; the default is
-`out/humanoid.glb`. A stale or unversioned recipe is refused. Delete it to bake again. The optional third is the
-budget of triangles for the skin; the default is 10000.
+`out/humanoid.glb`. The bake keeps the creation recipe, the content
+record of its meshes and mappings, and the canonical record. A stale,
+unversioned or edited bake is refused. Delete it to bake again. The
+optional third is the budget of triangles for the skin; the default is
+10000.
 """
 
 from animation.animation_clip import AnimationClip
@@ -27,10 +30,16 @@ from animation.animation_mixer import (
 )
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import Object3D
+from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import GLB, GltfExportOptions, write_gltf
-from core.user_data import UserData
+from core.user_data import UserData, user_data_of
+from extensions.humanoid.bake import CONTENT_KEY, require_bake_content
+from extensions.humanoid.canonical import (
+    CANONICAL_KEY,
+    canonical_record,
+    require_canonical_record,
+)
 from extensions.humanoid.fidelity import (
     CANONICAL_RECIPE,
     FIDELITY_KEY,
@@ -38,6 +47,13 @@ from extensions.humanoid.fidelity import (
     humanoid_provenance,
     require_bake_provenance,
 )
+from extensions.humanoid.skeleton.head.hair.styles import GROWN
+from extensions.humanoid.sources import (
+    CONVERTED_MANIFEST,
+    converted_sources,
+    game_source_paths,
+)
+from loaders.json import parse_json
 from extensions.humanoid.rig.clips import (
     idle_clip,
     jump_clip,
@@ -77,15 +93,34 @@ def _seconds_since(start: Int) -> Float64:
     return Float64(perf_counter_ns() - start) / 1e9
 
 
+def _spec() -> HumanoidSpec:
+    """Return this example's canonical inputs."""
+    return HumanoidSpec(Length(6.0, FOOT), MALE)
+
+
 def _expected_provenance(triangles: Int) raises -> UserData:
-    """Return this example's canonical and visual creation recipe."""
+    """Return this example's canonical and visual creation recipe.
+
+    It hashes the converted inputs again, so a changed asset is stale.
+    """
     return humanoid_provenance(
-        HumanoidSpec(Length(6.0, FOOT), MALE),
+        _spec(),
         game_build_settings(triangles),
         String(CANONICAL_RECIPE),
         String(GAME_RECIPE),
-        "unverified-converted-ICTF-THRS",
+        String(CONVERTED_MANIFEST),
+        converted_sources(game_source_paths(0, GROWN)),
     )
+
+
+def _humanoid_root(scene: Scene) raises -> NodeId:
+    """Return the loaded node that carries the content record."""
+    for node in scene.traverse():
+        if node != NO_PARENT and scene.get(node).user_data.has(
+            String(CONTENT_KEY)
+        ):
+            return node
+    raise Error("The baked file has no humanoid content record; rebuild it")
 
 
 def _bake(path: String, triangles: Int) raises:
@@ -98,7 +133,7 @@ def _bake(path: String, triangles: Int) raises:
         scene,
         assets,
         root,
-        HumanoidSpec(Length(6.0, FOOT), MALE),
+        _spec(),
         triangles,
         workers=available_workers(),
     )
@@ -113,6 +148,10 @@ def _bake(path: String, triangles: Int) raises:
     var options = GltfExportOptions()
     options.scene_user_data.set_json(
         String(FIDELITY_KEY), _expected_provenance(triangles).to_json()
+    )
+    # The canonical record stays beside the visual meshes, never from them.
+    options.scene_user_data.set_json(
+        String(CANONICAL_KEY), canonical_record(_spec()).to_json()
     )
     write_gltf(path, scene, assets, GLB, animations=clips^, options=options^)
     print("Baked", path, "in", _seconds_since(written), "s")
@@ -137,7 +176,13 @@ def main() raises:
     var assets = Assets()
     var scene = Scene()
     var model = read_gltf(baked, scene, assets)
-    require_bake_provenance(model.scene_extras, _expected_provenance(triangles))
+    var expected = _expected_provenance(triangles)
+    require_bake_provenance(model.scene_extras, expected)
+    require_bake_content(scene, assets, _humanoid_root(scene), expected)
+    if not model.scene_extras.has(String(CANONICAL_KEY)):
+        raise Error("The baked file has no canonical record; rebuild it")
+    var canonical = parse_json(model.scene_extras.json(String(CANONICAL_KEY)))
+    require_canonical_record(user_data_of(canonical, canonical.root()), _spec())
     print("Loaded in", _seconds_since(start), "s")
     var mixer = AnimationMixer()
     var actions = List[Int]()
