@@ -14,11 +14,16 @@ This module reads no consumer source; it never repins one by itself.
 """
 import hashlib
 import json
+import sys
 
 if __package__:
     from . import source_contracts as source
+    from . import consumer_successor_ledger as ledger
 else:
     import source_contracts as source
+    import consumer_successor_ledger as ledger
+
+_EXECUTED_MODULE_CODE = sys._getframe().f_code
 
 MIGRATION = 'tools/carla_lane_oracle/runtime-view-successor.json'
 MIGRATION_SHA256 = '40fe6f5aef91b4a9f407f1a8ea83721b317d24b690d947c623feca8b73dcc907'
@@ -40,23 +45,30 @@ def require(value, message):
         raise ValueError('reviewed runtime view successor: ' + message)
 
 
-def steps(root):
+def _read(root, path, operation):
+    # Preserve the original physical read and bind that exact observation.
+    raw = (root/path).read_bytes()
+    return ledger._audit()._observe_bytes(root, path, raw, _operation=operation)
+
+
+def steps(root, *, _operation=None):
     """Return each reviewed step by path once its record and tests match."""
-    raw = (root/MIGRATION).read_bytes()
-    require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact step')
-    record = json.loads(raw, object_pairs_hook=source.unique_keys)
-    require(type(record['schema']) is int and record['schema'] == 1
-            and record['issue'] == 333 and set(record['steps']) == set(MODULES),
-            'unexpected successor scope')
-    require(set(record['correctness_tests']) == set(TESTS), 'unexpected correctness test set')
-    result = {}
-    for path in MODULES:
-        step = record['steps'][path]
-        require(set(step) == KEYS and step['before_sha256'] != step['after_sha256']
-                and step['before_token_sha256'] != step['after_token_sha256'],
-                'malformed step: ' + path)
-        result[path] = dict(step)
-    for path, expected in record['correctness_tests'].items():
-        require(hashlib.sha256((root/path).read_bytes()).hexdigest() == expected,
-                'bound runtime view test changed: ' + path)
-    return result
+    with ledger._validation(root, _operation):
+        raw = _read(root, MIGRATION, _operation)
+        require(hashlib.sha256(raw).hexdigest() == MIGRATION_SHA256, 'unreviewed exact step')
+        record = json.loads(raw, object_pairs_hook=source.unique_keys)
+        require(type(record['schema']) is int and record['schema'] == 1
+                and record['issue'] == 333 and set(record['steps']) == set(MODULES),
+                'unexpected successor scope')
+        require(set(record['correctness_tests']) == set(TESTS), 'unexpected correctness test set')
+        result = {}
+        for path in MODULES:
+            step = record['steps'][path]
+            require(set(step) == KEYS and step['before_sha256'] != step['after_sha256']
+                    and step['before_token_sha256'] != step['after_token_sha256'],
+                    'malformed step: ' + path)
+            result[path] = dict(step)
+        for path, expected in record['correctness_tests'].items():
+            require(hashlib.sha256(_read(root, path, _operation)).hexdigest() == expected,
+                    'bound runtime view test changed: ' + path)
+        return result
