@@ -1,0 +1,24 @@
+{
+  "all_other_3836_source_files_unchanged": true,
+  "base_source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+  "candidate": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v30",
+  "delta_count": 1,
+  "files": [
+    {
+      "before_sha256": "113fdf00378019493262fcdc287235449775c79881533c4568a13e3c7e43fd47",
+      "bytes": 55677,
+      "git_blob": "359f9e672f99b0508e409a643da43df9a184ba6e",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v30/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "70418c4e21ddb92ae4278d824e892ebd3d57bd58a415f6489b5b97a9936a7ded"
+    }
+  ],
+  "mojo_and_genuine_report_unchanged": true,
+  "private_predecessor": "candidate-v29",
+  "published_base_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "review_sha256": "255e981621f80b655fa374fd283c911ad80ec19b43efb48a72fbde5de94a46f4",
+  "schema": 1,
+  "source_seal_sha256": "e595593ff7afaef3a4e04d6cbb24ec5343a0178ba11ea421e6a6c5ee455c4c38",
+  "status": "Reviewed test-only repair; fresh focused execution pending. No full-matrix or native/coverage claim."
+}

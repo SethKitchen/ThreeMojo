@@ -1,0 +1,64 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V29-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28"
+    }
+  ],
+  "pause_request_file": "optional-comment-v30.pause",
+  "phase": "optional-comment-focused-v30",
+  "scope": "Only two changed/new optional-runtime methods in each mode on isolated test correction atop v29. Full 96-method module, full matrix and native/coverage remain separate. Immutable v28 diagnostic continuation remains failed and separate.",
+  "seal": "CANDIDATE-V30-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v30",
+  "source_seal_sha256": "e595593ff7afaef3a4e04d6cbb24ec5343a0178ba11ea421e6a6c5ee455c4c38",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_optional_runtime_contracts.py",
+        "-k",
+        "test_absence_checks_actual_solver_imports_and_inert_decoys",
+        "-k",
+        "test_physical_inert_comment_preserves_semantics_but_not_exact_admission",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "normal-optional-comment",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_optional_runtime_contracts.py",
+        "-k",
+        "test_absence_checks_actual_solver_imports_and_inert_decoys",
+        "-k",
+        "test_physical_inert_comment_preserves_semantics_but_not_exact_admission",
+        "-v"
+      ],
+      "expected_tests": 2,
+      "label": "optimized-optional-comment",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

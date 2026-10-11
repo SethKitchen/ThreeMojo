@@ -1,0 +1,146 @@
+{
+  "files": [
+    {
+      "bytes": 3094,
+      "kind": "derived-command-and-baseline-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "35c5ad346334ac6e92b9f77577b44055ee1dcddafa20901eb7c540ab7c3b0f4f"
+    },
+    {
+      "bytes": 823,
+      "kind": "derived-specific-completed-record-extraction",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/COMPLETED-HANDOFF-SNAPSHOT-PROVENANCE.json",
+      "path": "COMPLETED-HANDOFF-SNAPSHOT-PROVENANCE.json",
+      "sha256": "0cef98d442e7f2e870858c7a66b1d7b932fcd0da16eb41d5c2d67b1d5f753af0"
+    },
+    {
+      "bytes": 15385,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "9587cfd24834b353d02b1ad5b2e50ad9531a7163c581f4d7b948078954a65c56"
+    },
+    {
+      "bytes": 2697,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/README.md",
+      "path": "README.md",
+      "sha256": "7ad364108347f5924ea79fc4eb00934df18e022fce7896b885d4d6a2483c03a5"
+    },
+    {
+      "bytes": 6448,
+      "kind": "derived-focused-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "b3c3c0f9a536ad3d460247df0688f13ced995cc419a67787a57c5ff7ff191e66"
+    },
+    {
+      "bytes": 327,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "path": "actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "sha256": "f7bebabeed81cad2178cc00d4150733b3aea7a29ddd8ee543386d8e7684e04f5"
+    },
+    {
+      "bytes": 2991,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/optional-comment-focused-v30/RESULT.json",
+      "path": "actual/optional-comment-focused-v30/RESULT.json",
+      "sha256": "5971f473b0ec743ec63113ead547966a4c5460d85753b37da232a9fc6f4b0bff"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/optional-comment-focused-v30/SDK-AFTER.json",
+      "path": "actual/optional-comment-focused-v30/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/optional-comment-focused-v30/SDK-BEFORE.json",
+      "path": "actual/optional-comment-focused-v30/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/optional-comment-focused-v30/WINDOW-START.json",
+      "path": "actual/optional-comment-focused-v30/WINDOW-START.json",
+      "sha256": "5c440d5e13ecb2842c733b4d80205bc38212483afa75c882854ceef02cac1372"
+    },
+    {
+      "bytes": 1018,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/optional-comment-focused-v30/normal-optional-comment.log",
+      "path": "actual/optional-comment-focused-v30/normal-optional-comment.log",
+      "sha256": "cbb147f63e98a51864af6cac974ff4c95893d62edcfce60faf7e95784f12d742"
+    },
+    {
+      "bytes": 1018,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/actual/optional-comment-focused-v30/optimized-optional-comment.log",
+      "path": "actual/optional-comment-focused-v30/optimized-optional-comment.log",
+      "sha256": "a3217d05ae4575d719025d7ed7d88277937c182e50c5b947e84b3cb80d5891e5"
+    },
+    {
+      "bytes": 1359985,
+      "kind": "lossless-original-receipts-source-and-bindings",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "49c3639ee9cc762513a3b061b2f694905cf4fadbd778dc142d704e622c971c41"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 1265,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "0e553e855cf50bc64d10e05ae63ecaf5708a834a44d9514ca1d85d35d7bd46b2"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 20065,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/reproduce/build_optional_comment_focused_v30_packet.py",
+      "path": "reproduce/build_optional_comment_focused_v30_packet.py",
+      "sha256": "fce92e696a43acc9c0af0fcc3b179f89ba71553b7e23d6ea1721980cf55a5aa2"
+    },
+    {
+      "bytes": 2114,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/reproduce/optional-comment-focused-v30.json",
+      "path": "reproduce/optional-comment-focused-v30.json",
+      "sha256": "2410f6b47e2b15a0522b113b77f92b0f4895582e1c4aedc318130e1f0354441d"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 55677,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-comment-focused-v30-packet/reproduce/source-v30/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "path": "reproduce/source-v30/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "70418c4e21ddb92ae4278d824e892ebd3d57bd58a415f6489b5b97a9936a7ded"
+    }
+  ],
+  "schema": 1,
+  "scope": "Two changed/new optional-runtime methods passed normally and optimized, four executions, zero skips. This test-only correction atop v29 does not qualify the complete96-method module, full matrix, native suite or coverage."
+}
