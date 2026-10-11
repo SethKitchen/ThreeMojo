@@ -1,0 +1,106 @@
+{
+  "completed_passing_stages": 8,
+  "evidence_policy": "Actual original receipts and raw output copied byte-for-byte; separate derived summary. No internal notes, secrets, reconstructed receipts, cap relaxation or completion claim.",
+  "failed_module_boundary": "The other five methods passed, including current/historical successor counts and record/pin mutations. These do not waive the failed cold verification bound.",
+  "failed_module_reported_methods": 6,
+  "failed_stage": "04-normal-test_coverage_invariant_contracts",
+  "failed_subtest_errors": 2,
+  "failure_kind": "TimeoutExpired in both import modes of test_direct_and_qualified_package_verification",
+  "original_caps": {
+    "failing_child_seconds": 10,
+    "other_authority_child_seconds": 120,
+    "other_watchdog_seconds": 30,
+    "per_module_seconds": 1800,
+    "window_seconds": 10800
+  },
+  "passing_executions_in_complete_stages": 68,
+  "remaining_owned_descendants": [],
+  "result_sha256": "de9875359428791e4424367e127f1ec2a250944d30a377119a640e4cccc316a0",
+  "schema": 1,
+  "scope": "The final v17 matrix stopped at stage9 of152. Eight complete normal/optimized stages passed68executions. The next six-test module had two subtest errors from the unchanged10-second direct/package verification subprocess limit. No later matrix, native or coverage stage ran.",
+  "source_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21",
+  "source_tree": "aacbd1af9fec2683e66abb2c4d65203f37cb79a0",
+  "stage_timings": [
+    {
+      "label": "00-normal-test_accepted_successor_contracts",
+      "returncode": 0,
+      "seconds": 27.119717429999582,
+      "skipped_test_count": 0,
+      "test_count": 4,
+      "timed_out": false
+    },
+    {
+      "label": "00-optimized-test_accepted_successor_contracts",
+      "returncode": 0,
+      "seconds": 25.049134250999487,
+      "skipped_test_count": 0,
+      "test_count": 4,
+      "timed_out": false
+    },
+    {
+      "label": "01-normal-test_border_parser_contracts",
+      "returncode": 0,
+      "seconds": 128.27403072699963,
+      "skipped_test_count": 0,
+      "test_count": 14,
+      "timed_out": false
+    },
+    {
+      "label": "01-optimized-test_border_parser_contracts",
+      "returncode": 0,
+      "seconds": 125.82454035000046,
+      "skipped_test_count": 0,
+      "test_count": 14,
+      "timed_out": false
+    },
+    {
+      "label": "02-normal-test_cache_key_contracts",
+      "returncode": 0,
+      "seconds": 20.5390451509993,
+      "skipped_test_count": 0,
+      "test_count": 12,
+      "timed_out": false
+    },
+    {
+      "label": "02-optimized-test_cache_key_contracts",
+      "returncode": 0,
+      "seconds": 21.04133684699991,
+      "skipped_test_count": 0,
+      "test_count": 12,
+      "timed_out": false
+    },
+    {
+      "label": "03-normal-test_coverage_followup_contracts",
+      "returncode": 0,
+      "seconds": 388.9339958310011,
+      "skipped_test_count": 0,
+      "test_count": 4,
+      "timed_out": false
+    },
+    {
+      "label": "03-optimized-test_coverage_followup_contracts",
+      "returncode": 0,
+      "seconds": 374.21049857899925,
+      "skipped_test_count": 0,
+      "test_count": 4,
+      "timed_out": false
+    },
+    {
+      "label": "04-normal-test_coverage_invariant_contracts",
+      "returncode": 1,
+      "seconds": 437.971450514,
+      "skipped_test_count": null,
+      "test_count": null,
+      "timed_out": false
+    }
+  ],
+  "status": "FAILED_FINAL_MATRIX_FIRST_ATTEMPT",
+  "total_window_seconds": 1561.3199111619979,
+  "uncompleted_expected_matrix": {
+    "executions": 2590,
+    "modules": 76,
+    "stages": 152
+  }
+}

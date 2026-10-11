@@ -1,0 +1,53 @@
+test_changed_record_cannot_authorize_active_pin (test_coverage_invariant_contracts.CoverageInvariantContracts.test_changed_record_cannot_authorize_active_pin) ... ok
+test_current_cleanup_adds_exactly_one_canonical_dependency (test_coverage_invariant_contracts.CoverageInvariantContracts.test_current_cleanup_adds_exactly_one_canonical_dependency) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_direct_and_qualified_package_verification (test_coverage_invariant_contracts.CoverageInvariantContracts.test_direct_and_qualified_package_verification) ... 
+  test_direct_and_qualified_package_verification (test_coverage_invariant_contracts.CoverageInvariantContracts.test_direct_and_qualified_package_verification) (import_mode='sys.path = [str(Path.cwd()/"tools/carla_lane_oracle")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant') ... ERROR
+  test_direct_and_qualified_package_verification (test_coverage_invariant_contracts.CoverageInvariantContracts.test_direct_and_qualified_package_verification) (import_mode='from tools.carla_lane_oracle import coverage_invariant_contracts as invariant') ... ERROR
+test_each_pin_edit_fails_without_reviewed_reseal (test_coverage_invariant_contracts.CoverageInvariantContracts.test_each_pin_edit_fails_without_reviewed_reseal) ... ok
+test_exact_runtime_and_guard_predecessors (test_coverage_invariant_contracts.CoverageInvariantContracts.test_exact_runtime_and_guard_predecessors) ... ok
+test_live_scope_and_retained_historical_counts (test_coverage_invariant_contracts.CoverageInvariantContracts.test_live_scope_and_retained_historical_counts) ... ok
+
+======================================================================
+ERROR: test_direct_and_qualified_package_verification (test_coverage_invariant_contracts.CoverageInvariantContracts.test_direct_and_qualified_package_verification) (import_mode='sys.path = [str(Path.cwd()/"tools/carla_lane_oracle")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/test_coverage_invariant_contracts.py", line 49, in test_direct_and_qualified_package_verification
+    subprocess.run([sys.executable, '-c', command], cwd=ROOT,
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python', '-c', 'import sys; from pathlib import Path; sys.path = [str(Path.cwd()/"tools/carla_lane_oracle")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result["sources"]) == 4 else 1)']' timed out after 10 seconds
+
+======================================================================
+ERROR: test_direct_and_qualified_package_verification (test_coverage_invariant_contracts.CoverageInvariantContracts.test_direct_and_qualified_package_verification) (import_mode='from tools.carla_lane_oracle import coverage_invariant_contracts as invariant')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/test_coverage_invariant_contracts.py", line 49, in test_direct_and_qualified_package_verification
+    subprocess.run([sys.executable, '-c', command], cwd=ROOT,
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 550, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1209, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 2116, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+  File "/workspace/scratch/c2bcdb1ca387/restored-toolchain/python/cpython-3.12.14-linux-x86_64-gnu/lib/python3.12/subprocess.py", line 1253, in _check_timeout
+    raise TimeoutExpired(
+subprocess.TimeoutExpired: Command '['/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python', '-c', 'import sys; from pathlib import Path; from tools.carla_lane_oracle import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result["sources"]) == 4 else 1)']' timed out after 10 seconds
+
+----------------------------------------------------------------------
+Ran 6 tests in 437.342s
+
+FAILED (errors=2)

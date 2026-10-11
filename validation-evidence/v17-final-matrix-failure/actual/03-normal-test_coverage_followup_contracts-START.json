@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_coverage_followup_contracts.py",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17",
+  "label": "03-normal-test_coverage_followup_contracts",
+  "pgid": 14,
+  "pid": 14,
+  "single_cpu": 0,
+  "source_seal_sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T01:35:35.741204+00:00"
+}

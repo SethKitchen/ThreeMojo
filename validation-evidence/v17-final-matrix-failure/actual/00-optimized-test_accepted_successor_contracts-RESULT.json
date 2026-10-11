@@ -1,0 +1,33 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-O",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_accepted_successor_contracts.py",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17",
+  "expected_tests": 4,
+  "label": "00-optimized-test_accepted_successor_contracts",
+  "leader_reaped": true,
+  "log_sha256": "a4632fd11fc806351bb7650a6b2f958bd9f31492ce8ac62a28b192ce400efa55",
+  "pgid": 9,
+  "pid": 9,
+  "remaining_owned_descendants": [],
+  "returncode": 0,
+  "seconds": 25.049134250999487,
+  "single_cpu": 0,
+  "skipped_test_count": 0,
+  "source_seal_sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T01:30:09.566220+00:00",
+  "test_count": 4,
+  "timed_out": false
+}

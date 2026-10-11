@@ -1,0 +1,286 @@
+{
+  "files": [
+    {
+      "bytes": 929,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/00-normal-test_accepted_successor_contracts-RESULT.json",
+      "path": "actual/00-normal-test_accepted_successor_contracts-RESULT.json",
+      "sha256": "81642f89d1ba3dc45648060b529332d1d35fff1dae06a20c9bd0f3821cee82ff"
+    },
+    {
+      "bytes": 616,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/00-normal-test_accepted_successor_contracts-START.json",
+      "path": "actual/00-normal-test_accepted_successor_contracts-START.json",
+      "sha256": "c24eda5b64dfffc3d259c7561dc1c10f285768a24eb999ed0c224b56c359e1d5"
+    },
+    {
+      "bytes": 1269,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/00-normal-test_accepted_successor_contracts.log",
+      "path": "actual/00-normal-test_accepted_successor_contracts.log",
+      "sha256": "4cb0253b5c68efbc7bb36849df4310dfc7244613e45deb95c312494f8a06aaf6"
+    },
+    {
+      "bytes": 942,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/00-optimized-test_accepted_successor_contracts-RESULT.json",
+      "path": "actual/00-optimized-test_accepted_successor_contracts-RESULT.json",
+      "sha256": "e448f29e1096446845fee577c856ccb6e2d69570963fc06a6ebad089b408a246"
+    },
+    {
+      "bytes": 629,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/00-optimized-test_accepted_successor_contracts-START.json",
+      "path": "actual/00-optimized-test_accepted_successor_contracts-START.json",
+      "sha256": "ebb1f7d795600fe80f0f1abdf494773bb78edaa9ac7bb664c299f47b3b1ae6c8"
+    },
+    {
+      "bytes": 1269,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/00-optimized-test_accepted_successor_contracts.log",
+      "path": "actual/00-optimized-test_accepted_successor_contracts.log",
+      "sha256": "a4632fd11fc806351bb7650a6b2f958bd9f31492ce8ac62a28b192ce400efa55"
+    },
+    {
+      "bytes": 923,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/01-normal-test_border_parser_contracts-RESULT.json",
+      "path": "actual/01-normal-test_border_parser_contracts-RESULT.json",
+      "sha256": "a6dc24724723f2f1f09b1f5919123a976b4e6f186788ff7d1429dc7da2e22edf"
+    },
+    {
+      "bytes": 608,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/01-normal-test_border_parser_contracts-START.json",
+      "path": "actual/01-normal-test_border_parser_contracts-START.json",
+      "sha256": "0275e87244a16954d1c64e93158c250506bbe555d7977395140615c4659a4d34"
+    },
+    {
+      "bytes": 3105,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/01-normal-test_border_parser_contracts.log",
+      "path": "actual/01-normal-test_border_parser_contracts.log",
+      "sha256": "42ab0d68d3f51f2c3ae962dc9817ff329d02490b4258acce3c8f82525053c511"
+    },
+    {
+      "bytes": 936,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/01-optimized-test_border_parser_contracts-RESULT.json",
+      "path": "actual/01-optimized-test_border_parser_contracts-RESULT.json",
+      "sha256": "a100522cc6c41b7df3a091d293ce77eb06fe5071bc03056ec2c53105a6145986"
+    },
+    {
+      "bytes": 621,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/01-optimized-test_border_parser_contracts-START.json",
+      "path": "actual/01-optimized-test_border_parser_contracts-START.json",
+      "sha256": "195a54f1c9a4fac8ca980f2d1c944c7c45282dec6a09330f97474fcdc8485abc"
+    },
+    {
+      "bytes": 3105,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/01-optimized-test_border_parser_contracts.log",
+      "path": "actual/01-optimized-test_border_parser_contracts.log",
+      "sha256": "6f53a164631b990e60734f115da5efcde895927218fbe24c025a779459a64f00"
+    },
+    {
+      "bytes": 913,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/02-normal-test_cache_key_contracts-RESULT.json",
+      "path": "actual/02-normal-test_cache_key_contracts-RESULT.json",
+      "sha256": "472b2f9ceb6e5dfd6f1cb5c0e61e241b569244f8e31d17ce27a817756c471b77"
+    },
+    {
+      "bytes": 600,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/02-normal-test_cache_key_contracts-START.json",
+      "path": "actual/02-normal-test_cache_key_contracts-START.json",
+      "sha256": "3f865316dfcbddc696f0517c856ec4ea26bbd12ab6ac6a7ed03c6122036fd11d"
+    },
+    {
+      "bytes": 2615,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/02-normal-test_cache_key_contracts.log",
+      "path": "actual/02-normal-test_cache_key_contracts.log",
+      "sha256": "1e32099faa48b1663ffac8d1a7482cfdd3da3b2a9471e162895bb7683ee8e2a6"
+    },
+    {
+      "bytes": 927,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/02-optimized-test_cache_key_contracts-RESULT.json",
+      "path": "actual/02-optimized-test_cache_key_contracts-RESULT.json",
+      "sha256": "3cf59dba7c80c1b5057a014058b4de4c7cf68c2e97505e1181a810e48765e58e"
+    },
+    {
+      "bytes": 613,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/02-optimized-test_cache_key_contracts-START.json",
+      "path": "actual/02-optimized-test_cache_key_contracts-START.json",
+      "sha256": "37daeca1c4ca7edf8438ead6e4f402cc94555661199da7b92954121e30927331"
+    },
+    {
+      "bytes": 2615,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/02-optimized-test_cache_key_contracts.log",
+      "path": "actual/02-optimized-test_cache_key_contracts.log",
+      "sha256": "c6f4ae0b1c7f4f9df108ef6b0070104a418953893c12fb789e2eeaab4c0b016f"
+    },
+    {
+      "bytes": 928,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/03-normal-test_coverage_followup_contracts-RESULT.json",
+      "path": "actual/03-normal-test_coverage_followup_contracts-RESULT.json",
+      "sha256": "edc9c1f82f69773647c0abb125889d1e43a95503d3c702511b515ea3f0d3dc8c"
+    },
+    {
+      "bytes": 616,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/03-normal-test_coverage_followup_contracts-START.json",
+      "path": "actual/03-normal-test_coverage_followup_contracts-START.json",
+      "sha256": "96b40a04d4d8bf9de404ee561ea7e158415eed2e35ba04e5027bddd058db71ea"
+    },
+    {
+      "bytes": 1312,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/03-normal-test_coverage_followup_contracts.log",
+      "path": "actual/03-normal-test_coverage_followup_contracts.log",
+      "sha256": "61c4c67978721b0cb4d00c4cf490d03731c0e8f4095dcf400da168a55486a243"
+    },
+    {
+      "bytes": 942,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/03-optimized-test_coverage_followup_contracts-RESULT.json",
+      "path": "actual/03-optimized-test_coverage_followup_contracts-RESULT.json",
+      "sha256": "a1cfb09986c907d4e3a7acb8554da163ec6a40c8d2933c6d1881ba720a0af0a7"
+    },
+    {
+      "bytes": 629,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/03-optimized-test_coverage_followup_contracts-START.json",
+      "path": "actual/03-optimized-test_coverage_followup_contracts-START.json",
+      "sha256": "69f52509c873232f6f2af51c2656aba2918c36b378fc53df010bea4bc7fd837f"
+    },
+    {
+      "bytes": 1312,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/03-optimized-test_coverage_followup_contracts.log",
+      "path": "actual/03-optimized-test_coverage_followup_contracts.log",
+      "sha256": "183ee4b8bd7ecafdc0010a1da621ebd68f0bed2abc16143ffdfad429e62932fd"
+    },
+    {
+      "bytes": 857,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/04-normal-test_coverage_invariant_contracts-RESULT.json",
+      "path": "actual/04-normal-test_coverage_invariant_contracts-RESULT.json",
+      "sha256": "c82d6c371986df8df2cf20ebcd3f16873adb20c38e35eae5face405d68ad2ec7"
+    },
+    {
+      "bytes": 618,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/04-normal-test_coverage_invariant_contracts-START.json",
+      "path": "actual/04-normal-test_coverage_invariant_contracts-START.json",
+      "sha256": "95671111c932184e150b3f8f136619b64d360e833fc3c1bd05fdc6799c26e901"
+    },
+    {
+      "bytes": 6483,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/04-normal-test_coverage_invariant_contracts.log",
+      "path": "actual/04-normal-test_coverage_invariant_contracts.log",
+      "sha256": "25c759a8d26c7ba24e9d42792c35729bd424be0e33114aad9ab9324bb08707a2"
+    },
+    {
+      "bytes": 805,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/FAILURE.json",
+      "path": "actual/FAILURE.json",
+      "sha256": "58967621cbd190fc7a4efddae292ee3d5c77e2179f24930e60300222f77a9925"
+    },
+    {
+      "bytes": 236,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/LATEST.json",
+      "path": "actual/LATEST.json",
+      "sha256": "812679bf789dba64ea99b49fd5aba06409b311bb1f02a3ec002e34a3047c28a1"
+    },
+    {
+      "bytes": 568528,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/PROCESSES.jsonl",
+      "path": "actual/PROCESSES.jsonl",
+      "sha256": "679c603bb5ff2fe24841b1ba0661c65833380a5fe8a3a2ee82576bc9d7fea53c"
+    },
+    {
+      "bytes": 10270,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/RESULT.json",
+      "path": "actual/RESULT.json",
+      "sha256": "de9875359428791e4424367e127f1ec2a250944d30a377119a640e4cccc316a0"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/SDK-AFTER.json",
+      "path": "actual/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/SDK-BEFORE.json",
+      "path": "actual/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 419268,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/SOURCE-SEAL.json",
+      "path": "actual/SOURCE-SEAL.json",
+      "sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-raw-log-or-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/actual/WINDOW-START.json",
+      "path": "actual/WINDOW-START.json",
+      "sha256": "cb2a32e8241862df7e741dbdc6c557fcbbfbabf82c11429787dbd529c137e171"
+    },
+    {
+      "bytes": 10102,
+      "kind": "exact-executed-harness-config-or-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 54465,
+      "kind": "exact-executed-harness-config-or-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/reproduce/full-python-matrix-final-v17.json",
+      "path": "reproduce/full-python-matrix-final-v17.json",
+      "sha256": "186f78287574be1887371a4c578e7016974f4faa73038a1773e6ab43175fe731"
+    },
+    {
+      "bytes": 15341,
+      "kind": "exact-executed-harness-config-or-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/reproduce/full-python-matrix-final-v17.supervisor.log",
+      "path": "reproduce/full-python-matrix-final-v17.supervisor.log",
+      "sha256": "5bb5f908faff942e7d2d6988f9b74333456dc8a9bef5815deb68bef40effb187"
+    },
+    {
+      "bytes": 551801,
+      "kind": "exact-executed-harness-config-or-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/reproduce/FINAL-PYTHON-EXPECTED-INVENTORY-V17.json",
+      "path": "reproduce/FINAL-PYTHON-EXPECTED-INVENTORY-V17.json",
+      "sha256": "3f0e3bfdb0c058d778e156dff9b9b021b3e8c4b2cc26e96ef516f13cdba61a8a"
+    },
+    {
+      "bytes": 3713,
+      "kind": "derived-failure-and-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v17-matrix-failure-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "76ab8d099e063e1c3e4622aa07c6254c72e269bb4867c94f0db224a9e9ab95cc"
+    }
+  ],
+  "schema": 1,
+  "scope": "The final v17 matrix stopped at stage9 of152. Eight complete normal/optimized stages passed68executions. The next six-test module had two subtest errors from the unchanged10-second direct/package verification subprocess limit. No later matrix, native or coverage stage ran."
+}

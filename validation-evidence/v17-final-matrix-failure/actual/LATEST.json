@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-11T01:55:38.824026+00:00",
+  "label": "04-normal-test_coverage_invariant_contracts",
+  "owned": [
+    {
+      "pgid": 16,
+      "pid": 16,
+      "ppid": 6,
+      "start_ticks": 2857132,
+      "state": "R"
+    }
+  ]
+}

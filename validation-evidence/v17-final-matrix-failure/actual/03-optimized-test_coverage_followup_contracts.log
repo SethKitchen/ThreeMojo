@@ -1,0 +1,13 @@
+test_current_cleanup_adds_exactly_one_canonical_dependency (test_coverage_followup_contracts.CoverageFollowupContracts.test_current_cleanup_adds_exactly_one_canonical_dependency) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_each_active_pin_and_record_mutation_rejects (test_coverage_followup_contracts.CoverageFollowupContracts.test_each_active_pin_and_record_mutation_rejects) ... ok
+test_exact_pin_scope_reconstructs_previous_checkpoint (test_coverage_followup_contracts.CoverageFollowupContracts.test_exact_pin_scope_reconstructs_previous_checkpoint) ... ok
+test_six_module_edges_and_shared_source_chain (test_coverage_followup_contracts.CoverageFollowupContracts.test_six_module_edges_and_shared_source_chain) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 373.201s
+
+OK

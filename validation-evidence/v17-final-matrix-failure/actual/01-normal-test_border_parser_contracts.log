@@ -1,0 +1,23 @@
+test_actual_finite_precedence_and_builder_operations_are_bound (test_border_parser_contracts.BorderParserSuccessorTests.test_actual_finite_precedence_and_builder_operations_are_bound) ... ok
+test_after_requires_its_reviewed_regression_suite (test_border_parser_contracts.BorderParserSuccessorTests.test_after_requires_its_reviewed_regression_suite) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_both_exact_source_relations_and_actual_root (test_border_parser_contracts.BorderParserSuccessorTests.test_both_exact_source_relations_and_actual_root) ... ok
+test_changed_inverse_anchors_and_resealed_spans_reject (test_border_parser_contracts.BorderParserSuccessorTests.test_changed_inverse_anchors_and_resealed_spans_reject) ... ok
+test_consumer_math_xml_speed_and_builder_mutations_reject (test_border_parser_contracts.BorderParserSuccessorTests.test_consumer_math_xml_speed_and_builder_mutations_reject) ... ok
+test_every_historical_record_is_still_exact (test_border_parser_contracts.BorderParserSuccessorTests.test_every_historical_record_is_still_exact) ... ok
+test_forward_fixture_and_exact_inverse_preserve_whole_predecessor (test_border_parser_contracts.BorderParserSuccessorTests.test_forward_fixture_and_exact_inverse_preserve_whole_predecessor) ... ok
+test_immutable_record_cannot_authorize_new_sources (test_border_parser_contracts.BorderParserSuccessorTests.test_immutable_record_cannot_authorize_new_sources) ... ok
+test_missing_duplicate_reordered_and_extra_inverse_spans_reject (test_border_parser_contracts.BorderParserSuccessorTests.test_missing_duplicate_reordered_and_extra_inverse_spans_reject) ... ok
+test_old_passes_xml_adapter_and_load_order_remain_bound (test_border_parser_contracts.BorderParserSuccessorTests.test_old_passes_xml_adapter_and_load_order_remain_bound) ... ok
+test_old_width_and_speed_regressions_cannot_be_replaced (test_border_parser_contracts.BorderParserSuccessorTests.test_old_width_and_speed_regressions_cannot_be_replaced) ... ok
+test_physical_line_endings_are_not_normalized_into_an_accepted_source (test_border_parser_contracts.BorderParserSuccessorTests.test_physical_line_endings_are_not_normalized_into_an_accepted_source) ... ok
+test_span_hashes_and_endpoint_hashes_cannot_change (test_border_parser_contracts.BorderParserSuccessorTests.test_span_hashes_and_endpoint_hashes_cannot_change) ... ok
+test_unknown_parser_variants_never_activate_an_edge (test_border_parser_contracts.BorderParserSuccessorTests.test_unknown_parser_variants_never_activate_an_edge) ... ok
+
+----------------------------------------------------------------------
+Ran 14 tests in 127.406s
+
+OK

@@ -1,0 +1,21 @@
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+test_complete_source_mutations_fail (test_cache_key_contracts.CacheKeyContracts.test_complete_source_mutations_fail) ... ok
+test_exact_reverse_preserves_all_bytes_and_old_pins (test_cache_key_contracts.CacheKeyContracts.test_exact_reverse_preserves_all_bytes_and_old_pins) ... ok
+test_historical_scalar_memo_mutations_remain_checked (test_cache_key_contracts.CacheKeyContracts.test_historical_scalar_memo_mutations_remain_checked) ... ok
+test_inert_comments_and_newlines_preserve_general_gate_compatibility (test_cache_key_contracts.CacheKeyContracts.test_inert_comments_and_newlines_preserve_general_gate_compatibility) ... ok
+test_live_optional_helper_comparison_mutations (test_cache_key_contracts.CacheKeyContracts.test_live_optional_helper_comparison_mutations) ... ok
+test_missing_and_swapped_components_fail (test_cache_key_contracts.CacheKeyContracts.test_missing_and_swapped_components_fail) ... ok
+test_no_projection_for_other_paths_or_unknown_lane_changes (test_cache_key_contracts.CacheKeyContracts.test_no_projection_for_other_paths_or_unknown_lane_changes) ... ok
+test_production_inventory_rejects_new_callers_aliases_and_reexports (test_cache_key_contracts.CacheKeyContracts.test_production_inventory_rejects_new_callers_aliases_and_reexports) ... ok
+test_reverse_requires_exact_complete_delta_set (test_cache_key_contracts.CacheKeyContracts.test_reverse_requires_exact_complete_delta_set) ... ok
+test_inventory_comments_preserve_views_but_semantic_tokens_reject (test_cache_key_contracts.ScoreHelperCacheInventoryTests.test_inventory_comments_preserve_views_but_semantic_tokens_reject) ... ok
+test_physical_score_inventory_corresponds_only_after_verification (test_cache_key_contracts.ScoreHelperCacheInventoryTests.test_physical_score_inventory_corresponds_only_after_verification) ... ok
+test_unknown_physical_and_between_read_changes_still_reject (test_cache_key_contracts.ScoreHelperCacheInventoryTests.test_unknown_physical_and_between_read_changes_still_reject) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 19.991s
+
+OK

@@ -1,0 +1,32 @@
+{
+  "adopted_reaped": [],
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_border_parser_contracts.py",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17",
+  "expected_tests": 14,
+  "label": "01-normal-test_border_parser_contracts",
+  "leader_reaped": true,
+  "log_sha256": "42ab0d68d3f51f2c3ae962dc9817ff329d02490b4258acce3c8f82525053c511",
+  "pgid": 10,
+  "pid": 10,
+  "remaining_owned_descendants": [],
+  "returncode": 0,
+  "seconds": 128.27403072699963,
+  "single_cpu": 0,
+  "skipped_test_count": 0,
+  "source_seal_sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T01:30:35.629610+00:00",
+  "test_count": 14,
+  "timed_out": false
+}

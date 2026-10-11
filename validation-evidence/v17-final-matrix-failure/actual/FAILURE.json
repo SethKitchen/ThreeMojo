@@ -1,0 +1,4 @@
+{
+  "error": "RuntimeError('Stage failed: 04-normal-test_coverage_invariant_contracts')",
+  "traceback": "Traceback (most recent call last):\n  File \"/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py\", line 148, in <module>\n    run(stage['label'], command, stage.get('accept_nonzero', False), stage.get('seconds', 180), stage.get('cwd'))\n  File \"/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py\", line 111, in run\n    if timedout or clean['remaining'] or (p.returncode and not accept_nonzero):raise RuntimeError('Stage failed: '+label)\n                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nRuntimeError: Stage failed: 04-normal-test_coverage_invariant_contracts\n"
+}
