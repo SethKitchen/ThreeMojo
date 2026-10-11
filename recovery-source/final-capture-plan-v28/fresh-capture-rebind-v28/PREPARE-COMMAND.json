@@ -1,0 +1,21 @@
+{
+  "argv": [
+    "python",
+    "-B",
+    "fresh-capture-plan/prepare_run.py",
+    "--label",
+    "carla-final-v28",
+    "--source-root",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+    "--source-seal",
+    "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+    "--source-seal-sha256",
+    "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596"
+  ],
+  "candidate_imports_or_execution": false,
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010",
+  "returncode": 0,
+  "source_clone_materialized": false,
+  "status": "source_only_generator_completed",
+  "stdout": "fresh-capture-rebind-v28/PREPARE-STDOUT.json"
+}

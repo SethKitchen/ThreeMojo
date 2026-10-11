@@ -1,0 +1,12 @@
+Prepared only. The parent owns the serialized execution lane.
+Run phases in order. Keep failures and all attempts. Do not reuse old native receipts or hits.
+Stop on a failed phase. An ordinary targeted deficit is preserved through the whole report.
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python -B /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/prepare.json
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python -B /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/native-o3.json
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python -B /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/native-o0.json
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python -B /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/capture.json
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python -B /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/finish.json
+Inspect all five supervisor RESULT.json files and FINAL-TARGETED-RESULT.json.
+The finish phase must complete with unchanged source/SDK and no owned descendants.
+Actual fresh TestSuite counts and frozen manifest obligations are authoritative.
+No command generates the final anatomy report.

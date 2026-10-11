@@ -1,0 +1,105 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17"
+    }
+  ],
+  "phase": "carla-final-v17-prepare",
+  "scope": "Fresh 19-suite CARLA qualification on the explicitly sealed snapshot. Native O3/O0 and maintained instrumented capture are separate. Targeted scope only; no global 100%, Arm, hosted CI, or anatomy-report claim.",
+  "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V17-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17",
+  "stages": [
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+        "copy-source",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json"
+      ],
+      "label": "copy-source",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+        "native-inventory",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json"
+      ],
+      "label": "native-inventory",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+        "begin-generation",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json"
+      ],
+      "label": "begin-generation",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+        "run",
+        "-I",
+        ".",
+        "coverage/build_cli.mojo",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v17-prepare/source/coverage/build",
+        "extensions/carla/lane_value_bounds.mojo",
+        "extensions/carla/curve_bounds.mojo",
+        "extensions/carla/junction_bounds.mojo",
+        "extensions/carla/lane_refinement.mojo",
+        "extensions/carla/speed_limits.mojo"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v17-prepare/source",
+      "label": "instrument",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+        "copy-passthrough",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json"
+      ],
+      "label": "copy-passthrough",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+        "seal-generation",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json"
+      ],
+      "label": "seal-generation",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+        "freeze-targets",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json"
+      ],
+      "label": "freeze-targets",
+      "seconds": 180
+    }
+  ],
+  "window_seconds": 1200
+}

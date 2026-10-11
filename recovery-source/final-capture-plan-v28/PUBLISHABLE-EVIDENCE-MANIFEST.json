@@ -1,0 +1,316 @@
+{
+  "excluded": [
+    "internal review notes",
+    "scratch plans",
+    "native or compiler output",
+    "old hits and capture receipts",
+    "candidate clone materialization"
+  ],
+  "file_count": 33,
+  "files": [
+    {
+      "bytes": 419268,
+      "git_blob": "659cb2602c0e22849f7227e0b40c5782e07bcdf8",
+      "kind": "immutable-complete-source-seal",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V17-SOURCE-SEAL.json",
+      "mode": "100644",
+      "path": "CANDIDATE-V17-SOURCE-SEAL.json",
+      "sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21"
+    },
+    {
+      "bytes": 419528,
+      "git_blob": "e9db714ea0aeb8344deed82e1cb771c587be8565",
+      "kind": "immutable-complete-source-seal",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "mode": "100644",
+      "path": "CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596"
+    },
+    {
+      "bytes": 33527,
+      "git_blob": "d815deb922cce05eb54301167f44675f1aeb21c0",
+      "kind": "unchanged-reviewed-generator-helper-or-spec-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/capture_support.py",
+      "mode": "100644",
+      "path": "fresh-capture-plan/capture_support.py",
+      "sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0"
+    },
+    {
+      "bytes": 85801,
+      "git_blob": "8bc684b081db330bd85e01eb8f2de9791d304b24",
+      "kind": "unchanged-reviewed-generator-helper-or-spec-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/plan-spec.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/plan-spec.json",
+      "sha256": "f2217df10b55d2fb828be144030f359140cf2e62cf0b1a0a83d404cd7f6218a8"
+    },
+    {
+      "bytes": 10105,
+      "git_blob": "5330423f7aac036864ff77ccc1632cfaf6aca818",
+      "kind": "unchanged-reviewed-generator-helper-or-spec-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepare_run.py",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepare_run.py",
+      "sha256": "e66ec2c9e77b64668d99885af47d2d6706722368918a6fc1f3f8d70b0a44205e"
+    },
+    {
+      "bytes": 784,
+      "git_blob": "7f45de6d7eb5aa2f0493a9c3e37705a2a84af928",
+      "kind": "immutable-prepared-bundle-seal",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17-SEAL.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17-SEAL.json",
+      "sha256": "cb4cd493fd77a462d878e024bc938bcab2283366e6ca079992658aa74e4b6c44"
+    },
+    {
+      "bytes": 1836,
+      "git_blob": "ef46d40cbd34d4462ea0a6bc3a70a095e5144c50",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/COMMANDS.txt",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/COMMANDS.txt",
+      "sha256": "00c17ccf4e003b975b6aa0ac71a40a0ef145dff28c61fea82a646279f9757d12"
+    },
+    {
+      "bytes": 4439,
+      "git_blob": "1007a8fb48f42e94b6a8f37aa08ddd61cebc9e40",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/capture.json",
+      "sha256": "5ada7e11edea36ead1981bce5295adc471454d047eeb2b6046509bcb3099968b"
+    },
+    {
+      "bytes": 33527,
+      "git_blob": "d815deb922cce05eb54301167f44675f1aeb21c0",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/capture_support.py",
+      "sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0"
+    },
+    {
+      "bytes": 2018,
+      "git_blob": "f4876bdd37a4033e874b497164e3ed9a85bdc577",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/finish.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/finish.json",
+      "sha256": "354f213d3493f585b0e8c48be7af39dbccca96ba05675ad45b07446ed8fb8229"
+    },
+    {
+      "bytes": 48044,
+      "git_blob": "66d9b4ce1f23c91b74abd2bdf169e82dc4a6f9d2",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/native-o0.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/native-o0.json",
+      "sha256": "c4eb4958d8360fc4bf297bae73898f4ac069e99a2fc5d28ad730c00b84ccb796"
+    },
+    {
+      "bytes": 48044,
+      "git_blob": "b10813d728f64fe0f28fbc31b9a3bc9179020b6d",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/native-o3.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/native-o3.json",
+      "sha256": "595a087fdc4f677d00bdb4d7338c89407d479d1a2fbb52c1819b8f336b2d977a"
+    },
+    {
+      "bytes": 86405,
+      "git_blob": "27023a534af70ca293574486676e0cb026f3577c",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/plan.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/plan.json",
+      "sha256": "ea64a98e9649219338a0ca4f71e8da6fc74f058aa5850c166e026f16470aa0e6"
+    },
+    {
+      "bytes": 4488,
+      "git_blob": "d3913928b96b86d07a2c5c4f920874daadb2cd54",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/prepare.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/prepare.json",
+      "sha256": "a0e774b13f4b477eee76a243d6a5c520beb2dbc5951db25a0fce3092d43d3228"
+    },
+    {
+      "bytes": 3622,
+      "git_blob": "5e706b6167576829d04980bae2808cf8ca7a8eff",
+      "kind": "preserved-predecessor-protocol-comparison-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v17/settings.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v17/settings.json",
+      "sha256": "6a66fd404ddde1dd33630716de8a5dc98b75d7c5d2645849cbeba545804e2169"
+    },
+    {
+      "bytes": 784,
+      "git_blob": "0255047cc98d600fc429e06e643846ee734da6b7",
+      "kind": "immutable-prepared-bundle-seal",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28-SEAL.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28-SEAL.json",
+      "sha256": "46abdf8dd3293516a24c12e46ee2a93c940ac45bb8429dbe6a5c56d9bd19e725"
+    },
+    {
+      "bytes": 1836,
+      "git_blob": "00925e8b16930037acbcbbb0b3fa1b3cdddd9f3f",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/COMMANDS.txt",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/COMMANDS.txt",
+      "sha256": "2993184d1bfac838be723ad4f7948d91d353ac2a048859defd6703970f03fdf1"
+    },
+    {
+      "bytes": 4439,
+      "git_blob": "0b083a307cdf9570756c7b1ad1ff30315a38e438",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/capture.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/capture.json",
+      "sha256": "ca12f174e32fa79dffe1ac9ea98873d001aa3ade4c0564407bd75fc9995deb79"
+    },
+    {
+      "bytes": 33527,
+      "git_blob": "d815deb922cce05eb54301167f44675f1aeb21c0",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/capture_support.py",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/capture_support.py",
+      "sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0"
+    },
+    {
+      "bytes": 2018,
+      "git_blob": "5f99050e4e2be867998d4854cd623ab4baee351b",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/finish.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/finish.json",
+      "sha256": "dd2df3136d44ff1ac5340e2be2c32a61ebd7214b2e0f0ffd9d18ba30802ad443"
+    },
+    {
+      "bytes": 48044,
+      "git_blob": "a318c7c12ea8b6f3471db4211e72d8de44a77f78",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/native-o0.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/native-o0.json",
+      "sha256": "c2b43035ff2d64d57ff0454ce88e8996e68aba066c007e710af4943943a7f13a"
+    },
+    {
+      "bytes": 48044,
+      "git_blob": "e4e2cb05e5ef2d693b2900f8cc3a0c35d55a58f5",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/native-o3.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/native-o3.json",
+      "sha256": "d55cc45e1e1131be48e56cca3ca3f4fe58d95467dd1d6d785a8061bef81797b5"
+    },
+    {
+      "bytes": 86405,
+      "git_blob": "869b550002184d2fd5f946fe9579c6b31658baa0",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/plan.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/plan.json",
+      "sha256": "1d079d9e6c388188450efa5d876cab4d1bd1a1235bd3e3b7dcadd6e0b9072442"
+    },
+    {
+      "bytes": 4488,
+      "git_blob": "83ac86280be38466d9d4b558b15b244d0f6371b9",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/prepare.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/prepare.json",
+      "sha256": "ee4ea1358bab95a1917379e4d2e96917c7aaf53450f06c6410329ad5524fbcfa"
+    },
+    {
+      "bytes": 3622,
+      "git_blob": "9a18656377c724b5c99bf4e6034097c91c887c6a",
+      "kind": "prepared-protocol-current",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28/settings.json",
+      "mode": "100644",
+      "path": "fresh-capture-plan/prepared/carla-final-v28/settings.json",
+      "sha256": "9c331cf1ff984c9d55c804a414b2a0f4e2581130bbf05c4c0fcd1ca18939efc2"
+    },
+    {
+      "bytes": 707,
+      "git_blob": "8278f08a23ddaea18903efa31a84886beaba7b84",
+      "kind": "source-only-rebind-reproducibility-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-rebind-v28/PREPARE-COMMAND.json",
+      "mode": "100644",
+      "path": "fresh-capture-rebind-v28/PREPARE-COMMAND.json",
+      "sha256": "c6b77c4562fbbdc80cf691e0d62f550b60c76b6cef89e41c8049f56ef8a5110d"
+    },
+    {
+      "bytes": 527,
+      "git_blob": "90de58364b4187dc2e1f40a6558fd6abb1eaa131",
+      "kind": "source-only-rebind-reproducibility-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-rebind-v28/PREPARE-STDOUT.json",
+      "mode": "100644",
+      "path": "fresh-capture-rebind-v28/PREPARE-STDOUT.json",
+      "sha256": "6dfc65d577e0f44406acbd333eb52291b6dc35396a59d3cd47c5ab301737964f"
+    },
+    {
+      "bytes": 4020,
+      "git_blob": "87e432f890f9b7640d70f88178619d591a56cf25",
+      "kind": "source-only-rebind-reproducibility-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-rebind-v28/REBIND-MANIFEST.json",
+      "mode": "100644",
+      "path": "fresh-capture-rebind-v28/REBIND-MANIFEST.json",
+      "sha256": "4d3a8afbc36f20785efc5261052be85a14bfa8dcd4bd695af12a7fc2ad0a720b"
+    },
+    {
+      "bytes": 206885,
+      "git_blob": "eba66408fca63f08f158bbb54c6cadf6388690d3",
+      "kind": "source-only-rebind-reproducibility-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-rebind-v28/REBIND.diff",
+      "mode": "100644",
+      "path": "fresh-capture-rebind-v28/REBIND.diff",
+      "sha256": "cf0998d548bd447ddd60670e09ae8e570f949fca80ed6d78ee7dab3e5075d560"
+    },
+    {
+      "bytes": 46862,
+      "git_blob": "059ad04ba14561f3bf6741e20c22120bcce5c2f1",
+      "kind": "source-only-rebind-reproducibility-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-rebind-v28/SOURCE-AND-PROTOCOL-COMPARISON.json",
+      "mode": "100644",
+      "path": "fresh-capture-rebind-v28/SOURCE-AND-PROTOCOL-COMPARISON.json",
+      "sha256": "d8c0cfab553ee2b672bd6801acec154cb5fc56ca4316155fad719621a5623ddb"
+    },
+    {
+      "bytes": 12906,
+      "git_blob": "b6a414b2a55684e9bad7c3347a36345322b31087",
+      "kind": "source-only-rebind-reproducibility-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-rebind-v28/audit_rebind.py",
+      "mode": "100644",
+      "path": "fresh-capture-rebind-v28/audit_rebind.py",
+      "sha256": "9bb31239ee375cb98a4a44cece947145319f386219af28b0318cd39eefb0417a"
+    },
+    {
+      "bytes": 21644,
+      "git_blob": "d3c9e79b1b80105225db17d18908d510921e2736",
+      "kind": "exact-recovered-helper-hash-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/recovery-carla-capture-plan/exact/capture_support.py",
+      "mode": "100644",
+      "path": "recovery-carla-capture-plan/exact/capture_support.py",
+      "sha256": "e2412e1965b0c0c82bdef9458b9ec78d5a15c3615828ed24bec9e607a275c7bd"
+    },
+    {
+      "bytes": 7831,
+      "git_blob": "65d012398aaa8ca65a8f84fa2a18dfb8a665eebf",
+      "kind": "unchanged-reviewed-supervisor-input",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py",
+      "mode": "100644",
+      "path": "run_stage.py",
+      "sha256": "9418d41fb962d00dbe4bd53107ef476428ba0c591f4478ac08d332ef907927ce"
+    }
+  ],
+  "payload_bytes": 1736025,
+  "prepared_bundle_seal_sha256": "46abdf8dd3293516a24c12e46ee2a93c940ac45bb8429dbe6a5c56d9bd19e725",
+  "reproduction_boundary": "Complete candidate source/SDK images are not duplicated here. Supplied source seals identify the required source snapshots. The generator reads the recovered helper at the original sibling recovery-carla-capture-plan/exact location; logical publication paths preserve those bytes without silently rewriting prepared absolute paths. Exact reviewed configs remain parent-lane inputs, subject to matrix, publication and independent-review gates.",
+  "schema": 1,
+  "scope": "Allowlist for the fresh carla-final-v28 protocol, exact immutable generator/helper/supervisor inputs, preserved v17 comparison bundle, complete source seals and source-only rebind evidence. No native or coverage qualification claimed.",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "status": "SOURCE_ONLY_PREPARED_UNEXECUTED"
+}

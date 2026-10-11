@@ -1,0 +1,7 @@
+{
+  "prepared_bundle": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28",
+  "prepared_bundle_seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v28-SEAL.json",
+  "prepared_bundle_seal_sha256": "46abdf8dd3293516a24c12e46ee2a93c940ac45bb8429dbe6a5c56d9bd19e725",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "status": "prepared only; no repository code or compiler executed"
+}
