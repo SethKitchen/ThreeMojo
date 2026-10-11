@@ -213,13 +213,45 @@ def run_probe(probe, mode, part, step, spec):
     return rows
 
 
-def sweep(probe, spec):
+def legacy_pair_ids(catalog):
+    """Return the complete legacy pair contract from the checked catalog."""
+    expected = {group: set() for group in LEGACY_GROUPS}
+
+    def add(group, first, second):
+        names = sorted((first.replace(' ', '_'), second.replace(' ', '_')))
+        expected[group].add('canonical/' + group + '/' + '|'.join(names))
+
+    for index, first in enumerate(catalog):
+        for second in catalog[index + 1:]:
+            group = av.legacy_pair_group(first, second)
+            if group:
+                add(group, first['label'], second['label'])
+    for region, indices in (('thoracolumbar', range(17)), ('cervical', range(2, 8))):
+        for index in indices:
+            body = f'{region}/{index}'
+            disc = body + '/disc'
+            add('spine', body, disc)
+            if region == 'thoracolumbar' and index == 16:
+                continue
+            below = 'thoracolumbar/0' if region == 'cervical' and index == 7 else f'{region}/{index + 1}'
+            add('spine', body, below)
+            add('spine', below, disc)
+    if {group: len(pairs) for group, pairs in expected.items()} != {'bones': 435, 'knee': 30, 'spine': 67}:
+        raise ValueError('legacy pair catalog does not match the 532-pair contract')
+    return expected
+
+
+def sweep(probe, spec, catalog):
     """Return {pair_id: {step_mm: row}} for every legacy pair record."""
     found = {}
+    expected = legacy_pair_ids(catalog)
     for step in STEPS_MM:
         groups = av.annotate_diagnostics(
             {mode: run_probe(probe, mode, 'none', step, spec) for mode in LEGACY_GROUPS})
         for group, rows in groups.items():
+            observed = {row['pair_id'] for row in rows if row['record'] == 'pair'}
+            if observed != expected[group]:
+                raise ValueError(f'{group} diagnostic pair inventory differs at {step} mm')
             for row in rows:
                 if row['record'] == 'pair':
                     entry = found.setdefault(row['pair_id'], {'group': group, 'rows': {}})
@@ -265,7 +297,7 @@ def status(grids):
 def build(probe, provenance, spec):
     catalog = av.validate_catalog(run_probe(probe, 'pairs', 'catalog', 5, spec))
     labels = {row['label']: row['index'] for row in catalog}
-    found = sweep(probe, spec)
+    found = sweep(probe, spec, catalog)
     missing = [pair for pair in ISSUE_595_PAIRS if pair not in found]
     if missing:
         raise ValueError(f'issue pairs are not in the legacy diagnostics: {missing}')
@@ -335,8 +367,11 @@ def main(argv=None):
         provenance = av.prepare_probe(ROOT, probe, args.mojo, args.build)
         snapshot = av.source_snapshot(ROOT)
         metadata = probe.with_suffix(probe.suffix+'.provenance.json').read_bytes()
+        tool_digest = tool_sha256()
         result = build(probe, provenance, spec)
         av.verify_report_inputs(ROOT, probe, provenance, snapshot, metadata)
+        if result['tool_sha256'] != tool_digest or tool_sha256() != tool_digest:
+            raise ValueError('overlap tool changed during execution; rerun before reporting')
         args.output.parent.mkdir(parents=True, exist_ok=True)
         args.output.write_text(json.dumps(result, indent=2, allow_nan=False)+'\n')
     except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError) as error:
