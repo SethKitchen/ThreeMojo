@@ -793,10 +793,7 @@ def read_gltf(
     var bytes = Path(path).read_bytes()
     # Up to and including the last slash, or nothing for a bare name.
     var directory = _slice(path, 0, path.rfind("/") + 1)
-    if (
-        len(bytes) >= 4
-        and little_endian_u32(bytes, 0) == GLB_MAGIC
-    ):
+    if len(bytes) >= 4 and little_endian_u32(bytes, 0) == GLB_MAGIC:
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
