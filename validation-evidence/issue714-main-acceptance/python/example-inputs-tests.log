@@ -1,0 +1,11 @@
+test_audio_game_face_has_a_binary_recipe_and_actual_inputs (test_example_inputs.ExampleInputsTests.test_audio_game_face_has_a_binary_recipe_and_actual_inputs) ... ok
+test_make_does_not_rebuild_for_unrelated_extension (test_example_inputs.ExampleInputsTests.test_make_does_not_rebuild_for_unrelated_extension) ... ok
+test_outer_make_flags_cannot_force_the_dependency_fixture (test_example_inputs.ExampleInputsTests.test_outer_make_flags_cannot_force_the_dependency_fixture) ... ok
+test_output_is_stable_and_rejects_make_syntax (test_example_inputs.ExampleInputsTests.test_output_is_stable_and_rejects_make_syntax) ... ok
+test_repository_recipes_cover_every_example_and_compress (test_example_inputs.ExampleInputsTests.test_repository_recipes_cover_every_example_and_compress) ... ok
+test_transitive_local_imports_packages_and_asset_prefixes (test_example_inputs.ExampleInputsTests.test_transitive_local_imports_packages_and_asset_prefixes) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.756s
+
+OK

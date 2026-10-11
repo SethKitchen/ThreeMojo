@@ -1,0 +1,288 @@
+[
+  {
+    "case": "root_transitive",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    "build_exit": 0,
+    "run_exit": 0,
+    "stdout": "10\n",
+    "expected": "10",
+    "diagnostic": null,
+    "passed": true,
+    "elapsed": 3.278436492997571
+  },
+  {
+    "case": "root_transitive_with_init",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "pkg/__init__.mojo": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build_exit": 0,
+    "run_exit": 0,
+    "stdout": "10\n",
+    "expected": "10",
+    "diagnostic": null,
+    "passed": true,
+    "elapsed": 0.7969643519900274
+  },
+  {
+    "case": "entry_transitive",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "tools/helper.mojo": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    "build_exit": 0,
+    "run_exit": 0,
+    "stdout": "30\n",
+    "expected": "30",
+    "diagnostic": null,
+    "passed": true,
+    "elapsed": 3.521911428004387
+  },
+  {
+    "case": "entry_direct",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "12d761ed6d0b3261a0da1eda0e8081f259ef94041a6faeef0a9c1eb6d6084e53",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "tools/helper.mojo": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    "build_exit": 0,
+    "run_exit": 0,
+    "stdout": "30\n",
+    "expected": "30",
+    "diagnostic": null,
+    "passed": true,
+    "elapsed": 0.7558190249983454
+  },
+  {
+    "case": "missing_root",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    "build_exit": 1,
+    "run_exit": null,
+    "stdout": null,
+    "expected": null,
+    "diagnostic": "unable to locate module 'helper'",
+    "passed": true,
+    "elapsed": 0.16348357299284544
+  },
+  {
+    "case": "missing_root_with_init",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "pkg/__init__.mojo": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build_exit": 1,
+    "run_exit": null,
+    "stdout": null,
+    "expected": null,
+    "diagnostic": "unable to locate module 'helper'",
+    "passed": true,
+    "elapsed": 0.18671189599263016
+  },
+  {
+    "case": "entry_package_hides_root",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "tools/pkg/__init__.mojo": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "build_exit": 1,
+    "run_exit": null,
+    "stdout": null,
+    "expected": null,
+    "diagnostic": "unable to locate module 'one'",
+    "passed": true,
+    "elapsed": 0.17013217399653513
+  },
+  {
+    "case": "entry_module_hides_root",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "tools/pkg.mojo": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    "build_exit": 1,
+    "run_exit": null,
+    "stdout": null,
+    "expected": null,
+    "diagnostic": "unable to locate module 'one'",
+    "passed": true,
+    "elapsed": 0.18454738000582438
+  },
+  {
+    "case": "plain_entry_namespace",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "tools/pkg/other.mojo": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    "build_exit": 0,
+    "run_exit": 0,
+    "stdout": "10\n",
+    "expected": "10",
+    "diagnostic": null,
+    "passed": true,
+    "elapsed": 0.6816644510108745
+  },
+  {
+    "case": "ambiguous_namespace",
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+      "build",
+      "--Werror",
+      "--num-threads",
+      "1",
+      "-I",
+      ".",
+      "tools/probe.mojo",
+      "-o",
+      "probe.bin"
+    ],
+    "source_sha256": {
+      "tools/probe.mojo": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e",
+      "pkg/one.mojo": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3",
+      "helper.mojo": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528",
+      "pkg/helper.mojo": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765",
+      "tools/pkg/one.mojo": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    "build_exit": 1,
+    "run_exit": null,
+    "stdout": null,
+    "expected": null,
+    "diagnostic": "ambiguous import 'one'",
+    "passed": true,
+    "elapsed": 0.15188070900330786
+  }
+]

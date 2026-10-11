@@ -1,0 +1,12 @@
+{
+  "command": [
+    "mojo",
+    "--version"
+  ],
+  "exit_code": 0,
+  "stdout": "Mojo 1.1.0 (8189361e)\n",
+  "stderr": "",
+  "launcher_sha256": "3fac98f9fd60ffadb359baf0ce795cd5f03b4a4197fd0523efe554242c33462b",
+  "telemetry": "MODULAR_TELEMETRY_ENABLED=false",
+  "note": "Official Python wheel launcher; version-only receipt. SDK roots supplied by mojo.run._mojo_env()."
+}

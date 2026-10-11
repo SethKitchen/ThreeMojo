@@ -1,0 +1,31 @@
+Source revision: 058cbbc10ac76649ce08ae2208cf4579d0404e56
+Compiler: Mojo 1.1.0 (8189361e)
+
+Python commands, from the source checkout:
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_affected*.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_ci_scope.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_build_tools.py' -v
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tools -p 'test_example_inputs.py' -v
+
+Exact executed native harness: replay-safe.py.
+Use a NEW empty output directory. Do not run over the retained receipts.
+The original harness expects this layout:
+  WORK/restored-toolchain/official-venv/bin/mojo
+  WORK/issue714-audit-20261011/replay-safe.py
+The first path must be the official pinned Mojo Python wheel launcher.
+Copy replay-safe.py into the second path in a fresh WORK location, then run:
+PYTHONDONTWRITEBYTECODE=1 python3 WORK/issue714-audit-20261011/replay-safe.py
+
+The harness writes native-safe/ beside itself, including generated fixtures and receipts.
+It clears inherited SDK/loader overrides, disables Modular telemetry explicitly,
+and uses local writable HOME/compiler/XDG cache directories.
+Build command in each fixture directory:
+mojo build --Werror --num-threads 1 -I . tools/probe.mojo -o probe.bin
+Build timeout: 60 seconds. Successful binary runtime timeout: 5 seconds.
+The fixture source hashes and exact original command paths are in native-safe/results.json.
+Expected negative compiler diagnostics count as passing cases when they match.
+Runtime stdout is retained in results.json; build stdout/stderr are separate files.
+
+Scope: fresh reconstruction of fixture descriptions retained in tools/test_affected_roots.py
+and issue 714. No historical binary reuse. The current include root is -I .;
+arbitrary external include roots and a full repository native audit are not claimed.

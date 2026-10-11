@@ -1,0 +1,381 @@
+{
+  "schema": 1,
+  "purpose": "Issue 714 successful acceptance evidence only",
+  "files": [
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/main-source-bindings.json",
+      "path": "main-source-bindings.json",
+      "sha256": "2a6b698840c028c19054140875c2c129490ae04c1061fdf5936c47699206c571"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/replay-safe.py",
+      "path": "replay-safe.py",
+      "sha256": "d855af023d0868e3252cf30ccc7bc7ebc074449408519edfaa91b58f1ce67e24"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/results.json",
+      "path": "native-safe/results.json",
+      "sha256": "7ce25bd809dee2afe5ce638e85b79a007fba40a16631d82e1631a42c60ccb60b"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/python/affected-tests.log",
+      "path": "python/affected-tests.log",
+      "sha256": "0fe001f5ebb9660e43aab500f3e6ba7ab671b28a9c5569678064bc0ff6b0f3a8"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/python/ci-scope-tests.log",
+      "path": "python/ci-scope-tests.log",
+      "sha256": "646cd8f159380df188f35450651b96f2783cd1fd5bba747d3f149297b73663a6"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/python/build-tools-tests.log",
+      "path": "python/build-tools-tests.log",
+      "sha256": "4ffa4b8b83644a0fe3d7e0bb9e96279848944c5b11e18211fb2c5ce1ff21fb16"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/python/example-inputs-tests.log",
+      "path": "python/example-inputs-tests.log",
+      "sha256": "fc4e16bd3b16ad0ed644cda76362df3864b65e8866103917547aeb11a62ebccf"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive/tools/probe.mojo",
+      "path": "native-safe/root_transitive/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive/pkg/one.mojo",
+      "path": "native-safe/root_transitive/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive/helper.mojo",
+      "path": "native-safe/root_transitive/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive/pkg/helper.mojo",
+      "path": "native-safe/root_transitive/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive/build.stdout",
+      "path": "native-safe/root_transitive/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive/build.stderr",
+      "path": "native-safe/root_transitive/build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/tools/probe.mojo",
+      "path": "native-safe/root_transitive_with_init/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/pkg/one.mojo",
+      "path": "native-safe/root_transitive_with_init/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/helper.mojo",
+      "path": "native-safe/root_transitive_with_init/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/pkg/helper.mojo",
+      "path": "native-safe/root_transitive_with_init/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/pkg/__init__.mojo",
+      "path": "native-safe/root_transitive_with_init/pkg/__init__.mojo",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/build.stdout",
+      "path": "native-safe/root_transitive_with_init/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/root_transitive_with_init/build.stderr",
+      "path": "native-safe/root_transitive_with_init/build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/tools/probe.mojo",
+      "path": "native-safe/entry_transitive/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/pkg/one.mojo",
+      "path": "native-safe/entry_transitive/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/helper.mojo",
+      "path": "native-safe/entry_transitive/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/pkg/helper.mojo",
+      "path": "native-safe/entry_transitive/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/tools/helper.mojo",
+      "path": "native-safe/entry_transitive/tools/helper.mojo",
+      "sha256": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/build.stdout",
+      "path": "native-safe/entry_transitive/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_transitive/build.stderr",
+      "path": "native-safe/entry_transitive/build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/tools/probe.mojo",
+      "path": "native-safe/entry_direct/tools/probe.mojo",
+      "sha256": "12d761ed6d0b3261a0da1eda0e8081f259ef94041a6faeef0a9c1eb6d6084e53"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/pkg/one.mojo",
+      "path": "native-safe/entry_direct/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/helper.mojo",
+      "path": "native-safe/entry_direct/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/pkg/helper.mojo",
+      "path": "native-safe/entry_direct/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/tools/helper.mojo",
+      "path": "native-safe/entry_direct/tools/helper.mojo",
+      "sha256": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/build.stdout",
+      "path": "native-safe/entry_direct/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_direct/build.stderr",
+      "path": "native-safe/entry_direct/build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root/tools/probe.mojo",
+      "path": "native-safe/missing_root/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root/pkg/one.mojo",
+      "path": "native-safe/missing_root/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root/pkg/helper.mojo",
+      "path": "native-safe/missing_root/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root/build.stdout",
+      "path": "native-safe/missing_root/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root/build.stderr",
+      "path": "native-safe/missing_root/build.stderr",
+      "sha256": "1a4f68fe055b28209c08118cb4fbc3b96445bb2e3a044970dc1f6894af7be412"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root_with_init/tools/probe.mojo",
+      "path": "native-safe/missing_root_with_init/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root_with_init/pkg/one.mojo",
+      "path": "native-safe/missing_root_with_init/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root_with_init/pkg/helper.mojo",
+      "path": "native-safe/missing_root_with_init/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root_with_init/pkg/__init__.mojo",
+      "path": "native-safe/missing_root_with_init/pkg/__init__.mojo",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root_with_init/build.stdout",
+      "path": "native-safe/missing_root_with_init/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/missing_root_with_init/build.stderr",
+      "path": "native-safe/missing_root_with_init/build.stderr",
+      "sha256": "946d22bfeb30689e1e29d0add8b6d1f1ace5a59a1d7491272e6d33721cc13395"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/tools/probe.mojo",
+      "path": "native-safe/entry_package_hides_root/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/pkg/one.mojo",
+      "path": "native-safe/entry_package_hides_root/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/helper.mojo",
+      "path": "native-safe/entry_package_hides_root/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/pkg/helper.mojo",
+      "path": "native-safe/entry_package_hides_root/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/tools/pkg/__init__.mojo",
+      "path": "native-safe/entry_package_hides_root/tools/pkg/__init__.mojo",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/build.stdout",
+      "path": "native-safe/entry_package_hides_root/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_package_hides_root/build.stderr",
+      "path": "native-safe/entry_package_hides_root/build.stderr",
+      "sha256": "789d2fd7b1c92b8b6746723695f8f56afa7c5f0587eb086ca20e58e5855a0c2a"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/tools/probe.mojo",
+      "path": "native-safe/entry_module_hides_root/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/pkg/one.mojo",
+      "path": "native-safe/entry_module_hides_root/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/helper.mojo",
+      "path": "native-safe/entry_module_hides_root/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/pkg/helper.mojo",
+      "path": "native-safe/entry_module_hides_root/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/tools/pkg.mojo",
+      "path": "native-safe/entry_module_hides_root/tools/pkg.mojo",
+      "sha256": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/build.stdout",
+      "path": "native-safe/entry_module_hides_root/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/entry_module_hides_root/build.stderr",
+      "path": "native-safe/entry_module_hides_root/build.stderr",
+      "sha256": "7cee5ffbfb7852ad95547b6eb5067e4c5758b081b88ef677b782f864046a5daf"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/tools/probe.mojo",
+      "path": "native-safe/plain_entry_namespace/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/pkg/one.mojo",
+      "path": "native-safe/plain_entry_namespace/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/helper.mojo",
+      "path": "native-safe/plain_entry_namespace/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/pkg/helper.mojo",
+      "path": "native-safe/plain_entry_namespace/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/tools/pkg/other.mojo",
+      "path": "native-safe/plain_entry_namespace/tools/pkg/other.mojo",
+      "sha256": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/build.stdout",
+      "path": "native-safe/plain_entry_namespace/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/plain_entry_namespace/build.stderr",
+      "path": "native-safe/plain_entry_namespace/build.stderr",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/tools/probe.mojo",
+      "path": "native-safe/ambiguous_namespace/tools/probe.mojo",
+      "sha256": "293a6da251e57edf5a048e01ee7c39d140edbc3e3d85a17428ae8851176ce91e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/pkg/one.mojo",
+      "path": "native-safe/ambiguous_namespace/pkg/one.mojo",
+      "sha256": "dcd231f98df899b0a2401f548a9abab5cab5cfa583acfa9fd85746ecd6fddef3"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/helper.mojo",
+      "path": "native-safe/ambiguous_namespace/helper.mojo",
+      "sha256": "b76d21aa0af6a4641aec1c268f38fb1431e1b580df7ad015140da2827b59c528"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/pkg/helper.mojo",
+      "path": "native-safe/ambiguous_namespace/pkg/helper.mojo",
+      "sha256": "cd7da4278d26f7c8794d345324ac4f043b26ec0e9b7e45ed64ea5f175904e765"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/tools/pkg/one.mojo",
+      "path": "native-safe/ambiguous_namespace/tools/pkg/one.mojo",
+      "sha256": "37c7fb2eba39331be42616b75ad976da7ae09100ac0fb3e64de2ea383c8d0cb9"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/build.stdout",
+      "path": "native-safe/ambiguous_namespace/build.stdout",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/native-safe/ambiguous_namespace/build.stderr",
+      "path": "native-safe/ambiguous_namespace/build.stderr",
+      "sha256": "6ceb5a748a7866fe8bc283467831a1160f982ec6907d3238624359787a198966"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/compiler-identity.json",
+      "path": "compiler-identity.json",
+      "sha256": "b65cc302aa7ead61cf83e46305ee936df2f2aa68fc00db04e82d7b1008a6f52e"
+    },
+    {
+      "local_source": "/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/publishable/replay-commands.txt",
+      "path": "replay-commands.txt",
+      "sha256": "25db8f21d4c5b8aa67dac7abcd971fa6401719dbef42773960ec8480d8162e45"
+    }
+  ]
+}

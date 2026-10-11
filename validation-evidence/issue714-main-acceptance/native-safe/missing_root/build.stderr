@@ -1,0 +1,5 @@
+Imported from /workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/native-safe/missing_root/tools/probe.mojo:1:
+./pkg/one.mojo:1:6: error: unable to locate module 'helper'
+from helper import value
+     ^
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo: error: failed to parse the provided Mojo source module

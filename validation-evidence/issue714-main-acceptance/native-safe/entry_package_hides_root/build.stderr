@@ -1,0 +1,4 @@
+/workspace/scratch/c2bcdb1ca387/issue714-audit-20261011/native-safe/entry_package_hides_root/tools/probe.mojo:1:10: error: unable to locate module 'one'
+from pkg.one import value
+         ^
+/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo: error: failed to parse the provided Mojo source module

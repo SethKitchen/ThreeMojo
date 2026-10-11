@@ -1,0 +1,52 @@
+test_coverage_instrumenter_changes_invalidate_coverage_stamp (test_build_tools.CacheTests.test_coverage_instrumenter_changes_invalidate_coverage_stamp) ... ok
+test_each_consumed_input_and_flags_changes_key (test_build_tools.CacheTests.test_each_consumed_input_and_flags_changes_key) ... ok
+test_generated_outputs_are_not_inputs (test_build_tools.CacheTests.test_generated_outputs_are_not_inputs) ... ok
+test_capture_and_replay_close_files_under_resource_warnings (test_build_tools.CoverageIoTests.test_capture_and_replay_close_files_under_resource_warnings) ... Coverage 0: start; 0.0s; waiting for probes (compile/startup); 0 stderr records
+Coverage 0: first probe; 0.1s; runtime probes observed; 1 stderr records
+Coverage 0: complete (exit 0); 0.1s; runtime probes observed; 40001 stderr records
+Coverage 1: start; 0.0s; waiting for probes (compile/startup); 0 stderr records
+Coverage 1: first probe; 0.0s; runtime probes observed; 1 stderr records
+Coverage 1: complete (exit 0); 0.0s; runtime probes observed; 40001 stderr records
+ok
+test_capture_cannot_fabricate_false_from_invalid_outcome (test_build_tools.CoverageIoTests.test_capture_cannot_fabricate_false_from_invalid_outcome) ... Coverage out: start; 0.0s; waiting for probes (compile/startup); 0 stderr records
+Coverage out: first probe; 0.0s; runtime probes observed; 1 stderr records
+Coverage out: aborted; 0.0s; runtime probes observed; 3 stderr records
+ok
+test_capture_keeps_each_record_once_and_replay_keeps_order (test_build_tools.CoverageIoTests.test_capture_keeps_each_record_once_and_replay_keeps_order) ... Coverage 0: start; 0.0s; waiting for probes (compile/startup); 0 stderr records
+Coverage 0: first probe; 0.1s; runtime probes observed; 1 stderr records
+Coverage 0: complete (exit 0); 0.1s; runtime probes observed; 40001 stderr records
+Coverage 1: start; 0.0s; waiting for probes (compile/startup); 0 stderr records
+Coverage 1: first probe; 0.0s; runtime probes observed; 1 stderr records
+Coverage 1: complete (exit 0); 0.0s; runtime probes observed; 40001 stderr records
+ok
+test_failed_suite_retains_diagnostics_and_exit_status (test_build_tools.CoverageIoTests.test_failed_suite_retains_diagnostics_and_exit_status) ... ok
+test_invalid_outcome_is_rejected_before_it_adds_a_hit (test_build_tools.CoverageIoTests.test_invalid_outcome_is_rejected_before_it_adds_a_hit) ... ok
+test_legacy_compound_records_require_recapture (test_build_tools.CoverageIoTests.test_legacy_compound_records_require_recapture) ... ok
+test_malformed_version_two_records_are_rejected (test_build_tools.CoverageIoTests.test_malformed_version_two_records_are_rejected) ... ok
+test_reducer_keeps_recursive_vectors_abandoned_hits_and_order (test_build_tools.CoverageIoTests.test_reducer_keeps_recursive_vectors_abandoned_hits_and_order) ... ok
+test_repeated_abandoned_and_complete_records_use_bounded_state (test_build_tools.CoverageIoTests.test_repeated_abandoned_and_complete_records_use_bounded_state) ... ok
+test_reporter_failure_does_not_wait_for_unread_fifos (test_build_tools.CoverageIoTests.test_reporter_failure_does_not_wait_for_unread_fifos) ... ok
+test_utf8_record_sizes_and_missing_newline_fail_closed (test_build_tools.CoverageIoTests.test_utf8_record_sizes_and_missing_newline_fail_closed) ... ok
+test_import_only_helpers_are_copied_beside_their_suites (test_build_tools.CoverageStagingTests.test_import_only_helpers_are_copied_beside_their_suites) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v38/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v38/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_import_only_helpers_are_libraries_and_coverage_passthrough (test_build_tools.CoverageStagingTests.test_import_only_helpers_are_libraries_and_coverage_passthrough) ... ok
+test_unselected_sibling_modules_are_staged (test_build_tools.CoverageStagingTests.test_unselected_sibling_modules_are_staged) ... ok
+test_coverage_parser_and_scanner_each_select_all_suites (test_build_tools.DependencyTests.test_coverage_parser_and_scanner_each_select_all_suites) ... ok
+test_git_failure_is_conservative (test_build_tools.DependencyTests.test_git_failure_is_conservative) ... ok
+test_multiline_comments_and_aliases (test_build_tools.DependencyTests.test_multiline_comments_and_aliases) ... ok
+test_nul_paths_and_untracked_tooling (test_build_tools.DependencyTests.test_nul_paths_and_untracked_tooling) ... ok
+test_sibling_imports_and_package_initializers (test_build_tools.DependencyTests.test_sibling_imports_and_package_initializers) ... ok
+test_unknown_change_is_conservative (test_build_tools.DependencyTests.test_unknown_change_is_conservative) ... ok
+test_physical_virtual_absent_and_detection_error (test_build_tools.GpuStatusTests.test_physical_virtual_absent_and_detection_error) ... ok
+test_explicit_partial_checks_have_distinct_keys (test_build_tools.MakeCacheTests.test_explicit_partial_checks_have_distinct_keys) ... ok
+test_optimizer_key_accounts_for_every_material_field (test_build_tools.MaterialStateTests.test_optimizer_key_accounts_for_every_material_field) ... ok
+test_a_group_keeps_the_given_order_and_refuses_a_bad_index (test_build_tools.ShardTests.test_a_group_keeps_the_given_order_and_refuses_a_bad_index) ... ok
+test_groups_cover_every_suite_once_and_balance (test_build_tools.ShardTests.test_groups_cover_every_suite_once_and_balance) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 17.417s
+
+OK
