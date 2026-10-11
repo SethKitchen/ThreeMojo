@@ -279,7 +279,8 @@ struct FootBoneField(DistanceField, ImplicitlyCopyable):
 
     The unclipped bone gives way to each listed neighbor that comes
     before it in `named_foot_bones`. The talus also gives way to the
-    tibia. Outside the unclipped bone, the value is the unclipped one.
+    tibia. The difference applies on both sides of the original surface,
+    so a surface buried inside a neighbor does not remain a zero set.
     """
 
     var segments: SegmentSet
@@ -359,8 +360,6 @@ struct FootBoneField(DistanceField, ImplicitlyCopyable):
         Negative is inside. Zero is the surface.
         """
         var d = segment_distance(self.segments, point, self.k)
-        if d >= 0:
-            return d
         # An earlier neighbor keeps its whole unclipped solid. This bone
         # keeps none of that interior. A point on that surface is not
         # inside this bone.
