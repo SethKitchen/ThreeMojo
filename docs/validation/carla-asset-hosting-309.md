@@ -4,6 +4,7 @@ The 47 CARLA archives are on Google Drive, and each one is shared with anyone wh
 The Drive API returned 36 archives, and each one matched its pinned SHA-256 sum.
 The public download links were not tested from this environment, because its network proxy refuses connections to Google Drive.
 The other 11 archives were not checked, because they are larger than the Drive connector can return.
+
 The owner then ran the public download of all 47 archives into an empty cache, from a network that can open Google Drive. The owner reported that it works: every archive was fetched and `verify --strict` passed.
 This closes [issue 309](https://github.com/SethKitchen/ThreeMojo/issues/309).
 
@@ -120,7 +121,7 @@ If Drive sends a web page, the tool stops and keeps no bytes.
 
 - HTTP `403`, `404` and `429`: the fetch fails after one request and keeps no file.
 - A web page with the content type `text/html`: the fetch fails and keeps no file.
-- A Drive virus-scan page, quota page or sign-in page sent as `application/octet-stream`: the fetch fails, says that the host sent a web page, and keeps no file.
+- A Drive virus-scan, quota or sign-in page sent as `application/octet-stream`: the fetch fails and keeps no file. It reports a web page.
 - A proxy that refuses the tunnel with `403` or `407`: the fetch fails after one request.
 - A dropped connection: the fetch tries again, then verifies the sum before it extracts.
 - A clean-cache download: the fetch verifies the sum, then extracts every member.
