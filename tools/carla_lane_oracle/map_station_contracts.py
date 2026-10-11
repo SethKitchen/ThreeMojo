@@ -8,10 +8,12 @@ admission: callers own physical observations, tests, final rereads and receipts.
 The certified search, seed score, floating-point guards and debits are unchanged.
 Native qualification of the bound tests is a separate requirement.
 """
+import functools
 import hashlib
 import sys
 import textwrap
 import tokenize
+import types
 
 if __package__:
     from . import source_contracts as source
@@ -199,6 +201,37 @@ def sha(text):
 
 
 def declaration(text, name, owner):
+    """Reuse only an exact immutable declaration inside the existing scope."""
+    if (type(source) is not types.ModuleType or type(textwrap) is not types.ModuleType
+            or type(tokenize) is not types.ModuleType):
+        return _declaration(text, name, owner)
+    active = vars(source).get('_active_lexical_memo')
+    if type(active) is not types.FunctionType or active() is None:
+        return _declaration(text, name, owner)
+    functions = (_declaration, vars(source).get('tokens'), require,
+                 vars(textwrap).get('dedent'))
+    producer = vars(source).get('_token_snapshot')
+    memoize = vars(source).get('_lexical_string')
+    kinds = tuple(vars(tokenize).get(name) for name in
+                  ('INDENT', 'DEDENT', 'NEWLINE', 'COMMENT', 'NL', 'ENDMARKER'))
+    if type(producer) is functools._lru_cache_wrapper:
+        producer_function = vars(producer).get('__wrapped__')
+    else:
+        producer_function = producer
+    dependencies = (*functions, producer_function)
+    if (not all(type(value) is types.FunctionType
+                and value.__defaults__ is None and value.__kwdefaults__ is None
+                for value in dependencies)
+            or type(producer) not in (types.FunctionType, functools._lru_cache_wrapper)
+            or type(memoize) is not types.FunctionType
+            or not all(type(value) is int for value in kinds)):
+        return _declaration(text, name, owner)
+    codes = tuple(value.__code__ for value in dependencies)
+    return memoize(_declaration, (text, name, owner),
+                   (*dependencies, *codes, *(id(code) for code in codes), producer, *kinds))
+
+
+def _declaration(text, name, owner):
     """Select one complete definition at its exact lexical owner, uncached."""
     tokens = source.tokens(text)
     scopes, statement, found = [], [], []
