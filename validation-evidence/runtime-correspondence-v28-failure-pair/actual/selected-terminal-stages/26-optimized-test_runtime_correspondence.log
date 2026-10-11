@@ -1,0 +1,190 @@
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+test_benign_comments_preserve_all_gates (test_runtime_correspondence.FixedRuntimeCandidateTests.test_benign_comments_preserve_all_gates) ... ERROR
+test_cli_positive_negative_and_missing_inputs_normal_and_optimized (test_runtime_correspondence.FixedRuntimeCandidateTests.test_cli_positive_negative_and_missing_inputs_normal_and_optimized) ... FAIL
+test_duplicate_dependency_pin_key_rejects (test_runtime_correspondence.FixedRuntimeCandidateTests.test_duplicate_dependency_pin_key_rejects) ... ok
+test_exact_dependency_schema_and_path_sets (test_runtime_correspondence.FixedRuntimeCandidateTests.test_exact_dependency_schema_and_path_sets) ... ok
+test_heading_semantic_projection_keeps_distinct_graphs (test_runtime_correspondence.FixedRuntimeCandidateTests.test_heading_semantic_projection_keeps_distinct_graphs) ... ok
+test_matched_wrong_full_and_value_blends_reject_reference (test_runtime_correspondence.FixedRuntimeCandidateTests.test_matched_wrong_full_and_value_blends_reject_reference) ... ok
+test_mutation_arc_overflow (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_arc_overflow) ... ok
+test_mutation_arc_result_index (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_arc_result_index) ... ok
+test_mutation_arc_translation (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_arc_translation) ... ok
+test_mutation_arc_unapproved_half (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_arc_unapproved_half) ... ok
+test_mutation_atan2_guard (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_atan2_guard) ... ok
+test_mutation_atan_branch (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_atan_branch) ... ok
+test_mutation_atan_guard (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_atan_guard) ... ok
+test_mutation_blend_complement_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_complement_error) ... ok
+test_mutation_blend_complement_weight (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_complement_weight) ... ok
+test_mutation_blend_difference_sign (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_difference_sign) ... ok
+test_mutation_blend_final_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_final_error) ... ok
+test_mutation_blend_finite_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_finite_error) ... ok
+test_mutation_blend_first_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_first_error) ... ok
+test_mutation_blend_negative_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_negative_error) ... ok
+test_mutation_blend_rate_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_rate_error) ... ok
+test_mutation_blend_second_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_second_error) ... ok
+test_mutation_blend_subnormal_support (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_blend_subnormal_support) ... ok
+test_mutation_bridge_error_reset (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_bridge_error_reset) ... ok
+test_mutation_bridge_round_ideal (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_bridge_round_ideal) ... ok
+test_mutation_broad_specialization (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_broad_specialization) ... ok
+test_mutation_clamp_support (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_clamp_support) ... ok
+test_mutation_constant_derivative_projection (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_constant_derivative_projection) ... ok
+test_mutation_constant_phase (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_constant_phase) ... ok
+test_mutation_derivative_read (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_derivative_read) ... ok
+test_mutation_difference_endpoint (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_difference_endpoint) ... ok
+test_mutation_difference_factor (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_difference_factor) ... ok
+test_mutation_difference_fallback (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_difference_fallback) ... ok
+test_mutation_difference_inherited_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_difference_inherited_error) ... ok
+test_mutation_difference_operand (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_difference_operand) ... ok
+test_mutation_difference_zero_guard (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_difference_zero_guard) ... ok
+test_mutation_eligibility_misplaced_half (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_eligibility_misplaced_half) ... ok
+test_mutation_expansion_count_guard (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_expansion_count_guard) ... ok
+test_mutation_expansion_final_zero_query (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_expansion_final_zero_query) ... ok
+test_mutation_expansion_infinite_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_expansion_infinite_error) ... ok
+test_mutation_geometry_clamp (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_geometry_clamp) ... ok
+test_mutation_global_domain_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_global_domain_error) ... ok
+test_mutation_half_factor (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_factor) ... ok
+test_mutation_half_inherited_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_inherited_error) ... ok
+test_mutation_half_maximum (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_maximum) ... ok
+test_mutation_half_minimum (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_minimum) ... ok
+test_mutation_half_negative_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_negative_error) ... ok
+test_mutation_half_nonfinite (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_nonfinite) ... ok
+test_mutation_half_operand (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_operand) ... ok
+test_mutation_half_unordered (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_half_unordered) ... ok
+test_mutation_heading_stale_half_spiral_domain_proof (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_heading_stale_half_spiral_domain_proof) ... ok
+test_mutation_heading_stale_half_spiral_moment_proof (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_heading_stale_half_spiral_moment_proof) ... ok
+test_mutation_heading_stale_half_spiral_moment_table (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_heading_stale_half_spiral_moment_table) ... ok
+test_mutation_ideal_error_mode (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_ideal_error_mode) ... ok
+test_mutation_ideal_u_misplaced_half_spiral_domain_proof (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_ideal_u_misplaced_half_spiral_domain_proof) ... ok
+test_mutation_ideal_u_misplaced_half_spiral_moment_proof (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_ideal_u_misplaced_half_spiral_moment_proof) ... ok
+test_mutation_ideal_u_misplaced_half_spiral_moment_table (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_ideal_u_misplaced_half_spiral_moment_table) ... ok
+test_mutation_import_alias (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_import_alias) ... ok
+test_mutation_missing_helper (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_missing_helper) ... ok
+test_mutation_polynomial_operand (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_polynomial_operand) ... ok
+test_mutation_primitive_qualifier (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_primitive_qualifier) ... ok
+test_mutation_proof_fallback (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_fallback) ... ok
+test_mutation_proof_translation_conjunction (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_translation_conjunction) ... ok
+test_mutation_proof_work_1024 (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_work_1024) ... ok
+test_mutation_proof_x_infinite_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_x_infinite_error) ... ok
+test_mutation_proof_x_sign (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_x_sign) ... ok
+test_mutation_proof_y_infinite_error (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_y_infinite_error) ... ok
+test_mutation_proof_y_sign (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_proof_y_sign) ... ok
+test_mutation_quadrant_support (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_quadrant_support) ... ok
+test_mutation_root_containment (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_root_containment) ... ok
+test_mutation_roundoff_accumulation (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_roundoff_accumulation) ... ok
+test_mutation_roundoff_count_support (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_roundoff_count_support) ... ok
+test_mutation_sample_blend_operand (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sample_blend_operand) ... ok
+test_mutation_sample_index (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sample_index) ... ok
+test_mutation_sample_negative_guard (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sample_negative_guard) ... ok
+test_mutation_sample_shared_rate (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sample_shared_rate) ... ok
+test_mutation_sampled_specialization (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sampled_specialization) ... ok
+test_mutation_sinc_boundary (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sinc_boundary) ... ok
+test_mutation_sinc_coefficients (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_sinc_coefficients) ... ok
+test_mutation_spiral_bridge (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_spiral_bridge) ... ok
+test_mutation_spiral_missing_record (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_spiral_missing_record) ... ok
+test_mutation_table_count_support (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_table_count_support) ... ok
+test_mutation_table_work_22 (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_table_work_22) ... ok
+test_mutation_target_generic (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_target_generic) ... ok
+test_mutation_target_qualifier (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_target_qualifier) ... ok
+test_mutation_top_level_execution (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_top_level_execution) ... ok
+test_mutation_two_count_join (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_two_count_join) ... ok
+test_mutation_unknown_interval (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_unknown_interval) ... ok
+test_mutation_work_debit (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_work_debit) ... ok
+test_mutation_work_guard (test_runtime_correspondence.FixedRuntimeCandidateTests.test_mutation_work_guard) ... ok
+test_positive_reports_name_real_root_and_keep_primitive (test_runtime_correspondence.FixedRuntimeCandidateTests.test_positive_reports_name_real_root_and_keep_primitive) ... ok
+
+======================================================================
+ERROR: test_benign_comments_preserve_all_gates (test_runtime_correspondence.FixedRuntimeCandidateTests.test_benign_comments_preserve_all_gates)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1548, in _admit
+    verify(root, _expected_lane_raw=expected_lane_raw, _capture=self)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1813, in verify
+    _capture._publish(root, snapshots, authority_raw, known, production, entries,
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1483, in _publish
+    self._match(root, path, value, mode)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1517, in _match
+    require(value == text, 'consumed operation text changed: ' + path)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 31, in require
+    raise ContractError('full-audit cleanup successor: ' + message)
+full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: consumed operation text changed: extensions/carla/curve_rounded_line.mojo
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/accepted_successor_contracts.py", line 175, in _verify_current_for_pin_pair
+    _, observed_current_admission = line._verify_for_pin_pair(root, **operation_args)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/rounded_line_selector_contracts.py", line 162, in _verify_for_pin_pair
+    record, observed_current_admission = _verify_premises(
+                                         ^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/rounded_line_selector_contracts.py", line 202, in _verify_premises
+    text, observed_road = full_audit._reviewed_lane_observation(root, text, observed_raw, **operation_args)
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1865, in _reviewed_lane_observation
+    _operation_record(_operation, root, expected_lane_raw=expected_raw))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1351, in _operation_record
+    _operation_fail(operation, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1128, in _operation_fail
+    raise error
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1349, in _operation_record
+    return operation._admit(root, exact=exact, expected_lane_raw=expected_lane_raw)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1561, in _admit
+    _operation_fail(self, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1132, in _operation_fail
+    raise failure from error
+full_audit_cleanup_contracts._OperationCoherenceError: full-audit cleanup successor: consumed operation text changed: extensions/carla/curve_rounded_line.mojo
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/check_sampled_values.py", line 317, in verify
+    sum2_contracts.verify(root)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/sum2_contracts.py", line 290, in verify
+    guard_result = guards.verify(root)
+                   ^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/sum2_guard_contracts.py", line 477, in verify
+    reviewed_cleanup_contracts.verify(root, **operation_args)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/reviewed_cleanup_contracts.py", line 299, in verify
+    invariant.verify(root)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 88, in verify
+    _predecessor_pin_pair(root, _operation=_operation))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 179, in _predecessor_pin_pair
+    followup._predecessor_pin_pair(root, _operation=_operation))
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_followup_contracts.py", line 188, in _predecessor_pin_pair
+    runtime_payload, guard_payload = accepted._predecessor_pin_pair(root, _operation=_operation)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/accepted_successor_contracts.py", line 281, in _predecessor_pin_pair
+    record, observed_current_admission = _verify_current_for_pin_pair(root, _operation=_operation)
+                                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/accepted_successor_contracts.py", line 179, in _verify_current_for_pin_pair
+    raise ValueError(
+ValueError: unreviewed complete successor: full-audit cleanup successor: consumed operation text changed: extensions/carla/curve_rounded_line.mojo
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_runtime_correspondence.py", line 184, in test_benign_comments_preserve_all_gates
+    sampled.verify(ROOT)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/check_sampled_values.py", line 319, in verify
+    raise CheckError(str(error)) from error
+check_sampled_values.CheckError: unreviewed complete successor: full-audit cleanup successor: consumed operation text changed: extensions/carla/curve_rounded_line.mojo
+
+======================================================================
+FAIL: test_cli_positive_negative_and_missing_inputs_normal_and_optimized (test_runtime_correspondence.FixedRuntimeCandidateTests.test_cli_positive_negative_and_missing_inputs_normal_and_optimized)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_runtime_correspondence.py", line 275, in test_cli_positive_negative_and_missing_inputs_normal_and_optimized
+    self.assertEqual(positive.returncode, 0, positive.stdout+positive.stderr)
+AssertionError: 1 != 0 : FAIL: full-audit cleanup successor: unreadable or malformed record
+
+
+----------------------------------------------------------------------
+Ran 91 tests in 191.279s
+
+FAILED (failures=1, errors=1)

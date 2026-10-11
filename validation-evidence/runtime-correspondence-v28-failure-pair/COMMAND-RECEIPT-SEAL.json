@@ -1,0 +1,83 @@
+{
+  "config_sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+  "kind": "derived-selected-commands-and-binding-index",
+  "schema": 1,
+  "scope": "Selected terminal pair only; no aggregate continuation status.",
+  "selected_stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_runtime_correspondence.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 91,
+      "label": "26-normal-test_runtime_correspondence",
+      "leader_reaped": true,
+      "log_sha256": "038597f77bd76e69f0fb5c74d42d9275497c91a85dd6632479bd1aae75f80235",
+      "pgid": 144,
+      "pid": 144,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 198.207305336,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T07:13:07.308137+00:00",
+      "test_count": 91,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_runtime_correspondence.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 91,
+      "label": "26-optimized-test_runtime_correspondence",
+      "leader_reaped": true,
+      "log_sha256": "1209fbff426dc2ee7d007d0a9e9376895cc45ab9d0a05e24b606788048003936",
+      "pgid": 151,
+      "pid": 151,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 192.4149340590011,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T07:16:27.828236+00:00",
+      "test_count": 91,
+      "timed_out": false
+    }
+  ],
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stage_files_sha256": {
+    "26-normal-test_runtime_correspondence-RESULT.json": "e37edbb5789da041466a7952431c50dc7f71cf5a8401bb07cf3b1baaedd56690",
+    "26-normal-test_runtime_correspondence-START.json": "54ab7aca5797e3cca2a17ded033828de36a2f3bf6f0c0192dca614c069fa1d61",
+    "26-normal-test_runtime_correspondence.log": "038597f77bd76e69f0fb5c74d42d9275497c91a85dd6632479bd1aae75f80235",
+    "26-optimized-test_runtime_correspondence-RESULT.json": "dfd6d6663886412a5031c0c3928d8284e063f251385785366ac1641dec16bf86",
+    "26-optimized-test_runtime_correspondence-START.json": "93e7d47009b67f404676f6428aa689a7b972753c75d2f00a14dbcadc4a565de2",
+    "26-optimized-test_runtime_correspondence.log": "1209fbff426dc2ee7d007d0a9e9376895cc45ab9d0a05e24b606788048003936"
+  },
+  "supervisor_sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+}
