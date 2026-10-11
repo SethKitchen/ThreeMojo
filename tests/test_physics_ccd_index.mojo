@@ -10,6 +10,7 @@ from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD, _sweep_domain
 from extensions.physics.ccd_index import _CCDIndex, _bounds, _down, _up
 from extensions.physics.shape import Shape, PhysicsMaterial, _wide
 from extensions.physics.world import PhysicsWorld
+from math.matrix3 import Matrix3
 from math.quaternion import Quaternion
 from math.triangle import Triangle
 from math.vector3 import Vector3
@@ -656,18 +657,24 @@ def test_brute_override_and_return_preserve_warm_index() raises:
             assert_equal(indexed._ccd_index.count, 17)
 
 
-def test_indexed_reachable_sphere_refusal_restores_pending_force() raises:
+def test_indexed_reachable_capsule_refusal_restores_pending_force() raises:
     var indexed = _world(_floor(), Vector3(0, 0, 0.15), Vector3(0, 0, -30))
     var brute = _world(_floor(), Vector3(0, 0, 0.15), Vector3(0, 0, -30), True)
     _step_pair(indexed, brute, 0.01)
     assert_equal(len(indexed.events), 2)
+    # Moving spheres can interact, but a moving capsule cannot.
     var stationary = RigidBody(
         DYNAMIC,
-        Shape.sphere(Length(0.1)),
+        Shape.capsule(Length(0.1), Length(0.05)),
         Mass(1),
         Vector3(0.5, 0, 0.5),
         Quaternion.identity(),
     )
+    var locked = Matrix3()
+    locked.elements[0] = 0
+    locked.elements[4] = 0
+    locked.elements[8] = 0
+    stationary.set_inverse_inertia(locked)
     _ = indexed.add_body(stationary.copy())
     _ = brute.add_body(stationary^)
     assert_equal(indexed._ccd_index.count, 17)

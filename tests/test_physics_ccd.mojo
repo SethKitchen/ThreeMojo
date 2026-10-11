@@ -362,7 +362,20 @@ def test_support_and_finite_failures_are_atomic() raises:
         elif choice == 14:
             world.bodies[1].force = Vector3(1, 2, 3e38)
         elif choice == 15:
-            _ = world.add_body(_ball(0.1, 0.3, 0))
+            # Moving spheres can interact; a moving capsule cannot.
+            var capsule = RigidBody(
+                DYNAMIC,
+                Shape.capsule(Length(0.05), Length(0.05)),
+                Mass(1),
+                Vector3(0, 0, 0.3),
+                Quaternion.identity(),
+            )
+            var locked = Matrix3()
+            locked.elements[0] = 0
+            locked.elements[4] = 0
+            locked.elements[8] = 0
+            capsule.set_inverse_inertia(locked)
+            _ = world.add_body(capsule^)
         else:
             world.bounce_threshold = nan[DType.float32]()
         var position = world.bodies[1].position
