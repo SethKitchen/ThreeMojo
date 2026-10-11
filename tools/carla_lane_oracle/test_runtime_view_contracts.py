@@ -11,6 +11,7 @@ import border_parser_contracts as border
 import runtime_boundary_contracts as boundary
 import runtime_view_contracts as view
 import winner_sign_contracts as winner
+import full_audit_cleanup_contracts as audit
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -94,6 +95,109 @@ class RuntimeViewSuccessorTests(unittest.TestCase):
                     patch.object(view, 'MIGRATION_SHA256', hashlib.sha256(forged).hexdigest()):
                 with self.assertRaises(ValueError):
                     view.steps(ROOT)
+
+
+class RuntimeViewBindingControls(unittest.TestCase):
+    def test_every_missing_record_or_fixture_preserves_the_public_read_error(self):
+        read = Path.read_bytes
+        for name in view.PROTECTED_INPUTS:
+            target = ROOT/name
+            def missing(path, *args, **kwargs):
+                if path == target:
+                    raise FileNotFoundError(str(target))
+                return read(path, *args, **kwargs)
+            with self.subTest(path=name), patch.object(Path, 'read_bytes', missing):
+                with self.assertRaises(FileNotFoundError):
+                    view.steps(ROOT)
+
+    def test_live_checker_code_is_bound_and_restoration_reinstates_identity(self):
+        original = view.steps.__code__
+        def forged(root, *, _operation=None):
+            return {}
+        try:
+            view.steps.__code__ = forged.__code__
+            with self.assertRaisesRegex(ValueError, 'executing function changed'):
+                audit.executing_checker_bindings()
+        finally:
+            view.steps.__code__ = original
+        self.assertIn('tools/carla_lane_oracle/runtime_view_contracts.py',
+                      audit.executing_checker_bindings())
+
+    def test_current_receipt_names_actual_runtime_view_authority_and_all_fixtures(self):
+        bindings = audit.proof_bindings(ROOT)
+        for name in (*view.PROTECTED_INPUTS,
+                     'tools/carla_lane_oracle/runtime_view_contracts.py'):
+            with self.subTest(path=name):
+                self.assertEqual(bindings[name], hashlib.sha256((ROOT/name).read_bytes()).hexdigest())
+
+
+class RuntimeViewOwnedInputControls(unittest.TestCase):
+    from test_invariant_operation_inputs import BoundedOwnerCurrentControls as _owners
+    setUp = _owners.setUp
+    audit = _owners.audit
+    assert_closed = _owners.assert_closed
+
+    def test_consumed_record_and_fixture_mutations_remain_sticky_after_restore(self):
+        for name in (view.MIGRATION, view.TESTS[0], view.FIXTURES[0]):
+            def consume(operation):
+                target = self.root/name
+                with patched_bytes(target, target.read_bytes() + b' '):
+                    with self.assertRaises(audit._OperationCoherenceError):
+                        view.steps(self.root, _operation=operation)
+                self.assertTrue(operation._failed)
+                with self.assertRaises(audit._OperationCoherenceError):
+                    view.steps(self.root, _operation=operation)
+            with self.subTest(path=name), self.audit(callback=consume) as events:
+                with self.assertRaises(ValueError):
+                    winner.verify(self.root)
+            self.assertEqual(len(events['admissions']), 1)
+            self.assert_closed(events['admissions'][0])
+
+    def test_caught_missing_reads_poison_the_real_owner_before_restoration(self):
+        read = Path.read_bytes
+        for name in (view.MIGRATION, view.TESTS[0]):
+            def consume(operation):
+                target = self.root/name
+                def missing(path, *args, **kwargs):
+                    if path == target:
+                        raise FileNotFoundError(str(target))
+                    return read(path, *args, **kwargs)
+                with patch.object(Path, 'read_bytes', missing):
+                    with self.assertRaises(audit._OperationCoherenceError) as caught:
+                        view.steps(self.root, _operation=operation)
+                self.assertIs(type(caught.exception.__cause__), FileNotFoundError)
+                self.assertTrue(operation._failed)
+                with self.assertRaises(audit._OperationCoherenceError):
+                    view.steps(self.root, _operation=operation)
+            with self.subTest(path=name), self.audit(callback=consume) as events:
+                with self.assertRaises(ValueError):
+                    winner.verify(self.root)
+            self.assertEqual(len(events['admissions']), 1)
+            self.assert_closed(events['admissions'][0])
+
+    def test_final_checkpoint_rejects_changes_after_the_last_view_read(self):
+        from functools import wraps
+        checkpoint = audit._CacheInputs.checkpoint
+        for name in (view.MIGRATION, view.TESTS[0]):
+            target = self.root/name
+            original = target.read_bytes()
+            operations = []
+            @wraps(checkpoint)
+            def at_finish(owner, caller, root):
+                self.assertEqual(owner._state, 'active')
+                self.assertEqual(owner._kind, 'winner')
+                operations.append(owner)
+                target.write_bytes(original + b' ')
+                return checkpoint(owner, caller, root)
+            try:
+                with self.subTest(path=name), patch.object(audit._CacheInputs, 'checkpoint', at_finish):
+                    with self.assertRaisesRegex(ValueError, 'owned input changed'):
+                        winner.verify(self.root)
+            finally:
+                target.write_bytes(original)
+            self.assertEqual(len(operations), 1)
+            self.assertTrue(operations[0]._failed)
+            self.assert_closed(operations[0])
 
 
 if __name__ == '__main__':
