@@ -190,6 +190,12 @@ def verify(root):
                             'full-audit edge does not start at canonical endpoint: ' + path)
                     successors[path] = edge
 
+        if __package__:
+            from . import consumer_successor_ledger as ledger
+        else:
+            import consumer_successor_ledger as ledger
+        successors = ledger.extend(successors, root, _operation=_operation)
+
         for path, expected in record['canonical_source_unchanged'].items():
             if path in successors:
                 require(expected == successors[path]['before_sha256'],

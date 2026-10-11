@@ -35,9 +35,11 @@ try:
     if __package__:
         from . import source_contracts as source
         from . import sum2_guard_contracts as guard
+        from . import consumer_successor_ledger as consumer_ledger
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
+        import consumer_successor_ledger as consumer_ledger
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -118,7 +120,8 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/consumer_successor_ledger.py': 'e86b82c4954eba87402c4f3f64f4c19c7299a2fb84cee6c625001311fd429ac6',
+ 'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
  'tools/carla_lane_oracle/sum2_guard_contracts.py': '870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd'}
@@ -168,6 +171,10 @@ INVENTORY_NAMES = frozenset({'_LaneBoundClose',
            'lane_value_bounds'})
 # END GENERATED AUTHORITY CONSTANTS
 
+# A new authority is supplemental; historical successor records stay immutable.
+CONSUMER_LEDGER = 'tools/carla_lane_oracle/consumer-successor-ledger.json'
+CONSUMER_LEDGER_SHA256 = 'cd966262e04f6017317603e2dd4651c26da58030b780506cb189ce5d1c2ae2be'
+
 BOUND_GROUPS = ('unchanged_inputs', 'historical_records', 'additional_records',
                 'native_references', 'native_witnesses',
                 'native_dependency_inputs', 'native_support_inputs',
@@ -179,7 +186,8 @@ SKIP = frozenset({'.git', '.venv', '.cache', 'out', 'node_modules', '__pycache__
 CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/source_contracts.py',
                  'tools/carla_lane_oracle/sum2_guard_contracts.py',
-                 'tools/affected.py', 'tools/cache_key.py')
+                 'tools/affected.py', 'tools/cache_key.py',
+                 'tools/carla_lane_oracle/consumer_successor_ledger.py')
 
 
 def _center_require(ok, message):
@@ -646,7 +654,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key')):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -678,7 +686,8 @@ def _live_function_code(value):
 
 def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
-    modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')), vars(_sibling('cache_key')))
+    modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
+               vars(_sibling('cache_key')), vars(consumer_ledger))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -1789,6 +1798,9 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         native_found = _native_dependency_inventory(root, witnesses=NATIVE_WITNESSES,
             _known=known, _snapshots=snapshots)
         require(native_found == set(record['native_dependency_inventory']), 'native witness import inventory changed')
+        ledger_raw = _regular(root, CONSUMER_LEDGER).read_bytes()
+        require(sha(ledger_raw) == CONSUMER_LEDGER_SHA256, 'unreviewed consumer ledger')
+        snapshots[CONSUMER_LEDGER] = ledger_raw
         bound = {}
         for group in BOUND_GROUPS:
             for path, expected in record[group].items():
@@ -1974,7 +1986,7 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         record = (verify(root, exact=True, include_roots=include_roots) if _operation is None else
                   _operation_record(_operation, root, exact=True, include_roots=include_roots))
         require(executing_checker_bindings(root) == executing, 'receipt checker changed during verification')
-        result = {MIGRATION: MIGRATION_SHA256, **executing}
+        result = {MIGRATION: MIGRATION_SHA256, CONSUMER_LEDGER: CONSUMER_LEDGER_SHA256, **executing}
         result.update({path: item['after_sha256'] for path, item in record['sources'].items()})
         for group in BOUND_GROUPS:
             result.update(record[group])

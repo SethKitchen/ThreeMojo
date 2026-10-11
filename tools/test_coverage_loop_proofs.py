@@ -778,6 +778,11 @@ class GuardedLoopTests(unittest.TestCase):
             self.assertEqual(loops.sha256(content),
                              loops.GUARDED_LOOP_SOURCE_SHA256[relative])
             destination.write_bytes(content)
+        # The maintained inventory includes this independent local helper.
+        # Keep the real source here without inventing a hair dependency pin.
+        water = self.root / 'extensions/water/gpu.mojo'
+        water.parent.mkdir(parents=True, exist_ok=True)
+        water.write_bytes((self.repo / 'extensions/water/gpu.mojo').read_bytes())
 
     def prove(self, rule):
         return loops.guarded_loop_proof(self.root, rule)
@@ -1106,6 +1111,153 @@ class GuardedLoopTests(unittest.TestCase):
     def hair_rules(self):
         return [rule for rule in loops.GUARDED_LOOP_RULES
                 if rule[0] == 'extensions/humanoid/skeleton/head/hair/strands']
+
+    def test_hair_census_resolves_real_water_without_a_source_pin(self):
+        name = 'extensions/water/gpu.mojo'
+        path = self.root / name
+        original = path.read_text()
+        proofs = {}
+        for rule in self.hair_rules():
+            proof = self.prove(rule)
+            proofs[rule[5]] = proof
+            self.assertIsNotNone(proof)
+            self.assertEqual(set(proof['dependency_sha256']),
+                             {rule[0] + '.mojo', *rule[6]})
+            self.assertNotIn(name, proof['dependency_sha256'])
+            self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, rule[0])),
+                             {221, 225, 231})
+        self.assertEqual(original.count('comptime _TILE = 16'), 1)
+        path.write_text(original.replace('comptime _TILE = 16',
+                                         'comptime _TILE = 8'))
+        for rule in self.hair_rules():
+            self.assertEqual(self.prove(rule), proofs[rule[5]])
+            self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, rule[0])),
+                             {221, 225, 231})
+        read_text = Path.read_text
+
+        def unreadable(source, *args, **kwargs):
+            if source == path:
+                raise OSError('unreadable maintained water source')
+            return read_text(source, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', unreadable):
+            for rule in self.hair_rules():
+                self.assertIsNone(self.prove(rule))
+        path.write_text(original)
+
+    def test_hair_water_member_call_and_alias_still_revoke(self):
+        path = self.root / 'extensions/water/gpu.mojo'
+        original = path.read_text()
+        for added in ('def added(hair, assets):\n    hair._upload(assets)\n',
+                      'def added(hair):\n    var alias = hair._upload\n'):
+            with self.subTest(added=added):
+                path.write_text(original + '\n' + added)
+                for rule in self.hair_rules():
+                    self.assertIsNone(self.prove(rule))
+                    self.assertEqual(
+                        set(loops.reviewed_nonempty_loops(self.root, rule[0])),
+                        {225, 231})
+        path.write_text(original)
+        for rule in self.hair_rules():
+            self.assertIsNotNone(self.prove(rule))
+
+    def test_hair_local_upload_identity_accepts_only_direct_calls(self):
+        names = ('_shadow_depths', '_upload')
+        plain = 'def _upload(value):\n    return value\n'
+        generic = ('def _upload[dtype: DType](values: List[Scalar[dtype]])'
+                   ' raises -> DeviceBuffer[dtype]:\n    pass\n')
+        for text in (plain, plain + '_upload(1)\n',
+                     generic + '_upload[DType.float32](values)\n',
+                     generic + '_upload[DType.int64](values)\n',
+                     generic + '_upload[\n    DType.float32, Other.Type\n](values)\n'):
+            with self.subTest(text=text):
+                self.assertFalse(loops._hair_census_reference(names, text))
+        for text in (plain + '# unknown _shadow_depths reference\n',
+                     plain + 'hair._shadow_depths([])\n'):
+            self.assertTrue(loops._hair_census_reference(names, text))
+        self.assertTrue(loops._hair_census_reference(
+            ('_topology',), plain + 'hair._topology.clear()\n'))
+        self.assertTrue(loops._hair_census_reference(('_upload',), plain))
+
+    def test_hair_local_upload_identity_rejects_binding_and_scope_ambiguity(self):
+        names = ('_shadow_depths', '_upload')
+        plain = 'def _upload(value):\n    return value\n'
+        cases = (
+            '_upload(value)\n',
+            plain + 'hair._upload(value)\n',
+            plain + 'var alias = _upload\n',
+            plain + 'from unknown import _upload\n',
+            plain + 'from unknown import different as _upload\n',
+            plain + 'import _upload as local\n',
+            plain + '_upload = other\n',
+            plain + 'def added(_upload):\n    _upload(value)\n',
+            plain + 'from unknown import *\n',
+            plain + 'from unknown import (\n    *\n)\n',
+            '@decorator\n' + plain,
+            'def outer():\n    def _upload(value):\n        pass\n',
+            'if enabled:\n    def _upload(value):\n        pass\n',
+            'struct Local:\n    def _upload(value):\n        pass\n',
+            plain + plain,
+            plain + 'fn _upload(value):\n    pass\n',
+            plain + 'struct _upload(Copyable):\n    pass\n',
+            plain + 'trait _upload(Copyable):\n    pass\n',
+            plain + 'class _upload(Base):\n    pass\n',
+            plain + 'struct _upload[Type](Trait):\n    pass\n',
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.assertTrue(loops._hair_census_reference(names, text))
+
+    def test_hair_local_upload_identity_rejects_unknown_syntax(self):
+        names = ('_shadow_depths', '_upload')
+        plain = 'def _upload(value):\n    return value\n'
+        cases = (
+            plain + '# unknown _upload reference\n',
+            plain + 'var name = "_upload"\n',
+            plain + 'var name = f"_upload"\n',
+            plain + 'var name = f"{_upload}"\n',
+            plain + 'var name = f"{_upload(value)}"\n',
+            plain + 'var name = f"{hair._upload(value)}"\n',
+            plain + 'var broken = "unterminated\n',
+            plain + '_upload(\n',
+            'def _upload = other:\n    pass\n',
+            'def _upload[dtype: DType]:\n    pass\n',
+            'def _upload(value) unexpected:\n    pass\n',
+            'def _upload(value=other):\n    pass\n',
+            'def _upload(mut value):\n    pass\n',
+            'def _upload(value: List[):\n    pass\n',
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.assertTrue(loops._hair_census_reference(names, text))
+        for specialization in ('[]', '[List[Float32]]', '[dtype=DType.float32]',
+                               '[42]', '["float32"]', '[True]', '[False]',
+                               '[None]', '[a + b]', '[a.]', '[.a]', '[a,]',
+                               '[,a]', '[a,,b]', '[*args]', '[a:b]', '[a; b]'):
+            text = plain + '_upload' + specialization + '(value)\n'
+            with self.subTest(specialization=specialization):
+                self.assertTrue(loops._hair_census_reference(names, text))
+        for ending in ('[DType.float32]\n', '[DType.float32]\n(value)\n'):
+            self.assertTrue(loops._hair_census_reference(names, plain + '_upload' + ending))
+
+    def test_hair_retained_manifest_keeps_required_true_and_unrelated_probes(self):
+        # Manifest-only source-proof control, never native capture evidence.
+        module = self.hair_rules()[0][0]
+        rows = loops.reviewed_nonempty_loops(self.root, module)
+        self.assertEqual(set(rows), {221, 225, 231})
+        original = ('B ' + module + ' 221\n').encode()
+        unrelated = (b'L other 25\nB other 26\nC other 27 0\nM other 27 1\n')
+        raw = original + unrelated
+        proof = dict(rows[221], module=module)
+        envelope = {'sha256': 'manifest-only-model', 'receipt': {
+            'manifest_sha256': loops.sha256(raw), 'proofs': [proof]}}
+        masked = loops.masked_manifest(raw, envelope)
+        expected = ('P ' + loops.SCHEMA + ' manifest-only-model\nR ' + module
+                    + ' 221 T ' + proof['kind'] + ' 1\n').encode() + unrelated
+        self.assertEqual(masked, expected)
+        self.assertEqual((proof['required'], proof['impossible']), ('T', 'F'))
+        self.assertEqual(raw, original + unrelated)
+        self.assertEqual(envelope['receipt']['manifest_sha256'], loops.sha256(raw))
 
     def test_hair_constructor_current_state_and_both_shading_borrows_are_bound(self):
         prefix = 'extensions/humanoid/skeleton/head/hair/'
@@ -1983,7 +2135,7 @@ def check(value,message):
     if not value: raise RuntimeError(message)
 if shadow == 'True':
     check(bool(prefix),'shadow control requires a package namespace')
-    for name in ('source_contracts','cache_key_contracts','speed_parser_contracts','seed_count_contracts','runtime_boundary_contracts','render_actor_reuse_contracts','ideal_projection'):
+    for name in ('source_contracts','cache_key_contracts','speed_parser_contracts','seed_count_contracts','runtime_boundary_contracts','render_actor_reuse_contracts','consumer_successor_ledger','ideal_projection'):
         sys.modules[name]=types.ModuleType(name)
 try:
     module=importlib.import_module(prefix+consumer)

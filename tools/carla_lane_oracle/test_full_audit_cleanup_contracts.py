@@ -312,7 +312,8 @@ class FullAuditCleanupContracts(unittest.TestCase):
         self.assertEqual(cleanup.verify(self.root, exact=True), self.record)
         self.assertIsNone(self.semantic(self.current))
         bindings = cleanup.proof_bindings(self.root)
-        expected = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
+        expected = {cleanup.MIGRATION, cleanup.CONSUMER_LEDGER,
+                    *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
         for group in cleanup.BOUND_GROUPS:
             expected.update(self.record[group])
         self.assertEqual(set(bindings), expected)

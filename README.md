@@ -67,6 +67,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Navigation safety
 
+- [x] [Reviewed CARLA consumer successors](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest#reviewed-consumer-successors): one pinned ledger with exact source, token and test chains [#703](https://github.com/SethKitchen/ThreeMojo/issues/703)
+
 <details>
 <summary>Implemented: 1</summary>
 

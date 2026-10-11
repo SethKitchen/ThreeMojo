@@ -132,3 +132,13 @@ The road has twice the listed lane count, split equally between its two sides.
 Each ratio divides the corrected median time by the baseline median time.
 A ratio above 1 means that the corrected method is slower.
 These measurements are local observations, not a cross-machine speed guarantee.
+
+
+## Reviewed consumer successors
+
+The [consumer successor ledger](../../tools/carla_lane_oracle/README.md#reviewed-consumer-successors)
+records reviewed changes to consumers pinned by the parser and winner-sign
+contracts. Each edge binds its source, tokens and current correctness tests.
+Unreviewed changes fail. Historical records, historical tests and independent
+arithmetic and source obligations remain enforced. The ledger does not narrow
+the dependency closure or establish a new native proof.

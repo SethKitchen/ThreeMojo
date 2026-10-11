@@ -1017,11 +1017,11 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
             for names, expected in census:
                 if not expected or not set(expected).issubset(bindings):
                     return None
-                pattern = r'\b(?:' + '|'.join(re.escape(name) for name in names) + r')\b'
+                # Only an exact local upload identity can exclude a collision.
                 actual = {
                     path.as_posix() for path in cache_key.input_paths(Path(root))
                     if path.suffix == '.mojo'
-                    and re.search(pattern,
+                    and _hair_census_reference(names,
                                   relative_source(root, path.as_posix()).read_text())
                 }
                 if actual != set(expected):
@@ -1615,6 +1615,144 @@ def verify_captures(captures, envelope):
                 or binding['capture_sha256'] != file_sha256(capture)
                 or binding['output_sha256'] != file_sha256(capture.parent / name)):
             raise ValueError('Stale or modified coverage capture: ' + capture.name)
+
+
+def _hair_census_reference(names, text):
+    """Keep unknown hair references; exclude only a proven local upload name."""
+    pattern = r'\b(?:' + '|'.join(re.escape(name) for name in names) + r')\b'
+    if not re.search(pattern, text):
+        return False
+    if (names != ('_shadow_depths', '_upload')
+            or re.search(r'\b_shadow_depths\b', text)):
+        return True
+    import keyword
+    from carla_lane_oracle import source_contracts, sum2_guard_contracts
+    try:
+        tokens = source_contracts.tokens(text)
+        # Python 3.12 exposes f-string parts separately. Their fields are not
+        # supported local-name evidence, even when the literal part is empty.
+        fstring_types = {getattr(tokenize, name, -1) for name in
+                         ('FSTRING_START', 'FSTRING_MIDDLE', 'FSTRING_END')}
+        if any(token.type == tokenize.ERRORTOKEN or token.type in fstring_types or
+               (token.type in (tokenize.COMMENT, tokenize.STRING)
+                and re.search(r'\b_upload\b', token.string)) for token in tokens):
+            return True
+        tokens = [token for token in tokens
+                  if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                        tokenize.ENDMARKER)]
+        # A star import can replace the binding without spelling its name.
+        importing = False
+        for token in tokens:
+            if token.type == tokenize.NEWLINE:
+                importing = False
+            elif token.type == tokenize.NAME and token.string == 'import':
+                importing = True
+            elif importing and token.string == '*':
+                return True
+        declaration = sum2_guard_contracts.declaration(text, '_upload', ())
+        stream = [token for token in source_contracts.tokens(declaration)
+                  if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                        tokenize.ENDMARKER)]
+        stream = stream[:next(index for index, token in enumerate(stream)
+                              if token.type == tokenize.NEWLINE)]
+        position = 0
+
+        def at(value):
+            return position < len(stream) and stream[position].string == value
+
+        def take(value):
+            nonlocal position
+            if not at(value):
+                raise ValueError('unsupported local upload syntax')
+            position += 1
+
+        def identifier():
+            nonlocal position
+            if (position >= len(stream) or stream[position].type != tokenize.NAME
+                    or keyword.iskeyword(stream[position].string)):
+                raise ValueError('unsupported local upload identifier')
+            position += 1
+
+        def type_name(depth=0):
+            if depth > 8:
+                raise ValueError('unsupported local upload type nesting')
+            identifier()
+            while at('.'):
+                take('.')
+                identifier()
+            if at('['):
+                take('[')
+                type_name(depth + 1)
+                while at(','):
+                    take(',')
+                    type_name(depth + 1)
+                take(']')
+
+        # declaration() binds the unique lexical owner, but retains decorators
+        # and does not validate a signature. Admit only this narrow grammar.
+        take('def')
+        take('_upload')
+        if at('['):
+            take('[')
+            while True:
+                identifier()
+                take(':')
+                identifier()
+                while at('.'):
+                    take('.')
+                    identifier()
+                if not at(','):
+                    break
+                take(',')
+            take(']')
+        take('(')
+        if not at(')'):
+            while True:
+                identifier()
+                if at(':'):
+                    take(':')
+                    type_name()
+                if not at(','):
+                    break
+                take(',')
+        take(')')
+        if at('raises'):
+            take('raises')
+        if at('->'):
+            take('->')
+            type_name()
+        take(':')
+        if position != len(stream):
+            return True
+        declarations = 0
+        for index, token in enumerate(tokens):
+            if token.type != tokenize.NAME or token.string != '_upload':
+                continue
+            previous = tokens[index - 1].string if index else ''
+            if previous == 'def':
+                declarations += 1
+                continue
+            if previous in {'.', 'fn', 'struct', 'trait', 'class', 'alias',
+                            'var', 'comptime', 'mut', 'out', 'ref',
+                            'import', 'from', 'as'}:
+                return True
+            position = index + 1
+            stream = tokens
+            if at('['):
+                take('[')
+                while True:
+                    identifier()
+                    while at('.'):
+                        take('.')
+                        identifier()
+                    if not at(','):
+                        break
+                    take(',')
+                take(']')
+            take('(')
+        return declarations != 1
+    except (ValueError, StopIteration):
+        return True
 
 
 def main():

@@ -85,3 +85,34 @@ as an additional fail-closed check. They never compile or run Mojo.
 Each later contract is a module in this directory with a JSON pin beside it.
 `make test-tools` runs those suites. A source-pin failure needs proof review.
 Do not refresh a pin because a comment moved.
+
+
+## Reviewed consumer successors
+
+Issue [#703](https://github.com/SethKitchen/ThreeMojo/issues/703) uses one
+reviewed ledger for consumer changes. It does not remove historical pins or
+accept changes automatically. `consumer-successor-ledger.json` starts with
+the existing #306 render-actor edge and its correctness tests.
+
+Each later edge must name its issue, consumer path, source and token digests,
+and current correctness tests. Append the edge in order. Both digest forms
+must join the preceding edge. Review the ledger and update its fixed digest
+in `consumer_successor_ledger.py` and `full_audit_cleanup_contracts.py`.
+Update the reviewed checker digest when the checker source changes.
+
+The border-parser and winner-sign checks use this ledger. A chain can start
+at a historical pin, extend a known edge, or repeat that exact first edge
+before extending it. The live consumer must match the complete chain end.
+The runtime-boundary and render-reuse checks keep their historical edge
+descriptors. They validate the live ledger endpoint before returning them.
+The root check composes each chain once.
+
+Historical records and their tests remain unchanged. A new ledger test does
+not replace a test bound by an independent contract. Add a separate current
+test when that historical test must remain fixed. Map, the parser, and all
+independent arithmetic, source, caller and resolver checks remain enforced.
+A ledger edge alone cannot change their proof authority.
+
+The current operation owns all ledger, record, consumer and test reads.
+A changed observation or a rejected chain invalidates that operation.
+The source receipt includes the ledger and its executing checker identity.
