@@ -88,7 +88,7 @@ The foot rule follows the accounting order and not a bisector. The earlier bone 
 
 ## Results after the repair
 
-At 5, 3 and 2 mm, no legacy pair has a sampled common interior. Each bone and knee issue pair has a refined value from 0 to 5.3e-8 m: the fields meet at a surface. C2/C3 has a refined value of 2.0 mm: the pillars now keep the disc height apart. The template report has no bone, knee or spine finding. All 23 body/disc endplane checks pass. All independent controls pass.
+At 5, 3 and 2 mm, no legacy pair has a sampled common interior. Each bone and knee issue pair has a refined value from 0 to 2.9e-8 m: the fields meet at a surface. C2/C3 has a refined value of 2.0 mm: the pillars now keep the disc height apart. The template report has no bone, knee or spine finding. All 23 body/disc endplane checks pass. All independent controls pass.
 
 Native tests sample each interface. `test_foot.mojo` checks every listed joint on both sides at 2 mm, and the talus against the tibia. `test_fibula.mojo` checks the proximal tibiofibular joint at 1 mm on both sides. `test_knee.mojo` checks all knee tissues against the bones and each other at 3 mm on both sides. `test_head.mojo` checks C2/C3 through C6/C7 at 2 mm.
 
@@ -119,7 +119,7 @@ The fibula changes by less than 0.01 g. A few small bones gain a little mass fro
 - No acceptance threshold, biological tolerance or clearance certification is claimed.
 - Every interface has zero thickness. Joint space, foot articular cartilage, attachment fibrocartilage and deep and superficial MCL layers are not modeled.
 - The precedence order is an accounting rule, not a measured articular surface.
-- An interface between differently placed frames is exact only to float32 coordinate roundoff. The largest refined value at a clipped interface here is 5.3e-8 m.
+- An interface between differently placed frames is exact only to float32 coordinate roundoff. The largest refined value at a clipped interface here is below 2.9e-8 m.
 - No sampled hit does not prove no overlap. A refinement is local to the grid witness.
 - The tissue pairs of #596 keep 329 unallowlisted findings. Muscle, ligament, vessel, nerve and lymphatic interfaces are not classified here.
 - Whole-body, dynamic, posed and visual geometry remain outside this evidence.
