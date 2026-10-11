@@ -1276,7 +1276,14 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
             return {}
         cleanup_bindings = {}
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
-        if any(name in cleanup.SOURCE_PATHS and actual[name] != expected[name]
+        helpers = cleanup.shared_helpers
+        # A reviewed shared-helper edit is admitted below, by its own
+        # binding. Any other difference needs the cleanup proof, which
+        # fails the operation when the difference is not a reviewed edge.
+        if any(actual[name] != expected[name]
+               and not (name in helpers.SOURCE_PATHS
+                        and expected[name] == helpers.BEFORE_SHA256[name]
+                        and actual[name] == helpers.AFTER_SHA256[name])
                for name in expected):
             cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
             edges = cleanup.verified_edges(root, include_roots=include_roots, **operation_args)
