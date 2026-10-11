@@ -176,7 +176,8 @@ def _check_carla(entry):
     if release is None:
         raise ManifestError(f'{entry_id}: a CARLA entry needs its release page as source, '
                             'https://github.com/carla-simulator/carla/releases/tag/VERSION')
-    if f'CARLA {release.group(1)}' not in entry['provenance']:
+    release_name = rf'\bCARLA {re.escape(release.group(1))}(?![\w+-]|\.\w)'
+    if re.search(release_name, entry['provenance']) is None:
         raise ManifestError(f'{entry_id}: the provenance must name CARLA {release.group(1)}, '
                             'the release in the source')
     if not entry.get('changes'):
