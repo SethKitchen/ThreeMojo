@@ -1,0 +1,74 @@
+{
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phases": [
+    {
+      "config_sha256": "a05c0e82640bb73da504f7dc53ea6d20e53839c019c961b22be140ea86feefcf",
+      "configured_but_unrun_labels": [
+        "normal-package",
+        "optimized-direct",
+        "optimized-package"
+      ],
+      "phase": "invariant-input-cold-probes-v19",
+      "result_sha256": "bf4d3be4a9ca045bfe7cdfb0c9c2146c91be6ab90eef94eee91e25231b9e1c77",
+      "stage": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-c",
+          "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19",
+        "label": "normal-direct",
+        "leader_reaped": true,
+        "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "pgid": 7,
+        "pid": 7,
+        "remaining_owned_descendants": [],
+        "returncode": -9,
+        "seconds": 10.045146466000006,
+        "single_cpu": 0,
+        "source_seal_sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e",
+        "stage_timeout_seconds": 10,
+        "started": "2026-10-11T03:14:39.989808+00:00",
+        "timed_out": true
+      },
+      "stage_result_sha256": "a6eeffd6835fcd6cc7994f28f766c9af7acaac0eb86f02497a61a2a5389a2df2",
+      "start_sha256": "e019d41a7410079891d14d90dc4c0458d21c95d9bca12dabc9c8d7941b930c03"
+    },
+    {
+      "config_sha256": "cef80c2a4bd98355a4bd72b1f819115d17ef6bc095d0e57e9489dfe5cb3c2174",
+      "configured_but_unrun_labels": [],
+      "phase": "invariant-input-diagnostic-v19",
+      "result_sha256": "264fbb282f7e7f6024fc2b1d8bf4759e585f78edf74e9a1c8bf76bc33dc986c7",
+      "stage": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_invariant_child_v19.py",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/invariant-input-diagnostic-v19",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19",
+          "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-profile-command-v19.json"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19",
+        "label": "bounded-complete-cost-profile",
+        "leader_reaped": true,
+        "log_sha256": "0c3b26e2db53adbd82dfc14a990a80cdbd71040be388c32f03c8b8800725b659",
+        "pgid": 8,
+        "pid": 8,
+        "remaining_owned_descendants": [],
+        "returncode": 1,
+        "seconds": 28.57750377800403,
+        "single_cpu": 0,
+        "source_seal_sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e",
+        "stage_timeout_seconds": 30,
+        "started": "2026-10-11T03:15:51.107749+00:00",
+        "timed_out": false
+      },
+      "stage_result_sha256": "f987c3d7057f29fb31dc306b44725aae1b920e5a4344fb0f0ede689c6be9393f",
+      "start_sha256": "2a3d4b292458e8763109c9ee9cf68a202b9c410588a98d15b67e50ebf35fd16d"
+    }
+  ],
+  "schema": 1,
+  "source_seal_sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e"
+}

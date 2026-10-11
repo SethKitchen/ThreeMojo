@@ -1,0 +1,24 @@
+{
+  "pause_request_file": "invariant-input-diagnostic-v19.pause",
+  "phase": "invariant-input-diagnostic-v19",
+  "scope": "Single explicitly authorized diagnostic-only profile after failed original10s v19 cold command.28s inner/30s outer collection does not change maintained qualification limits; source remains unchanged. Raw code identities retained, stop after this diagnostic even if censored.",
+  "seal": "CANDIDATE-V19-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19",
+  "source_seal_sha256": "8985c71b586bf5a8b8e7b7ddc21ad9c61be72f416da9b5d06d8e5c5901c2ae4e",
+  "stages": [
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/profile_invariant_child_v19.py",
+        "{evidence}",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v19",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/invariant-profile-command-v19.json"
+      ],
+      "label": "bounded-complete-cost-profile",
+      "seconds": 30
+    }
+  ],
+  "window_seconds": 300
+}
