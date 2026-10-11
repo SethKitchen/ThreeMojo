@@ -1,0 +1,153 @@
+{
+  "files": [
+    {
+      "bytes": 5018,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "0316172642ff42051fc3188a23a37606a5a52b8e6e6680ec084689420de8e9a4"
+    },
+    {
+      "bytes": 25439,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "61779da92e185f6d6dc5d0d8313401597cd31a0d1e4ec5937586bbe782f3bca2"
+    },
+    {
+      "bytes": 1863,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/README.md",
+      "path": "README.md",
+      "sha256": "677d755a88f8a3176b60e2ea420a84be1ee5da575d3f69815a4a11b308283a79"
+    },
+    {
+      "bytes": 8386,
+      "kind": "derived-passing-eight-method-distinct-mechanism-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "fbe7b2b43327090a1f407e2677958199eb55d2417e7c38291c3ba031cd5c1b1a"
+    },
+    {
+      "bytes": 4392,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-mechanisms-v28/RESULT.json",
+      "path": "actual/distinct-mechanisms-v28/RESULT.json",
+      "sha256": "ce78d86a6c5d8bb4c5821b6f93f55c86849a8e295b66e6411904d1ba43aba4c5"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-mechanisms-v28/SDK-AFTER.json",
+      "path": "actual/distinct-mechanisms-v28/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-mechanisms-v28/SDK-BEFORE.json",
+      "path": "actual/distinct-mechanisms-v28/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-mechanisms-v28/WINDOW-START.json",
+      "path": "actual/distinct-mechanisms-v28/WINDOW-START.json",
+      "sha256": "e8a8fa43eeb8ff655499a3a41f8091396831cc2efd32ff8b804c1c112940b70e"
+    },
+    {
+      "bytes": 2699,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-mechanisms-v28/normal-distinct-mechanisms.log",
+      "path": "actual/distinct-mechanisms-v28/normal-distinct-mechanisms.log",
+      "sha256": "25fef90c4c4ae91af6ab75fa760e1bb784d14aee8449d996dd39990c7bdd26b5"
+    },
+    {
+      "bytes": 2699,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-mechanisms-v28/optimized-distinct-mechanisms.log",
+      "path": "actual/distinct-mechanisms-v28/optimized-distinct-mechanisms.log",
+      "sha256": "d3abb133f63dff0ef54abbf0eac2a12c387273768b648e9725d1158c62eeb78b"
+    },
+    {
+      "bytes": 6089,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/actual/distinct-negative-mechanism-prerequisites-v28.json",
+      "path": "actual/distinct-negative-mechanism-prerequisites-v28.json",
+      "sha256": "2df82dfe2f5d5c189db62f694d3a4774760fc7a02dcdc7c7a266e489e740c28f"
+    },
+    {
+      "bytes": 587421,
+      "kind": "lossless-original-passing-receipts-full-raw-logs-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "6c1dd153e3025cff3452a2b048384bfcbfd36dccf121395677c2ef7d33cc58a4"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419528,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596"
+    },
+    {
+      "bytes": 17072,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "d3b1e05667a9d64a9b3f23bcb553ecda4ae65911c4cfac4576e90cd7dc2d5e31"
+    },
+    {
+      "bytes": 21635,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/build_distinct_mechanisms_v28_packet.py",
+      "path": "reproduce/build_distinct_mechanisms_v28_packet.py",
+      "sha256": "2f081849e5649e3474c4ca58aaccf641c038daf077fc18991628a62c63139325"
+    },
+    {
+      "bytes": 3151,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/distinct-mechanisms-v28.json",
+      "path": "reproduce/distinct-mechanisms-v28.json",
+      "sha256": "59ec72d2ef144c17c335b9714be73cb554c58b9196486f3ae222f1d34880a531"
+    },
+    {
+      "bytes": 7101,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/distinct-mechanisms-v28.supervisor.log",
+      "path": "reproduce/distinct-mechanisms-v28.supervisor.log",
+      "sha256": "5ce852a9d94fc8f403baae39c8ec70bbd9d2d839edde309344240ebb3497dfa7"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1797,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2"
+    },
+    {
+      "bytes": 180754,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-distinct-mechanisms-v28-packet/reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9"
+    }
+  ],
+  "schema": 1,
+  "scope": "Eight selected distinct-mechanism methods passed in normal and optimized modes: sixteen method executions, zero skips, eighteen source-defined fresh-owner subcases per mode. No complete 42-method suite, full Python matrix, native coverage, hosted CI or overall completion claim."
+}

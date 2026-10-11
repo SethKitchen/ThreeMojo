@@ -1,0 +1,103 @@
+{
+  "all_stages_returncode_zero": true,
+  "any_stage_timed_out": false,
+  "console_binding_limit": "Original supervisor console stage records precede later test_count/expected_tests/skipped_test_count annotations; final JSON includes them. No console output is reconstructed.",
+  "evidence_policy": "Ordinary original receipts/logs/config, saved source-evidence prerequisite audit and exact source bytes only. No private review/design notes, unexecuted proposals, candidate edits, reruns, native execution or uploads.",
+  "exact_frozen_source_manifest_paths": 31,
+  "executed_test_path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+  "executed_test_sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+  "late_finalizer_boundary": "The prerequisite receipt did not enumerate Map proof IDs. The preserved late-finalizer negative asserts all genuine guarded Map proof IDs plus the construction proof before its mutation; that method passed both modes. No separate proof-ID runtime report is fabricated.",
+  "method_executions": 16,
+  "modes": [
+    {
+      "elapsed_seconds": 85.69784786600212,
+      "log_bytes": 2699,
+      "log_sha256": "25fef90c4c4ae91af6ab75fa760e1bb784d14aee8449d996dd39990c7bdd26b5",
+      "method_executions": 8,
+      "method_names": [
+        "BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof"
+      ],
+      "mode": "normal",
+      "returncode": 0,
+      "skips": 0,
+      "source_defined_owner_subcases": 18,
+      "timed_out": false
+    },
+    {
+      "elapsed_seconds": 88.70138096799928,
+      "log_bytes": 2699,
+      "log_sha256": "d3abb133f63dff0ef54abbf0eac2a12c387273768b648e9725d1158c62eeb78b",
+      "method_executions": 8,
+      "method_names": [
+        "BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults",
+        "BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof"
+      ],
+      "mode": "optimized",
+      "returncode": 0,
+      "skips": 0,
+      "source_defined_owner_subcases": 18,
+      "timed_out": false
+    }
+  ],
+  "other_34_methods_selected": false,
+  "prerequisite_audit_sha256": "2df82dfe2f5d5c189db62f694d3a4774760fc7a02dcdc7c7a266e489e740c28f",
+  "qualification_limit": "The other34 methods were not selected in this phase. This does not establish a full Python matrix, native coverage, hosted CI or overall completion.",
+  "remaining_owned_descendants": [],
+  "reproduction_boundary": "Includes all thirteen phase files, actual config/console/supervisor, full source/SDK seals, all31 frozen manifest source paths and SDK identity support. The full unchanged repository and SDK executable image are not distributed.",
+  "schema": 1,
+  "scope": "Eight selected distinct-mechanism methods passed in normal and optimized modes: sixteen method executions, zero skips, eighteen source-defined fresh-owner subcases per mode. No complete 42-method suite, full Python matrix, native coverage, hosted CI or overall completion claim.",
+  "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "selected_method_names": [
+    "BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults",
+    "BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof"
+  ],
+  "separate_positive_evidence_reference": {
+    "limit": "The exact same-source positive sweep and full raw positive logs remain in their separate packet. The original saved prerequisite audit is included unchanged here. Positive outcomes are not relabeled as negative-test receipts.",
+    "packet_manifest_sha256": "4c2fcc460c4c5f5f90e5ad97af0b790a930752603db5cc6cb86ceaca299d227b",
+    "packet_path": "validation-evidence-reached-bindings-v28-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+    "raw_members_included_here": false
+  },
+  "skips": 0,
+  "source_defined_owner_subcases_per_mode": 18,
+  "source_defined_subcase_counts_by_method": {
+    "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract": 3,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults": 5,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics": 2,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults": 4,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal": 1,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof": 1,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication": 1,
+    "BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes": 1
+  },
+  "source_manifest_sha256": "d3b1e05667a9d64a9b3f23bcb553ecda4ae65911c4cfac4576e90cd7dc2d5e31",
+  "source_manifest_time_boundary": "The reviewed source_only_unqualified 31-path manifest is preserved byte-exact, including its earlier focused positive method label. COMMAND-RECEIPT-SEAL.json and original config/logs identify the later eight-method execution in this packet.",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "source_test_methods": 42,
+  "stage_cap_seconds": 1800,
+  "status": "PASSED_V28_DISTINCT_MECHANISMS_EIGHT_METHODS_ONLY",
+  "stream_capture": "Both full original merged stdout/stderr logs are preserved byte-exact, including warnings. Separate streams are not invented.",
+  "subcase_boundary": "The original logs persist eight unittest method outcomes per mode. The eighteen owner subcases are defined by the preserved source and enforced within passing methods; no independent per-subcase runtime receipts are invented.",
+  "unique_executed_methods": 8,
+  "whole_window_cap_seconds": 10800,
+  "window_elapsed_seconds": 179.0562330169996
+}

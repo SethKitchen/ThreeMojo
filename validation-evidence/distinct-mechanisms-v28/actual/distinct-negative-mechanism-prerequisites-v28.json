@@ -1,0 +1,141 @@
+{
+  "schema": 1,
+  "verdict": "Exact v28 positive receipts satisfy prerequisites for the reviewed eight methods and 18 fresh-owner subcases in both modes.",
+  "scope": "Read-only receipt/source review. No candidate changes or negative execution by the author. This is not negative-test, full-matrix, or native qualification.",
+  "reviewed_at_utc": "2026-10-11T05:24:18Z",
+  "result_path": "evidence/reached-bindings-v28/RESULT.json",
+  "source_seal_path": "CANDIDATE-V28-SOURCE-SEAL.json",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "fragment_path": "distinct-negative-mechanism-proposal-v25/negative_mechanism_fragment.py",
+  "fragment_sha256": "7d4bca4d573f2708b71ce87a09309c83170be93211bd4d188db8887663f79a44",
+  "candidate_test_path": "candidate-v28/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+  "candidate_negative_class_literal_equals_reviewed_fragment_class": true,
+  "parsing": "Each OPERATION_REACHED_BINDINGS payload was parsed with JSONDecoder.raw_decode, preserving the final R-tree payload despite trailing unittest output.",
+  "terminal_checks": {
+    "sequence_completed": true,
+    "failure": null,
+    "source_seal_unchanged": true,
+    "sdk_identity_unchanged": true,
+    "remaining_owned_descendants": [],
+    "both_stages_returncode": 0,
+    "both_stages_test_count": 1,
+    "both_stages_skipped_test_count": 0,
+    "both_stages_timed_out": false
+  },
+  "raw_logs": [
+    {
+      "mode": "normal",
+      "path": "evidence/reached-bindings-v28/normal-reached-bindings-v28.log",
+      "sha256": "5816cb13afc8e534c4418b1027cf59ca9d163b200759e616d272f157f8d3a616"
+    },
+    {
+      "mode": "optimized",
+      "path": "evidence/reached-bindings-v28/optimized-reached-bindings-v28.log",
+      "sha256": "1b2da531ecf82033546f4c093673652f4a856842af5aa31ef7dbebaa98034b17"
+    }
+  ],
+  "identical_target_counts_in_each_mode": {
+    "reached_consumed_site_union": 108,
+    "pending_accepted_curve_rounded_line": {
+      "site": "tools/carla_lane_oracle/accepted_successor_contracts.py:117:1",
+      "path": "extensions/carla/curve_rounded_line.mojo",
+      "mode": "default",
+      "phase": "pending",
+      "count": 1
+    },
+    "grouped_y": {
+      "site": "tools/carla_lane_oracle/grouped_y_finiteness_contracts.py:26:1",
+      "mode": "default",
+      "phase": "active",
+      "path_counts": {
+        "extensions/carla/spiral_grouped_roundoff_proof.mojo": 12,
+        "extensions/carla/curve_interval.mojo": 12,
+        "extensions/carla/curve_trig.mojo": 12,
+        "extensions/carla/geometry.mojo": 12,
+        "extensions/carla/curve_sum2.mojo": 12
+      }
+    },
+    "raw_cut_json": {
+      "site": "tools/carla_lane_oracle/raw_cut_inverse_contracts.py:53:1",
+      "path": "tools/carla_lane_oracle/curve-support-dispatch-migration.json",
+      "mode": "default",
+      "phase": "active",
+      "count": 5
+    },
+    "explicit_utf8_pins": {
+      "site": "tools/carla_lane_oracle/source_contracts.py:180:1",
+      "path": "tools/carla_lane_oracle/runtime-source-pins.json",
+      "mode": "physical",
+      "phase": "active",
+      "count": 6
+    },
+    "explicit_utf8_group": {
+      "site": "tools/carla_lane_oracle/source_contracts.py:207:1",
+      "path": "extensions/carla/curve_sum2.mojo",
+      "mode": "physical",
+      "phase": "active",
+      "count": 4
+    },
+    "borrowed_map": {
+      "route": "invariant",
+      "matching_same_lease_ids": [
+        0,
+        2,
+        4
+      ],
+      "local_supplied_read_present_on_each": true,
+      "all_four_byte_positions_present_on_each": true,
+      "byte_position_ids": [
+        "tools/carla_lane_oracle/cache_key_contracts.py:92:1",
+        "tools/carla_lane_oracle/seed_count_contracts.py:542:1",
+        "tools/carla_lane_oracle/seed_count_contracts.py:564:1",
+        "tools/carla_lane_oracle/cache_key_contracts.py:132:1"
+      ],
+      "local_supplied_current_address": "cache_key_contracts.inventory:103",
+      "direct_caller_chain": [
+        "cache_key_contracts.verify:232",
+        "cache_key_contracts.predecessor_source:246",
+        "cache_key_contracts.reviewed_text:270",
+        "coverage_followup_contracts.verify:108",
+        "coverage_followup_contracts.accepts_predecessor_source:128",
+        "coverage_invariant_contracts.verify:96"
+      ]
+    },
+    "map_production_discovery_consumption": {
+      "site": "tools/carla_lane_oracle/seed_count_contracts.py:484:1",
+      "owner": "verify_score_caller_inventory",
+      "path": "extensions/carla/cameras.mojo",
+      "mode": "default",
+      "phase": "active",
+      "count": 9
+    },
+    "map_known_discovery_consumption": {
+      "site": "tools/coverage_loop_proofs.py:1029:1",
+      "owner": "_construction_boundary_callers",
+      "path": "extensions/carla/cameras.mojo",
+      "mode": "default",
+      "phase": "active",
+      "count": 1
+    },
+    "map_finalizer": {
+      "site": "tools/carla_lane_oracle/full_audit_cleanup_contracts.py:1003:1",
+      "path": "extensions/carla/road.mojo",
+      "mode": "bytes",
+      "phase": "outer_finalizer",
+      "count": 1
+    },
+    "map_streams": {
+      "queued_publish_replay": 62,
+      "live_original_frame": 8
+    },
+    "rtree_streams": {
+      "live_original_frame": 1
+    }
+  },
+  "interpretation_limits": [
+    "Discovery prerequisites combine actual active original-loop consumption with reviewed source attribution to the original production/known generators; the positive JSON is not a separate discovery-hook fault test.",
+    "The positive receipt does not enumerate complete Map proof IDs. The negative must satisfy its existing source-bound pre-mutation assertion that all guarded Map proof IDs and construction-geometry-boundary-list already exist.",
+    "The same-lease receipt records presence and ancestry. The fourth-position negative must still prove the three preceding successful original returns on that exact lease.",
+    "Exact ancestry, one fired injection, original error/cause envelopes, sticky failures where required, and disposal assertions remain mandatory in the negatives."
+  ]
+}

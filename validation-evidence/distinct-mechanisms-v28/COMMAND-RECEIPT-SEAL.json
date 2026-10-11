@@ -1,0 +1,92 @@
+{
+  "config_sha256": "59ec72d2ef144c17c335b9714be73cb554c58b9196486f3ae222f1d34880a531",
+  "configured_but_unrun_stage_labels": [],
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phase": "distinct-mechanisms-v28",
+  "prerequisite_audit_sha256": "2df82dfe2f5d5c189db62f694d3a4774760fc7a02dcdc7c7a266e489e740c28f",
+  "result_sha256": "ce78d86a6c5d8bb4c5821b6f93f55c86849a8e295b66e6411904d1ba43aba4c5",
+  "schema": 1,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stages": [
+    {
+      "stage": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+          "-v",
+          "-f",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "expected_tests": 8,
+        "label": "normal-distinct-mechanisms",
+        "leader_reaped": true,
+        "log_sha256": "25fef90c4c4ae91af6ab75fa760e1bb784d14aee8449d996dd39990c7bdd26b5",
+        "pgid": 8,
+        "pid": 8,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 85.69784786600212,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T05:24:42.427226+00:00",
+        "test_count": 8,
+        "timed_out": false
+      },
+      "stage_result_sha256": "e8c145861f1db8a321c39f7ac2f858f67d942ad35f6e78c2b24d2fb72f64629e",
+      "start_sha256": "4027f35b899b99339e51fbe578397fb55b15bd0e1396e5af764b23bb75cc70a6"
+    },
+    {
+      "stage": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+          "-v",
+          "-f",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults",
+          "BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "expected_tests": 8,
+        "label": "optimized-distinct-mechanisms",
+        "leader_reaped": true,
+        "log_sha256": "d3abb133f63dff0ef54abbf0eac2a12c387273768b648e9725d1158c62eeb78b",
+        "pgid": 9,
+        "pid": 9,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 88.70138096799928,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T05:26:09.332391+00:00",
+        "test_count": 8,
+        "timed_out": false
+      },
+      "stage_result_sha256": "5a99cb73d41316026a0a95f50d1aba6ccef817ba76196ce39f90891eeccb0684",
+      "start_sha256": "3eee4411b2a40dc991ab2136c7c4f0c25dafae2978af7b3bbbea659cc444f7b7"
+    }
+  ],
+  "supervisor_console_sha256": "5ce852a9d94fc8f403baae39c8ec70bbd9d2d839edde309344240ebb3497dfa7"
+}

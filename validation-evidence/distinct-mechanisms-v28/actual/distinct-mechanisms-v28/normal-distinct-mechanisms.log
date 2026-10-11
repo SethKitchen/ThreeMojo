@@ -1,0 +1,21 @@
+test_distinct_pending_observation_reconciles_at_real_publication (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_pending_observation_reconciles_at_real_publication) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_grouped_y_batch_reads_all_five_before_observation_refusal) ... ok
+test_distinct_raw_cut_second_json_text_binds_original_checked_bytes (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_raw_cut_second_json_text_binds_original_checked_bytes) ... ok
+test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_explicit_utf8_pins_and_group_refuse_before_semantics) ... ok
+test_distinct_borrowed_map_observations_delegate_all_five_faults (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_observations_delegate_all_five_faults) ... ok
+test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_borrowed_map_local_supplied_text_preserves_its_own_contract) ... ok
+test_distinct_fresh_production_and_known_discoveries_refuse_four_faults (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_fresh_production_and_known_discoveries_refuse_four_faults) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_distinct_late_map_finalizer_discards_every_real_completed_proof (__main__.BoundedOwnerDistinctMechanismControls.test_distinct_late_map_finalizer_discards_every_real_completed_proof) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 84.978s
+
+OK
