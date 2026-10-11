@@ -10,6 +10,8 @@ from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from extensions.humanoid.skeleton.leg.knee.dimensions import (
+    _yield,
+    _yield_tube,
     ARTICULAR_CARTILAGE,
     LATERAL_COLLATERAL,
     LATERAL_MENISCUS,
@@ -325,6 +327,38 @@ def test_cartilage_landmarks_are_inside() raises:
     var back = Vector3(0, 0, -1)
     var reach = dims.patellar_thickness.value
     assert_true(_first_inside(cartilage, dims.patellar_cartilage, back, reach))
+
+
+def test_knee_subtraction_removes_buried_zero_sets() raises:
+    var dims = knee_dimensions(Length(6.0, FOOT), MALE)
+    var cartilage = CartilageField(dims)
+    var low = dims.femoral_medial_cartilage
+    var high = low + Vector3(0, 2 * dims.femoral_thickness.value, 0)
+    assert_true(cartilage.lens_distance(low) < 0)
+    assert_true(cartilage.lens_distance(high) > 0)
+    for _ in range(40):
+        var middle = (low + high) * Float32(0.5)
+        if cartilage.lens_distance(middle) < 0:
+            low = middle
+        else:
+            high = middle
+    # One float32 step across a buried lens surface must not restore it.
+    for p in [low, high]:
+        var bone = cartilage.bones.femur.distance(p - dims.femur_origin)
+        assert_true(bone < 0)
+        assert_true(cartilage.distance(p) >= -bone)
+
+    var p = dims.femoral_medial_cartilage
+    var lens = cartilage.lens_distance(p)
+    assert_true(lens < 0)
+    var meniscus = MeniscusField(dims, MEDIAL_MENISCUS)
+    var tube = meniscus.tube_distance(meniscus.p2)
+    assert_true(tube < 0)
+    for value in [Float32(-0.01), Float32(0), Float32(0.000001)]:
+        assert_equal(_yield(value, cartilage, p), max(value, -lens))
+        assert_equal(
+            _yield_tube(value, meniscus, meniscus.p2), max(value, -tube)
+        )
 
 
 def test_menisci_and_collaterals_are_inside_at_landmarks() raises:
