@@ -147,6 +147,6 @@ This extension draws a CPU still. It is not a shared scene-water object or a val
 
 `draw` shades and grades disjoint runs of rows on every logical core. Each pixel keeps the serial arithmetic, so the picture does not change. `compose` runs its depth test first, by disjoint runs of rows. It then shades only the pixels that pass, in parallel.
 
-Set `WaterScene.workers` to limit the threads. Zero, the default, uses every logical core. One runs each pass serially. Every count draws the same picture.
+Set `WaterScene.workers` to control how each pass is cut into tasks. Zero, the default, sizes the cut for every logical core. One runs each pass serially, as one task. A larger count makes more tasks, but the shared thread pool decides how many run at once, so the count is not a thread limit. Every count draws the same picture.
 
 On an AMD Ryzen 9 5900X, a 1920 x 1080 `draw` takes about 1.7 seconds. On one thread it took about 18 seconds. One `advance` takes about 12 milliseconds. The CPU path therefore cannot reach 60 frames per second at that size. See [the water cost report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/water-cost-300.md) and `bench/water_bench.mojo`.

@@ -284,11 +284,12 @@ def _depth_rows(
 def _row_tasks(workers: Int, per_worker: Int, height: Int) -> Int:
     # How many runs of rows a pass is cut into. Zero or fewer workers means
     # every logical core. One worker runs one task over every row: the
-    # serial pass, which a test compares with the parallel one.
+    # serial pass, which a test compares with the parallel one. Clamp to
+    # the rows before multiplying, so a huge count cannot overflow.
     var threads = workers if workers > 0 else num_logical_cores()
     if threads == 1:
         return 1
-    return min(threads * per_worker, height)
+    return min(min(threads, height) * per_worker, height)
 
 
 def _radiance_image(
@@ -1307,10 +1308,12 @@ struct WaterScene(Movable):
     var sun: Vector3
     """The unit direction toward the sun. Y is up. See `set_sun`."""
     var workers: Int
-    """The threads that the row passes use. Zero, the default, means every
-    logical core. One runs each pass serially. Every count draws the same
-    image, because each pixel has one writer and the serial arithmetic. The
-    glare pass is always serial."""
+    """How the row passes are cut into tasks. Zero, the default, sizes the
+    cut for every logical core. One runs each pass serially, as one task. A
+    larger count cuts the rows into more tasks, but the shared thread pool
+    decides how many run at once, so it is not a thread limit. Every count
+    draws the same image, because each pixel has one writer and the serial
+    arithmetic. The glare pass is always serial."""
     var _spectrum: ComplexField
     var _ripples: RippleField
     var _glare: Optional[GlareKernels]

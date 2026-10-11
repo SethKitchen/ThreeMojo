@@ -16,7 +16,7 @@ Hardware: NVIDIA TITAN RTX (24 GiB, driver 591.86) and AMD Ryzen 9 5900X (12 cor
 
 ## Results
 
-The depth pass, the highlight and blur passes, and the grade-and-write pass run disjoint runs of rows on every logical core ([issue 733](https://github.com/SethKitchen/ThreeMojo/issues/733)). Each pixel has one writer and the serial arithmetic. `WaterScene.workers` sets the thread count, and one worker runs each pass as one task over every row. A test draws `FRAME`, `LINEAR` and `GLARE` and composes a scene on one worker and on every core. It requires the same pixels, depths and drawn count. Other tests compare each pass with one serial pass bit for bit. The glare pass stays serial.
+The depth pass, the highlight and blur passes, and the grade-and-write pass run disjoint runs of rows on every logical core ([issue 733](https://github.com/SethKitchen/ThreeMojo/issues/733)). Each pixel has one writer and the serial arithmetic. `WaterScene.workers` sets how each pass is cut into tasks, not a thread limit. One worker runs each pass as one task over every row. A test draws `FRAME`, `LINEAR` and `GLARE` and composes a scene on one worker and on every core. It requires the same pixels, depths and drawn count. Other tests compare each pass with one serial pass bit for bit. The glare pass stays serial.
 
 Radiance only, in milliseconds:
 

@@ -1744,6 +1744,26 @@ def test_one_worker_draws_and_composes_what_every_core_does() raises:
             kept += 1
     assert_equal(changed, drawn)
     assert_true(drawn > 0 and kept > 0)
+    # A huge count is clamped to the rows before it is multiplied, so it
+    # cannot overflow into no tasks. The picture is the serial one.
+    var huge = _scene(Duration(5.0, SECOND))
+    huge.workers = 1 << 61
+    huge.advance(Duration(1.0 / 60.0, SECOND), True)
+    var reference = _scene(Duration(5.0, SECOND))
+    reference.workers = 1
+    reference.advance(Duration(1.0 / 60.0, SECOND), True)
+    _assert_same_picture(
+        huge.draw(width, height, FRAME, True, stones, pitch),
+        reference.draw(width, height, FRAME, True, stones, pitch),
+    )
+    var wide = Framebuffer(width, height, Color(0, 0, 0))
+    var serial_image = Framebuffer(width, height, Color(0, 0, 0))
+    assert_equal(
+        huge.compose(wide, camera, Length(0.0, METER), stones),
+        reference.compose(serial_image, camera, Length(0.0, METER), stones),
+    )
+    assert_true(wide.pixels == serial_image.pixels)
+    assert_true(wide.depth == serial_image.depth)
 
 
 def main() raises:
