@@ -345,14 +345,20 @@ def _cervical(mut sweeps: List[Sweep], h: HeadDimensions, index: Int):
         )
         arch.append(joint)
         sweeps.append(tube(arch, h.cm(0.3), h.cm(0.28)))
+        # The rounded pillar ends reach the body's endplane levels and
+        # stop there. Neighboring pillars then keep the disc's height
+        # apart, as the bodies do. Longer ends met the next vertebra's
+        # pillar in a common interior (#595).
+        var pillar_r = h.cm(0.45)
+        var pillar_half = 0.5 * tall - pillar_r
         var pillar = Sweep(Vector3(1, 0, 0))
         pillar.round(
-            Vector3(sign * h.cm(1.55), c.y - 0.5 * tall, root - h.cm(0.6)),
-            h.cm(0.45),
+            Vector3(sign * h.cm(1.55), c.y - pillar_half, root - h.cm(0.6)),
+            pillar_r,
         )
         pillar.round(
-            Vector3(sign * h.cm(1.55), c.y + 0.5 * tall, root - h.cm(0.6)),
-            h.cm(0.45),
+            Vector3(sign * h.cm(1.55), c.y + pillar_half, root - h.cm(0.6)),
+            pillar_r,
         )
         sweeps.append(pillar^)
         var reach_out = h.cm(1.5)

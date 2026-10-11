@@ -42,14 +42,23 @@ from extensions.humanoid.skeleton.leg.knee.mass import (
     medial_collateral_mass,
     medial_meniscus_mass,
 )
-from extensions.humanoid.skeleton.leg.femur.dimensions import femur_dimensions
+from extensions.humanoid.skeleton.field import DistanceField
+from extensions.humanoid.skeleton.leg.femur.dimensions import (
+    FemurField,
+    femur_dimensions,
+)
 from extensions.humanoid.skeleton.leg.fibula.dimensions import (
+    FibulaField,
     fibula_dimensions,
 )
 from extensions.humanoid.skeleton.leg.patella.dimensions import (
+    PatellaField,
     patella_dimensions,
 )
-from extensions.humanoid.skeleton.leg.tibia.dimensions import tibia_dimensions
+from extensions.humanoid.skeleton.leg.tibia.dimensions import (
+    TibiaField,
+    tibia_dimensions,
+)
 from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
@@ -83,7 +92,7 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from materials.material import DOUBLE_SIDE, PHONG
 from math.vector3 import Vector3
-from std.math import inf, nan
+from std.math import inf, max, min, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -278,35 +287,61 @@ def test_left_knee_mirrors_the_right() raises:
     assert_true(right.lcl_fibula.x > 0)
 
 
+def _first_inside[
+    F: DistanceField
+](field: F, start: Vector3, direction: Vector3, reach: Float32) -> Bool:
+    """Return True if `field` is negative at a 0.1 mm step along a ray."""
+    var steps = Int(reach / Float32(0.0001))
+    for index in range(steps + 1):
+        if field.distance(start + direction * (Float32(index) * 0.0001)) < 0:
+            return True
+    return False
+
+
 def test_cartilage_landmarks_are_inside() raises:
     var dims = knee_dimensions(Length(6.0, FOOT), MALE)
+    var cartilage = CartilageField(dims)
+    # The authored lens holds its landmarks. The solid is the lens
+    # outside the bones, so a landmark inside a condyle is not cartilage.
+    assert_true(cartilage.lens_distance(dims.femoral_medial_cartilage) < 0)
+    assert_true(cartilage.lens_distance(dims.tibial_lateral_cartilage) < 0)
+    assert_true(cartilage.lens_distance(dims.patellar_cartilage) < 0)
+    var down = Vector3(0, -1, 0)
+    var thick = dims.femoral_thickness.value
     assert_true(
-        knee_distance(dims, ARTICULAR_CARTILAGE, dims.femoral_medial_cartilage)
-        < 0
+        _first_inside(cartilage, dims.femoral_medial_cartilage, down, thick)
     )
     assert_true(
-        knee_distance(dims, ARTICULAR_CARTILAGE, dims.tibial_lateral_cartilage)
-        < 0
+        _first_inside(
+            cartilage, dims.tibial_lateral_cartilage, Vector3(0, 1, 0), thick
+        )
     )
     assert_true(knee_distance(dims, ARTICULAR_CARTILAGE, Vector3(10, 0, 0)) > 0)
     assert_true(
         knee_occupancy(dims, ARTICULAR_CARTILAGE, Vector3(10, 0, 0))
         == SOFT_EMPTY
     )
-    assert_true(
-        knee_occupancy(dims, ARTICULAR_CARTILAGE, dims.patellar_cartilage)
-        == SOFT_FILL
-    )
+    # Patellar cartilage lies behind the patella, toward the trochlea.
+    var back = Vector3(0, 0, -1)
+    var reach = dims.patellar_thickness.value
+    assert_true(_first_inside(cartilage, dims.patellar_cartilage, back, reach))
 
 
 def test_menisci_and_collaterals_are_inside_at_landmarks() raises:
     var dims = knee_dimensions(Length(6.0, FOOT), MALE)
     var field = MeniscusField(dims, MEDIAL_MENISCUS)
-    assert_true(field.distance(field.p2) < 0)
-    assert_true(knee_distance(dims, MEDIAL_MENISCUS, field.p2) < 0)
+    assert_true(field.tube_distance(field.p2) < 0)
     var lateral = MeniscusField(dims, LATERAL_MENISCUS)
-    assert_true(lateral.distance(lateral.p2) < 0)
-    assert_true(knee_distance(dims, LATERAL_MENISCUS, lateral.p2) < 0)
+    assert_true(lateral.tube_distance(lateral.p2) < 0)
+    # Each meniscus keeps tissue outside the bones and the cartilage.
+    var reach = dims.medial_meniscus_radial.value
+    assert_true(_first_inside(field, field.p2, Vector3(-1, 0, 0), reach))
+    assert_true(_first_inside(lateral, lateral.p2, Vector3(1, 0, 0), reach))
+    for p in [field.p0, field.p2, lateral.p0, lateral.p2]:
+        assert_equal(knee_distance(dims, MEDIAL_MENISCUS, p), field.distance(p))
+        assert_equal(
+            knee_distance(dims, LATERAL_MENISCUS, p), lateral.distance(p)
+        )
     var mcl = CollateralField(dims, MEDIAL_COLLATERAL)
     var mid = Vector3(
         0.5 * (mcl.a.x + mcl.b.x),
@@ -323,6 +358,58 @@ def test_menisci_and_collaterals_are_inside_at_landmarks() raises:
     assert_true(knee_distance(dims, LATERAL_COLLATERAL, lmid) < 0)
 
 
+def _check_knee_interfaces(side: BodySide) raises:
+    """Sample a 3 mm grid over the knee tissues for any common interior."""
+    var dims = knee_dimensions(Length(6.0, FOOT), MALE, side)
+    var femur = FemurField(dims.femur)
+    var tibia = TibiaField(dims.tibia)
+    var fibula = FibulaField(dims.fibula)
+    var patella = PatellaField(dims.patella)
+    var cartilage = CartilageField(dims)
+    var medial = MeniscusField(dims, MEDIAL_MENISCUS)
+    var lateral = MeniscusField(dims, LATERAL_MENISCUS)
+    var mcl = CollateralField(dims, MEDIAL_COLLATERAL)
+    var lcl = CollateralField(dims, LATERAL_COLLATERAL)
+    var low = Vector3(
+        min(cartilage.low.x, min(mcl.low.x, lcl.low.x)),
+        min(cartilage.low.y, min(mcl.low.y, lcl.low.y)),
+        min(cartilage.low.z, min(mcl.low.z, lcl.low.z)),
+    )
+    var high = Vector3(
+        max(cartilage.high.x, max(mcl.high.x, lcl.high.x)),
+        max(cartilage.high.y, max(mcl.high.y, lcl.high.y)),
+        max(cartilage.high.z, max(mcl.high.z, lcl.high.z)),
+    )
+    var step = Float32(0.003)
+    var tissue_points = 0
+    for iz in range(Int((high.z - low.z) / step)):
+        for iy in range(Int((high.y - low.y) / step)):
+            for ix in range(Int((high.x - low.x) / step)):
+                var p = low + Vector3(
+                    (Float32(ix) + 0.5) * step,
+                    (Float32(iy) + 0.5) * step,
+                    (Float32(iz) + 0.5) * step,
+                )
+                var c = cartilage.distance(p) < 0
+                var m = medial.distance(p) < 0 or lateral.distance(p) < 0
+                var l = mcl.distance(p) < 0 or lcl.distance(p) < 0
+                if not (c or m or l):
+                    continue
+                tissue_points += 1
+                assert_false(femur.distance(p - dims.femur_origin) < 0)
+                assert_false(tibia.distance(p - dims.tibia_origin) < 0)
+                assert_false(fibula.distance(p - dims.fibula_origin) < 0)
+                assert_false(patella.distance(p - dims.patella_origin) < 0)
+                assert_false(c and (m or l))
+                assert_false(m and l)
+    assert_true(tissue_points > 0)
+
+
+def test_knee_tissues_share_no_interior_with_bones_or_earlier_tissues() raises:
+    _check_knee_interfaces(RIGHT)
+    _check_knee_interfaces(LEFT)
+
+
 def test_meniscus_and_collateral_fields_refuse_the_wrong_part() raises:
     var dims = knee_dimensions(Length(6.0, FOOT), MALE)
     with assert_raises():
@@ -336,7 +423,7 @@ def test_narrow_meniscus_clamps_the_ellipse() raises:
     dims.medial_meniscus_ap = Length(4.0, MILLIMETER)
     var field = MeniscusField(dims, MEDIAL_MENISCUS)
     assert_true(field.r2 > 0)
-    assert_true(field.distance(field.p0) < 0)
+    assert_true(field.tube_distance(field.p0) < 0)
 
 
 def test_gradient_at_a_far_point_points_out() raises:
