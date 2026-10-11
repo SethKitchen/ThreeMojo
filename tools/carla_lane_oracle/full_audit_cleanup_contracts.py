@@ -37,11 +37,15 @@ try:
         from . import sum2_guard_contracts as guard
         from . import consumer_successor_ledger as consumer_ledger
         from . import map_station_contracts as station
+        from . import runtime_view_contracts as runtime_view
+        from . import shared_helper_contracts as shared_helpers
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
         import consumer_successor_ledger as consumer_ledger
         import map_station_contracts as station
+        import runtime_view_contracts as runtime_view
+        import shared_helper_contracts as shared_helpers
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -122,7 +126,9 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/map_station_contracts.py': '16396cc2c491b4c47fb929c429bda7ad3de7d93b13281ed76ce9407c3293329c',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/runtime_view_contracts.py': '0afad70cdd83529e89550aaca0c1a469e2b25ca963a90e2b7b17e1a2fd324193',
+ 'tools/carla_lane_oracle/shared_helper_contracts.py': '70b070d0bd5117b146a71470a46cb7a02c7fc31dfac1a5236eed50faf75b468e',
+ 'tools/carla_lane_oracle/map_station_contracts.py': 'caca22f46767ced3037d839a7941cb73a8ccf816238ad2037e28715f060055b7',
  'tools/carla_lane_oracle/consumer_successor_ledger.py': '8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
@@ -192,7 +198,9 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/sum2_guard_contracts.py',
                  'tools/affected.py', 'tools/cache_key.py',
                  'tools/carla_lane_oracle/consumer_successor_ledger.py',
-                 'tools/carla_lane_oracle/map_station_contracts.py')
+                 'tools/carla_lane_oracle/map_station_contracts.py',
+                 'tools/carla_lane_oracle/shared_helper_contracts.py',
+                 'tools/carla_lane_oracle/runtime_view_contracts.py')
 
 
 def _center_require(ok, message):
@@ -659,7 +667,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station, shared_helpers, runtime_view):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -692,7 +700,7 @@ def _live_function_code(value):
 def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
-               vars(_sibling('cache_key')), vars(consumer_ledger), vars(station))
+               vars(_sibling('cache_key')), vars(consumer_ledger), vars(station), vars(shared_helpers), vars(runtime_view))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -825,7 +833,7 @@ def _native_dependency_inventory(root, *, witnesses, _known=None, _snapshots=Non
     return found
 
 
-def resolver_unshadowed(root, paths):
+def resolver_unshadowed(root, paths, *, render_entries=None):
     """Refuse alternate qualified-module and namespace lookup surfaces.
 
     Every reviewed import begins at a protected top-level namespace. Guard
@@ -833,6 +841,9 @@ def resolver_unshadowed(root, paths):
     entry directory, repository root and supplied include root. Imported-module
     directories are not Mojo lookup roots. An unrelated leaf basename elsewhere
     cannot shadow a qualified import and is not itself a namespace competitor.
+    For the new render helper only, a separately verified source entry census
+    can restrict bare render basenames to actual compiled lookup directories.
+    The default retains the historical conservative rule for every namespace.
     Exact consumed module/prefix coordinates still reject case, alternate
     suffix/package and symlink changes. Only three exact regular wiki files are
     inert. Include roots receive structural checks only: maintained generation
@@ -840,6 +851,10 @@ def resolver_unshadowed(root, paths):
     """
     root = Path(root)
     if not root.is_dir() or not _root_unaliased(root):
+        return False
+    if render_entries is not None and (type(render_entries) is not frozenset
+            or '.' not in render_entries or any(type(path) is not str or not path
+            or Path(path).is_absolute() or '..' in Path(path).parts for path in render_entries)):
         return False
     allowed = set(paths)
     stems = {str(Path(p).with_suffix('')).casefold() for p in allowed}
@@ -852,18 +867,45 @@ def resolver_unshadowed(root, paths):
             relative_dir = _relative_path(Path(folder), root).as_posix()
             directories[:] = [name for name in directories if name not in SKIP
                               and (Path(relative_dir) / name).as_posix() != 'coverage/build']
+            # This is only lexical work on os.walk's builtin POSIX names.
+            # Keep every traversal and every relevant filesystem observation.
+            plain_directory = (os.name == 'posix' and type(root) is PosixPath
+                and type(getattr(root, '_raw_paths', None)) is list
+                and all(type(part) is str for part in root._raw_paths)
+                and type(folder) is str and folder.startswith('/')
+                and all(part not in ('', '.', '..') for part in folder.split('/')[1:])
+                and type(relative_dir) is str
+                and (relative_dir == '.' or all(part not in ('', '.', '..')
+                                               for part in relative_dir.split('/'))))
             for name in directories + files:
-                path = Path(folder) / name
-                relative = _relative_path(path, root).as_posix()
+                plain_name = (plain_directory and type(name) is str
+                    and name not in ('', '.', '..') and '/' not in name
+                    and not name.endswith('.'))
+                if plain_name:
+                    dot = name.rfind('.')
+                    leaf_stem = name[:dot] if dot > 0 else name
+                    plain_name = leaf_stem not in ('.', '..')
+                if plain_name:
+                    prefix = '' if relative_dir == '.' else relative_dir + '/'
+                    relative = prefix + name
+                    stem = (prefix + leaf_stem).casefold()
+                    path = None
+                else:
+                    path = Path(folder) / name
+                    relative = _relative_path(path, root).as_posix()
+                    stem = str(Path(relative).with_suffix('')).casefold()
                 folded = relative.casefold()
-                stem = str(Path(relative).with_suffix('')).casefold()
                 # Namespace roots remain protected at every actual lookup root.
                 scoped_name = name.split('.')[0].casefold()
                 relevant = (folded in stems or folded in prefixes or stem in stems
-                            or stem in prefixes or scoped_name in top
+                            or stem in prefixes or (scoped_name in top
+                                and (scoped_name != 'render' or render_entries is None
+                                     or relative_dir.casefold() in render_entries))
                             or (name == '__init__.mojo' and relative_dir.casefold() in prefixes))
                 if not relevant:
                     continue
+                if path is None:
+                    path = Path(folder) / name
                 if relative in inert and not path.is_symlink() and path.is_file():
                     continue
                 if path.is_symlink():
@@ -877,6 +919,63 @@ def resolver_unshadowed(root, paths):
         return True
     except OSError:
         return False
+
+
+def _render_lookup_args(paths, entries):
+    """Restrict only render's namespace clause with an established entry census."""
+    if not any(path.startswith('render/') for path in paths):
+        return {}
+    require(type(entries) in (tuple, list), 'missing render entry census')
+    return {'render_entries': frozenset(('.', *(path.casefold() for path in entries),
+        *(str(Path(path).parent).casefold() for path in shared_helpers.TESTS)))}
+
+
+def _helper_entry_census(root, *, _operation=None):
+    """Observe actual source bytes that determine the compiled entry contexts."""
+    known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
+             if path.suffix == '.mojo'}
+    _operation_known_paths(root, known, _operation=_operation)
+    image = {}
+    for path in sorted(known):
+        raw = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+        require(type(raw) is bytes, 'render entry source is not physical bytes: ' + path)
+        image[path] = raw
+    entries = tuple(_sibling('affected').entry_directories(
+        {path: _physical_text(raw) for path, raw in image.items()}))
+    return entries, image
+
+
+def _helper_entry_census_finish(root, image, *, _operation=None):
+    """Keep all entry-classifying reads, then finish with a fresh path census."""
+    for path, raw in image.items():
+        actual = _observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+        require(type(actual) is bytes and actual == raw, 'render entry source changed: ' + path)
+    known = {path.as_posix() for path in _sibling('cache_key').input_paths(root)
+             if path.suffix == '.mojo'}
+    _operation_known_paths(root, known, _operation=_operation)
+    require(known == set(image), 'render entry path census changed')
+
+
+def _helper_render_context(root, *, _inputs=None, _operation=None):
+    """Use the actual owned census, or physically establish a historical one."""
+    owner = _inputs if _inputs is not None else _operation
+    if owner is not None and owner._state == 'active':
+        return owner._entries, None
+    raw = _observe_bytes(root, MIGRATION, _regular(root, MIGRATION).read_bytes(),
+                         _operation=_operation)
+    require(sha(raw) == MIGRATION_SHA256, 'render entry authority changed')
+    expected = json.loads(raw, object_pairs_hook=source.unique_keys)['entry_directories']
+    entries, image = _helper_entry_census(root, _operation=_operation)
+    require(list(entries) == expected, 'render compiled entry directories changed')
+    if _operation is not None:
+        require(_operation._state == 'pending', 'invalid render context owner')
+        require(not _operation._known or _operation._known == frozenset(image),
+                'pending render source census changed')
+        require(not _operation._entries or _operation._entries == entries,
+                'pending render entry directories changed')
+        _operation._known = frozenset(image)
+        _operation._entries = entries
+    return entries, image
 
 
 def native_support_mapping(root, *, raw=None):
@@ -912,6 +1011,9 @@ def _cache_verify_frame(frame, *, include_aliases=False):
     main = sys.modules.get('__main__')
     if (frame is not None and main is not None and frame.f_globals is vars(main)
             and type(getattr(main, '__file__', None)) is str
+            and not (type(main) is types.ModuleType
+                     and type(vars(main).get('__file__')) is str
+                     and _different_alias_leaf(vars(main)['__file__'], ('cache_key_contracts.py',)))
             and Path(main.__file__).absolute() == Path(__file__).absolute().with_name('cache_key_contracts.py')
             and frame.f_code is _live_function_code(getattr(main, 'verify', None))):
         return True
@@ -1011,6 +1113,8 @@ class _CacheInputs:
         self._entries = tuple(entries)
         self._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
         self._resolver_paths = frozenset(resolver_paths)
+        require(not self._executing or dict(self._executing) == executing,
+                'pending checker image differs from captured execution')
         self._executing = types.MappingProxyType(dict(executing))
         self._state = 'active'
 
@@ -1091,7 +1195,8 @@ class _CacheInputs:
             require({path.relative_to(root).as_posix()
                      for path in guard.production_mojo_paths(Path(root))} == self._production,
                     'production path inventory changed during owned verification')
-            require(resolver_unshadowed(root, self._resolver_paths)
+            require(resolver_unshadowed(root, self._resolver_paths,
+                        **_render_lookup_args(self._resolver_paths, self._entries))
                     and all(resolver_unshadowed(location, self._resolver_paths)
                             for location in self._include_roots),
                     'resolver surface changed during owned verification')
@@ -1160,7 +1265,7 @@ def _operation_frame_kind(frame, *, include_aliases=False):
     namespace = frame.f_globals
     filename = namespace.get('__file__')
     # Pure negative filter only for exact builtin absolute spellings and plain
-    # functions. Relative paths, decorated/cyclic/exotic values keep full checks.
+    # functions. Relative paths and deeper/cyclic/exotic wrappers keep full checks.
     if (type(filename) is str and filename.startswith('/')
             and type(__file__) is str and __file__.startswith('/')):
         candidates = (namespace.get('verify'), namespace.get('reviewed_nonempty_loops'))
@@ -1168,6 +1273,40 @@ def _operation_frame_kind(frame, *, include_aliases=False):
                 and '__wrapped__' not in value.__dict__
                 and frame.f_code is not value.__code__) for value in candidates):
             return None
+        # Preserve the original plain branch and exotic-dictionary protocols.
+        if type(namespace) is dict:
+            for value in candidates:
+                if value is None:
+                    continue
+                if type(value) is not types.FunctionType or type(value.__dict__) is not dict:
+                    break
+                if '__wrapped__' in value.__dict__:
+                    value = value.__dict__['__wrapped__']
+                    if (type(value) is not types.FunctionType or type(value.__dict__) is not dict
+                            or '__wrapped__' in value.__dict__):
+                        break
+                if frame.f_code is value.__code__:
+                    break
+            else:
+                # Only widen the negative filter in a builtin registry context.
+                # Exotic registrations and lazy module exports retain their
+                # original lookup/error behavior. No owner result is retained.
+                if (type(sys.modules) is dict
+                        and (__package__ is None or type(__package__) is str)):
+                    prefix = (__package__ + '.') if __package__ else ''
+                    for name, attribute in (
+                            (prefix + 'coverage_invariant_contracts', 'verify'),
+                            (prefix + 'winner_sign_contracts', 'verify'),
+                            (prefix + 'border_parser_contracts', 'verify'),
+                            ('coverage_loop_proofs', 'reviewed_nonempty_loops'),
+                            ('tools.coverage_loop_proofs', 'reviewed_nonempty_loops')):
+                        module = sys.modules.get(name)
+                        if module is not None and (type(module) is not types.ModuleType
+                                or (namespace is vars(module) and attribute not in vars(module)
+                                    and '__getattr__' in vars(module))):
+                            break
+                    else:
+                        return None
     for kind in ('invariant', 'winner', 'border'):
         module = _owner_module(kind)
         if (module is not None and namespace is vars(module)
@@ -1491,6 +1630,8 @@ class _InvariantInputs(_CacheInputs):
         self._entries = tuple(entries)
         self._native_contexts = tuple((path, (str(Path(path).parent),)) for path in NATIVE_WITNESSES)
         self._resolver_paths = frozenset(resolver_paths)
+        require(not self._executing or dict(self._executing) == executing,
+                'pending checker image differs from captured execution')
         self._executing = types.MappingProxyType(dict(executing))
         self._state = 'active'
         for path, value, mode in self._observations:
@@ -1585,6 +1726,26 @@ class _InvariantInputs(_CacheInputs):
             try:
                 if self._state == 'active':
                     _CacheInputs.checkpoint(self, self._owner, root)
+                elif self._resolver_paths:
+                    # Historical owners need no current-root admission. Retain
+                    # only their supplemental helper observations until exit.
+                    leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
+                    for path, value, mode in self._observations:
+                        if mode == 'bytes' and (path in self._resolver_paths or path == leaf
+                                or (any(name.startswith('render/') for name in self._resolver_paths)
+                                    and (path in self._known or path == MIGRATION))):
+                            actual = _regular(root, path).read_bytes()
+                            require(type(actual) is bytes and actual == value,
+                                    'supplemental helper changed during historical operation: ' + path)
+                    require(executing_checker_bindings() == dict(self._executing),
+                            'supplemental helper checker changed during historical operation')
+                    if any(path.startswith('render/') for path in self._resolver_paths):
+                        require({path.as_posix() for path in _sibling('cache_key').input_paths(root)
+                                 if path.suffix == '.mojo'} == self._known,
+                                'render entry path census changed during historical operation')
+                    require(resolver_unshadowed(root, self._resolver_paths,
+                                **_render_lookup_args(self._resolver_paths, self._entries)),
+                            'supplemental resolver surface changed during historical operation')
             except BaseException:
                 self.close()
                 raise
@@ -1741,6 +1902,155 @@ def _cache_lane_inputs(root, supplied_text, owner, *, _operation=None):
 
 
 
+def _shared_helper_bindings(root, *, paths=None, _snapshots=None, _inputs=None,
+                            _input_owner=None, _operation=None):
+    """Bind exact helper sources and tests in the owner's original byte image."""
+    _operation_check(_operation, root)
+    require((_inputs is None) == (_input_owner is None), 'incomplete helper input ownership')
+    if _inputs is not None:
+        require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid helper input view')
+        _inputs._check(_input_owner, root)
+    def observe(path):
+        raw = (_observe_bytes(root, path, _regular(root, path).read_bytes(), _operation=_operation)
+               if _inputs is None else _inputs.raw(_input_owner, root, path))
+        require(type(raw) is bytes, 'helper source is not physical bytes: ' + path)
+        if _snapshots is not None:
+            require(_snapshots.setdefault(path, raw) == raw,
+                    'helper input changed after consumption: ' + path)
+        return raw
+    selected = shared_helpers.ARITHMETIC_PATHS if paths is None else paths
+    require(type(selected) is tuple and bool(selected)
+            and len(set(selected)) == len(selected)
+            and set(selected) <= set(shared_helpers.SOURCE_PATHS), 'invalid helper input scope')
+    sources = {path: observe(path) for path in selected}
+    active = []
+    for path, raw in sources.items():
+        require(sha(raw) in (shared_helpers.BEFORE_SHA256[path], shared_helpers.AFTER_SHA256[path]),
+                'unknown shared-helper endpoint: ' + path)
+        if sha(raw) == shared_helpers.AFTER_SHA256[path]:
+            active.append(path)
+    if not active:
+        return {}
+    leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
+    providers = {name for path in active for name in shared_helpers.PROVIDER_PATHS[path]}
+    tests = {name for path in active for name in shared_helpers.TEST_PATHS[path]}
+    expected = {leaf: DEPENDENCY_TOOL_SHA256[leaf],
+                **shared_helpers.package_inputs((*selected, *providers)),
+                **{path: shared_helpers.PROVIDERS[path] for path in providers},
+                **{path: shared_helpers.TESTS[path] for path in tests}}
+    bound = {path: observe(path) for path in expected}
+    for path, raw in bound.items():
+        require(sha(raw) == expected[path], 'shared-helper fixture changed: ' + path)
+    texts = {path: raw.decode('utf-8') for path, raw in sources.items()}
+    texts.update({path: bound[path].decode('utf-8') for path in providers})
+    require(set(shared_helpers.verify_correspondence(texts)) == set(active),
+            'shared-helper active endpoints differ')
+    for path, raw in {**sources, **bound}.items():
+        require(observe(path) == raw, 'shared-helper input changed during admission: ' + path)
+    return {**expected, **{path: sha(raw) for path, raw in sources.items()}}
+
+
+def shared_helper_proof_bindings(root, *, paths=None, include_roots=(), _inputs=None,
+                                 _input_owner=None, _operation=None):
+    """Admit supplemental edges without replacing any historical input bytes."""
+    try:
+        _operation_check(_operation, root)
+        require((_inputs is None) == (_input_owner is None), 'incomplete helper input ownership')
+        if _inputs is not None:
+            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid helper input view')
+            _inputs._check(_input_owner, root)
+        # Existing owners check the complete executed image at capture and exit.
+        # Retained adapters consume that image without starting another root gate.
+        standalone = _inputs is None and (_operation is None or _operation._state != 'active')
+        executing = (executing_checker_bindings() if standalone else
+                     (_inputs._executing if _inputs is not None else _operation._executing))
+        result = _shared_helper_bindings(root, paths=paths, _inputs=_inputs,
+                                         _input_owner=_input_owner, _operation=_operation)
+        fresh_image = None
+        render_args = {}
+        if result:
+            resolver_paths = {path for path in result if path.endswith('.mojo')}
+            if any(path.startswith('render/') for path in resolver_paths):
+                require(include_roots == () or (_operation is None and _inputs is None),
+                        'unowned helper include roots')
+                entries, fresh_image = _helper_render_context(
+                    root, _inputs=_inputs, _operation=_operation)
+                render_args = _render_lookup_args(resolver_paths, entries)
+                result[MIGRATION] = MIGRATION_SHA256
+            require(resolver_unshadowed(root, resolver_paths, **render_args) and all(
+                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for path in resolver_paths})
+                    for location in include_roots), 'shared-helper resolver surface changed')
+            leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
+            require(result[leaf] == executing[leaf], 'shared-helper receipt lacks executing leaf')
+            # The same owner's exit sweep must retain every supplemental
+            # resolver premise consumed after its initial arithmetic capture.
+            owners = (() if _inputs is None else (_inputs,))
+            if _operation is not None:
+                owners += (_operation,)
+            if type(_inputs) is _BorrowedCacheInputs:
+                owners += (_inputs._operation,)
+            for owner in owners:
+                observed = (owner._raw.keys() if owner._state == 'active' else
+                            {path for path, value, mode in owner._observations})
+                require(resolver_paths <= observed,
+                        'helper resolver inputs were not observed by their owner')
+                owner._resolver_paths = frozenset(owner._resolver_paths | resolver_paths)
+                if owner._state == 'pending':
+                    require(not owner._executing or dict(owner._executing) == executing,
+                            'pending helper checker image changed')
+                    owner._executing = types.MappingProxyType(dict(executing))
+        if fresh_image is not None:
+            _helper_entry_census_finish(root, fresh_image, _operation=_operation)
+        if render_args:
+            require(sha(_observe_bytes(root, MIGRATION, _regular(root, MIGRATION).read_bytes(),
+                        _operation=_operation)) == MIGRATION_SHA256, 'render entry authority changed')
+            # Rendering callers have no include roots. Keep the historical
+            # conservative rule for explicitly supplied stage contexts.
+            require(resolver_unshadowed(root, resolver_paths, **render_args) and all(
+                    resolver_unshadowed(location, resolver_paths | {path + '.cov-origin' for path in resolver_paths})
+                    for location in include_roots), 'shared-helper final resolver surface changed')
+        if standalone:
+            require(executing_checker_bindings() == executing,
+                    'shared-helper checker changed during admission')
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
+def shared_helper_edges(root, *, paths=None, include_roots=(), _inputs=None,
+                        _input_owner=None, _operation=None):
+    """Return only live, physically admitted helper extraction descriptors."""
+    bindings = shared_helper_proof_bindings(root, paths=paths, include_roots=include_roots,
+        _inputs=_inputs, _input_owner=_input_owner, _operation=_operation)
+    return shared_helpers.edges(tuple(path for path in shared_helpers.SOURCE_PATHS
+        if bindings.get(path) == shared_helpers.AFTER_SHA256[path]))
+
+
+def _runtime_view_bindings(root, *, _snapshots=None, _operation=None):
+    """Bind the merged runtime-view authority and every consumed fixture."""
+    runtime_view.steps(root, _operation=_operation)
+    raw = _observe_bytes(root, runtime_view.MIGRATION,
+        _regular(root, runtime_view.MIGRATION).read_bytes(), _operation=_operation)
+    require(sha(raw) == runtime_view.MIGRATION_SHA256,
+            'runtime view record changed during admission')
+    record = json.loads(raw, object_pairs_hook=source.unique_keys)
+    leaf = 'tools/carla_lane_oracle/runtime_view_contracts.py'
+    expected_inputs = {runtime_view.MIGRATION: runtime_view.MIGRATION_SHA256,
+                       leaf: DEPENDENCY_TOOL_SHA256[leaf],
+                       **record['correctness_tests']}
+    result = {}
+    for path, expected in expected_inputs.items():
+        value = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                               _operation=_operation)
+        require(sha(value) == expected, 'runtime view bound input changed: ' + path)
+        if _snapshots is not None:
+            require(_snapshots.setdefault(path, value) == value,
+                    'runtime view input changed after consumption: ' + path)
+        result[path] = expected
+    return result
+
+
+
 def _station_bindings(root, *, _snapshots=None, _operation=None):
     """Admit one supplemental Map edge without replacing any live image bytes."""
     raw = _observe_bytes(root, station.MODULE,
@@ -1805,14 +2115,22 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             # Fixed exact inverse objects are not a normalization API. Only
             # sealed recorded endpoints may be inverted, after live checks.
             reverse_exact(path, item['after_source'], item)
+        helper_bindings = _shared_helper_bindings(root, _snapshots=snapshots)
+        helper_edges = shared_helpers.edges(tuple(
+            path for path in shared_helpers.SOURCE_PATHS
+            if helper_bindings.get(path) == shared_helpers.AFTER_SHA256[path]))
+        helper_closure = ({'loaders/utf8.mojo'} if 'loaders/xml.mojo' in helper_edges else set())
         resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
-                          | set(record['native_dependency_inventory']))
+                          | set(record['native_dependency_inventory']) | helper_closure
+                          | {path for path in helper_bindings if path.endswith('.mojo')}
+                          | (set(_capture._resolver_paths) if _capture is not None else set()))
         # Coverage origin files cannot enter Mojo module lookup. Admit only
         # exact sidecar coordinates of reviewed Mojo inputs at include roots;
         # generation_origins and capture verification still bind their bytes.
         include_resolver_paths = resolver_paths | {path + '.cov-origin'
             for path in resolver_paths if path.endswith('.mojo')}
-        require(resolver_unshadowed(root, resolver_paths)
+        require(resolver_unshadowed(root, resolver_paths,
+                    **_render_lookup_args(resolver_paths, record['entry_directories']))
                 and all(resolver_unshadowed(location, include_resolver_paths)
                         for location in include_roots),
                 'unreviewed alternate, compiled, package, symlink or std resolver surface')
@@ -1829,13 +2147,15 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         require(entries == record['entry_directories'], 'maintained entrypoint directories changed')
         require(dependency_inventory(root, roots=(*SOURCE_PATHS, *record['inventory']), entries=entries,
                                      _known=known, _snapshots=snapshots)
-                == set(record['dependency_inventory']), 'production import inventory changed')
+                == set(record['dependency_inventory']) | helper_closure, 'production import inventory changed')
         native_found = _native_dependency_inventory(root, witnesses=NATIVE_WITNESSES,
             _known=known, _snapshots=snapshots)
-        require(native_found == set(record['native_dependency_inventory']), 'native witness import inventory changed')
+        require(native_found == set(record['native_dependency_inventory']) | helper_closure,
+                'native witness import inventory changed')
         ledger_raw = _regular(root, CONSUMER_LEDGER).read_bytes()
         require(sha(ledger_raw) == CONSUMER_LEDGER_SHA256, 'unreviewed consumer ledger')
         snapshots[CONSUMER_LEDGER] = ledger_raw
+        _runtime_view_bindings(root, _snapshots=snapshots)
         station_bindings = _station_bindings(root, _snapshots=snapshots)
         bound = {}
         for group in BOUND_GROUPS:
@@ -1848,6 +2168,11 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
                             and expected == station.BEFORE_SHA256,
                             'station edge does not extend this immutable Map premise')
                     expected = station_bindings[path]
+                if path in helper_edges:
+                    require(group in ('unchanged_inputs', 'native_dependency_inputs')
+                            and expected == helper_edges[path]['before_sha256'],
+                            'helper edge does not extend immutable input: ' + path)
+                    expected = helper_edges[path]['after_sha256']
                 require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
@@ -1865,7 +2190,8 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             require(_regular(root, path).read_bytes() == raw, 'input changed during verification: ' + path)
         require({p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'} == known,
                 'source path inventory changed during verification')
-        require(resolver_unshadowed(root, resolver_paths)
+        require(resolver_unshadowed(root, resolver_paths,
+                    **_render_lookup_args(resolver_paths, record['entry_directories']))
                 and all(resolver_unshadowed(location, include_resolver_paths) for location in include_roots),
                 'resolver surface changed during verification')
         if _capture is not None:
@@ -2055,6 +2381,9 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         # Receipts name the actual admitted Map and its bound native inputs.
         # The immutable record remains a historical premise, never a live hash.
         result.update(_station_bindings(root, _operation=_operation))
+        result.update(_runtime_view_bindings(root, _operation=_operation))
+        result.update(shared_helper_proof_bindings(root, include_roots=include_roots,
+                                                  _operation=_operation))
         return result
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
         _operation_fail(_operation, error)
