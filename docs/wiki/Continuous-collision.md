@@ -25,7 +25,7 @@ The bound uses the body's total translational and rotational energy after the fo
 
 Moving bodies whose reachable regions overlap form a group. An impact can give one member the energy of every other member. So each member of a group reaches as far as the whole group's energy can take it. Groups grow until no two groups overlap. A group of spheres is swept together; see [Moving sphere pairs](#moving-sphere-pairs). A body alone keeps its own bound and its own sweep.
 
-A capsule must be alone in its group. Otherwise the step raises an error. It does not silently use discrete moving-body contacts.
+A group can hold spheres and rotation-locked capsules. The mode never silently uses discrete contacts for moving bodies that it cannot sweep.
 
 A kinematic sphere follows its set velocity and takes no impulse. It must have no spin and no angular push. It passes through static meshes and other kinematic bodies, as in the discrete mode. It strikes a dynamic sphere as a body of infinite mass, and its pose stays the one that its velocity gives.
 
@@ -33,7 +33,7 @@ In a kinematic sphere's frame, an impact cannot add energy. So each impact with 
 
 A dynamic sphere that a kinematic sphere drives into a static mesh has no impulse that can open both contacts. The step then raises an error and rolls back.
 
-The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic capsules, spinning kinematic spheres, static primitives and offset spheres. It also refuses a moving capsule that can reach another moving body. General convex, rotating-capsule, rotating-offset and moving-capsule CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
+The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic capsules, spinning kinematic spheres, static primitives and offset spheres. General convex, rotating-capsule and rotating-offset CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.
 
@@ -69,11 +69,11 @@ The opt-in mode corrects the tunneling example in [issue 292](https://github.com
 
 ## Moving sphere pairs
 
-The spheres of a group move together in time order. Each pass finds the earliest impact of any member with a static triangle or another member. It moves every member to that time and applies that one impulse. Then it sweeps the remaining time again.
+The members of a group move together in time order. Each pass finds the earliest impact of any member with a static triangle or another member. It moves every member to that time and applies that one impulse. Then it sweeps the remaining time again.
 
-A pair's sweep uses their relative motion and their summed radius. That sweep is exact for two spheres that move in straight lines. Equal times keep the lower member first, then a triangle before another member, then the lower other member.
+A pair's sweep uses their relative motion and their summed radius. Each member is a segment: a capsule's axis, or a sphere's center. The sweep tests each end of one segment against the other segment, as a cylinder and two end caps. It also tests the two interiors across the plane that both axes span. It is exact for shapes that only translate, as spheres and rotation-locked capsules do between impacts. Equal times keep the lower member first, then a triangle before another member, then the lower other member.
 
-A pair impact uses the normal between the two centers. The normal impulse uses both inverse masses and the pair's restitution and bounce threshold. A Coulomb friction impulse then acts at the contact. It uses each sphere's world inverse inertia at its orientation at the start of the step. The normal response with restitution between zero and one cannot add kinetic energy. Friction that at most stops the slip cannot add it either.
+A pair impact uses the normal between the two closest points. The normal impulse uses both inverse masses and the pair's restitution and bounce threshold. A Coulomb friction impulse then acts at the contact. It uses each sphere's world inverse inertia at its orientation at the start of the step. The normal response with restitution between zero and one cannot add kinetic energy. Friction that at most stops the slip cannot add it either.
 
 A body that falls onto a resting stack makes a cascade: several impacts at one instant. A plastic cascade only halves the speeds each round, so it would never end. A second impact at the same instant therefore settles the cascade. It finds every contact that touches at that instant, including pairs and member triangles. It solves their normal impulses together as one plastic contact problem. The solver tries active sets in one fixed order, so the result is deterministic.
 

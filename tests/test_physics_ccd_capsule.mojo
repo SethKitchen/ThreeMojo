@@ -260,12 +260,14 @@ def test_unsupported_capsules_are_refused() raises:
         assert_almost_equal(world.bodies[1].position.z, 0.5, atol=1e-7)
 
 
-def test_overlapping_reach_and_precision_are_refused() raises:
-    # Two capsules whose reachable bounding spheres overlap.
+def test_side_by_side_capsules_step_and_precision_is_refused() raises:
+    # Two capsules whose reachable bounding spheres overlap form a group.
+    # They fall side by side onto the floor and stay apart.
     var world = _world(_capsule(Vector3(0, 0, 0.5), Vector3(0, 0, -30)))
     _ = world.add_body(_capsule(Vector3(0.3, 0, 0.5), Vector3(0, 0, -30)))
-    with assert_raises():
-        world.step(Duration(0.01))
+    world.step(Duration(0.01))
+    assert_equal(world.contact_count, 2)
+    assert_true(world.bodies[2].position.x - world.bodies[1].position.x > 0.2)
     # Travel beyond 2^20 bounding radii in one step.
     var fast = _world(_capsule(Vector3(0, 0, 0.5), Vector3(0, 0, -1.0e6)))
     with assert_raises():

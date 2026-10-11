@@ -42,7 +42,8 @@ from extensions.physics.ccd import (
     CollisionDetection,
     DISCRETE,
     SPHERE_MESH_CCD,
-    _root,
+    _segment_gap,
+    _sweep_segments,
     _sweep_capsule_triangle,
     _SweepHit,
     _initial_capsule_contact,
@@ -649,13 +650,6 @@ struct PhysicsWorld(Movable):
                 raise Error(
                     "CCD travel exceeds the radius-relative precision bound"
                 )
-            if body.shape.kind == CAPSULE:
-                for j in range(count):  # pragma: no branch
-                    if j != i and group[j] == group[i]:
-                        raise Error(
-                            "CCD moving-capsule reachable regions must be"
-                            " disjoint"
-                        )
             if kinematic[i]:
                 # A kinematic sphere passes through static meshes.
                 continue
@@ -779,14 +773,7 @@ struct PhysicsWorld(Movable):
         ) * Float64(h)
         var velocity = _wide(self.bodies[i].linear_velocity)
         var angular = _wide(self.bodies[i].angular_velocity)
-        # A capsule's half axis in the world. Its rotation does not change.
-        var half_axis = SIMD[DType.float64, 4](0)
-        if self.bodies[i].shape.kind == CAPSULE:
-            half_axis = _wide(
-                self.bodies[i]
-                .shape_world_rotation()
-                .rotate(Vector3(0, 0, self.bodies[i].shape.half_height))
-            )
+        var half_axis = self._ccd_half_axis(i)
         var remaining = Float64(h)
         var count = 0
         var candidates = List[Int]()
@@ -833,6 +820,17 @@ struct PhysicsWorld(Movable):
         self.bodies[i].linear_velocity = _ccd_narrow(velocity)
         self.bodies[i].angular_velocity = _ccd_narrow(angular)
         return (_ccd_narrow(at), rotation)
+
+    def _ccd_half_axis(self, i: Int) -> SIMD[DType.float64, 4]:
+        # A capsule's half axis in the world, or zero for a sphere. A
+        # rotation-locked capsule's axis does not change during a step.
+        if self.bodies[i].shape.kind != CAPSULE:
+            return SIMD[DType.float64, 4](0)
+        return _wide(
+            self.bodies[i]
+            .shape_world_rotation()
+            .rotate(Vector3(0, 0, self.bodies[i].shape.half_height))
+        )
 
     def _ccd_first_hit(
         self,
@@ -984,9 +982,11 @@ struct PhysicsWorld(Movable):
         var count = List[Int](length=n, fill=0)
         # Dynamic members respond; kinematic ones keep their velocity.
         var moves = List[Bool]()
+        var half = List[SIMD[DType.float64, 4]]()
         for i in members:  # pragma: no branch
             ref body = self.bodies[i]
             moves.append(body.kind() == DYNAMIC)
+            half.append(self._ccd_half_axis(i))
             at.append(
                 _wide(body.position) + _wide(body.push_velocity) * Float64(h)
             )
@@ -1014,7 +1014,7 @@ struct PhysicsWorld(Movable):
                         members[k],
                         at[k],
                         velocity[k] * remaining,
-                        none,
+                        half[k],
                         candidates,
                     )
                     if hit[0].fraction < fraction:
@@ -1026,19 +1026,20 @@ struct PhysicsWorld(Movable):
                 for l in range(k + 1, n):
                     if not (moves[k] or moves[l]):
                         continue
-                    var offset = at[k] - at[l]
-                    var relative = (velocity[k] - velocity[l]) * remaining
-                    var root = _root(
-                        offset,
-                        relative,
+                    # Each member is a segment: a capsule's axis, or a
+                    # sphere's center. The normal runs from l toward k.
+                    var pair = _sweep_segments(
+                        at[k] - half[k],
+                        half[k] * 2,
+                        at[l] - half[l],
+                        half[l] * 2,
+                        (velocity[k] - velocity[l]) * remaining,
                         Float64(self.bodies[members[k]].shape.radius)
                         + Float64(self.bodies[members[l]].shape.radius),
                     )
-                    if root <= 1 and root < fraction:
-                        # From the other member's center to this one's.
-                        var gap = offset + relative * root
-                        fraction = root
-                        normal = gap / sqrt(_wide_dot(gap, gap))
+                    if pair.fraction < fraction:
+                        fraction = pair.fraction
+                        normal = pair.normal
                         first = k
                         second = l
                         triangle = -1
@@ -1077,6 +1078,7 @@ struct PhysicsWorld(Movable):
                 self._ccd_settle(
                     members,
                     moves,
+                    half,
                     at,
                     velocity,
                     Float64(h) - remaining,
@@ -1092,7 +1094,7 @@ struct PhysicsWorld(Movable):
                     triangle,
                     at[first],
                     incoming,
-                    none,
+                    half[first],
                     normal,
                     velocity[first],
                     angular[first],
@@ -1150,6 +1152,7 @@ struct PhysicsWorld(Movable):
         self,
         members: List[Int],
         moves: List[Bool],
+        half: List[SIMD[DType.float64, 4]],
         at: List[SIMD[DType.float64, 4]],
         mut velocity: List[SIMD[DType.float64, 4]],
         time: Float64,
@@ -1159,8 +1162,9 @@ struct PhysicsWorld(Movable):
     ) raises:
         # Every contact touching at this instant: member pairs at their
         # summed radius, and member triangles that the member approaches.
-        # A sphere's impulses act through its center, so they only change
-        # its velocity, and the contact matrix needs only inverse masses.
+        # A sphere's impulses act through its center, and a capsule cannot
+        # turn, so they only change velocities, and the contact matrix
+        # needs only inverse masses.
         var n = len(members)
         var body = List[Int]()
         var partner = List[Int]()
@@ -1184,8 +1188,13 @@ struct PhysicsWorld(Movable):
                 var index = candidates[c] if indexed else c
                 if not self.bodies[self._triangle_body[index]].collides:
                     continue
-                var hit = _initial_triangle_contact(
-                    at[k], velocity[k], radius, self._triangles[index]
+                # A sphere is a capsule of no length.
+                var hit = _initial_capsule_contact(
+                    at[k] - half[k],
+                    at[k] + half[k],
+                    velocity[k],
+                    radius,
+                    self._triangles[index],
                 )
                 if hit.fraction == 0:
                     body.append(k)
@@ -1195,16 +1204,17 @@ struct PhysicsWorld(Movable):
             for l in range(k + 1, n):
                 if not (moves[k] or moves[l]):
                     continue
-                var offset = at[k] - at[l]
                 var reach = radius + Float64(
                     self.bodies[members[l]].shape.radius
                 )
-                var distance = sqrt(_wide_dot(offset, offset))
-                if distance <= reach * (1 + 1e-9):
+                var gap = _segment_gap(
+                    at[k] - half[k], half[k] * 2, at[l] - half[l], half[l] * 2
+                )
+                if gap[0] <= reach * (1 + 1e-9):
                     body.append(k)
                     partner.append(l)
                     triangle.append(-1)
-                    normal.append(offset / distance)
+                    normal.append(gap[1])
         var m = len(body)
         var inverse = List[Float64]()
         for k in range(n):  # pragma: no branch

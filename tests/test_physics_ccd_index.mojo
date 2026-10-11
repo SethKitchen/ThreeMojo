@@ -657,12 +657,12 @@ def test_brute_override_and_return_preserve_warm_index() raises:
             assert_equal(indexed._ccd_index.count, 17)
 
 
-def test_indexed_reachable_capsule_refusal_restores_pending_force() raises:
+def test_indexed_reach_refusal_restores_pending_force() raises:
     var indexed = _world(_floor(), Vector3(0, 0, 0.15), Vector3(0, 0, -30))
     var brute = _world(_floor(), Vector3(0, 0, 0.15), Vector3(0, 0, -30), True)
     _step_pair(indexed, brute, 0.01)
     assert_equal(len(indexed.events), 2)
-    # Moving spheres can interact, but a moving capsule cannot.
+    # A nearby moving capsule joins the sphere's group.
     var stationary = RigidBody(
         DYNAMIC,
         Shape.capsule(Length(0.1), Length(0.05)),
@@ -680,13 +680,15 @@ def test_indexed_reachable_capsule_refusal_restores_pending_force() raises:
     assert_equal(indexed._ccd_index.count, 17)
     _reset(indexed, Vector3(0, 0, 0.5), Vector3(0, 0, -30))
     _reset(brute, Vector3(0, 0, 0.5), Vector3(0, 0, -30))
-    indexed.bodies[1].force = Vector3(1, 2, 3)
-    brute.bodies[1].force = Vector3(1, 2, 3)
+    # After velocity integration this force makes the sphere's reach exceed
+    # 1048576 radii. Refusal after integration must not consume forces.
+    indexed.bodies[1].force = Vector3(2e9, 2, 3)
+    brute.bodies[1].force = Vector3(2e9, 2, 3)
     indexed.bodies[1].torque = Vector3(0, 1, 0)
     brute.bodies[1].torque = Vector3(0, 1, 0)
-    # The shapes start separated, but their conservative reachable regions
-    # overlap. Refusal after velocity integration must not consume forces.
     _failure_pair(indexed, brute, 0.01)
+    indexed.bodies[1].force = Vector3(1, 2, 3)
+    brute.bodies[1].force = Vector3(1, 2, 3)
     indexed.bodies[2].position.x = 5
     brute.bodies[2].position.x = 5
     _step_pair(indexed, brute, 0.01)
