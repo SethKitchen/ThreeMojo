@@ -316,6 +316,7 @@ class FullAuditCleanupContracts(unittest.TestCase):
                     *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
         for group in cleanup.BOUND_GROUPS:
             expected.update(self.record[group])
+        expected.update(cleanup.shared_helper_proof_bindings(self.root))
         self.assertEqual(set(bindings), expected)
         for path, digest in bindings.items():
             self.assertEqual(cleanup.sha((self.root/path).read_bytes()), digest)
