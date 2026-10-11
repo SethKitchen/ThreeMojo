@@ -1,0 +1,13 @@
+test_current_foreign_root_thread_and_cwd_poison_the_owner (__main__.BoundedOwnerCurrentControls.test_current_foreign_root_thread_and_cwd_poison_the_owner) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_current_invalid_exact_request_is_sticky_when_caught (__main__.BoundedOwnerCurrentControls.test_current_invalid_exact_request_is_sticky_when_caught) ... ok
+test_current_nested_public_owner_is_fresh_and_blocks_the_outer_handle (__main__.BoundedOwnerCurrentControls.test_current_nested_public_owner_is_fresh_and_blocks_the_outer_handle) ... ok
+test_current_registered_and_unregistered_aliases_block_outer_use (__main__.BoundedOwnerCurrentControls.test_current_registered_and_unregistered_aliases_block_outer_use) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 38.717s
+
+OK

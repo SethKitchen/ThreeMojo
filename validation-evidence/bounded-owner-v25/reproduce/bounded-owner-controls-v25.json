@@ -1,0 +1,48 @@
+{
+  "pause_request_file": "bounded-owner-controls-v25.pause",
+  "phase": "bounded-owner-controls-v25",
+  "scope": "Full30-method owner suite normal/optimized after strict four-method public-envelope test correction. All production equals v24. Original caps retained; broader observation/helper controls separate.",
+  "seal": "CANDIDATE-V25-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25",
+  "source_seal_sha256": "22dae75f9db4f3569aba6d839f71fad9f426fdf10bf32c5d22e2e01530582ac8",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v",
+        "-f"
+      ],
+      "expected_tests": 30,
+      "label": "normal-bounded-owner-controls",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_invariant_operation_inputs.py",
+        "-v",
+        "-f"
+      ],
+      "expected_tests": 30,
+      "label": "optimized-bounded-owner-controls",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

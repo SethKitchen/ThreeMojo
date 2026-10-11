@@ -1,0 +1,44 @@
+{
+  "pause_request_file": "public-error-focused-v25.pause",
+  "phase": "public-error-focused-v25",
+  "scope": "Four repaired current-owner methods, normal/optimized. Exact public exception/cause and poisoned/disposed owner. No full suite claim. Original caps retained.",
+  "seal": "CANDIDATE-V25-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v25",
+  "source_seal_sha256": "22dae75f9db4f3569aba6d839f71fad9f426fdf10bf32c5d22e2e01530582ac8",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+        "-v",
+        "-f",
+        "BoundedOwnerCurrentControls.test_current_foreign_root_thread_and_cwd_poison_the_owner",
+        "BoundedOwnerCurrentControls.test_current_invalid_exact_request_is_sticky_when_caught",
+        "BoundedOwnerCurrentControls.test_current_nested_public_owner_is_fresh_and_blocks_the_outer_handle",
+        "BoundedOwnerCurrentControls.test_current_registered_and_unregistered_aliases_block_outer_use"
+      ],
+      "expected_tests": 4,
+      "label": "normal-public-error-focused",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+        "-v",
+        "-f",
+        "BoundedOwnerCurrentControls.test_current_foreign_root_thread_and_cwd_poison_the_owner",
+        "BoundedOwnerCurrentControls.test_current_invalid_exact_request_is_sticky_when_caught",
+        "BoundedOwnerCurrentControls.test_current_nested_public_owner_is_fresh_and_blocks_the_outer_handle",
+        "BoundedOwnerCurrentControls.test_current_registered_and_unregistered_aliases_block_outer_use"
+      ],
+      "expected_tests": 4,
+      "label": "optimized-public-error-focused",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

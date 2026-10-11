@@ -1,0 +1,202 @@
+{
+  "files": [
+    {
+      "bytes": 7562,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "078f97f0c9b1f55ce07fbc631899b0b066a617bfef0f99957b9bc99c7b69ca46"
+    },
+    {
+      "bytes": 32758,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "c5775ac80a2073469c17bd1f05671c0c39996c901d413901f8e422daec85aac0"
+    },
+    {
+      "bytes": 2519,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/README.md",
+      "path": "README.md",
+      "sha256": "f90a3601dde5116e027bbe4bd1695721566b19c05158b7ffacbbe0466a120178"
+    },
+    {
+      "bytes": 12496,
+      "kind": "derived-passing-two-phase-execution-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "8b96cf4ca84d90e9728d70095a2a93a37085b0b27a08c0199ae45ddcbc9df04c"
+    },
+    {
+      "bytes": 2637,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/bounded-owner-controls-v25/RESULT.json",
+      "path": "actual/bounded-owner-controls-v25/RESULT.json",
+      "sha256": "a5c8eaacd75bf3557e53902248f64eecbcbd343b267a42896e6d15b0053e0b42"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/bounded-owner-controls-v25/SDK-AFTER.json",
+      "path": "actual/bounded-owner-controls-v25/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/bounded-owner-controls-v25/SDK-BEFORE.json",
+      "path": "actual/bounded-owner-controls-v25/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/bounded-owner-controls-v25/WINDOW-START.json",
+      "path": "actual/bounded-owner-controls-v25/WINDOW-START.json",
+      "sha256": "7d5800b685235f4b125e4243d1ff2b40be1067e13462d63bfea82b50fed6619f"
+    },
+    {
+      "bytes": 7067,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/bounded-owner-controls-v25/normal-bounded-owner-controls.log",
+      "path": "actual/bounded-owner-controls-v25/normal-bounded-owner-controls.log",
+      "sha256": "4a7657c0d9f72032af90cb9f1c76fda3d8cc810dccfa28ddc40764669a56d58d"
+    },
+    {
+      "bytes": 7067,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/bounded-owner-controls-v25/optimized-bounded-owner-controls.log",
+      "path": "actual/bounded-owner-controls-v25/optimized-bounded-owner-controls.log",
+      "sha256": "dbb491e6e0ceacd6bf83db70ee2b3d42f2d01cf33ffc7505e88a102c3c6eface"
+    },
+    {
+      "bytes": 3217,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/public-error-focused-v25/RESULT.json",
+      "path": "actual/public-error-focused-v25/RESULT.json",
+      "sha256": "e2f6fe63f761352b6b6a340403cb81f68af5ed778d50d70bb36d482581b8783b"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/public-error-focused-v25/SDK-AFTER.json",
+      "path": "actual/public-error-focused-v25/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/public-error-focused-v25/SDK-BEFORE.json",
+      "path": "actual/public-error-focused-v25/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/public-error-focused-v25/WINDOW-START.json",
+      "path": "actual/public-error-focused-v25/WINDOW-START.json",
+      "sha256": "267a1a0952c89b3d2370755b66b527b14383f54004c52d91a6e6303c99588167"
+    },
+    {
+      "bytes": 1307,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/public-error-focused-v25/normal-public-error-focused.log",
+      "path": "actual/public-error-focused-v25/normal-public-error-focused.log",
+      "sha256": "fef7c0f44461877a8dc9e4c159a8aa93fc8e020fbe902e686cdd7a3976e3fd29"
+    },
+    {
+      "bytes": 1307,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/actual/public-error-focused-v25/optimized-public-error-focused.log",
+      "path": "actual/public-error-focused-v25/optimized-public-error-focused.log",
+      "sha256": "d9959a2d12ec9d79ccea085cca19301ab8df571b2c0ffbcf940b8a1255357ce6"
+    },
+    {
+      "bytes": 902561,
+      "kind": "lossless-original-passing-phase-receipts-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "a3f91c70d0916ac2e3f415c8dcd63bbbfef8c9f63e89de9aaef2d971930568cb"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419528,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/CANDIDATE-V25-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V25-SOURCE-SEAL.json",
+      "sha256": "22dae75f9db4f3569aba6d839f71fad9f426fdf10bf32c5d22e2e01530582ac8"
+    },
+    {
+      "bytes": 16702,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "eec81feea68a76daccac2d4d9ed255ee7b51d74b6eb029b58cd1b9c86bb9bc32"
+    },
+    {
+      "bytes": 1324,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/bounded-owner-controls-v25.json",
+      "path": "reproduce/bounded-owner-controls-v25.json",
+      "sha256": "465c09dbf81ac19b379320b37f2438fc3ccf05faccb9702338f09283a4d32ccd"
+    },
+    {
+      "bytes": 3716,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/bounded-owner-controls-v25.supervisor.log",
+      "path": "reproduce/bounded-owner-controls-v25.supervisor.log",
+      "sha256": "7a5fdd24540a82d78450e240b4a67a3a986616ca85935804cc836ea7c6ca0d1e"
+    },
+    {
+      "bytes": 21031,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/build_bounded_owner_v25_packet.py",
+      "path": "reproduce/build_bounded_owner_v25_packet.py",
+      "sha256": "d1eb54b72e8d6c620377aa102271eb1e924a5191f4f911680dba28f8a2891fdb"
+    },
+    {
+      "bytes": 1900,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/public-error-focused-v25.json",
+      "path": "reproduce/public-error-focused-v25.json",
+      "sha256": "07c9f874dbc0f23f68678539cc0b913a7b1b0ddc95798c5a94295edb79df6116"
+    },
+    {
+      "bytes": 4984,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/public-error-focused-v25.supervisor.log",
+      "path": "reproduce/public-error-focused-v25.supervisor.log",
+      "sha256": "a4177a1bbc9d39333e7217b39d277662689351df81c9a57185f650f5b435ee6a"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1797,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2"
+    },
+    {
+      "bytes": 52478,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-bounded-owner-v25-packet/reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "a24b9ead2d8ed2ae3f05785ebbf3233773c473e595a7214216dc1f568ac54f1d"
+    }
+  ],
+  "schema": 1,
+  "scope": "Only the two actual phases: eight focused method executions plus sixty executions of the existing thirty-method owner suite, normal and optimized. No dynamic observation sweep, full Python matrix, native coverage, hosted CI or full completion claim."
+}
