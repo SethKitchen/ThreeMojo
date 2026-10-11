@@ -291,20 +291,28 @@ To publish an archive, the publisher does these steps:
 
 1. Put the exact pinned archive in the cache.
    A rebuilt archive can have a different checksum. Do not use a rebuilt archive in place of a pinned one.
-2. Package the archive with its manifest and attribution:
+2. Package every archive that the distribution will share with its manifest and attribution.
+   For a distribution with one archive:
 
    ```sh
    python3 assets/carla/tools/carla_assets.py stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2
    ```
 
    The command fails when the archive bytes do not match the pinned sum.
-3. Upload the archive from the package to the Google Drive folder.
-   Keep its file name. For example, `vehicle.audi.a2.zip`.
-4. Set the link sharing of the file to "Anyone with the link" and the role to "Viewer".
+3. Upload the archives, `manifest.json` and `ATTRIBUTION.md` from the staged package to the same Google Drive folder.
+   Keep each archive's file name. For example, `vehicle.audi.a2.zip`.
+   Do not upload only the zip. Keep both companion files available with the downloadable archives.
+   If the folder shares several archives, stage all their entry ids together.
+   Do not replace the folder's attribution with credits for only one of its archives.
+4. Set the link sharing of every archive and both companion files to "Anyone with the link" and the role to "Viewer".
 5. Put the share link in the manifest. For a vehicle, use
    `manifest_vehicles.py --urls`. For a town, use `manifest_towns.py --urls`.
    See "Host the vehicle zips". Do not change the sum.
-6. Verify the checksum with a download into an empty cache:
+   After URL edits, generate the attribution and stage the complete distribution again in a new output directory.
+   Replace the published companion files with `manifest.json` and `ATTRIBUTION.md` from that new package.
+   Keep the exact pinned archive bytes.
+6. Download every published entry into an empty cache and verify each checksum.
+   For the one-archive example:
 
    ```sh
    python3 assets/carla/tools/carla_assets.py --cache /tmp/carla-check fetch carla.vehicle.audi.a2
@@ -312,6 +320,8 @@ To publish an archive, the publisher does these steps:
    ```
 
    Both commands must return 0. The `/tmp/carla-check` directory must not exist before step 6.
+   Also check that a signed-out recipient can download both companion files.
+   Their bytes must match the staged manifest and attribution.
 7. Run `check` and the tool tests. Then commit the manifest and `ATTRIBUTION.md` together.
 
 `check` refuses a CARLA entry, an id that starts with `carla.`, that loses one of these:
