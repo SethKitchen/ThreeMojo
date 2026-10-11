@@ -514,7 +514,10 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     comptime native = reflect[N].name()
     comptime rewritten = reflect[I].name()
     comptime if _pure(left) and _pure(right) and _pure(native):
-        return not _optional(native) or (_optional(left) and _optional(right))
+        # An Optional can itself be an Optional's element. Both operands
+        # being Optional does not rule out a wrap that changes emptiness to
+        # presence. Preserve only the same Optional type on both sides.
+        return not _optional(native) or (left == native and right == native)
     comptime if native == "Bool":
         return rewritten == "Bool"
     # Same-type: one native type, kept by one recording proxy type.
