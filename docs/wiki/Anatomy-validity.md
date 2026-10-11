@@ -50,6 +50,10 @@ python3 tools/anatomy_overlaps.py --build --output anatomy-overlaps.json
 
 The tool checks all 532 legacy pairs at 5, 3 and 2 mm. It localizes each pair that #595 lists and each pair with a sampled common interior. For each grid it records the witness point and the box of common-interior cell centers. Two local cubes around the witness then search at one sixteenth and one 256th of the grid width. The output records the same source digest and probe digest as the report. Omit `--build` to reuse a current probe.
 
+Each grid must return the complete pair inventory. The coarse refinement cube estimates local overlap volume with endpoint weights. A sample on one cube face has half weight on that axis. An edge or corner combines those weights. An entirely occupied cube therefore reports its own volume.
+
+This is a sampled estimate, not an exact overlap volume. The pinned unrepaired report keeps its original, unweighted local-volume estimates.
+
 A negative refined value is a point inside both canonical fields. It is not a penetration depth. The refinement is local, so a nonnegative value does not prove clearance elsewhere.
 
 ## Read the report
@@ -129,6 +133,8 @@ The inventory also lists five interface rules. Each rule makes a later field giv
 Articulating foot bones follow the segment accounting's bone order. The talus and the fibula give way to the tibia. Knee tissues give way to the leg bones, then to the cartilage, then to the menisci. Each cervical articular pillar ends at its body endplane levels. Only that last rule changes an authored primitive. No rule changes a landmark, a radius or a cited thickness.
 
 A rule moves the interface, so a clipped solid is smaller than its authored shape. Per-part masses can therefore fall. A collateral ligament end still lies at its authored attachment landmark. The part of the band inside the bone is not ligament.
+
+Field subtraction applies inside and outside the original solid. It takes the maximum of the original field and the negated clipping field. A buried original surface must not remain a zero set. This continuous difference keeps interior classification, but it can change exterior field values and mesh interpolation.
 
 No positive-volume attachment allowance is currently justified for catalog pairs. A shared tendon path, vascular junction or apparent anatomical attachment remains a finding. Its permitted overlap volume is unknown. The skin-domain rule only prevents duplicate domain accounting; it does not validate containment or dermis clearance.
 
