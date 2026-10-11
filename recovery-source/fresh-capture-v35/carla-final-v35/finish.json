@@ -1,0 +1,39 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V35-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/STAGED-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source/coverage/build"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/TARGET-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/frozen-target"
+    }
+  ],
+  "phase": "carla-final-v35-finish",
+  "scope": "Fresh 19-suite CARLA qualification on the explicitly sealed snapshot. Native O3/O0 and maintained instrumented capture are separate. Targeted scope only; no global 100%, Arm, hosted CI, or anatomy-report claim.",
+  "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V35-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+  "stages": [
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/capture_support.py",
+        "final-summary",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/settings.json"
+      ],
+      "label": "final-summary",
+      "seconds": 180
+    }
+  ],
+  "window_seconds": 300
+}

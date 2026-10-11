@@ -1,0 +1,89 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V35-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/STAGED-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source/coverage/build"
+    },
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/TARGET-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/frozen-target"
+    }
+  ],
+  "phase": "carla-final-v35-capture",
+  "scope": "Fresh 19-suite CARLA qualification on the explicitly sealed snapshot. Native O3/O0 and maintained instrumented capture are separate. Targeted scope only; no global 100%, Arm, hosted CI, or anatomy-report claim.",
+  "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V35-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v35",
+  "stages": [
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+        "build",
+        "--Werror",
+        "-I",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source/coverage/build",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source/coverage/build/coverage/report_cli.mojo",
+        "-o",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-capture/reporter"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source/coverage/build",
+      "label": "reporter-build",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source/tools/coverage_io.py",
+        "group",
+        "--seconds",
+        "9000",
+        "--",
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/capture_support.py",
+        "capture-batch",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/settings.json"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source",
+      "label": "maintained-captures",
+      "seconds": 9030
+    },
+    {
+      "accept_nonzero": true,
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/capture_support.py",
+        "targeted-report",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/settings.json"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source",
+      "label": "targeted-report",
+      "seconds": 180
+    },
+    {
+      "command": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/capture_support.py",
+        "whole-report",
+        "--settings",
+        "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/settings.json"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v35-prepare/source",
+      "label": "whole-measured-modules-report",
+      "seconds": 180
+    }
+  ],
+  "window_seconds": 10000
+}

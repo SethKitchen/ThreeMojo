@@ -1,0 +1,90 @@
+{
+  "bundle_seal_sha256": "6a16acc10598a9943a03346bbd74cc5424b01b3e752b9c9569f55c85b99cc7dd",
+  "files": [
+    {
+      "bytes": 1836,
+      "git_blob": "9e04d5188ef86640ac8b3fe8b752c930304fcd6c",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/COMMANDS.txt",
+      "mode": "100644",
+      "path": "carla-final-v35/COMMANDS.txt",
+      "sha256": "b9d7e54459e041f3aa26c16ed3c886055bae49fdea8f14727133da59d66fea8a"
+    },
+    {
+      "bytes": 4439,
+      "git_blob": "d0240101c62059273b676b3d55ac2f40997d7c9e",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/capture.json",
+      "mode": "100644",
+      "path": "carla-final-v35/capture.json",
+      "sha256": "b9b718d609fb7f7d2f1d648e79fad1fd4aae9e88784eaf092ef0a7cf73e1aa18"
+    },
+    {
+      "bytes": 33527,
+      "git_blob": "d815deb922cce05eb54301167f44675f1aeb21c0",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/capture_support.py",
+      "mode": "100644",
+      "path": "carla-final-v35/capture_support.py",
+      "sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0"
+    },
+    {
+      "bytes": 2018,
+      "git_blob": "2b8291aed40c26178d67d1f9939ca01893184572",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/finish.json",
+      "mode": "100644",
+      "path": "carla-final-v35/finish.json",
+      "sha256": "1157876d8b5435b56f1e5b6e4c95f6040f189a69af20efe388eeca8b9916a5f5"
+    },
+    {
+      "bytes": 48044,
+      "git_blob": "dd0f1aa508b254fb41826f17ed428bb636c71755",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/native-o0.json",
+      "mode": "100644",
+      "path": "carla-final-v35/native-o0.json",
+      "sha256": "487230b66ec77dec7297dac4d69bd7be7717b1c434abb0eeeaaf182c695ceb5f"
+    },
+    {
+      "bytes": 48044,
+      "git_blob": "8555ac977f2041ac304ee524b11fc1a3e45bd965",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/native-o3.json",
+      "mode": "100644",
+      "path": "carla-final-v35/native-o3.json",
+      "sha256": "67fe392e7da59a7a785f7ffdff3d2b5fd49587a929bdfbb2afcfb4a8b123472c"
+    },
+    {
+      "bytes": 86405,
+      "git_blob": "f64d3a170850e0d5136bcd3201e50afaba45876e",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/plan.json",
+      "mode": "100644",
+      "path": "carla-final-v35/plan.json",
+      "sha256": "87f4a69df32b1af3f1fec796319878db19e8ce027265c136a16003b21ed8d13f"
+    },
+    {
+      "bytes": 4488,
+      "git_blob": "c145fc1822ffc4e2047f75c6521d8e13d3fa1eec",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/prepare.json",
+      "mode": "100644",
+      "path": "carla-final-v35/prepare.json",
+      "sha256": "c34574426f2745117f7887b1d9102d2046882b8c944f499714fd6d3bf241230b"
+    },
+    {
+      "bytes": 3622,
+      "git_blob": "abef8e99bf61260a70fd292fce9fe3dbe7e2c4ed",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35/settings.json",
+      "mode": "100644",
+      "path": "carla-final-v35/settings.json",
+      "sha256": "fc4335ef581dce88b97638bf3c97f1f1585c4fa0cee7fc2f237b81736c89af91"
+    },
+    {
+      "bytes": 784,
+      "git_blob": "8ed257d4fac51f25695ffeef0343571b93f3a39a",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v35-SEAL.json",
+      "mode": "100644",
+      "path": "carla-final-v35-SEAL.json",
+      "sha256": "6a16acc10598a9943a03346bbd74cc5424b01b3e752b9c9569f55c85b99cc7dd"
+    }
+  ],
+  "plan_sha256": "87f4a69df32b1af3f1fec796319878db19e8ce027265c136a16003b21ed8d13f",
+  "private_review_notes_included": false,
+  "schema": 1,
+  "source_seal_sha256": "020a72e9ceb1e45bf31559b624b5d328fd4a6e6414aafbdba5259b71af9fd7cc",
+  "status": "Reviewed mechanically rebound protocol source only; no native/capture execution or qualification claimed"
+}
