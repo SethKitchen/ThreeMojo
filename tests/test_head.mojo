@@ -220,7 +220,7 @@ from extensions.anatomy.tissue import (
 )
 from materials.material import MaterialId
 from math.vector3 import Vector3
-from std.math import inf, nan
+from std.math import inf, max, min, nan
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -347,6 +347,38 @@ def test_bones_are_named_and_solid() raises:
     assert_true(head_bone_from_dimensions(dims, HYOID, 8).triangle_count() > 0)
     with assert_raises():
         _ = head_bone_from_dimensions(dims, C7, 7)
+
+
+def test_neighboring_cervical_pillars_keep_the_disc_apart() raises:
+    # C2 through C7: each vertebra and the next one share no sampled
+    # interior. The articular pillars stop at the body endplane levels.
+    var h = head_dimensions(Length(6.0, FOOT), MALE)
+    var step = Float32(0.002)
+    for index in range(2, 7):
+        var upper = head_bone_field(h, HeadBone(index - 1))
+        var lower = head_bone_field(h, HeadBone(index))
+        var low = Vector3(
+            max(upper.low.x, lower.low.x),
+            max(upper.low.y, lower.low.y),
+            max(upper.low.z, lower.low.z),
+        )
+        var high = Vector3(
+            min(upper.high.x, lower.high.x),
+            min(upper.high.y, lower.high.y),
+            min(upper.high.z, lower.high.z),
+        )
+        assert_true(low.y < high.y)
+        for iz in range(Int((high.z - low.z) / step)):
+            for iy in range(Int((high.y - low.y) / step)):
+                for ix in range(Int((high.x - low.x) / step)):
+                    var p = low + Vector3(
+                        (Float32(ix) + 0.5) * step,
+                        (Float32(iy) + 0.5) * step,
+                        (Float32(iz) + 0.5) * step,
+                    )
+                    assert_false(
+                        upper.distance(p) < 0 and lower.distance(p) < 0
+                    )
 
 
 def test_bone_mass() raises:

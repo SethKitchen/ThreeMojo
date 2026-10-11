@@ -154,6 +154,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
 
+- [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): custom operands keep their native conversions and lifetimes. Three unsupported operand forms still fail compilation [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
+
 </details>
 
 ### Scene
@@ -514,6 +516,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Anatomy validity limits](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity): canonical lower-limb reports, provenance, sampling controls and unsupported-use gates [#289](https://github.com/SethKitchen/ThreeMojo/issues/289)
 
 - [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
+- [x] [Canonical anatomy overlap repair](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#localize-sampled-overlaps): source-bound witness localization at three grids, classified bone, knee and spine overlaps, and zero-volume interface rules [#595](https://github.com/SethKitchen/ThreeMojo/issues/595)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)

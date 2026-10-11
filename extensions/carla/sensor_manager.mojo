@@ -159,6 +159,7 @@ from extensions.carla.v2x import (
 from extensions.carla.world import World
 from math.vector3 import Vector3
 from render.framebuffer import Framebuffer
+from std.math import isfinite
 from units.si import (
     DEGREE,
     RADIAN,
@@ -271,8 +272,17 @@ def sensor_type_of(kind: SensorKind) raises -> SensorType:
     return SensorType(materialize[_TYPES]()[kind.value])
 
 
+def _check_measurement_time(seconds: Float64) raises:
+    if not (isfinite(seconds) and seconds >= 0):
+        raise Error("A measurement time must be finite and nonnegative")
+
+
 struct SensorMeasurement(Copyable, Movable):
-    """What one sensor gives on one tick."""
+    """What one sensor gives on one tick.
+
+    The `timestamp` field keeps CARLA's raw Float64 seconds, as the header
+    writes them. `elapsed` is the typed view.
+    """
 
     var sensor: ActorId
     var kind: SensorKind
@@ -311,12 +321,14 @@ struct SensorMeasurement(Copyable, Movable):
             kind: What it is.
 
         Raises:
-            Error: If the sensor is not alive or the kind is not valid.
+            Error: If the sensor is not alive, the kind is not valid, or the
+                world's time is not finite or is negative.
         """
         self.sensor = sensor
         self.kind = kind
         self.frame = world.frame
         self.timestamp = world.elapsed_seconds
+        _check_measurement_time(self.timestamp)
         self.transform = world.get_transform(sensor)
         self.header = sensor_header(
             sensor_type_of(kind), self.frame, self.timestamp, self.transform
@@ -337,6 +349,18 @@ struct SensorMeasurement(Copyable, Movable):
         self.obstacle = None
         self.cams = List[ReceivedCam]()
         self.custom = List[ReceivedCustom]()
+
+    def elapsed(self) raises -> Duration64:
+        """Return the simulated time of the measurement.
+
+        Returns:
+            The unchanged Float64 time as a Duration64.
+
+        Raises:
+            Error: If the mutable time field is not finite or is negative.
+        """
+        _check_measurement_time(self.timestamp)
+        return Duration64(self.timestamp)
 
     def image(self) raises -> Framebuffer:
         """Return a camera's image.

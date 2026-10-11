@@ -20,6 +20,15 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior. A
 right knee uses that frame. A left knee uses the same rule after the
 bones flip x.
 
+The tissues meet the bones and each other at interfaces, not in a common
+interior. Each solid gives way to every solid before it in this order:
+the four leg bones, the articular cartilage, the two menisci, then the
+two collateral ligaments. This is the order in which the segment
+accounting assigns bone before soft tissue. A collateral end still lies
+at its authored attachment landmark, but the part inside the bone is not
+ligament. The cartilage thickness inputs do not change. The cartilage
+solid is the part of its authored lens outside the bones.
+
 `KneeDimensions` is fieldwise-constructible. Editing a measurement does
 not rebuild landmarks. Call `knee_dimensions` to resolve a template.
 Call `validate` at every public consumer of an edited copy.
@@ -40,18 +49,23 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.leg.femur.dimensions import (
     FemurDimensions,
+    FemurField,
     femur_dimensions,
 )
 from extensions.humanoid.skeleton.leg.fibula.dimensions import (
     FibulaDimensions,
+    FibulaField,
     fibula_dimensions,
+    fibula_tibia_offset,
 )
 from extensions.humanoid.skeleton.leg.patella.dimensions import (
     PatellaDimensions,
+    PatellaField,
     patella_dimensions,
 )
 from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaDimensions,
+    TibiaField,
     tibia_dimensions,
 )
 from math.vector3 import Vector3
@@ -162,15 +176,32 @@ struct KneeDimensions(ImplicitlyCopyable):
     var mcl_tibia: Vector3
     var lcl_femur: Vector3
     var lcl_fibula: Vector3
+    var femur: FemurDimensions
+    var tibia: TibiaDimensions
+    var fibula: FibulaDimensions
+    var patella: PatellaDimensions
+    var femur_origin: Vector3
+    var tibia_origin: Vector3
+    var fibula_origin: Vector3
+    var patella_origin: Vector3
 
     def validate(self) raises:
         """Refuse dimensions that a field, mesh or mass cannot consume.
 
         Raises:
             Error: If sex or side is not valid, if a required length is
-                not finite or not positive, or if a landmark is not finite.
+                not finite or not positive, if a landmark or bone origin
+                is not finite, or if a placed bone fails `validate`.
         """
         check_spec(self.stature, self.sex, self.side, "knee")
+        self.femur.validate()
+        self.tibia.validate()
+        self.fibula.validate()
+        self.patella.validate()
+        finite_point(self.femur_origin, "femur origin", "knee")
+        finite_point(self.tibia_origin, "tibia origin", "knee")
+        finite_point(self.fibula_origin, "fibula origin", "knee")
+        finite_point(self.patella_origin, "patella origin", "knee")
         positive_length(self.femoral_thickness, "femoral thickness", "knee")
         positive_length(self.tibial_thickness, "tibial thickness", "knee")
         positive_length(self.patellar_thickness, "patellar thickness", "knee")
@@ -223,9 +254,50 @@ struct KneeDimensions(ImplicitlyCopyable):
         finite_point(self.lcl_fibula, "LCL fibular attachment", "knee")
 
 
-struct CartilageField(DistanceField, ImplicitlyCopyable):
-    """The implicit solid for articular cartilage of one knee."""
+struct _KneeBones(ImplicitlyCopyable):
+    """The four placed leg bones that every knee tissue gives way to."""
 
+    var femur: FemurField
+    var tibia: TibiaField
+    var fibula: FibulaField
+    var patella: PatellaField
+    var femur_origin: Vector3
+    var tibia_origin: Vector3
+    var fibula_origin: Vector3
+    var patella_origin: Vector3
+
+    def __init__(out self, dimensions: KneeDimensions) raises:
+        """Place the bones that `dimensions` carries in the leg frame."""
+        self.femur = FemurField(dimensions.femur)
+        self.tibia = TibiaField(dimensions.tibia)
+        self.fibula = FibulaField(dimensions.fibula)
+        self.patella = PatellaField(dimensions.patella)
+        self.femur_origin = dimensions.femur_origin
+        self.tibia_origin = dimensions.tibia_origin
+        self.fibula_origin = dimensions.fibula_origin
+        self.patella_origin = dimensions.patella_origin
+
+    def clip(self, point: Vector3, value: Float32) -> Float32:
+        """Remove every bone interior from a tissue's field `value`.
+
+        A nonnegative `value` is returned unchanged: the point is not in
+        the tissue either way.
+        """
+        if value >= 0:
+            return value
+        var d = max(value, -self.femur.distance(point - self.femur_origin))
+        d = max(d, -self.tibia.distance(point - self.tibia_origin))
+        d = max(d, -self.fibula.distance(point - self.fibula_origin))
+        return max(d, -self.patella.distance(point - self.patella_origin))
+
+
+struct CartilageField(DistanceField, ImplicitlyCopyable):
+    """The implicit solid for articular cartilage of one knee.
+
+    The solid is the authored lens outside the four leg bones.
+    """
+
+    var bones: _KneeBones
     var fem_med: Vector3
     var fem_med_r: Vector3
     var fem_lat: Vector3
@@ -253,6 +325,7 @@ struct CartilageField(DistanceField, ImplicitlyCopyable):
             Error: If `dimensions.validate` refuses the copy.
         """
         dimensions.validate()
+        self.bones = _KneeBones(dimensions)
         var t_f = dimensions.femoral_thickness.value
         var t_t = dimensions.tibial_thickness.value
         var t_p = dimensions.patellar_thickness.value
@@ -293,10 +366,14 @@ struct CartilageField(DistanceField, ImplicitlyCopyable):
         self.low = padded.low
         self.high = padded.high
 
-    def distance(self, point: Vector3) -> Float32:
-        """Return how far `point` lies outside the cartilage, in meters.
+    def lens_distance(self, point: Vector3) -> Float32:
+        """Return the authored lens field before the bones clip it.
 
-        Negative is inside. Zero is the surface.
+        Args:
+            point: A point in the leg frame, in meters.
+
+        Returns:
+            The signed value, in meters. Negative is inside.
         """
         var d = sd_ellipsoid(point, self.fem_med, self.fem_med_r)
         d = smin(d, sd_ellipsoid(point, self.fem_lat, self.fem_lat_r), self.k)
@@ -305,14 +382,25 @@ struct CartilageField(DistanceField, ImplicitlyCopyable):
         d = smin(d, sd_ellipsoid(point, self.tib_lat, self.tib_lat_r), self.k)
         return smin(d, sd_ellipsoid(point, self.pat, self.pat_r), self.k)
 
+    def distance(self, point: Vector3) -> Float32:
+        """Return how far `point` lies outside the cartilage, in meters.
+
+        Negative is inside. Zero is the surface.
+        """
+        return self.bones.clip(point, self.lens_distance(point))
+
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
 
 
 struct MeniscusField(DistanceField, ImplicitlyCopyable):
-    """The implicit solid for one meniscus."""
+    """The implicit solid for one meniscus.
 
+    The solid is the authored tube outside the bones and the cartilage.
+    """
+
+    var cartilage: CartilageField
     var p0: Vector3
     var p1: Vector3
     var p2: Vector3
@@ -343,6 +431,7 @@ struct MeniscusField(DistanceField, ImplicitlyCopyable):
         if part != MEDIAL_MENISCUS:
             if part != LATERAL_MENISCUS:
                 raise Error("A meniscus field needs a medial or lateral part")
+        self.cartilage = CartilageField(dimensions)
         var medial = part == MEDIAL_MENISCUS
         var ap: Float32
         var height: Float32
@@ -404,10 +493,14 @@ struct MeniscusField(DistanceField, ImplicitlyCopyable):
         self.low = padded.low
         self.high = padded.high
 
-    def distance(self, point: Vector3) -> Float32:
-        """Return how far `point` lies outside the meniscus, in meters.
+    def tube_distance(self, point: Vector3) -> Float32:
+        """Return the authored tube field before any clip.
 
-        Negative is inside. Zero is the surface.
+        Args:
+            point: A point in the leg frame, in meters.
+
+        Returns:
+            The signed value, in meters. Negative is inside.
         """
         var d = sd_segment(point, self.p0, self.p1, self.r0, self.r1)
         d = smin(
@@ -420,14 +513,46 @@ struct MeniscusField(DistanceField, ImplicitlyCopyable):
             d, sd_segment(point, self.p3, self.p4, self.r3, self.r4), self.k
         )
 
+    def distance(self, point: Vector3) -> Float32:
+        """Return how far `point` lies outside the meniscus, in meters.
+
+        Negative is inside. Zero is the surface.
+        """
+        var d = self.cartilage.bones.clip(point, self.tube_distance(point))
+        return _yield(d, self.cartilage, point)
+
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
 
 
-struct CollateralField(DistanceField, ImplicitlyCopyable):
-    """The implicit solid for one collateral ligament."""
+def _yield(
+    value: Float32, cartilage: CartilageField, point: Vector3
+) -> Float32:
+    """Remove the cartilage lens from a later tissue's field `value`."""
+    if value >= 0:
+        return value
+    return max(value, -cartilage.lens_distance(point))
 
+
+def _yield_tube(
+    value: Float32, meniscus: MeniscusField, point: Vector3
+) -> Float32:
+    """Remove a meniscus tube from a later tissue's field `value`."""
+    if value >= 0:
+        return value
+    return max(value, -meniscus.tube_distance(point))
+
+
+struct CollateralField(DistanceField, ImplicitlyCopyable):
+    """The implicit solid for one collateral ligament.
+
+    The solid is the authored band outside the bones, the cartilage and
+    both menisci. Its ends stay at the authored attachment landmarks.
+    """
+
+    var medial: MeniscusField
+    var lateral: MeniscusField
     var a: Vector3
     var b: Vector3
     var ra: Float32
@@ -452,6 +577,8 @@ struct CollateralField(DistanceField, ImplicitlyCopyable):
         if part != MEDIAL_COLLATERAL:
             if part != LATERAL_COLLATERAL:
                 raise Error("A collateral field needs a medial or lateral part")
+        self.medial = MeniscusField(dimensions, MEDIAL_MENISCUS)
+        self.lateral = MeniscusField(dimensions, LATERAL_MENISCUS)
         if part == MEDIAL_COLLATERAL:
             self.a = dimensions.mcl_femur
             self.b = dimensions.mcl_tibia
@@ -477,7 +604,11 @@ struct CollateralField(DistanceField, ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        return sd_segment(point, self.a, self.b, self.ra, self.rb)
+        var d = sd_segment(point, self.a, self.b, self.ra, self.rb)
+        d = self.medial.cartilage.bones.clip(point, d)
+        d = _yield(d, self.medial.cartilage, point)
+        d = _yield_tube(d, self.medial, point)
+        return _yield_tube(d, self.lateral, point)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
@@ -676,6 +807,14 @@ def knee_dimensions_from_bones(
         mcl_b,
         lcl_a,
         lcl_b,
+        femur,
+        tibia,
+        fibula,
+        patella,
+        f_origin,
+        t_origin,
+        fi_origin,
+        p_origin,
     )
 
 
@@ -743,22 +882,11 @@ def fibula_origin(
         The bone origin in the leg frame, in meters.
 
     Raises:
-        Error: If a bone fails `validate`.
+        Error: If the tibia origin is not finite, or a bone fails
+            `validate`.
     """
-    tibia.validate()
-    fibula.validate()
     finite_point(tibia_origin_point, "tibia origin", "knee")
-    var lat = tibia_origin_point + tibia.lateral_condyle
-    var head_r = fibula.head_diameter.value * 0.5
-    var lat_sign = Float32(1)
-    if fibula.side == LEFT:
-        lat_sign = Float32(-1)
-    var target = Vector3(
-        lat.x + lat_sign * (head_r * 1.12 + Float32(0.003)),
-        lat.y - Float32(0.010),
-        lat.z - Float32(0.006),
-    )
-    return target - fibula.head_center
+    return tibia_origin_point + fibula_tibia_offset(tibia, fibula)
 
 
 def patella_origin(

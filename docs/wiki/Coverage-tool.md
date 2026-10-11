@@ -82,21 +82,49 @@ Version 2 fixes the ambiguous evaluation boundaries tracked in [issue #385](http
 
 ### Truth-conversion limit
 
-Simple decisions accept any `Boolable` value. Their helper borrows the value and calls `__bool__` exactly once. Compound operands support `Bool`, `SIMD[DType.bool, 1]`, `Int`, `String`, `Optional[T]` and `List[T]`. Their pinned standard-library truth tests read only the value, presence flag or length. The element type does not supply their truth test.
+Simple decisions accept any `Boolable` value. Their helper borrows the value and calls `__bool__` exactly once.
 
-Custom `Boolable` operands in compound decisions fail compilation with a coverage diagnostic. Mojo can test a selected custom operand twice when both logical operands have the same type. Converting that operand to `Bool` early can change side effects or the decision. A borrowing wrapper also changes type identity through its origin parameters. The tool must reject this case until it can preserve the native conversions. Do not omit the source or its obligations to bypass this limit.
+Compound decisions keep the native `and`, `or` and `not` operators. Pinned Mojo 1.1.0 selects the truth semantics of `and` and `or` from the operand types:
 
-[Issue #556](https://github.com/SethKitchen/ThreeMojo/issues/556) fixes standard-library truth conversion. Native and instrumented checks cover optional, string, list and integer operands, including throwing operand expressions and short-circuit order. A move-only custom operand verifies simple-decision borrowing and conversion side effects. Stable and changing custom truth tests verify the explicit compound rejection.
+- **One type.** Mojo converts the left operand. It returns the left operand, or the right operand without a conversion. The enclosing operator or truth test converts the selected operand again. In `a or b or c`, a true `a` is converted three times.
+- **Two types.** Mojo converts each evaluated operand to `Bool` once.
+- **An implicit conversion.** Mojo can join two types into one. For example, `Optional[Int](None) or 0` wraps `0` in an `Optional` and is true.
 
-Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body. [Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) tracks general custom compound semantics and lifetimes.
+Operands of `Bool`, `SIMD[DType.bool, 1]`, `Int`, `String`, `Optional[T]` and `List[T]` become `Bool` when they are recorded. Their pinned standard-library truth tests read only the value, presence flag or length.
+
+Other `Boolable` operands, which include custom types, go into a recording proxy. The native operators convert the proxy at the same points as the operand:
+
+- A temporary operand moves into a proxy that owns it. The proxy type has no operand origin, so two temporaries of one type give one proxy type. The extra move must be trivial, because a bitwise move runs no source code.
+- A retained operand, such as a variable or a field, goes into a proxy that borrows it with its origin. A same-type operator must copy a retained operand, so a move-only retained operand is always in a two-type operator.
+- Each conversion calls the operand's `__bool__` once. The first conversion records the condition. A later conversion of the same selected operand with a different truth records that hit too, and marks the condition `?`.
+
+Each `and` and `or` operator also gets an unevaluated `type_of` check. It compares the original subexpression with the instrumented one when Mojo instantiates the function, also in generic code. The check fails compilation when the probes would change the semantics of the operator.
+
+These operands fail compilation with a coverage diagnostic:
+
+- A retained implicitly copyable custom operand. A same-type operator copies it, and a proxy cannot make that copy.
+- A temporary custom operand with a user-defined move constructor. The proxy would run it one more time.
+- An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence.
+
+Do not omit the source or its obligations to bypass these limits.
+
+The pinned reflection API names types without their origin parameters. A same-type check therefore also needs a proxy as the instrumented result. An operator whose operands differ only by origin keeps its native two-type semantics through distinct proxy types.
+
+[Issue #556](https://github.com/SethKitchen/ThreeMojo/issues/556) fixes standard-library truth conversion. Native and instrumented checks cover optional, string, list and integer operands, including throwing operand expressions and short-circuit order.
+
+[Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) adds custom compound operands. An independent Python model of the native semantics supplies the expected results for 17 decision trees. The trees combine one-type and two-type operators, `not`, temporary and retained operands, `Bool` operands and a conditional-expression operand. Each tree runs with 16 truth assignments and 5 throwing positions, with stable truth tests and with truth tests that change at each conversion. The check compares the exact sequence of operand creation, conversion and destruction, the condition and decision hits, and the vectors. The reducer and the report must refuse each `?` vector.
+
+More native controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They also compare a retained operand without a pinned lifetime, a temporary that cannot move, and pure one-type operators. One generic function runs with one operand type and with two operand types, so each instantiation gets its own check. Six more programs compile natively and must fail with the coverage diagnostic.
+
+Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body.
 
 ### Evaluation protocol
 
 Each function invocation that has a compound decision owns one private operand buffer. Other functions have no buffer. The new buffer and helper names use a prefix absent from the source. The buffer factory also avoids unqualified caller-scope `List` and `Int` names.
 
-A begin operation clears the buffer before each reached `if`, `elif` or `while` evaluation. It does not change the original operand order or short-circuit behavior. Each completed leaf writes its condition hit. The runtime accepts standard-library truth-testable operands without requiring implicit argument conversion. All hit records use `COVLINE`, including payloads with a condition index and a `T` or `F` outcome.
+A begin operation clears the buffer before each reached `if`, `elif` or `while` evaluation. It does not change the original operand order or short-circuit behavior. Each completed pure leaf writes its condition hit. A proxy writes its condition hit when Mojo first converts it. The runtime accepts standard-library truth-testable operands without requiring implicit argument conversion. All hit records use `COVLINE`, including payloads with a condition index and a `T` or `F` outcome.
 
-A completed decision writes its outcome hit and one `COVEVAL2:<decision>:<T|F>:<vector>;` record. Each vector character is `T`, `F` or `-` for an unevaluated leaf. The record ends with a newline.
+A completed decision writes its outcome hit and one `COVEVAL2:<decision>:<T|F>:<vector>;` record. Each vector character is `T`, `F`, `-` for an unevaluated leaf, or `?` for a leaf whose repeated truth tests disagree. The parser and the reducer refuse a `?` vector, because it cannot certify MC/DC. The record ends with a newline.
 
 Recursive calls and concurrent calls have separate local buffers. An exception before completion writes no evaluation record. The observed condition hits remain available. A later begin clears any abandoned operands.
 
@@ -124,7 +152,7 @@ No branch, condition or MC/DC obligation changes in these production sources. Th
 
 The instrumenter checks the full source text before it chooses any injected name. Hit and branch aliases, evaluation helper and buffer names, and loop-counter prefixes must be absent from that text. A collision adds underscores until the name is unused. This includes names in nested functions, parameters and generic callbacks. A loop counter also includes its original source line number.
 
-These names do not change probe IDs or manifest entries. The imported buffer factory avoids caller-scope `List` and `Int` names.
+These names do not change probe IDs or manifest entries. The imported buffer factory avoids caller-scope `List` and `Int` names. The operator checks also use `type_of`. Mojo reserves that name, so the source cannot define another `type_of`. The proxy types are inferred results, and the instrumented source never names them.
 
 `make test-coverage-tool` checks exact inherited-default line, branch, condition and MC/DC entries. It also checks native versus instrumented output, full default-method probe streams, recursive defaults, exceptions, nested callbacks and collisions with loop line numbers. `tests/test_trait_defaults.mojo` calls all eleven defaults through `ProgramSource` and checks inherited values through the node interpreter. The render-hook suite checks sun and point-light shadows with inherited `NoHooks` defaults.
 

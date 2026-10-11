@@ -40,6 +40,18 @@ The report uses an initial source and inventory snapshot. It rechecks source, pr
 
 `--use game-fantasy` permits the labeled template estimate. Engineering, whole-body, dynamic/constitutive, patient-specific and clinical/safety requests still produce an evidence report. They return exit code 2 because their use gate is unsupported. A failed calculation returns exit code 1. A supported labeled estimate returns 0.
 
+## Localize sampled overlaps
+
+Run this command from the repository root to localize the bone, knee and neighboring-spine overlaps:
+
+```sh
+python3 tools/anatomy_overlaps.py --build --output anatomy-overlaps.json
+```
+
+The tool checks all 532 legacy pairs at 5, 3 and 2 mm. It localizes each pair that #595 lists and each pair with a sampled common interior. For each grid it records the witness point and the box of common-interior cell centers. Two local cubes around the witness then search at one sixteenth and one 256th of the grid width. The output records the same source digest and probe digest as the report. Omit `--build` to reuse a current probe.
+
+A negative refined value is a point inside both canonical fields. It is not a penetration depth. The refinement is local, so a nonnegative value does not prove clearance elsewhere.
+
 ## Read the report
 
 The JSON schema version is 2. Every quantity has a unit in its key or its stated frame. Pair IDs use a canonical group plus sorted component IDs. They remain stable when pair order changes. Reports retain source-file, report-logic, inventory and executable hashes.
@@ -112,6 +124,12 @@ The machine-readable inventory marks each pair as checked or intentionally omitt
 
 The provenance inventory has an explicit intentional-overlap allowlist. It covers construction primitives inside one named field, contained anatomy inside the skin domain, and the leg/foot envelope union. It permits a shared body/disc endplane surface within 1e-6 m. It permits no positive-volume body/disc overlap. Distinct named fields are not exempted by the construction-union rule.
 
+The inventory also lists five interface rules. Each rule makes a later field give way to an earlier field, so the two share no interior. Every interface has zero thickness, and no rule allows a positive volume.
+
+Articulating foot bones follow the segment accounting's bone order. The talus and the fibula give way to the tibia. Knee tissues give way to the leg bones, then to the cartilage, then to the menisci. Each cervical articular pillar ends at its body endplane levels. Only that last rule changes an authored primitive. No rule changes a landmark, a radius or a cited thickness.
+
+A rule moves the interface, so a clipped solid is smaller than its authored shape. Per-part masses can therefore fall. A collateral ligament end still lies at its authored attachment landmark. The part of the band inside the bone is not ligament.
+
 No positive-volume attachment allowance is currently justified for catalog pairs. A shared tendon path, vascular junction or apparent anatomical attachment remains a finding. Its permitted overlap volume is unknown. The skin-domain rule only prevents duplicate domain accounting; it does not validate containment or dermis clearance.
 
 Finite positive dimensions can still be geometrically incompatible. A reversed disc gap, endplane mismatch or unexpected overlap is evidence to inspect. It does not authorize automatic changes to measured or cited inputs. Use `diagnose_pair` with edited canonical fields for additional pairs. The caller must supply conservative bounds in one frame.
@@ -130,7 +148,11 @@ Canonical-to-visual, rig and bake mapping remains [issue #297](https://github.co
 
 ## Tracked limits
 
-[Issue #595](https://github.com/SethKitchen/ThreeMojo/issues/595) tracks classification and repair of current sampled-overlap findings. The default 5 mm template reports 21 bone-pair hits, 14 knee-pair hits and one full C2/C3 field hit. These 36 findings remain unallowlisted. All 23 body/disc endplane checks pass. A signed field witness is not a measured penetration depth. A sampled volume is not an exact overlap volume.
+[Issue #595](https://github.com/SethKitchen/ThreeMojo/issues/595) classified and repaired the bone, knee and spine overlaps. After the repair, no grid finds a bone, knee or spine common interior. [The #595 evidence](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/anatomy-overlaps-595.md) records each witness point, class and rule.
+
+Before the repair, the 5 mm grid found 36 pairs with a common interior. The 3 and 2 mm grids found 19 more. A local refinement put a point inside both fields for all 55 pairs. The C2/C3 witness of −1.15e-6 m was a grid artifact. Its refined point lies 2.5 mm inside both fields, at the articular pillars.
+
+The lower-limb tissue pairs of #596 still have sampled common interiors. The report retains each one as an unallowlisted finding. All 23 body/disc endplane checks pass. A signed field witness is not a measured penetration depth. A sampled volume is not an exact overlap volume.
 
 [Issue #596](https://github.com/SethKitchen/ThreeMojo/issues/596) adds the complete selected-side pair inventory and missing tissue-class execution. The source-bound `docs/validation/anatomy-pair-example.json` uses the explicit representative scope. It is focused evidence for the implementation. The full integrated report and aggregate qualification remain separate checks. Neither pair coverage nor passing analytic controls grants a clearance or certification claim.
 

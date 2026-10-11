@@ -19,12 +19,16 @@ terminate the suite instead of certifying missing data.
 from std.ffi import external_call
 from std.memory import stack_allocation
 from std.sys._libc_errno import ErrNo, get_errno, set_errno
+from std.reflection import reflect
 from std.sys import is_defined
 
 comptime LINE_PREFIX = "COVLINE:"
 comptime BRANCH_PREFIX = "COVBRANCH:"
 comptime EVALUATION_PREFIX = "COVEVAL2:"
 comptime MAX_RECORD_BYTES = 512
+# A slot whose repeated native truth conversions disagreed. Its vector
+# character is `?`, which the parsers refuse instead of certifying MC-DC.
+comptime INCONSISTENT = 2
 
 
 @inline(.never)
@@ -274,32 +278,273 @@ def leaf[
 
 
 @inline(.never)
-def leaf[
-    T: Boolable, *Ts: AnyType
-](
-    value: T, mut values: List[Int], id: StaticString, index: Int, *extra: *Ts
-) -> Bool:
-    """Reject unverified truth conversion instead of changing source behavior.
+def _observe(
+    mut values: List[Int], id: StaticString, index: Int, outcome: Bool
+):
+    """Record one native truth conversion of a custom operand.
 
-    The trailing pack makes this a fallback after the fixed pure-type overloads.
-    It also prevents implicit Optional construction from admitting a custom type.
+    The first conversion fills the slot and writes the condition hit. A later
+    conversion of the same selected object with the same truth adds nothing.
+    A later conversion with a different truth writes that hit too and marks
+    the slot inconsistent, so the vector cannot certify MC-DC.
+    """
+    var state = values[index]
+    if state == Int(outcome):
+        return
+    values[index] = Int(outcome) if state < 0 else INCONSISTENT
+    _emit_hit(id, StaticString(":T\n") if outcome else StaticString(":F\n"))
+
+
+struct _OwnedLeaf[T: Boolable & Movable & Deinitable, origin: Origin[mut=True]](
+    Boolable, Movable
+):
+    """An owned temporary operand that records each native truth conversion.
+
+    The type has no operand origin. Two temporaries of one native type give one
+    proxy type, so Mojo keeps its same-type or mixed-type operator semantics.
+    The proxy is not copyable, so a selected operand moves as it does natively.
+    """
+
+    var value: Self.T
+    var values: Pointer[List[Int], Self.origin]
+    var id: StaticString
+    var index: Int
+
+    def __init__(
+        out self,
+        var value: Self.T,
+        values: Pointer[List[Int], Self.origin],
+        id: StaticString,
+        index: Int,
+    ):
+        """Take ownership of the temporary operand without converting it.
+
+        Args:
+            value: The temporary operand.
+            values: The current invocation's operand buffer.
+            id: The condition's static hit identifier.
+            index: The condition's slot in the buffer.
+        """
+        self.value = value^
+        self.values = values
+        self.id = id
+        self.index = index
+
+    def __bool__(self) -> Bool:
+        """Convert the operand once for this native truth test and record it.
+
+        Returns:
+            The operand's own `__bool__` result.
+        """
+        var outcome = self.value.__bool__()
+        _observe(self.values[], self.id, self.index, outcome)
+        return outcome
+
+
+struct _BorrowedLeaf[
+    T: Boolable, value_origin: Origin[mut=False], origin: Origin[mut=True]
+](Boolable, Movable):
+    """A borrowed retained operand that records each native truth conversion.
+
+    The type keeps the operand origin, so Mojo keeps the operand alive. Only
+    non-implicitly-copyable operands use it. Native same-type `and` or `or`
+    must copy a retained operand, so these operands can only be mixed-type.
+    """
+
+    var value: Pointer[Self.T, Self.value_origin]
+    var values: Pointer[List[Int], Self.origin]
+    var id: StaticString
+    var index: Int
+
+    def __init__(
+        out self,
+        value: Pointer[Self.T, Self.value_origin],
+        values: Pointer[List[Int], Self.origin],
+        id: StaticString,
+        index: Int,
+    ):
+        """Borrow the retained operand without converting it.
+
+        Args:
+            value: The retained operand.
+            values: The current invocation's operand buffer.
+            id: The condition's static hit identifier.
+            index: The condition's slot in the buffer.
+        """
+        self.value = value
+        self.values = values
+        self.id = id
+        self.index = index
+
+    def __bool__(self) -> Bool:
+        """Convert the operand once for this native truth test and record it.
+
+        Returns:
+            The operand's own `__bool__` result.
+        """
+        var outcome = self.value[].__bool__()
+        _observe(self.values[], self.id, self.index, outcome)
+        return outcome
+
+
+@inline(.never)
+def leaf[
+    T: Boolable & Movable & Deinitable,
+    origin: Origin[mut=True],
+    //,
+    *Ts: AnyType,
+](
+    var value: T,
+    ref[origin] values: List[Int],
+    id: StaticString,
+    index: Int,
+    *extra: *Ts,
+) -> _OwnedLeaf[T, origin]:
+    """Move a temporary custom operand into a recording proxy.
+
+    Mojo selects this overload for a temporary and the `ref` overload for a
+    retained value. The trailing pack makes both a fallback after the fixed
+    pure-type overloads. The operand is not converted here: the native `and`,
+    `or`, `not` and truth context convert the proxy as they would the operand.
 
     Args:
-        value: An unsupported operand.
+        value: The temporary operand, moved without a copy.
         values: The current invocation's operand buffer.
         id: The condition's static hit identifier.
         index: The condition's slot in the buffer.
         extra: The overload-resolution fallback pack; callers leave it empty.
 
     Returns:
-        No value. Instantiation fails with an actionable diagnostic.
+        A proxy that owns the operand and records its truth conversions.
     """
-    comptime assert False, (
-        "Coverage compound operands support Bool, scalar SIMD Bool, Int,"
-        " String, Optional and List; custom Boolable truth conversions are not"
-        " yet supported. Do not exclude the source; see the coverage"
-        " truth-conversion limit."
+    # The move into the proxy is extra. Only a bitwise move hides it.
+    comptime assert T.__move_ctor_is_trivial, (
+        "Coverage cannot yet preserve a temporary custom Boolable compound"
+        " operand with a user-defined move constructor: the probe would add a"
+        " move. Do not exclude the source; see the coverage truth-conversion"
+        " limit."
     )
+    return _OwnedLeaf[T, origin](value^, Pointer(to=values), id, index)
+
+
+@inline(.never)
+def leaf[
+    T: Boolable,
+    value_origin: Origin[mut=False],
+    origin: Origin[mut=True],
+    //,
+    *Ts: AnyType,
+](
+    ref[value_origin] value: T,
+    ref[origin] values: List[Int],
+    id: StaticString,
+    index: Int,
+    *extra: *Ts,
+) -> _BorrowedLeaf[T, value_origin, origin]:
+    """Borrow a retained custom operand in a recording proxy.
+
+    Native same-type `and` or `or` copies a retained operand into its result.
+    A borrowing proxy cannot reproduce that copy, so an implicitly copyable
+    retained operand is rejected. Other retained operands are always mixed-type.
+
+    Args:
+        value: The retained operand, borrowed without a copy.
+        values: The current invocation's operand buffer.
+        id: The condition's static hit identifier.
+        index: The condition's slot in the buffer.
+        extra: The overload-resolution fallback pack; callers leave it empty.
+
+    Returns:
+        A proxy that borrows the operand and records its truth conversions.
+    """
+    comptime assert not conforms_to(T, ImplicitlyCopyable), (
+        "Coverage cannot yet preserve a retained implicitly copyable custom"
+        " Boolable compound operand: native same-type and/or copies it. Do not"
+        " exclude the source; see the coverage truth-conversion limit."
+    )
+    return _BorrowedLeaf[T, value_origin, origin](
+        Pointer(to=value), Pointer(to=values), id, index
+    )
+
+
+def _pure(name: StaticString) -> Bool:
+    """Return True for a type whose operands convert to Bool without probes.
+
+    These are the fixed `leaf` overloads. Pinned Mojo 1.1.0 names prelude
+    types without a module and every source type with its module, so a source
+    type cannot take one of these names.
+    """
+    return (
+        name == "Bool"
+        or name == "SIMD[DType.bool, 1]"
+        or name == "SIMD[DType.int, 1]"
+        or name == "String"
+        or name.startswith("List[")
+        or _optional(name)
+    )
+
+
+def _optional(name: StaticString) -> Bool:
+    """Return True for an Optional type name, with or without its module."""
+    return name.startswith("Optional[") or name.startswith(
+        "std.collections.optional.Optional["
+    )
+
+
+def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
+    """Check that probes keep one `and`/`or` operator's native semantics.
+
+    Mojo tests a same-type operand again in the enclosing context and converts
+    mixed-type operands once. An implicit conversion can also join two operand
+    types. The probes keep the native operator, so it must choose the same
+    semantics for the proxies. Fixed pure operands become `Bool`. They are
+    exact unless an implicit `Optional` wrap replaces a value with presence.
+
+    Parameters:
+        L: The native left operand type.
+        R: The native right operand type.
+        N: The native result type.
+        I: The instrumented result type.
+
+    Returns:
+        True if the instrumented operator keeps the native truth semantics.
+    """
+    comptime left = reflect[L].name()
+    comptime right = reflect[R].name()
+    comptime native = reflect[N].name()
+    comptime rewritten = reflect[I].name()
+    comptime if _pure(left) and _pure(right) and _pure(native):
+        return not _optional(native) or (_optional(left) and _optional(right))
+    comptime if native == "Bool":
+        return rewritten == "Bool"
+    # Same-type: one native type, kept by one recording proxy type.
+    return rewritten != "Bool" and left == right and left == native
+
+
+@inline(.never)
+def truth[T: Boolable, //, kept: Bool](value: T) -> Bool:
+    """Apply the decision's final native truth test to its compound value.
+
+    It runs before `finish` borrows the buffer, so no proxy aliases that borrow.
+
+    Parameters:
+        T: The compound condition's type, Bool or a recording proxy.
+        kept: Whether every operator keeps its native semantics. See `node`.
+
+    Args:
+        value: The compound condition's value.
+
+    Returns:
+        The value's Boolean conversion, evaluated exactly once.
+    """
+    comptime assert kept, (
+        "Coverage cannot yet preserve this compound condition: the probes"
+        " would change how an and/or operator joins its operand types. The"
+        " cause is an implicit conversion between operand types or a retained"
+        " implicitly copyable custom Boolable operand. Do not exclude the"
+        " source; see the coverage truth-conversion limit."
+    )
+    return value.__bool__()
 
 
 @inline(.never)
@@ -321,6 +566,9 @@ def finish(value: Bool, values: List[Int], id: StaticString) -> Bool:
         String(EVALUATION_PREFIX) + String(id) + (":T:" if value else ":F:")
     )
     for state in values:
-        record += "-" if state < 0 else ("T" if state > 0 else "F")
+        if state == INCONSISTENT:
+            record += "?"
+        else:
+            record += "-" if state < 0 else ("T" if state > 0 else "F")
     _emit_evaluation(record + ";\n")
     return value

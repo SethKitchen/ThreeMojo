@@ -5179,6 +5179,50 @@
       "function declared here"
     ]
   },
+  "tests/compile_fail/carla_lane_invasion_event_time_rejects_float32_duration.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".dtype of the first value is 'DType.float32' but the second value is 'DType.float64'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'timestamp' cannot be converted from 'Quantity[Int(0), Int(0), Int(1), Int(0)]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_lane_invasion_event_time_rejects_length.mojo": {
+    "errors": [
+      {
+        "line": 15,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      ".length of the first value is 'Int(1)' but the second value is 'Int(0)'",
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'timestamp' cannot be converted from 'Quantity[Int(1), Int(0), Int(0), Int(0), dtype=.float64]' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+    ]
+  },
+  "tests/compile_fail/carla_lane_invasion_event_time_rejects_raw_float64.mojo": {
+    "errors": [
+      {
+        "line": 14,
+        "column": 26,
+        "message": "no matching function in initialization"
+      }
+    ],
+    "notes": [
+      "candidate not viable: missing required argument: 'copy'",
+      "candidate not viable: missing required argument: 'move'",
+      "candidate not viable: value passed to 'timestamp' cannot be converted from 'Float64' to 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
+    ]
+  },
   "tests/compile_fail/carla_lane_invasion_time_rejects_float32_duration.mojo": {
     "errors": [
       {
@@ -5253,6 +5297,18 @@
     ],
     "notes": [
       "function declared here"
+    ]
+  },
+  "tests/compile_fail/carla_measurement_time_is_not_a_raw_float64.mojo": {
+    "errors": [
+      {
+        "line": 12,
+        "column": 47,
+        "message": "cannot implicitly convert 'Duration64' value to 'Float64'"
+      }
+    ],
+    "notes": [
+      "'Duration64' is aka 'Quantity[Int(0), Int(0), Int(1), Int(0), dtype=.float64]'"
     ]
   },
   "tests/compile_fail/carla_speed_adapter_rejects_length.mojo": {
