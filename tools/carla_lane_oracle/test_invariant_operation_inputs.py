@@ -1608,6 +1608,12 @@ class ReviewedRelativePathMechanics(_rm_unittest.TestCase):
 # Tuple: module, original owner, physical expression, expected count, selections.
 # Each selection is (index, legacy site suffix, comparator mode, narrow binding kind).
 _OPERATION_REACHED_READ_SPECS = (
+    ('tools/carla_lane_oracle/consumer_successor_ledger.py', '_read',
+     'audit._regular(root, path).read_bytes()', 1, ((0, '82:1', 'bytes', 'observe'),)),
+    ('tools/carla_lane_oracle/runtime_boundary_contracts.py', 'verify',
+     '(root / MIGRATION).read_bytes()', 1, ((0, '66:1', 'bytes', 'observe'),)),
+    ('tools/carla_lane_oracle/render_actor_reuse_contracts.py', 'verify',
+     '(root / MIGRATION).read_bytes()', 1, ((0, '59:1', 'bytes', 'observe'),)),
     ('tools/carla_lane_oracle/coverage_invariant_contracts.py', 'verify',
      '(root / path).read_text()', 1, ((0, '81:1', 'default', 'observe'),)),
     ('tools/carla_lane_oracle/coverage_followup_contracts.py', 'verify',
@@ -1749,7 +1755,7 @@ _OPERATION_REACHED_READ_SPECS = (
     ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', 'reviewed_sum2_callers',
      "physical.read_text(encoding='utf-8')", 1, ((0, '1291:1', 'supplied_physical', 'observe'),)),
     ('tools/carla_lane_oracle/render_actor_reuse_contracts.py', 'verify',
-     '(root / path).read_bytes()', 2, ((0, '47:1', 'bytes', 'observe'),)),
+     '(root / path).read_bytes()', 2, ((0, '47:1', 'bytes', 'observe'), (1, '81:1', 'bytes', 'observe'))),
     ('tools/carla_lane_oracle/reviewed_cleanup_contracts.py', 'verify_premises',
      '(root / SOURCE_PATHS[0]).read_text()', 1, ((0, '103:1', 'default', 'observe'),)),
     ('tools/carla_lane_oracle/reviewed_cleanup_contracts.py', 'verify_premises',
@@ -1759,7 +1765,7 @@ _OPERATION_REACHED_READ_SPECS = (
     ('tools/carla_lane_oracle/reviewed_cleanup_contracts.py', 'verify',
      '(root / path).read_text()', 2, ((0, '252:1', 'default', 'observe'), (1, '266:1', 'default', 'observe'))),
     ('tools/carla_lane_oracle/runtime_boundary_contracts.py', 'verify',
-     '(root / path).read_bytes()', 2, ((0, '54:1', 'bytes', 'observe'),)),
+     '(root / path).read_bytes()', 2, ((0, '54:1', 'bytes', 'observe'), (1, '88:1', 'bytes', 'observe'))),
     ('tools/carla_lane_oracle/seed_count_contracts.py', 'historical_source',
      '(root / MODULE).read_bytes()', 2, ((0, '731:1', 'bytes', 'observe'), (1, '737:1', 'bytes', 'observe'))),
     ('tools/carla_lane_oracle/source_contracts.py', 'read_pins',
@@ -1847,7 +1853,7 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
             sites[filename, span] = (relative + ':' + suffix, owner, mode, binding)
 
     # The one retained local-S comparator is deliberately not treated as a
-    # generic _observe call. Keep its exact original chained predicate.
+    # generic _observe call. Keep its exact endpoint-paired chained predicate.
     cache_filename = str((Path(code_root)/'tools/carla_lane_oracle/cache_key_contracts.py').absolute())
     cache_tree = trees[cache_filename]
     inventory_node = next(item for item in cache_tree.body
@@ -1855,7 +1861,9 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
     local_predicate = ast.parse(
         'source.token_sha256(text) == source.token_sha256('
         '_inputs.text_default(_input_owner, root, rel.as_posix())) '
-        '== seed_count.SCORE_AFTER_TOKEN_SHA256', mode='eval').body
+        '== (seed_count.station.AFTER_TOKEN_SHA256 '
+        'if hashlib.sha256(physical).hexdigest() == seed_count.station.AFTER_SHA256 '
+        'else seed_count.SCORE_AFTER_TOKEN_SHA256)', mode='eval').body
     predicate_key = ast.dump(local_predicate, include_attributes=False)
     guarded_comparisons = [item for item in ast.walk(inventory_node)
         if isinstance(item, ast.Call) and isinstance(item.func, ast.Name)
@@ -2389,13 +2397,13 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
 
     _SOURCE_SHA256 = {
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
-        'cache_key_contracts.py': '99b947f241fa5459ecfbb890e277519e6735ff6a53e4d97a29e220b69acc78d0',
+        'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '3679bb0565255c19e9fcbf3af6da6790beb78cf9379197e7264b718444f14532',
-        'full_audit_cleanup_contracts.py': '993496a159a84a9515ee3284cb6a36a8f411820ba4d4d4df0fe5e6766cb74498',
+        'coverage_loop_proofs.py': '2b6dbe7483d3c9ceb2ee9914158d99fcd8c1d87f9298f797edac150a78457f67',
+        'full_audit_cleanup_contracts.py': 'a182c861c55962fb749b2c0aa6b7a5c0466674b474e1c6b67dd6ed621dc44f25',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': 'f87c9eef3bb9204c5dcb0eb4bdbedbc6651b8da26a8d9de7ebfb55cffe5098f5',
+        'seed_count_contracts.py': 'd5b16ad9ef253250c5cceffe2fe82ca6f013526f574974e5b952c81ee012a4c4',
         'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
     }
 
@@ -2710,9 +2718,9 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
     def _lease_sites(self, cache, seed):
         return (
             self._site(cache.inventory, 106, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
-            self._site(seed.verify_score, 550, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
-            self._site(seed.verify_score, 572, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
-            self._site(cache.inventory, 150, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
+            self._site(seed.verify_score, 583, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(seed.verify_score, 612, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(cache.inventory, 153, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
         )
 
     @staticmethod
@@ -2732,7 +2740,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1039,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1157,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -2838,7 +2846,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         physical = (self.root/path).read_bytes()
         site = self._site(cache.inventory, 103, 'path.read_text()')
         local_require = self._site(cache.inventory, 113,
-            "require(source.token_sha256(text) == source.token_sha256(_inputs.text_default(_input_owner, root, rel.as_posix())) == seed_count.SCORE_AFTER_TOKEN_SHA256, 'unreviewed supplied score-helper source')")
+            "require(source.token_sha256(text) == source.token_sha256(_inputs.text_default(_input_owner, root, rel.as_posix())) == (seed_count.station.AFTER_TOKEN_SHA256 if hashlib.sha256(physical).hexdigest() == seed_count.station.AFTER_SHA256 else seed_count.SCORE_AFTER_TOKEN_SHA256), 'unreviewed supplied score-helper source')")
         sites = self._lease_sites(cache, seed)
         for fault in ('comment', 'tokens', 'io'):
             with self.subTest(fault=fault):
@@ -2846,7 +2854,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                 failure = OSError('distinct local supplied Map read denied')
                 original_read, original_require = Path.read_text, cache.require
                 original_observe = cleanup._BorrowedCacheInputs.observe_bytes
-                original_projection = seed.score_predecessor_source
+                original_projection = seed.score_family_predecessor_source
                 @wraps(original_read)
                 def read(actual, *args, **kwargs):
                     value = original_read(actual, *args, **kwargs)
@@ -2886,7 +2894,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                 with self.audit() as events, patch.object(Path, 'read_text', read), \
                         patch.object(cache, 'require', require), \
                         patch.object(cleanup._BorrowedCacheInputs, 'observe_bytes', observe), \
-                        patch.object(seed, 'score_predecessor_source', projection):
+                        patch.object(seed, 'score_family_predecessor_source', projection):
                     if fault == 'comment':
                         result = invariant.verify(self.root)
                     else:
@@ -2920,13 +2928,13 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         from functools import wraps
         loops, core = self.coverage()
         from carla_lane_oracle import seed_count_contracts as seed
-        production_site = self._site(seed.verify_score_caller_inventory, 482,
+        production_site = self._site(seed.verify_score_caller_inventory, 486,
                                      'guard.production_mojo_paths(root)')
-        known_site = self._site(loops._construction_boundary_callers, 1126,
+        known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1318,
+        production_catch = self._site(core._operation_production_paths, 1471,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1226,
+        known_catch = self._site(loops.construction_boundary_loops, 1326,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'

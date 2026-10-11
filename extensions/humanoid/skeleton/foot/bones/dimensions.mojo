@@ -20,6 +20,15 @@ phalanges share a thin cortical shell over trabecular bone. A medullary
 canal is not cut. That is an authored simplification for these short
 bones.
 
+Neighboring bones meet at a joint interface, not in a common interior.
+`foot_articulations` lists the bones that each bone meets. Where two
+listed neighbors overlap, the later bone in `named_foot_bones` gives way
+to the earlier one. That is the order in which the segment accounting
+assigns bone. The talus also gives way to the tibia, which the leg
+places. The interface has zero thickness. The template has no cartilage
+or joint space between foot bones. These rules change no landmark and no
+radius.
+
 `FootDimensions` is fieldwise-constructible. Editing a measurement
 does not rebuild landmarks. Call `foot_dimensions` to resolve a
 template. Call `validate` at every public consumer of an edited copy.
@@ -56,7 +65,10 @@ from extensions.humanoid.skeleton.leg.knee.dimensions import (
 from extensions.humanoid.skeleton.leg.patella.dimensions import (
     patella_dimensions,
 )
-from extensions.humanoid.skeleton.leg.tibia.dimensions import tibia_dimensions
+from extensions.humanoid.skeleton.leg.tibia.dimensions import (
+    TibiaField,
+    tibia_dimensions,
+)
 from math.vector3 import Vector3
 from std.math import max, min
 from units.si import Length
@@ -243,8 +255,33 @@ struct FootDimensions(ImplicitlyCopyable):
         finite_point(self.lateral_malleolus, "lateral malleolus", "foot")
 
 
+@fieldwise_init
+struct _Shape(ImplicitlyCopyable):
+    """The unclipped solid of one bone, with its smooth-union radius."""
+
+    var segments: SegmentSet
+    var k: Float32
+
+    def distance(self, point: Vector3) -> Float32:
+        """Return the unclipped field value at `point`, in meters."""
+        return segment_distance(self.segments, point, self.k)
+
+
+def _shape(dimensions: FootDimensions, part: FootBone) -> _Shape:
+    """Return the unclipped solid of `part`."""
+    var segments = _segments(dimensions, part)
+    var shell = SHELL_FRACTION * min(segments.ra0, segments.rb0)
+    return _Shape(segments, Float32(0.35) * shell)
+
+
 struct FootBoneField(DistanceField, ImplicitlyCopyable):
-    """The implicit solid for one named foot bone."""
+    """The implicit solid for one named foot bone.
+
+    The unclipped bone gives way to each listed neighbor that comes
+    before it in `named_foot_bones`. The talus also gives way to the
+    tibia. The difference applies on both sides of the original surface,
+    so a surface buried inside a neighbor does not remain a zero set.
+    """
 
     var segments: SegmentSet
     var k: Float32
@@ -252,6 +289,14 @@ struct FootBoneField(DistanceField, ImplicitlyCopyable):
     var shell: Float32
     var low: Vector3
     var high: Vector3
+    var joints: Int
+    var j0: _Shape
+    var j1: _Shape
+    var j2: _Shape
+    var j3: _Shape
+    var yields_to_tibia: Bool
+    var tibia: TibiaField
+    var tibia_offset: Vector3
 
     def __init__(out self, dimensions: FootDimensions, part: FootBone) raises:
         """Build one bone from dimensions that `validate` accepts.
@@ -261,27 +306,74 @@ struct FootBoneField(DistanceField, ImplicitlyCopyable):
             part: A named bone.
 
         Raises:
-            Error: If `dimensions.validate` refuses the copy, or `part`
-                is not named.
+            Error: If `dimensions.validate` refuses the copy, `part` is
+                not named, or the tibia for the same stature, sex and
+                side is refused.
         """
         dimensions.validate()
         if not part.is_valid():
             raise Error("A foot bone must be one of the twenty-six bones")
-        self.segments = _segments(dimensions, part)
-        var ends = min(self.segments.ra0, self.segments.rb0)
-        self.shell = SHELL_FRACTION * ends
-        self.k = Float32(0.35) * self.shell
+        var own = _shape(dimensions, part)
+        self.segments = own.segments
+        self.k = own.k
+        self.shell = SHELL_FRACTION * min(own.segments.ra0, own.segments.rb0)
         self.epsilon = Float32(0.25) * self.shell
         var box = segment_bounds(self.segments, Float32(0.004) + self.shell)
         self.low = box.low
         self.high = box.high
+        var near = earlier_articulations(part)
+        self.joints = len(near)
+        var shapes = List[_Shape]()
+        for index in range(MAX_EARLIER_ARTICULATIONS):  # pragma: no branch
+            # Unused slots repeat the bone itself and are never read.
+            if index < len(near):
+                shapes.append(_shape(dimensions, near[index]))
+            else:
+                shapes.append(own)
+        self.j0 = shapes[0]
+        self.j1 = shapes[1]
+        self.j2 = shapes[2]
+        self.j3 = shapes[3]
+        # The leg places the tibia so that its plafond is this frame's
+        # origin. A tibia point is a foot point plus the plafond.
+        var tibia = tibia_dimensions(
+            dimensions.stature, dimensions.sex, dimensions.side
+        )
+        self.yields_to_tibia = part == TALUS
+        self.tibia = TibiaField(tibia)
+        self.tibia_offset = tibia.plafond
+
+    def unclipped_distance(self, point: Vector3) -> Float32:
+        """Return the bone's own field before any joint interface.
+
+        Args:
+            point: A point in the foot frame, in meters.
+
+        Returns:
+            The signed value, in meters. Negative is inside.
+        """
+        return segment_distance(self.segments, point, self.k)
 
     def distance(self, point: Vector3) -> Float32:
         """Return how far `point` lies outside the bone, in meters.
 
         Negative is inside. Zero is the surface.
         """
-        return segment_distance(self.segments, point, self.k)
+        var d = segment_distance(self.segments, point, self.k)
+        # An earlier neighbor keeps its whole unclipped solid. This bone
+        # keeps none of that interior. A point on that surface is not
+        # inside this bone.
+        if self.joints > 0:
+            d = max(d, -self.j0.distance(point))
+        if self.joints > 1:
+            d = max(d, -self.j1.distance(point))
+        if self.joints > 2:
+            d = max(d, -self.j2.distance(point))
+        if self.joints > 3:
+            d = max(d, -self.j3.distance(point))
+        if self.yields_to_tibia:
+            d = max(d, -self.tibia.distance(point + self.tibia_offset))
+        return d
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
@@ -514,6 +606,100 @@ def named_foot_bones() -> List[FootBone]:
     parts.append(TOE5_MIDDLE)
     parts.append(TOE5_DISTAL)
     return parts^
+
+
+def _articulation_pairs() -> List[Tuple[FootBone, FootBone]]:
+    """Return each pair of foot bones that meet at a joint, once."""
+    var pairs = List[Tuple[FootBone, FootBone]]()
+    pairs.append((TALUS, CALCANEUS))
+    pairs.append((TALUS, NAVICULAR))
+    pairs.append((CALCANEUS, CUBOID))
+    pairs.append((NAVICULAR, MEDIAL_CUNEIFORM))
+    pairs.append((NAVICULAR, INTERMEDIATE_CUNEIFORM))
+    pairs.append((NAVICULAR, LATERAL_CUNEIFORM))
+    pairs.append((NAVICULAR, CUBOID))
+    pairs.append((CUBOID, LATERAL_CUNEIFORM))
+    pairs.append((CUBOID, METATARSAL_4))
+    pairs.append((CUBOID, METATARSAL_5))
+    pairs.append((MEDIAL_CUNEIFORM, INTERMEDIATE_CUNEIFORM))
+    pairs.append((MEDIAL_CUNEIFORM, METATARSAL_1))
+    pairs.append((MEDIAL_CUNEIFORM, METATARSAL_2))
+    pairs.append((INTERMEDIATE_CUNEIFORM, LATERAL_CUNEIFORM))
+    pairs.append((INTERMEDIATE_CUNEIFORM, METATARSAL_2))
+    pairs.append((LATERAL_CUNEIFORM, METATARSAL_2))
+    pairs.append((LATERAL_CUNEIFORM, METATARSAL_3))
+    pairs.append((LATERAL_CUNEIFORM, METATARSAL_4))
+    pairs.append((METATARSAL_1, METATARSAL_2))
+    pairs.append((METATARSAL_2, METATARSAL_3))
+    pairs.append((METATARSAL_3, METATARSAL_4))
+    pairs.append((METATARSAL_4, METATARSAL_5))
+    pairs.append((METATARSAL_1, HALLUX_PROXIMAL))
+    pairs.append((HALLUX_PROXIMAL, HALLUX_DISTAL))
+    pairs.append((METATARSAL_2, TOE2_PROXIMAL))
+    pairs.append((TOE2_PROXIMAL, TOE2_MIDDLE))
+    pairs.append((TOE2_MIDDLE, TOE2_DISTAL))
+    pairs.append((METATARSAL_3, TOE3_PROXIMAL))
+    pairs.append((TOE3_PROXIMAL, TOE3_MIDDLE))
+    pairs.append((TOE3_MIDDLE, TOE3_DISTAL))
+    pairs.append((METATARSAL_4, TOE4_PROXIMAL))
+    pairs.append((TOE4_PROXIMAL, TOE4_MIDDLE))
+    pairs.append((TOE4_MIDDLE, TOE4_DISTAL))
+    pairs.append((METATARSAL_5, TOE5_PROXIMAL))
+    pairs.append((TOE5_PROXIMAL, TOE5_MIDDLE))
+    pairs.append((TOE5_MIDDLE, TOE5_DISTAL))
+    return pairs^
+
+
+# No foot bone in `_articulation_pairs` meets more than six others.
+comptime MAX_ARTICULATIONS = 6
+# No foot bone meets more than four bones that come before it in
+# `named_foot_bones`.
+comptime MAX_EARLIER_ARTICULATIONS = 4
+
+
+def foot_articulations(part: FootBone) -> List[FootBone]:
+    """Return the foot bones that `part` meets at a joint.
+
+    The list is the usual adult joint topology of the foot: the tarsal
+    joints, the tarsometatarsal and intermetatarsal joints, and each
+    joint along a toe. The talus also meets the tibia. The leg owns the
+    tibia, so this list leaves it out.
+
+    Args:
+        part: A foot bone, named or not.
+
+    Returns:
+        The neighbors in anatomical order. A bone that is not named has
+        none.
+    """
+    var near = List[FootBone]()
+    for pair in _articulation_pairs():  # pragma: no branch
+        if pair[0] == part:
+            near.append(pair[1])
+        elif pair[1] == part:
+            near.append(pair[0])
+    return near^
+
+
+def earlier_articulations(part: FootBone) -> List[FootBone]:
+    """Return the neighbors that `part` gives way to.
+
+    These are the bones in `foot_articulations` that come before `part`
+    in `named_foot_bones`. The segment accounting assigns bone in that
+    order.
+
+    Args:
+        part: A foot bone, named or not.
+
+    Returns:
+        The earlier neighbors. The talus and a bone that is not named
+        have none.
+    """
+    var near = List[FootBone]()
+    for other in foot_articulations(part):
+        if other.value < part.value:
+            near.append(other)
+    return near^
 
 
 @fieldwise_init

@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.pelvis.vessels.dimensions import (
     pelvis_vessel_distance,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     vessel_tissue,
@@ -36,7 +37,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
     classify_soft,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def pelvis_vessel_occupancy(
@@ -107,7 +107,4 @@ def pelvis_vessel_mass_from_dimensions(
     var volume = tube_chain_volume(
         PelvisVesselField(dimensions, part, RIGHT).chain
     )
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

@@ -778,6 +778,11 @@ class GuardedLoopTests(unittest.TestCase):
             self.assertEqual(loops.sha256(content),
                              loops.GUARDED_LOOP_SOURCE_SHA256[relative])
             destination.write_bytes(content)
+        # The maintained inventory includes this independent local helper.
+        # Keep the real source here without inventing a hair dependency pin.
+        water = self.root / 'extensions/water/gpu.mojo'
+        water.parent.mkdir(parents=True, exist_ok=True)
+        water.write_bytes((self.repo / 'extensions/water/gpu.mojo').read_bytes())
 
     def prove(self, rule):
         return loops.guarded_loop_proof(self.root, rule)
@@ -1106,6 +1111,153 @@ class GuardedLoopTests(unittest.TestCase):
     def hair_rules(self):
         return [rule for rule in loops.GUARDED_LOOP_RULES
                 if rule[0] == 'extensions/humanoid/skeleton/head/hair/strands']
+
+    def test_hair_census_resolves_real_water_without_a_source_pin(self):
+        name = 'extensions/water/gpu.mojo'
+        path = self.root / name
+        original = path.read_text()
+        proofs = {}
+        for rule in self.hair_rules():
+            proof = self.prove(rule)
+            proofs[rule[5]] = proof
+            self.assertIsNotNone(proof)
+            self.assertEqual(set(proof['dependency_sha256']),
+                             {rule[0] + '.mojo', *rule[6]})
+            self.assertNotIn(name, proof['dependency_sha256'])
+            self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, rule[0])),
+                             {221, 225, 231})
+        self.assertEqual(original.count('comptime _TILE = 16'), 1)
+        path.write_text(original.replace('comptime _TILE = 16',
+                                         'comptime _TILE = 8'))
+        for rule in self.hair_rules():
+            self.assertEqual(self.prove(rule), proofs[rule[5]])
+            self.assertEqual(set(loops.reviewed_nonempty_loops(self.root, rule[0])),
+                             {221, 225, 231})
+        read_text = Path.read_text
+
+        def unreadable(source, *args, **kwargs):
+            if source == path:
+                raise OSError('unreadable maintained water source')
+            return read_text(source, *args, **kwargs)
+
+        with patch.object(Path, 'read_text', unreadable):
+            for rule in self.hair_rules():
+                self.assertIsNone(self.prove(rule))
+        path.write_text(original)
+
+    def test_hair_water_member_call_and_alias_still_revoke(self):
+        path = self.root / 'extensions/water/gpu.mojo'
+        original = path.read_text()
+        for added in ('def added(hair, assets):\n    hair._upload(assets)\n',
+                      'def added(hair):\n    var alias = hair._upload\n'):
+            with self.subTest(added=added):
+                path.write_text(original + '\n' + added)
+                for rule in self.hair_rules():
+                    self.assertIsNone(self.prove(rule))
+                    self.assertEqual(
+                        set(loops.reviewed_nonempty_loops(self.root, rule[0])),
+                        {225, 231})
+        path.write_text(original)
+        for rule in self.hair_rules():
+            self.assertIsNotNone(self.prove(rule))
+
+    def test_hair_local_upload_identity_accepts_only_direct_calls(self):
+        names = ('_shadow_depths', '_upload')
+        plain = 'def _upload(value):\n    return value\n'
+        generic = ('def _upload[dtype: DType](values: List[Scalar[dtype]])'
+                   ' raises -> DeviceBuffer[dtype]:\n    pass\n')
+        for text in (plain, plain + '_upload(1)\n',
+                     generic + '_upload[DType.float32](values)\n',
+                     generic + '_upload[DType.int64](values)\n',
+                     generic + '_upload[\n    DType.float32, Other.Type\n](values)\n'):
+            with self.subTest(text=text):
+                self.assertFalse(loops._hair_census_reference(names, text))
+        for text in (plain + '# unknown _shadow_depths reference\n',
+                     plain + 'hair._shadow_depths([])\n'):
+            self.assertTrue(loops._hair_census_reference(names, text))
+        self.assertTrue(loops._hair_census_reference(
+            ('_topology',), plain + 'hair._topology.clear()\n'))
+        self.assertTrue(loops._hair_census_reference(('_upload',), plain))
+
+    def test_hair_local_upload_identity_rejects_binding_and_scope_ambiguity(self):
+        names = ('_shadow_depths', '_upload')
+        plain = 'def _upload(value):\n    return value\n'
+        cases = (
+            '_upload(value)\n',
+            plain + 'hair._upload(value)\n',
+            plain + 'var alias = _upload\n',
+            plain + 'from unknown import _upload\n',
+            plain + 'from unknown import different as _upload\n',
+            plain + 'import _upload as local\n',
+            plain + '_upload = other\n',
+            plain + 'def added(_upload):\n    _upload(value)\n',
+            plain + 'from unknown import *\n',
+            plain + 'from unknown import (\n    *\n)\n',
+            '@decorator\n' + plain,
+            'def outer():\n    def _upload(value):\n        pass\n',
+            'if enabled:\n    def _upload(value):\n        pass\n',
+            'struct Local:\n    def _upload(value):\n        pass\n',
+            plain + plain,
+            plain + 'fn _upload(value):\n    pass\n',
+            plain + 'struct _upload(Copyable):\n    pass\n',
+            plain + 'trait _upload(Copyable):\n    pass\n',
+            plain + 'class _upload(Base):\n    pass\n',
+            plain + 'struct _upload[Type](Trait):\n    pass\n',
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.assertTrue(loops._hair_census_reference(names, text))
+
+    def test_hair_local_upload_identity_rejects_unknown_syntax(self):
+        names = ('_shadow_depths', '_upload')
+        plain = 'def _upload(value):\n    return value\n'
+        cases = (
+            plain + '# unknown _upload reference\n',
+            plain + 'var name = "_upload"\n',
+            plain + 'var name = f"_upload"\n',
+            plain + 'var name = f"{_upload}"\n',
+            plain + 'var name = f"{_upload(value)}"\n',
+            plain + 'var name = f"{hair._upload(value)}"\n',
+            plain + 'var broken = "unterminated\n',
+            plain + '_upload(\n',
+            'def _upload = other:\n    pass\n',
+            'def _upload[dtype: DType]:\n    pass\n',
+            'def _upload(value) unexpected:\n    pass\n',
+            'def _upload(value=other):\n    pass\n',
+            'def _upload(mut value):\n    pass\n',
+            'def _upload(value: List[):\n    pass\n',
+        )
+        for text in cases:
+            with self.subTest(text=text):
+                self.assertTrue(loops._hair_census_reference(names, text))
+        for specialization in ('[]', '[List[Float32]]', '[dtype=DType.float32]',
+                               '[42]', '["float32"]', '[True]', '[False]',
+                               '[None]', '[a + b]', '[a.]', '[.a]', '[a,]',
+                               '[,a]', '[a,,b]', '[*args]', '[a:b]', '[a; b]'):
+            text = plain + '_upload' + specialization + '(value)\n'
+            with self.subTest(specialization=specialization):
+                self.assertTrue(loops._hair_census_reference(names, text))
+        for ending in ('[DType.float32]\n', '[DType.float32]\n(value)\n'):
+            self.assertTrue(loops._hair_census_reference(names, plain + '_upload' + ending))
+
+    def test_hair_retained_manifest_keeps_required_true_and_unrelated_probes(self):
+        # Manifest-only source-proof control, never native capture evidence.
+        module = self.hair_rules()[0][0]
+        rows = loops.reviewed_nonempty_loops(self.root, module)
+        self.assertEqual(set(rows), {221, 225, 231})
+        original = ('B ' + module + ' 221\n').encode()
+        unrelated = (b'L other 25\nB other 26\nC other 27 0\nM other 27 1\n')
+        raw = original + unrelated
+        proof = dict(rows[221], module=module)
+        envelope = {'sha256': 'manifest-only-model', 'receipt': {
+            'manifest_sha256': loops.sha256(raw), 'proofs': [proof]}}
+        masked = loops.masked_manifest(raw, envelope)
+        expected = ('P ' + loops.SCHEMA + ' manifest-only-model\nR ' + module
+                    + ' 221 T ' + proof['kind'] + ' 1\n').encode() + unrelated
+        self.assertEqual(masked, expected)
+        self.assertEqual((proof['required'], proof['impossible']), ('T', 'F'))
+        self.assertEqual(raw, original + unrelated)
+        self.assertEqual(envelope['receipt']['manifest_sha256'], loops.sha256(raw))
 
     def test_hair_constructor_current_state_and_both_shading_borrows_are_bound(self):
         prefix = 'extensions/humanoid/skeleton/head/hair/'
@@ -1633,9 +1785,10 @@ class MapSuccessorLoopTests(unittest.TestCase):
                       2373: 2365, 2378: 2370, 2387: 2379, 2396: 2388}
         self.raw = (self.repo/self.name).read_bytes()
         self.digest = loops.sha256(self.raw)
-        self.assertIn(self.digest, (seed_count.BEFORE_SHA256, seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256, seed_count.SUPPORT_AFTER_SHA256, seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256))
+        self.assertIn(self.digest, (seed_count.BEFORE_SHA256, seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256, seed_count.SUPPORT_AFTER_SHA256, seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256))
         self.optional = self.digest == seed_count.OPTIONAL_AFTER_SHA256
         self.support = self.digest == seed_count.SUPPORT_AFTER_SHA256
+        self.station = self.digest == seed_count.station.AFTER_SHA256
         self.score = self.digest == seed_count.SCORE_AFTER_SHA256
         self.frontier = self.digest == seed_count.FRONTIER_AFTER_SHA256
         if self.optional:
@@ -1649,6 +1802,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
                           2373: 2343, 2378: 2348, 2387: 2357, 2396: 2366}
         if self.score:
             self.lines = loops._MAP_SCORE_SUCCESSOR_LINES
+        if self.station:
+            self.lines = loops._MAP_STATION_SUCCESSOR_LINES
         self.after = self.digest != seed_count.BEFORE_SHA256
 
     def assert_live_proofs(self, root):
@@ -1658,6 +1813,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
             expected.add(4055)
         if self.score:
             expected.add(4069)
+        if self.station:
+            expected.add(4099)
         self.assertEqual(set(actual), expected)
         text = (root/self.name).read_text().splitlines()
         for rule in self.rules:
@@ -1675,11 +1832,12 @@ class MapSuccessorLoopTests(unittest.TestCase):
         return actual
 
     def fixture(self):
-        temporary = tempfile.TemporaryDirectory(prefix='map-successor-loop-')
+        temporary = tempfile.TemporaryDirectory(prefix='map-successor-loop-',
+            dir=Path(tempfile.gettempdir()).resolve() if self.station else None)
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
         record = self.seed.read_record(self.repo)
-        names = {self.name, self.seed.MIGRATION, *self.seed.SCORE_TESTS}
+        names = {self.name, self.seed.MIGRATION, *self.seed.SCORE_TESTS, *self.seed.station.TESTS, 'tools/carla_lane_oracle/map_station_contracts.py'}
         for key in ('unchanged_inputs', 'historical_records',
                     'unchanged_correctness_tests', 'after_correctness_tests'):
             names.update(record[key])
@@ -1694,7 +1852,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
 
     def test_actual_physical_state_keeps_live_hashes_and_all_true_obligations(self):
         self.assertEqual({r[1] for r in self.rules}, set(self.lines))
-        expected = (loops._MAP_SCORE_SUCCESSOR_LINES if self.score else
+        expected = (loops._MAP_STATION_SUCCESSOR_LINES if self.station else
+                    loops._MAP_SCORE_SUCCESSOR_LINES if self.score else
                     loops._MAP_FRONTIER_SUCCESSOR_LINES if self.frontier else
                     loops._MAP_SUPPORT_SUCCESSOR_LINES if self.support else
                     loops._MAP_OPTIONAL_SUCCESSOR_LINES if self.optional else
@@ -1704,7 +1863,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
 
     def test_missing_future_fixture_cannot_activate_after_in_before_checkout(self):
         root = self.fixture()
-        (root/self.name).write_text(self.seed.score_successor_source(self.repo) if self.score else
+        (root/self.name).write_text(self.raw.decode() if self.station else
+                                   self.seed.score_successor_source(self.repo) if self.score else
                                    self.seed.frontier_successor_source(self.repo) if self.frontier else
                                    self.seed.support_successor_source(self.repo) if self.support else
                                    self.seed.optional_successor_source(self.repo) if self.optional else
@@ -1742,7 +1902,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
         root = self.fixture()
         # Use the source-only reconstruction to test rejection even before the
         # future fixture exists; only a physical after checkout admits it.
-        (root/self.name).write_text(self.seed.score_successor_source(self.repo) if self.score else
+        (root/self.name).write_text(self.raw.decode() if self.station else
+                                   self.seed.score_successor_source(self.repo) if self.score else
                                    self.seed.frontier_successor_source(self.repo) if self.frontier else
                                    self.seed.support_successor_source(self.repo) if self.support else
                                    self.seed.optional_successor_source(self.repo) if self.optional else
@@ -1765,7 +1926,7 @@ class MapSuccessorLoopTests(unittest.TestCase):
         if self.after:
             self.assert_live_proofs(root)
 
-    def test_all_six_explicit_map_states_keep_eight_required_true_rows(self):
+    def test_all_seven_explicit_map_states_keep_eight_required_true_rows(self):
         root = self.fixture()
         middle = self.seed.successor_source(self.repo)
         earliest = self.seed.predecessor_source(middle, self.seed.read_record(self.repo))
@@ -1777,7 +1938,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
                 (optional, loops._MAP_OPTIONAL_SUCCESSOR_LINES),
                 (support, loops._MAP_SUPPORT_SUCCESSOR_LINES),
                 (newest, loops._MAP_FRONTIER_SUCCESSOR_LINES),
-                (self.seed.score_successor_source(self.repo), loops._MAP_SCORE_SUCCESSOR_LINES)]
+                (self.seed.score_successor_source(self.repo), loops._MAP_SCORE_SUCCESSOR_LINES),
+                ((self.repo/self.name).read_text(), loops._MAP_STATION_SUCCESSOR_LINES)]
         for text, correspondence in maps:
             (root/self.name).write_text(text)
             proof = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
@@ -1786,6 +1948,8 @@ class MapSuccessorLoopTests(unittest.TestCase):
                 expected.add(4055)
             if loops.sha256(text.encode()) == self.seed.SCORE_AFTER_SHA256:
                 expected.add(4069)
+            if loops.sha256(text.encode()) == self.seed.station.AFTER_SHA256:
+                expected.add(4099)
             self.assertEqual(set(proof), expected)
             for rule in self.rules:
                 line = correspondence[rule[1]]
@@ -1797,7 +1961,7 @@ class MapSuccessorLoopTests(unittest.TestCase):
         self.assertEqual(loops.reviewed_nonempty_loops(root,'extensions/carla/map'),{})
         self.assertEqual(loops.reviewed_nonempty_loops(root,'extensions/carla/rtree'),{})
 
-    def test_complete_consumers_accept_six_exact_states_and_reject_mutations(self):
+    def test_complete_consumers_accept_seven_exact_states_and_reject_mutations(self):
         from carla_lane_oracle import winner_sign_contracts as winner
         from carla_lane_oracle import border_parser_contracts as border
         middle = self.seed.successor_source(self.repo)
@@ -1807,6 +1971,7 @@ class MapSuccessorLoopTests(unittest.TestCase):
             self.seed.support_successor_source(self.repo),
             self.seed.frontier_successor_source(self.repo),
             self.seed.score_successor_source(self.repo),
+            (self.repo/self.name).read_text(),
         )
         predecessors = audit_fixtures.verified_predecessors(self.repo)
         families = (
@@ -1816,6 +1981,7 @@ class MapSuccessorLoopTests(unittest.TestCase):
             (self.seed.SUPPORT_AFTER_SHA256, True),
             (self.seed.FRONTIER_AFTER_SHA256, True),
             (self.seed.SCORE_AFTER_SHA256, False),
+            (self.seed.station.AFTER_SHA256, False),
         )
         target = self.repo/self.name
         read_bytes, read_text = Path.read_bytes, Path.read_text
@@ -1859,6 +2025,9 @@ class MapSuccessorLoopTests(unittest.TestCase):
              'unreviewed complete live endpoint: extensions/carla/curve_bounds.mojo'),
             (self.seed.SCORE_AFTER_SHA256, self.seed.score_successor_source(self.repo),
              current, loops._MAP_SCORE_SUCCESSOR_LINES, 4069,
+             'unchanged premise, record or fixture changed: extensions/carla/road.mojo'),
+            (self.seed.station.AFTER_SHA256, (self.repo/self.name).read_text(),
+             current, loops._MAP_STATION_SUCCESSOR_LINES, 4099,
              'unchanged premise, record or fixture changed: extensions/carla/road.mojo'),
         )
         for digest, text, dependencies, correspondence, line, reason in cases:
@@ -1983,7 +2152,7 @@ def check(value,message):
     if not value: raise RuntimeError(message)
 if shadow == 'True':
     check(bool(prefix),'shadow control requires a package namespace')
-    for name in ('source_contracts','cache_key_contracts','speed_parser_contracts','seed_count_contracts','runtime_boundary_contracts','render_actor_reuse_contracts','ideal_projection'):
+    for name in ('source_contracts','cache_key_contracts','speed_parser_contracts','seed_count_contracts','runtime_boundary_contracts','runtime_view_contracts','render_actor_reuse_contracts','consumer_successor_ledger','ideal_projection'):
         sys.modules[name]=types.ModuleType(name)
 try:
     module=importlib.import_module(prefix+consumer)
@@ -2120,8 +2289,9 @@ if mode == 'cli':
         print('unknown successor withheld all named Map and R-tree proofs')
         raise SystemExit(0)
     digest = hashlib.sha256((root/seed.MODULE).read_bytes()).hexdigest()
-    after = digest in {seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256}
-    mapping = (loops._MAP_SCORE_SUCCESSOR_LINES if digest == seed.SCORE_AFTER_SHA256 else
+    after = digest in {seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}
+    mapping = (loops._MAP_STATION_SUCCESSOR_LINES if digest == seed.station.AFTER_SHA256 else
+               loops._MAP_SCORE_SUCCESSOR_LINES if digest == seed.SCORE_AFTER_SHA256 else
                loops._MAP_FRONTIER_SUCCESSOR_LINES if digest == seed.FRONTIER_AFTER_SHA256 else
                loops._MAP_SUPPORT_SUCCESSOR_LINES if digest == seed.SUPPORT_AFTER_SHA256 else
                loops._MAP_OPTIONAL_SUCCESSOR_LINES if digest == seed.OPTIONAL_AFTER_SHA256 else
@@ -2131,6 +2301,8 @@ if mode == 'cli':
         expected.add(4055)
     if digest == seed.SCORE_AFTER_SHA256:
         expected.add(4069)
+    if digest == seed.station.AFTER_SHA256:
+        expected.add(4099)
     check(set(actual) == expected and set(tree) == {666}, 'clean CLI lost expected named proofs')
     for proof in [*actual.values(), *tree.values()]:
         check((proof['required'], proof['impossible']) == ('T', 'F'), 'reachable outcome weakened')
@@ -2192,7 +2364,8 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
 
     def setUp(self):
         self.repo = Path(__file__).resolve().parents[1]
-        temporary = tempfile.TemporaryDirectory(prefix='construction-boundary-')
+        temporary = tempfile.TemporaryDirectory(prefix='construction-boundary-',
+            dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.map = 'extensions/carla/map.mojo'
@@ -2200,7 +2373,15 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
         self.loft = 'extensions/humanoid/skeleton/loft.mojo'
         from carla_lane_oracle import seed_count_contracts as seed
         record = seed.read_record(self.repo)
-        names = {*loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256, self.loft, seed.MIGRATION, *seed.SCORE_TESTS}
+        names = {*loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256, self.loft, seed.MIGRATION, *seed.SCORE_TESTS, *seed.station.TESTS, 'tools/carla_lane_oracle/map_station_contracts.py'}
+        from carla_lane_oracle import shared_helper_contracts as helpers
+        names.update((
+            'tools/carla_lane_oracle/shared_helper_contracts.py',
+            'loaders/utf8.mojo', *helpers.TEST_PATHS['extensions/carla/curve_distance.mojo'],
+            *helpers.TEST_PATHS['loaders/xml.mojo']))
+        if getattr(self, 'station', False):
+            # The station receipt control also exercises the independent R-tree theorem.
+            names.update(loops.REVIEWED_LOOP_RULES['extensions/carla/rtree'][0])
         for group in ('historical_records', 'unchanged_correctness_tests',
                       'after_correctness_tests'):
             names.update(record[group])
@@ -2211,7 +2392,8 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
 
         audit_fixtures.write_predecessors(
             self.root, audit_fixtures.verified_predecessors(self.repo))
-        (self.root/self.map).write_text(seed.score_successor_source(self.repo) if self.score
+        (self.root/self.map).write_text((self.repo/self.map).read_text() if getattr(self, "station", False) else
+                                         seed.score_successor_source(self.repo) if self.score
                                          else seed.frontier_successor_source(self.repo))
 
     def proof(self):
@@ -2225,9 +2407,11 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
                           row['minimum_cardinality'], row['maximum_cardinality']),
                          ('T', 'F', 1, 1, None))
         self.assertEqual(row['proof_id'], 'construction-geometry-boundary-list')
+        from carla_lane_oracle import shared_helper_contracts as helpers
         for name, expected in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256.items():
             self.assertEqual(row['dependency_sha256'][name],
-                             loops.file_sha256(self.root/name) if self.score and name == self.map else expected)
+                             loops.file_sha256(self.root/name) if (self.score and name == self.map)
+                             or name in helpers.SOURCE_PATHS else expected)
         for name, expected in row['dependency_sha256'].items():
             self.assertEqual(loops.file_sha256(self.root/name), expected)
         self.assertEqual((self.root/self.map).read_text().splitlines()[self.line-1].strip(),
@@ -2387,6 +2571,52 @@ class ScoreConstructionBoundaryLoopTests(ConstructionBoundaryLoopTests):
 
 
 
+class StationConstructionBoundaryLoopTests(ConstructionBoundaryLoopTests):
+    """The same constructor theorem at the exact sixth source endpoint."""
+    line = 4099
+    score = True
+    station = True
+
+    def test_historical_cleanup_station_receipt_binds_leaf_and_tests(self):
+        from carla_lane_oracle import map_station_contracts as station
+        leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
+        groups = (self.proof(),
+                  loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'),
+                  loops.reviewed_nonempty_loops(self.root, 'extensions/carla/rtree'))
+        self.assertTrue(all(groups))
+        for group in groups:
+            for proof in group.values():
+                for name in (leaf, *station.TESTS):
+                    self.assertEqual(proof['dependency_sha256'][name], loops.file_sha256(self.root/name))
+        path = self.root/leaf
+        raw = path.read_bytes()
+        for missing in (False, True):
+            if missing: path.unlink()
+            else: path.write_bytes(raw+b'\n# unreviewed leaf\n')
+            try:
+                self.assertEqual(self.proof(), {})
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map'), {})
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'extensions/carla/rtree'), {})
+            finally: path.write_bytes(raw)
+        self.assertEqual(set(self.proof()), {self.line})
+
+    def test_new_station_helper_branches_remain_measured(self):
+        text = (self.root/self.map).read_text()
+        proofs = loops.reviewed_nonempty_loops(self.root, 'extensions/carla/map')
+        from carla_lane_oracle import map_station_contracts as station
+        helper = station.declaration(text, '_chord_station_delta', ())
+        first = text.splitlines().index(helper.splitlines()[0]) + 1
+        for offset, line in enumerate(helper.splitlines()):
+            if line.strip().startswith(('if ', 'elif ')):
+                branch = first + offset
+                self.assertNotIn(branch, proofs)
+                raw = f'B extensions/carla/map {branch}\n'.encode()
+                receipt = {'manifest_sha256': loops.sha256(raw), 'proofs': []}
+                envelope = {'sha256': loops.sha256(loops.canonical(receipt)), 'receipt': receipt}
+                self.assertIn(raw, loops.masked_manifest(raw, envelope))
+
+
+
 class FullAuditCleanupLoopTests(unittest.TestCase):
     """Current source edges retain their exact old theorems and required T."""
 
@@ -2401,7 +2631,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
             'extensions/carla/curve_sample_dispatch': {126},
             'extensions/carla/lane_refinement': {146, 736, 1299, 1324},
             'extensions/carla/junction_bounds': {706},
-            'extensions/carla/map': {*loops._MAP_SCORE_SUCCESSOR_LINES.values(), 4069},
+            'extensions/carla/map': {*loops._MAP_STATION_SUCCESSOR_LINES.values(), 4099},
             'extensions/carla/rtree': {666},
         }
         for module, lines in expected.items():
@@ -2427,8 +2657,8 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
                     self.assertIn(f'L {module} {row["line"]}'.encode(), masked)
 
         construction = loops.construction_boundary_loops(self.repo)
-        self.assertEqual(set(construction), {4069})
-        row = construction[4069]
+        self.assertEqual(set(construction), {4099})
+        row = construction[4099]
         self.assertEqual((row['required'], row['impossible'], row['minimum_cardinality']), ('T', 'F', 1))
         self.assertEqual(len(loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256), 62)
         for name in loops.CONSTRUCTION_BOUNDARY_SOURCE_SHA256:
@@ -2451,7 +2681,7 @@ class FullAuditCleanupLoopTests(unittest.TestCase):
                 finally:
                     path.write_bytes(original)
         self.assertEqual(set(loops.reviewed_nonempty_loops(root, module)), {126})
-        self.assertEqual(set(loops.construction_boundary_loops(root)), {4069})
+        self.assertEqual(set(loops.construction_boundary_loops(root)), {4099})
 
     def test_mixed_historical_endpoint_cannot_keep_current_receipt(self):
         root = self.current_root()

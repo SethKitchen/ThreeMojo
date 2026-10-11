@@ -49,6 +49,7 @@ that order whatever the masks say. The format flags are not read: a known
 code is a block format even when the flags say RGB, as in three.js.
 """
 
+from core.binary import little_endian_u32
 from render.compressed_texture import (
     RED_GREEN_RGTC2_FORMAT,
     RED_RGTC1_FORMAT,
@@ -102,17 +103,6 @@ def four_cc(code: String) -> Int:
     )
 
 
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian word at `at`; the caller has checked the
-    length."""
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
-
-
 def format_of_four_cc(code: Int) raises -> CompressedFormat:
     """Return the format a pixel format's four-character code names.
 
@@ -159,11 +149,11 @@ def uncompressed_bytes(bytes: List[UInt8]) -> Int:
     Returns:
         Four for 32-bit BGRA, three for 24-bit BGR, or zero for neither.
     """
-    var bits = _u32(bytes, 88)
-    var red = (_u32(bytes, 92) & 0xFF0000) != 0
-    var green = (_u32(bytes, 96) & 0xFF00) != 0
-    var blue = (_u32(bytes, 100) & 0xFF) != 0
-    var alpha = (_u32(bytes, 104) & 0xFF000000) != 0
+    var bits = little_endian_u32(bytes, 88)
+    var red = (little_endian_u32(bytes, 92) & 0xFF0000) != 0
+    var green = (little_endian_u32(bytes, 96) & 0xFF00) != 0
+    var blue = (little_endian_u32(bytes, 100) & 0xFF) != 0
+    var alpha = (little_endian_u32(bytes, 104) & 0xFF000000) != 0
     var color = red and green and blue
     if bits == 32 and color and alpha:
         return 4
@@ -262,26 +252,29 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     """
     if len(bytes) < 4 + HEADER_BYTES:
         raise Error("DDS: the file is shorter than its header")
-    if _u32(bytes, 0) != four_cc("DDS "):
+    if little_endian_u32(bytes, 0) != four_cc("DDS "):
         raise Error("DDS: the file does not start with the magic 'DDS '")
-    if _u32(bytes, 4) != HEADER_BYTES or _u32(bytes, 76) != 32:
+    if (
+        little_endian_u32(bytes, 4) != HEADER_BYTES
+        or little_endian_u32(bytes, 76) != 32
+    ):
         raise Error("DDS: the header or pixel format states the wrong size")
-    var height = _u32(bytes, 12)
-    var width = _u32(bytes, 16)
+    var height = little_endian_u32(bytes, 12)
+    var width = little_endian_u32(bytes, 16)
     if width <= 0 or height <= 0:
         raise Error("DDS: the dimensions must be positive")
     var levels = 1
-    if (_u32(bytes, 8) & DDSD_MIPMAPCOUNT) != 0:
-        levels = max(1, _u32(bytes, 28))
+    if (little_endian_u32(bytes, 8) & DDSD_MIPMAPCOUNT) != 0:
+        levels = max(1, little_endian_u32(bytes, 28))
     if levels > chain_length(width, height):
         raise Error("DDS: the file names more levels than its size has")
     var faces = 1
-    var caps2 = _u32(bytes, 112)
+    var caps2 = little_endian_u32(bytes, 112)
     if (caps2 & DDSCAPS2_CUBEMAP) != 0:
         if (caps2 & DDSCAPS2_ALL_FACES) != DDSCAPS2_ALL_FACES:
             raise Error("DDS: a cube must hold all six faces")
         faces = 6
-    var code = _u32(bytes, 84)
+    var code = little_endian_u32(bytes, 84)
     var start = 4 + HEADER_BYTES
     var format: CompressedFormat
     var space = LINEAR
@@ -290,15 +283,17 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     if code == four_cc("DX10"):
         if len(bytes) < start + DX10_HEADER_BYTES:
             raise Error("DDS: the file is shorter than its DX10 header")
-        var named = format_of_dxgi(_u32(bytes, start))
+        var named = format_of_dxgi(little_endian_u32(bytes, start))
         format = named[0]
         space = named[1]
         # D3D10_RESOURCE_DIMENSION_TEXTURE2D is three.
-        if _u32(bytes, start + 4) != 3:
+        if little_endian_u32(bytes, start + 4) != 3:
             raise Error("DDS: only 2D textures are ported")
-        if _u32(bytes, start + 12) != 1:
+        if little_endian_u32(bytes, start + 12) != 1:
             raise Error("DDS: texture arrays are not ported")
-        if (_u32(bytes, start + 8) & DDS_RESOURCE_MISC_TEXTURECUBE) != 0:
+        if (
+            little_endian_u32(bytes, start + 8) & DDS_RESOURCE_MISC_TEXTURECUBE
+        ) != 0:
             faces = 6
         start += DX10_HEADER_BYTES
     else:

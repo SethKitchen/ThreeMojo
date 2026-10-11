@@ -312,9 +312,11 @@ class FullAuditCleanupContracts(unittest.TestCase):
         self.assertEqual(cleanup.verify(self.root, exact=True), self.record)
         self.assertIsNone(self.semantic(self.current))
         bindings = cleanup.proof_bindings(self.root)
-        expected = {cleanup.MIGRATION, *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
+        expected = {cleanup.MIGRATION, cleanup.CONSUMER_LEDGER,
+                    *cleanup.CHECKER_PATHS, *cleanup.SOURCE_PATHS}
         for group in cleanup.BOUND_GROUPS:
             expected.update(self.record[group])
+        expected.update(cleanup.shared_helper_proof_bindings(self.root))
         self.assertEqual(set(bindings), expected)
         for path, digest in bindings.items():
             self.assertEqual(cleanup.sha((self.root/path).read_bytes()), digest)
@@ -829,6 +831,52 @@ class FullAuditCleanupContracts(unittest.TestCase):
             with physical_change(include, 'extensions/carla/math.mojo', b'# staged instrumentation view\n'):
                 cleanup.verify(self.root, include_roots=(include,))
             cleanup.verify(self.root, exact=True)
+
+    def test_include_origin_metadata_keeps_exact_coordinates_and_source_guards(self):
+        name = 'extensions/carla/math.mojo'
+        origin = name + '.cov-origin'
+        paths = (set(self.record['dependency_inventory']) | set(self.record['inventory'])
+                 | set(self.record['native_dependency_inventory']))
+        self.assertIn(name, paths)
+        self.assertNotIn('tests/math.mojo', paths)
+        self.assertIn('math/__init__.mojo', paths)
+        self.assertNotIn('extensions/carla/math/__init__.mojo', paths)
+        include_paths = paths | {path + '.cov-origin' for path in paths
+                                 if path.endswith('.mojo')}
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-origin-include-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
+            include = Path(folder)
+            with physical_change(include, name, (self.root/name).read_bytes()):
+                # This gate checks lookup topology only. The maintained origin
+                # verifier separately binds and rejects changed metadata bytes.
+                with physical_change(include, origin, b'opaque origin metadata\n'):
+                    self.assertFalse(cleanup.resolver_unshadowed(include, paths))
+                    self.assertTrue(cleanup.resolver_unshadowed(include, include_paths))
+                    cleanup.verify(self.root, exact=True, include_roots=(include,))
+                target = include/origin
+                target.symlink_to(include/name)
+                try:
+                    self.assertFalse(cleanup.resolver_unshadowed(include, include_paths))
+                finally:
+                    target.unlink()
+                target.mkdir()
+                try:
+                    self.assertFalse(cleanup.resolver_unshadowed(include, include_paths))
+                finally:
+                    target.rmdir()
+                for competitor in ('tests/math.mojo.cov-origin',
+                                   'extensions/carla/Math.mojo.cov-origin',
+                                   'extensions/carla/math.mojo.cov-origin.mojopkg',
+                                   'math.mojo', 'math.mojopkg', 'extensions/carla/math/__init__.mojo'):
+                    with self.subTest(competitor=competitor), physical_change(
+                            include, competitor, b'# not an eligible origin sidecar\n'):
+                        self.assertFalse(cleanup.resolver_unshadowed(include, include_paths))
+                cleanup.verify(self.root, exact=True, include_roots=(include,))
+            with physical_change(self.root, origin, b'not allowed in the source root\n'):
+                self.assertFalse(cleanup.resolver_unshadowed(self.root, paths))
+                with self.assertRaisesRegex(cleanup.ContractError, 'resolver surface'):
+                    cleanup.verify(self.root, exact=True, include_roots=(include,))
+        cleanup.verify(self.root, exact=True)
 
     def test_maintained_resolver_keeps_ordered_entry_roots_before_repository(self):
         affected = cleanup._sibling('affected')
@@ -2321,10 +2369,10 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        prior = seed.score_predecessor_source(original.decode('utf-8')).encode('utf-8')
+        prior = seed.score_family_predecessor_source(original.decode('utf-8')).encode('utf-8')
         mutants = (('prior', prior), ('comment', original + b'\n# Retained B.\n'),
                    ('crlf', original.replace(b'\n', b'\r\n')))
-        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_predecessor_source
+        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_family_predecessor_source
         for site in (('inventory', 1), ('verify_score', 1), ('verify_score', 2), ('inventory', 2)):
             for label, changed in mutants:
                 counts, injected, parsed = {}, [], []
@@ -2353,7 +2401,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     return inverse(text)
                 with self.subTest(site=site, mutant=label), patch.object(
                         cleanup._CacheInputs, 'observe_bytes', observed), patch.object(
-                        Path, 'read_bytes', raw), patch.object(seed, 'score_predecessor_source', parsed_map):
+                        Path, 'read_bytes', raw), patch.object(seed, 'score_family_predecessor_source', parsed_map):
                     with self.assertRaisesRegex(ValueError, 'owned input changed: ' + seed.MODULE):
                         cache.verify(self.root)
                 self.assertEqual(injected, [site])
@@ -2488,13 +2536,13 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     observed.append(path)
                     return value + ('\nunreviewed_map_operation()\n' if semantic else '\n# Supplied café comment.\n')
                 return value
-            inverse = seed.score_predecessor_source
+            inverse = seed.score_family_predecessor_source
             @wraps(inverse)
             def projected(text):
                 inverse_inputs.append(text)
                 self.assertNotIn('unreviewed_map_operation()', text)
                 return inverse(text)
-            with self.subTest(semantic=semantic), patch.object(Path, 'read_text', supplied), patch.object(seed, 'score_predecessor_source', projected):
+            with self.subTest(semantic=semantic), patch.object(Path, 'read_text', supplied), patch.object(seed, 'score_family_predecessor_source', projected):
                 if semantic:
                     with self.assertRaisesRegex(ValueError, 'unreviewed supplied score-helper source'):
                         cache.verify(self.root)
@@ -2962,7 +3010,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_predecessor_source
+        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_family_predecessor_source
         for site in (('inventory', 1), ('verify_score', 1), ('verify_score', 2), ('inventory', 2)):
             for changed in (EqualBytes(original), bytearray(original), EqualObject()):
                 counts, injected, active, parsed = {}, [], [], []
@@ -2990,7 +3038,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     return inverse(text)
                 with self.subTest(site=site, kind=type(changed).__name__), patch.object(
                         cleanup._CacheInputs, 'observe_bytes', observed), patch.object(
-                        Path, 'read_bytes', raw), patch.object(seed, 'score_predecessor_source', parsed_map):
+                        Path, 'read_bytes', raw), patch.object(seed, 'score_family_predecessor_source', parsed_map):
                     with self.assertRaisesRegex(ValueError, 'owned input changed: ' + seed.MODULE):
                         cache.verify(self.root)
                 self.assertEqual(len(injected), 1)

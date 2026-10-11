@@ -1,0 +1,53 @@
+# Certified lane query on assets/carla/town.xodr (#685)
+revision: main 058cbbc1 plus bench/carla_certified_query_bench.mojo (before), and the same with the item 1 skip (after)
+build: mojo build -I . --Werror -o cqb bench/carla_certified_query_bench.mojo
+run: three times each
+mojo: Mojo 1.1.0 (8189361e)
+cpu: AMD Ryzen 9 5900X, one thread
+os: Linux 6.18.33.1-microsoft-standard-WSL2, WSL 2
+
+## before
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,391.9975602836878,170.237,1274.102,38.77912867274569,2.986322188449848,1982.7178318135766,43.709726443769
+zero-deviation-bound,313.62997365754825,76.322,1209.443,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.15626732
+item6_saving_bound_us_per_query 12.119821019250253
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,389.4325118203307,168.724,1275.425,38.77912867274569,2.986322188449848,1982.7178318135766,43.709726443769
+zero-deviation-bound,310.11096166835506,74.769,1205.304,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.14956244000000002
+item6_saving_bound_us_per_query 11.599802210739616
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,388.60986727456987,169.666,1262.711,38.77912867274569,2.986322188449848,1982.7178318135766,43.709726443769
+zero-deviation-bound,310.52039040864565,75.611,1196.779,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.15224674000000002
+item6_saving_bound_us_per_query 11.80799184093212
+
+## after (item 1)
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,361.30066024991544,125.043,1255.098,32.689463019250255,1.67983789260385,1854.9807497467073,43.709726443769
+zero-deviation-bound,313.0491541708881,75.441,1203.491,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.16017611
+item6_saving_bound_us_per_query 10.472142048824722
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,356.436770685579,124.662,1244.547,32.689463019250255,1.67983789260385,1854.9807497467073,43.709726443769
+zero-deviation-bound,312.1771811887876,76.051,1207.849,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.16530171
+item6_saving_bound_us_per_query 10.807248272127659
+segments 987 queries 1974
+curve_deviation_m 1.0002308808622429
+run,mean_us,p50_us,p95_us,nodes_per_query,candidates_per_query,terms_per_query,index_pops_per_query
+certified,357.99281948666015,124.021,1239.949,32.689463019250255,1.67983789260385,1854.9807497467073,43.709726443769
+zero-deviation-bound,312.82178149273886,75.752,1214.02,28.99898682877406,1.2026342451874368,1563.7720364741642,24.36980749746707
+center_eval_us 0.15981627
+item6_saving_bound_us_per_query 10.448616096079029

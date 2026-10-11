@@ -47,6 +47,7 @@ composer can run with its frame on the GPU; see
 `docs/wiki/GPU-backend.md`.
 """
 
+from postprocessing.sample_math import gaussian_pdf
 from cameras.camera import Camera
 from core.assets import Assets
 from core.layers import Layers
@@ -4240,11 +4241,6 @@ def blur_light(mut frame: RenderTarget, spread: Float32):
     _blur_along(frame, spread, False)
 
 
-def _gaussian(x: Float32, sigma: Float32) -> Float32:
-    """Return three.js's `gaussianPdf`."""
-    return 0.39894 * exp(-0.5 * x * x / (sigma * sigma)) / sigma
-
-
 def separable_blur_pixel(
     source: LightView,
     x: Int,
@@ -4279,14 +4275,14 @@ def separable_blur_pixel(
         step_v = 1 / Float32(height)
     var u = u_of(x, width)
     var v = v_of(y, height)
-    var weight = _gaussian(0, sigma)
+    var weight = gaussian_pdf(0, sigma)
     var center = source.sample(u, v)
     var sum = center.scaled(weight)
     var total = weight
     var tap = 1
     while tap < kernel:
         var offset = Float32(tap)
-        var w = _gaussian(offset, sigma)
+        var w = gaussian_pdf(offset, sigma)
         var ahead = source.sample(u + step_u * offset, v + step_v * offset)
         var behind = source.sample(u - step_u * offset, v - step_v * offset)
         sum = FloatColor(

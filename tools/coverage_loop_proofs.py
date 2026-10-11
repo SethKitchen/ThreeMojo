@@ -529,6 +529,15 @@ _MAP_SCORE_SUCCESSOR_LINES = {
 }
 
 
+# The default station edge changes only its helper and two default callers.
+# These sites were mapped individually through unchanged complete loop bodies;
+# the helper's new branches remain measured normally. No blanket line offset.
+_MAP_STATION_SUCCESSOR_LINES = {
+    1491: 1508, 2272: 2287, 2279: 2294, 2301: 2316,
+    2373: 2388, 2378: 2393, 2387: 2402, 2396: 2411,
+}
+
+
 # A separate exact source pair for the HairDensity boundary correction.
 # Historical hashes/rules stay unchanged. The four retained hair theorems were
 # reviewed again: rebuild still validates its positive cube and owned partition;
@@ -716,8 +725,11 @@ def repaired_density_loops(root, *, include_roots=()):
 # Bind the complete producer/consumer and maintained exceptional-value control;
 # fail closed on source changes or local/staged stdlib shadows. The receipt
 # separately binds the exact compiler/SDK and still requires a runtime True hit.
-# Successor for #732: renderer.mojo changed only after `_emit_wide_line`
-# begins; lines 1-3829, with this loop and every cap helper, are identical.
+# The #298 placed-corner successor changes the cap consumer, not this count
+# theorem: its sole steps assignment still calls the same cap_steps expression,
+# and range(1, steps + 1) never reassigns steps. Earlier work can raise, but a
+# reached loop is nonempty. Bind each complete reviewed endpoint separately;
+# new consumer branches remain counted and runtime True is still required.
 STRAND_CAP_SOURCES = {
     'objects/__init__.mojo':
         '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
@@ -729,6 +741,12 @@ STRAND_CAP_SOURCES = {
         '5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79',
     'tests/test_small_loop_witnesses.mojo':
         '8f768e04ecaebdb132cf359819be03cb039d5a546b823674c22ac06a1b790362',
+}
+
+
+STRAND_CAP_RENDERER_ENDPOINTS = {
+    'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5': 3757,
+    '08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45': 3886,
 }
 
 
@@ -771,7 +789,10 @@ def strand_cap_loops(root, *, include_roots=()):
     try:
         actual = {name: file_sha256(relative_source(root, name))
                   for name in STRAND_CAP_SOURCES}
-        if actual != STRAND_CAP_SOURCES:
+        renderer = 'renderers/renderer.mojo'
+        line = STRAND_CAP_RENDERER_ENDPOINTS.get(actual[renderer])
+        expected = {**STRAND_CAP_SOURCES, renderer: actual[renderer]}
+        if line is None or actual != expected:
             return {}
         if not all(
                 _density_stdlib_unshadowed(path)
@@ -780,8 +801,8 @@ def strand_cap_loops(root, *, include_roots=()):
             return {}
     except (OSError, ValueError):
         return {}
-    return {3757: {
-        'line': 3757, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
+    return {line: {
+        'line': line, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
         'minimum_cardinality': 2, 'maximum_cardinality': 64,
         'required': 'T', 'impossible': 'F',
         'expression': 'range(1, steps + 1)',
@@ -881,6 +902,63 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             continue
         if digest != expected:
             from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+            if (name in cleanup.shared_helpers.SOURCE_PATHS
+                    and expected == cleanup.shared_helpers.BEFORE_SHA256[name]
+                    and digest == cleanup.shared_helpers.AFTER_SHA256[name]):
+                # This local theorem keeps its original premise scope. The
+                # exact inverse and actual provider prove the same arithmetic;
+                # the complete Map proof separately binds its native test image.
+                executing = cleanup.executing_checker_bindings()
+                helper = cleanup.shared_helpers
+                leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
+                leaf_raw = _coverage_observe_bytes(root, leaf,
+                    relative_source(root, leaf, **operation_args).read_bytes(),
+                    _operation=_operation)
+                if sha256(leaf_raw) != executing[leaf]:
+                    return None
+                texts = {name: raw.decode('utf-8')}
+                providers = {}
+                provider_raw = {}
+                for provider in helper.PROVIDER_PATHS[name]:
+                    value = _coverage_observe_bytes(root, provider,
+                        relative_source(root, provider, **operation_args).read_bytes(),
+                        _operation=_operation)
+                    provider_raw[provider] = value
+                    providers[provider] = sha256(value)
+                    texts[provider] = value.decode('utf-8')
+                if helper.verify_correspondence(texts) != (name,):
+                    return None
+                for package, expected_package in helper.package_inputs((name, *providers)).items():
+                    value = _coverage_observe_bytes(root, package,
+                        relative_source(root, package, **operation_args).read_bytes(),
+                        _operation=_operation)
+                    if sha256(value) != expected_package:
+                        return None
+                    provider_raw[package] = value
+                    providers[package] = expected_package
+                resolver_paths = {name, *providers}
+                if not all(cleanup.resolver_unshadowed(location, resolver_paths)
+                           for location in (root, *include_roots)):
+                    return None
+                for provider, value in provider_raw.items():
+                    if _coverage_observe_bytes(root, provider,
+                            relative_source(root, provider, **operation_args).read_bytes(),
+                            _operation=_operation) != value:
+                        return None
+                if _coverage_observe_bytes(root, name, path.read_bytes(),
+                                           _operation=_operation) != raw:
+                    return None
+                if (_coverage_observe_bytes(root, leaf,
+                        relative_source(root, leaf, **operation_args).read_bytes(),
+                        _operation=_operation) != leaf_raw
+                        or cleanup.executing_checker_bindings() != executing
+                        or not all(cleanup.resolver_unshadowed(location, resolver_paths)
+                                   for location in (root, *include_roots))):
+                    return None
+                actual.update(providers)
+                actual[leaf] = executing[leaf]
+                actual[name] = digest
+                continue
             if (name in cleanup.SOURCE_PATHS
                     and expected == cleanup.BEFORE_SHA256[name]
                     and digest == cleanup.AFTER_SHA256[name]):
@@ -896,12 +974,14 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             if digest not in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
                                       seed_count.SUPPORT_AFTER_SHA256,
                                       seed_count.FRONTIER_AFTER_SHA256,
-                                      seed_count.SCORE_AFTER_SHA256}:
+                                      seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
                 return None
             predecessor = seed_count.historical_source(root, **operation_args).encode('utf-8')
             if sha256(predecessor) != expected or _coverage_observe_bytes(
                     root, name, path.read_bytes(), _operation=_operation) != raw:
                 return None
+            if digest == seed_count.station.AFTER_SHA256:
+                actual.update(cleanup.station_proof_bindings(root, **operation_args))
             actual.update(_cleanup_current_bindings(root, include_roots=include_roots, **operation_args))
         actual[name] = digest
     return actual
@@ -984,6 +1064,7 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
                 seed_count.SUPPORT_AFTER_SHA256: _MAP_SUPPORT_SUCCESSOR_LINES,
                 seed_count.FRONTIER_AFTER_SHA256: _MAP_FRONTIER_SUCCESSOR_LINES,
                 seed_count.SCORE_AFTER_SHA256: _MAP_SCORE_SUCCESSOR_LINES,
+                seed_count.station.AFTER_SHA256: _MAP_STATION_SUCCESSOR_LINES,
             }[actual_bindings[module + '.mojo']]
             line = mapping.get(line)
             if line is None:
@@ -1017,11 +1098,11 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
             for names, expected in census:
                 if not expected or not set(expected).issubset(bindings):
                     return None
-                pattern = r'\b(?:' + '|'.join(re.escape(name) for name in names) + r')\b'
+                # Only an exact local upload identity can exclude a collision.
                 actual = {
                     path.as_posix() for path in cache_key.input_paths(Path(root))
                     if path.suffix == '.mojo'
-                    and re.search(pattern,
+                    and _hair_census_reference(names,
                                   relative_source(root, path.as_posix()).read_text())
                 }
                 if actual != set(expected):
@@ -1182,35 +1263,54 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         # Preserve the immutable frontier table and verify the complete new
         # source/data edge before admitting its identical constructor theorem.
         expected = dict(CONSTRUCTION_BOUNDARY_SOURCE_SHA256)
-        score = actual[seed_count_contracts.MODULE] == seed_count_contracts.SCORE_AFTER_SHA256
+        station = actual[seed_count_contracts.MODULE] == seed_count_contracts.station.AFTER_SHA256
+        score = station or actual[seed_count_contracts.MODULE] == seed_count_contracts.SCORE_AFTER_SHA256
         line = CONSTRUCTION_BOUNDARY_LINE
         if score:
-            expected[seed_count_contracts.MODULE] = seed_count_contracts.SCORE_AFTER_SHA256
-            line = 4069
+            expected[seed_count_contracts.MODULE] = (seed_count_contracts.station.AFTER_SHA256
+                if station else seed_count_contracts.SCORE_AFTER_SHA256)
+            line = 4099 if station else 4069
         # An inapplicable constructor theorem must not attempt current admission.
         # Historical guarded theorems are still verified independently below.
         if actual[seed_count_contracts.MODULE] != expected[seed_count_contracts.MODULE]:
             return {}
         cleanup_bindings = {}
-        if actual != expected:
-            from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        if any(name in cleanup.SOURCE_PATHS and actual[name] != expected[name]
+               for name in expected):
             cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
             edges = cleanup.verified_edges(root, include_roots=include_roots, **operation_args)
             for name, edge in edges.items():
                 if name in expected and expected[name] == edge['before_sha256']:
                     expected[name] = edge['after_sha256']
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        helper_bindings = cleanup.shared_helper_proof_bindings(
+            root, paths=('extensions/carla/curve_distance.mojo', 'loaders/xml.mojo'),
+            include_roots=include_roots, **operation_args)
+        for name in cleanup.shared_helpers.SOURCE_PATHS:
+            if (name in expected and helper_bindings.get(name)
+                    == cleanup.shared_helpers.AFTER_SHA256[name]):
+                if expected[name] != cleanup.shared_helpers.BEFORE_SHA256[name]:
+                    return {}
+                expected[name] = cleanup.shared_helpers.AFTER_SHA256[name]
         if actual != expected:
             return {}
-        if seed_count_contracts.dependency_inventory(root, **operation_args) != set(actual):
+        helper_closure = ({'loaders/utf8.mojo'} if helper_bindings.get('loaders/xml.mojo')
+                          == cleanup.shared_helpers.AFTER_SHA256['loaders/xml.mojo'] else set())
+        if seed_count_contracts.dependency_inventory(root, **operation_args) != set(actual) | helper_closure:
             return {}
         # Preserve the final endpoint's independently bound source/data edge.
         if score:
             seed_count_contracts.verify_score(root, **operation_args)
             actual.update(seed_count_contracts.SCORE_TESTS)
+            if station:
+                from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+                actual.update(cleanup.station_proof_bindings(root, **operation_args))
         else:
             seed_count_contracts.verify_frontier(root)
         record = seed_count_contracts.read_record(root, **operation_args)
         actual.update(cleanup_bindings)
+        actual.update(helper_bindings)
         actual[seed_count_contracts.MIGRATION] = seed_count_contracts.MIGRATION_SHA256
         for group in ('historical_records', 'unchanged_correctness_tests',
                       'after_correctness_tests'):
@@ -1615,6 +1715,144 @@ def verify_captures(captures, envelope):
                 or binding['capture_sha256'] != file_sha256(capture)
                 or binding['output_sha256'] != file_sha256(capture.parent / name)):
             raise ValueError('Stale or modified coverage capture: ' + capture.name)
+
+
+def _hair_census_reference(names, text):
+    """Keep unknown hair references; exclude only a proven local upload name."""
+    pattern = r'\b(?:' + '|'.join(re.escape(name) for name in names) + r')\b'
+    if not re.search(pattern, text):
+        return False
+    if (names != ('_shadow_depths', '_upload')
+            or re.search(r'\b_shadow_depths\b', text)):
+        return True
+    import keyword
+    from carla_lane_oracle import source_contracts, sum2_guard_contracts
+    try:
+        tokens = source_contracts.tokens(text)
+        # Python 3.12 exposes f-string parts separately. Their fields are not
+        # supported local-name evidence, even when the literal part is empty.
+        fstring_types = {getattr(tokenize, name, -1) for name in
+                         ('FSTRING_START', 'FSTRING_MIDDLE', 'FSTRING_END')}
+        if any(token.type == tokenize.ERRORTOKEN or token.type in fstring_types or
+               (token.type in (tokenize.COMMENT, tokenize.STRING)
+                and re.search(r'\b_upload\b', token.string)) for token in tokens):
+            return True
+        tokens = [token for token in tokens
+                  if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                        tokenize.ENDMARKER)]
+        # A star import can replace the binding without spelling its name.
+        importing = False
+        for token in tokens:
+            if token.type == tokenize.NEWLINE:
+                importing = False
+            elif token.type == tokenize.NAME and token.string == 'import':
+                importing = True
+            elif importing and token.string == '*':
+                return True
+        declaration = sum2_guard_contracts.declaration(text, '_upload', ())
+        stream = [token for token in source_contracts.tokens(declaration)
+                  if token.type not in (tokenize.COMMENT, tokenize.NL,
+                                        tokenize.ENDMARKER)]
+        stream = stream[:next(index for index, token in enumerate(stream)
+                              if token.type == tokenize.NEWLINE)]
+        position = 0
+
+        def at(value):
+            return position < len(stream) and stream[position].string == value
+
+        def take(value):
+            nonlocal position
+            if not at(value):
+                raise ValueError('unsupported local upload syntax')
+            position += 1
+
+        def identifier():
+            nonlocal position
+            if (position >= len(stream) or stream[position].type != tokenize.NAME
+                    or keyword.iskeyword(stream[position].string)):
+                raise ValueError('unsupported local upload identifier')
+            position += 1
+
+        def type_name(depth=0):
+            if depth > 8:
+                raise ValueError('unsupported local upload type nesting')
+            identifier()
+            while at('.'):
+                take('.')
+                identifier()
+            if at('['):
+                take('[')
+                type_name(depth + 1)
+                while at(','):
+                    take(',')
+                    type_name(depth + 1)
+                take(']')
+
+        # declaration() binds the unique lexical owner, but retains decorators
+        # and does not validate a signature. Admit only this narrow grammar.
+        take('def')
+        take('_upload')
+        if at('['):
+            take('[')
+            while True:
+                identifier()
+                take(':')
+                identifier()
+                while at('.'):
+                    take('.')
+                    identifier()
+                if not at(','):
+                    break
+                take(',')
+            take(']')
+        take('(')
+        if not at(')'):
+            while True:
+                identifier()
+                if at(':'):
+                    take(':')
+                    type_name()
+                if not at(','):
+                    break
+                take(',')
+        take(')')
+        if at('raises'):
+            take('raises')
+        if at('->'):
+            take('->')
+            type_name()
+        take(':')
+        if position != len(stream):
+            return True
+        declarations = 0
+        for index, token in enumerate(tokens):
+            if token.type != tokenize.NAME or token.string != '_upload':
+                continue
+            previous = tokens[index - 1].string if index else ''
+            if previous == 'def':
+                declarations += 1
+                continue
+            if previous in {'.', 'fn', 'struct', 'trait', 'class', 'alias',
+                            'var', 'comptime', 'mut', 'out', 'ref',
+                            'import', 'from', 'as'}:
+                return True
+            position = index + 1
+            stream = tokens
+            if at('['):
+                take('[')
+                while True:
+                    identifier()
+                    while at('.'):
+                        take('.')
+                        identifier()
+                    if not at(','):
+                        break
+                    take(',')
+                take(']')
+            take('(')
+        return declarations != 1
+    except (ValueError, StopIteration):
+        return True
 
 
 def main():

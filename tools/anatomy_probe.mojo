@@ -10,7 +10,7 @@ field. The report writer must replace that specific placeholder with null
 and identify the authored support plane. Raw rows are not validity reports.
 """
 
-from tools.anatomy_pairs import _pair_probe
+from tools.anatomy_pairs import _pair_probe, localize_pair
 from extensions.humanoid.athleticism import TONED, UNTONED
 from extensions.humanoid.sex import MALE, FEMALE
 from extensions.humanoid.side import RIGHT, LEFT
@@ -317,6 +317,9 @@ def main() raises:
         return
     if args[1] == "spine":
         _spine(spec, step)
+        return
+    if args[1] == "spine-witness":
+        _spine_witness(spec, String(args[2]), step)
         return
     var pose = assemble_leg(spec, side)
     var f = FemurField(pose.femur)
@@ -627,7 +630,40 @@ def main() raises:
         )
         return
     raise Error(
-        "A probe mode must be controls, segment, bones, knee, spine or pairs"
+        "A probe mode must be controls, segment, bones, knee, spine,"
+        " spine-witness or pairs"
+    )
+
+
+def _spine_witness(spec: HumanoidSpec, request: String, step: Length) raises:
+    # Localize one neighboring body pair: cervical/N with N+1 (2..6), or
+    # thoracolumbar/N with N+1 (0..15).
+    var tokens = request.split("/")
+    if len(tokens) != 2:
+        raise Error("A spine witness needs cervical/N or thoracolumbar/N")
+    var n = Int(String(tokens[1]))
+    var h = head_dimensions(spec.stature, spec.sex)
+    var text: String
+    var region = String(tokens[0])
+    if region == "cervical" and n >= 2 and n <= 6:
+        var a = head_bone_field(h, HeadBone(n - 1))
+        var b = head_bone_field(h, HeadBone(n))
+        text = localize_pair(a, a.low, a.high, b, b.low, b.high, step)
+    elif region == "thoracolumbar" and n >= 0 and n <= 15:
+        var t = h.torso.copy()
+        var a = torso_bone_field(t, TorsoBone(n), RIGHT)
+        var b = torso_bone_field(t, TorsoBone(n + 1), RIGHT)
+        text = localize_pair(a, a.low, a.high, b, b.low, b.high, step)
+    else:
+        raise Error("A spine witness names a supported neighboring body")
+    print(
+        '{"record":"witness","first":'
+        + quote_json(request)
+        + ',"second":'
+        + quote_json(region + "/" + String(n + 1))
+        + ","
+        + text
+        + "}"
     )
 
 

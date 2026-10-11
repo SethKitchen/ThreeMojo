@@ -45,4 +45,4 @@ Discrete steps leave bodies up to 20 cm inside raised terrain. CCD stops each wa
 
 ## Limits
 
-These rows do not measure interacting moving bodies, because CCD refuses bodies whose reachable regions overlap. That work stays in issue 635. Rollback storage is not measured separately here. The [acceleration report](continuous-collision-636.md) times a failed step with rollback for sphere probes. The numbers describe this machine. They are not a real-time capacity claim.
+These rows measure bodies that never meet. The [interacting-sphere report](ccd-pairs-635.md) measures pairs, chains and struck stacks, and a rolled-back step with its rollback storage. Rollback storage is not measured separately here. The [acceleration report](continuous-collision-636.md) times a failed step with rollback for sphere probes. The numbers describe this machine. They are not a real-time capacity claim.

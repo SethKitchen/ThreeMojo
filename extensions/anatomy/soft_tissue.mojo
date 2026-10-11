@@ -53,8 +53,10 @@ from units.si import (
     STANDARD_GRAVITY,
     Acceleration,
     Density,
+    CUBIC_METER,
     Force,
     GRAM_PER_CUBIC_CENTIMETER,
+    KILOGRAM,
     MEGAPASCAL,
     Mass,
     Pressure,
@@ -193,6 +195,25 @@ struct SoftMass(ImplicitlyCopyable):
             `mass * gravity`, in newtons when `gravity` is standard.
         """
         return self.mass * gravity
+
+
+def analytic_soft_mass(tissue: SoftTissue, volume: Float32) -> SoftMass:
+    """Return wet-tissue mass from an analytic volume.
+
+    The caller validates `tissue` before it computes `volume`. A bad
+    tissue is refused before that work.
+
+    Args:
+        tissue: Hydrated tissue. Mass uses `wet_density` once.
+        volume: Analytic volume in cubic meters.
+
+    Returns:
+        That volume and its wet-tissue mass.
+    """
+    return SoftMass(
+        Volume(volume, CUBIC_METER),
+        Mass(tissue.wet_density.value * volume, KILOGRAM),
+    )
 
 
 def cartilage_tissue() -> SoftTissue:

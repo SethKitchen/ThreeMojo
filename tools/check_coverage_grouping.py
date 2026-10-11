@@ -294,6 +294,731 @@ def case_{number}():
     return s, cases
 
 
+# Custom Boolable compound operands (issue #560). Leaves: ('S', i) a temporary
+# Probe, ('D', i) a temporary Other, ('B', i) a Bool, ('X', i) a retained
+# move-only Probe, and ('choose', condition, then, else) an opaque conditional
+# expression. Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one
+# type, it tests the left operand, then returns it or the right operand
+# unconverted, and the enclosing operator or truth context tests the selected
+# object again. With two types, it converts each evaluated operand once.
+TRUTH_CASES = [
+    ('or', ('S', 0), ('S', 1)),
+    ('and', ('S', 0), ('S', 1)),
+    ('or', ('or', ('S', 0), ('S', 1)), ('S', 2)),
+    ('or', ('and', ('S', 0), ('S', 1)), ('S', 2)),
+    ('or', ('S', 0), ('and', ('S', 1), ('S', 2))),
+    ('not', ('or', ('S', 0), ('S', 1))),
+    ('and', ('not', ('S', 0)), ('S', 1)),
+    ('or', ('S', 0), ('D', 1)),
+    ('and', ('D', 0), ('or', ('S', 1), ('S', 2))),
+    ('and', ('or', ('S', 0), ('S', 1)), ('or', ('S', 2), ('S', 3))),
+    ('or', ('and', ('S', 0), ('S', 1)), ('B', 2)),
+    ('or', ('B', 0), ('and', ('S', 1), ('S', 2))),
+    ('or', ('X', 0), ('B', 1)),
+    ('or', ('and', ('B', 0), ('not', ('X', 1))), ('S', 2)),
+    ('or', ('and', ('X', 0), ('D', 1)), ('S', 2)),
+    ('or', ('choose', ('B', 1), ('S', 2), ('S', 3)), ('S', 0)),
+    ('and', ('or', ('D', 0), ('D', 1)), ('S', 2)),
+]
+
+
+def truth_type(tree):
+    """Return the native static type of a subexpression: S, D or Bool (B)."""
+    kind = tree[0]
+    if kind in ('S', 'X'):
+        return 'S'
+    if kind in ('D', 'B'):
+        return kind
+    if kind == 'choose':
+        return truth_type(tree[2])
+    if kind == 'not':
+        return 'B'
+    left, right = truth_type(tree[1]), truth_type(tree[2])
+    return left if left == right else 'B'
+
+
+def truth_text(tree, top=True):
+    """Render a reference tree as fixture source text."""
+    kind = tree[0]
+    if kind == 'S':
+        return f'probe({tree[1]}, state)'
+    if kind == 'D':
+        return f'other({tree[1]}, state)'
+    if kind == 'B':
+        return f'flag({tree[1]}, state)'
+    if kind == 'X':
+        return f'retained{tree[1]}'
+    if kind == 'choose':
+        return (f'({truth_text(tree[2], False)} if {truth_text(tree[1], False)}'
+                f' else {truth_text(tree[3], False)})')
+    if kind == 'not':
+        return f'not {truth_text(tree[1], False)}'
+    text = f'{truth_text(tree[1], False)} {kind} {truth_text(tree[2], False)}'
+    return text if top else f'({text})'
+
+
+def truth_slots(tree, slots=None):
+    """Number the instrumented leaves left to right; a conditional is one."""
+    slots = {} if slots is None else slots
+    if tree[0] in ('S', 'D', 'B', 'X', 'choose'):
+        slots[id(tree)] = len(slots)
+    else:
+        for child in tree[1:]:
+            truth_slots(child, slots)
+    return slots
+
+
+class TruthFailure(Exception):
+    pass
+
+
+class TruthModel:
+    """Evaluate one decision as native Mojo does and as the probes record it."""
+
+    def __init__(self, tree, mask, fail, changing, line):
+        self.tree, self.mask, self.fail, self.changing = tree, mask, fail, changing
+        self.line, self.slots = line, truth_slots(tree)
+        self.log, self.records, self.states = [], [], {}
+        self.counts = defaultdict(int)
+
+    def bit(self, name):
+        return bool(self.mask & (1 << name))
+
+    def enter(self, name):
+        self.log.append(f'+{name}')
+        if name == self.fail:
+            raise TruthFailure()
+
+    def observe(self, slot, value):
+        # Mirrors the runtime: the first truth fills the slot, a later
+        # disagreeing truth marks it inconsistent and is recorded too.
+        state = self.states.get(slot, -1)
+        if state == int(value):
+            return
+        self.states[slot] = int(value) if state < 0 else 2
+        self.records.append(f'COVLINE:truth:{self.line}.{slot}:{"T" if value else "F"}')
+
+    def convert(self, item):
+        kind, name, slot, _ = item
+        if kind == 'B':
+            return name
+        self.log.append(str(name))
+        count = self.counts[name]
+        self.counts[name] += 1
+        value = self.bit(name) != (self.changing and count % 2 == 1)
+        self.observe(slot, value)
+        return value
+
+    def drop(self, item):
+        kind, name, _, retained = item
+        if kind != 'B' and not retained:
+            self.log.append(f'~{name}')
+
+    def evaluate(self, tree):
+        kind = tree[0]
+        slot = self.slots.get(id(tree))
+        if kind in ('S', 'D'):
+            self.enter(tree[1])
+            return (kind, tree[1], slot, False)
+        if kind == 'X':
+            return ('S', tree[1], slot, True)
+        if kind == 'B':
+            self.enter(tree[1])
+            value = self.bit(tree[1])
+            self.observe(slot, value)
+            return ('B', value, slot, False)
+        if kind == 'choose':
+            self.enter(tree[1][1])
+            chosen = tree[2] if self.bit(tree[1][1]) else tree[3]
+            self.enter(chosen[1])
+            return ('S', chosen[1], slot, False)
+        if kind == 'not':
+            item = self.evaluate(tree[1])
+            value = self.convert(item)
+            self.drop(item)
+            return ('B', not value, None, False)
+        same = truth_type(tree[1]) == truth_type(tree[2])
+        left = self.evaluate(tree[1])
+        value = self.convert(left)
+        short = value if kind == 'or' else not value
+        if same:
+            if short:
+                return left
+            self.drop(left)
+            return self.evaluate(tree[2])
+        self.drop(left)
+        if short:
+            return ('B', value, None, False)
+        right = self.evaluate(tree[2])
+        value = self.convert(right)
+        self.drop(right)
+        return ('B', value, None, False)
+
+    def run(self):
+        retained = [leaf for leaf in truth_leaves(self.tree) if leaf[0] == 'X']
+        try:
+            item = self.evaluate(self.tree)
+            outcome = self.convert(item)
+            self.drop(item)
+        except TruthFailure:
+            outcome = None
+        self.log.append('|E' if outcome is None else ('|T' if outcome else '|F'))
+        self.log.extend(f'~{leaf[1]}' for leaf in retained)
+        vector = None
+        if outcome is not None:
+            self.records.append(f'COVLINE:truth:{self.line}:{"T" if outcome else "F"}')
+            vector = ''.join('FT?'[self.states[slot]] if slot in self.states else '-'
+                             for slot in range(len(self.slots)))
+            vector = f'COVEVAL2:truth:{self.line}:{"T" if outcome else "F"}:{vector};'
+        return ''.join(self.log), self.records, vector
+
+
+def truth_leaves(tree):
+    if tree[0] in ('S', 'D', 'B', 'X'):
+        return [tree]
+    return [leaf for child in tree[1:] for leaf in truth_leaves(child)]
+
+
+TRUTH_PRELUDE = '''from std.os import getenv
+from std.testing import TestSuite
+
+
+struct State(Movable):
+    var log: String
+    var mask: Int
+    var fail: Int
+    var changing: Bool
+    var counts: List[Int]
+
+    def __init__(out self, mask: Int, fail: Int, changing: Bool):
+        self.log = String("")
+        self.mask = mask
+        self.fail = fail
+        self.changing = changing
+        self.counts = List[Int](length=8, fill=0)
+
+    def enter(mut self, index: Int) raises:
+        self.log += "+" + String(index)
+        if index == self.fail:
+            raise Error("fixture exception")
+
+    def convert(mut self, index: Int) -> Bool:
+        self.log += String(index)
+        var count = self.counts[index]
+        self.counts[index] = count + 1
+        var value = (self.mask & (1 << index)) != 0
+        return value != (self.changing and count % 2 == 1)
+
+
+comptime Cell = Pointer[State, MutUntrackedOrigin]
+
+
+trait Made(Boolable, Movable, Deinitable):
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        ...
+
+
+struct Probe(Made):
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+struct Other(Made):
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+def probe(index: Int, state: Cell) raises -> Probe:
+    state[].enter(index)
+    return Probe(index, state)
+
+
+def other(index: Int, state: Cell) raises -> Other:
+    state[].enter(index)
+    return Other(index, state)
+
+
+def flag(index: Int, state: Cell) raises -> Bool:
+    state[].enter(index)
+    return (state[].mask & (1 << index)) != 0
+'''
+
+
+def truth_source():
+    """Generate one function per reference tree; return the decision lines."""
+    text = TRUTH_PRELUDE
+    lines = []
+    for number, tree in enumerate(TRUTH_CASES):
+        retained = ''.join(f'    var retained{leaf[1]} = Probe({leaf[1]}, state)\n'
+                           for leaf in truth_leaves(tree) if leaf[0] == 'X')
+        released = ''.join(f'    _ = retained{leaf[1]}^\n'
+                           for leaf in truth_leaves(tree) if leaf[0] == 'X')
+        text += f'''
+
+def truth_{number}(mask: Int, fail: Int, changing: Bool):
+    var cell = State(mask, fail, changing)
+    var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
+{retained}    try:
+'''
+        lines.append(len(text.splitlines()) + 1)
+        text += f'''        if {truth_text(tree)}:
+            state[].log += "|T"
+        else:
+            state[].log += "|F"
+    except error:
+        state[].log += "|E"
+{released}    print("TRUTH", {number}, mask, fail, changing, state[].log)
+    _ = cell^
+'''
+    text += '''
+
+def test_truth() raises:
+    var changing = getenv("THREEMOJO_TRUTH_CHANGING", "0") == "1"
+    for fail in range(-1, 4):
+        for mask in range(16):
+'''
+    text += ''.join(f'            truth_{number}(mask, fail, changing)\n'
+                    for number in range(len(TRUTH_CASES)))
+    text += '\n\ndef main() raises:\n    TestSuite.discover_tests[__functions_in_module()]().run()\n'
+    return text, lines
+
+
+# Native-only controls without an independent model: the instrumented output
+# must equal the native output byte for byte.
+TRUTH_CONTROLS = TRUTH_PRELUDE.replace(
+    'from std.testing import TestSuite\n',
+    'from std.testing import TestSuite\nfrom render.tasks import TaskGroup\n') + '''
+
+struct Pinned(Boolable):
+    """A temporary that can be neither moved nor copied."""
+
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+@fieldwise_init
+struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __bool__(self) -> Bool:
+        return self.value
+
+
+def optional_probe(index: Int, state: Cell) raises -> Optional[Probe]:
+    state[].enter(index)
+    if (state[].mask & (1 << index)) != 0:
+        return Probe(index, state)
+    return None
+
+
+def nested_optional(full: Bool) -> Optional[Optional[Int]]:
+    if full:
+        return Optional[Int](None)
+    return None
+
+
+def depth(count: Int, state: Cell) raises -> Int:
+    if probe(0, state) and (probe(1, state) or flag(2, state)) and count > 0:
+        return 1 + depth(count - 1, state)
+    return 0
+
+
+def generic_pair[A: Made, B: Made](state: Cell) -> Bool:
+    # The operator checks run per instantiation: one type, then two types.
+    if A.make(0, state) or B.make(1, state) and A.make(2, state):
+        return True
+    return False
+
+
+def controls(mask: Int, changing: Bool) raises:
+    var cell = State(mask, -1, changing)
+    var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
+    var loops = 0
+    while (probe(0, state) or probe(1, state)) and loops < 3:
+        loops += 1
+        state[].log += "|W"
+    state[].log += "|"
+    if probe(0, state) and probe(1, state):
+        state[].log += "|A"
+    elif not probe(2, state) or other(3, state):
+        state[].log += "|B"
+    elif probe(1, state) or probe(2, state):
+        state[].log += "|C"
+    state[].log += "|"
+    var unpinned = Probe(3, state)
+    if flag(0, state) and not unpinned or probe(1, state):
+        state[].log += "|U"
+    state[].log += "|"
+    if Pinned(1, state) or flag(2, state) and Pinned(3, state):
+        state[].log += "|P"
+    state[].log += "|"
+    if optional_probe(0, state) and flag(1, state) or probe(2, state):
+        state[].log += "|O"
+    state[].log += "|"
+    var maybe = Optional[Int](mask) if mask % 3 == 0 else None
+    var other = Optional[Int](None) if mask % 2 == 0 else Optional[Int](0)
+    var number = mask % 2
+    if (maybe or other) and (number or flag(1, state)) or String("x") and List[Int](length=mask, fill=0):
+        state[].log += "|S"
+    state[].log += "|"
+    if nested_optional(mask % 2 == 0) or nested_optional(mask % 3 == 0):
+        state[].log += "|N"
+    if nested_optional(mask % 2 == 0) and nested_optional(mask % 3 == 0):
+        state[].log += "|D"
+    state[].log += "|"
+    var copied = Copied(mask % 2 == 0)
+    if copied:
+        state[].log += "|K"
+    state[].log += "|" + String(depth(mask % 4, state))
+    state[].log += "|" + String(generic_pair[Probe, Probe](state))
+    state[].log += "|" + String(generic_pair[Probe, Other](state))
+    print("CONTROL", mask, changing, state[].log)
+    _ = cell^
+
+
+def worker(index: Int, iteration: Int) -> Bool:
+    var cell = State(index * 7 + iteration, -1, False)
+    var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
+    var result = False
+    if Probe(0, state) or Probe(1, state) and Other(2, state):
+        result = True
+    _ = cell^
+    return result
+
+
+async def task(index: Int, totals: MutPointer[Int, MutAnyOrigin]):
+    var total = 0
+    for iteration in range(64):
+        total += Int(worker(index, iteration))
+    totals[unsafe_offset=index] = total
+
+
+def test_controls() raises:
+    for changing in [False, True]:
+        for mask in range(16):
+            controls(mask, changing)
+    var totals = List[Int](length=8, fill=0)
+    var group = TaskGroup()
+    for index in range(8):
+        group.create_task(task(index, totals.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()))
+    group.wait()
+    print("CONCURRENT", totals)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()
+'''
+
+def nested_optional_rejections():
+    """Model selection before an inner Optional wraps into the result type.
+
+    Both operators first test the original left operand. The selected inner
+    Optional becomes present in the outer result, even when it was empty.
+    Construction logs also prove which right operands were short-circuited.
+    """
+    prelude = '''def inner(full: Bool) -> Optional[Int]:
+    print("MAKE inner")
+    if full:
+        return 0
+    return None
+
+
+def outer(full: Bool) -> Optional[Optional[Int]]:
+    print("MAKE outer")
+    if full:
+        return Optional[Int](None)
+    return None
+'''
+    cases = {}
+    for first, second in (("inner", "outer"), ("outer", "inner")):
+        for operator in ("and", "or"):
+            source = prelude + f'''
+
+def main():
+    for mask in range(4):
+        print("CASE", mask)
+        var left = (mask & 1) != 0
+        var right = (mask & 2) != 0
+        if {first}(left) {operator} {second}(right):
+            print("T")
+        else:
+            print("F")
+'''
+            expected = []
+            for mask in range(4):
+                left, right = bool(mask & 1), bool(mask & 2)
+                expected += [f"CASE {mask}", f"MAKE {first}"]
+                short = left if operator == "or" else not left
+                selected, present = (first, left) if short else (second, right)
+                if not short:
+                    expected.append(f"MAKE {second}")
+                expected.append("T" if selected == "inner" or present else "F")
+            cases[f"nested-optional-{first}-{operator}"] = (source, "\n".join(expected) + "\n")
+    return cases
+
+
+NESTED_OPTIONAL_REJECTIONS = nested_optional_rejections()
+
+
+# Unsupported operands must fail compilation with the coverage diagnostic.
+TRUTH_REJECTED = {
+    'copyable-retained': ('''@fieldwise_init
+struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __bool__(self) -> Bool:
+        return self.value
+
+
+def main():
+    var copied = Copied(True)
+    var other = Copied(False)
+    if copied or other:
+        print("T")
+    else:
+        print("F")
+''', 'retained implicitly copyable custom Boolable'),
+    'copyable-retained-mixed': ('''@fieldwise_init
+struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __bool__(self) -> Bool:
+        return self.value
+
+
+def main():
+    var copied = Copied(False)
+    var flag = True
+    if copied or flag:
+        print("T")
+    else:
+        print("F")
+''', 'Coverage cannot yet preserve a retained implicitly copyable custom'),
+    'custom-move': ('''@fieldwise_init
+struct Moving(Boolable):
+    var value: Bool
+
+    def __init__(out self, *, deinit move: Self):
+        self.value = move.value
+        print("MOVE")
+
+    def __bool__(self) -> Bool:
+        return self.value
+
+
+def main():
+    var flag = True
+    if Moving(False) or flag:
+        print("T")
+    else:
+        print("F")
+''', 'user-defined move constructor'),
+    'optional-join': ('''struct Probe(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def empty() -> Optional[Probe]:
+    return None
+
+
+def main():
+    if empty() or Probe(False):
+        print("T")
+    else:
+        print("F")
+''', 'an implicit conversion between operand types'),
+    'pure-optional-join': ('''def main():
+    var empty = Optional[Int](None)
+    var zero = 0
+    if empty or zero:
+        print("T")
+    else:
+        print("F")
+''', 'an implicit conversion between operand types'),
+    **{name: (source, 'an implicit conversion between operand types')
+       for name, (source, _) in NESTED_OPTIONAL_REJECTIONS.items()},
+    'implicit-join': ('''struct Lifted(Movable, Boolable):
+    var value: Bool
+
+    @implicit
+    def __init__(out self, value: Bool):
+        print("LIFT")
+        self.value = value
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def main():
+    var flag = True
+    if Lifted(False) or flag:
+        print("T")
+    else:
+        print("F")
+''', 'an implicit conversion between operand types'),
+}
+
+
+def check_custom_truth(work, native, rewritten, build, mojo):
+    """Compare custom compound operands with the native-semantics model."""
+    source, lines = truth_source()
+    (native / 'truth.mojo').write_text(source)
+    run([str(build), str(rewritten), 'truth.mojo'], cwd=native)
+    binaries = []
+    for label, folder in (('native', native), ('instrumented', rewritten)):
+        binary = work / f'truth-{label}'
+        run([mojo, 'build', '-Werror', '-I', str(folder),
+             str(folder / 'truth.mojo'), '-o', str(binary)])
+        binaries.append(binary)
+    inconsistent = 0
+    for changing in (False, True):
+        expected_rows, expected_records, expected_vectors = [], defaultdict(list), defaultdict(list)
+        for fail in range(-1, 4):
+            for mask in range(16):
+                for number, tree in enumerate(TRUTH_CASES):
+                    log, hits, vector = TruthModel(
+                        tree, mask, fail, changing, lines[number]).run()
+                    expected_rows.append(f'TRUTH {number} {mask} {fail} {changing} {log}')
+                    expected_records[number] += hits
+                    if vector:
+                        expected_vectors[number].append(vector)
+        outputs = []
+        for binary in binaries:
+            with isolated_environment() as environment:
+                environment['THREEMOJO_TRUTH_CHANGING'] = '1' if changing else '0'
+                result = run([str(binary)], env=environment, timeout=10)
+            assert not result_errors(result.stdout), result.stdout
+            assert not slow_tests(result.stdout, 5), result.stdout
+            rows = [line for line in result.stdout.splitlines() if line.startswith('TRUTH ')]
+            mismatch = next((pair for pair in zip(rows, expected_rows) if pair[0] != pair[1]), None)
+            assert rows == expected_rows, (binary.name, changing, mismatch, len(rows))
+            outputs.append(result)
+        raw = outputs[1].stderr
+        label = 'changing' if changing else 'stable'
+        (work / f'truth-raw-{label}.txt').write_text(raw)
+        for number, line in enumerate(lines):
+            hits = [record for record in raw.splitlines()
+                    if record.startswith((f'COVLINE:truth:{line}:', f'COVLINE:truth:{line}.'))]
+            assert hits == expected_records[number], (number, changing, hits[:4])
+            actual = [record for record in raw.splitlines()
+                      if record.startswith(f'COVEVAL2:truth:{line}:')]
+            assert actual == expected_vectors[number], (number, changing, actual[:3])
+        marked = sum('?' in record.rpartition(':')[2]
+                     for record in raw.splitlines() if record.startswith('COVEVAL2:'))
+        reduced = []
+        reducer = Reducer(reduced.append)
+        if not changing:
+            assert marked == 0
+            for record in raw.encode().splitlines(keepends=True):
+                reducer.feed(record)
+            (work / 'truth-reduced-stable.txt').write_bytes(b''.join(reduced))
+            reports = [run([str(work / 'analyze'), str(work / name)]).stdout
+                       for name in ('truth-raw-stable.txt', 'truth-reduced-stable.txt')]
+            assert reports[0] == reports[1], 'raw/reduced custom truth traces differ'
+            continue
+        # A repeated conversion that disagrees must refuse MC-DC evidence.
+        assert marked > 0
+        inconsistent = marked
+        try:
+            for record in raw.encode().splitlines(keepends=True):
+                reducer.feed(record)
+            raise AssertionError('the reducer accepted an inconsistent vector')
+        except ValueError as error:
+            assert 'Inconsistent repeated truth conversion' in str(error), error
+        manifest = [entry for entry in (rewritten / 'manifest.txt').read_text().splitlines()
+                    if entry.split()[0] in ('B', 'C', 'M') and entry.split()[1] == 'truth']
+        assert len([entry for entry in manifest if entry.startswith('M ')]) == sum(
+            len(truth_slots(tree)) for tree in TRUTH_CASES)
+        (work / 'truth-manifest.txt').write_text('\n'.join(manifest) + '\n')
+        refused = subprocess.run([str(work / 'report'), str(work / 'truth-manifest.txt'),
+                                  str(work / 'truth-raw-changing.txt')],
+                                 text=True, capture_output=True)
+        assert refused.returncode != 0, refused.stdout
+        assert 'Inconsistent repeated truth conversion' in refused.stdout + refused.stderr, refused
+        (work / 'truth-refused-report.txt').write_text(refused.stdout + refused.stderr)
+
+    (native / 'controls.mojo').write_text(TRUTH_CONTROLS)
+    run([str(build), str(rewritten), 'controls.mojo'], cwd=native)
+    outputs = []
+    for label, folder in (('native', native), ('instrumented', rewritten)):
+        binary = work / f'controls-{label}'
+        run([mojo, 'build', '-Werror', '-I', str(folder), '-I', str(ROOT),
+             str(folder / 'controls.mojo'), '-o', str(binary)])
+        result = run([str(binary)], timeout=10)
+        assert not result_errors(result.stdout), result.stdout
+        assert not slow_tests(result.stdout, 5), result.stdout
+        outputs.append(result.stdout.partition('\nRunning ')[0].strip() or result.stdout)
+        (work / f'controls-{label}.txt').write_text(result.stdout)
+    assert outputs[0] == outputs[1], 'custom truth controls differ'
+    assert 'CONCURRENT' in outputs[0] and outputs[0].count('CONTROL ') == 32, outputs[0]
+
+    for name, (text, message) in TRUTH_REJECTED.items():
+        (native / f'{name}.mojo').write_text(text)
+        result = run([mojo, 'build', '-Werror', '-I', str(native), str(native / f'{name}.mojo'),
+                      '-o', str(work / name)])
+        native_output = run([str(work / name)], timeout=5).stdout
+        if name in NESTED_OPTIONAL_REJECTIONS:
+            assert native_output == NESTED_OPTIONAL_REJECTIONS[name][1], (
+                name, native_output, NESTED_OPTIONAL_REJECTIONS[name][1])
+        run([str(build), str(rewritten), f'{name}.mojo'], cwd=native)
+        rejected = subprocess.run([mojo, 'build', '-Werror', '-I', str(rewritten),
+                                   str(rewritten / f'{name}.mojo'), '-o', str(work / 'rejected')],
+                                  text=True, capture_output=True)
+        assert rejected.returncode != 0 and message in rejected.stderr, (name, rejected.stderr[-2000:])
+        (work / f'truth-{name}-native.txt').write_text(native_output)
+        (work / f'truth-{name}-rejected.txt').write_text(rejected.stderr)
+    return (f'{len(TRUTH_CASES)} custom truth trees x 16 masks x 5 failure positions, '
+            f'stable and changing; {inconsistent} inconsistent vectors refused; '
+            f'{len(TRUTH_REJECTED)} explicit rejections')
+
+
 def run(command, **kwargs):
     result = subprocess.run(command, text=True, capture_output=True, **kwargs)
     if result.returncode:
@@ -445,44 +1170,7 @@ def main() raises:
         (work / 'branch-report.txt').write_text(branch_report.stdout)
         assert 'condition 1:' in result.stdout and 'condition 2:' in result.stdout, result.stdout
         (work / 'negative-report.txt').write_text(result.stdout + result.stderr)
-        # A generic conversion must not silently alter custom __bool__ calls.
-        # Native same-type `or` retests the selected value in the outer context.
-        custom_source = '''@fieldwise_init
-struct Custom(Movable, Boolable):
-    var value: Bool
-    var changing: Bool
-    var calls: Pointer[Int, MutUntrackedOrigin]
-
-    def __bool__(self) -> Bool:
-        self.calls[] += 1
-        return self.calls[] % 2 == 1 if self.changing else self.value
-
-def main():
-    var calls = 0
-    var counter = Pointer(to=calls).unsafe_origin_cast[MutUntrackedOrigin]()
-    var result = False
-    if Custom(True, CHANGE, counter) or Custom(True, CHANGE, counter):
-        result = True
-    print("CUSTOM", result, calls)
-'''
-        for changing in (False, True):
-            name = 'changing' if changing else 'stable'
-            (native / 'custom.mojo').write_text(custom_source.replace('CHANGE', str(changing)))
-            run([mojo, 'build', '-Werror', '-I', str(native), str(native / 'custom.mojo'),
-                 '-o', str(work / 'custom')])
-            result = run([str(work / 'custom')], timeout=5)
-            assert result.stdout.strip() == f'CUSTOM {not changing} 2', result.stdout
-            (work / f'custom-{name}-native.txt').write_text(result.stdout)
-            run([str(build), str(rewritten), 'custom.mojo'], cwd=native)
-            custom_manifest = (rewritten / 'manifest.txt').read_text()
-            assert sum(row.startswith('C custom ') for row in custom_manifest.splitlines()) == 2
-            assert sum(row.startswith('M custom ') for row in custom_manifest.splitlines()) == 2
-            (work / f'custom-{name}-manifest.txt').write_text(custom_manifest)
-            result = subprocess.run([mojo, 'build', '-Werror', '-I', str(rewritten),
-                                     str(rewritten / 'custom.mojo'), '-o', str(work / 'rejected')],
-                                    text=True, capture_output=True)
-            assert result.returncode != 0 and 'custom Boolable truth conversions are not yet supported' in result.stderr, result
-            (work / f'custom-{name}-rejected.txt').write_text(result.stderr)
+        truth_summary = check_custom_truth(work, native, rewritten, build, mojo)
 
         lifetime, lifetime_cases = lifetime_source()
         (native / 'lifetime.mojo').write_text(lifetime)
@@ -509,7 +1197,7 @@ def main():
             (args.output / 'manifest.txt').write_text('\n'.join(manifest) + '\n')
         print(f'PASS: {len(CASES)} native/instrumented cases, 64 truth assignments, normal and 6 throwing positions; '
               'exact order/count/outcomes, manifest C/M, raw/reduced Mojo vectors, and negative report; '
-              f'{len(lifetime_cases)} container destructor-order cases')
+              f'{len(lifetime_cases)} container destructor-order cases; {truth_summary}')
 
 
 if __name__ == '__main__':

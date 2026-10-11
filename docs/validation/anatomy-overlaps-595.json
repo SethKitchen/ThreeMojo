@@ -1,0 +1,3705 @@
+{
+  "schema_version": 1,
+  "issue": "https://github.com/SethKitchen/ThreeMojo/issues/595",
+  "result_label": "template geometry evidence; not clearance or biomechanical validation",
+  "build_provenance": {
+    "source_sha256": "af5c2e25b77ae47d7e5f9bc4b6a5e1f86a9322f98ca18adaaabd89e34b5e40a5",
+    "toolchain": "Mojo 1.1.0 (8189361e)",
+    "flags": [
+      "--Werror",
+      "--num-threads",
+      "1"
+    ],
+    "binary_sha256": "fd95141207fc410e4c823437d3fcbbce96b57f68486b32c87c1dba525a395941"
+  },
+  "tool_sha256": "85917cd0805b96821b486f93462b6b5a78b397a96129d5f0389c04568f60f3da",
+  "spec": {
+    "stature_m": 1.8288,
+    "sex": "male",
+    "side": "right",
+    "athleticism": "untoned"
+  },
+  "steps_mm": [
+    5.0,
+    3.0,
+    2.0
+  ],
+  "checked_pairs_per_step": 532,
+  "pairs_with_sampled_common_interior": {
+    "5.0": {
+      "bones": 0,
+      "knee": 0,
+      "spine": 0
+    },
+    "3.0": {
+      "bones": 0,
+      "knee": 0,
+      "spine": 0
+    },
+    "2.0": {
+      "bones": 0,
+      "knee": 0,
+      "spine": 0
+    }
+  },
+  "reproduction": "python3 tools/anatomy_overlaps.py --build --output <file>",
+  "interface_rules": {
+    "foot_articulation_precedence": "A foot bone gives way to each articulating foot bone before it in the segment accounting order.",
+    "talus_yields_to_tibia": "The talus gives way to the placed tibia.",
+    "fibula_yields_to_tibia": "The fibula gives way to the placed tibia.",
+    "knee_tissue_precedence": "Knee tissues give way to the leg bones, then to the cartilage, then to the menisci, in that order.",
+    "cervical_pillar_endplane_extent": "Each cervical articular pillar ends at its body endplane levels."
+  },
+  "classes": {
+    "unintended_articular_interior": "Two bones meet at a joint. Real bones there are separated by articular surfaces; the template has no joint space. A common interior is a construction error.",
+    "unintended_layer_interior": "A tissue layer lies on a bone or on another tissue. A common interior double-counts the same space.",
+    "attachment_representation": "An authored ligament end or attached tissue lies at an attachment landmark inside the other field. The attachment is real anatomy; the shared volume is not. It becomes a zero-volume interface.",
+    "unintended_path_interior": "A ligament path passes through a bone or tissue that it does not attach to at that place."
+  },
+  "pairs": [
+    {
+      "pair_id": "canonical/bones/foot/calcaneus|foot/cuboid",
+      "group": "bones",
+      "first": "foot/calcaneus",
+      "second": "foot/cuboid",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 630,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00024461933,
+          "witness_point_m": [
+            0.026315486,
+            -0.4635956,
+            0.06480944
+          ],
+          "refined_point_m": [
+            0.025495173,
+            -0.46566594,
+            0.06728991
+          ],
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": -3.7252903e-09,
+          "refined_second_field_m": 3.7252903e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2805,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.2598542e-05,
+          "witness_point_m": [
+            0.023315485,
+            -0.4745956,
+            0.065809436
+          ],
+          "refined_point_m": [
+            0.022120172,
+            -0.47683388,
+            0.063524276
+          ],
+          "refined_field_witness_m": 5.5879354e-09,
+          "refined_first_field_m": 5.5879354e-09,
+          "refined_second_field_m": -5.5879354e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 8800,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.345668e-05,
+          "witness_point_m": [
+            0.022815486,
+            -0.4580956,
+            0.06530944
+          ],
+          "refined_point_m": [
+            0.021440485,
+            -0.45759562,
+            0.06605944
+          ],
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": 1.8626451e-09,
+          "refined_second_field_m": -1.8626451e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/calcaneus|foot/talus",
+      "group": "bones",
+      "first": "foot/talus",
+      "second": "foot/calcaneus",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 1680,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00042386074,
+          "witness_point_m": [
+            0.0009581412,
+            -0.44630915,
+            0.022839522
+          ],
+          "refined_point_m": [
+            0.0012315787,
+            -0.44625056,
+            0.021902021
+          ],
+          "refined_field_witness_m": 9.313226e-10,
+          "refined_first_field_m": 9.313226e-10,
+          "refined_second_field_m": -9.313226e-10,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 7920,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.5119632e-05,
+          "witness_point_m": [
+            -0.0010418606,
+            -0.44730917,
+            0.01683952
+          ],
+          "refined_point_m": [
+            0.002122202,
+            -0.44710997,
+            0.01993327
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 26460,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.795551e-05,
+          "witness_point_m": [
+            0.010458141,
+            -0.45080915,
+            0.0063395197
+          ],
+          "refined_point_m": [
+            0.009762828,
+            -0.45153573,
+            0.004644207
+          ],
+          "refined_field_witness_m": 6.519258e-09,
+          "refined_first_field_m": -6.519258e-09,
+          "refined_second_field_m": 6.519258e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/cuboid|foot/lateral_cuneiform",
+      "group": "bones",
+      "first": "foot/cuboid",
+      "second": "foot/lateral cuneiform",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 210,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 7.151812e-05,
+          "witness_point_m": [
+            0.016315486,
+            -0.4613341,
+            0.09196931
+          ],
+          "refined_point_m": [
+            0.017819393,
+            -0.45740834,
+            0.09144197
+          ],
+          "refined_field_witness_m": 9.313226e-09,
+          "refined_first_field_m": 9.313226e-09,
+          "refined_second_field_m": -9.313226e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 792,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00013799686,
+          "witness_point_m": [
+            0.017315485,
+            -0.4603341,
+            0.092969306
+          ],
+          "refined_point_m": [
+            0.01634283,
+            -0.45943177,
+            0.09125837
+          ],
+          "refined_field_witness_m": 2.7939677e-09,
+          "refined_first_field_m": -2.7939677e-09,
+          "refined_second_field_m": 2.7939677e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 2496,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.6251579e-06,
+          "witness_point_m": [
+            0.016815485,
+            -0.4608341,
+            0.09246931
+          ],
+          "refined_point_m": [
+            0.015901422,
+            -0.46213877,
+            0.09178181
+          ],
+          "refined_field_witness_m": 1.21071935e-08,
+          "refined_first_field_m": -1.21071935e-08,
+          "refined_second_field_m": 1.21071935e-08,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/fifth_toe_middle_phalanx|foot/fifth_toe_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/fifth toe proximal phalanx",
+      "second": "foot/fifth toe middle phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 48,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0003429507,
+          "witness_point_m": [
+            0.035772875,
+            -0.48227933,
+            0.1680082
+          ],
+          "refined_point_m": [
+            0.034386158,
+            -0.48503324,
+            0.1670121
+          ],
+          "refined_field_witness_m": 2.3283064e-09,
+          "refined_first_field_m": -2.3283064e-09,
+          "refined_second_field_m": 2.3283064e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 245,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.6546808e-05,
+          "witness_point_m": [
+            0.035772875,
+            -0.4842793,
+            0.16800818
+          ],
+          "refined_point_m": [
+            0.03705022,
+            -0.48480663,
+            0.16784412
+          ],
+          "refined_field_witness_m": 1.44355e-08,
+          "refined_first_field_m": -1.44355e-08,
+          "refined_second_field_m": 1.44355e-08,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 700,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.6885496e-05,
+          "witness_point_m": [
+            0.039272875,
+            -0.4817793,
+            0.16750818
+          ],
+          "refined_point_m": [
+            0.039202564,
+            -0.48260743,
+            0.16768007
+          ],
+          "refined_field_witness_m": 6.0535967e-09,
+          "refined_first_field_m": 6.0535967e-09,
+          "refined_second_field_m": -6.0535967e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/first_metatarsal|foot/hallux_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/first metatarsal",
+      "second": "foot/hallux proximal phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 196,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0009544296,
+          "witness_point_m": [
+            -0.03364261,
+            -0.48716158,
+            0.17247914
+          ],
+          "refined_point_m": [
+            -0.030615264,
+            -0.48731783,
+            0.17443226
+          ],
+          "refined_field_witness_m": 4.656613e-09,
+          "refined_first_field_m": 4.656613e-09,
+          "refined_second_field_m": -4.656613e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 726,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00059529115,
+          "witness_point_m": [
+            -0.029642608,
+            -0.48316157,
+            0.17547913
+          ],
+          "refined_point_m": [
+            -0.030955108,
+            -0.48564592,
+            0.17471741
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 2304,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.8118491e-05,
+          "witness_point_m": [
+            -0.025142606,
+            -0.48666155,
+            0.17397913
+          ],
+          "refined_point_m": [
+            -0.026509795,
+            -0.48709905,
+            0.17427601
+          ],
+          "refined_field_witness_m": 2.7939677e-09,
+          "refined_first_field_m": -2.7939677e-09,
+          "refined_second_field_m": 2.7939677e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/first_metatarsal|foot/medial_cuneiform",
+      "group": "bones",
+      "first": "foot/medial cuneiform",
+      "second": "foot/first metatarsal",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 384,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00034646876,
+          "witness_point_m": [
+            -0.013588197,
+            -0.45264035,
+            0.11748955
+          ],
+          "refined_point_m": [
+            -0.012123353,
+            -0.45432004,
+            0.117196575
+          ],
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": -3.7252903e-09,
+          "refined_second_field_m": 3.7252903e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 1296,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00011281531,
+          "witness_point_m": [
+            -0.010588198,
+            -0.45764035,
+            0.11648955
+          ],
+          "refined_point_m": [
+            -0.010646792,
+            -0.46047628,
+            0.11638408
+          ],
+          "refined_field_witness_m": 5.6024874e-10,
+          "refined_first_field_m": 5.6024874e-10,
+          "refined_second_field_m": -5.6024874e-10,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 4536,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.7383136e-05,
+          "witness_point_m": [
+            -0.025088198,
+            -0.46714035,
+            0.11298955
+          ],
+          "refined_point_m": [
+            -0.025049135,
+            -0.4668591,
+            0.11332549
+          ],
+          "refined_field_witness_m": 9.313226e-10,
+          "refined_first_field_m": -9.313226e-10,
+          "refined_second_field_m": 9.313226e-10,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/first_metatarsal|foot/second_metatarsal",
+      "group": "bones",
+      "first": "foot/first metatarsal",
+      "second": "foot/second metatarsal",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 880,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00021859678,
+          "witness_point_m": [
+            -0.010219082,
+            -0.46125695,
+            0.12540999
+          ],
+          "refined_point_m": [
+            -0.007308926,
+            -0.462839,
+            0.12249984
+          ],
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": -3.7252903e-09,
+          "refined_second_field_m": 3.7252903e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 3888,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0004415363,
+          "witness_point_m": [
+            -0.009219083,
+            -0.45825693,
+            0.122409984
+          ],
+          "refined_point_m": [
+            -0.008211271,
+            -0.45838583,
+            0.11964436
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 12960,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.8398277e-05,
+          "witness_point_m": [
+            -0.0077190828,
+            -0.45975694,
+            0.11790998
+          ],
+          "refined_point_m": [
+            -0.0073518953,
+            -0.46101475,
+            0.117589675
+          ],
+          "refined_field_witness_m": 1.21071935e-08,
+          "refined_first_field_m": 1.21071935e-08,
+          "refined_second_field_m": -1.21071935e-08,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/fourth_toe_middle_phalanx|foot/fourth_toe_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/fourth toe proximal phalanx",
+      "second": "foot/fourth toe middle phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 60,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00033308612,
+          "witness_point_m": [
+            0.020385617,
+            -0.4823649,
+            0.18193445
+          ],
+          "refined_point_m": [
+            0.019565305,
+            -0.48115396,
+            0.1819735
+          ],
+          "refined_field_witness_m": 4.656613e-10,
+          "refined_first_field_m": 4.656613e-10,
+          "refined_second_field_m": -4.656613e-10,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 245,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00031546596,
+          "witness_point_m": [
+            0.023385618,
+            -0.48136488,
+            0.18193443
+          ],
+          "refined_point_m": [
+            0.023877807,
+            -0.48130629,
+            0.18206334
+          ],
+          "refined_field_witness_m": 9.778887e-09,
+          "refined_first_field_m": -9.778887e-09,
+          "refined_second_field_m": 9.778887e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 770,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.948901e-05,
+          "witness_point_m": [
+            0.023885617,
+            -0.48386487,
+            0.18143444
+          ],
+          "refined_point_m": [
+            0.021885617,
+            -0.48548988,
+            0.18068443
+          ],
+          "refined_field_witness_m": 1.3969839e-09,
+          "refined_first_field_m": -1.3969839e-09,
+          "refined_second_field_m": 1.3969839e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/hallux_distal_phalanx|foot/hallux_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/hallux proximal phalanx",
+      "second": "foot/hallux distal phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 144,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0010730317,
+          "witness_point_m": [
+            -0.037466288,
+            -0.48716158,
+            0.205701
+          ],
+          "refined_point_m": [
+            -0.03559129,
+            -0.4854233,
+            0.20724396
+          ],
+          "refined_field_witness_m": 1.0244548e-08,
+          "refined_first_field_m": -1.0244548e-08,
+          "refined_second_field_m": 1.0244548e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 486,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0002620304,
+          "witness_point_m": [
+            -0.031466287,
+            -0.48316157,
+            0.20870099
+          ],
+          "refined_point_m": [
+            -0.03293113,
+            -0.48172015,
+            0.20793927
+          ],
+          "refined_field_witness_m": 9.313226e-10,
+          "refined_first_field_m": 9.313226e-10,
+          "refined_second_field_m": -9.313226e-10,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 1764,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.3415702e-05,
+          "witness_point_m": [
+            -0.029966287,
+            -0.48866156,
+            0.20720099
+          ],
+          "refined_point_m": [
+            -0.030083476,
+            -0.49035686,
+            0.20590411
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/intermediate_cuneiform|foot/lateral_cuneiform",
+      "group": "bones",
+      "first": "foot/intermediate cuneiform",
+      "second": "foot/lateral cuneiform",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 192,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0010312395,
+          "witness_point_m": [
+            0.0024480017,
+            -0.45933822,
+            0.10121285
+          ],
+          "refined_point_m": [
+            0.0050065955,
+            -0.45410386,
+            0.100138634
+          ],
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": -1.8626451e-09,
+          "refined_second_field_m": 1.8626451e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 780,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 7.684529e-05,
+          "witness_point_m": [
+            0.0024480012,
+            -0.4563382,
+            0.09421285
+          ],
+          "refined_point_m": [
+            0.004182376,
+            -0.4540179,
+            0.09482222
+          ],
+          "refined_field_witness_m": 2.7939677e-09,
+          "refined_first_field_m": 2.7939677e-09,
+          "refined_second_field_m": -2.7939677e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 2700,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.4007244e-06,
+          "witness_point_m": [
+            0.0039480016,
+            -0.4558382,
+            0.106712855
+          ],
+          "refined_point_m": [
+            0.003283939,
+            -0.45685384,
+            0.10616598
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/intermediate_cuneiform|foot/medial_cuneiform",
+      "group": "bones",
+      "first": "foot/medial cuneiform",
+      "second": "foot/intermediate cuneiform",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 216,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 4.13619e-05,
+          "witness_point_m": [
+            -0.009877378,
+            -0.4493382,
+            0.11121286
+          ],
+          "refined_point_m": [
+            -0.0080414405,
+            -0.45162335,
+            0.10996286
+          ],
+          "refined_field_witness_m": 5.5879354e-09,
+          "refined_first_field_m": 5.5879354e-09,
+          "refined_second_field_m": -5.5879354e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 980,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 4.8261736e-06,
+          "witness_point_m": [
+            -0.0068773786,
+            -0.4563382,
+            0.10921285
+          ],
+          "refined_point_m": [
+            -0.007041441,
+            -0.4542054,
+            0.10865036
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 3150,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00021033362,
+          "witness_point_m": [
+            -0.008377378,
+            -0.4538382,
+            0.11271285
+          ],
+          "refined_point_m": [
+            -0.008002378,
+            -0.4553851,
+            0.112970665
+          ],
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": -1.8626451e-09,
+          "refined_second_field_m": 1.8626451e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/intermediate_cuneiform|foot/navicular",
+      "group": "bones",
+      "first": "foot/navicular",
+      "second": "foot/intermediate cuneiform",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 168,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00038237963,
+          "witness_point_m": [
+            0.00012262282,
+            -0.4493382,
+            0.091212854
+          ],
+          "refined_point_m": [
+            -0.0016937836,
+            -0.44572493,
+            0.09148629
+          ],
+          "refined_field_witness_m": 1.6763806e-08,
+          "refined_first_field_m": -1.6763806e-08,
+          "refined_second_field_m": 1.6763806e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 720,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00021867547,
+          "witness_point_m": [
+            -0.0008773783,
+            -0.4503382,
+            0.091212854
+          ],
+          "refined_point_m": [
+            -0.0035726908,
+            -0.45080698,
+            0.09157614
+          ],
+          "refined_field_witness_m": 2.3574103e-09,
+          "refined_first_field_m": 2.3574103e-09,
+          "refined_second_field_m": -2.3574103e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 2295,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00018950924,
+          "witness_point_m": [
+            -0.0003773776,
+            -0.4518382,
+            0.09071285
+          ],
+          "refined_point_m": [
+            -0.0021273776,
+            -0.45144758,
+            0.091189414
+          ],
+          "refined_field_witness_m": 2.6775524e-09,
+          "refined_first_field_m": -2.6775524e-09,
+          "refined_second_field_m": 2.6775524e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/intermediate_cuneiform|foot/second_metatarsal",
+      "group": "bones",
+      "first": "foot/intermediate cuneiform",
+      "second": "foot/second metatarsal",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 150,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00024167914,
+          "witness_point_m": [
+            -0.0048773773,
+            -0.45933822,
+            0.11040998
+          ],
+          "refined_point_m": [
+            -0.0073773777,
+            -0.45607647,
+            0.113632634
+          ],
+          "refined_field_witness_m": 6.9849193e-09,
+          "refined_first_field_m": 6.9849193e-09,
+          "refined_second_field_m": -6.9849193e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 560,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 5.41145e-06,
+          "witness_point_m": [
+            0.0021226217,
+            -0.4563382,
+            0.11340998
+          ],
+          "refined_point_m": [
+            0.0013960593,
+            -0.45365462,
+            0.11565998
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 1848,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 6.795861e-06,
+          "witness_point_m": [
+            -0.0043773777,
+            -0.4578382,
+            0.11390998
+          ],
+          "refined_point_m": [
+            -0.0061351904,
+            -0.4574632,
+            0.11327717
+          ],
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": 1.8626451e-09,
+          "refined_second_field_m": -1.8626451e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/lateral_cuneiform|foot/third_metatarsal",
+      "group": "bones",
+      "first": "foot/lateral cuneiform",
+      "second": "foot/third metatarsal",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 144,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00057522405,
+          "witness_point_m": [
+            0.012448003,
+            -0.45633409,
+            0.115808815
+          ],
+          "refined_point_m": [
+            0.0149089405,
+            -0.4610997,
+            0.11360179
+          ],
+          "refined_field_witness_m": 5.5879354e-09,
+          "refined_first_field_m": 5.5879354e-09,
+          "refined_second_field_m": -5.5879354e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 567,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0003092466,
+          "witness_point_m": [
+            0.014448001,
+            -0.4603341,
+            0.11380881
+          ],
+          "refined_point_m": [
+            0.011401126,
+            -0.4609552,
+            0.1146174
+          ],
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": 3.7252903e-09,
+          "refined_second_field_m": -3.7252903e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 1960,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00012042839,
+          "witness_point_m": [
+            0.013948002,
+            -0.4608341,
+            0.11430881
+          ],
+          "refined_point_m": [
+            0.014713626,
+            -0.45993567,
+            0.11418381
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/medial_cuneiform|foot/second_metatarsal",
+      "group": "bones",
+      "first": "foot/medial cuneiform",
+      "second": "foot/second metatarsal",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 200,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00019438192,
+          "witness_point_m": [
+            -0.010219082,
+            -0.45264035,
+            0.115409985
+          ],
+          "refined_point_m": [
+            -0.011058927,
+            -0.45420286,
+            0.11644514
+          ],
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": -1.8626451e-09,
+          "refined_second_field_m": 1.8626451e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 832,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0004444318,
+          "witness_point_m": [
+            -0.009219083,
+            -0.45164037,
+            0.11340998
+          ],
+          "refined_point_m": [
+            -0.008867521,
+            -0.4540427,
+            0.11406623
+          ],
+          "refined_field_witness_m": 7.450581e-09,
+          "refined_first_field_m": 7.450581e-09,
+          "refined_second_field_m": -7.450581e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 2736,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00020915831,
+          "witness_point_m": [
+            -0.0077190828,
+            -0.46114036,
+            0.111909985
+          ],
+          "refined_point_m": [
+            -0.0083909575,
+            -0.4597107,
+            0.11378498
+          ],
+          "refined_field_witness_m": 3.4633558e-09,
+          "refined_first_field_m": -3.4633558e-09,
+          "refined_second_field_m": 3.4633558e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/navicular|foot/talus",
+      "group": "bones",
+      "first": "foot/talus",
+      "second": "foot/navicular",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 462,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00039006863,
+          "witness_point_m": [
+            -0.00904186,
+            -0.44630915,
+            0.07657747
+          ],
+          "refined_point_m": [
+            -0.006092641,
+            -0.44193414,
+            0.07780794
+          ],
+          "refined_field_witness_m": 5.5879354e-09,
+          "refined_first_field_m": -5.5879354e-09,
+          "refined_second_field_m": 5.5879354e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 1836,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 9.8841265e-06,
+          "witness_point_m": [
+            -0.0070418604,
+            -0.45330915,
+            0.07257747
+          ],
+          "refined_point_m": [
+            -0.009502797,
+            -0.45180914,
+            0.07358528
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 6552,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.8021092e-06,
+          "witness_point_m": [
+            0.0024581407,
+            -0.44680917,
+            0.07407747
+          ],
+          "refined_point_m": [
+            0.0017081406,
+            -0.4452779,
+            0.07517903
+          ],
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": 3.7252903e-09,
+          "refined_second_field_m": -3.7252903e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/second_metatarsal|foot/second_toe_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/second metatarsal",
+      "second": "foot/second toe proximal phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 90,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0003975453,
+          "witness_point_m": [
+            -0.009277176,
+            -0.48693764,
+            0.17865571
+          ],
+          "refined_point_m": [
+            -0.012597489,
+            -0.48387122,
+            0.17828461
+          ],
+          "refined_field_witness_m": 7.916242e-09,
+          "refined_first_field_m": 7.916242e-09,
+          "refined_second_field_m": -7.916242e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 360,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 4.6363566e-05,
+          "witness_point_m": [
+            -0.011277177,
+            -0.48393762,
+            0.1786557
+          ],
+          "refined_point_m": [
+            -0.013175615,
+            -0.48305872,
+            0.17763616
+          ],
+          "refined_field_witness_m": 9.778887e-09,
+          "refined_first_field_m": -9.778887e-09,
+          "refined_second_field_m": 9.778887e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 1092,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00010503689,
+          "witness_point_m": [
+            -0.012777177,
+            -0.48343763,
+            0.1781557
+          ],
+          "refined_point_m": [
+            -0.013527177,
+            -0.48382825,
+            0.17778853
+          ],
+          "refined_field_witness_m": 4.656613e-10,
+          "refined_first_field_m": 4.656613e-10,
+          "refined_second_field_m": -4.656613e-10,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/second_metatarsal|foot/third_metatarsal",
+      "group": "bones",
+      "first": "foot/second metatarsal",
+      "second": "foot/third metatarsal",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 704,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.001070072,
+          "witness_point_m": [
+            0.001090301,
+            -0.46125695,
+            0.12080881
+          ],
+          "refined_point_m": [
+            0.0026137387,
+            -0.4605929,
+            0.120281465
+          ],
+          "refined_field_witness_m": 4.656613e-09,
+          "refined_first_field_m": 4.656613e-09,
+          "refined_second_field_m": -4.656613e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2808,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.5286729e-05,
+          "witness_point_m": [
+            0.0040903008,
+            -0.45525694,
+            0.11680881
+          ],
+          "refined_point_m": [
+            0.0041020196,
+            -0.45552647,
+            0.11581272
+          ],
+          "refined_field_witness_m": 1.21071935e-08,
+          "refined_first_field_m": -1.21071935e-08,
+          "refined_second_field_m": 1.21071935e-08,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 9126,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 5.8738515e-05,
+          "witness_point_m": [
+            0.002590301,
+            -0.45975694,
+            0.112308815
+          ],
+          "refined_point_m": [
+            0.002434051,
+            -0.45884287,
+            0.11175413
+          ],
+          "refined_field_witness_m": 4.656613e-09,
+          "refined_first_field_m": 4.656613e-09,
+          "refined_second_field_m": -4.656613e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/talus|tibia",
+      "group": "bones",
+      "first": "tibia",
+      "second": "foot/talus",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "talus_yields_to_tibia",
+      "note": "Talocrural joint. The witness lies at the medial malleolus over the talar body.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 1620,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 9.5377225e-05,
+          "witness_point_m": [
+            0.0009581412,
+            -0.4168757,
+            0.03283952
+          ],
+          "refined_point_m": [
+            -0.00093639013,
+            -0.41574288,
+            0.035105147
+          ],
+          "refined_field_witness_m": 2.2608562e-09,
+          "refined_first_field_m": -2.2608562e-09,
+          "refined_second_field_m": 2.2608562e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 6720,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 7.779174e-07,
+          "witness_point_m": [
+            -0.0070418604,
+            -0.4278757,
+            0.013839519
+          ],
+          "refined_point_m": [
+            -0.008541861,
+            -0.42901242,
+            0.013007487
+          ],
+          "refined_field_witness_m": 1.0547378e-08,
+          "refined_first_field_m": 1.0547378e-08,
+          "refined_second_field_m": -1.0547378e-08,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 22680,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 5.6736144e-06,
+          "witness_point_m": [
+            0.010458141,
+            -0.41737568,
+            0.02633952
+          ],
+          "refined_point_m": [
+            0.009348765,
+            -0.41737568,
+            0.02808952
+          ],
+          "refined_field_witness_m": 2.8436537e-09,
+          "refined_first_field_m": 2.8436537e-09,
+          "refined_second_field_m": -2.8436537e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/third_metatarsal|foot/third_toe_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/third metatarsal",
+      "second": "foot/third toe proximal phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 75,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00012316089,
+          "witness_point_m": [
+            0.0077110566,
+            -0.48732638,
+            0.1742722
+          ],
+          "refined_point_m": [
+            0.007320432,
+            -0.4840256,
+            0.17382297
+          ],
+          "refined_field_witness_m": 4.656613e-10,
+          "refined_first_field_m": -4.656613e-10,
+          "refined_second_field_m": 4.656613e-10,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 360,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0001299791,
+          "witness_point_m": [
+            0.0057110554,
+            -0.48432636,
+            0.17427218
+          ],
+          "refined_point_m": [
+            0.0075391806,
+            -0.48549825,
+            0.17429562
+          ],
+          "refined_field_witness_m": 2.7939677e-09,
+          "refined_first_field_m": 2.7939677e-09,
+          "refined_second_field_m": -2.7939677e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 1001,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.000100453384,
+          "witness_point_m": [
+            0.004211056,
+            -0.48382637,
+            0.17377219
+          ],
+          "refined_point_m": [
+            0.0035391808,
+            -0.4832951,
+            0.17306906
+          ],
+          "refined_field_witness_m": 4.656613e-10,
+          "refined_first_field_m": 4.656613e-10,
+          "refined_second_field_m": -4.656613e-10,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/bones/foot/third_toe_middle_phalanx|foot/third_toe_proximal_phalanx",
+      "group": "bones",
+      "first": "foot/third toe proximal phalanx",
+      "second": "foot/third toe middle phalanx",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "foot_articulation_precedence",
+      "note": "Articulating foot bones.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 60,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00016281102,
+          "witness_point_m": [
+            0.0039329873,
+            -0.4823264,
+            0.19302993
+          ],
+          "refined_point_m": [
+            0.0049681435,
+            -0.48447484,
+            0.19215103
+          ],
+          "refined_field_witness_m": 1.9557774e-08,
+          "refined_first_field_m": -1.9557774e-08,
+          "refined_second_field_m": 1.9557774e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 280,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00037885224,
+          "witness_point_m": [
+            0.0039329864,
+            -0.48132637,
+            0.19302991
+          ],
+          "refined_point_m": [
+            0.006686893,
+            -0.4802834,
+            0.19377992
+          ],
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": -1.8626451e-09,
+          "refined_second_field_m": 1.8626451e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 770,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.3540499e-05,
+          "witness_point_m": [
+            0.007432987,
+            -0.48382637,
+            0.19252992
+          ],
+          "refined_point_m": [
+            0.006409549,
+            -0.48339668,
+            0.19311586
+          ],
+          "refined_field_witness_m": 6.9849193e-09,
+          "refined_first_field_m": -6.9849193e-09,
+          "refined_second_field_m": 6.9849193e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/femur|knee/cartilage",
+      "group": "knee",
+      "first": "femur",
+      "second": "knee/cartilage",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The femoral cartilage lens extends into the condyles and the trochlea.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 3640,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.000109404915,
+          "witness_point_m": [
+            -0.031670615,
+            0.004502016,
+            -0.0035733033
+          ],
+          "refined_point_m": [
+            -0.02692452,
+            0.0026856097,
+            -0.0018154908
+          ],
+          "refined_field_witness_m": 5.437467e-09,
+          "refined_first_field_m": -5.437467e-09,
+          "refined_second_field_m": 5.437467e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 17424,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.2378871e-07,
+          "witness_point_m": [
+            -0.011670616,
+            0.033502016,
+            0.029426696
+          ],
+          "refined_point_m": [
+            -0.011565147,
+            0.034451235,
+            0.02930951
+          ],
+          "refined_field_witness_m": 7.1655832e-09,
+          "refined_first_field_m": 7.1655832e-09,
+          "refined_second_field_m": -7.1655832e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 56595,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.8072467e-06,
+          "witness_point_m": [
+            -0.008170615,
+            0.034002017,
+            0.026926698
+          ],
+          "refined_point_m": [
+            -0.0071940525,
+            0.032681704,
+            0.026317324
+          ],
+          "refined_field_witness_m": 2.73576e-09,
+          "refined_first_field_m": -2.73576e-09,
+          "refined_second_field_m": 2.73576e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/femur|knee/lateral",
+      "group": "knee",
+      "first": "femur",
+      "second": "knee/lateral",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The lateral meniscus tube reaches into the lateral femoral condyle.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 594,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00018150357,
+          "witness_point_m": [
+            0.018454771,
+            0.004791853,
+            0.010338788
+          ],
+          "refined_point_m": [
+            0.020759458,
+            0.0047527906,
+            0.011745038
+          ],
+          "refined_field_witness_m": 2.8249339e-08,
+          "refined_first_field_m": 2.8249339e-08,
+          "refined_second_field_m": -2.8249339e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2268,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0005348994,
+          "witness_point_m": [
+            0.02045477,
+            0.0037918522,
+            0.010338786
+          ],
+          "refined_point_m": [
+            0.022318052,
+            0.0043074773,
+            0.0109598795
+          ],
+          "refined_field_witness_m": 7.0742283e-09,
+          "refined_first_field_m": 7.0742283e-09,
+          "refined_second_field_m": -7.0742283e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 7098,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 9.073186e-06,
+          "witness_point_m": [
+            0.023954771,
+            0.004291853,
+            -0.012161214
+          ],
+          "refined_point_m": [
+            0.022837583,
+            0.0046902904,
+            -0.013215901
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/femur|knee/lcl",
+      "group": "knee",
+      "first": "femur",
+      "second": "knee/lcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "attachment_representation",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The LCL femoral end lies at its authored epicondyle landmark inside the femur.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 528,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00080196187,
+          "witness_point_m": [
+            0.039128687,
+            0.009471708,
+            0.0015051931
+          ],
+          "refined_point_m": [
+            0.035007592,
+            0.00654202,
+            -0.001600276
+          ],
+          "refined_field_witness_m": 1.13408465e-08,
+          "refined_first_field_m": -1.13408465e-08,
+          "refined_second_field_m": 1.13408465e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2340,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.3564578e-07,
+          "witness_point_m": [
+            0.038128685,
+            0.009471706,
+            -0.0014948084
+          ],
+          "refined_point_m": [
+            0.038984153,
+            0.010502956,
+            -0.002022152
+          ],
+          "refined_field_witness_m": 9.208853e-09,
+          "refined_first_field_m": 9.208853e-09,
+          "refined_second_field_m": -9.208853e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 7410,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.3192004e-05,
+          "witness_point_m": [
+            0.036628686,
+            0.007971707,
+            -0.0019948077
+          ],
+          "refined_point_m": [
+            0.035339624,
+            0.006792019,
+            -0.00094793265
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/femur|knee/mcl",
+      "group": "knee",
+      "first": "femur",
+      "second": "knee/mcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "attachment_representation",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The MCL femoral end lies at its authored epicondyle landmark inside the femur.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 864,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00028607476,
+          "witness_point_m": [
+            -0.037823975,
+            0.009471708,
+            0.0061432132
+          ],
+          "refined_point_m": [
+            -0.037003662,
+            0.008299833,
+            0.0061822757
+          ],
+          "refined_field_witness_m": 5.0265863e-09,
+          "refined_first_field_m": -5.0265863e-09,
+          "refined_second_field_m": 5.0265863e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 3192,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 6.1262675e-05,
+          "witness_point_m": [
+            -0.038823977,
+            0.009471706,
+            0.0021432124
+          ],
+          "refined_point_m": [
+            -0.036714602,
+            0.0075381123,
+            0.0021432124
+          ],
+          "refined_field_witness_m": 6.7154025e-09,
+          "refined_first_field_m": 6.7154025e-09,
+          "refined_second_field_m": -6.7154025e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 10962,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.6909041e-05,
+          "witness_point_m": [
+            -0.040323976,
+            0.013971708,
+            0.011643213
+          ],
+          "refined_point_m": [
+            -0.040573977,
+            0.014042021,
+            0.011158838
+          ],
+          "refined_field_witness_m": 1.608641e-09,
+          "refined_first_field_m": -1.608641e-09,
+          "refined_second_field_m": 1.608641e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/femur|knee/medial",
+      "group": "knee",
+      "first": "femur",
+      "second": "knee/medial",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The medial meniscus tube reaches into the medial femoral condyle.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 648,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.230514e-05,
+          "witness_point_m": [
+            -0.027423628,
+            0.004471707,
+            -0.010270742
+          ],
+          "refined_point_m": [
+            -0.02652519,
+            0.0043154573,
+            -0.0102902725
+          ],
+          "refined_field_witness_m": 1.8261254e-09,
+          "refined_first_field_m": -1.8261254e-09,
+          "refined_second_field_m": 1.8261254e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2565,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0006261231,
+          "witness_point_m": [
+            -0.02542363,
+            0.0064717066,
+            -0.014270742
+          ],
+          "refined_point_m": [
+            -0.027286911,
+            0.0052060816,
+            -0.012219961
+          ],
+          "refined_field_witness_m": 1.46029935e-08,
+          "refined_first_field_m": 1.46029935e-08,
+          "refined_second_field_m": -1.46029935e-08,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 9338,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 8.206044e-05,
+          "witness_point_m": [
+            -0.021923628,
+            0.005971707,
+            -0.0147707425
+          ],
+          "refined_point_m": [
+            -0.020829877,
+            0.0058388947,
+            -0.0144816805
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/fibula|knee/lcl",
+      "group": "knee",
+      "first": "fibula",
+      "second": "knee/lcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "attachment_representation",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The LCL fibular end is authored at the fibular head center.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 336,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00037397232,
+          "witness_point_m": [
+            0.039128687,
+            -0.01201415,
+            -0.0034948073
+          ],
+          "refined_point_m": [
+            0.035925563,
+            -0.0116625875,
+            -0.008182308
+          ],
+          "refined_field_witness_m": 1.0519898e-08,
+          "refined_first_field_m": -1.0519898e-08,
+          "refined_second_field_m": 1.0519898e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 1560,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 7.9120226e-05,
+          "witness_point_m": [
+            0.038128685,
+            -0.012014152,
+            -0.0044948086
+          ],
+          "refined_point_m": [
+            0.035316184,
+            -0.012728996,
+            -0.0061588716
+          ],
+          "refined_field_witness_m": 6.148184e-10,
+          "refined_first_field_m": -6.148184e-10,
+          "refined_second_field_m": 6.148184e-10,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 5130,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.1800915e-05,
+          "witness_point_m": [
+            0.036628686,
+            -0.011514151,
+            -0.007994808
+          ],
+          "refined_point_m": [
+            0.034714624,
+            -0.013068839,
+            -0.006861996
+          ],
+          "refined_field_witness_m": 4.7330104e-09,
+          "refined_first_field_m": 4.7330104e-09,
+          "refined_second_field_m": 4.7330104e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/cartilage|knee/medial",
+      "group": "knee",
+      "first": "knee/cartilage",
+      "second": "knee/medial",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The medial meniscus and the plateau cartilage occupy the same space.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 594,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.2080545e-06,
+          "witness_point_m": [
+            -0.027423628,
+            -0.000497984,
+            0.0064266976
+          ],
+          "refined_point_m": [
+            -0.031857222,
+            0.0004981098,
+            0.009707948
+          ],
+          "refined_field_witness_m": 5.912215e-09,
+          "refined_first_field_m": 5.912215e-09,
+          "refined_second_field_m": -5.912215e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2565,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.27995345e-05,
+          "witness_point_m": [
+            -0.01042363,
+            0.00050201523,
+            0.011426696
+          ],
+          "refined_point_m": [
+            -0.013001754,
+            -4.8765993e-05,
+            0.010911071
+          ],
+          "refined_field_witness_m": 1.4491496e-08,
+          "refined_first_field_m": -1.4491496e-08,
+          "refined_second_field_m": 1.4491496e-08,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 9016,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.1534038e-06,
+          "witness_point_m": [
+            -0.023923628,
+            0.0020020157,
+            -0.015073304
+          ],
+          "refined_point_m": [
+            -0.023548627,
+            0.0020020157,
+            -0.015073304
+          ],
+          "refined_field_witness_m": 1.3319613e-09,
+          "refined_first_field_m": 1.3319613e-09,
+          "refined_second_field_m": -1.3319613e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/cartilage|patella",
+      "group": "knee",
+      "first": "patella",
+      "second": "knee/cartilage",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The patellar cartilage lens extends into the patella.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 715,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00022366657,
+          "witness_point_m": [
+            -0.0075329645,
+            0.029586108,
+            0.030457674
+          ],
+          "refined_point_m": [
+            -0.006771246,
+            0.034488454,
+            0.029832674
+          ],
+          "refined_field_witness_m": 7.6324795e-09,
+          "refined_first_field_m": -7.6324795e-09,
+          "refined_second_field_m": 7.6324795e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2793,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.3755117e-05,
+          "witness_point_m": [
+            0.004467034,
+            0.045586105,
+            0.028457673
+          ],
+          "refined_point_m": [
+            0.0020295337,
+            0.046816576,
+            0.027684236
+          ],
+          "refined_field_witness_m": 4.1618477e-09,
+          "refined_first_field_m": 4.1618477e-09,
+          "refined_second_field_m": -4.1618477e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 9548,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 8.333915e-06,
+          "witness_point_m": [
+            0.008967035,
+            0.037086107,
+            0.028957672
+          ],
+          "refined_point_m": [
+            0.007592035,
+            0.036273606,
+            0.028957672
+          ],
+          "refined_field_witness_m": 1.3810677e-09,
+          "refined_first_field_m": -1.3810677e-09,
+          "refined_second_field_m": 1.3810677e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/cartilage|tibia",
+      "group": "knee",
+      "first": "tibia",
+      "second": "knee/cartilage",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The tibial cartilage lens extends into the plateau.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 1560,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.255733e-06,
+          "witness_point_m": [
+            -0.026670616,
+            -0.000497984,
+            -0.0035733033
+          ],
+          "refined_point_m": [
+            -0.026358116,
+            -0.00022454648,
+            0.00087982183
+          ],
+          "refined_field_witness_m": 1.4457023e-08,
+          "refined_first_field_m": 1.4457023e-08,
+          "refined_second_field_m": -1.4457023e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 6534,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00027787616,
+          "witness_point_m": [
+            0.024329383,
+            -0.0054979846,
+            -0.009573305
+          ],
+          "refined_point_m": [
+            0.024247352,
+            -0.0047362656,
+            -0.007510805
+          ],
+          "refined_field_witness_m": 4.1909516e-09,
+          "refined_first_field_m": 4.1909516e-09,
+          "refined_second_field_m": -4.1909516e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 22638,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 5.9217414e-06,
+          "witness_point_m": [
+            -0.024170617,
+            2.0157313e-06,
+            0.00092669635
+          ],
+          "refined_point_m": [
+            -0.023608116,
+            2.0157313e-06,
+            -0.0007139287
+          ],
+          "refined_field_witness_m": 9.7246815e-09,
+          "refined_first_field_m": -9.7246815e-09,
+          "refined_second_field_m": 9.7246815e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/lateral|knee/lcl",
+      "group": "knee",
+      "first": "knee/lateral",
+      "second": "knee/lcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_path_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The LCL does not attach to the lateral meniscus.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 240,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00036918215,
+          "witness_point_m": [
+            0.034128685,
+            -0.0002081471,
+            -0.0034948073
+          ],
+          "refined_point_m": [
+            0.034675557,
+            0.00065122795,
+            0.00070441177
+          ],
+          "refined_field_witness_m": 7.2759576e-09,
+          "refined_first_field_m": -7.2759576e-09,
+          "refined_second_field_m": 7.2759576e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 819,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.000115332834,
+          "witness_point_m": [
+            0.035128687,
+            0.0007918521,
+            -0.0014948084
+          ],
+          "refined_point_m": [
+            0.034941185,
+            0.0011551335,
+            -0.0008854334
+          ],
+          "refined_field_witness_m": 9.138603e-09,
+          "refined_first_field_m": -9.138603e-09,
+          "refined_second_field_m": 9.138603e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 2717,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.2593169e-05,
+          "witness_point_m": [
+            0.034628686,
+            -0.0017081475,
+            5.1924726e-06
+          ],
+          "refined_point_m": [
+            0.034995872,
+            -0.0007940849,
+            -0.0016979326
+          ],
+          "refined_field_witness_m": 1.1059456e-09,
+          "refined_first_field_m": 1.1059456e-09,
+          "refined_second_field_m": -1.1059456e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/lcl|tibia",
+      "group": "knee",
+      "first": "tibia",
+      "second": "knee/lcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_path_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The LCL does not attach to the tibia.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 480,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 5.623541e-05,
+          "witness_point_m": [
+            0.034128685,
+            -0.00701415,
+            -0.0034948073
+          ],
+          "refined_point_m": [
+            0.03668728,
+            -0.011896963,
+            -0.000994807
+          ],
+          "refined_field_witness_m": 8.411007e-09,
+          "refined_first_field_m": -8.411007e-09,
+          "refined_second_field_m": 8.411007e-09,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2080,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.900829e-05,
+          "witness_point_m": [
+            0.035128687,
+            -0.009014151,
+            -0.007494808
+          ],
+          "refined_point_m": [
+            0.03509353,
+            -0.008732901,
+            -0.0068034017
+          ],
+          "refined_field_witness_m": 4.0618033e-09,
+          "refined_first_field_m": -4.0618033e-09,
+          "refined_second_field_m": 4.0618033e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 6384,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 4.5590277e-06,
+          "witness_point_m": [
+            0.034628686,
+            -0.0075141503,
+            -0.0039948076
+          ],
+          "refined_point_m": [
+            0.033113062,
+            -0.006631338,
+            -0.0042448076
+          ],
+          "refined_field_witness_m": 1.7462298e-09,
+          "refined_first_field_m": -1.7462298e-09,
+          "refined_second_field_m": 1.7462298e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/mcl|knee/medial",
+      "group": "knee",
+      "first": "knee/medial",
+      "second": "knee/mcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "attachment_representation",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The deep MCL attaches to the medial meniscus. The template has one MCL band and no deep layer, so the overlap is not a measured attachment volume.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 336,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.00016262056,
+          "witness_point_m": [
+            -0.03242363,
+            -0.0012669491,
+            0.011143214
+          ],
+          "refined_point_m": [
+            -0.032462694,
+            0.00013930099,
+            0.011065089
+          ],
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 1320,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0002295908,
+          "witness_point_m": [
+            -0.03742363,
+            -0.00026694988,
+            0.0021432124
+          ],
+          "refined_point_m": [
+            -0.03741191,
+            -0.0010052312,
+            0.0028346186
+          ],
+          "refined_field_witness_m": 5.820766e-09,
+          "refined_first_field_m": 5.820766e-09,
+          "refined_second_field_m": -5.820766e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 4032,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.723387e-05,
+          "witness_point_m": [
+            -0.03592363,
+            -0.0007669494,
+            0.005643213
+          ],
+          "refined_point_m": [
+            -0.034814257,
+            -0.0019075745,
+            0.006518213
+          ],
+          "refined_field_witness_m": 5.9371814e-09,
+          "refined_first_field_m": 5.9371814e-09,
+          "refined_second_field_m": -5.9371814e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/mcl|tibia",
+      "group": "knee",
+      "first": "tibia",
+      "second": "knee/mcl",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_path_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The witness lies near the joint line, far above the authored tibial attachment.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 1088,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 9.902028e-05,
+          "witness_point_m": [
+            -0.03317703,
+            -0.011058369,
+            0.0061432132
+          ],
+          "refined_point_m": [
+            -0.03350906,
+            -0.011644307,
+            0.0025689944
+          ],
+          "refined_field_witness_m": 1.1001248e-08,
+          "refined_first_field_m": 1.1001248e-08,
+          "refined_second_field_m": -1.1001248e-08,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 4032,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.4283314e-05,
+          "witness_point_m": [
+            -0.03117703,
+            -0.010058372,
+            0.011143212
+          ],
+          "refined_point_m": [
+            -0.033098906,
+            -0.00980056,
+            0.009420556
+          ],
+          "refined_field_witness_m": 4.370122e-09,
+          "refined_first_field_m": 4.370122e-09,
+          "refined_second_field_m": -4.370122e-09,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 13284,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 5.2904106e-05,
+          "witness_point_m": [
+            -0.03567703,
+            -0.009558369,
+            0.0036432128
+          ],
+          "refined_point_m": [
+            -0.03475516,
+            -0.010238057,
+            0.0041666506
+          ],
+          "refined_field_witness_m": 1.717126e-09,
+          "refined_first_field_m": 1.717126e-09,
+          "refined_second_field_m": -1.717126e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/knee/knee/medial|tibia",
+      "group": "knee",
+      "first": "tibia",
+      "second": "knee/medial",
+      "frame_id": "canonical/selected-side/lower-limb/knee-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_layer_interior",
+      "interface_rule": "knee_tissue_precedence",
+      "note": "The medial meniscus tube reaches into the tibial plateau.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 648,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 1.4989833e-05,
+          "witness_point_m": [
+            -0.022423629,
+            -0.0012669491,
+            -0.010270742
+          ],
+          "refined_point_m": [
+            -0.02523613,
+            -0.0015599179,
+            -0.010348867
+          ],
+          "refined_field_witness_m": 9.899268e-10,
+          "refined_first_field_m": -9.899268e-10,
+          "refined_second_field_m": 9.899268e-10,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2565,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 3.832058e-05,
+          "witness_point_m": [
+            -0.02542363,
+            -0.00326695,
+            -0.014270742
+          ],
+          "refined_point_m": [
+            -0.025306443,
+            -0.0039349184,
+            -0.015313711
+          ],
+          "refined_field_witness_m": 7.860961e-10,
+          "refined_first_field_m": -7.860961e-10,
+          "refined_second_field_m": 7.860961e-10,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 9338,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 2.4436433e-06,
+          "witness_point_m": [
+            -0.029923629,
+            -0.0027669496,
+            0.013229259
+          ],
+          "refined_point_m": [
+            -0.030790817,
+            -0.0026419496,
+            0.012112072
+          ],
+          "refined_field_witness_m": 4.210321e-09,
+          "refined_first_field_m": -4.210321e-09,
+          "refined_second_field_m": 4.210321e-09,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    },
+    {
+      "pair_id": "canonical/spine/cervical/2|cervical/3",
+      "group": "spine",
+      "first": "cervical/2",
+      "second": "cervical/3",
+      "frame_id": "canonical/spine/hip-midpoint-origin",
+      "listed_in_issue_595": true,
+      "classification": "unintended_articular_interior",
+      "interface_rule": "cervical_pillar_endplane_extent",
+      "note": "Facet region. The rounded pillar ends crossed the disc space into the next pillar.",
+      "grids": [
+        {
+          "step_m": 0.0050000004,
+          "bounds_gap_m": 0.0,
+          "samples": 780,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0039999485,
+          "witness_point_m": [
+            -0.007699999,
+            0.62349624,
+            -0.028472794
+          ],
+          "refined_point_m": [
+            -0.0024460924,
+            0.62150407,
+            -0.029703263
+          ],
+          "refined_field_witness_m": 0.0020077825,
+          "refined_first_field_m": 0.0020051806,
+          "refined_second_field_m": 0.0020077825,
+          "refine_half_widths_m": [
+            0.0050000004,
+            0.00031250002
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.003,
+          "bounds_gap_m": 0.0,
+          "samples": 2793,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.0019999743,
+          "witness_point_m": [
+            -0.0047000004,
+            0.62149626,
+            -0.028472798
+          ],
+          "refined_point_m": [
+            -0.0047000004,
+            0.62149626,
+            -0.028472798
+          ],
+          "refined_field_witness_m": 0.0019999743,
+          "refined_first_field_m": 0.0019999743,
+          "refined_second_field_m": 0.0019999743,
+          "refine_half_widths_m": [
+            0.003,
+            0.0001875
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        },
+        {
+          "step_m": 0.002,
+          "bounds_gap_m": 0.0,
+          "samples": 9889,
+          "overlap_samples": 0,
+          "overlap_volume_m3": 0.0,
+          "signed_field_witness_m": 0.002499938,
+          "witness_point_m": [
+            -0.0051999996,
+            0.6219962,
+            -0.028972795
+          ],
+          "refined_point_m": [
+            -0.0031999994,
+            0.6214962,
+            -0.029472794
+          ],
+          "refined_field_witness_m": 0.0020000339,
+          "refined_first_field_m": 0.0020000339,
+          "refined_second_field_m": 0.0019999146,
+          "refine_half_widths_m": [
+            0.002,
+            0.000125
+          ],
+          "refine_samples_per_axis": 33,
+          "local_overlap_samples": 0,
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
+        }
+      ],
+      "status": "no_common_interior_sampled"
+    }
+  ],
+  "limits": [
+    "A refined witness searches two cubes around the grid witness only. It is not a global minimum.",
+    "A negative field value is a point inside both canonical fields. It is not a penetration depth.",
+    "No sampled common interior does not prove clearance. Thin overlap can lie between samples.",
+    "Field values are float32. Interfaces between differently placed frames are exact only to coordinate roundoff.",
+    "Lower-limb tissue pairs from #596 are outside this localization. The template report retains their findings.",
+    "No clinical, engineering or biological acceptance threshold is applied."
+  ]
+}

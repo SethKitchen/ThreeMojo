@@ -34,6 +34,7 @@ decoder cannot draw: a side that is not a power of two, and more levels
 than the size has, which three.js reads as levels of no width.
 """
 
+from core.binary import little_endian_u32
 from render.compressed_texture import (
     RGB_PVRTC_2BPPV1_FORMAT,
     RGB_PVRTC_4BPPV1_FORMAT,
@@ -49,24 +50,6 @@ from render.srgb import LINEAR
 
 # The header's length in words, which three.js reads whatever the version.
 comptime HEADER_WORDS = 13
-
-
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return a little-endian word.
-
-    Args:
-        bytes: The file.
-        at: Where the word starts.
-
-    Returns:
-        The word.
-    """
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
 
 
 def read(bytes: List[UInt8]) raises -> CompressedImage:
@@ -90,8 +73,8 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
     var faces: Int
     var levels: Int
     var start: Int
-    if _u32(bytes, 0) == 0x03525650:
-        var pixel_format = _u32(bytes, 8)
+    if little_endian_u32(bytes, 0) == 0x03525650:
+        var pixel_format = little_endian_u32(bytes, 8)
         var formats: List[CompressedFormat] = [
             RGB_PVRTC_2BPPV1_FORMAT,
             RGBA_PVRTC_2BPPV1_FORMAT,
@@ -103,14 +86,14 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
                 "PVR: pixel format " + String(pixel_format) + " is not PVRTC"
             )
         format = formats[pixel_format]
-        height = _u32(bytes, 24)
-        width = _u32(bytes, 28)
-        faces = _u32(bytes, 40)
-        levels = _u32(bytes, 44)
-        start = 52 + _u32(bytes, 48)
-    elif _u32(bytes, 44) == 0x21525650:
-        var kind = _u32(bytes, 16) & 0xFF
-        var alpha = _u32(bytes, 40) > 0
+        height = little_endian_u32(bytes, 24)
+        width = little_endian_u32(bytes, 28)
+        faces = little_endian_u32(bytes, 40)
+        levels = little_endian_u32(bytes, 44)
+        start = 52 + little_endian_u32(bytes, 48)
+    elif little_endian_u32(bytes, 44) == 0x21525650:
+        var kind = little_endian_u32(bytes, 16) & 0xFF
+        var alpha = little_endian_u32(bytes, 40) > 0
         if kind == 25:
             format = (
                 RGBA_PVRTC_4BPPV1_FORMAT if alpha else RGB_PVRTC_4BPPV1_FORMAT
@@ -121,11 +104,11 @@ def read(bytes: List[UInt8]) raises -> CompressedImage:
             )
         else:
             raise Error("PVR: format " + String(kind) + " is not PVRTC")
-        start = _u32(bytes, 0)
-        height = _u32(bytes, 4)
-        width = _u32(bytes, 8)
-        levels = _u32(bytes, 12) + 1
-        faces = _u32(bytes, 48)
+        start = little_endian_u32(bytes, 0)
+        height = little_endian_u32(bytes, 4)
+        width = little_endian_u32(bytes, 8)
+        levels = little_endian_u32(bytes, 12) + 1
+        faces = little_endian_u32(bytes, 48)
     else:
         raise Error("PVR: the file is neither version 2 nor version 3")
     if width <= 0 or height <= 0 or faces <= 0:

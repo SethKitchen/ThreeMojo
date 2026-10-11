@@ -6,11 +6,7 @@
 """Which pixels a triangle covers, in exact integer arithmetic.
 
 This is the one piece of the rasterizer that both the CPU path and the GPU
-kernel must agree on *exactly*, so it lives in one place and both import it.
-It was duplicated for a while, with a comment explaining that a kernel cannot
-call into a module that prints — true of `render.rasterizer`, which writes
-pixels, but not of arithmetic. Two copies of a rule whose entire purpose is
-that two implementations agree is the wrong thing to have.
+kernel must agree on exactly, so both import this module.
 
 Nothing here allocates, raises, prints, or touches a framebuffer, so it
 compiles for a device as readily as for the host.

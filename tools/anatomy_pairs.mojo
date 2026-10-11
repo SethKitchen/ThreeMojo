@@ -526,11 +526,206 @@ def _batch(parts: List[_Component], request: String, step: Length) raises:
         )
 
 
+# Samples per axis in each local refinement cube. Odd, so the cube center
+# is itself a sample. Two passes of 33 samples evaluate 71,874 points.
+comptime _REFINE_SAMPLES = 33
+
+
+def _refine[
+    F: DistanceField, G: DistanceField
+](a: F, b: G, center: Vector3, half: Float32) -> Tuple[
+    Vector3, Float32, Int, Int
+]:
+    # Search a cube for the smallest max(a, b); count common-interior samples.
+    var best = center
+    var value = max(a.distance(center), b.distance(center))
+    var hits = 0
+    var hit_weight_eighths = 0
+    var spacing = 2 * half / Float32(_REFINE_SAMPLES - 1)
+    for iz in range(_REFINE_SAMPLES):
+        for iy in range(_REFINE_SAMPLES):
+            for ix in range(_REFINE_SAMPLES):
+                var p = center + Vector3(
+                    -half + Float32(ix) * spacing,
+                    -half + Float32(iy) * spacing,
+                    -half + Float32(iz) * spacing,
+                )
+                var fa = a.distance(p)
+                var fb = b.distance(p)
+                if fa < 0 and fb < 0:
+                    hits += 1
+                    # Endpoint samples own half a cell on each boundary
+                    # axis. The weights cover this cube, without adding a
+                    # full cell beyond each of its six faces.
+                    var wx = 1 if ix == 0 or ix == _REFINE_SAMPLES - 1 else 2
+                    var wy = 1 if iy == 0 or iy == _REFINE_SAMPLES - 1 else 2
+                    var wz = 1 if iz == 0 or iz == _REFINE_SAMPLES - 1 else 2
+                    hit_weight_eighths += wx * wy * wz
+                if max(fa, fb) < value:
+                    value = max(fa, fb)
+                    best = p
+    return (best, value, hits, hit_weight_eighths)
+
+
+def localize_pair[
+    F: DistanceField, G: DistanceField
+](
+    a: F,
+    alo: Vector3,
+    ahi: Vector3,
+    b: G,
+    blo: Vector3,
+    bhi: Vector3,
+    step: Length,
+) raises -> String:
+    """Return the witness location of one pair as JSON members.
+
+    The grid pass repeats `diagnose_pair` and records where its witness
+    and common-interior cells lie. Two local cubes around that witness then
+    search at one sixteenth and one 256th of the grid width. A negative
+    refined value is a point inside both fields. It is not a penetration
+    depth, and a nonnegative value does not prove clearance elsewhere.
+
+    Parameters:
+        F: Type of the first canonical field.
+        G: Type of the second canonical field.
+
+    Args:
+        a: The first canonical field.
+        alo: Its conservative lower bound, in meters.
+        ahi: Its conservative upper bound, in meters.
+        b: The second field in the same frame.
+        blo: Its conservative lower bound, in meters.
+        bhi: Its conservative upper bound, in meters.
+        step: Grid width, 2 mm through 20 mm.
+
+    Returns:
+        JSON object members without the enclosing braces.
+
+    Raises:
+        Error: If `diagnose_pair` refuses the request, or the witness
+            pass does not repeat its grid.
+    """
+    var d = diagnose_pair(a, alo, ahi, b, blo, bhi, step)
+    var text = (
+        '"step_m":'
+        + String(step.value)
+        + ',"bounds_gap_m":'
+        + String(d.bounds_gap.value)
+        + ',"samples":'
+        + String(d.samples)
+        + ',"overlap_samples":'
+        + String(d.overlap_samples)
+        + ',"overlap_volume_m3":'
+        + String(d.overlap_volume.value)
+        + ',"signed_field_witness_m":'
+        + String(d.field_witness.value)
+    )
+    if d.samples == 0:
+        return text + ',"witness_point_m":null'
+    var low = Vector3(max(alo.x, blo.x), max(alo.y, blo.y), max(alo.z, blo.z))
+    var high = Vector3(min(ahi.x, bhi.x), min(ahi.y, bhi.y), min(ahi.z, bhi.z))
+    var grid = SampleGrid(low, high, step)
+    var witness = Float32.MAX
+    var point = low
+    var hit_low = high
+    var hit_high = low
+    var hits = 0
+    for iz in range(grid.nz):
+        for iy in range(grid.ny):
+            for ix in range(grid.nx):
+                var p = grid.cell(ix, iy, iz)[0]
+                var fa = a.distance(p)
+                var fb = b.distance(p)
+                if max(fa, fb) < witness:
+                    witness = max(fa, fb)
+                    point = p
+                if fa < 0 and fb < 0:
+                    hits += 1
+                    hit_low = Vector3(
+                        min(hit_low.x, p.x),
+                        min(hit_low.y, p.y),
+                        min(hit_low.z, p.z),
+                    )
+                    hit_high = Vector3(
+                        max(hit_high.x, p.x),
+                        max(hit_high.y, p.y),
+                        max(hit_high.z, p.z),
+                    )
+    if hits != d.overlap_samples or witness != d.field_witness.value:
+        raise Error("A witness pass must repeat the diagnostic grid")
+    text += ',"witness_point_m":' + _vec(point)
+    if hits > 0:
+        text += (
+            ',"hit_center_low_m":'
+            + _vec(hit_low)
+            + ',"hit_center_high_m":'
+            + _vec(hit_high)
+        )
+    var coarse_half = step.value
+    var coarse = _refine(a, b, point, coarse_half)
+    var fine_half = coarse_half / 16
+    var fine = _refine(a, b, coarse[0], fine_half)
+    var spacing = Float64(2 * coarse_half / Float32(_REFINE_SAMPLES - 1))
+    return (
+        text
+        + ',"refined_point_m":'
+        + _vec(fine[0])
+        + ',"refined_field_witness_m":'
+        + String(fine[1])
+        + ',"refined_first_field_m":'
+        + String(a.distance(fine[0]))
+        + ',"refined_second_field_m":'
+        + String(b.distance(fine[0]))
+        + ',"refine_half_widths_m":['
+        + String(coarse_half)
+        + ","
+        + String(fine_half)
+        + '],"refine_samples_per_axis":'
+        + String(_REFINE_SAMPLES)
+        + ',"local_overlap_samples":'
+        + String(coarse[2])
+        + ',"local_overlap_volume_m3":'
+        + String(Float64(coarse[3]) * 0.125 * spacing * spacing * spacing)
+        + ',"local_overlap_volume_method":"endpoint-weighted coarse cube'
+        ' samples"'
+    )
+
+
+def _witness(parts: List[_Component], request: String, step: Length) raises:
+    # A witness request is witness:first-index:second-index.
+    check_mass_step(step, "canonical pair witness")
+    var tokens = request.split(":")
+    if len(tokens) != 3 or String(tokens[0]) != "witness":
+        raise Error("A pair witness needs witness:first:second")
+    var first = Int(String(tokens[1]))
+    var second = Int(String(tokens[2]))
+    if first < 0 or second <= first or second >= len(parts):
+        raise Error("A pair witness must name ordered catalog indices")
+    var a = parts[first].copy()
+    var b = parts[second].copy()
+    print(
+        '{"record":"witness","first_id":'
+        + quote_json(a.identity)
+        + ',"second_id":'
+        + quote_json(b.identity)
+        + ',"first":'
+        + quote_json(a.label)
+        + ',"second":'
+        + quote_json(b.label)
+        + ","
+        + localize_pair(a, a.low, a.high, b, b.low, b.high, step)
+        + "}"
+    )
+
+
 def _pair_probe(
     spec: HumanoidSpec, side: BodySide, request: String, step: Length
 ) raises:
     var parts = _components(spec, side)
     if request == "catalog":
         _catalog(parts)
+    elif request.startswith("witness:"):
+        _witness(parts, request, step)
     else:
         _batch(parts, request, step)

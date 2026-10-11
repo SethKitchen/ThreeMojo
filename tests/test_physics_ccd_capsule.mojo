@@ -242,7 +242,10 @@ def test_unsupported_capsules_are_refused() raises:
     for choice in range(6):
         var body = _capsule(Vector3(0, 0, 0.5), Vector3(0, 0, -30))
         if choice == 0:
-            body.set_inverse_inertia(Matrix3())
+            # A turning capsule needs a positive definite tensor.
+            var tensor = Matrix3()
+            tensor.elements[1] = 1
+            body.set_inverse_inertia(tensor)
         elif choice == 1:
             body.angular_velocity = Vector3(0, 0, 1)
         elif choice == 2:

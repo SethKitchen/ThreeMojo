@@ -158,10 +158,61 @@ def test_compound_condition_wraps_the_decision_and_each_operand() raises:
     assert_equal(result.conditions, [2])
     assert_true(
         "if _cov_eval_begin(_cov_eval_state0, 2) and"
-        ' _cov_eval_finish(_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0)'
-        ' and _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1),'
+        " _cov_eval_finish(_cov_eval_truth[_cov_eval_node[type_of(a > 0),"
+        " type_of(a < 9), type_of(a > 0 and a < 9),"
+        ' type_of(_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1))]()]'
+        '(_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1)),'
         ' _cov_eval_state0, "m:2"):'
         in result.text
+    )
+
+
+def test_each_operator_gets_a_native_type_check_in_mojo_grouping() raises:
+    # `and` binds first, each level groups left to right, and a group's own
+    # operators are checked before the operators around it.
+    var result = instrument(
+        String(
+            "def f():\n    if a and b or (c or d) and not e:\n        pass\n"
+        ),
+        "m",
+    )
+    assert_equal(result.conditions, [5])
+    var leaf_a = String('_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0)')
+    var leaf_b = String('_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1)')
+    var leaf_c = String('_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2)')
+    var leaf_d = String('_cov_eval_leaf(d, _cov_eval_state0, "m:2.3", 3)')
+    var leaf_e = String('_cov_eval_leaf(e, _cov_eval_state0, "m:2.4", 4)')
+    var group = "(" + leaf_c + " or " + leaf_d + ")"
+    var right = group + " and not " + leaf_e
+    var whole = leaf_a + " and " + leaf_b + " or " + right
+    var checks = [
+        "_cov_eval_node[type_of(a), type_of(b), type_of(a and b), type_of("
+        + leaf_a
+        + " and "
+        + leaf_b
+        + ")]()",
+        "_cov_eval_node[type_of(c), type_of(d), type_of(c or d), type_of("
+        + leaf_c
+        + " or "
+        + leaf_d
+        + ")]()",
+        "_cov_eval_node[type_of((c or d)), type_of(not e),"
+        + " type_of((c or d) and not e), type_of("
+        + right
+        + ")]()",
+        "_cov_eval_node[type_of(a and b), type_of((c or d) and not e),"
+        + " type_of(a and b or (c or d) and not e), type_of("
+        + whole
+        + ")]()",
+    ]
+    assert_true(
+        "_cov_eval_truth[" + " and ".join(checks) + "](" + whole + ")"
+        in result.text
+    )
+    assert_true(
+        "truth as _cov_eval_truth, node as _cov_eval_node\n" in result.text
     )
 
 
@@ -195,9 +246,14 @@ def test_negated_group_measures_its_leaves() raises:
     var result = instrument(source, String("m"))
     assert_equal(result.conditions, [2])
     assert_true(
-        "if _cov_eval_begin(_cov_eval_state0, 2) and _cov_eval_finish(not"
-        ' (_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1)), _cov_eval_state0,'
+        "if _cov_eval_begin(_cov_eval_state0, 2) and"
+        " _cov_eval_finish(_cov_eval_truth[_cov_eval_node[type_of(a),"
+        " type_of(b), type_of(a and b),"
+        in result.text
+    )
+    assert_true(
+        ']()](not (_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1))), _cov_eval_state0,'
         ' "m:2"):'
         in result.text
     )
@@ -279,8 +335,8 @@ def test_multi_line_condition_spanning_several_operands() raises:
     assert_equal(result.branches, [2])
     assert_equal(result.conditions, [2])
     assert_true(
-        '_cov_eval_finish((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0)'
-        ' and _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1)),'
+        ']()]((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1))),'
         ' _cov_eval_state0, "m:2")'
         in result.text
     )
@@ -295,8 +351,8 @@ def test_comments_inside_a_multi_line_condition_do_not_swallow_code() raises:
     var result = instrument(source, String("m"))
     assert_equal(result.conditions, [2])
     assert_true(
-        '_cov_eval_finish((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0)'
-        ' and _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1)),'
+        ']()]((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
+        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1))),'
         ' _cov_eval_state0, "m:2")'
         in result.text
     )
@@ -730,7 +786,7 @@ def test_redundant_groups_and_negations_keep_leaf_order() raises:
         '(((_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) or'
         ' (_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1) and not'
         ' (_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2) or not'
-        ' _cov_eval_leaf(d, _cov_eval_state0, "m:2.3", 3)))))),'
+        ' _cov_eval_leaf(d, _cov_eval_state0, "m:2.3", 3))))))),'
         ' _cov_eval_state0, "m:2"):'
         in result.text
     )

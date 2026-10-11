@@ -41,6 +41,7 @@ number, and a file that ends early. An empty line is zero, as
 `Number("")` is in JavaScript.
 """
 
+from math.rounded_product import rounded_product
 from loaders.js_number import js_string_to_number
 from render.exr import half_to_float
 from render.srgb import LINEAR
@@ -292,14 +293,7 @@ def parse_ies(text: String) raises -> IesLamp:
 def _lerp(x: Float64, y: Float64, t: Float64) -> Float64:
     """Return three.js's `MathUtils.lerp`, each product rounded before the
     sum as JavaScript rounds it."""
-    return _product(1 - t, x) + _product(t, y)
-
-
-@no_inline
-def _product(a: Float64, b: Float64) -> Float64:
-    """Return `a * b` rounded, where the compiler cannot fuse it into a
-    multiply-add."""
-    return a * b
+    return rounded_product(1 - t, x) + rounded_product(t, y)
 
 
 def _interpolate(lamp: IesLamp, phi: Float64, theta: Float64) -> Float64:

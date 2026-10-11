@@ -345,14 +345,77 @@ def _wrap_leaf(
     return result^
 
 
+def _node_check(
+    left: String, right: String, native: String, rewritten: String, stem: String
+) -> String:
+    """Name one `and`/`or` operator's native and instrumented result types.
+
+    `type_of` does not evaluate its operand. The runtime compares the types
+    when the enclosing function is instantiated.
+    """
+    return (
+        stem
+        + "node[type_of("
+        + left
+        + "), type_of("
+        + right
+        + "), type_of("
+        + native
+        + "), type_of("
+        + rewritten
+        + ")]()"
+    )
+
+
+def _fold_operators(
+    operands: List[String],
+    wrapped: List[String],
+    separator: String,
+    stem: String,
+    mut checks: List[String],
+) -> List[String]:
+    """Fold one precedence level left to right, as Mojo groups it.
+
+    Args:
+        operands: The original operand texts at this level.
+        wrapped: The instrumented operand texts, in step with `operands`.
+        separator: The operator with its surrounding spaces.
+        stem: An evaluation-helper prefix absent from the source.
+        checks: Receives one type check per operator.
+
+    Returns:
+        The original and the instrumented text of the whole chain.
+    """
+    var native = operands[0].copy()
+    var rewritten = wrapped[0].copy()
+    for index in range(1, len(operands)):
+        var next_native = native + separator + operands[index]
+        var next_rewritten = rewritten + separator + wrapped[index]
+        checks.append(
+            _node_check(
+                native, operands[index], next_native, next_rewritten, stem
+            )
+        )
+        native = next_native^
+        rewritten = next_rewritten^
+    return [native^, rewritten^]
+
+
 def _wrap_leaves(
-    condition: String, id: String, mut count: Int, frame: String, stem: String
+    condition: String,
+    id: String,
+    mut count: Int,
+    frame: String,
+    stem: String,
+    mut checks: List[String],
 ) raises -> String:
     """Wrap Boolean leaves, retaining every logical operator and group.
 
     Only the decision's Boolean grammar is traversed. An atomic call, index,
     comparison or arithmetic expression stays intact, even if it contains a
-    Boolean expression used as an argument or value. No leaf is duplicated.
+    Boolean expression used as an argument or value. No leaf is duplicated
+    in evaluated code. Each `and`/`or` operator also gets an unevaluated type
+    check, because Mojo selects its truth semantics from the operand types.
     """
     var parts = split_conditions(condition)
     # Conditional expressions bind less tightly than Boolean operators.
@@ -362,22 +425,37 @@ def _wrap_leaves(
         if parts[index] == " if ":
             return _wrap_leaf(String(condition.strip()), id, count, frame, stem)
     if len(parts) > 1:
-        var out = String("")
-        for index in range(len(parts)):
-            if index % 2 == 1:
-                out += parts[index]
-            else:
-                out += _wrap_leaves(parts[index], id, count, frame, stem)
-        return out^
+        # `and` binds more tightly than `or`; each level groups left to right.
+        var terms = List[String]()
+        var wrapped_terms = List[String]()
+        var operands = List[String]()
+        var wrapped = List[String]()
+        for index in range(0, len(parts), 2):
+            operands.append(parts[index].copy())
+            wrapped.append(
+                _wrap_leaves(parts[index], id, count, frame, stem, checks)
+            )
+            if index + 1 == len(parts) or parts[index + 1] == " or ":
+                var term = _fold_operators(
+                    operands, wrapped, String(" and "), stem, checks
+                )
+                terms.append(term[0].copy())
+                wrapped_terms.append(term[1].copy())
+                operands.clear()
+                wrapped.clear()
+        var whole = _fold_operators(
+            terms, wrapped_terms, String(" or "), stem, checks
+        )
+        return whole[1].copy()
     var text = parts[0].copy()
     if _is_group(text):
         var inner = _substring(text, 1, _codepoint_count(text) - 1)
-        return "(" + _wrap_leaves(inner, id, count, frame, stem) + ")"
+        return "(" + _wrap_leaves(inner, id, count, frame, stem, checks) + ")"
     var chars = _characters(text)
     if len(chars) > 3 and _word_at(chars, 0, String("not")):
         if _token_boundary(chars[3]):
             var inner = _substring(text, 3, len(chars))
-            return "not " + _wrap_leaves(inner, id, count, frame, stem)
+            return "not " + _wrap_leaves(inner, id, count, frame, stem, checks)
     return _wrap_leaf(text, id, count, frame, stem)
 
 
@@ -439,7 +517,8 @@ def _wrap_condition(
         return Wrapped(String(line), 0)
 
     var conditions = 0
-    var rebuilt = _wrap_leaves(condition, id, conditions, frame, stem)
+    var checks = List[String]()
+    var rebuilt = _wrap_leaves(condition, id, conditions, frame, stem, checks)
     # The decision already measures a single leaf, including a negated leaf.
     # Keep its original spelling, including redundant grouping and whitespace.
     if conditions == 1:
@@ -479,8 +558,12 @@ def _wrap_condition(
         + ") and "
         + stem
         + "finish("
+        + stem
+        + "truth["
+        + " and ".join(checks)
+        + "]("
         + rebuilt
-        + ", "
+        + "), "
         + frame
         + ', "'
         + id
@@ -692,7 +775,11 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     + stem
                     + "finish, buffer as "
                     + stem
-                    + "buffer\n"
+                    + "buffer, truth as "
+                    + stem
+                    + "truth, node as "
+                    + stem
+                    + "node\n"
                 )
                 import_emitted = True
 

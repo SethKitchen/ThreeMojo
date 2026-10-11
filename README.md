@@ -67,6 +67,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Navigation safety
 
+- [x] [Reviewed CARLA consumer successors](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest#reviewed-consumer-successors): one pinned ledger with exact source, token and test chains [#703](https://github.com/SethKitchen/ThreeMojo/issues/703)
+
 <details>
 <summary>Implemented: 1</summary>
 
@@ -76,7 +78,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Physics safety
 
-- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): locked capsules, anisotropic spheres, moving pairs and kinematic spheres work; rotating capsules and convex shapes remain open [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
+- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): turning capsules, offset shapes, translating boxes and hulls, moving pairs and kinematic spheres work; turning boxes and hulls remain refused [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
 
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
@@ -123,10 +125,10 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Project tools
 
-- [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#recover-an-offline-cache): offline recovery and strict cache checks are available; approved hosting remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
-
 <details>
-<summary>Implemented: 12</summary>
+<summary>Implemented: 13</summary>
+
+- [x] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives, and a public download of all 47 is verified [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 - [x] [Wiki link check](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation#check-the-rules): `make docs-check` refuses wiki links to pages or headings that do not exist [#687](https://github.com/SethKitchen/ThreeMojo/issues/687)
 
@@ -151,6 +153,8 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [x] [Complete coverage vectors](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#evaluation-protocol): recursion, exceptions and concurrent calls retain separate evaluation operands [#385](https://github.com/SethKitchen/ThreeMojo/issues/385)
 
 - [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
+
+- [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): custom operands keep their native conversions and lifetimes. Three unsupported operand forms still fail compilation [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
 
 </details>
 
@@ -512,6 +516,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [Anatomy validity limits](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity): canonical lower-limb reports, provenance, sampling controls and unsupported-use gates [#289](https://github.com/SethKitchen/ThreeMojo/issues/289)
 
 - [x] [Canonical anatomy pair diagnostics](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#geometry-diagnostics): complete selected-side pair inventory, tissue-class execution, bounded sampling and explicit unsupported domains [#596](https://github.com/SethKitchen/ThreeMojo/issues/596)
+- [x] [Canonical anatomy overlap repair](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity#localize-sampled-overlaps): source-bound witness localization at three grids, classified bone, knee and spine overlaps, and zero-volume interface rules [#595](https://github.com/SethKitchen/ThreeMojo/issues/595)
 - [x] [Segment inertia](https://github.com/SethKitchen/ThreeMojo/wiki/Segment-inertia): mass, center of mass and inertia tensor of a thigh, a shank and a foot [#326](https://github.com/SethKitchen/ThreeMojo/issues/326)
 - [x] [Persistent scene water](https://github.com/SethKitchen/ThreeMojo/wiki/Water#animate-it): `WaterScene` keeps its state and composes with a scene. `GpuWater` shades it on a CUDA GPU, with CPU comparisons and 1080p benchmarks [#300](https://github.com/SethKitchen/ThreeMojo/issues/300)
 - [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare [#327](https://github.com/SethKitchen/ThreeMojo/issues/327)

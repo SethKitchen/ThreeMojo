@@ -10,25 +10,9 @@ comparisons use bounded exact binary products, not an epsilon or a rounded
 square. This is point-distance arithmetic, not a global curve certificate.
 """
 
+from extensions.carla.curve_interval import _next_down, _next_up
 from std.math import inf, isfinite, isnan, sqrt
 from std.memory import bitcast
-
-
-def _next_up(value: Float64) -> Float64:
-    # Observe the rounded bits before any following arithmetic. Unlike an
-    # epsilon multiplier, this also handles zero and subnormal results.
-    if isnan(value) or value == inf[DType.float64]():
-        return value
-    if value == 0.0:
-        return bitcast[DType.float64](UInt64(1))
-    var bits = bitcast[DType.uint64](value)
-    if value < 0.0:
-        return bitcast[DType.float64](bits - 1)
-    return bitcast[DType.float64](bits + 1)
-
-
-def _next_down(value: Float64) -> Float64:
-    return -_next_up(-value)
 
 
 @fieldwise_init

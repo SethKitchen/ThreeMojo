@@ -15,13 +15,20 @@ HAIR = 'extensions/humanoid/skeleton/head/hair/strands'
 
 class ReviewedAdditionalLoopTests(unittest.TestCase):
     def setUp(self):
-        self.temp = tempfile.TemporaryDirectory(prefix='reviewed additional loops ')
+        self.temp = tempfile.TemporaryDirectory(prefix='reviewed additional loops ',
+            dir=Path(tempfile.gettempdir()).resolve())
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         for module in (AXES, PRODUCER, BLEND, HAIR):
             target = self.root/(module+'.mojo')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT/(module+'.mojo')).read_bytes())
+        leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
+        target = self.root/leaf
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((ROOT/leaf).read_bytes())
+        for package in ('extensions/__init__.mojo', 'extensions/carla/__init__.mojo'):
+            (self.root/package).write_bytes((ROOT/package).read_bytes())
 
     def test_exact_sites_and_truthful_cardinalities(self):
         expected = {AXES: {50: ('reviewed-nonempty-range', 1, 3)},
@@ -50,6 +57,37 @@ class ReviewedAdditionalLoopTests(unittest.TestCase):
                 path.write_text(original.replace(before, after))
                 self.assertEqual(loops.reviewed_nonempty_loops(self.root, AXES), {})
                 path.write_text(original)
+
+    def test_extracted_provider_and_executing_leaf_changes_reject_locally(self):
+        from unittest.mock import patch
+        from carla_lane_oracle import shared_helper_contracts as helpers
+        path = self.root/(BLEND + '.mojo')
+        raw = path.read_bytes()
+        path.write_bytes(raw.replace(b'bits + 1', b'bits + 2', 1))
+        self.assertEqual(loops.reviewed_nonempty_loops(self.root, AXES), {})
+        path.write_bytes(raw)
+        with patch.object(helpers, 'verify_correspondence', lambda texts: (PRODUCER + '.mojo',)):
+            self.assertEqual(loops.reviewed_nonempty_loops(self.root, AXES), {})
+        receipt = loops.reviewed_nonempty_loops(self.root, AXES)[50]['dependency_sha256']
+        for name, digest in receipt.items():
+            self.assertEqual(loops.file_sha256(self.root/name), digest)
+        self.assertIn('tools/carla_lane_oracle/shared_helper_contracts.py', receipt)
+        self.assertIn(BLEND + '.mojo', receipt)
+
+    def test_provider_shadow_during_final_leaf_read_rejects_locally(self):
+        from unittest.mock import patch
+        leaf = self.root/'tools/carla_lane_oracle/shared_helper_contracts.py'
+        shadow = self.root/(BLEND + '.mojopkg')
+        read, visits = Path.read_bytes, []
+        def observed(path, *args, **kwargs):
+            raw = read(path, *args, **kwargs)
+            if path == leaf:
+                visits.append(True)
+                if len(visits) == 2: shadow.write_bytes(b'unreviewed compiled provider')
+            return raw
+        with patch.object(Path, 'read_bytes', observed):
+            self.assertEqual(loops.reviewed_nonempty_loops(self.root, AXES), {})
+        self.assertEqual(len(visits), 2)
 
     def test_exact_float_elements_and_method_literals_are_bound(self):
         cases = [(BLEND, '[actual_rate.low, actual_rate.high, one, two]', '[one]'),

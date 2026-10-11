@@ -18,6 +18,7 @@ if __package__:
     from . import speed_parser_contracts as speed
     from . import runtime_boundary_contracts as boundary
     from . import render_actor_reuse_contracts as reuse
+    from . import consumer_successor_ledger as ledger
 else:
     import source_contracts as source
     import full_audit_cleanup_contracts as full_audit
@@ -25,6 +26,7 @@ else:
     import speed_parser_contracts as speed
     import runtime_boundary_contracts as boundary
     import render_actor_reuse_contracts as reuse
+    import consumer_successor_ledger as ledger
 
 MODULE = 'extensions/carla/opendrive.mojo'
 MIGRATION = 'tools/carla_lane_oracle/border-parser-successor.json'
@@ -168,6 +170,12 @@ def verify(root, *, _operation=None):
             for path, reviewed in full_audit.verified_edges(root, **operation_args).items():
                 require(path not in consumers, 'duplicate reviewed cleanup consumer edge: ' + path)
                 consumers[path] = reviewed
+        consumers = ledger.extend(consumers, root, _operation=_operation)
+        for path, reviewed in full_audit.shared_helper_edges(root, paths=full_audit.shared_helpers.SOURCE_PATHS,
+                _operation=_operation).items():
+            if path in record['unchanged_inputs']:
+                require(path not in consumers, 'duplicate shared-helper consumer edge: ' + path)
+                consumers[path] = reviewed
         for group in ('historical_records', 'unchanged_inputs', 'unchanged_correctness_tests'):
             for path, expected in record[group].items():
                 actual = hashlib.sha256(full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)).hexdigest()
@@ -179,7 +187,7 @@ def verify(root, *, _operation=None):
                     require(expected == seed_count.BEFORE_SHA256
                             and actual in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
                                           seed_count.SUPPORT_AFTER_SHA256,
-                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256},
+                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256},
                             'unreviewed Map consumer variant')
                     map_edge = seed_count.verify(root, **operation_args)
                     require(map_edge is not None and map_edge['before_sha256'] == expected

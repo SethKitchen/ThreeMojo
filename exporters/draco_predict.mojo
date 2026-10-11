@@ -52,10 +52,13 @@ from loaders.draco_attributes import (
     DracoPrediction,
     DracoTransform,
     Octahedron,
+    _abs_sum,
     _cross,
+    _dot,
     _int_sqrt,
     _rotate,
     _rotation_count,
+    _sub,
     product32,
 )
 from loaders.draco_buffer import draco_require, to_int32, truncated_divide
@@ -923,27 +926,6 @@ def _next_permutation(mut flags: List[Bool]) -> Bool:
         a += 1
         b -= 1
     return True
-
-
-def _sub(a: List[Int], b: List[Int]) -> List[Int]:
-    """Subtract two three-component vectors."""
-    return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-
-
-def _dot(a: List[Int], b: List[Int]) -> Int:
-    """The dot product of two three-component vectors."""
-    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-
-
-def _abs_sum(v: List[Int]) -> Int:
-    """Draco's `VectorD::AbsSum`, which stops at the largest integer."""
-    var sum = 0
-    for k in range(3):  # pragma: no branch
-        var next = abs(v[k])
-        if next < 0 or sum > _INT64_MAX - next:
-            return _INT64_MAX
-        sum += next
-    return sum
 
 
 def encode_integers(

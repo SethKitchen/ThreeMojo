@@ -8,6 +8,8 @@ import coverage_loop_proofs as loops
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE = 'renderers/renderer'
+CURRENT_RENDERER_SHA256 = '08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45'
+CURRENT_CAP_LINE = 3886
 
 
 class RendererCapLoopTests(unittest.TestCase):
@@ -22,12 +24,46 @@ class RendererCapLoopTests(unittest.TestCase):
 
     def test_exact_bound_retains_required_runtime_true(self):
         proof = loops.reviewed_nonempty_loops(self.root, MODULE)
-        self.assertEqual(set(proof), {3757})
-        row = proof[3757]
+        self.assertEqual(set(proof), {CURRENT_CAP_LINE})
+        row = proof[CURRENT_CAP_LINE]
         self.assertEqual((row['required'], row['impossible']), ('T', 'F'))
         self.assertEqual((row['minimum_cardinality'], row['maximum_cardinality']), (2, 64))
-        self.assertEqual(row['dependency_sha256'], loops.STRAND_CAP_SOURCES)
+        self.assertEqual(row['dependency_sha256'], {
+            **loops.STRAND_CAP_SOURCES, 'renderers/renderer.mojo': CURRENT_RENDERER_SHA256})
         self.assertEqual(loops.reviewed_nonempty_loops(self.root, 'other/renderer'), {})
+
+    def test_exact_endpoint_table_preserves_the_historical_theorem(self):
+        self.assertEqual(loops.STRAND_CAP_RENDERER_ENDPOINTS, {
+            'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5': 3757,
+            CURRENT_RENDERER_SHA256: CURRENT_CAP_LINE,
+        })
+        self.assertEqual(loops.STRAND_CAP_SOURCES['renderers/renderer.mojo'],
+                         'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5')
+        self.assertEqual(loops.file_sha256(self.root/'renderers/renderer.mojo'),
+                         CURRENT_RENDERER_SHA256)
+
+    def test_strand_cap_assignment_range_and_unrelated_bytes_revoke(self):
+        path = self.root/'renderers/renderer.mojo'
+        original = path.read_text()
+        start = original.index('def _emit_strand_cap(')
+        end = original.index('\ndef ', start + 1)
+        body = original[start:end]
+        cases = (
+            ('var steps = cap_steps(', 'var steps = 0 # cap_steps('),
+            ('for step in range(1, steps + 1):', 'for step in range(1, steps):'),
+            ('    for step in range(1, steps + 1):',
+             '    steps = 0\n    for step in range(1, steps + 1):'),
+        )
+        for before, after in cases:
+            with self.subTest(premise=before):
+                self.assertEqual(body.count(before), 1)
+                path.write_text(original[:start] + body.replace(before, after, 1)
+                                + original[end:])
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, MODULE), {})
+                path.write_text(original)
+        path.write_text(original + '\n# An unrelated source edit still revokes the exact endpoint.\n')
+        self.assertEqual(loops.reviewed_nonempty_loops(self.root, MODULE), {})
+        path.write_text(original)
 
     def test_producer_consumer_and_control_changes_revoke(self):
         cases = (
@@ -108,16 +144,22 @@ class RendererCapLoopTests(unittest.TestCase):
                     self.root, MODULE, include_roots=include_roots), {})
 
     def test_manifest_changes_only_the_one_impossible_outcome(self):
-        raw = b'L renderers/renderer 3756\nB renderers/renderer 3757\nB renderers/renderer 3758\n'
-        proof = loops.reviewed_nonempty_loops(self.root, MODULE)[3757]
+        raw = (b'L renderers/renderer 3885\nB renderers/renderer 3886\n'
+               b'B renderers/renderer 3887\nB renderers/renderer 3757\n'
+               b'B renderers/renderer 3810\n')
+        proof = loops.reviewed_nonempty_loops(self.root, MODULE)[CURRENT_CAP_LINE]
         proof['module'] = MODULE
         envelope = {'sha256': '0' * 64, 'receipt': {
             'manifest_sha256': loops.sha256(raw), 'proofs': [proof]}}
         result = loops.masked_manifest(raw, envelope).decode()
-        self.assertIn('R renderers/renderer 3757 T reviewed-nonempty-range 1\n', result)
-        self.assertIn('L renderers/renderer 3756\n', result)
-        self.assertIn('B renderers/renderer 3758\n', result)
-        self.assertEqual(result.count('\n'), 4)
+        self.assertIn('R renderers/renderer 3886 T reviewed-nonempty-range 1\n', result)
+        self.assertIn('L renderers/renderer 3885\n', result)
+        self.assertIn('B renderers/renderer 3887\n', result)
+        self.assertIn('B renderers/renderer 3757\n', result)
+        self.assertIn('B renderers/renderer 3810\n', result)
+        self.assertNotIn('R renderers/renderer 3757 ', result)
+        self.assertNotIn('R renderers/renderer 3810 ', result)
+        self.assertEqual(result.count('\n'), 6)
 
 
 if __name__ == '__main__':

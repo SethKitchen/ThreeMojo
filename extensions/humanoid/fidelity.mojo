@@ -11,14 +11,44 @@ asset's source. Visual realism never grants an engineering capability.
 A producer must change its revision when its geometry or mapping changes.
 """
 
-from core.user_data import UserData
-from extensions.humanoid.genome import GENE_COUNT
+from core.user_data import UserData, user_data_of
+from extensions.humanoid.athleticism import Athleticism
+from extensions.humanoid.genome import GENE_COUNT, Genome
+from extensions.humanoid.sex import Sex
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
+from loaders.json import parse_json
 from std.math import isfinite
 from std.memory import bitcast
+from units.si import Length, METER
 
 comptime FIDELITY_KEY = "threemojo_humanoid_fidelity"
-comptime FIDELITY_SCHEMA = 1
+# Version 2 adds the transform matrix and the content fingerprints.
+comptime FIDELITY_SCHEMA = 2
+comptime FINGERPRINT_ALGORITHM = (
+    "fnv1a-64 over normalized UTF-8 JSON; not cryptographic"
+)
+# The canonical frame is the local rest frame: a column-major 4x4 identity.
+comptime CANONICAL_TO_LOCAL_REST = "[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]"
+comptime _FNV_OFFSET = UInt64(0xCBF29CE484222325)
+comptime _FNV_PRIME = UInt64(0x100000001B3)
+comptime _HEX: List[String] = [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e",
+    "f",
+]
 # These are recipe versions, not upstream commit or checksum claims.
 comptime CANONICAL_RECIPE = "threemojo-canonical-inputs-v1"
 comptime GAME_RECIPE = "threemojo-game-skin-19-joints-v1"
@@ -122,6 +152,76 @@ def canonical_inputs(spec: HumanoidSpec) raises -> UserData:
     return data^
 
 
+def json_fingerprint(text: String) -> String:
+    """Return the 64-bit FNV-1a fingerprint of JSON text.
+
+    The fingerprint detects a changed recipe. It is not a cryptographic
+    hash and does not prove the source of an asset.
+
+    Args:
+        text: Normalized JSON text, as `UserData` writes it.
+
+    Returns:
+        Sixteen lowercase hexadecimal digits.
+    """
+    var hash = _FNV_OFFSET
+    for byte in text.as_bytes():  # pragma: no branch
+        hash = (hash ^ UInt64(byte)) * _FNV_PRIME
+    var hex = materialize[_HEX]()
+    var digits = String()
+    for at in range(16):  # pragma: no branch
+        var nibble = Int((hash >> UInt64(60 - 4 * at)) & 0xF)
+        digits += hex[nibble]
+    return digits^
+
+
+def _normalized(text: String) raises -> String:
+    """Return JSON text in the one form that `UserData` writes.
+
+    Args:
+        text: One JSON value.
+
+    Returns:
+        The same value as normalized text.
+
+    Raises:
+        Error: If the text is not one JSON value.
+    """
+    var data = UserData()
+    data.set_json("value", text)
+    return data.json("value")
+
+
+def spec_fingerprint(spec: HumanoidSpec) raises -> String:
+    """Return the fingerprint of a spec's complete canonical inputs.
+
+    Args:
+        spec: The canonical input recipe.
+
+    Returns:
+        The fingerprint of `canonical_inputs(spec)`.
+
+    Raises:
+        Error: If the spec is outside its software input domain.
+    """
+    return json_fingerprint(_normalized(canonical_inputs(spec).to_json()))
+
+
+def settings_fingerprint(visual_settings: UserData) raises -> String:
+    """Return the fingerprint of every visual quality and build option.
+
+    Args:
+        visual_settings: The triangle budget, details, style and materials.
+
+    Returns:
+        The fingerprint of the settings' normalized JSON.
+
+    Raises:
+        Error: If the settings do not form a JSON object.
+    """
+    return json_fingerprint(_normalized(visual_settings.to_json()))
+
+
 def humanoid_provenance(
     spec: HumanoidSpec,
     visual_settings: UserData,
@@ -135,7 +235,10 @@ def humanoid_provenance(
     assertions, not verified hashes or proof of a license. Use an explicit
     unknown marker when the converted asset has no pinned source manifest.
     Local coordinates are meters, right-handed, y-up, pelvis-origin.
+    The canonical-to-local-rest transform is an explicit identity matrix.
     Parent and animation transforms remain in glTF nodes and channels.
+    The record holds fingerprints of the spec, the visual settings and
+    the complete recipe.
 
     Args:
         spec: Canonical SI inputs, copied independently of visual settings.
@@ -174,11 +277,24 @@ def humanoid_provenance(
         "transform_scope",
         "local-rest; node and animation transforms remain separate",
     )
+    recipe.set_json("canonical_to_local_rest", String(CANONICAL_TO_LOCAL_REST))
+    recipe.set_string(
+        "matrix_layout", "column-major 4x4; translation in meters"
+    )
     var record = UserData()
     record.set_number("schema_version", FIDELITY_SCHEMA)
     record.set_json("recipe", recipe.to_json())
     # This is a lossless recipe key. It is not a cryptographic asset hash.
     record.set_string("recipe_fingerprint", recipe.to_json())
+    record.set_string("fingerprint_algorithm", String(FINGERPRINT_ALGORITHM))
+    record.set_string(
+        "spec_fingerprint", json_fingerprint(recipe.json("canonical_inputs"))
+    )
+    record.set_string(
+        "visual_settings_fingerprint",
+        json_fingerprint(recipe.json("visual_settings")),
+    )
+    record.set_string("recipe_digest", json_fingerprint(record.json("recipe")))
     record.set_boolean("visual_use", True)
     record.set_boolean("engineering_use", False)
     record.set_boolean("canonical_geometry_embedded", False)
@@ -217,6 +333,152 @@ def humanoid_provenance(
     return record^
 
 
+def _template_input(inputs: UserData, key: String) raises -> Int:
+    """Read one named binary template without truncating or overflowing."""
+    var value = inputs.json(key)
+    if value == "0":
+        return 0
+    if value == "1":
+        return 1
+    raise Error(
+        "Humanoid bake canonical inputs are stale or changed; rebuild it"
+    )
+
+
+def _spec_from_canonical(inputs: UserData) raises -> HumanoidSpec:
+    """Read exact input bits and refuse any inconsistent canonical field."""
+    var gene_document = parse_json(inputs.json("gene_float32_bits"))
+    var genes = user_data_of(gene_document, gene_document.root())
+    var genome = Genome()
+    for at in range(GENE_COUNT):  # pragma: no branch
+        genome.expressions[at] = bitcast[DType.float32](
+            UInt32(Int(genes.string(String(at))))
+        )
+    var spec = HumanoidSpec(
+        Length(
+            bitcast[DType.float32](
+                UInt32(Int(inputs.string("stature_float32_bits")))
+            ),
+            METER,
+        ),
+        Sex(_template_input(inputs, "sex")),
+        Athleticism(_template_input(inputs, "athleticism")),
+        genome,
+    )
+    if inputs.to_json() != _normalized(canonical_inputs(spec).to_json()):
+        raise Error(
+            "Humanoid bake canonical inputs are stale or changed; rebuild it"
+        )
+    return spec
+
+
+def stored_provenance(stored: UserData) raises -> UserData:
+    """Return a bake's provenance record after checking its fingerprints.
+
+    The check recomputes each fingerprint and the complete schema record.
+    It refuses missing fields, edited capability claims and inconsistent
+    recipes. It does not authenticate a recipe rewritten with its hashes.
+
+    Args:
+        stored: Extras loaded from the humanoid root or scene.
+
+    Returns:
+        The stored provenance record.
+
+    Raises:
+        Error: If the record is absent, malformed, of another schema,
+            incomplete or inconsistent with its own fingerprints.
+    """
+    if not stored.has(String(FIDELITY_KEY)):
+        raise Error("Humanoid bake has no fidelity provenance; rebuild it")
+    var document = parse_json(stored.json(String(FIDELITY_KEY)))
+    var record = user_data_of(document, document.root())
+    if not record.has("schema_version"):
+        raise Error("Humanoid bake provenance has no schema; rebuild it")
+    if record.json("schema_version") != String(FIDELITY_SCHEMA):
+        raise Error(
+            "Humanoid bake provenance schema is unsupported; rebuild it"
+        )
+    for key in [  # pragma: no branch
+        "recipe",
+        "spec_fingerprint",
+        "visual_settings_fingerprint",
+        "recipe_digest",
+    ]:
+        if not record.has(key):
+            raise Error("Humanoid bake provenance is incomplete; rebuild it")
+    var recipe_document = parse_json(record.json("recipe"))
+    var recipe = user_data_of(recipe_document, recipe_document.root())
+    for key in [  # pragma: no branch
+        "schema_version",
+        "canonical_revision",
+        "visual_revision",
+        "asset_revision",
+        "canonical_inputs",
+        "visual_settings",
+        "length_unit",
+        "handedness",
+        "up_axis",
+        "right_axis",
+        "anterior_axis",
+        "origin",
+        "transform_scope",
+        "canonical_to_local_rest",
+        "matrix_layout",
+    ]:
+        if not recipe.has(key):
+            raise Error("Humanoid bake recipe is incomplete; rebuild it")
+    var consistent = json_fingerprint(record.json("recipe")) == record.string(
+        "recipe_digest"
+    )
+    consistent = consistent and json_fingerprint(
+        recipe.json("canonical_inputs")
+    ) == record.string("spec_fingerprint")
+    consistent = consistent and json_fingerprint(
+        recipe.json("visual_settings")
+    ) == record.string("visual_settings_fingerprint")
+    if not consistent:
+        raise Error(
+            "Humanoid bake fingerprints do not match its recipe; rebuild it"
+        )
+    var input_document = parse_json(recipe.json("canonical_inputs"))
+    var inputs = user_data_of(input_document, input_document.root())
+    var settings_document = parse_json(recipe.json("visual_settings"))
+    var settings = user_data_of(settings_document, settings_document.root())
+    var expected = humanoid_provenance(
+        _spec_from_canonical(inputs),
+        settings,
+        recipe.string("canonical_revision"),
+        recipe.string("visual_revision"),
+        recipe.string("asset_revision"),
+    )
+    if record.to_json() != expected.to_json():
+        raise Error("Humanoid bake provenance is stale or changed; rebuild it")
+    return record^
+
+
+def require_current_spec(stored: UserData, spec: HumanoidSpec) raises:
+    """Refuse a bake that does not represent the current spec.
+
+    The check compares the exact canonical inputs, not only fingerprints.
+    It ignores visual settings and revisions.
+
+    Args:
+        stored: Extras loaded from the humanoid root or scene.
+        spec: The spec that the caller expects the bake to represent.
+
+    Raises:
+        Error: If the record is refused by `stored_provenance`, or if the
+            bake represents a different spec.
+    """
+    var record = stored_provenance(stored)
+    var recipe_document = parse_json(record.json("recipe"))
+    var recipe = user_data_of(recipe_document, recipe_document.root())
+    var current = _normalized(canonical_inputs(spec).to_json())
+    if recipe.json("canonical_inputs") != current:
+        raise Error("Humanoid bake represents a different spec; rebuild it")
+
+
 def require_bake_provenance(stored: UserData, expected: UserData) raises:
     """Refuse missing, stale or edited humanoid provenance before reuse.
 
@@ -229,9 +491,15 @@ def require_bake_provenance(stored: UserData, expected: UserData) raises:
         expected: The freshly built expected provenance record.
 
     Raises:
-        Error: If the record is absent or differs in any field.
+        Error: If the record is refused by `stored_provenance`, if the spec
+            or visual settings changed, or if any other field differs.
     """
-    if not stored.has(String(FIDELITY_KEY)):
-        raise Error("Humanoid bake has no fidelity provenance; rebuild it")
+    var record = stored_provenance(stored)
+    if record.string("spec_fingerprint") != expected.string("spec_fingerprint"):
+        raise Error("Humanoid bake spec fingerprint is stale; rebuild it")
+    if record.string("visual_settings_fingerprint") != expected.string(
+        "visual_settings_fingerprint"
+    ):
+        raise Error("Humanoid bake visual settings are stale; rebuild it")
     if stored.json(String(FIDELITY_KEY)) != expected.to_json():
         raise Error("Humanoid bake provenance is stale or changed; rebuild it")

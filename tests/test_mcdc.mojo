@@ -314,6 +314,21 @@ def test_malformed_complete_vectors_are_rejected() raises:
         assert_true(raised)
 
 
+def test_inconsistent_repeated_truth_conversion_is_refused() raises:
+    # Native same-type `or` tests the selected operand again. A custom
+    # `__bool__` can disagree with itself, which makes the vector false.
+    for record in [
+        String("COVEVAL2:m:4:F:?-;"),
+        String("COVEVAL2:m:4:T:F?;"),
+    ]:
+        var raised = False
+        try:
+            _ = parse_traces("COVEVAL2:m:4:T:T-;\n" + record + "\n")
+        except error:
+            raised = "Inconsistent repeated truth conversion" in String(error)
+        assert_true(raised)
+
+
 def test_large_repetition_keeps_only_distinct_vectors() raises:
     var parser = TraceParser()
     for _ in range(10000):

@@ -53,9 +53,11 @@ class SeedCountSuccessorTests(unittest.TestCase):
                                   else read_text(p,*a,**k)):
                     yield
             else:
-                # Finite-score controls keep their existing current byte-only
-                # view and complete current cleanup admission route.
-                yield
+                # This is the fifth endpoint's fixture. Its coherent text view
+                # remains fifth even when production has the later station edge.
+                with patch.object(Path, 'read_text', lambda p,*a,**k:
+                                  self.after if p == ROOT/MAP else read_text(p,*a,**k)):
+                    yield
 
     def test_exact_relation_and_truthful_actual_state(self):
         self.assertIsNone(seed.verify_source(self.before, self.record))
@@ -64,8 +66,8 @@ class SeedCountSuccessorTests(unittest.TestCase):
         self.assertEqual(edge['before_sha256'], seed.BEFORE_SHA256)
         self.assertEqual(edge['after_sha256'], seed.AFTER_SHA256)
         actual = seed.sha((ROOT/MAP).read_bytes().decode())
-        self.assertIn(actual, {seed.BEFORE_SHA256, seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256})
-        expected = (seed.verify_score(ROOT) if actual == seed.SCORE_AFTER_SHA256
+        self.assertIn(actual, {seed.BEFORE_SHA256, seed.AFTER_SHA256, seed.OPTIONAL_AFTER_SHA256, seed.SUPPORT_AFTER_SHA256, seed.FRONTIER_AFTER_SHA256, seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256})
+        expected = (seed.verify_score(ROOT) if actual in {seed.SCORE_AFTER_SHA256, seed.station.AFTER_SHA256}
                     else seed.verify_frontier(ROOT) if actual == seed.FRONTIER_AFTER_SHA256
                     else seed.verify_support(ROOT) if actual == seed.SUPPORT_AFTER_SHA256
                     else seed.verify_optional(ROOT) if actual == seed.OPTIONAL_AFTER_SHA256 else edge)
@@ -202,7 +204,8 @@ class SeedCountSuccessorTests(unittest.TestCase):
     def test_actual_after_graph_and_complete_import_closure(self):
         with self.live_after():
             seed.verify_premises(ROOT,self.record,after=True)
-            self.assertEqual(seed.dependency_inventory(ROOT), {MAP,*self.record['unchanged_inputs']})
+            self.assertEqual(seed.dependency_inventory(ROOT),
+                             {MAP, *self.record['unchanged_inputs'], 'loaders/utf8.mojo'})
         self.assertIn('extensions/carla/road.mojo',self.record['unchanged_inputs'])
         self.assertIn('extensions/carla/curve_trig.mojo',self.record['unchanged_inputs'])
         self.assertTrue(any(x['name']=='_uncertain' for x in self.record['premise_declarations']))

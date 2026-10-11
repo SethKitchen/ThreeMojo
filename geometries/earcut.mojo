@@ -27,6 +27,7 @@ JavaScript rounds it, so a nearly flat corner is judged as three.js
 judges it.
 """
 
+from math.rounded_product import rounded_product
 from std.math import isfinite, trunc
 
 
@@ -58,19 +59,14 @@ struct _EarNode(ImplicitlyCopyable):
         self.steiner = False
 
 
-@no_inline
-def _product(a: Float64, b: Float64) -> Float64:
-    """Return `a * b`, rounded before any sum uses it, as JavaScript
-    rounds it."""
-    return a * b
-
-
 def _area(nodes: List[_EarNode], p: Int, q: Int, r: Int) -> Float64:
     """Return earcut's signed `area` of a triangle."""
     ref a = nodes[p]
     ref b = nodes[q]
     ref c = nodes[r]
-    return _product(b.y - a.y, c.x - b.x) - _product(b.x - a.x, c.y - b.y)
+    return rounded_product(b.y - a.y, c.x - b.x) - rounded_product(
+        b.x - a.x, c.y - b.y
+    )
 
 
 def _equals(nodes: List[_EarNode], p: Int, q: Int) -> Bool:
@@ -84,7 +80,7 @@ def _signed_area(data: List[Float64], start: Int, end: Int) -> Float64:
     var j = end - 2
     # A ring holds a point at least: the loop always runs.
     for i in range(start, end, 2):  # pragma: no branch
-        total += _product(data[j] - data[i], data[i + 1] + data[j + 1])
+        total += rounded_product(data[j] - data[i], data[i + 1] + data[j + 1])
         j = i
     return total
 
@@ -185,9 +181,11 @@ def _point_in_triangle(
 ) -> Bool:
     """Return True if a point is in a triangle, edges included."""
     return (
-        _product(cx - px, ay - py) >= _product(ax - px, cy - py)
-        and _product(ax - px, by - py) >= _product(bx - px, ay - py)
-        and _product(bx - px, cy - py) >= _product(cx - px, by - py)
+        rounded_product(cx - px, ay - py) >= rounded_product(ax - px, cy - py)
+        and rounded_product(ax - px, by - py)
+        >= rounded_product(bx - px, ay - py)
+        and rounded_product(bx - px, cy - py)
+        >= rounded_product(cx - px, by - py)
     )
 
 
@@ -454,7 +452,7 @@ def _flips(nodes: List[_EarNode], p: Int, px: Float64, py: Float64) -> Bool:
     return (
         straddles
         and n.y != q.y
-        and px < _product(n.x - q.x, py - q.y) / (n.y - q.y) + q.x
+        and px < rounded_product(n.x - q.x, py - q.y) / (n.y - q.y) + q.x
     )
 
 
@@ -610,7 +608,7 @@ def _find_hole_bridge(nodes: List[_EarNode], hole: Int, outer: Int) -> Int:
         if _equals(nodes, hole, n):
             return n
         if hy <= nodes[p].y and hy >= nodes[n].y and nodes[n].y != nodes[p].y:
-            var x = nodes[p].x + _product(
+            var x = nodes[p].x + rounded_product(
                 hy - nodes[p].y, nodes[n].x - nodes[p].x
             ) / (nodes[n].y - nodes[p].y)
             if x <= hx and (infinite or x > qx):

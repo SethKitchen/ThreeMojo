@@ -38,6 +38,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from render.color_math import floor_channels
 from math.norm import length2
 from cameras.camera import Camera
 from core.assets import Assets
@@ -283,13 +284,6 @@ def _load(view: LightView, x: Int, y: Int) -> FloatColor:
     )
 
 
-def _floor0(color: FloatColor) -> FloatColor:
-    """Return a color with its negative channels raised to zero."""
-    return FloatColor(
-        max(color.r, 0), max(color.g, 0), max(color.b, 0), max(color.a, 0)
-    )
-
-
 def clip_aabb(
     current: FloatColor,
     history: FloatColor,
@@ -500,7 +494,7 @@ def traa_pixel(
         -1, -1, -1, 1, 1, -1, 1, 1, 1, 0, 0, -1, 0, 1, -1, 0
     )
     for at in range(8):  # pragma: no branch
-        var near = _floor0(
+        var near = floor_channels(
             _load(
                 beauty, x + Int(offsets[at * 2]), y + Int(offsets[at * 2 + 1])
             )

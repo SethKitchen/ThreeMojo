@@ -519,9 +519,9 @@ def _segment_gap(
     a_axis: SIMD[DType.float64, 4],
     b: SIMD[DType.float64, 4],
     b_axis: SIMD[DType.float64, 4],
-) -> Tuple[Float64, SIMD[DType.float64, 4]]:
-    """Return the distance between two segments and the unit normal from B
-    toward A at their closest points.
+) -> Tuple[Float64, SIMD[DType.float64, 4], Float64]:
+    """Return the distance between two segments, the unit normal from B
+    toward A at their closest points, and A's parameter there.
 
     Ericson's clamped closest points of two segments, where either can be
     a single point.
@@ -533,7 +533,8 @@ def _segment_gap(
         b_axis: From B's start to its other end.
 
     Returns:
-        The distance and the normal. The normal is zero when they meet.
+        The distance, the normal, and the parameter in [0, 1] of A's
+        closest point. The normal is zero when they meet.
     """
     var r = a - b
     var aa = _wide_dot(a_axis, a_axis)
@@ -551,7 +552,9 @@ def _segment_gap(
             var ab = _wide_dot(a_axis, b_axis)
             var denominator = aa * bb - ab * ab
             if denominator > 0:
-                s = min(max((ab * f - c * bb) / denominator, Float64(0)), Float64(1))
+                s = min(
+                    max((ab * f - c * bb) / denominator, Float64(0)), Float64(1)
+                )
             t = (ab * s + f) / bb
             if t < 0:
                 t = 0
@@ -562,5 +565,306 @@ def _segment_gap(
     var gap = a + a_axis * s - (b + b_axis * t)
     var distance = sqrt(_wide_dot(gap, gap))
     if distance == 0:
-        return (distance, SIMD[DType.float64, 4](0))
-    return (distance, gap / distance)
+        return (distance, SIMD[DType.float64, 4](0), s)
+    return (distance, gap / distance, s)
+
+
+def _on_segment(
+    p: SIMD[DType.float64, 4],
+    x: SIMD[DType.float64, 4],
+    edge: SIMD[DType.float64, 4],
+) -> SIMD[DType.float64, 4]:
+    # The point of segment x + u edge, u in [0, 1], closest to p.
+    var u = _wide_dot(p - x, edge) / _wide_dot(edge, edge)
+    return x + edge * min(max(u, Float64(0)), Float64(1))
+
+
+def _triangle_closest(
+    p: SIMD[DType.float64, 4],
+    a: SIMD[DType.float64, 4],
+    b: SIMD[DType.float64, 4],
+    c: SIMD[DType.float64, 4],
+) -> SIMD[DType.float64, 4]:
+    """Return the point of triangle abc closest to p.
+
+    The projection onto the plane when it falls inside the triangle, and
+    otherwise the nearest point of the three edges.
+
+    Args:
+        p: The point.
+        a: A corner.
+        b: A corner.
+        c: A corner. The triangle's normal must not be zero.
+
+    Returns:
+        The closest point.
+    """
+    var normal = _wide_cross(b - a, c - a)
+    var flat = p - normal * (
+        _wide_dot(p - a, normal) / _wide_dot(normal, normal)
+    )
+    if (
+        _wide_dot(_wide_cross(b - a, flat - a), normal) >= 0
+        and _wide_dot(_wide_cross(c - b, flat - b), normal) >= 0
+        and _wide_dot(_wide_cross(a - c, flat - c), normal) >= 0
+    ):
+        return flat
+    var best = _on_segment(p, a, b - a)
+    for edge in [(b, c - b), (c, a - c)]:  # pragma: no branch
+        var other = _on_segment(p, edge[0], edge[1])
+        if _wide_dot(p - other, p - other) < _wide_dot(p - best, p - best):
+            best = other
+    return best
+
+
+def _segment_triangle_gap(
+    start: SIMD[DType.float64, 4],
+    axis: SIMD[DType.float64, 4],
+    triangle: Triangle,
+) -> Tuple[Float64, SIMD[DType.float64, 4], SIMD[DType.float64, 4]]:
+    """Return the distance from a segment to a triangle, the unit normal
+    from the triangle toward the segment, and the segment's closest point.
+
+    The closest pair is an end of the segment against the triangle, the
+    segment against an edge, or a crossing of the face. A crossing has
+    distance zero and the face normal. Equal distances keep that order.
+
+    Args:
+        start: One end of the segment; an axis of zero is a point.
+        axis: From that end to the other.
+        triangle: The triangle, with a nonzero normal.
+
+    Returns:
+        The distance, the normal and the point on the segment.
+    """
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var face = _wide_cross(b - a, c - a)
+    face /= sqrt(_wide_dot(face, face))
+    var best = Float64(1e300)
+    var normal = face
+    var point = start
+    for end in range(2):  # pragma: no branch
+        var p = start + axis * Float64(end)
+        var gap = p - _triangle_closest(p, a, b, c)
+        var distance = sqrt(_wide_dot(gap, gap))
+        if distance < best:
+            best = distance
+            normal = gap / distance if distance > 0 else face
+            point = p
+    var corners = [a, b, c]
+    for i in range(3):  # pragma: no branch
+        var edge = _segment_gap(
+            start, axis, corners[i], corners[(i + 1) % 3] - corners[i]
+        )
+        if edge[0] < best:
+            best = edge[0]
+            # A segment that touches the edge line has no gap direction.
+            normal = edge[1] if edge[0] > 0 else face
+            point = start + axis * edge[2]
+    var low = _wide_dot(start - a, face)
+    var high = _wide_dot(start + axis - a, face)
+    if low * high < 0:
+        var crossing = start + axis * (low / (low - high))
+        if (
+            _wide_dot(_wide_cross(b - a, crossing - a), face) >= 0
+            and _wide_dot(_wide_cross(c - b, crossing - b), face) >= 0
+            and _wide_dot(_wide_cross(a - c, crossing - c), face) >= 0
+        ):
+            return (Float64(0), face, crossing)
+    return (best, normal, point)
+
+
+def _turning_step(
+    ends: Tuple[SIMD[DType.float64, 4], SIMD[DType.float64, 4]],
+    speeds: Tuple[SIMD[DType.float64, 4], SIMD[DType.float64, 4]],
+    radius: Float64,
+    tolerance: Float64,
+    curvature: Float64,
+    triangle: Triangle,
+) -> Float64:
+    """Return how long a turning segment stays clear of a triangle.
+
+    The segment's ends move at `speeds` now. Every point of the true rigid
+    path stays within curvature * t^2 / 2 of its straight-line path, so a
+    separating plane's distance to the true segment is at least its
+    distance to the straight-line ends less that. The best separating
+    plane is the face or one of the three edge side planes. The result is
+    the first time its bound reaches -`tolerance` below `radius`.
+
+    Args:
+        ends: The segment's two ends; equal ends are a point.
+        speeds: The two ends' velocities.
+        radius: The shape's radius about the segment.
+        tolerance: The overlap the bound may allow.
+        curvature: |omega|^2 times the larger lever from the mass center.
+        triangle: The triangle, with a nonzero normal.
+
+    Returns:
+        The time, 1e300 for no limit, or -1 when the segment is wholly
+        behind the face. A segment that already overlaps may deepen by the
+        tolerance at most.
+    """
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var face = _wide_cross(b - a, c - a)
+    face /= sqrt(_wide_dot(face, face))
+    if _wide_dot(ends[0] - a, face) < 0 and _wide_dot(ends[1] - a, face) < 0:
+        # The mesh stays one-sided.
+        return -1
+    # Each plane is a unit normal and a point on it.
+    var normals = List[SIMD[DType.float64, 4]]()
+    var origins = List[SIMD[DType.float64, 4]]()
+    normals.append(face)
+    origins.append(a)
+    var corners = [a, b, c]
+    for i in range(3):  # pragma: no branch
+        var side = _wide_cross(corners[(i + 1) % 3] - corners[i], face)
+        normals.append(side / sqrt(_wide_dot(side, side)))
+        origins.append(corners[i])
+    # The plane that separates the segment most now.
+    var chosen = 0
+    var most = Float64(-1e300)
+    for k in range(4):  # pragma: no branch
+        var low = min(
+            _wide_dot(ends[0] - origins[k], normals[k]),
+            _wide_dot(ends[1] - origins[k], normals[k]),
+        )
+        if low > most:
+            most = low
+            chosen = k
+    # A shape that already overlaps keeps its current depth, plus the
+    # tolerance; the caller's impact test opens a closing contact.
+    var allowance = tolerance + max(radius - most, Float64(0))
+    var limit = Float64(1e300)
+    var tips = [ends[0], ends[1]]
+    var moving = [speeds[0], speeds[1]]
+    for end in range(2):  # pragma: no branch
+        var room = (
+            _wide_dot(tips[end] - origins[chosen], normals[chosen])
+            - radius
+            + allowance
+        )
+        var rate = _wide_dot(moving[end], normals[chosen])
+        # The first positive root of room + rate t - curvature t^2 / 2.
+        if curvature > 0:
+            var root = sqrt(rate * rate + 2 * curvature * room)
+            # Rationalize the closing root: when curvature is tiny, root
+            # rounds to -rate and their direct sum loses all progress.
+            var time = (
+                2 * room / (root - rate) if rate
+                < 0 else (rate + root) / curvature
+            )
+            limit = min(limit, time)
+        elif rate < 0:
+            limit = min(limit, room / -rate)
+    return limit
+
+
+def _project(
+    points: List[SIMD[DType.float64, 4]], axis: SIMD[DType.float64, 4]
+) -> Tuple[Float64, Float64]:
+    # The interval that points cover along an axis.
+    var low = _wide_dot(points[0], axis)
+    var high = low
+    # A triangle or a solid has three points at least.
+    for k in range(1, len(points)):  # pragma: no branch
+        var value = _wide_dot(points[k], axis)
+        low = min(low, value)
+        high = max(high, value)
+    return (low, high)
+
+
+def _sweep_convex_triangle(
+    vertices: List[SIMD[DType.float64, 4]],
+    faces: List[SIMD[DType.float64, 4]],
+    edges: List[SIMD[DType.float64, 4]],
+    travel: SIMD[DType.float64, 4],
+    triangle: Triangle,
+) -> _SweepHit:
+    """Sweep a translating convex solid against the front of a triangle.
+
+    The separating-axis test over time: the solid and the triangle overlap
+    exactly when their projections overlap on every candidate axis. These
+    are the solid's face normals, the triangle's normal, and each cross
+    product of a solid edge with a triangle edge. Along each axis the
+    solid's interval moves linearly, so it overlaps during one interval of
+    time. The first contact is the latest entry, when it comes before the
+    earliest exit. Its normal is the axis that entered last; a solid that
+    already overlaps uses the axis of least overlap instead.
+
+    Args:
+        vertices: The solid's corners at the start, in the world.
+        faces: The solid's unit face normals.
+        edges: The solid's edge directions.
+        travel: The solid's motion over the interval.
+        triangle: The triangle, with a nonzero normal.
+
+    Returns:
+        The earliest approaching contact, or the fraction 2 for none.
+    """
+    var miss = _SweepHit(2, SIMD[DType.float64, 4](0))
+    var a = _wide(triangle.a)
+    var b = _wide(triangle.b)
+    var c = _wide(triangle.c)
+    var face = _wide_cross(b - a, c - a)
+    face /= sqrt(_wide_dot(face, face))
+    if _project(vertices, face)[1] < _wide_dot(a, face):
+        # The mesh stays one-sided: a solid wholly behind is not caught.
+        return miss
+    var corners = List[SIMD[DType.float64, 4]]()
+    corners.append(a)
+    corners.append(b)
+    corners.append(c)
+    var axes = faces.copy()
+    axes.append(face)
+    for edge in edges:  # pragma: no branch
+        for k in range(3):  # pragma: no branch
+            axes.append(_wide_cross(edge, corners[(k + 1) % 3] - corners[k]))
+    var entry = Float64(-1e300)
+    var leave = Float64(1e300)
+    var normal = SIMD[DType.float64, 4](0)
+    # The axis of least overlap now, and the way it separates the solid.
+    var depth = Float64(1e300)
+    var shallow = SIMD[DType.float64, 4](0)
+    for axis in axes:  # pragma: no branch
+        var square = _wide_dot(axis, axis)
+        if square == 0:
+            # Parallel edges give no axis.
+            continue
+        var unit = axis / sqrt(square)
+        var solid = _project(vertices, unit)
+        var flat = _project(corners, unit)
+        var up = flat[1] - solid[0]
+        var down = solid[1] - flat[0]
+        if min(up, down) < depth:
+            depth = min(up, down)
+            shallow = unit if up < down else -unit
+        var rate = _wide_dot(travel, unit)
+        if rate == 0:
+            if solid[1] < flat[0] or solid[0] > flat[1]:
+                return miss
+            continue
+        # The solid's interval reaches the triangle's at `first` and
+        # passes it at `last`.
+        var first = (flat[0] - solid[1]) / rate
+        var last = (flat[1] - solid[0]) / rate
+        if rate < 0:
+            first = (flat[1] - solid[0]) / rate
+            last = (flat[0] - solid[1]) / rate
+        if first > entry:
+            entry = first
+            # From the triangle toward the solid, against its motion.
+            normal = -unit if rate > 0 else unit
+        leave = min(leave, last)
+    if entry == -1e300 or entry > leave or entry > 1 or leave < 0:
+        return miss
+    if entry <= 0:
+        # Already touching or overlapping: every entry is past, and the
+        # contact pushes out along the axis of least overlap.
+        normal = shallow
+    if not _approaches(travel, normal):
+        return miss
+    return _SweepHit(max(entry, Float64(0)), normal)

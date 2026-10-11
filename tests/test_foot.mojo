@@ -33,7 +33,11 @@ from extensions.humanoid.skeleton.foot.bones.dimensions import (
     FootBone,
     FootBoneField,
     FootDimensions,
+    MAX_ARTICULATIONS,
+    MAX_EARLIER_ARTICULATIONS,
     bone_distance,
+    earlier_articulations,
+    foot_articulations,
     bone_part_label,
     foot_dimensions,
     medial_axis,
@@ -48,7 +52,7 @@ from extensions.humanoid.skeleton.foot.bones.mass import (
     foot_bone_mass_from_dimensions,
     foot_bone_occupancy,
 )
-from extensions.humanoid.skeleton.foot.chain import tube_set_volume
+from extensions.humanoid.skeleton.foot.chain import one_segment, tube_set_volume
 from extensions.humanoid.skeleton.foot.contents import (
     ALL,
     BONES,
@@ -237,8 +241,12 @@ from extensions.anatomy.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
+from extensions.humanoid.skeleton.leg.tibia.dimensions import (
+    TibiaField,
+    tibia_dimensions,
+)
 from math.vector3 import Vector3
-from std.math import inf, nan
+from std.math import inf, max, min, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -370,6 +378,134 @@ def test_every_bone_has_a_solid_and_a_label() raises:
         _ = FootBoneField(dims, FootBone(40))
     with assert_raises():
         _ = bone_from_dimensions(dims, FootBone(-2), 8)
+
+
+def test_articulations_are_symmetric_and_bounded() raises:
+    var parts = named_foot_bones()
+    var total = 0
+    for part in parts:
+        var near = foot_articulations(part)
+        assert_true(len(near) >= 1)
+        assert_true(len(near) <= MAX_ARTICULATIONS)
+        var earlier = earlier_articulations(part)
+        assert_true(len(earlier) <= MAX_EARLIER_ARTICULATIONS)
+        for other in earlier:
+            assert_true(other.value < part.value)
+        total += len(near)
+        for other in near:
+            assert_true(other != part)
+            var back = foot_articulations(other)
+            var found = False
+            for item in back:
+                if item == part:
+                    found = True
+            assert_true(found)
+    # Thirty-six joints, each counted from both of its bones.
+    assert_equal(total, 72)
+    assert_equal(len(foot_articulations(FootBone(40))), 0)
+    assert_equal(len(earlier_articulations(TALUS)), 0)
+    assert_equal(len(earlier_articulations(FootBone(40))), 0)
+    assert_equal(len(earlier_articulations(METATARSAL_1)), 1)
+
+
+def _check_joint(
+    first: FootBoneField, second: FootBoneField, step: Float32
+) raises -> Int:
+    """Sample the two boxes' overlap; refuse any common interior."""
+    var low = Vector3(
+        max(first.low.x, second.low.x),
+        max(first.low.y, second.low.y),
+        max(first.low.z, second.low.z),
+    )
+    var high = Vector3(
+        min(first.high.x, second.high.x),
+        min(first.high.y, second.high.y),
+        min(first.high.z, second.high.z),
+    )
+    var raw = 0
+    for iz in range(Int((high.z - low.z) / step)):
+        for iy in range(Int((high.y - low.y) / step)):
+            for ix in range(Int((high.x - low.x) / step)):
+                var p = low + Vector3(
+                    (Float32(ix) + 0.5) * step,
+                    (Float32(iy) + 0.5) * step,
+                    (Float32(iz) + 0.5) * step,
+                )
+                if (
+                    first.unclipped_distance(p) < 0
+                    and second.unclipped_distance(p) < 0
+                ):
+                    raw += 1
+                assert_false(first.distance(p) < 0 and second.distance(p) < 0)
+    return raw
+
+
+def test_neighboring_bones_meet_without_a_common_interior() raises:
+    for side in [RIGHT, LEFT]:
+        var dims = foot_dimensions(Length(6.0, FOOT), MALE, side)
+        var raw = 0
+        for part in named_foot_bones():
+            for other in foot_articulations(part):
+                if other.value > part.value:
+                    raw += _check_joint(
+                        FootBoneField(dims, part),
+                        FootBoneField(dims, other),
+                        Float32(0.002),
+                    )
+        # The authored solids do overlap; the clipped bones do not.
+        assert_true(raw > 0)
+        # The talus gives way to the tibia beside it.
+        var talus = FootBoneField(dims, TALUS)
+        var tibia = TibiaField(tibia_dimensions(Length(6.0, FOOT), MALE, side))
+        var removed = 0
+        var step = Float32(0.002)
+        for iz in range(Int((talus.high.z - talus.low.z) / step)):
+            for iy in range(Int((talus.high.y - talus.low.y) / step)):
+                for ix in range(Int((talus.high.x - talus.low.x) / step)):
+                    var p = talus.low + Vector3(
+                        (Float32(ix) + 0.5) * step,
+                        (Float32(iy) + 0.5) * step,
+                        (Float32(iz) + 0.5) * step,
+                    )
+                    var bone = tibia.distance(p + talus.tibia_offset) < 0
+                    if bone and talus.unclipped_distance(p) < 0:
+                        removed += 1
+                    assert_false(bone and talus.distance(p) < 0)
+        assert_true(removed > 0)
+
+
+def test_joint_subtraction_removes_buried_zero_sets() raises:
+    # Exact binary-radius spheres isolate each difference branch from the
+    # anatomical landmarks. The smaller sphere is buried in its neighbor.
+    var field = FootBoneField(_right_foot(), CALCANEUS)
+    var center = Vector3(0, 0, 0)
+    field.segments = one_segment(center, center, 0.125, 0.125)
+    field.k = 0
+    field.j0.segments = one_segment(center, center, 0.25, 0.25)
+    field.j0.k = 0
+    field.j1 = field.j0
+    field.j2 = field.j0
+    field.j3 = field.j0
+    field.j1.segments = one_segment(center, center, 0.375, 0.375)
+    field.j2.segments = one_segment(center, center, 0.5, 0.5)
+    field.j3.segments = one_segment(center, center, 0.625, 0.625)
+    for joints in range(1, 5):
+        field.joints = joints
+        for x in [Float32(0.0625), Float32(0.125), Float32(0.1875)]:
+            var p = Vector3(x, 0, 0)
+            var radius = Float32(joints + 1) * 0.125
+            assert_equal(field.distance(p), max(x - 0.125, radius - x))
+
+    # The talus/tibia branch must apply at zero and positive raw values too.
+    field.joints = 0
+    field.yields_to_tibia = True
+    var shin = tibia_dimensions(Length(6.0, FOOT), MALE)
+    var p = Vector3(0.125, 0, 0)
+    field.tibia_offset = shin.medial_condyle - p
+    var bone = field.tibia.distance(p + field.tibia_offset)
+    assert_true(bone < 0)
+    assert_equal(field.unclipped_distance(p), Float32(0))
+    assert_equal(field.distance(p), -bone)
 
 
 def test_bone_occupancy_is_shell_then_trabecular() raises:

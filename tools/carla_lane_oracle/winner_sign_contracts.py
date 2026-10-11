@@ -83,7 +83,7 @@ def verify(root):
                 import seed_count_contracts as seed_count
             require(live_map_sha256 in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
                                           seed_count.SUPPORT_AFTER_SHA256,
-                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256},
+                                          seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256},
                     'unreviewed complete Map source')
             map_count_edge = seed_count.verify(root, **operation_args)
             require(map_count_edge is not None
@@ -190,6 +190,18 @@ def verify(root):
                             'full-audit edge does not start at canonical endpoint: ' + path)
                     successors[path] = edge
 
+        if __package__:
+            from . import consumer_successor_ledger as ledger
+        else:
+            import consumer_successor_ledger as ledger
+        successors = ledger.extend(successors, root, _operation=_operation)
+        for path, reviewed in full_audit.shared_helper_edges(root, paths=tuple(path for path in full_audit.shared_helpers.SOURCE_PATHS
+                if path in record['canonical_source_unchanged']),
+                _operation=_operation).items():
+            if path in record['canonical_source_unchanged']:
+                require(path not in successors, 'duplicate shared-helper consumer edge: ' + path)
+                successors[path] = reviewed
+
         for path, expected in record['canonical_source_unchanged'].items():
             if path in successors:
                 require(expected == successors[path]['before_sha256'],
@@ -211,7 +223,7 @@ def verify(root):
         contains(seed, 'work._step(60)', 'fixed admission must be prepaid')
         contains(seed, 'work._step(12)', 'local-band retry must be separately prepaid')
         contains(seed, 'for level in range(8):', 'dyadic proposal depth changed')
-        if map_count_edge is not None and live_map_sha256 == seed_count.SCORE_AFTER_SHA256:
+        if map_count_edge is not None and live_map_sha256 in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
             seed_count.verify_score_live(live_map)
         else:
             contains(seed, 'if _wide_point_order(point, certificate.point, query) < 0:',
@@ -220,7 +232,7 @@ def verify(root):
                  'scalar proposal work must be charged')
         winner_followup = 'var winner_followup = len(winner.cells) + 12'
         if map_count_edge is not None and live_map_sha256 in {
-                seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256}:
+                seed_count.FRONTIER_AFTER_SHA256, seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
             winner_followup = 'var winner_followup = min(len(winner.cells), 16373) + 12'
         contains(room, winner_followup, 'winner continuation reserve changed')
         contains(room, 'var target_followup = target_cells + 12',
@@ -238,7 +250,7 @@ def verify(root):
             _operation.finish(root)
         return {'status': 'PASS', 'source_bound_helpers': 4,
                 'numerical_score_helpers': int(map_count_edge is not None and
-                                              live_map_sha256 == seed_count.SCORE_AFTER_SHA256),
+                                              live_map_sha256 in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}),
                 'fresh_environment_entries': 2, 'changed_map_dependency_groups': 3,
                 'canonical_dependencies_unchanged': len(record['canonical_source_unchanged']) - len(successors),
                 'reviewed_cleanup_successors': len(successors),

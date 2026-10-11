@@ -20,7 +20,10 @@ ratios are authored template parameters. They are not a cited osteometric
 table.
 
 The solid is a smooth union of a thin elliptical shaft, a proximal head
-and styloid, and a distal lateral malleolus.
+and styloid, and a distal lateral malleolus. Where that union overlaps the
+tibia that the leg places beside it, the fibula gives way. The two bones
+then meet at the tibiofibular joints without a common interior. The
+segment accounting already assigns the tibia before the fibula.
 
 The bone's own frame is osteological. Plus y is proximal, plus x is
 lateral, plus z is anterior, the origin is mid-shaft. A right fibula uses
@@ -47,6 +50,11 @@ from extensions.humanoid.skeleton.field import (
     sd_ellipsoid,
     sd_segment,
     smin,
+)
+from extensions.humanoid.skeleton.leg.tibia.dimensions import (
+    TibiaDimensions,
+    TibiaField,
+    tibia_dimensions,
 )
 from math.vector3 import Vector3
 from std.math import max
@@ -158,6 +166,8 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
     var epsilon: Float32
     var low: Vector3
     var high: Vector3
+    var tibia: TibiaField
+    var tibia_offset: Vector3
 
     def __init__(out self, dimensions: FibulaDimensions) raises:
         """Build the solid from dimensions that `validate` accepts.
@@ -166,7 +176,8 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
             dimensions: Size and landmarks.
 
         Raises:
-            Error: If `dimensions.validate` refuses the copy.
+            Error: If `dimensions.validate` refuses the copy, or the tibia
+                for the same stature, sex and side is refused.
         """
         dimensions.validate()
         var L = dimensions.length.value
@@ -239,11 +250,31 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         var padded = box.padded(0.018 * L + Float32(0.003))
         self.low = padded.low
         self.high = padded.high
+        var tibia = tibia_dimensions(
+            dimensions.stature, dimensions.sex, dimensions.side
+        )
+        self.tibia = TibiaField(tibia)
+        self.tibia_offset = fibula_tibia_offset(tibia, dimensions)
 
     def distance(self, point: Vector3) -> Float32:
         """Return how far `point` lies outside the fibula, in meters.
 
-        Negative is inside. Zero is the surface.
+        Negative is inside. Zero is the surface. The fibula gives way to
+        the tibia where the two authored solids overlap. The difference
+        applies outside the authored fibula too, so its buried surface
+        does not remain a zero set.
+        """
+        var d = self.shape_distance(point)
+        return max(d, -self.tibia.distance(point + self.tibia_offset))
+
+    def shape_distance(self, point: Vector3) -> Float32:
+        """Return the authored fibula field before the tibia clips it.
+
+        Args:
+            point: A point in the fibula frame, in meters.
+
+        Returns:
+            The signed value, in meters. Negative is inside.
         """
         var d = sd_ellipse_segment(
             point,
@@ -313,6 +344,39 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
+
+
+def fibula_tibia_offset(
+    tibia: TibiaDimensions, fibula: FibulaDimensions
+) raises -> Vector3:
+    """Return where the leg places the fibula origin, from the tibia origin.
+
+    The head sits just lateral and slightly distal of the tibial lateral
+    condyle. A point in the fibula frame plus this offset is the same
+    point in the tibia frame.
+
+    Args:
+        tibia: A tibia already sized from stature and sex.
+        fibula: A fibula from the same spec.
+
+    Returns:
+        The fibula origin minus the tibia origin, in meters.
+
+    Raises:
+        Error: If a bone fails `validate`.
+    """
+    tibia.validate()
+    fibula.validate()
+    var head_r = fibula.head_diameter.value * 0.5
+    var lat_sign = Float32(1)
+    if fibula.side == LEFT:
+        lat_sign = Float32(-1)
+    var target = Vector3(
+        tibia.lateral_condyle.x + lat_sign * (head_r * 1.12 + Float32(0.003)),
+        tibia.lateral_condyle.y - Float32(0.010),
+        tibia.lateral_condyle.z - Float32(0.006),
+    )
+    return target - fibula.head_center
 
 
 def fibula_dimensions(

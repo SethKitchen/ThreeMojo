@@ -144,7 +144,8 @@
       "unknowns": [
         "Shape ratios and landmarks are not a cited osteometric table.",
         "Edits do not rebuild stored landmarks.",
-        "Foot bones have an authored shell and no medullary canal."
+        "Foot bones have an authored shell and no medullary canal.",
+        "Joint interfaces follow authored precedence rules, not measured articular surfaces."
       ]
     },
     {
@@ -216,7 +217,8 @@
       "references": [],
       "unknowns": [
         "No measured cross-section or muscle-volume data set calibrates these shapes.",
-        "Static geometry does not establish contact or load-bearing behavior."
+        "Static geometry does not establish contact or load-bearing behavior.",
+        "Knee tissues are clipped at bone and tissue interfaces; attachment depth into bone is not modeled."
       ]
     },
     {
@@ -459,5 +461,62 @@
       "url": "https://www.fda.gov/regulatory-information/search-fda-guidance-documents/assessing-credibility-computational-modeling-and-simulation-medical-device-submissions",
       "use": "Context-specific credibility distinction only. No FDA assessment, clearance or certification is claimed."
     }
+  ],
+  "interface_rules": [
+    {
+      "id": "foot_articulation_precedence",
+      "scope": "Pairs of foot bones that foot_articulations lists",
+      "source_files": [
+        "extensions/humanoid/skeleton/foot/bones/dimensions.mojo"
+      ],
+      "rule": "The later bone in named_foot_bones gives way to the earlier one.",
+      "reason": "Articulating bones meet at a joint surface. The template has no joint space or foot cartilage.",
+      "allowed_positive_overlap_volume_m3": 0
+    },
+    {
+      "id": "talus_yields_to_tibia",
+      "scope": "Talus and the placed tibia",
+      "source_files": [
+        "extensions/humanoid/skeleton/foot/bones/dimensions.mojo"
+      ],
+      "rule": "The talus gives way to the tibia.",
+      "reason": "Talocrural joint surface, in segment-accounting bone order.",
+      "allowed_positive_overlap_volume_m3": 0
+    },
+    {
+      "id": "fibula_yields_to_tibia",
+      "scope": "Fibula and the placed tibia",
+      "source_files": [
+        "extensions/humanoid/skeleton/leg/fibula/dimensions.mojo"
+      ],
+      "rule": "The fibula gives way to the tibia.",
+      "reason": "Tibiofibular joint surfaces, in segment-accounting bone order.",
+      "allowed_positive_overlap_volume_m3": 0
+    },
+    {
+      "id": "knee_tissue_precedence",
+      "scope": "Knee cartilage, menisci and collateral ligaments",
+      "source_files": [
+        "extensions/humanoid/skeleton/leg/knee/dimensions.mojo"
+      ],
+      "rule": "Each tissue gives way to the four leg bones, then to the cartilage, then to the menisci.",
+      "reason": "Layers and attachments meet at interfaces. The segment accounting assigns bone before soft tissue.",
+      "allowed_positive_overlap_volume_m3": 0
+    },
+    {
+      "id": "cervical_pillar_endplane_extent",
+      "scope": "Articular pillars of C2 through C7",
+      "source_files": [
+        "extensions/humanoid/skeleton/head/bones/dimensions.mojo"
+      ],
+      "rule": "Each rounded pillar ends at its body endplane levels.",
+      "reason": "Neighboring pillars then keep the disc height apart, as the bodies do.",
+      "allowed_positive_overlap_volume_m3": 0
+    }
+  ],
+  "interface_rule_unknowns": [
+    "Every interface has zero thickness. Joint space, foot articular cartilage and attachment fibrocartilage are not modeled.",
+    "An interface between differently placed frames is exact only to float32 coordinate roundoff.",
+    "The precedence order is an accounting rule. It is not a measured tissue boundary."
   ]
 }
