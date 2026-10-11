@@ -4067,7 +4067,7 @@ def _emit_wide_line(
     # segment was cut away holds none.
     var kept = List[Int](length=2 * tasks, fill=-1)
     for task in range(tasks):  # pragma: no branch
-        for own in range(len(outputs[task].surfaces)):  # pragma: no branch
+        for own in range(len(outputs[task].surfaces)):
             kept[2 * task + own] = _adopt(corners, outputs[task], own)
     # Place each run's corners in parallel, as `_emit_jobs` does: one
     # copy each, with each corner's surface renamed to the kept one.

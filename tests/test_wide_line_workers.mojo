@@ -27,6 +27,11 @@ from units.si import Length, METER
 comptime SIZE = 48
 # Enough segments for three runs of `WIDE_RUN_SEGMENTS`.
 comptime SEGMENTS = 3 * WIDE_RUN_SEGMENTS + 17
+comptime WORKERS = 8
+# The renderer cuts a line into `min(workers, segments // WIDE_RUN_SEGMENTS)`
+# runs, and run `i` holds segments `i * segments // runs` up to the next.
+comptime RUNS = min(WORKERS, SEGMENTS // WIDE_RUN_SEGMENTS)
+comptime FIRST_RUN = SEGMENTS // RUNS
 
 
 def _camera() raises -> OrthographicCamera:
@@ -51,9 +56,9 @@ def _points(
         # The last run ends with one long segment.
         points[2 * SEGMENTS - 1] = Vector3(100.0, 100.0, 0)
     if hidden_first:
-        # The first run's segments are all behind the camera, so that run
-        # draws nothing and a later run makes the line's surface.
-        for s in range(2 * WIDE_RUN_SEGMENTS):
+        # Every segment of the first run is behind the camera, so that run
+        # holds no surface and a later run makes the line's surface.
+        for s in range(2 * FIRST_RUN):
             points[s] = Vector3(points[s].x, points[s].y, 10.0)
     return points^
 
@@ -185,12 +190,12 @@ def test_many_workers_draw_what_one_draws() raises:
     for choice in cases:
         var parts = _scene(choice[0], choice[1], hidden_first=choice[2])
         var serial = _frame(parts[0], parts[1], 1)
-        var parallel = _frame(parts[0], parts[1], 8)
+        var parallel = _frame(parts[0], parts[1], WORKERS)
         assert_true(len(serial.corners) > 0)
         _same_surfaces(serial, parallel)
         _same_corners(serial.whole_corners(), parallel.whole_corners())
         var one = _render(parts[0], parts[1], 1)
-        var many = _render(parts[0], parts[1], 8)
+        var many = _render(parts[0], parts[1], WORKERS)
         var drawn = 0
         for y in range(SIZE):
             for x in range(SIZE):
@@ -209,7 +214,7 @@ def test_a_refused_dash_pattern_refuses_on_many_workers() raises:
     # A dash 1 cm long cuts the last segment, about 140 m long, into
     # far more than 4096 dashes. The last run raises; the earlier ones pass.
     var parts = _scene(SOLID_LINE_COVERAGE, 0.01, long_last=True)
-    for workers in [1, 8]:
+    for workers in [1, WORKERS]:
         with assert_raises(contains="dash pattern is too fine"):
             _ = _render(parts[0], parts[1], workers)
 
