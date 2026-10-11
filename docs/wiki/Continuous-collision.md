@@ -208,7 +208,7 @@ The [interacting-sphere report](https://github.com/SethKitchen/ThreeMojo/blob/ma
 
 `bench/physics_ccd_bench.mojo` times the steps.
 `bench/physics_ccd_index_bench.mojo` times the triangle index.
-`bench/physics_ccd_walker_bench.mojo` times rotation-locked capsule walkers and spinning anisotropic spheres on a terrain. See [the walker report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ccd-walker-728.md).
+`bench/physics_ccd_walker_bench.mojo` times rotation-locked capsule walkers and spinning anisotropic spheres on a terrain, with 1 and 64 bodies on 2,048 and 8,192 triangles. After every timed step, outside the timing, it checks each body for a terrain event, an independent clearance and the local terrain height. See [the walker report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ccd-walker-728.md).
 
 Tests include the original tunneling example, a radius/speed/step/restitution family, edge and vertex formulas, grazing controls and multiple rebounds. Other controls cover friction, spin energy, late-impact orientation, deterministic ordering, mode changes, ghosts, numeric refusals and rollback. Twenty-three reference hits use a separate 70-digit Decimal nearest-triangle-distance search and time bisection. Ordinary discrete physics suites remain part of qualification.
 
