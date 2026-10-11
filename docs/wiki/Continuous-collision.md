@@ -163,7 +163,7 @@ The two separation checks query the complete reachable region, including the con
 
 The cached geometry check is O(1). Live-body validation is O(B) for B bodies. Moving-body grouping costs O(B²) for each round in which groups grow, and there are at most B rounds. It adds tree visits and candidate checks.
 
-In a group of G spheres, each impact pass sweeps every member against its triangle candidates and every pair once. A settled cascade of C contacts tries at most 2^C active sets, and C is at most ten. For S moving spheres, T triangles and impact limit I, worst-case swept work remains O(S T (I + 1)). Overlapping triangle bounds can defeat pruning.
+A body alone does O(T (I + 1)) swept work for T triangle candidates and impact limit I. In a group of G members, each pass sweeps every member against its triangle candidates and every pair once, which is O(G T + G²). Each pass, settling included, ends the step or charges an impact to a dynamic member. So a group makes at most G I + 1 passes. A settled cascade of C contacts tries at most 2^C active sets, and C is at most ten. Overlapping triangle bounds can defeat pruning.
 
 Rollback storage still scales with mutable body state and reports. Initial discrete contacts and rays retain the existing octree.
 

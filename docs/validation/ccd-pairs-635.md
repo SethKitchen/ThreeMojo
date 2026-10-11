@@ -45,4 +45,4 @@ A rolled-back stack step took 1.10 ms. A step keeps 100 bytes of rollback state 
 
 ## Limits
 
-These are synthetic sphere probes. CCD still refuses boxes and convex hulls, so the bench measures no vehicle chassis. Rotation-locked capsules must still be alone in their group. The [walker report](ccd-walker-728.md) measures walkers that never meet. The numbers describe this machine. They are not a real-time capacity claim.
+These are synthetic sphere probes. CCD still refuses boxes and convex hulls, so the bench measures no vehicle chassis. The bench measures spheres only. At its revision a rotation-locked capsule had to be alone in its group; later CCD sweeps such capsules with spheres and other capsules, but no row here measures them. The [walker report](ccd-walker-728.md) measures walkers that never meet. The numbers describe this machine. They are not a real-time capacity claim.

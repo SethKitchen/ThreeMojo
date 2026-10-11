@@ -1075,6 +1075,11 @@ struct PhysicsWorld(Movable):
             if cascade and (
                 instant > 2 * n or not self._ccd_bounces(i, other, approach)
             ):
+                # Each settling pass costs an impact, so a pass that opens
+                # nothing cannot repeat at one instant without bound.
+                _ccd_spend(count, first, self.ccd_max_impacts, moves)
+                if second >= 0:
+                    _ccd_spend(count, second, self.ccd_max_impacts, moves)
                 self._ccd_settle(
                     members,
                     moves,
@@ -1181,7 +1186,12 @@ struct PhysicsWorld(Movable):
                 near = len(self._triangles)
                 if indexed:
                     _ = self._ccd_index.query(
-                        at[k], SIMD[DType.float64, 4](0), radius * 2, candidates
+                        at[k],
+                        SIMD[DType.float64, 4](0),
+                        # A contact lies within the radius of the whole
+                        # segment: the capsule-aware bound, plus the radius.
+                        _ccd_bound(self.bodies[members[k]]) + radius,
+                        candidates,
                     )
                     near = len(candidates)
             for c in range(near):

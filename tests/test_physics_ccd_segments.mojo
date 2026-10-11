@@ -278,5 +278,81 @@ def test_a_capsule_stack_settles_on_the_floor() raises:
     assert_almost_equal(world.bodies[2].position.z, 0.7, atol=1e-5)
 
 
+def _tiled_floor() raises -> RigidBody:
+    # 32 triangles, enough for a tree, in exact binary coordinates.
+    var triangles = List[Triangle]()
+    for row in range(4):
+        for column in range(4):
+            var x = Float32(column) * 4 - 8
+            var y = Float32(row) * 4 - 8
+            triangles.append(
+                Triangle(
+                    Vector3(x, y, 0), Vector3(x + 4, y, 0), Vector3(x, y + 4, 0)
+                )
+            )
+            triangles.append(
+                Triangle(
+                    Vector3(x + 4, y, 0),
+                    Vector3(x + 4, y + 4, 0),
+                    Vector3(x, y + 4, 0),
+                )
+            )
+    return RigidBody(
+        STATIC,
+        Shape.mesh(triangles^),
+        Mass(0),
+        Vector3(0, 0, 0),
+        Quaternion.identity(),
+    )
+
+
+def test_a_tall_capsule_settles_on_an_indexed_floor() raises:
+    # An upright capsule, radius 0.125 and half height 0.5, stands on the
+    # floor; a sphere of radius 0.125 falls onto it at 1 m/s from 0.125 m
+    # above its top cap. Plastic, frictionless and equal masses: at 0.125 s
+    # both move at -0.5 m/s, and the floor contact then settles both at
+    # once. The floor is beyond twice the capsule's radius from its center,
+    # so settling must search the capsule's whole length. The tree and the
+    # full scan agree, and the step ends.
+    var results = List[Float32]()
+    for brute in [False, True]:
+        var world = _world()
+        world._ccd_brute_force = brute
+        _ = world.add_body(_tiled_floor())
+        var capsule = RigidBody(
+            DYNAMIC,
+            Shape.capsule(Length(0.125), Length(0.5)),
+            Mass(1),
+            Vector3(0, 0, 0.625),
+            Quaternion.identity(),
+        )
+        var locked = Matrix3()
+        locked.elements[0] = 0
+        locked.elements[4] = 0
+        locked.elements[8] = 0
+        capsule.set_inverse_inertia(locked)
+        capsule.material = PhysicsMaterial(0, 0)
+        _ = world.add_body(capsule^)
+        var sphere = RigidBody(
+            DYNAMIC,
+            Shape.sphere(Length(0.125)),
+            Mass(1),
+            Vector3(0, 0, 1.5),
+            Quaternion.identity(),
+        )
+        sphere.linear_velocity = Vector3(0, 0, -1)
+        sphere.material = PhysicsMaterial(0, 0)
+        _ = world.add_body(sphere^)
+        world.step(Duration(0.5))
+        assert_almost_equal(world.bodies[1].linear_velocity.z, 0, atol=1e-6)
+        assert_almost_equal(world.bodies[2].linear_velocity.z, 0, atol=1e-6)
+        assert_almost_equal(world.bodies[1].position.z, 0.625, atol=1e-6)
+        assert_almost_equal(world.bodies[2].position.z, 1.375, atol=1e-6)
+        results.append(world.bodies[1].position.z)
+        results.append(world.bodies[2].position.z)
+    assert_equal(results[0], results[2])
+    assert_equal(results[1], results[3])
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
