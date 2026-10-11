@@ -26,6 +26,12 @@ from extensions.humanoid.skeleton.leg.fibula.dimensions import (
     FibulaField,
     fibula_dimensions,
     fibula_distance,
+    fibula_tibia_offset,
+)
+from extensions.humanoid.skeleton.leg.knee.dimensions import fibula_origin
+from extensions.humanoid.skeleton.leg.tibia.dimensions import (
+    TibiaField,
+    tibia_dimensions,
 )
 from extensions.humanoid.skeleton.leg.fibula.geometry import (
     fibula,
@@ -42,6 +48,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -250,6 +257,40 @@ def test_full_porosity_has_no_mass_but_keeps_regions() raises:
     )
     assert_equal(report.mass.value, Float32(0))
     assert_true(report.cortical_region.value > 0)
+
+
+def test_fibula_gives_way_to_the_tibia() raises:
+    for side in [RIGHT, LEFT]:
+        var height = Length(6.0, FOOT)
+        var bone = fibula_dimensions(height, MALE, side)
+        var shin = tibia_dimensions(height, MALE, side)
+        var field = FibulaField(bone)
+        var tibia = TibiaField(shin)
+        var origin = Vector3(0.1, -0.2, 0.03)
+        var placed = fibula_origin(shin, origin, bone) - origin
+        var offset = fibula_tibia_offset(shin, bone)
+        assert_almost_equal(placed.x, offset.x, atol=Float64(1e-6))
+        assert_almost_equal(placed.y, offset.y, atol=Float64(1e-6))
+        assert_almost_equal(placed.z, offset.z, atol=Float64(1e-6))
+        # Sample the proximal tibiofibular joint at 1 mm.
+        var head = bone.head_center
+        var reach = bone.head_diameter.value
+        var step = Float32(0.001)
+        var count = Int(2 * reach / step)
+        var removed = 0
+        for iz in range(count):
+            for iy in range(count):
+                for ix in range(count):
+                    var p = head + Vector3(
+                        -reach + (Float32(ix) + 0.5) * step,
+                        -reach + (Float32(iy) + 0.5) * step,
+                        -reach + (Float32(iz) + 0.5) * step,
+                    )
+                    var shin_inside = tibia.distance(p + offset) < 0
+                    if shin_inside and field.shape_distance(p) < 0:
+                        removed += 1
+                    assert_false(shin_inside and field.distance(p) < 0)
+        assert_true(removed > 0)
 
 
 def test_left_and_right_masses_agree() raises:
