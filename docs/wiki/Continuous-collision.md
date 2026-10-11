@@ -13,7 +13,7 @@ The CARLA compatibility module `extensions.carla.physics.world` exports the same
 
 ## Supported worlds
 
-An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
+An enabled collider must be a dynamic sphere, a rotation-locked dynamic capsule, a kinematic sphere or a motionless static triangle mesh. Each sphere or capsule must have zero shape offset and zero mass-center offset. A sphere's inverse inertia must be symmetric and positive definite, and the sphere can spin.
 
 The tensor can be anisotropic. Each pair of mirrored off-diagonal elements must be exactly equal. A tensor computed as `R M Rᵀ` in Float32 can round each pair differently. Set each pair to its mean before you give the tensor to the body.
 
@@ -27,7 +27,13 @@ Moving bodies whose reachable regions overlap form a group. An impact can give o
 
 A capsule must be alone in its group. Otherwise the step raises an error. It does not silently use discrete moving-body contacts.
 
-The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic bodies, static primitives and offset spheres. It also refuses a moving capsule that can reach another moving body. General convex, rotating-capsule, rotating-offset, kinematic and moving-capsule CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
+A kinematic sphere follows its set velocity and takes no impulse. It must have no spin and no angular push. It passes through static meshes and other kinematic bodies, as in the discrete mode. It strikes a dynamic sphere as a body of infinite mass, and its pose stays the one that its velocity gives.
+
+In a kinematic sphere's frame, an impact cannot add energy. So each impact with a kinematic sphere raises a dynamic member's speed by at most twice the kinematic speed. The group's reach bound adds that much for each impact that the impact limit allows its dynamic members. A fast kinematic sphere can therefore join many bodies into one group.
+
+A dynamic sphere that a kinematic sphere drives into a static mesh has no impulse that can open both contacts. The step then raises an error and rolls back.
+
+The mode refuses colliding boxes, convex hulls, capsules that can rotate, kinematic capsules, spinning kinematic spheres, static primitives and offset spheres. It also refuses a moving capsule that can reach another moving body. General convex, rotating-capsule, rotating-offset and moving-capsule CCD remain unsupported. This feature does not turn a box chassis into a continuous collider. A capsule walker is supported only with its rotation locked.
 
 A body with `collides = False` stays outside collision handling. Its forces and motion still follow the original integration rules. It must still have valid finite state. Turning collisions back on restores the same support checks on the next step.
 

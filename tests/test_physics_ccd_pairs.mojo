@@ -5,7 +5,13 @@
 
 """Moving sphere pairs under continuous collision, against analytic paths."""
 
-from extensions.physics.body import DYNAMIC, STATIC, RigidBody, rotation_matrix
+from extensions.physics.body import (
+    DYNAMIC,
+    KINEMATIC,
+    STATIC,
+    RigidBody,
+    rotation_matrix,
+)
 from extensions.physics.ccd import DISCRETE, SPHERE_MESH_CCD
 from extensions.physics.shape import Shape, PhysicsMaterial
 from extensions.physics.world import PhysicsWorld, _ccd_lcp
@@ -426,6 +432,134 @@ def test_indexed_brute_and_repeated_runs_agree() raises:
             assert_equal(values[k], reference[k])
         # Events stay in time order.
         assert_true(len(world.events) > 0)
+
+
+def _paddle(x: Float32, velocity: Float32) raises -> RigidBody:
+    var body = _ball(x, velocity, bounce=1)
+    body.set_kind(KINEMATIC)
+    return body^
+
+
+def test_a_kinematic_sphere_strikes_with_infinite_mass() raises:
+    # A paddle at 10 m/s meets a resting sphere elastically: the sphere
+    # leaves at twice the paddle's speed, and the paddle keeps its path.
+    var world = _world()
+    _ = world.add_body(_paddle(0, 10))
+    _ = world.add_body(_ball(0.3, 0, bounce=1))
+    world.step(Duration(0.02))
+    assert_almost_equal(world.bodies[1].linear_velocity.x, 20, atol=1e-4)
+    assert_equal(world.bodies[0].linear_velocity.x, 10)
+    assert_almost_equal(world.bodies[0].position.x, 0.2, atol=1e-6)
+    assert_equal(world.contact_count, 1)
+    assert_equal(world.events[0].body.value, 0)
+    assert_equal(world.events[0].other.value, 1)
+    # Contact at 10 ms, then 10 ms at 20 m/s.
+    assert_almost_equal(world.bodies[1].position.x, 0.5, atol=1e-5)
+    # The lower body can be the dynamic one too.
+    var swapped = _world()
+    _ = swapped.add_body(_ball(0.3, 0, bounce=1))
+    _ = swapped.add_body(_paddle(0, 10))
+    swapped.step(Duration(0.02))
+    assert_almost_equal(swapped.bodies[0].linear_velocity.x, 20, atol=1e-4)
+
+
+def test_kinematic_spheres_pass_meshes_and_each_other() raises:
+    # Two kinematic spheres pass through each other and the floor, with no
+    # events, and keep the integrator's path exactly.
+    var world = _world()
+    _ = world.add_body(_floor())
+    var low = _paddle(0, 30)
+    low.position.z = 0.05
+    low.linear_velocity.z = -10
+    _ = world.add_body(low^)
+    _ = world.add_body(_paddle(0.5, -30))
+    var reference = _world()
+    reference.collision_detection = DISCRETE
+    _ = reference.add_body(_floor())
+    reference.bodies[0].collides = False
+    var copy = _paddle(0, 30)
+    copy.position.z = 0.05
+    copy.linear_velocity.z = -10
+    _ = reference.add_body(copy^)
+    _ = reference.add_body(_paddle(0.5, -30))
+    world.step(Duration(0.02))
+    reference.step(Duration(0.02))
+    assert_equal(world.contact_count, 0)
+    for i in range(1, 3):
+        assert_true(world.bodies[i].position == reference.bodies[i].position)
+
+
+def test_a_sphere_crushed_by_a_kinematic_sphere_rolls_back() raises:
+    # A paddle drives a resting sphere into the floor. No impulse can
+    # open both contacts, so the step is refused and rolled back.
+    var world = _world()
+    _ = world.add_body(_floor())
+    # The paddle comes before the sphere, so a contact can start at a
+    # kinematic member.
+    var paddle = _paddle(0, 0)
+    paddle.position = Vector3(0, 0, 0.5)
+    paddle.linear_velocity = Vector3(0, 0, -30)
+    paddle.material = PhysicsMaterial(0, 0)
+    _ = world.add_body(paddle^)
+    var ball = _ball(0, 0)
+    ball.position = Vector3(0, 0, 0.1)
+    _ = world.add_body(ball^)
+    # A resting kinematic sphere touches the paddle's path; two kinematic
+    # spheres never form a contact.
+    var post = _paddle(0, 0)
+    post.position = Vector3(0, 0, 0.7)
+    _ = world.add_body(post^)
+    with assert_raises(contains="could not resolve simultaneous contacts"):
+        world.step(Duration(0.02))
+    assert_equal(world.bodies[1].position.z, 0.5)
+    assert_equal(world.bodies[2].position.z, 0.1)
+
+
+def test_a_sphere_between_closing_paddles_is_bounded() raises:
+    # A sphere bounces between two paddles closing at 5 m/s each. Each
+    # bounce adds speed, and the impact limit bounds the step.
+    var world = _world()
+    world.ccd_max_impacts = 4
+    _ = world.add_body(_paddle(-0.5, 5))
+    _ = world.add_body(_ball(0, 40, bounce=1))
+    _ = world.add_body(_paddle(0.5, -5))
+    with assert_raises(contains="impact limit exhausted"):
+        world.step(Duration(0.05))
+    assert_equal(world.bodies[1].linear_velocity.x, 40)
+    # With room for the bounces, the sphere stays between the paddles.
+    var roomy = _world()
+    _ = roomy.add_body(_paddle(-0.5, 5))
+    _ = roomy.add_body(_ball(0, 40, bounce=1))
+    _ = roomy.add_body(_paddle(0.5, -5))
+    roomy.step(Duration(0.02))
+    assert_true(
+        roomy.bodies[1].position.x > roomy.bodies[0].position.x + 0.2 - 1e-5
+    )
+    assert_true(
+        roomy.bodies[1].position.x < roomy.bodies[2].position.x - 0.2 + 1e-5
+    )
+    assert_true(abs(roomy.bodies[1].linear_velocity.x) > 40)
+
+
+def test_a_kinematic_capsule_is_refused() raises:
+    var world = _world()
+    var capsule = RigidBody(
+        KINEMATIC,
+        Shape.capsule(Length(0.1), Length(0.1)),
+        Mass(1),
+        Vector3(0, 0, 0),
+        Quaternion.identity(),
+    )
+    _ = world.add_body(capsule^)
+    with assert_raises(contains="kinematic spheres only"):
+        world.step(Duration(0.01))
+    # A split-correction spin counts as spin.
+    var pushed = _world()
+    var sphere = _paddle(0, 0)
+    sphere.push_angular = Vector3(0, 1, 0)
+    _ = pushed.add_body(sphere^)
+    with assert_raises(contains="kinematic sphere without spin"):
+        pushed.step(Duration(0.01))
 
 
 def main() raises:

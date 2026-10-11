@@ -445,7 +445,18 @@ struct PhysicsWorld(Movable):
                 ) or body.angular_velocity != Vector3(0, 0, 0):
                     raise Error("CCD requires motionless static meshes")
                 continue
-            if body.kind() != DYNAMIC or (
+            var kinematic = body.kind() == KINEMATIC
+            if kinematic:
+                # A kinematic sphere follows its set velocity. With no spin,
+                # an impact in its frame cannot add energy; see
+                # _ccd_separation.
+                if body.shape.kind != SPHERE:
+                    raise Error("CCD supports kinematic spheres only")
+                if body.angular_velocity != Vector3(
+                    0, 0, 0
+                ) or body.push_angular != Vector3(0, 0, 0):
+                    raise Error("CCD requires a kinematic sphere without spin")
+            elif body.kind() != DYNAMIC or (
                 body.shape.kind != SPHERE and body.shape.kind != CAPSULE
             ):
                 raise Error(
@@ -479,7 +490,7 @@ struct PhysicsWorld(Movable):
                         "CCD capsule half height must be between 0 and"
                         " 10000 meters"
                     )
-            elif not _positive_definite(inverse):
+            elif not kinematic and not _positive_definite(inverse):
                 raise Error(
                     "CCD requires symmetric positive definite sphere inertia"
                 )
@@ -540,12 +551,14 @@ struct PhysicsWorld(Movable):
         var push = List[Float64](length=count, fill=0)
         var bound = List[Float64](length=count, fill=0)
         var group = List[Int](length=count, fill=-1)
+        var kinematic = List[Bool](length=count, fill=False)
         for i in range(count):
             ref body = self.bodies[i]
             _finite_vector(body.linear_velocity)
             _finite_vector(body.angular_velocity)
-            if not body.collides or body.kind() != DYNAMIC:
+            if not body.collides or body.kind() == STATIC:
                 continue
+            kinematic[i] = body.kind() == KINEMATIC
             var v = _wide(body.linear_velocity)
             var w = _wide(body.angular_velocity)
             # A rotation-locked capsule has no spin energy to transfer.
@@ -573,26 +586,41 @@ struct PhysicsWorld(Movable):
         var merged = True
         while merged:
             merged = False
-            # Twice each group's kinetic energy: the sum of m s^2.
+            # Twice each group's dynamic kinetic energy, the sum of m s^2,
+            # its fastest kinematic speed, its heaviest dynamic mass and
+            # its dynamic member count.
             var energy = List[Float64](length=count, fill=0)
+            var fast = List[Float64](length=count, fill=0)
+            var heaviest = List[Float64](length=count, fill=0)
+            var dynamic = List[Int](length=count, fill=0)
             var size = List[Int](length=count, fill=0)
             for i in range(count):
-                if group[i] >= 0:
-                    energy[group[i]] += (
-                        speed[i]
-                        * speed[i]
-                        / Float64(self.bodies[i].inverse_mass())
-                    )
-                    size[group[i]] += 1
+                if group[i] < 0:
+                    continue
+                size[group[i]] += 1
+                if kinematic[i]:
+                    fast[group[i]] = max(fast[group[i]], speed[i])
+                    continue
+                var mass = 1 / Float64(self.bodies[i].inverse_mass())
+                energy[group[i]] += speed[i] * speed[i] * mass
+                heaviest[group[i]] = max(heaviest[group[i]], mass)
+                dynamic[group[i]] += 1
             for i in range(count):
                 if group[i] < 0:
                     continue
                 var most = speed[i]
-                if size[group[i]] > 1:
-                    most = sqrt(
-                        energy[group[i]]
-                        * Float64(self.bodies[i].inverse_mass())
-                    )
+                if size[group[i]] > 1 and not kinematic[i]:
+                    # In a kinematic sphere's frame an impact cannot add
+                    # energy, so it raises a member's speed by at most twice
+                    # the kinematic speed, and the square root of the
+                    # group's energy by at most that times the root of the
+                    # heaviest mass. Each such impact counts against the
+                    # impact limit of a dynamic member.
+                    var g = group[i]
+                    var root = sqrt(energy[g]) + 2 * fast[g] * sqrt(
+                        heaviest[g]
+                    ) * Float64(self.ccd_max_impacts * dynamic[g])
+                    most = root * sqrt(Float64(self.bodies[i].inverse_mass()))
                 reach[i] = bound[i] + Float64(h) * (most + push[i])
             for i in range(count):
                 for j in range(i):
@@ -628,6 +656,9 @@ struct PhysicsWorld(Movable):
                             "CCD moving-capsule reachable regions must be"
                             " disjoint"
                         )
+            if kinematic[i]:
+                # A kinematic sphere passes through static meshes.
+                continue
             var triangles = len(self._triangles)
             if indexed:
                 _ = self._ccd_index.query(
@@ -694,7 +725,7 @@ struct PhysicsWorld(Movable):
         # analytic sweep follows the physical, post-solve velocity from it.
         # A body alone sweeps by itself; a group sweeps in time order.
         for i in range(len(self.bodies)):
-            if len(members[i]) == 1:
+            if len(members[i]) == 1 and self.bodies[i].kind() == DYNAMIC:
                 var result = self._ccd_sphere(i, h, impacts)
                 positions[i] = result[0]
                 rotations[i] = result[1]
@@ -707,17 +738,21 @@ struct PhysicsWorld(Movable):
                     rotations[j] = poses[k][1]
                     spins[j] = self.bodies[j].angular_velocity
         self._integrate_positions(h)
+        var impacted = List[Bool](length=len(self.bodies), fill=False)
+        for impact in impacts:
+            impacted[impact.body] = True
+            if impact.other >= 0:
+                impacted[impact.other] = True
         for i in range(len(self.bodies)):
-            for impact in impacts:
-                if impact.body == i or impact.other == i:
-                    # The impact path turns at a constant spin, so the spin
-                    # stays the one that made its pose. The integrator's
-                    # torque-free precession of an anisotropic tensor
-                    # resumes on the next step.
-                    self.bodies[i].position = positions[i]
-                    self.bodies[i].rotation = rotations[i]
-                    self.bodies[i].angular_velocity = spins[i]
-                    break
+            # A kinematic sphere keeps the integrator's prescribed path.
+            if impacted[i] and self.bodies[i].kind() == DYNAMIC:
+                # The impact path turns at a constant spin, so the spin
+                # stays the one that made its pose. The integrator's
+                # torque-free precession of an anisotropic tensor
+                # resumes on the next step.
+                self.bodies[i].position = positions[i]
+                self.bodies[i].rotation = rotations[i]
+                self.bodies[i].angular_velocity = spins[i]
             _ccd_coordinate(self.bodies[i].position)
             _ccd_rotation(self.bodies[i].rotation)
             if self.bodies[i].collides and self.bodies[i].kind() == DYNAMIC:
@@ -947,8 +982,11 @@ struct PhysicsWorld(Movable):
         var turning = List[SIMD[DType.float64, 4]]()
         var rotation = List[Quaternion]()
         var count = List[Int](length=n, fill=0)
+        # Dynamic members respond; kinematic ones keep their velocity.
+        var moves = List[Bool]()
         for i in members:  # pragma: no branch
             ref body = self.bodies[i]
+            moves.append(body.kind() == DYNAMIC)
             at.append(
                 _wide(body.position) + _wide(body.push_velocity) * Float64(h)
             )
@@ -971,16 +1009,23 @@ struct PhysicsWorld(Movable):
             var second = -1
             var triangle = -1
             for k in range(n):  # pragma: no branch
-                var hit = self._ccd_first_hit(
-                    members[k], at[k], velocity[k] * remaining, none, candidates
-                )
-                if hit[0].fraction < fraction:
-                    fraction = hit[0].fraction
-                    normal = hit[0].normal
-                    first = k
-                    second = -1
-                    triangle = hit[1]
+                if moves[k]:
+                    var hit = self._ccd_first_hit(
+                        members[k],
+                        at[k],
+                        velocity[k] * remaining,
+                        none,
+                        candidates,
+                    )
+                    if hit[0].fraction < fraction:
+                        fraction = hit[0].fraction
+                        normal = hit[0].normal
+                        first = k
+                        second = -1
+                        triangle = hit[1]
                 for l in range(k + 1, n):
+                    if not (moves[k] or moves[l]):
+                        continue
                     var offset = at[k] - at[l]
                     var relative = (velocity[k] - velocity[l]) * remaining
                     var root = _root(
@@ -1031,6 +1076,7 @@ struct PhysicsWorld(Movable):
             ):
                 self._ccd_settle(
                     members,
+                    moves,
                     at,
                     velocity,
                     Float64(h) - remaining,
@@ -1039,7 +1085,7 @@ struct PhysicsWorld(Movable):
                     candidates,
                 )
                 continue
-            _ccd_spend(count, first, self.ccd_max_impacts)
+            _ccd_spend(count, first, self.ccd_max_impacts, moves)
             if second < 0:
                 var wall = self._ccd_wall(
                     i,
@@ -1061,7 +1107,7 @@ struct PhysicsWorld(Movable):
                     )
                 )
                 continue
-            _ccd_spend(count, second, self.ccd_max_impacts)
+            _ccd_spend(count, second, self.ccd_max_impacts, moves)
             var j = members[second]
             # Two elements of one list cannot both be passed mutably.
             var va = velocity[first]
@@ -1103,6 +1149,7 @@ struct PhysicsWorld(Movable):
     def _ccd_settle(
         self,
         members: List[Int],
+        moves: List[Bool],
         at: List[SIMD[DType.float64, 4]],
         mut velocity: List[SIMD[DType.float64, 4]],
         time: Float64,
@@ -1124,12 +1171,15 @@ struct PhysicsWorld(Movable):
         )
         for k in range(n):  # pragma: no branch
             var radius = Float64(self.bodies[members[k]].shape.radius)
-            var near = len(self._triangles)
-            if indexed:
-                _ = self._ccd_index.query(
-                    at[k], SIMD[DType.float64, 4](0), radius * 2, candidates
-                )
-                near = len(candidates)
+            # A kinematic member passes through static meshes.
+            var near = 0
+            if moves[k]:
+                near = len(self._triangles)
+                if indexed:
+                    _ = self._ccd_index.query(
+                        at[k], SIMD[DType.float64, 4](0), radius * 2, candidates
+                    )
+                    near = len(candidates)
             for c in range(near):
                 var index = candidates[c] if indexed else c
                 if not self.bodies[self._triangle_body[index]].collides:
@@ -1143,6 +1193,8 @@ struct PhysicsWorld(Movable):
                     triangle.append(index)
                     normal.append(hit.normal)
             for l in range(k + 1, n):
+                if not (moves[k] or moves[l]):
+                    continue
                 var offset = at[k] - at[l]
                 var reach = radius + Float64(
                     self.bodies[members[l]].shape.radius
@@ -1180,10 +1232,10 @@ struct PhysicsWorld(Movable):
         for c in range(m):  # pragma: no branch
             if impulse[c] <= 0:
                 continue
-            _ccd_spend(count, body[c], self.ccd_max_impacts)
+            _ccd_spend(count, body[c], self.ccd_max_impacts, moves)
             velocity[body[c]] += normal[c] * (impulse[c] * inverse[body[c]])
             if partner[c] >= 0:
-                _ccd_spend(count, partner[c], self.ccd_max_impacts)
+                _ccd_spend(count, partner[c], self.ccd_max_impacts, moves)
                 velocity[partner[c]] -= normal[c] * (
                     impulse[c] * inverse[partner[c]]
                 )
@@ -1886,8 +1938,13 @@ def _ccd_lcp(
     raise Error("CCD could not resolve simultaneous contacts; step rolled back")
 
 
-def _ccd_spend(mut count: List[Int], k: Int, limit: Int) raises:
+def _ccd_spend(
+    mut count: List[Int], k: Int, limit: Int, moves: List[Bool]
+) raises:
     # One impact of a group member. Exhaustion rolls back the whole step.
+    # A kinematic member's impacts count against the dynamic member hit.
+    if not moves[k]:
+        return
     if count[k] == limit:
         raise Error("CCD impact limit exhausted; step rolled back")
     count[k] += 1

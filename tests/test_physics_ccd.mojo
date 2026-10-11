@@ -301,8 +301,14 @@ def test_ghosts_modes_and_reentry() raises:
     assert_equal(world.contact_count, 0)
     world.bodies[0].collides = True
     world.bodies[1].set_kind(KINEMATIC)
-    with assert_raises():
+    # A kinematic sphere passes through static meshes. With spin it is
+    # refused.
+    world.step(Duration(0.01))
+    assert_equal(world.contact_count, 0)
+    world.bodies[1].angular_velocity = Vector3(0, 0, 1)
+    with assert_raises(contains="kinematic sphere without spin"):
         world.step(Duration(0.01))
+    world.bodies[1].angular_velocity = Vector3(0, 0, 0)
     world.bodies[1].collides = False
     world.step(Duration(0.01))
     world.bodies[1].set_kind(STATIC)

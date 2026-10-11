@@ -76,7 +76,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Physics safety
 
-- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): capsules, anisotropic spheres and moving sphere pairs work; rotating capsules, convex shapes, kinematic bodies and moving capsule pairs remain open [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
+- [ ] [Wider continuous collision](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#supported-worlds): capsules, anisotropic spheres, sphere pairs and kinematic spheres work; rotating capsules, convex shapes and capsule pairs remain open [#635](https://github.com/SethKitchen/ThreeMojo/issues/635)
 
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
