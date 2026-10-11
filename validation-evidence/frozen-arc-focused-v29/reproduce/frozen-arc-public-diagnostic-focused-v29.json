@@ -1,0 +1,52 @@
+{
+  "additional_sources": [
+    {
+      "seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28"
+    }
+  ],
+  "pause_request_file": "frozen-arc-focused-v29.pause",
+  "phase": "frozen-arc-public-diagnostic-focused-v29",
+  "scope": "Fresh full nine-method frozen ARC module normal/optimized on isolated two-file repair. Original five methods unchanged, four cause/dispatch controls appended. Does not qualify the final fullmatrix or native/coverage. Immutable v28 continuation remains separate.",
+  "seal": "CANDIDATE-V29-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29",
+  "source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_frozen_arc_producer_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "normal-frozen-arc-public-diagnostic",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_frozen_arc_producer_contracts.py",
+        "-v"
+      ],
+      "expected_tests": 9,
+      "label": "optimized-frozen-arc-public-diagnostic",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

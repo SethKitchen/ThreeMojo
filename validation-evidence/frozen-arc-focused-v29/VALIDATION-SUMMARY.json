@@ -1,0 +1,80 @@
+{
+  "actual_console_sha256": "7a6c7fb088667e1b228e3a0475ddcdef757d36868ee6eafb1122702138f4e72f",
+  "additional_baseline_binding": "The exact config adds candidate-v28 with its full seal. The unchanged executed supervisor verifies both primary and additional baseline trees at its verification points; receipt source_seal_unchanged is not a separately named baseline flag.",
+  "baseline_published_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "baseline_source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "completed_lane_handoff_record_sha256": "d2c043975879ab9149095015744ba53c14854f18a64def02621d8f03eef3d374",
+  "config_sha256": "706e64ca5cedb6d72774348952693826de119a1880ec030ab85b31a7f76518d9",
+  "control_scope": "Original five functional/mutation methods plus real current-gate causal rejection, other-bound-input rejection, physical historical-layer rejection, and separately labeled synthetic exception/private-forwarding dispatch. Synthetic dispatch does not establish real owner admission.",
+  "evidence_policy": "Original bytes with separately labeled derived summary, command index and one completed-record extraction. No internal review/design notes, candidate changes, project imports, tests/native reruns or uploads.",
+  "executed_methods_per_mode": [
+    "FrozenArcProducerContracts.test_complete_scoped_positive_and_retained_predecessor",
+    "FrozenArcProducerContracts.test_frozen_native_reference_is_the_original_consumer",
+    "FrozenArcProducerContracts.test_manifest_and_runtime_pin_refresh_cannot_authorize_change",
+    "FrozenArcProducerContracts.test_producer_box_constructor_and_consumer_mutations_reject",
+    "FrozenArcProducerContracts.test_three_new_pin_placements_reconstruct_exact_predecessor",
+    "FrozenArcPublicDiagnosticControls.test_current_runtime_pin_failure_retains_the_complete_gate_cause",
+    "FrozenArcPublicDiagnosticControls.test_other_current_bound_failures_keep_their_complete_gate_context",
+    "FrozenArcPublicDiagnosticControls.test_physical_historical_runtime_pin_rejection_stays_at_its_existing_layer",
+    "FrozenArcPublicDiagnosticControls.test_synthetic_exception_dispatch_keeps_types_causes_and_private_identity"
+  ],
+  "finished": "2026-10-11T06:20:21.950702+00:00",
+  "handoff_scope": "The entire focused window lies within the completed v28 pause/resume interval. Only that completed record is included; no live continuation state or result is credited.",
+  "new_control_methods": [
+    "FrozenArcPublicDiagnosticControls.test_current_runtime_pin_failure_retains_the_complete_gate_cause",
+    "FrozenArcPublicDiagnosticControls.test_other_current_bound_failures_keep_their_complete_gate_context",
+    "FrozenArcPublicDiagnosticControls.test_physical_historical_runtime_pin_rejection_stays_at_its_existing_layer",
+    "FrozenArcPublicDiagnosticControls.test_synthetic_exception_dispatch_keeps_types_causes_and_private_identity"
+  ],
+  "original_methods_byte_ast_unchanged": [
+    "FrozenArcProducerContracts.test_complete_scoped_positive_and_retained_predecessor",
+    "FrozenArcProducerContracts.test_frozen_native_reference_is_the_original_consumer",
+    "FrozenArcProducerContracts.test_manifest_and_runtime_pin_refresh_cannot_authorize_change",
+    "FrozenArcProducerContracts.test_producer_box_constructor_and_consumer_mutations_reject",
+    "FrozenArcProducerContracts.test_three_new_pin_placements_reconstruct_exact_predecessor"
+  ],
+  "prior_failure_boundary": "The original v28 full-matrix failure remains in its own packet unchanged. This focused pass neither rewrites it nor establishes any later continuation result.",
+  "qualification_limit": "No full v29 matrix, full native suite, maintained coverage, hosted CI or issue completion is claimed.",
+  "remaining_owned_descendants": [],
+  "repair_source_boundary": "Exactly two seal entries change; all other 3835 entries, all Mojo sources and the genuine report are unchanged. This packet compares seals and exact changed/support source bytes, without rerunning the producer or rehashing the full installed SDK.",
+  "reproduction_boundary": "Contains all13 focused phase originals, exact config and actual console, executed supervisor, both full source seals, baseline publication binding, exact before/after repair source and unchanged gate/fixture/SDK-support/runtime-record source. The entire unchanged repository and SDK executable image are not distributed.",
+  "result_sha256": "3de0c52b6db36a767efcaee1c62021179b1c37a20a0fde6cfa259fe1d0b46515",
+  "schema": 1,
+  "scope": "Both normal and optimized runs of the complete nine-method frozen ARC module passed, zero skips: eighteen focused test executions. This is a separate isolated two-file v29 repair qualification, not a complete v29 Python matrix or native/coverage qualification.",
+  "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "source_manifest_time_boundary": "The source manifest is preserved exactly with its earlier source-only/pending-execution status. This later passing result remains separately timestamped.",
+  "source_only_repair_manifest_sha256": "62bcd52e392561266bb13f3fb4502ae83b340e443d9ab7422c1377453d80afc9",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+  "stage_cap_seconds": 1800,
+  "stage_results": [
+    {
+      "expected_tests": 9,
+      "label": "normal-frozen-arc-public-diagnostic",
+      "leader_reaped": true,
+      "log_sha256": "93b181c3c152b6803fd999a93f3c4314fd990955f277ac3e14d92809c97fb6c0",
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 29.119174102001125,
+      "skipped_test_count": 0,
+      "test_count": 9,
+      "timed_out": false
+    },
+    {
+      "expected_tests": 9,
+      "label": "optimized-frozen-arc-public-diagnostic",
+      "leader_reaped": true,
+      "log_sha256": "caede447f0e6ffcd4f1b605a5e62b4c4ff3baaac11833de82045de34017b275d",
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 30.584908304001146,
+      "skipped_test_count": 0,
+      "test_count": 9,
+      "timed_out": false
+    }
+  ],
+  "status": "PASS_SEPARATE_V29_FROZEN_ARC_FOCUSED_QUALIFICATION_ONLY",
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+  "whole_window_seconds": 66.71838693900645,
+  "window_cap_seconds": 10800
+}

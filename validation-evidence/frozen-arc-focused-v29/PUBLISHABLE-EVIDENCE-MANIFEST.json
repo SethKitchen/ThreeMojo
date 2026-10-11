@@ -1,0 +1,153 @@
+{
+  "files": [
+    {
+      "bytes": 3004,
+      "kind": "derived-command-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "a398383afc0bc5e538458a193c7a1fd9626a46765afc70e74380e420426db8b7"
+    },
+    {
+      "bytes": 876,
+      "kind": "derived-specific-completed-record-extraction-provenance",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/COMPLETED-HANDOFF-SNAPSHOT-PROVENANCE.json",
+      "path": "COMPLETED-HANDOFF-SNAPSHOT-PROVENANCE.json",
+      "sha256": "27eb12c8b537d988c8dadc90330c9c063e02fde797eedb425817c91ed96d59a7"
+    },
+    {
+      "bytes": 15549,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "7769b353d619619e7b791a6da114717004b64dd5f4054790354a5eaab5a6c845"
+    },
+    {
+      "bytes": 2619,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/README.md",
+      "path": "README.md",
+      "sha256": "b899703a139315dbfdb1661b114e433d602a83a271d43113e07aee3f57f34792"
+    },
+    {
+      "bytes": 6407,
+      "kind": "derived-focused-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "87abe046b7173ca4a1032dbf30597a000a2df86ed4ea2bc78a945b73fcefa533"
+    },
+    {
+      "bytes": 330,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "path": "actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+      "sha256": "d2c043975879ab9149095015744ba53c14854f18a64def02621d8f03eef3d374"
+    },
+    {
+      "bytes": 2687,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/frozen-arc-public-diagnostic-focused-v29/RESULT.json",
+      "path": "actual/frozen-arc-public-diagnostic-focused-v29/RESULT.json",
+      "sha256": "3de0c52b6db36a767efcaee1c62021179b1c37a20a0fde6cfa259fe1d0b46515"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/frozen-arc-public-diagnostic-focused-v29/SDK-AFTER.json",
+      "path": "actual/frozen-arc-public-diagnostic-focused-v29/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/frozen-arc-public-diagnostic-focused-v29/SDK-BEFORE.json",
+      "path": "actual/frozen-arc-public-diagnostic-focused-v29/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/frozen-arc-public-diagnostic-focused-v29/WINDOW-START.json",
+      "path": "actual/frozen-arc-public-diagnostic-focused-v29/WINDOW-START.json",
+      "sha256": "df1e6bc5c1b77372a1d6f08ffcecc819abfa5a1ab1ec4fe1e6df2819b9ca5a23"
+    },
+    {
+      "bytes": 2512,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/frozen-arc-public-diagnostic-focused-v29/normal-frozen-arc-public-diagnostic.log",
+      "path": "actual/frozen-arc-public-diagnostic-focused-v29/normal-frozen-arc-public-diagnostic.log",
+      "sha256": "93b181c3c152b6803fd999a93f3c4314fd990955f277ac3e14d92809c97fb6c0"
+    },
+    {
+      "bytes": 2512,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/actual/frozen-arc-public-diagnostic-focused-v29/optimized-frozen-arc-public-diagnostic.log",
+      "path": "actual/frozen-arc-public-diagnostic-focused-v29/optimized-frozen-arc-public-diagnostic.log",
+      "sha256": "caede447f0e6ffcd4f1b605a5e62b4c4ff3baaac11833de82045de34017b275d"
+    },
+    {
+      "bytes": 976773,
+      "kind": "lossless-original-receipts-logs-source-and-seals",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "d841c7949652fc2530c9d627919357c2a00d806aff3d570aa30a4904719775d8"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 1745,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "62bcd52e392561266bb13f3fb4502ae83b340e443d9ab7422c1377453d80afc9"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 20814,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/build_frozen_arc_focused_v29_packet.py",
+      "path": "reproduce/build_frozen_arc_focused_v29_packet.py",
+      "sha256": "8b2d87b43194eb160483f57ab0013c15af2a5394c55e9a1346fda069e24b2496"
+    },
+    {
+      "bytes": 1619,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/frozen-arc-public-diagnostic-focused-v29.json",
+      "path": "reproduce/frozen-arc-public-diagnostic-focused-v29.json",
+      "sha256": "706e64ca5cedb6d72774348952693826de119a1880ec030ab85b31a7f76518d9"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 9002,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/source-v29/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "path": "reproduce/source-v29/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "143ce9c367283e8100c6bc2c7b344fc5d5e54af346266f9f337fc6580eb7026f"
+    },
+    {
+      "bytes": 13742,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-frozen-arc-focused-v29-packet/reproduce/source-v29/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "path": "reproduce/source-v29/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "sha256": "793445460dc7027ab00a76546cf9c003951fcf766ee5b9a47c8f0bb511cd3be2"
+    }
+  ],
+  "schema": 1,
+  "scope": "Both normal and optimized runs of the complete nine-method frozen ARC module passed, zero skips: eighteen focused test executions. This is a separate isolated two-file v29 repair qualification, not a complete v29 Python matrix or native/coverage qualification."
+}

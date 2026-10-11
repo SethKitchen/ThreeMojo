@@ -1,0 +1,81 @@
+{
+  "actual_supervisor_console_sha256": "7a6c7fb088667e1b228e3a0475ddcdef757d36868ee6eafb1122702138f4e72f",
+  "baseline_source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "config_sha256": "706e64ca5cedb6d72774348952693826de119a1880ec030ab85b31a7f76518d9",
+  "kind": "derived-actual-command-and-source-baseline-binding",
+  "phase": "frozen-arc-public-diagnostic-focused-v29",
+  "result_sha256": "3de0c52b6db36a767efcaee1c62021179b1c37a20a0fde6cfa259fe1d0b46515",
+  "schema": 1,
+  "source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_frozen_arc_producer_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29",
+      "expected_tests": 9,
+      "label": "normal-frozen-arc-public-diagnostic",
+      "leader_reaped": true,
+      "log_sha256": "93b181c3c152b6803fd999a93f3c4314fd990955f277ac3e14d92809c97fb6c0",
+      "pgid": 8,
+      "pid": 8,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 29.119174102001125,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T06:19:17.690547+00:00",
+      "test_count": 9,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_frozen_arc_producer_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29",
+      "expected_tests": 9,
+      "label": "optimized-frozen-arc-public-diagnostic",
+      "leader_reaped": true,
+      "log_sha256": "caede447f0e6ffcd4f1b605a5e62b4c4ff3baaac11833de82045de34017b275d",
+      "pgid": 9,
+      "pid": 9,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 30.584908304001146,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T06:19:48.892978+00:00",
+      "test_count": 9,
+      "timed_out": false
+    }
+  ],
+  "start_receipt_sha256": {
+    "normal-frozen-arc-public-diagnostic": "7cde485aa3a964a24ebdd43710f789a2e09eb5cf62bbfa41ce93956cb60f3409",
+    "optimized-frozen-arc-public-diagnostic": "0a12b15be9b58219d0008be9be90c3015e46cf6c033deb0df5f2c6c814066fe2"
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "boundary": "Only the exact completed record is preserved. The source stream is mutable and its observed hash is timestamped provenance, not an assertion of final continuation state. No other continuation files or results are included.",
+  "byte_offset": 0,
+  "kind": "specific-completed-record-byte-exact-extraction",
+  "line_number": 1,
+  "observed_stream_bytes": 330,
+  "observed_stream_sha256": "d2c043975879ab9149095015744ba53c14854f18a64def02621d8f03eef3d374",
+  "original_stream": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/LANE-HANDOFFS.jsonl",
+  "record": "actual/completed-v28-handoff/COMPLETED-HANDOFF.jsonl",
+  "record_bytes": 330,
+  "record_sha256": "d2c043975879ab9149095015744ba53c14854f18a64def02621d8f03eef3d374",
+  "schema": 1,
+  "snapshot_observed_utc": "2026-10-11T06:27:35.568549+00:00"
+}

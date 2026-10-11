@@ -1,0 +1,19 @@
+test_complete_scoped_positive_and_retained_predecessor (test_frozen_arc_producer_contracts.FrozenArcProducerContracts.test_complete_scoped_positive_and_retained_predecessor) ... /workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+ok
+test_frozen_native_reference_is_the_original_consumer (test_frozen_arc_producer_contracts.FrozenArcProducerContracts.test_frozen_native_reference_is_the_original_consumer) ... ok
+test_manifest_and_runtime_pin_refresh_cannot_authorize_change (test_frozen_arc_producer_contracts.FrozenArcProducerContracts.test_manifest_and_runtime_pin_refresh_cannot_authorize_change) ... ok
+test_producer_box_constructor_and_consumer_mutations_reject (test_frozen_arc_producer_contracts.FrozenArcProducerContracts.test_producer_box_constructor_and_consumer_mutations_reject) ... ok
+test_three_new_pin_placements_reconstruct_exact_predecessor (test_frozen_arc_producer_contracts.FrozenArcProducerContracts.test_three_new_pin_placements_reconstruct_exact_predecessor) ... ok
+test_current_runtime_pin_failure_retains_the_complete_gate_cause (test_frozen_arc_producer_contracts.FrozenArcPublicDiagnosticControls.test_current_runtime_pin_failure_retains_the_complete_gate_cause) ... ok
+test_other_current_bound_failures_keep_their_complete_gate_context (test_frozen_arc_producer_contracts.FrozenArcPublicDiagnosticControls.test_other_current_bound_failures_keep_their_complete_gate_context) ... ok
+test_physical_historical_runtime_pin_rejection_stays_at_its_existing_layer (test_frozen_arc_producer_contracts.FrozenArcPublicDiagnosticControls.test_physical_historical_runtime_pin_rejection_stays_at_its_existing_layer) ... ok
+test_synthetic_exception_dispatch_keeps_types_causes_and_private_identity (test_frozen_arc_producer_contracts.FrozenArcPublicDiagnosticControls.test_synthetic_exception_dispatch_keeps_types_causes_and_private_identity)
+Dispatch-only faults; this does not claim real admission or owner validation. ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 28.575s
+
+OK
