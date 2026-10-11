@@ -1696,5 +1696,55 @@ def test_parallel_water_rows_equal_one_serial_pass() raises:
         assert_equal(parallel[i], serial[i])
 
 
+def test_one_worker_draws_and_composes_what_every_core_does() raises:
+    # One worker runs each pass of the whole pipeline as one task over every
+    # row: the serial reference. Every core must draw the same picture.
+    var stones = _stones()
+    var pitch = Angle(-0.72, RADIAN)
+    var width = 29
+    var height = 41
+    for view in [FRAME, LINEAR, GLARE]:
+        var serial = _scene(Duration(5.0, SECOND))
+        var parallel = _scene(Duration(5.0, SECOND))
+        serial.workers = 1
+        serial.advance(Duration(1.0 / 60.0, SECOND), True)
+        parallel.advance(Duration(1.0 / 60.0, SECOND), True)
+        _assert_same_picture(
+            serial.draw(width, height, view, True, stones, pitch),
+            parallel.draw(width, height, view, True, stones, pitch),
+        )
+    # Composition: the same depths, shown pixels, colors and drawn count.
+    var camera = _page_camera(width, height)
+    var serial = _scene(Duration(5.0, SECOND))
+    var parallel = _scene(Duration(5.0, SECOND))
+    serial.workers = 1
+    serial.advance(Duration(1.0 / 60.0, SECOND), True)
+    parallel.advance(Duration(1.0 / 60.0, SECOND), True)
+    var one = Framebuffer(width, height, Color(0, 0, 0))
+    var many = Framebuffer(width, height, Color(0, 0, 0))
+    # A few pixels already hold a nearer surface, so some tests fail.
+    for i in range(0, width * height, 5):
+        one.depth[i] = -0.5
+        many.depth[i] = -0.5
+    var before = one.depth.copy()
+    var drawn = serial.compose(one, camera, Length(0.0, METER), stones)
+    assert_equal(
+        parallel.compose(many, camera, Length(0.0, METER), stones), drawn
+    )
+    assert_true(one.depth == many.depth)
+    assert_true(one.pixels == many.pixels)
+    # A shown pixel took the water's nearer depth, so the shown pixels are
+    # the changed depths, and there is one for each pixel drawn.
+    var changed = 0
+    var kept = 0
+    for i in range(width * height):
+        if one.depth[i] != before[i]:
+            changed += 1
+        elif i % 5 == 0:
+            kept += 1
+    assert_equal(changed, drawn)
+    assert_true(drawn > 0 and kept > 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

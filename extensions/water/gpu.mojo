@@ -201,11 +201,16 @@ struct GpuWater(Movable):
     var context: DeviceContext
     """The CUDA device the frames run on."""
 
-    def __init__(out self, bed: PebbleBed) raises:
+    def __init__(
+        out self, bed: PebbleBed, _fail_after_first_upload: Bool = False
+    ) raises:
         """Open the CUDA GPU and copy the photograph to it once.
 
         Args:
             bed: The pebble photograph.
+            _fail_after_first_upload: For tests only. True raises after the
+                photograph's first copy is queued, as a failed second copy
+                would, to check the cleanup of a partial construction.
 
         Raises:
             Error: If there is no NVIDIA GPU, or a copy fails.
@@ -213,7 +218,9 @@ struct GpuWater(Movable):
         if not has_nvidia_gpu_accelerator():
             raise Error("GpuWater needs an NVIDIA CUDA GPU")
         var context = DeviceContext(api="cuda")
-        var buffers = _upload_bed(context, pack_pebbles(bed))
+        var buffers = _upload_bed(
+            context, pack_pebbles(bed), _fail_after_first_upload
+        )
         self._pebble = buffers[0]
         self._pebble_table = buffers[1]
         self._fail_after_uploads = False
@@ -442,12 +449,16 @@ struct GpuWater(Movable):
 
 
 def _upload_bed(
-    context: DeviceContext, packed: Tuple[List[Float32], List[Int64]]
+    context: DeviceContext,
+    packed: Tuple[List[Float32], List[Int64]],
+    fail_after_first: Bool,
 ) raises -> Tuple[DeviceBuffer[DType.float32], DeviceBuffer[DType.int64]]:
     # A copy reads its host list until it completes. On every exit, wait for
     # the queue before the packed lists can be freed.
     try:
         var texels = _upload[DType.float32](context, packed[0])
+        if fail_after_first:
+            raise Error("The photograph upload failed after its first copy")
         var table = _upload[DType.int64](context, packed[1])
         context.synchronize()
         return (texels^, table^)

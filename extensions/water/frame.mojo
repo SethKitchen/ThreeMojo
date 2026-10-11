@@ -281,6 +281,16 @@ def _depth_rows(
             shown[unsafe_offset=slot] = True
 
 
+def _row_tasks(workers: Int, per_worker: Int, height: Int) -> Int:
+    # How many runs of rows a pass is cut into. Zero or fewer workers means
+    # every logical core. One worker runs one task over every row: the
+    # serial pass, which a test compares with the parallel one.
+    var threads = workers if workers > 0 else num_logical_cores()
+    if threads == 1:
+        return 1
+    return min(threads * per_worker, height)
+
+
 def _radiance_image(
     look: CameraLook,
     aspect: Float32,
@@ -293,6 +303,7 @@ def _radiance_image(
     width: Int,
     height: Int,
     shown: List[Bool],
+    workers: Int = 0,
 ) -> List[Float32]:
     """Shade every pixel, or the pixels `shown` marks, into linear RGB.
 
@@ -303,7 +314,7 @@ def _radiance_image(
     var hdr = List[Float32](length=width * height * 3, fill=0.0)
     # Sky rows cost far less than water rows, so small runs of rows balance
     # the threads. Each task gets at least one row, because tasks <= height.
-    var tasks = min(num_logical_cores() * 8, height)
+    var tasks = _row_tasks(workers, 8, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -414,6 +425,7 @@ def _graded_image(
     height: Int,
     clock: Duration,
     view: WaterView,
+    workers: Int = 0,
 ) -> List[Float32]:
     """Grade every pixel, in parallel runs of rows, as `grade_pixel` does.
 
@@ -422,7 +434,7 @@ def _graded_image(
     var graded = List[Float32](length=width * height * 3, fill=0.0)
     # Sky rows cost far less than water rows, so small runs of rows balance
     # the threads. Each task gets at least one row, because tasks <= height.
-    var tasks = min(num_logical_cores() * 8, height)
+    var tasks = _row_tasks(workers, 8, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -1294,6 +1306,11 @@ struct WaterScene(Movable):
     """How many times `advance` has stepped the ripples since a reset."""
     var sun: Vector3
     """The unit direction toward the sun. Y is up. See `set_sun`."""
+    var workers: Int
+    """The threads that the row passes use. Zero, the default, means every
+    logical core. One runs each pass serially. Every count draws the same
+    image, because each pixel has one writer and the serial arithmetic. The
+    glare pass is always serial."""
     var _spectrum: ComplexField
     var _ripples: RippleField
     var _glare: Optional[GlareKernels]
@@ -1328,6 +1345,7 @@ struct WaterScene(Movable):
         self.clock = start
         self.steps = 0
         self.sun = sun_direction()
+        self.workers = 0
         self._spectrum = build_spectrum(
             ocean, Length(_PATCH_METERS), _TARGET_SLOPE
         )
@@ -1521,6 +1539,7 @@ struct WaterScene(Movable):
             image.width,
             image.height,
             shown,
+            self.workers,
         )
         return self._compose_write(image, hdr, shown)
 
@@ -1533,7 +1552,7 @@ struct WaterScene(Movable):
         var width = image.width
         var height = image.height
         var shown = List[Bool](length=width * height, fill=False)
-        var tasks = min(num_logical_cores() * 8, height)
+        var tasks = _row_tasks(self.workers, 8, height)
         var group = TaskGroup()
         for task in range(tasks):  # pragma: no branch
             group.create_task(
@@ -1561,7 +1580,7 @@ struct WaterScene(Movable):
         # pixel has one writer, so disjoint runs of rows write in parallel.
         var width = image.width
         var height = image.height
-        var tasks = min(num_logical_cores(), height)
+        var tasks = _row_tasks(self.workers, 1, height)
         var drawn = List[Int](length=tasks, fill=0)
         var group = TaskGroup()
         for task in range(tasks):  # pragma: no branch
@@ -1636,6 +1655,7 @@ struct WaterScene(Movable):
             width,
             height,
             List[Bool](),
+            self.workers,
         )
         return self._finish(hdr, width, height, view)
 
@@ -1644,20 +1664,24 @@ struct WaterScene(Movable):
     ) raises -> Framebuffer:
         # Bloom, glare and the tone curve over a frame of linear radiance.
         var clock = self.clock
-        var bright = _highlights(hdr, width, height, 2.5)
+        var bright = _highlights(hdr, width, height, 2.5, self.workers)
         var bloom = _blur(
-            _blur(bright, width, height, True), width, height, False
+            _blur(bright, width, height, True, self.workers),
+            width,
+            height,
+            False,
+            self.workers,
         )
         var glare = List[Float32](length=width * height * 3, fill=0.0)
         if view == FRAME or view == GLARE:
             if not self._glare:
                 self._glare = glare_kernels(self.glare_resolution)
-            var sparks = _highlights(hdr, width, height, 14.0)
+            var sparks = _highlights(hdr, width, height, 14.0, self.workers)
             for i in range(len(sparks)):  # pragma: no branch
                 sparks[i] *= 0.001
             glare = apply_glare(sparks, width, height, self._glare.value())
         var graded = _graded_image(
-            hdr, glare, bloom, width, height, clock, view
+            hdr, glare, bloom, width, height, clock, view, self.workers
         )
         var image = Framebuffer(width, height, Color(0, 0, 0))
         for y in range(height):  # pragma: no branch
@@ -1796,12 +1820,16 @@ def _caustic_picture(
 
 
 def _highlights(
-    hdr: List[Float32], width: Int, height: Int, threshold: Float32
+    hdr: List[Float32],
+    width: Int,
+    height: Int,
+    threshold: Float32,
+    workers: Int = 0,
 ) -> List[Float32]:
     # Each output pixel reads fixed input neighbors, so disjoint runs of
     # rows run in parallel and equal the serial pass bit for bit.
     var out = List[Float32](length=width * height * 3, fill=0.0)
-    var tasks = min(num_logical_cores(), height)
+    var tasks = _row_tasks(workers, 1, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(
@@ -1871,12 +1899,16 @@ def _highlight_rows(
 
 
 def _blur(
-    src: List[Float32], width: Int, height: Int, horizontal: Bool
+    src: List[Float32],
+    width: Int,
+    height: Int,
+    horizontal: Bool,
+    workers: Int = 0,
 ) -> List[Float32]:
     # Each output pixel reads fixed input taps, so disjoint runs of rows
     # run in parallel and equal the serial pass bit for bit.
     var out = List[Float32](length=width * height * 3, fill=0.0)
-    var tasks = min(num_logical_cores(), height)
+    var tasks = _row_tasks(workers, 1, height)
     var group = TaskGroup()
     for task in range(tasks):  # pragma: no branch
         group.create_task(

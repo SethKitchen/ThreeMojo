@@ -242,7 +242,8 @@ def test_gpu_compose_matches_the_cpu_compose() raises:
         elif _channels(p, host.get_pixel(x, y)) > 2:
             far += 1
     assert_true(kept > 0)
-    assert_true(far * 100 <= 40 * 30 * 2, String(far))
+    # At most 2 percent of the water pixels, not of the whole image.
+    assert_true(far * 100 <= a * 2, String(far))
 
 
 def test_a_failed_frame_leaves_the_gpu_and_the_image_usable() raises:
@@ -274,14 +275,19 @@ def test_a_failed_frame_leaves_the_gpu_and_the_image_usable() raises:
             ),
             0,
         )
-    # A retry draws the same water as a first try.
-    var host = renderer.render(parts[0], parts[1], parts[2])
+    # A retry draws the image a first try draws: every pixel, every depth
+    # and the drawn count. Both run on the device, so they match exactly.
+    var fresh = renderer.render(parts[0], parts[1], parts[2])
     var drawn = gpu.compose(
         scene, image, parts[0], parts[2], Length(0.0, METER)
     )
     assert_equal(
-        drawn, scene.compose(host, parts[0], parts[2], Length(0.0, METER), bed)
+        drawn,
+        gpu.compose(scene, fresh, parts[0], parts[2], Length(0.0, METER)),
     )
+    assert_true(drawn > 0)
+    assert_true(image.depth == fresh.depth)
+    assert_true(image.pixels == fresh.pixels)
 
 
 def _resident_bytes() raises -> Int:
@@ -350,6 +356,30 @@ def test_gpu_water_releases_after_construction_and_failure() raises:
         _ = gpu^
         assert_true(
             probe.get_memory_info()[0] + (1 << 20) >= empty, String(failing)
+        )
+
+
+def test_a_failed_construction_releases_and_the_next_one_works() raises:
+    if _skipped("a failed construction releases and the next one works"):
+        return
+    var probe = DeviceContext(api="cuda")
+    var empty = probe.get_memory_info()[0]
+    var scene = _scene()
+    var bed = _bed()
+    for round in range(2):
+        # The photograph's first copy is queued, then the construction
+        # fails. Its buffer and its context are released.
+        with assert_raises(contains="failed after its first copy"):
+            _ = GpuWater(bed, _fail_after_first_upload=True)
+        assert_true(
+            probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
+        )
+        # The next construction works and shades as the CPU does.
+        var gpu = GpuWater(bed)
+        _agree(_gpu(gpu, scene, -0.72, 48, 32), _cpu(scene, bed, -0.72, 48, 32))
+        _ = gpu^
+        assert_true(
+            probe.get_memory_info()[0] + (1 << 20) >= empty, String(round)
         )
 
 
