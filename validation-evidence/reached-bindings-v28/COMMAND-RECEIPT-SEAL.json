@@ -1,0 +1,77 @@
+{
+  "config_sha256": "66421e91f119a5a6c7dcd97920100780f2f6c13bd6ebf43b278a71737625ad5c",
+  "configured_but_unrun_stage_labels": [],
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phase": "reached-bindings-v28",
+  "result_sha256": "58f79b3c379bd910e33ee2234305dad8d599c90e83f0b6507ce5f08fca8c327e",
+  "schema": 1,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stages": [
+    {
+      "stage": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-B",
+          "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+          "-v",
+          "-f",
+          "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "expected_tests": 1,
+        "label": "normal-reached-bindings-v28",
+        "leader_reaped": true,
+        "log_sha256": "5816cb13afc8e534c4418b1027cf59ca9d163b200759e616d272f157f8d3a616",
+        "pgid": 8,
+        "pid": 8,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 69.64164626400452,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T05:16:27.711524+00:00",
+        "test_count": 1,
+        "timed_out": false
+      },
+      "stage_result_sha256": "61c25a23bba53382ee1f1120c215624dd4536530e1f4aaf303bd5c5059add42c",
+      "start_sha256": "31b77e4dd9ac5fe7287ea6ff04aaeee6f002dae8213f17849372a12c5cd70c27"
+    },
+    {
+      "stage": {
+        "adopted_reaped": [],
+        "argv": [
+          "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+          "-O",
+          "-B",
+          "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+          "-v",
+          "-f",
+          "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+        ],
+        "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+        "expected_tests": 1,
+        "label": "optimized-reached-bindings-v28",
+        "leader_reaped": true,
+        "log_sha256": "1b2da531ecf82033546f4c093673652f4a856842af5aa31ef7dbebaa98034b17",
+        "pgid": 9,
+        "pid": 9,
+        "remaining_owned_descendants": [],
+        "returncode": 0,
+        "seconds": 70.29850567900576,
+        "single_cpu": 0,
+        "skipped_test_count": 0,
+        "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+        "stage_timeout_seconds": 1800,
+        "started": "2026-10-11T05:17:38.429036+00:00",
+        "test_count": 1,
+        "timed_out": false
+      },
+      "stage_result_sha256": "b43b2c60e1ebcf305e30c398db58275a81a06f3d5ffdb40f575dba2a850b6b24",
+      "start_sha256": "10af5aaba14c85c774d23d31f82ff3de49f01aed11bd7febc01f7881078ddb81"
+    }
+  ],
+  "supervisor_console_sha256": "a8e4b09415c5348e5108c026b4ea195bf4b9f0af1754ec93b8fae0fe994d5572"
+}

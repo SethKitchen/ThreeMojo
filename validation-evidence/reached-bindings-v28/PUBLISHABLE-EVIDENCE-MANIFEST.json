@@ -1,0 +1,132 @@
+{
+  "files": [
+    {
+      "bytes": 3204,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "397035a8b66dda74e60df9a1bc4097bab5b14ef6d5d44a79485b67d1fd3c7858"
+    },
+    {
+      "bytes": 24795,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "2b4a9b7bfcd62c7118a816143f46b0826660e1b3d8e638a98f8771ecd93450fa"
+    },
+    {
+      "bytes": 2555,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/README.md",
+      "path": "README.md",
+      "sha256": "127b9c91eb6f7f9427c40274d520e23515297d440362cce4e9ec1cb7750c15ce"
+    },
+    {
+      "bytes": 22185,
+      "kind": "derived-passing-focused-reached-sweep-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "a2ee2141721aea7be757ed28ab16ffbbd84055c1d9fc2716c31eaecdf6e61363"
+    },
+    {
+      "bytes": 2624,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/actual/reached-bindings-v28/RESULT.json",
+      "path": "actual/reached-bindings-v28/RESULT.json",
+      "sha256": "58f79b3c379bd910e33ee2234305dad8d599c90e83f0b6507ce5f08fca8c327e"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/actual/reached-bindings-v28/SDK-AFTER.json",
+      "path": "actual/reached-bindings-v28/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/actual/reached-bindings-v28/SDK-BEFORE.json",
+      "path": "actual/reached-bindings-v28/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/actual/reached-bindings-v28/WINDOW-START.json",
+      "path": "actual/reached-bindings-v28/WINDOW-START.json",
+      "sha256": "870078d7aae247ca32dc25edb11f9dd6fe4ea0dd53002f4d12eb496450885546"
+    },
+    {
+      "bytes": 1214109,
+      "kind": "lossless-original-passing-receipts-full-raw-logs-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "34fb8ad3763f4475763b0bf59a66dcd26a92840f8c938d13ba3dbe596bdf1d96"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419528,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596"
+    },
+    {
+      "bytes": 17072,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "d3b1e05667a9d64a9b3f23bcb553ecda4ae65911c4cfac4576e90cd7dc2d5e31"
+    },
+    {
+      "bytes": 22900,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/build_reached_bindings_v28_packet.py",
+      "path": "reproduce/build_reached_bindings_v28_packet.py",
+      "sha256": "5633e4d03007ecf6b5d665d129104955ce05f965bec74496be2538c58a34b9cb"
+    },
+    {
+      "bytes": 1303,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/reached-bindings-v28.json",
+      "path": "reproduce/reached-bindings-v28.json",
+      "sha256": "66421e91f119a5a6c7dcd97920100780f2f6c13bd6ebf43b278a71737625ad5c"
+    },
+    {
+      "bytes": 3873,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/reached-bindings-v28.supervisor.log",
+      "path": "reproduce/reached-bindings-v28.supervisor.log",
+      "sha256": "a8e4b09415c5348e5108c026b4ea195bf4b9f0af1754ec93b8fae0fe994d5572"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1797,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2"
+    },
+    {
+      "bytes": 180754,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-reached-bindings-v28-packet/reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9"
+    }
+  ],
+  "schema": 1,
+  "scope": "One selected reached-binding method passed in normal and optimized modes: two method executions, four owner reports per mode, zero skips. Each mode reports union108 consumed IDs with no residual. No full test suite, Python matrix, native coverage, hosted CI or overall completion claim."
+}

@@ -1,0 +1,38 @@
+{
+  "pause_request_file": "reached-bindings-v28.pause",
+  "phase": "reached-bindings-v28",
+  "scope": "Fresh normal/optimized focused execution of reviewed appended methods only. Exact source/SDK binding and original module/window limits retained. No full matrix or coverage claim.",
+  "seal": "CANDIDATE-V28-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+        "-v",
+        "-f",
+        "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+      ],
+      "expected_tests": 1,
+      "label": "normal-reached-bindings-v28",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+        "-v",
+        "-f",
+        "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+      ],
+      "expected_tests": 1,
+      "label": "optimized-reached-bindings-v28",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}
