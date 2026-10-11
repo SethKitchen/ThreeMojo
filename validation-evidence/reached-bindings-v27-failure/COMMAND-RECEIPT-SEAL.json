@@ -1,0 +1,39 @@
+{
+  "config_sha256": "1a2bdc71e87a6db94ed301f4fc02018f921b9975276868c0be569353289dc4e6",
+  "configured_but_unrun_stage_labels": [
+    "optimized-reached-bindings-v27"
+  ],
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phase": "reached-bindings-v27",
+  "result_sha256": "3969fb3139c1a2b3c87417471f3ab9fd9cd1ec307e6ea59382e1a36b383d3560",
+  "schema": 1,
+  "source_seal_sha256": "a36731dcc18ee0757482f613ad6d3b5ef96f0b67c0dd96a80d95105ed46ce8e5",
+  "stage": {
+    "adopted_reaped": [],
+    "argv": [
+      "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+      "-B",
+      "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "-v",
+      "-f",
+      "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+    ],
+    "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v27",
+    "label": "normal-reached-bindings-v27",
+    "leader_reaped": true,
+    "log_sha256": "61bed3e8e065548660dcaaf09130984fdae009e1083c519b81f5581464631705",
+    "pgid": 8,
+    "pid": 8,
+    "remaining_owned_descendants": [],
+    "returncode": 1,
+    "seconds": 70.16300123700057,
+    "single_cpu": 0,
+    "source_seal_sha256": "a36731dcc18ee0757482f613ad6d3b5ef96f0b67c0dd96a80d95105ed46ce8e5",
+    "stage_timeout_seconds": 1800,
+    "started": "2026-10-11T05:04:33.281163+00:00",
+    "timed_out": false
+  },
+  "stage_result_sha256": "2cfd82dc3f8ca89c6119754083aa0f7b84416c4d0ea89aa41fcb1af3799eccf5",
+  "start_sha256": "d5c0c97d8c61efa12fb2c1b54bd7afd7c9a2dd5e053b009cf73e1dc4edc7abf9",
+  "supervisor_console_sha256": "fcbca094af6be9cb5d0675251e93496542770db81085a3868493b2b876b034cc"
+}

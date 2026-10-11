@@ -1,0 +1,86 @@
+{
+  "actual_stage": {
+    "elapsed_seconds": 70.16300123700057,
+    "fail_fast": true,
+    "label": "normal-reached-bindings-v27",
+    "returncode": 1,
+    "sequence_completed": false,
+    "stage_cap_seconds": 1800,
+    "timed_out": false,
+    "whole_window_cap_seconds": 10800,
+    "whole_window_elapsed_seconds": 73.54091602800327
+  },
+  "binding_evidence_limit": "Only invariant and winner JSON route records were emitted. The Map route reached summarize and failed at its stream matched assertion, so its stream/queue item and full Map report were not serialized. No missing Map or Rtree report is reconstructed and no failure cause is inferred.",
+  "cause_classification": "Unresolved binding evidence pending fresh exact queue replay. The saved failure does not establish a production defect or a harness defect.",
+  "count_provenance": "Counts are read from the original unittest log. The supervisor stopped on exit 1 before post-success test-count annotations. The configured expected_tests=1 is not a pass.",
+  "evidence_policy": "Ordinary original receipts/logs/config and exact source bytes only. No private review/design notes, later proposed test changes, candidate edits, reruns, native execution or upload.",
+  "exact_frozen_source_manifest_paths": 31,
+  "executed_test_path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+  "executed_test_sha256": "e5b205db38fa5969e1bfee2f18742c8892deaac89c083c6fd0e567955d0939af",
+  "normal_routes": {
+    "completed_report_metadata": [
+      {
+        "original_streams": 0,
+        "reached_sites": 73,
+        "residual_unreached_sites": 35,
+        "route": "invariant"
+      },
+      {
+        "original_streams": 0,
+        "reached_sites": 102,
+        "residual_unreached_sites": 6,
+        "route": "winner"
+      }
+    ],
+    "completed_report_routes": [
+      "invariant",
+      "winner"
+    ],
+    "failed_route": "map_loops",
+    "map_report_serialized": false,
+    "rtree_report_serialized": false,
+    "unrun_routes": [
+      "rtree_loops"
+    ]
+  },
+  "observed_normal_methods": {
+    "errors": 0,
+    "failure_subtest": "owner='map_loops'",
+    "failures": 1,
+    "method_names": [
+      "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+    ],
+    "passed": 0,
+    "ran": 1,
+    "skips_observed": 0
+  },
+  "optimized": {
+    "configured_methods": 1,
+    "status": "UNRUN",
+    "unrun_routes": [
+      "invariant",
+      "winner",
+      "map_loops",
+      "rtree_loops"
+    ]
+  },
+  "other_33_methods_selected": false,
+  "qualification_limit": "No complete normal/optimized reached-binding sweep, full Python matrix, native coverage, hosted CI or overall issue completion is qualified. Earlier evidence remains in its separate packets.",
+  "remaining_owned_descendants": [],
+  "reproduction_boundary": "Includes all eleven original phase files, actual config/console/supervisor, the full source seal, all31 frozen manifest source paths and SDK identity support. The full unchanged repository and SDK executable image are not distributed.",
+  "result_sha256": "3969fb3139c1a2b3c87417471f3ab9fd9cd1ec307e6ea59382e1a36b383d3560",
+  "schema": 1,
+  "scope": "One normal-mode focused method failed at the Map stream matched assertion after two completed invariant/winner route records. The normal Rtree route and all optimized routes were unrun. No dynamic sweep, suite or broader qualification pass.",
+  "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "selected_method": "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings",
+  "source_manifest_sha256": "00064f7ae60ff1fdfcea950d3f07b20078d7ea5b05c3509a352ce89e1ac107c6",
+  "source_manifest_time_boundary": "The original source_only_unqualified manifest is unchanged. This packet records the later failed run. The frozen source differs from v26 only at the test file; production/proof bytes are unchanged.",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "a36731dcc18ee0757482f613ad6d3b5ef96f0b67c0dd96a80d95105ed46ce8e5",
+  "source_test_methods": 34,
+  "stage_log_bytes": 944885,
+  "stage_log_sha256": "61bed3e8e065548660dcaaf09130984fdae009e1083c519b81f5581464631705",
+  "status": "FAILED_V27_NORMAL_REACHED_BINDINGS_SWEEP_NOT_A_QUALIFICATION_PASS",
+  "stream_capture": "Original stdout/stderr share one merged stage log. The complete 944885-byte log is preserved in the reversible container. Separate streams and absent reports are not reconstructed.",
+  "traceback_preservation": "The full raw log preserves the Map subtest assertion traceback and both preceding route records. FAILURE.json preserves the supervisor traceback; the actual aggregate supervisor console is retained unchanged."
+}
