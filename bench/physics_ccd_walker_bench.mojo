@@ -319,7 +319,10 @@ def _run(name: String, side: Int, bodies: Int, walkers: Bool) raises:
 def main() raises:
     _controls()
     print("scene,ccd,triangles,bodies,mean_step_ms,max_step_ms,least_gap_m")
-    _run("walker", 32, 1, True)
-    _run("walker-crowd", 64, 64, True)
-    _run("spinning-probe", 32, 1, False)
-    _run("spinning-fleet", 64, 64, False)
+    # Every body count runs on every terrain size, so the triangle count
+    # and the body count change one at a time.
+    for side in [32, 64]:
+        _run("walker", side, 1, True)
+        _run("walker-crowd", side, 64, True)
+        _run("spinning-probe", side, 1, False)
+        _run("spinning-fleet", side, 64, False)
