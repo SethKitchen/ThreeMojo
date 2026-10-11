@@ -1,0 +1,239 @@
+{
+  "container": {
+    "encoding": "base64 of deterministic gzip mtime=0 containing JSON",
+    "json_bytes": 2363451,
+    "json_sha256": "5efc4c5ea2a09028d59a94ccd282b6e06b176dbfe62983f37f495e4cf1f288b1",
+    "members": 13,
+    "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+  },
+  "members": [
+    {
+      "bytes": 2165,
+      "kind": "constant-original-source-sdk-or-window-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/SDK-BEFORE.json",
+      "path": "actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+      "storage": "readable",
+      "transport_path": "actual/constant-continuation-bindings/SDK-BEFORE.json"
+    },
+    {
+      "bytes": 419528,
+      "kind": "constant-original-source-sdk-or-window-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/SOURCE-SEAL.json",
+      "path": "actual/constant-continuation-bindings/SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 376,
+      "kind": "constant-original-source-sdk-or-window-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/WINDOW-START.json",
+      "path": "actual/constant-continuation-bindings/WINDOW-START.json",
+      "sha256": "d87934d76871e7ba07167d30214cfc93a7c6746be3574d26e21abc4d74c63cc4",
+      "storage": "readable",
+      "transport_path": "actual/constant-continuation-bindings/WINDOW-START.json"
+    },
+    {
+      "bytes": 928,
+      "kind": "original-terminal-stage-start-result-or-complete-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/17-normal-test_optional_runtime_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-RESULT.json",
+      "sha256": "e23c02fac9a02824073c1098307055e5d757981a71d76ac3b2f629e7668a5a8c",
+      "storage": "readable",
+      "transport_path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-RESULT.json"
+    },
+    {
+      "bytes": 614,
+      "kind": "original-terminal-stage-start-result-or-complete-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/17-normal-test_optional_runtime_contracts-START.json",
+      "path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-START.json",
+      "sha256": "320962c1173f90d7540a6685917caa20fb3901850ea2a184c9826151b2179583",
+      "storage": "readable",
+      "transport_path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-START.json"
+    },
+    {
+      "bytes": 20527,
+      "kind": "original-terminal-stage-start-result-or-complete-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/17-normal-test_optional_runtime_contracts.log",
+      "path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts.log",
+      "sha256": "0ed334f0c2a5d3391b21f68a8bea034dfed7272fa445df84bba043892b2f8329",
+      "storage": "readable",
+      "transport_path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts.log"
+    },
+    {
+      "bytes": 941,
+      "kind": "original-terminal-stage-start-result-or-complete-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/17-optimized-test_optional_runtime_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-RESULT.json",
+      "sha256": "a3d0fb6027e393bf5737af63e27e0394b3cf74acda2e47fc1944da179d4ac480",
+      "storage": "readable",
+      "transport_path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-RESULT.json"
+    },
+    {
+      "bytes": 627,
+      "kind": "original-terminal-stage-start-result-or-complete-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/17-optimized-test_optional_runtime_contracts-START.json",
+      "path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-START.json",
+      "sha256": "33d8d63968292a937c0ba67f08ef8ee4f628c7561c3ffa8f4ae0d704278e595b",
+      "storage": "readable",
+      "transport_path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-START.json"
+    },
+    {
+      "bytes": 20527,
+      "kind": "original-terminal-stage-start-result-or-complete-merged-log",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-diagnostic-continuation-v28/17-optimized-test_optional_runtime_contracts.log",
+      "path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts.log",
+      "sha256": "376eeef74e9a7cf3b43d55d9583e00c5f738ac81d0020723b2d56217abfedd89",
+      "storage": "readable",
+      "transport_path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts.log"
+    },
+    {
+      "bytes": 419528,
+      "kind": "constant-diagnostic-protocol-inventory-or-published-source-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V28-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V28-SOURCE-SEAL.json",
+      "sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 616420,
+      "kind": "constant-diagnostic-protocol-inventory-or-published-source-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/FINAL-PYTHON-EXPECTED-INVENTORY-V28.json",
+      "path": "reproduce/FINAL-PYTHON-EXPECTED-INVENTORY-V28.json",
+      "sha256": "0996f6650319b26da030bcfccf85868e2eba6b755a46063bec9daabfd796a2f9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 848,
+      "kind": "constant-diagnostic-protocol-inventory-or-published-source-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf",
+      "storage": "readable",
+      "transport_path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json"
+    },
+    {
+      "bytes": 53516,
+      "kind": "constant-diagnostic-protocol-inventory-or-published-source-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/full-python-diagnostic-continuation-v28.json",
+      "path": "reproduce/full-python-diagnostic-continuation-v28.json",
+      "sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+      "storage": "readable",
+      "transport_path": "reproduce/full-python-diagnostic-continuation-v28.json"
+    },
+    {
+      "bytes": 18919,
+      "kind": "unchanged-original-qualification-failure-deadline-input",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/full-python-matrix-final-v28/RESULT.json",
+      "path": "reproduce/original-failed-matrix-RESULT.json",
+      "sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 11833,
+      "kind": "constant-diagnostic-protocol-inventory-or-published-source-binding",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_diagnostic_continuation_v28.py",
+      "path": "reproduce/run_diagnostic_continuation_v28.py",
+      "sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc",
+      "storage": "readable",
+      "transport_path": "reproduce/run_diagnostic_continuation_v28.py"
+    },
+    {
+      "bytes": 92965,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/extensions/carla/lane_refinement.mojo",
+      "path": "reproduce/source/extensions/carla/lane_refinement.mojo",
+      "sha256": "13ae6d4658458a7d243597428eee762f9bbc40f8fe3507a47beac9ebd4ac1737",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8956,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "sha256": "37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 8759,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "sha256": "b5068eff6fcfccd7596512559c793b7c038f2f9e56703ba0fe371be98b8b8dc9",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 103293,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 22696,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/optional_runtime_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/optional_runtime_contracts.py",
+      "sha256": "6f590602951d944a20cda93f9d353dca4ab93da4a45d3068bd2911c015688532",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 14542,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/reviewed_cleanup_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/reviewed_cleanup_contracts.py",
+      "sha256": "3ee8a27ecc528e7029aded89fe9c729d7623bc6ff8c70d4ba4a45b7258b1bb7a",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 12704,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/source_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/source_contracts.py",
+      "sha256": "857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 24282,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/sum2_guard_contracts.py",
+      "sha256": "870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    },
+    {
+      "bytes": 53228,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "113fdf00378019493262fcdc287235449775c79881533c4568a13e3c7e43fd47",
+      "storage": "readable",
+      "transport_path": "reproduce/source/tools/carla_lane_oracle/test_optional_runtime_contracts.py"
+    },
+    {
+      "bytes": 8205,
+      "kind": "exact-seal-bound-test-observer-guard-or-source",
+      "original_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/coverage_toolchain_identity.py",
+      "path": "reproduce/source/tools/coverage_toolchain_identity.py",
+      "sha256": "4fe6f947fc6cba35449287ed1398f7a8a37489be1f7aa5120fbe130e0391be22",
+      "storage": "container",
+      "transport_path": "containers/ORIGINAL-EVIDENCE.json.gz.b64"
+    }
+  ],
+  "original_member_bytes": 1936927,
+  "original_member_count": 25,
+  "schema": 1
+}

@@ -1,0 +1,139 @@
+{
+  "files": [
+    {
+      "bytes": 3375,
+      "kind": "derived-selected-command-binding-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "61b14e87b199ab271443900c48da0fa0eb163893f146ef4ff08e0003b9634089"
+    },
+    {
+      "bytes": 13723,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "a47cc4e43f8e645923dc72a4067a0090ce642e09cebe8fc3d0488c0a437ec3b0"
+    },
+    {
+      "bytes": 2739,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/README.md",
+      "path": "README.md",
+      "sha256": "4c4b08af68a586a583eaae6898c0c01f40d3cce4e5812c28b429c6db9772c5a4"
+    },
+    {
+      "bytes": 6345,
+      "kind": "derived-selected-error-pair-scope-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "5ba2cc35d59ad98a0a8c3ce1dce458f1a241253ab95b62851422fcdc00a4d285"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "path": "actual/constant-continuation-bindings/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 376,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/constant-continuation-bindings/WINDOW-START.json",
+      "path": "actual/constant-continuation-bindings/WINDOW-START.json",
+      "sha256": "d87934d76871e7ba07167d30214cfc93a7c6746be3574d26e21abc4d74c63cc4"
+    },
+    {
+      "bytes": 928,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-RESULT.json",
+      "sha256": "e23c02fac9a02824073c1098307055e5d757981a71d76ac3b2f629e7668a5a8c"
+    },
+    {
+      "bytes": 614,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-START.json",
+      "path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts-START.json",
+      "sha256": "320962c1173f90d7540a6685917caa20fb3901850ea2a184c9826151b2179583"
+    },
+    {
+      "bytes": 20527,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts.log",
+      "path": "actual/selected-terminal-stages/17-normal-test_optional_runtime_contracts.log",
+      "sha256": "0ed334f0c2a5d3391b21f68a8bea034dfed7272fa445df84bba043892b2f8329"
+    },
+    {
+      "bytes": 941,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-RESULT.json",
+      "path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-RESULT.json",
+      "sha256": "a3d0fb6027e393bf5737af63e27e0394b3cf74acda2e47fc1944da179d4ac480"
+    },
+    {
+      "bytes": 627,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-START.json",
+      "path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts-START.json",
+      "sha256": "33d8d63968292a937c0ba67f08ef8ee4f628c7561c3ffa8f4ae0d704278e595b"
+    },
+    {
+      "bytes": 20527,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts.log",
+      "path": "actual/selected-terminal-stages/17-optimized-test_optional_runtime_contracts.log",
+      "sha256": "376eeef74e9a7cf3b43d55d9583e00c5f738ac81d0020723b2d56217abfedd89"
+    },
+    {
+      "bytes": 939969,
+      "kind": "lossless-original-source-and-constant-bindings",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "b0d4c5d67993387ed52b66389405d8478f4329edf007741f846164fd1d3dbcef"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 18861,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/reproduce/build_optional_runtime_failure_pair_v28_packet.py",
+      "path": "reproduce/build_optional_runtime_failure_pair_v28_packet.py",
+      "sha256": "c34757d06c30b117e883ea4a211d586c32aa862df21d1262ca4812e2362f2d99"
+    },
+    {
+      "bytes": 53516,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/reproduce/full-python-diagnostic-continuation-v28.json",
+      "path": "reproduce/full-python-diagnostic-continuation-v28.json",
+      "sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3"
+    },
+    {
+      "bytes": 11833,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/reproduce/run_diagnostic_continuation_v28.py",
+      "path": "reproduce/run_diagnostic_continuation_v28.py",
+      "sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+    },
+    {
+      "bytes": 53228,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-optional-runtime-v28-failure-pair-packet/reproduce/source/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "113fdf00378019493262fcdc287235449775c79881533c4568a13e3c7e43fd47"
+    }
+  ],
+  "schema": 1,
+  "scope": "Two selected completed diagnostic stages on immutable v28: normal and optimized optional-runtime each ran95methods with94passing and1error, zero skips. Both retained1800-second stage caps and returned1 without timeout. This selected pair is not a passing module, complete continuation result or full qualification."
+}

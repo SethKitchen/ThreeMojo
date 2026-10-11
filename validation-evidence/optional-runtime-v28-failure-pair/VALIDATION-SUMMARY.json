@@ -1,0 +1,113 @@
+{
+  "base_published_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "cleanup_boundary": "Each selected leader was reaped and its receipt reports no remaining owned descendants. No live process status for the overall continuation is asserted.",
+  "completed_prefix_disclosure": "Only the two specified terminal stage receipts at positions18/19 of the diagnostic configuration are packaged. No assertion that this packet contains all completed prefix stages. Collection-level RESULT, LATEST, PROCESSES, SDK-AFTER, ongoing console and handoff files are neither read nor copied.",
+  "config_sha256": "a7282c67969f81b7e323cb685ed635db516aaf79621ea107d3d86ff2ecf1a0b3",
+  "configured_continuation_stage_count": 137,
+  "error_message": "full-audit cleanup successor: consumed operation text changed: extensions/carla/lane_refinement.mojo",
+  "error_method": "OptionalRuntimeContracts.test_absence_checks_actual_solver_imports_and_inert_decoys",
+  "error_type": "full_audit_cleanup_contracts._OperationCoherenceError",
+  "evidence_policy": "Exact original bytes plus clearly derived summaries/index. No mutable ongoing files, private notes, test/native execution, candidate edits, uploads or invented receipts.",
+  "original_failure_boundary": "Original v28 full-matrix failure remains failed and unchanged. Diagnostic accept_nonzero collects ordinary errors without converting them to passes. Any later v30 focus, repair or diagnostic result is excluded.",
+  "original_window": {
+    "absolute_deadline_utc": "2026-10-11T08:35:38.016452+00:00",
+    "clamped_seconds_recorded_at_start": 9158.74437,
+    "configured_seconds": 10800,
+    "original_failed_matrix_result_sha256": "a2d054ac36ac97e729d292956a2233f10b479b6f40194fec90c9f088858be844"
+  },
+  "other_135_stage_outcomes": "Outside this packet; no pass/fail/unrun or completion status assigned.",
+  "per_mode": {
+    "errors": 1,
+    "failures": 0,
+    "methods_run": 95,
+    "passed": 94,
+    "skips": 0
+  },
+  "qualification_limit": "No passing optional-runtime module, complete continuation, full matrix, native/coverage, hosted CI or issue completion.",
+  "reproduction_boundary": "Contains six selected terminal stage files, only constant phase bindings, exact diagnostic config and supervisor, expected inventory, source/publication seals, original failure deadline input, and ten bound relevant source files. The complete unchanged repository and installed SDK are not distributed.",
+  "schema": 1,
+  "scope": "Two selected completed diagnostic stages on immutable v28: normal and optimized optional-runtime each ran95methods with94passing and1error, zero skips. Both retained1800-second stage caps and returned1 without timeout. This selected pair is not a passing module, complete continuation result or full qualification.",
+  "sdk_before_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "selected_config_positions_one_based": [
+    18,
+    19
+  ],
+  "selected_pair_total": {
+    "errors": 2,
+    "methods_run": 190,
+    "passed": 188
+  },
+  "selected_stage_results": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_optional_runtime_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 95,
+      "label": "17-normal-test_optional_runtime_contracts",
+      "leader_reaped": true,
+      "log_sha256": "0ed334f0c2a5d3391b21f68a8bea034dfed7272fa445df84bba043892b2f8329",
+      "pgid": 66,
+      "pid": 66,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 741.0565567150043,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T06:23:29.031410+00:00",
+      "test_count": 95,
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_optional_runtime_contracts.py",
+        "-v"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+      "expected_tests": 95,
+      "label": "17-optimized-test_optional_runtime_contracts",
+      "leader_reaped": true,
+      "log_sha256": "376eeef74e9a7cf3b43d55d9583e00c5f738ac81d0020723b2d56217abfedd89",
+      "pgid": 69,
+      "pid": 69,
+      "remaining_owned_descendants": [],
+      "returncode": 1,
+      "seconds": 736.2463915760018,
+      "single_cpu": 0,
+      "skipped_test_count": 0,
+      "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+      "stage_timeout_seconds": 1800,
+      "started": "2026-10-11T06:35:52.339297+00:00",
+      "test_count": 95,
+      "timed_out": false
+    }
+  ],
+  "source_read_boundary": "Original test patches Path.read_text to prepend an inert comment to lane_refinement.mojo while leaving Path.read_bytes unpatched. The raw traceback shows rejection at the owned consumed-text comparison during guards.verify(ROOT), after optional.verify(ROOT) returned. This packet records that error; it does not change or waive the existing assertion.",
+  "source_sdk_check_boundary": "Each terminal receipt has post-run test-count annotations. In the exact included supervisor those annotations are written only after run returns through source verification and SDK comparison. This is a control-flow inference from terminal receipts, not a fabricated overall source/SDK-after receipt. The constant initial source and SDK bindings are retained; no final collection stability claim is made.",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "source_tree": "d2c9f94523b9c03aa94b04eaad774f73f147cd74",
+  "status": "TWO_TERMINAL_OPTIONAL_RUNTIME_DIAGNOSTIC_ERRORS_NOT_QUALIFICATION",
+  "supervisor_sha256": "0c6cf71e8be2fe48be76414cd800449e382569de824424a9e51110e90bc50ffc"
+}

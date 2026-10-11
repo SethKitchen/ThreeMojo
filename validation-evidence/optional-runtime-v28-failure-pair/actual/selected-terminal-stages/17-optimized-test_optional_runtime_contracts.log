@@ -1,0 +1,157 @@
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+test_absence_checks_actual_solver_imports_and_inert_decoys (test_optional_runtime_contracts.OptionalRuntimeContracts.test_absence_checks_actual_solver_imports_and_inert_decoys) ... ERROR
+test_absence_rejects_import_alias_reexport_and_indirect_consumers (test_optional_runtime_contracts.OptionalRuntimeContracts.test_absence_rejects_import_alias_reexport_and_indirect_consumers) ... ok
+test_actual_dispatch_exact_and_one_short_reserves (test_optional_runtime_contracts.OptionalRuntimeContracts.test_actual_dispatch_exact_and_one_short_reserves) ... ok
+test_actual_integer_helper_exact_one_short_and_overflow_boundaries (test_optional_runtime_contracts.OptionalRuntimeContracts.test_actual_integer_helper_exact_one_short_and_overflow_boundaries) ... ok
+test_actual_recheck_helper_exact_and_one_short (test_optional_runtime_contracts.OptionalRuntimeContracts.test_actual_recheck_helper_exact_and_one_short) ... ok
+test_all_five_new_modules_have_dependency_contracts (test_optional_runtime_contracts.OptionalRuntimeContracts.test_all_five_new_modules_have_dependency_contracts) ... ok
+test_combined_current_lane_and_producer_faults_never_project_away (test_optional_runtime_contracts.OptionalRuntimeContracts.test_combined_current_lane_and_producer_faults_never_project_away) ... ok
+test_continuation_preserves_cumulative_work_and_saved_depth (test_optional_runtime_contracts.OptionalRuntimeContracts.test_continuation_preserves_cumulative_work_and_saved_depth) ... ok
+test_debit_cannot_move_after_first_raw_envelope (test_optional_runtime_contracts.OptionalRuntimeContracts.test_debit_cannot_move_after_first_raw_envelope) ... ok
+test_dispatch_cannot_move_before_original_closures (test_optional_runtime_contracts.OptionalRuntimeContracts.test_dispatch_cannot_move_before_original_closures) ... ok
+test_every_historical_lane_family_has_a_live_current_owner_refusal (test_optional_runtime_contracts.OptionalRuntimeContracts.test_every_historical_lane_family_has_a_live_current_owner_refusal) ... ok
+test_global_inventory_rejects_new_modules_aliases_and_reexports (test_optional_runtime_contracts.OptionalRuntimeContracts.test_global_inventory_rejects_new_modules_aliases_and_reexports) ... ok
+test_grouped_reserve_cannot_bypass_prepaid_fallback_order (test_optional_runtime_contracts.OptionalRuntimeContracts.test_grouped_reserve_cannot_bypass_prepaid_fallback_order) ... ok
+test_historical_search_helper_never_admits_an_old_physical_endpoint (test_optional_runtime_contracts.OptionalRuntimeContracts.test_historical_search_helper_never_admits_an_old_physical_endpoint) ... ok
+test_missing_global_inventory_binding_rejects (test_optional_runtime_contracts.OptionalRuntimeContracts.test_missing_global_inventory_binding_rejects) ... ok
+test_mutation_actual_after_index (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_actual_after_index) ... ok
+test_mutation_actual_before_index (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_actual_before_index) ... ok
+test_mutation_actual_witness_point (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_actual_witness_point) ... ok
+test_mutation_actual_witness_source (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_actual_witness_source) ... ok
+test_mutation_cached_term_reservation (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_cached_term_reservation) ... ok
+test_mutation_center_outside (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_center_outside) ... ok
+test_mutation_dispatch_child_predecessor (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_child_predecessor) ... ok
+test_mutation_dispatch_cut_cap (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_cut_cap) ... ok
+test_mutation_dispatch_descendant_nodes (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_descendant_nodes) ... ok
+test_mutation_dispatch_descendant_terms (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_descendant_terms) ... ok
+test_mutation_dispatch_node_headroom (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_node_headroom) ... ok
+test_mutation_dispatch_term_debit (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_term_debit) ... ok
+test_mutation_dispatch_term_headroom (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_dispatch_term_headroom) ... ok
+test_mutation_expansion_memo_wrong_scale (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_expansion_memo_wrong_scale) ... ok
+test_mutation_expansion_memo_wrong_station (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_expansion_memo_wrong_station) ... ok
+test_mutation_fast_memo_wrong_scale (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fast_memo_wrong_scale) ... ok
+test_mutation_fast_memo_wrong_station (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fast_memo_wrong_station) ... ok
+test_mutation_fixtures_survive_formatter_wrapping (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fixtures_survive_formatter_wrapping) ... ok
+test_mutation_followup_center_admission (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_center_admission) ... ok
+test_mutation_followup_consumed_nodes (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_consumed_nodes) ... ok
+test_mutation_followup_consumed_terms (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_consumed_terms) ... ok
+test_mutation_followup_negative_center (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_negative_center) ... ok
+test_mutation_followup_negative_nodes (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_negative_nodes) ... ok
+test_mutation_followup_negative_reference (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_negative_reference) ... ok
+test_mutation_followup_negative_terms (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_negative_terms) ... ok
+test_mutation_followup_one_short_node (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_one_short_node) ... ok
+test_mutation_followup_one_short_term (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_one_short_term) ... ok
+test_mutation_followup_overflow_form (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_followup_overflow_form) ... ok
+test_mutation_fresh_guard__restrict_objective_model (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__restrict_objective_model) ... ok
+test_mutation_fresh_guard__sample_dispatch_cut (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__sample_dispatch_cut) ... ok
+test_mutation_fresh_guard__try_grouped_lane_jet (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__try_grouped_lane_jet) ... ok
+test_mutation_fresh_guard__try_objective_model (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__try_objective_model) ... ok
+test_mutation_fresh_guard__try_sample_dispatch_cuts (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__try_sample_dispatch_cuts) ... ok
+test_mutation_fresh_guard__try_spiral_grouped_roundoff_envelope (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__try_spiral_grouped_roundoff_envelope) ... ok
+test_mutation_fresh_guard__try_spiral_grouped_roundoff_envelope_metered (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_guard__try_spiral_grouped_roundoff_envelope_metered) ... ok
+test_mutation_fresh_producer_early_cached_closure (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_producer_early_cached_closure) ... ok
+test_mutation_fresh_producer_stale_domain (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_producer_stale_domain) ... ok
+test_mutation_fresh_producer_unpaid (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_producer_unpaid) ... ok
+test_mutation_fresh_producer_wrong_owner (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_producer_wrong_owner) ... ok
+test_mutation_fresh_producer_wrong_work (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_fresh_producer_wrong_work) ... ok
+test_mutation_grouped_debit_omission (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_debit_omission) ... ok
+test_mutation_grouped_distance_error (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_distance_error) ... ok
+test_mutation_grouped_dropped_count (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_dropped_count) ... ok
+test_mutation_grouped_hidden_fallback (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_hidden_fallback) ... ok
+test_mutation_grouped_multiplicity (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_multiplicity) ... ok
+test_mutation_grouped_recheck_headroom (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_recheck_headroom) ... ok
+test_mutation_grouped_second_count_debit (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_second_count_debit) ... ok
+test_mutation_grouped_second_count_domain (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_second_count_domain) ... ok
+test_mutation_grouped_stale_optional_result (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_stale_optional_result) ... ok
+test_mutation_grouped_unchecked_error (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_unchecked_error) ... ok
+test_mutation_grouped_union_admission (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_union_admission) ... ok
+test_mutation_grouped_work (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_grouped_work) ... ok
+test_mutation_invalid_error (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_invalid_error) ... ok
+test_mutation_logical_dispatch_fee (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_logical_dispatch_fee) ... ok
+test_mutation_memo_cross_invocation (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_memo_cross_invocation) ... ok
+test_mutation_metered_fallback_reservation (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_metered_fallback_reservation) ... ok
+test_mutation_model_capture_reintroduction (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_model_capture_reintroduction) ... ok
+test_mutation_model_restriction_reintroduction (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_model_restriction_reintroduction) ... ok
+test_mutation_model_state_reintroduction (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_model_state_reintroduction) ... ok
+test_mutation_owner_curvature (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_owner_curvature) ... ok
+test_mutation_owner_error (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_owner_error) ... ok
+test_mutation_owner_high (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_owner_high) ... ok
+test_mutation_owner_low (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_owner_low) ... ok
+test_mutation_raw_inverse_adjacent_bracket (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_raw_inverse_adjacent_bracket) ... ok
+test_mutation_recheck_negative_counter (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_recheck_negative_counter) ... ok
+test_mutation_recheck_one_short (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_recheck_one_short) ... ok
+test_mutation_retained_model_fee (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_retained_model_fee) ... ok
+test_mutation_scale_word (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_scale_word) ... ok
+test_mutation_stored_predicate_strict (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_stored_predicate_strict) ... ok
+test_mutation_stored_predicate_subtraction (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_stored_predicate_subtraction) ... ok
+test_mutation_support_actual_witness (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_support_actual_witness) ... ok
+test_mutation_support_convex_error (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_support_convex_error) ... ok
+test_mutation_support_error_substitution (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_support_error_substitution) ... ok
+test_mutation_taylor_half (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_taylor_half) ... ok
+test_mutation_unknown_derivative (test_optional_runtime_contracts.OptionalRuntimeContracts.test_mutation_unknown_derivative) ... ok
+test_omitted_new_dependency_rejects_schema (test_optional_runtime_contracts.OptionalRuntimeContracts.test_omitted_new_dependency_rejects_schema) ... ok
+test_removal_manifest_is_bound_and_retains_historical_controls (test_optional_runtime_contracts.OptionalRuntimeContracts.test_removal_manifest_is_bound_and_retains_historical_controls) ... ok
+test_try_only_projection_preserves_all_historical_graph_constants (test_optional_runtime_contracts.OptionalRuntimeContracts.test_try_only_projection_preserves_all_historical_graph_constants) ... ok
+test_unreviewed_checked_leaf_edge_inside_existing_module_rejects (test_optional_runtime_contracts.OptionalRuntimeContracts.test_unreviewed_checked_leaf_edge_inside_existing_module_rejects) ... ok
+test_unreviewed_removal_lineage_rejects (test_optional_runtime_contracts.OptionalRuntimeContracts.test_unreviewed_removal_lineage_rejects) ... ok
+
+======================================================================
+ERROR: test_absence_checks_actual_solver_imports_and_inert_decoys (test_optional_runtime_contracts.OptionalRuntimeContracts.test_absence_checks_actual_solver_imports_and_inert_decoys)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1535, in _observe
+    self._match(root, path, value, mode)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1517, in _match
+    require(value == text, 'consumed operation text changed: ' + path)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 31, in require
+    raise ContractError('full-audit cleanup successor: ' + message)
+full_audit_cleanup_contracts.ContractError: full-audit cleanup successor: consumed operation text changed: extensions/carla/lane_refinement.mojo
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_optional_runtime_contracts.py", line 468, in test_absence_checks_actual_solver_imports_and_inert_decoys
+    self.assertEqual(guards.verify(ROOT)['status'], 'PASS')
+                     ^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/sum2_guard_contracts.py", line 477, in verify
+    reviewed_cleanup_contracts.verify(root, **operation_args)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/reviewed_cleanup_contracts.py", line 299, in verify
+    invariant.verify(root)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_invariant_contracts.py", line 96, in verify
+    matches = followup.accepts_predecessor_source(root,path,item['after_token_sha256'], **operation_args)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_followup_contracts.py", line 128, in accepts_predecessor_source
+    record = verify(root, **({} if _operation is None else {'_operation': _operation}))
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_followup_contracts.py", line 108, in verify
+    require(source.token_sha256(accepted.predecessor_text(root, path, **operation_args) if path in accepted.SOURCE_PATHS else cache_key.reviewed_text(root, path, _observe_text(root, path, (root/path).read_text(), _operation=_operation), **operation_args)) == item['after_token_sha256'],
+                                                                                                                                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/coverage_followup_contracts.py", line 56, in _observe_text
+    return full_audit._observe_text(root, path, text, _operation=_operation)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1375, in _observe_text
+    _operation_fail(_operation, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1128, in _operation_fail
+    raise error
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1373, in _observe_text
+    return _operation_observe(_operation, root, path, value, actual_mode)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1342, in _operation_observe
+    _operation_fail(operation, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1128, in _operation_fail
+    raise error
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1339, in _operation_observe
+    operation._observe(root, str(path), value, mode)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1537, in _observe
+    _operation_fail(self, error)
+  File "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/full_audit_cleanup_contracts.py", line 1132, in _operation_fail
+    raise failure from error
+full_audit_cleanup_contracts._OperationCoherenceError: full-audit cleanup successor: consumed operation text changed: extensions/carla/lane_refinement.mojo
+
+----------------------------------------------------------------------
+Ran 95 tests in 735.252s
+
+FAILED (errors=1)

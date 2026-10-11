@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_optional_runtime_contracts.py",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+  "label": "17-normal-test_optional_runtime_contracts",
+  "pgid": 66,
+  "pid": 66,
+  "single_cpu": 0,
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T06:23:29.031410+00:00"
+}
