@@ -280,11 +280,9 @@ struct _KneeBones(ImplicitlyCopyable):
     def clip(self, point: Vector3, value: Float32) -> Float32:
         """Remove every bone interior from a tissue's field `value`.
 
-        A nonnegative `value` is returned unchanged: the point is not in
-        the tissue either way.
+        The difference applies to nonnegative values too. Otherwise a
+        tissue surface buried inside a bone remains a spurious zero set.
         """
-        if value >= 0:
-            return value
         var d = max(value, -self.femur.distance(point - self.femur_origin))
         d = max(d, -self.tibia.distance(point - self.tibia_origin))
         d = max(d, -self.fibula.distance(point - self.fibula_origin))
@@ -530,8 +528,6 @@ def _yield(
     value: Float32, cartilage: CartilageField, point: Vector3
 ) -> Float32:
     """Remove the cartilage lens from a later tissue's field `value`."""
-    if value >= 0:
-        return value
     return max(value, -cartilage.lens_distance(point))
 
 
@@ -539,8 +535,6 @@ def _yield_tube(
     value: Float32, meniscus: MeniscusField, point: Vector3
 ) -> Float32:
     """Remove a meniscus tube from a later tissue's field `value`."""
-    if value >= 0:
-        return value
     return max(value, -meniscus.tube_distance(point))
 
 
