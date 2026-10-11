@@ -36,6 +36,7 @@ This is not a three.js port. See Extensions.
     var face = model.part(points, FACE_AND_HEAD)
 """
 
+from core.binary import little_endian_u32
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from math.vector3 import Vector3
@@ -103,16 +104,6 @@ def _need(bytes: List[UInt8], at: Int, count: Int) raises:
         raise Error("The face model ends early")
 
 
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian 32-bit integer at `at`."""
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
-
-
 def _count_limit(value: Int, limit: Int) raises:
     """Refuse a header count before any multiplication or allocation."""
     if value > limit:
@@ -129,22 +120,22 @@ def _header(bytes: List[UInt8], path: String) raises:
         or bytes[3] != 70
     ):
         raise Error("Not a face model: " + path)
-    if _u32(bytes, 4) != _VERSION:
+    if little_endian_u32(bytes, 4) != _VERSION:
         raise Error("A face model of another version: " + path)
-    _count_limit(_u32(bytes, 8), 65536)
-    _count_limit(_u32(bytes, 12), 65536)
-    _count_limit(_u32(bytes, 16), _MAX_COUNT)
-    _count_limit(_u32(bytes, 20), 1024)
-    _count_limit(_u32(bytes, 24), 1024)
-    _count_limit(_u32(bytes, 28), _MAX_COUNT)
-    _count_limit(_u32(bytes, 32), _MAX_COUNT)
-    _count_limit(_u32(bytes, 36), _MAX_COUNT)
-    _count_limit(_u32(bytes, 40), _MAX_COUNT)
-    _count_limit(_u32(bytes, 44), _MAX_COUNT)
-    _count_limit(_u32(bytes, 48), _MAX_BYTES - HEADER)
-    _count_limit(_u32(bytes, 52), 65536)
-    _count_limit(_u32(bytes, 56), _MAX_COUNT)
-    _count_limit(_u32(bytes, 60), 65536)
+    _count_limit(little_endian_u32(bytes, 8), 65536)
+    _count_limit(little_endian_u32(bytes, 12), 65536)
+    _count_limit(little_endian_u32(bytes, 16), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 20), 1024)
+    _count_limit(little_endian_u32(bytes, 24), 1024)
+    _count_limit(little_endian_u32(bytes, 28), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 32), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 36), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 40), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 44), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 48), _MAX_BYTES - HEADER)
+    _count_limit(little_endian_u32(bytes, 52), 65536)
+    _count_limit(little_endian_u32(bytes, 56), _MAX_COUNT)
+    _count_limit(little_endian_u32(bytes, 60), 65536)
     if _prefix(bytes, -1, True) > _MAX_BYTES - HEADER:
         raise Error("A face model exceeds its byte limit")
 
@@ -227,28 +218,31 @@ def _prefix(header: List[UInt8], identities: Int, expressions: Bool) -> Int:
     mesh, the expressions if they are wanted or identities follow them,
     and the first `identities` identity modes, or all for a negative
     count."""
-    var vertices = _u32(header, 8)
-    var drawn = _u32(header, 12)
+    var vertices = little_endian_u32(header, 8)
+    var drawn = little_endian_u32(header, 12)
     var shorts = (
         drawn
-        + _u32(header, 16) * 3
-        + _u32(header, 28) * 3
-        + _u32(header, 32) * 2
-        + _u32(header, 36)
-        + _u32(header, 40)
-        + _u32(header, 44) * 3
-        + _u32(header, 52)
-        + _u32(header, 56) * 2
-        + _u32(header, 60) * 3
+        + little_endian_u32(header, 16) * 3
+        + little_endian_u32(header, 28) * 3
+        + little_endian_u32(header, 32) * 2
+        + little_endian_u32(header, 36)
+        + little_endian_u32(header, 40)
+        + little_endian_u32(header, 44) * 3
+        + little_endian_u32(header, 52)
+        + little_endian_u32(header, 56) * 2
+        + little_endian_u32(header, 60) * 3
     )
-    var modes = _u32(header, 20)
+    var modes = little_endian_u32(header, 20)
     if identities >= 0:
         modes = min(modes, identities)
     var wanted = (
-        vertices * 12 + drawn * 8 + _aligned(shorts * 2) + _u32(header, 60) * 8
+        vertices * 12
+        + drawn * 8
+        + _aligned(shorts * 2)
+        + little_endian_u32(header, 60) * 8
     )
     if expressions or modes > 0:
-        wanted += _u32(header, 48)
+        wanted += little_endian_u32(header, 48)
     return wanted + modes * _aligned(4 + vertices * 3)
 
 
@@ -330,25 +324,25 @@ struct FaceModel(Movable):
             self.bytes.extend(source.read_bytes(wanted))
         # Unrequested trailing modes are not read or certified. Every byte
         # admitted to this model is checked before it can reach a caller.
-        var vertices = _u32(self.bytes, 8)
-        var drawn = _u32(self.bytes, 12)
-        var triangle_count = _u32(self.bytes, 16)
-        var modes = _u32(self.bytes, 20)
-        var shapes = _u32(self.bytes, 24)
+        var vertices = little_endian_u32(self.bytes, 8)
+        var drawn = little_endian_u32(self.bytes, 12)
+        var triangle_count = little_endian_u32(self.bytes, 16)
+        var modes = little_endian_u32(self.bytes, 20)
+        var shapes = little_endian_u32(self.bytes, 24)
         if identities >= 0:
             modes = min(modes, identities)
         var read_shapes = expressions or modes > 0
         if not read_shapes:
             shapes = 0
-        var skin = _u32(self.bytes, 28)
-        var edges = _u32(self.bytes, 32)
-        var holes = _u32(self.bytes, 36)
-        var corners = _u32(self.bytes, 40)
-        var coarse = _u32(self.bytes, 44)
-        var shape_bytes = _u32(self.bytes, 48)
-        var kept = _u32(self.bytes, 52)
-        var links = _u32(self.bytes, 56)
-        var followers = _u32(self.bytes, 60)
+        var skin = little_endian_u32(self.bytes, 28)
+        var edges = little_endian_u32(self.bytes, 32)
+        var holes = little_endian_u32(self.bytes, 36)
+        var corners = little_endian_u32(self.bytes, 40)
+        var coarse = little_endian_u32(self.bytes, 44)
+        var shape_bytes = little_endian_u32(self.bytes, 48)
+        var kept = little_endian_u32(self.bytes, 52)
+        var links = little_endian_u32(self.bytes, 56)
+        var followers = little_endian_u32(self.bytes, 60)
         var at = HEADER
         var shorts = (
             drawn
@@ -477,7 +471,7 @@ struct FaceModel(Movable):
             self.expression_names.append(name)
             at = _aligned(at + 1 + length)
             _need(self.bytes, at, 8)
-            var moved = _u32(self.bytes, at)
+            var moved = little_endian_u32(self.bytes, at)
             self.expression_scales.append(_scale(self.bytes, at + 4))
             at += 8
             if moved > 65536:

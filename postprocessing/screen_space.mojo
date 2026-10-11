@@ -41,6 +41,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from postprocessing.sample_math import gaussian_pdf
 from math.norm import length2
 
 from core.layers import Layers
@@ -1610,14 +1611,14 @@ def _outline_blur(
         while x < width:
             var u = u_of(x, width)
             var v = v_of(y, height)
-            var total = _gaussian(0, sigma)
+            var total = gaussian_pdf(0, sigma)
             var sum = sample(source, source_width, source_height, u, v)
             sum = FloatColor(
                 sum.r * total, sum.g * total, sum.b * total, sum.a * total
             )
             var tap = 1
             while tap <= max_radius:
-                var w = _gaussian(
+                var w = gaussian_pdf(
                     kernel_radius * Float32(tap) / Float32(max_radius), sigma
                 )
                 var t = Float32(tap)
@@ -1641,11 +1642,6 @@ def _outline_blur(
             x += 1
         y += 1
     return out^
-
-
-def _gaussian(x: Float32, sigma: Float32) -> Float32:
-    """Return three.js's `gaussianPdf`."""
-    return 0.39894 * exp(-0.5 * x * x / (sigma * sigma)) / sigma
 
 
 def outline_mask(

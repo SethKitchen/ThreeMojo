@@ -15,6 +15,7 @@ one side's. The display minimum radius is not used.
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     lymph_tissue,
@@ -33,7 +34,6 @@ from extensions.humanoid.skeleton.torso.lymph.dimensions import (
     torso_lymph_field,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def torso_lymph_occupancy(
@@ -97,7 +97,4 @@ def torso_lymph_mass_from_dimensions(
     """
     tissue.validate()
     var volume = torso_lymph_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

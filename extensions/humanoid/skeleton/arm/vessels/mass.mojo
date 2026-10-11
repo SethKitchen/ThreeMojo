@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.arm.vessels.dimensions import (
     arm_vessel_field,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     vessel_tissue,
@@ -34,7 +35,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def arm_vessel_occupancy(
@@ -98,7 +98,4 @@ def arm_vessel_mass_from_dimensions(
     """
     tissue.validate()
     var volume = arm_vessel_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

@@ -111,7 +111,7 @@ A disabled body still occupies its body slot. CARLA parks destroyed actors with 
 
 Convex edge contacts compare differences between support projections. A maximum support vertex stays selected after a large world translation. Contact coordinates still have Float32 resolution. Tests move crossed edges by positive and negative 10 km offsets along each contact axis. Their 3 mm point and depth tolerance allows about three Float32 coordinate steps at 10 km.
 
-These tests do not prove contact accuracy at arbitrary world coordinates. Body positions and contact points still use Float32. A precision-preserving public quantity contract is tracked in [#333](https://github.com/SethKitchen/ThreeMojo/issues/333); a world-origin policy remains a separate design choice.
+These tests do not prove contact accuracy at arbitrary world coordinates. Body positions and contact points still use Float32. A precision-preserving public quantity contract is tracked in [#333](https://github.com/SethKitchen/ThreeMojo/issues/333). The candidate scan is [the quantity inventory](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/carla-quantity-inventory-333.md). A world-origin policy remains a separate design choice.
 
 Material mixing widens the friction product before its square root. This keeps a representable geometric mean finite across the accepted Float32 coefficient range. It does not establish a calibrated material model.
 

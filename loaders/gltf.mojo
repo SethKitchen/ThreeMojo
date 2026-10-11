@@ -166,6 +166,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from core.binary import little_endian_u32
 from math.norm import length3, normalized3, _ordinary_squared
 
 from loaders.gltf_layout import AccessorLayout, check_buffer_range
@@ -792,7 +793,10 @@ def read_gltf(
     var bytes = Path(path).read_bytes()
     # Up to and including the last slash, or nothing for a bare name.
     var directory = _slice(path, 0, path.rfind("/") + 1)
-    if len(bytes) >= 4 and _le32(bytes, 0) == GLB_MAGIC:
+    if (
+        len(bytes) >= 4
+        and little_endian_u32(bytes, 0) == GLB_MAGIC
+    ):
         var parts = split_glb(bytes)
         return load_gltf(parts[0], parts[1], directory, scene, assets, workers)
     return load_gltf(
@@ -819,11 +823,14 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
             chunk is not JSON, a chunk runs past the file, or a chunk is
             of a type that is neither JSON nor binary.
     """
-    if len(bytes) < GLB_HEADER_BYTES or _le32(bytes, 0) != GLB_MAGIC:
+    if (
+        len(bytes) < GLB_HEADER_BYTES
+        or little_endian_u32(bytes, 0) != GLB_MAGIC
+    ):
         raise Error("glTF: not a .glb container")
-    if _le32(bytes, 4) != GLB_VERSION:
+    if little_endian_u32(bytes, 4) != GLB_VERSION:
         raise Error("glTF: only version 2 of the binary container is read")
-    if _le32(bytes, 8) != len(bytes):
+    if little_endian_u32(bytes, 8) != len(bytes):
         raise Error("glTF: the container's length does not match the file")
     var at = GLB_HEADER_BYTES
     var json = String()
@@ -832,8 +839,8 @@ def split_glb(bytes: List[UInt8]) raises -> Tuple[String, List[UInt8]]:
     while at < len(bytes):
         if at + GLB_CHUNK_HEADER_BYTES > len(bytes):
             raise Error("glTF: a chunk header runs past the file")
-        var length = _le32(bytes, at)
-        var kind = _le32(bytes, at + 4)
+        var length = little_endian_u32(bytes, at)
+        var kind = little_endian_u32(bytes, at + 4)
         var start = at + GLB_CHUNK_HEADER_BYTES
         if start + length > len(bytes):
             raise Error("glTF: a chunk runs past the file")
@@ -1040,16 +1047,6 @@ def _check_asset(document: JsonDocument, root: Int) raises:
         raise Error("glTF: no asset version")
     if not document.string(version).startswith("2."):
         raise Error("glTF: only version 2 is read")
-
-
-def _le32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian unsigned word at `at`."""
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
 
 
 def decode_base64(text: String) raises -> List[UInt8]:
@@ -3640,7 +3637,9 @@ def _read_component[
     """Return one component as a number, normalized to zero through one or
     minus one through one when the accessor says so."""
     if component == COMPONENT_FLOAT:
-        return bitcast[DType.float32](UInt32(_le32(bytes, at))).cast[dtype]()
+        return bitcast[DType.float32](
+            UInt32(little_endian_u32(bytes, at))
+        ).cast[dtype]()
     var raw: Int
     if component == COMPONENT_UNSIGNED_BYTE:
         raw = Int(bytes[at])
@@ -3656,7 +3655,7 @@ def _read_component[
             raw -= 65536
     else:
         # `COMPONENT_UNSIGNED_INT`, the last `_component_size` admits.
-        raw = _le32(bytes, at)
+        raw = little_endian_u32(bytes, at)
     if normalized:
         return _integer_component(raw, component, True).cast[dtype]()
     return SIMD[dtype, 1](raw)

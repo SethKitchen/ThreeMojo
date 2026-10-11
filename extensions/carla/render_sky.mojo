@@ -50,6 +50,7 @@ the sunlit part of the light by it.
 The scales in this module are this port's own choices.
 """
 
+from render.color_math import mix_opaque
 from core.assets import Assets
 from core.object3d import Object3D
 from core.scene import Scene
@@ -272,7 +273,7 @@ def sky_texel(
         The color, in linear light.
     """
     var up = max(direction.y, 0)
-    var night = _mix(NIGHT_HORIZON, NIGHT_ZENITH, sqrt(up))
+    var night = mix_opaque(NIGHT_HORIZON, NIGHT_ZENITH, sqrt(up))
     var clear = FloatColor(
         sky.r * gain * day + night.r,
         sky.g * gain * day + night.g,
@@ -280,7 +281,7 @@ def sky_texel(
     )
     # Overcast: the whole sky goes gray as the cover grows.
     var gray = (clear.r + clear.g + clear.b) / 3
-    var overcast = _mix(
+    var overcast = mix_opaque(
         clear,
         FloatColor(gray, gray * 1.02, gray * 1.06),
         pow(settings.cloud_cover, Float32(1.5)),
@@ -298,8 +299,8 @@ def sky_texel(
         shade + light.g * silver * day + light.g * Float32(0.05) * day,
         shade + light.b * silver * day + light.b * Float32(0.05) * day,
     )
-    var colored = _mix(overcast, lit, cloud)
-    return _mix(
+    var colored = mix_opaque(overcast, lit, cloud)
+    return mix_opaque(
         _ground_color(ground),
         colored,
         smoothstep(Float32(-0.04), Float32(0.01), direction.y),
@@ -660,15 +661,8 @@ def hdri_sky(
                 var sky = FloatColor(
                     data[at] * gain, data[at + 1] * gain, data[at + 2] * gain
                 )
-                var seen = _mix(ground, sky, above)
+                var seen = mix_opaque(ground, sky, above)
                 data[at] = seen.r
                 data[at + 1] = seen.g
                 data[at + 2] = seen.b
     return _lighting(assets, cube^)
-
-
-def _mix(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
-    """Return `a` moved toward `b` by `t`."""
-    return FloatColor(
-        a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t
-    )

@@ -49,6 +49,7 @@ This is not a three.js port. See Extensions.
     var strand = style.strand(dims.head, 0)
 """
 
+from core.binary import little_endian_u32
 from extensions.humanoid.assets import humanoid_asset_path
 from extensions.humanoid.skeleton.head.frame import HeadDimensions
 from math.vector3 import Vector3
@@ -189,16 +190,6 @@ def hair_style_path(style: HairStyle) raises -> String:
     )
 
 
-def _u32(bytes: List[UInt8], at: Int) -> Int:
-    """Return the little-endian 32-bit integer at `at`."""
-    return (
-        Int(bytes[at])
-        | (Int(bytes[at + 1]) << 8)
-        | (Int(bytes[at + 2]) << 16)
-        | (Int(bytes[at + 3]) << 24)
-    )
-
-
 def _unit(v: Vector3) -> Vector3:
     """Return `v` scaled to unit length, or `v` where it has none."""
     var length = v.length()
@@ -270,10 +261,10 @@ struct HairStyleFile(Movable):
                 or bytes[3] != 83
             ):
                 raise Error("Not a hair style: " + path)
-            if _u32(bytes, 4) != _VERSION:
+            if little_endian_u32(bytes, 4) != _VERSION:
                 raise Error("The hair style is another version: " + path)
-            self.count = _u32(bytes, 8)
-            self.points = _u32(bytes, 12)
+            self.count = little_endian_u32(bytes, 8)
+            self.points = little_endian_u32(bytes, 12)
             if self.count < 1 or self.points < 2:
                 raise Error("The hair style has no strands: " + path)
             if self.count > 65536 or self.points > 256:

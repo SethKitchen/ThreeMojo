@@ -15,6 +15,7 @@ one side's. The display minimum radius is not used.
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
 )
@@ -33,7 +34,6 @@ from extensions.humanoid.skeleton.head.ligaments.dimensions import (
     head_ligament_tissue,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def head_ligament_occupancy(
@@ -101,7 +101,4 @@ def head_ligament_mass_from_dimensions(
     """
     tissue.validate()
     var volume = head_ligament_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)
