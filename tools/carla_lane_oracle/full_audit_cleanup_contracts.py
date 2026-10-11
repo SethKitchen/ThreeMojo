@@ -1763,8 +1763,13 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
             reverse_exact(path, item['after_source'], item)
         resolver_paths = (set(record['dependency_inventory']) | set(record['inventory'])
                           | set(record['native_dependency_inventory']))
+        # Coverage origin files cannot enter Mojo module lookup. Admit only
+        # exact sidecar coordinates of reviewed Mojo inputs at include roots;
+        # generation_origins and capture verification still bind their bytes.
+        include_resolver_paths = resolver_paths | {path + '.cov-origin'
+            for path in resolver_paths if path.endswith('.mojo')}
         require(resolver_unshadowed(root, resolver_paths)
-                and all(resolver_unshadowed(location, resolver_paths)
+                and all(resolver_unshadowed(location, include_resolver_paths)
                         for location in include_roots),
                 'unreviewed alternate, compiled, package, symlink or std resolver surface')
         known = {p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'}
@@ -1802,7 +1807,7 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         require({p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'} == known,
                 'source path inventory changed during verification')
         require(resolver_unshadowed(root, resolver_paths)
-                and all(resolver_unshadowed(location, resolver_paths) for location in include_roots),
+                and all(resolver_unshadowed(location, include_resolver_paths) for location in include_roots),
                 'resolver surface changed during verification')
         if _capture is not None:
             _regular(root, MIGRATION)

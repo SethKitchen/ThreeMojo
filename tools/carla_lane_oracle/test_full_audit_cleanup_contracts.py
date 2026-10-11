@@ -830,6 +830,52 @@ class FullAuditCleanupContracts(unittest.TestCase):
                 cleanup.verify(self.root, include_roots=(include,))
             cleanup.verify(self.root, exact=True)
 
+    def test_include_origin_metadata_keeps_exact_coordinates_and_source_guards(self):
+        name = 'extensions/carla/math.mojo'
+        origin = name + '.cov-origin'
+        paths = (set(self.record['dependency_inventory']) | set(self.record['inventory'])
+                 | set(self.record['native_dependency_inventory']))
+        self.assertIn(name, paths)
+        self.assertNotIn('tests/math.mojo', paths)
+        self.assertIn('math/__init__.mojo', paths)
+        self.assertNotIn('extensions/carla/math/__init__.mojo', paths)
+        include_paths = paths | {path + '.cov-origin' for path in paths
+                                 if path.endswith('.mojo')}
+        with tempfile.TemporaryDirectory(
+                prefix='cleanup-origin-include-', dir=Path(tempfile.gettempdir()).resolve()) as folder:
+            include = Path(folder)
+            with physical_change(include, name, (self.root/name).read_bytes()):
+                # This gate checks lookup topology only. The maintained origin
+                # verifier separately binds and rejects changed metadata bytes.
+                with physical_change(include, origin, b'opaque origin metadata\n'):
+                    self.assertFalse(cleanup.resolver_unshadowed(include, paths))
+                    self.assertTrue(cleanup.resolver_unshadowed(include, include_paths))
+                    cleanup.verify(self.root, exact=True, include_roots=(include,))
+                target = include/origin
+                target.symlink_to(include/name)
+                try:
+                    self.assertFalse(cleanup.resolver_unshadowed(include, include_paths))
+                finally:
+                    target.unlink()
+                target.mkdir()
+                try:
+                    self.assertFalse(cleanup.resolver_unshadowed(include, include_paths))
+                finally:
+                    target.rmdir()
+                for competitor in ('tests/math.mojo.cov-origin',
+                                   'extensions/carla/Math.mojo.cov-origin',
+                                   'extensions/carla/math.mojo.cov-origin.mojopkg',
+                                   'math.mojo', 'math.mojopkg', 'extensions/carla/math/__init__.mojo'):
+                    with self.subTest(competitor=competitor), physical_change(
+                            include, competitor, b'# not an eligible origin sidecar\n'):
+                        self.assertFalse(cleanup.resolver_unshadowed(include, include_paths))
+                cleanup.verify(self.root, exact=True, include_roots=(include,))
+            with physical_change(self.root, origin, b'not allowed in the source root\n'):
+                self.assertFalse(cleanup.resolver_unshadowed(self.root, paths))
+                with self.assertRaisesRegex(cleanup.ContractError, 'resolver surface'):
+                    cleanup.verify(self.root, exact=True, include_roots=(include,))
+        cleanup.verify(self.root, exact=True)
+
     def test_maintained_resolver_keeps_ordered_entry_roots_before_repository(self):
         affected = cleanup._sibling('affected')
         known = {'tools/probe.mojo', 'tests/probe.mojo', 'pkg/one.mojo',
