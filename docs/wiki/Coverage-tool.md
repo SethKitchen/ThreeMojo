@@ -95,14 +95,15 @@ Operands of `Bool`, `SIMD[DType.bool, 1]`, `Int`, `String`, `Optional[T]` and `L
 Other `Boolable` operands, which include custom types, go into a recording proxy. The native operators convert the proxy at the same points as the operand:
 
 - A temporary operand moves into a proxy that owns it. The proxy type has no operand origin, so two temporaries of one type give one proxy type. The extra move must be trivial, because a bitwise move runs no source code.
-- A retained operand, such as a variable or a field, goes into a proxy that borrows it with its origin. A same-type operator must copy a retained operand, so a move-only retained operand is always in a two-type operator.
+- A retained operand goes into a proxy that borrows it with its origin. Examples are a variable, a field and a conditional expression with two retained arms. A two-type operator converts the borrowed operand once and does not copy it. This is also true for an implicitly copyable operand, for example `copied or flag`.
+- A same-type operator selects an owned copy or move of a retained operand. A borrowing proxy cannot make that copy or move, so the operator check refuses it. Two borrows of one origin, as in `copied or copied`, have one proxy type. The check therefore reads the proxy kind and not only the type names.
 - Each conversion calls the operand's `__bool__` once. The first conversion records the condition. A later conversion of the same selected operand with a different truth records that hit too, and marks the condition `?`.
 
 Each `and` and `or` operator also gets an unevaluated `type_of` check. It compares the original subexpression with the instrumented one when Mojo instantiates the function, also in generic code. The check fails compilation when the probes would change the semantics of the operator.
 
 These operands fail compilation with a coverage diagnostic:
 
-- A retained implicitly copyable custom operand. A same-type operator copies it, and a proxy cannot make that copy.
+- A same-type operator with a retained custom operand, for example `copied or other` or `copied or Copied(False)`. The native operator copies or moves the selected retained operand, and a proxy cannot do that. A two-type operator with the same operand compiles.
 - A temporary custom operand with a user-defined move constructor. The proxy would run it one more time.
 - An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence. This includes a wrap from an empty `Optional[T]` into a present `Optional[Optional[T]]`.
 
@@ -112,9 +113,13 @@ The pinned reflection API names types without their origin parameters. A same-ty
 
 [Issue #556](https://github.com/SethKitchen/ThreeMojo/issues/556) fixes standard-library truth conversion. Native and instrumented checks cover optional, string, list and integer operands, including throwing operand expressions and short-circuit order.
 
-[Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) adds custom compound operands. An independent Python model of the native semantics supplies the expected results for 17 decision trees. The trees combine one-type and two-type operators, `not`, temporary and retained operands, `Bool` operands and a conditional-expression operand. Each tree runs with 16 truth assignments and 5 throwing positions, with stable truth tests and with truth tests that change at each conversion. The check compares the exact sequence of operand creation, conversion and destruction, the condition and decision hits, and the vectors. The reducer and the report must refuse each `?` vector.
+[Issue #560](https://github.com/SethKitchen/ThreeMojo/issues/560) adds custom compound operands. An independent Python model of the native semantics supplies the expected results for 24 decision trees. The trees combine one-type and two-type operators, `not`, temporary and retained operands, retained implicitly copyable operands, `Bool` operands and conditional-expression operands. Each tree runs with 16 truth assignments and 5 throwing positions, with stable truth tests and with truth tests that change at each conversion. The check compares the exact sequence of operand creation, conversion and destruction, the condition and decision hits, and the vectors. The reducer and the report must refuse each `?` vector.
 
-More native controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They also compare a retained operand without a pinned lifetime, a temporary that cannot move, and pure one-type operators. One generic function runs with one operand type and with two operand types, so each instantiation gets its own check. Ten more programs compile natively and must fail with the coverage diagnostic. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
+A second copy of the 24 trees uses caller-scope names that collide with the instrumenter. Retained operands are named `List`, `Int`, `Bool` and `_cov_eval_finish`. The helpers are named `_cov_eval_leaf`, `_cov_eval_node` and `_cov_branch`, and the state is named `_cov_eval_state0` and `_cov_hit`. The check requires that each generated alias and buffer name is absent from the source. The same model must then agree with each log, hit and vector.
+
+More native controls compare `while` and `elif` decisions, recursion and eight concurrent tasks. They also compare retained move-only and copyable operands without a pinned lifetime, a temporary that cannot move, and pure one-type operators. One generic function runs with one operand type and with two operand types, so each instantiation gets its own check. Another generic function borrows a retained copyable operand in one instantiation and has two `Bool` operands in the other.
+
+Eleven more programs compile natively and must fail with the coverage diagnostic. Two of them must also print the native copy of the selected retained operand. Four cover nested `Optional` operands in both orders, with `and` and `or`, all empty and present combinations, and construction logs that check short-circuit order.
 
 Destructor-order controls compare retained and temporary optional/list values with move-only elements. Shared drop-state observations cover later operands, grouped same-type and mixed-type decisions, and the final body.
 

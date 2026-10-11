@@ -154,7 +154,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Grouped coverage conditions](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#grouped-conditions): leaf-condition and MC/DC probes retain Boolean grouping and short-circuit order [#535](https://github.com/SethKitchen/ThreeMojo/issues/535)
 
-- [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): custom operands keep their native conversions and lifetimes. Three unsupported operand forms still fail compilation [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
+- [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): custom operands keep their native conversions and lifetimes, also retained implicitly copyable operands in two-type operators. Three unsupported operand forms still fail compilation [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
 
 </details>
 

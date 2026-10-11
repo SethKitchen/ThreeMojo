@@ -346,9 +346,10 @@ struct _BorrowedLeaf[
 ](Boolable, Movable):
     """A borrowed retained operand that records each native truth conversion.
 
-    The type keeps the operand origin, so Mojo keeps the operand alive. Only
-    non-implicitly-copyable operands use it. Native same-type `and` or `or`
-    must copy a retained operand, so these operands can only be mixed-type.
+    The type keeps the operand origin, so Mojo keeps the operand alive. A
+    native mixed-type `and` or `or` converts the borrowed operand once and
+    does not copy it. A native same-type operator selects an owned copy or
+    move of the operand. `node` refuses a same-type operator of these proxies.
     """
 
     var value: Pointer[Self.T, Self.value_origin]
@@ -443,9 +444,10 @@ def leaf[
 ) -> _BorrowedLeaf[T, value_origin, origin]:
     """Borrow a retained custom operand in a recording proxy.
 
-    Native same-type `and` or `or` copies a retained operand into its result.
-    A borrowing proxy cannot reproduce that copy, so an implicitly copyable
-    retained operand is rejected. Other retained operands are always mixed-type.
+    Native mixed-type `and` or `or` converts a retained operand once, without
+    a copy, so the proxy keeps it. Native same-type `and` or `or` copies or
+    moves a retained operand into its result. A borrowing proxy cannot do
+    that, so `node` refuses a same-type operator whose result is this proxy.
 
     Args:
         value: The retained operand, borrowed without a copy.
@@ -457,11 +459,6 @@ def leaf[
     Returns:
         A proxy that borrows the operand and records its truth conversions.
     """
-    comptime assert not conforms_to(T, ImplicitlyCopyable), (
-        "Coverage cannot yet preserve a retained implicitly copyable custom"
-        " Boolable compound operand: native same-type and/or copies it. Do not"
-        " exclude the source; see the coverage truth-conversion limit."
-    )
     return _BorrowedLeaf[T, value_origin, origin](
         Pointer(to=value), Pointer(to=values), id, index
     )
@@ -491,6 +488,25 @@ def _optional(name: StaticString) -> Bool:
     )
 
 
+def _borrowed(name: StaticString) -> Bool:
+    """Return True for the type name of a borrowing recording proxy.
+
+    The prefix comes from the proxy's own reflected name, so it follows the
+    runtime module path. A source type name always has its own module.
+
+    Args:
+        name: A reflected type name.
+
+    Returns:
+        True if the name is a `_BorrowedLeaf` instantiation.
+    """
+    comptime proxy = reflect[
+        _BorrowedLeaf[Bool, ImmutAnyOrigin, MutAnyOrigin]
+    ].name()
+    comptime prefix = proxy[byte = : proxy.find("[") + 1]
+    return name.startswith(prefix)
+
+
 def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     """Check that probes keep one `and`/`or` operator's native semantics.
 
@@ -499,6 +515,8 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     types. The probes keep the native operator, so it must choose the same
     semantics for the proxies. Fixed pure operands become `Bool`. They are
     exact unless an implicit `Optional` wrap replaces a value with presence.
+    A same-type result must be an owning proxy: a borrowing proxy cannot copy
+    or move the retained operand that the native operator selects.
 
     Parameters:
         L: The native left operand type.
@@ -520,8 +538,15 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
         return not _optional(native) or (left == native and right == native)
     comptime if native == "Bool":
         return rewritten == "Bool"
-    # Same-type: one native type, kept by one recording proxy type.
-    return rewritten != "Bool" and left == right and left == native
+    # Same-type: one native type, kept by one recording proxy type. The
+    # native operator selects an owned copy or move of a retained operand.
+    # A borrowing proxy selects only the borrow, so it cannot keep that.
+    return (
+        rewritten != "Bool"
+        and not _borrowed(rewritten)
+        and left == right
+        and left == native
+    )
 
 
 @inline(.never)
@@ -543,9 +568,9 @@ def truth[T: Boolable, //, kept: Bool](value: T) -> Bool:
     comptime assert kept, (
         "Coverage cannot yet preserve this compound condition: the probes"
         " would change how an and/or operator joins its operand types. The"
-        " cause is an implicit conversion between operand types or a retained"
-        " implicitly copyable custom Boolable operand. Do not exclude the"
-        " source; see the coverage truth-conversion limit."
+        " cause is an implicit conversion between operand types or a same-type"
+        " operator that selects a retained custom Boolable operand. Do not"
+        " exclude the source; see the coverage truth-conversion limit."
     )
     return value.__bool__()
 
