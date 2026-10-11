@@ -22,8 +22,13 @@ outright, its depth lives in a register that nothing else can touch. That
 depth is written out alongside the color, so what comes back is a framebuffer
 in the same sense the CPU produces one — a result that reports no depth at all
 would silently let a later depth-tested triangle paint over a nearer surface.
-Tiling and per-triangle binning can come later; they are optimizations of a
-correct thing.
+
+**Tile binning.** A pixel walks only the triangles that can reach its 16x16
+tile, in the frame's order; see `bin_triangles`. The bins are an exact
+superset of the triangles that cover each pixel, so the image is the one a
+walk over every triangle makes. A frame of strand hair has millions of
+triangles a few pixels across, and without the bins each pixel tested all of
+them.
 
 **The transform pipeline is still on the host.** Scene traversal, projection,
 lighting and clipping run on the CPU, and only the finished screen-space
@@ -520,7 +525,8 @@ from max.gpu import global_idx
 from max.gpu.memory import AddressSpace
 from std.math import ceildiv, cos, floor, inf, isfinite, log2, sin, sqrt
 from std.memory import bitcast, unsafe_memcpy
-from std.sys import has_accelerator
+from render.tasks import TaskGroup
+from std.sys import has_accelerator, num_logical_cores
 
 # Device memory is typed in the global address space throughout this file.
 # Metal has no generic address space, and Mojo can drop a generic pointer's
@@ -1149,116 +1155,207 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         `FLOATS_PER_VERTEX` floats per vertex, in the order the kernel
         unpacks them.
     """
-    var flat = List[Float32]()
+    var flat = List[Float32](length=len(corners) * FLOATS_PER_VERTEX, fill=0)
+    var dest = flat.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
     for index in range(len(corners)):
-        var corner = corners[index]
-        flat.append(corner.x)
-        flat.append(corner.y)
-        flat.append(corner.z)
-        flat.append(corner.inv_w)
-        flat.append(corner.color.r)
-        flat.append(corner.color.g)
-        flat.append(corner.color.b)
-        flat.append(corner.color.a)
-        flat.append(corner.u)
-        flat.append(corner.v)
-        flat.append(corner.normal.x)
-        flat.append(corner.normal.y)
-        flat.append(corner.normal.z)
-        flat.append(corner.world.x)
-        flat.append(corner.world.y)
-        flat.append(corner.world.z)
-        flat.append(corner.emissive.r)
-        flat.append(corner.emissive.g)
-        flat.append(corner.emissive.b)
-        flat.append(corner.view_depth)
-        flat.append(corner.alpha_test)
-        flat.append(corner.specular.r)
-        flat.append(corner.specular.g)
-        flat.append(corner.specular.b)
-        flat.append(corner.shininess)
-        flat.append(corner.line_distance)
-        flat.append(corner.dash_size)
-        flat.append(corner.gap_size)
-        flat.append(corner.point_size)
-        flat.append(corner.reflectivity)
-        flat.append(corner.roughness)
-        flat.append(corner.metalness)
-        flat.append(corner.env_map_intensity)
-        flat.append(corner.specular_intensity)
-        flat.append(corner.clearcoat)
-        flat.append(corner.clearcoat_roughness)
-        flat.append(corner.normal_scale.x)
-        flat.append(corner.normal_scale.y)
-        flat.append(corner.bump_scale)
-        flat.append(corner.u1)
-        flat.append(corner.v1)
-        flat.append(corner.ao_map_intensity)
-        flat.append(corner.light_map_intensity)
-        flat.append(corner.state.log_depth_scale)
-        flat.append(corner.transmission)
-        flat.append(corner.thickness.x)
-        flat.append(corner.thickness.y)
-        flat.append(corner.thickness.z)
-        flat.append(corner.attenuation_color.r)
-        flat.append(corner.attenuation_color.g)
-        flat.append(corner.attenuation_color.b)
-        flat.append(corner.attenuation_distance)
-        flat.append(corner.dispersion)
-        flat.append(corner.ior)
-        flat.append(corner.reference.x)
-        flat.append(corner.reference.y)
-        flat.append(corner.reference.z)
-        flat.append(corner.near_distance)
-        flat.append(corner.far_distance)
-        flat.append(corner.layers.sheen_color.x)
-        flat.append(corner.layers.sheen_color.y)
-        flat.append(corner.layers.sheen_color.z)
-        flat.append(corner.layers.sheen_roughness)
-        flat.append(corner.layers.iridescence)
-        flat.append(corner.layers.iridescence_ior)
-        flat.append(corner.layers.thickness_minimum)
-        flat.append(corner.layers.thickness_maximum)
-        flat.append(corner.layers.anisotropy.x)
-        flat.append(corner.layers.anisotropy.y)
-        flat.append(corner.layers.specular_color.x)
-        flat.append(corner.layers.specular_color.y)
-        flat.append(corner.layers.specular_color.z)
-        flat.append(corner.layers.clearcoat_normal_scale.x)
-        flat.append(corner.layers.clearcoat_normal_scale.y)
-        _append_basis(flat, corner.frames.env_rotation)
-        flat.append(corner.frames.refraction_ratio)
-        _append_basis(flat, corner.frames.object_normal)
-        flat.append(corner.state.blend_red)
-        flat.append(corner.state.blend_green)
-        flat.append(corner.state.blend_blue)
-        flat.append(corner.state.blend_alpha)
-        for lane in range(8):
-            flat.append(corner.custom[lane])
-        flat.append(corner.gouraud_direct.x)
-        flat.append(corner.gouraud_direct.y)
-        flat.append(corner.gouraud_direct.z)
-        flat.append(corner.gouraud_indirect.x)
-        flat.append(corner.gouraud_indirect.y)
-        flat.append(corner.gouraud_indirect.z)
-        flat.append(corner.scatter_color.r)
-        flat.append(corner.scatter_color.g)
-        flat.append(corner.scatter_color.b)
-        flat.append(corner.scatter_distortion)
-        flat.append(corner.scatter_ambient)
-        flat.append(corner.scatter_attenuation)
-        flat.append(corner.scatter_power)
-        flat.append(corner.scatter_scale)
-        flat.append(corner.current.x)
-        flat.append(corner.current.y)
-        flat.append(corner.current.z)
-        flat.append(corner.previous.x)
-        flat.append(corner.previous.y)
-        flat.append(corner.previous.z)
-        flat.append(Float32(corner.steps))
-        flat.append(corner.model_radius)
-        flat.append(Float32(1) if corner.volume_scene_depth else Float32(0))
+        _write_corner(dest, index * FLOATS_PER_VERTEX, corners[index])
     return flat^
+
+
+def flatten_into(
+    corners: List[RasterVertex],
+    dest: MutPointer[Float32, MutAnyOrigin],
+    workers: Int,
+):
+    """Write `corners` to `dest` as `flatten` lays them out, on `workers`
+    threads.
+
+    The upload writes straight into the device buffer's host mapping, so
+    a frame of strand hair does not build its gigabytes twice. Each worker
+    owns a run of whole vertices, so no two write the same float.
+
+    Args:
+        corners: Raster vertices, three per triangle.
+        dest: Room for `FLOATS_PER_VERTEX` floats per vertex.
+        workers: How many threads to use; one or fewer writes on the
+            calling thread.
+    """
+    var count = len(corners)
+    var bands = min(max(1, workers), max(1, count // _FLATTEN_GRAIN))
+    if bands == 1:
+        for index in range(count):
+            _write_corner(dest, index * FLOATS_PER_VERTEX, corners[index])
+        return
+    var source = corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin]()
+    var group = TaskGroup()
+    for band in range(bands):
+        group.create_task(
+            _flatten_band(
+                source,
+                dest,
+                band * count // bands,
+                (band + 1) * count // bands,
+            )
+        )
+    group.wait()
+    # The tasks read the corners through a pointer the compiler cannot
+    # see; this read keeps the list alive until every band has finished.
+    _ = len(corners)
+
+
+# The fewest vertices a flatten worker takes: below this, starting a task
+# costs more than the copy it saves.
+comptime _FLATTEN_GRAIN = 4096
+
+
+async def _flatten_band(
+    corners: Pointer[RasterVertex, ImmutAnyOrigin],
+    dest: MutPointer[Float32, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Write vertices `first` to `past` of `flatten_into`'s corners."""
+    for index in range(first, past):
+        _write_corner(
+            dest, index * FLOATS_PER_VERTEX, corners[unsafe_offset=index]
+        )
+
+
+@always_inline
+def _put(dest: MutPointer[Float32, MutAnyOrigin], mut at: Int, value: Float32):
+    """Write one lane and move to the next."""
+    dest[unsafe_offset=at] = value
+    at += 1
+
+
+def _put_basis(
+    dest: MutPointer[Float32, MutAnyOrigin], mut at: Int, basis: Basis3
+):
+    """Write a 3x3 matrix's nine numbers in `Basis3`'s order."""
+    _put(dest, at, basis.e0)
+    _put(dest, at, basis.e1)
+    _put(dest, at, basis.e2)
+    _put(dest, at, basis.e3)
+    _put(dest, at, basis.e4)
+    _put(dest, at, basis.e5)
+    _put(dest, at, basis.e6)
+    _put(dest, at, basis.e7)
+    _put(dest, at, basis.e8)
+
+
+def _write_corner(
+    dest: MutPointer[Float32, MutAnyOrigin], start: Int, corner: RasterVertex
+):
+    """Write one vertex's `FLOATS_PER_VERTEX` lanes from `start`, in the
+    order the kernel unpacks them. `flatten` and `flatten_into` share it,
+    so the two layouts cannot differ."""
+    var at = start
+    _put(dest, at, corner.x)
+    _put(dest, at, corner.y)
+    _put(dest, at, corner.z)
+    _put(dest, at, corner.inv_w)
+    _put(dest, at, corner.color.r)
+    _put(dest, at, corner.color.g)
+    _put(dest, at, corner.color.b)
+    _put(dest, at, corner.color.a)
+    _put(dest, at, corner.u)
+    _put(dest, at, corner.v)
+    _put(dest, at, corner.normal.x)
+    _put(dest, at, corner.normal.y)
+    _put(dest, at, corner.normal.z)
+    _put(dest, at, corner.world.x)
+    _put(dest, at, corner.world.y)
+    _put(dest, at, corner.world.z)
+    _put(dest, at, corner.emissive.r)
+    _put(dest, at, corner.emissive.g)
+    _put(dest, at, corner.emissive.b)
+    _put(dest, at, corner.view_depth)
+    _put(dest, at, corner.alpha_test)
+    _put(dest, at, corner.specular.r)
+    _put(dest, at, corner.specular.g)
+    _put(dest, at, corner.specular.b)
+    _put(dest, at, corner.shininess)
+    _put(dest, at, corner.line_distance)
+    _put(dest, at, corner.dash_size)
+    _put(dest, at, corner.gap_size)
+    _put(dest, at, corner.point_size)
+    _put(dest, at, corner.reflectivity)
+    _put(dest, at, corner.roughness)
+    _put(dest, at, corner.metalness)
+    _put(dest, at, corner.env_map_intensity)
+    _put(dest, at, corner.specular_intensity)
+    _put(dest, at, corner.clearcoat)
+    _put(dest, at, corner.clearcoat_roughness)
+    _put(dest, at, corner.normal_scale.x)
+    _put(dest, at, corner.normal_scale.y)
+    _put(dest, at, corner.bump_scale)
+    _put(dest, at, corner.u1)
+    _put(dest, at, corner.v1)
+    _put(dest, at, corner.ao_map_intensity)
+    _put(dest, at, corner.light_map_intensity)
+    _put(dest, at, corner.state.log_depth_scale)
+    _put(dest, at, corner.transmission)
+    _put(dest, at, corner.thickness.x)
+    _put(dest, at, corner.thickness.y)
+    _put(dest, at, corner.thickness.z)
+    _put(dest, at, corner.attenuation_color.r)
+    _put(dest, at, corner.attenuation_color.g)
+    _put(dest, at, corner.attenuation_color.b)
+    _put(dest, at, corner.attenuation_distance)
+    _put(dest, at, corner.dispersion)
+    _put(dest, at, corner.ior)
+    _put(dest, at, corner.reference.x)
+    _put(dest, at, corner.reference.y)
+    _put(dest, at, corner.reference.z)
+    _put(dest, at, corner.near_distance)
+    _put(dest, at, corner.far_distance)
+    _put(dest, at, corner.layers.sheen_color.x)
+    _put(dest, at, corner.layers.sheen_color.y)
+    _put(dest, at, corner.layers.sheen_color.z)
+    _put(dest, at, corner.layers.sheen_roughness)
+    _put(dest, at, corner.layers.iridescence)
+    _put(dest, at, corner.layers.iridescence_ior)
+    _put(dest, at, corner.layers.thickness_minimum)
+    _put(dest, at, corner.layers.thickness_maximum)
+    _put(dest, at, corner.layers.anisotropy.x)
+    _put(dest, at, corner.layers.anisotropy.y)
+    _put(dest, at, corner.layers.specular_color.x)
+    _put(dest, at, corner.layers.specular_color.y)
+    _put(dest, at, corner.layers.specular_color.z)
+    _put(dest, at, corner.layers.clearcoat_normal_scale.x)
+    _put(dest, at, corner.layers.clearcoat_normal_scale.y)
+    _put_basis(dest, at, corner.frames.env_rotation)
+    _put(dest, at, corner.frames.refraction_ratio)
+    _put_basis(dest, at, corner.frames.object_normal)
+    _put(dest, at, corner.state.blend_red)
+    _put(dest, at, corner.state.blend_green)
+    _put(dest, at, corner.state.blend_blue)
+    _put(dest, at, corner.state.blend_alpha)
+    for lane in range(8):
+        _put(dest, at, corner.custom[lane])
+    _put(dest, at, corner.gouraud_direct.x)
+    _put(dest, at, corner.gouraud_direct.y)
+    _put(dest, at, corner.gouraud_direct.z)
+    _put(dest, at, corner.gouraud_indirect.x)
+    _put(dest, at, corner.gouraud_indirect.y)
+    _put(dest, at, corner.gouraud_indirect.z)
+    _put(dest, at, corner.scatter_color.r)
+    _put(dest, at, corner.scatter_color.g)
+    _put(dest, at, corner.scatter_color.b)
+    _put(dest, at, corner.scatter_distortion)
+    _put(dest, at, corner.scatter_ambient)
+    _put(dest, at, corner.scatter_attenuation)
+    _put(dest, at, corner.scatter_power)
+    _put(dest, at, corner.scatter_scale)
+    _put(dest, at, corner.current.x)
+    _put(dest, at, corner.current.y)
+    _put(dest, at, corner.current.z)
+    _put(dest, at, corner.previous.x)
+    _put(dest, at, corner.previous.y)
+    _put(dest, at, corner.previous.z)
+    _put(dest, at, Float32(corner.steps))
+    _put(dest, at, corner.model_radius)
+    _put(dest, at, Float32(1) if corner.volume_scene_depth else Float32(0))
 
 
 @always_inline
@@ -1274,22 +1371,9 @@ def _blend_constant(buffer: DevicePointer[Float32], base: Int) -> Rgba:
     return constant
 
 
-def _append_basis(mut flat: List[Float32], basis: Basis3):
-    """Append a 3x3 matrix's nine numbers in `Basis3`'s order."""
-    flat.append(basis.e0)
-    flat.append(basis.e1)
-    flat.append(basis.e2)
-    flat.append(basis.e3)
-    flat.append(basis.e4)
-    flat.append(basis.e5)
-    flat.append(basis.e6)
-    flat.append(basis.e7)
-    flat.append(basis.e8)
-
-
 def _basis_at(corners: DevicePointer[Float32], at: Int) -> Basis3:
     """Return the 3x3 matrix whose nine numbers start at `at` in the
-    vertex buffer, as `_append_basis` wrote them."""
+    vertex buffer, as `_put_basis` wrote them."""
     return Basis3(
         corners[unsafe_offset=at],
         corners[unsafe_offset=at + 1],
@@ -4187,6 +4271,155 @@ def point_state(
     return state^
 
 
+# The most entries a frame's bins may hold, about 512 MiB of indices. A
+# frame whose triangles reach more tiles than this is drawn unbinned: each
+# pixel walks every triangle, as it did before bins.
+comptime BIN_LIMIT = 1 << 27
+
+
+def bin_triangles(
+    corners: List[RasterVertex],
+    width: Int,
+    height: Int,
+    base: Int,
+    limit: Int = BIN_LIMIT,
+) -> List[Int32]:
+    """Return each `TILE` x `TILE` tile's triangles, for the kernel to walk
+    in place of every triangle.
+
+    A pixel is covered only where its sample, snapped as `render.fillrule`
+    snaps it, lies inside the snapped triangle. So a triangle can cover
+    only the pixels whose samples lie in its snapped bounds, and the tiles
+    those pixels are in. The bounds are computed here with the kernel's own
+    `snap` and `sample`, so a triangle is never left out of a tile it can
+    cover. A triangle with a coordinate that is not finite, or too large to
+    snap exactly, goes in every tile, and the kernel decides it as before.
+
+    Args:
+        corners: Raster vertices, three per triangle.
+        width: The image's width in pixels.
+        height: The image's height in pixels.
+        base: Where the result starts in the draw buffer, after the draw
+            table. The offsets it holds count from the buffer's start.
+        limit: The most entries the bins may hold.
+
+    Returns:
+        One flag, then the tiles' offsets, then the triangle indices. The
+        flag is 1 when the triangles are binned. Then come `tiles + 1`
+        offsets, in row-major tile order, and tile t's triangles are the
+        indices from offset t up to offset t + 1, in increasing order. The
+        flag is 0, with nothing after it, when the bins would hold more
+        than `limit` entries.
+    """
+    var across = ceildiv(width, TILE)
+    var down = ceildiv(height, TILE)
+    var tiles = across * down
+    var triangles = len(corners) // 3
+    # Each triangle's tile rectangle: first and last column, first and last
+    # row. An empty rectangle has its first after its last.
+    var spans = List[Int](length=triangles * 4, fill=0)
+    var counts = List[Int](length=tiles, fill=0)
+    var total = 0
+    for triangle in range(triangles):
+        _tile_span(corners, triangle, width, height, spans)
+        var at = triangle * 4
+        var columns = spans[at + 1] - spans[at] + 1
+        var rows = spans[at + 3] - spans[at + 2] + 1
+        if columns <= 0 or rows <= 0:
+            continue
+        total += columns * rows
+        if total > limit:
+            return [Int32(0)]
+        for row in range(spans[at + 2], spans[at + 3] + 1):
+            for column in range(spans[at], spans[at + 1] + 1):
+                counts[row * across + column] += 1
+    var bins = List[Int32](length=1 + tiles + 1 + total, fill=0)
+    bins[0] = 1
+    var start = base + 1 + tiles + 1
+    var next = List[Int](length=tiles, fill=0)
+    for tile in range(tiles):
+        bins[1 + tile] = Int32(start)
+        next[tile] = start - base
+        start += counts[tile]
+    bins[1 + tiles] = Int32(start)
+    for triangle in range(triangles):
+        for row in range(spans[triangle * 4 + 2], spans[triangle * 4 + 3] + 1):
+            for column in range(
+                spans[triangle * 4], spans[triangle * 4 + 1] + 1
+            ):
+                var tile = row * across + column
+                bins[next[tile]] = Int32(triangle)
+                next[tile] += 1
+    return bins^
+
+
+# The largest coordinate magnitude `_tile_span` snaps: its subpixel value
+# and every edge product stay exact far inside 64-bit integers.
+comptime _SNAP_LIMIT = Float32(1 << 24)
+
+
+def _tile_span(
+    corners: List[RasterVertex],
+    triangle: Int,
+    width: Int,
+    height: Int,
+    mut spans: List[Int],
+):
+    """Write the first and last tile column, then the first and last tile
+    row, whose pixels a triangle can cover, to the triangle's four entries
+    of `spans`: every tile when a corner cannot be snapped exactly, and a
+    first after its last when no pixel can be covered."""
+    var across = ceildiv(width, TILE)
+    var down = ceildiv(height, TILE)
+    var at = triangle * 4
+    var low_x = Int.MAX
+    var high_x = Int.MIN
+    var low_y = Int.MAX
+    var high_y = Int.MIN
+    for corner in range(3):
+        ref vertex = corners[triangle * 3 + corner]
+        if not (abs(vertex.x) <= _SNAP_LIMIT and abs(vertex.y) <= _SNAP_LIMIT):
+            spans[at] = 0
+            spans[at + 1] = across - 1
+            spans[at + 2] = 0
+            spans[at + 3] = down - 1
+            return
+        var x = snap(vertex.x)
+        var y = snap(vertex.y)
+        low_x = min(low_x, x)
+        high_x = max(high_x, x)
+        low_y = min(low_y, y)
+        high_y = max(high_y, y)
+    var columns = _pixel_span(low_x, high_x, width)
+    var rows = _pixel_span(low_y, high_y, height)
+    if columns[0] > columns[1] or rows[0] > rows[1]:
+        spans[at] = 1
+        spans[at + 1] = 0
+        spans[at + 2] = 1
+        spans[at + 3] = 0
+        return
+    spans[at] = columns[0] // TILE
+    spans[at + 1] = columns[1] // TILE
+    spans[at + 2] = rows[0] // TILE
+    spans[at + 3] = rows[1] // TILE
+
+
+def _pixel_span(low: Int, high: Int, pixels: Int) -> Tuple[Int, Int]:
+    """Return the first and last of `pixels` whose sample lies from `low` to
+    `high` on the subpixel grid, the first after the last when none does.
+
+    Pixel p's sample is `sample(p)`, p * SUBPIXEL + SUBPIXEL / 2."""
+    var half = SUBPIXEL // 2
+    # The first p with sample(p) >= low, and the last with sample(p) <= high.
+    var first = -((half - low) // SUBPIXEL)
+    var last = (high - half) // SUBPIXEL
+    first = max(first, 0)
+    last = min(last, pixels - 1)
+    if first > last:
+        return (1, 0)
+    return (first, last)
+
+
 def triangle_state(
     corners: List[RasterVertex],
     cube_base: Int = 0,
@@ -5903,6 +6136,18 @@ def rasterize_kernel(
         SHADE_UV.value
     )
 
+    # This pixel's tile's run of triangles, when the host binned them: see
+    # `bin_triangles`. The bins follow the draw table in the same buffer,
+    # because the kernel already takes Metal's thirty-one arguments.
+    var bins = Int(draw_count) * INTS_PER_DRAW
+    var binned = draws[unsafe_offset=bins] != 0
+    var tile_first = 0
+    var tile_past = 0
+    if binned:
+        var tile = (y // TILE) * ceildiv(Int(width), TILE) + x // TILE
+        tile_first = Int(draws[unsafe_offset=bins + 1 + tile])
+        tile_past = Int(draws[unsafe_offset=bins + 2 + tile])
+
     for draw in range(Int(draw_count)):
         var kind = draws[unsafe_offset=draw * INTS_PER_DRAW]
         var first = Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 1])
@@ -6462,7 +6707,32 @@ def rasterize_kernel(
                     data = False
 
             continue
-        for index in range(first, past):
+        # The draw's triangles in the frame's order. Binned, only the ones
+        # whose snapped bounds reach this pixel's tile: no other can cover
+        # it, and the ones that can come in the same order, so the pixel
+        # is the one a walk over every triangle makes.
+        var position = first
+        if binned:
+            # The tile's first triangle at or after `first`.
+            var low = tile_first
+            var high = tile_past
+            while low < high:
+                var middle = (low + high) // 2
+                if Int(draws[unsafe_offset=middle]) < first:
+                    low = middle + 1
+                else:
+                    high = middle
+            position = low
+        position -= 1
+        while True:
+            position += 1
+            var index = position
+            if binned:
+                if position >= tile_past:
+                    break
+                index = Int(draws[unsafe_offset=position])
+            if index >= past:
+                break
             # The triangle's light block, and how many of each light it
             # holds, in place of the frame's: a material with a light mask,
             # three.js's `lightsNode`. The frame's own block starts at zero.
@@ -9183,8 +9453,9 @@ struct GpuRenderer(Movable):
     var points: DeviceBuffer[DType.float32]
     var point_maps: DeviceBuffer[DType.int32]
     var point_capacity: Int
-    # The frame's draw order, `INTS_PER_DRAW` integers a draw, and how many
-    # draws the buffer has room for.
+    # The frame's draw order, `INTS_PER_DRAW` integers a draw, then the
+    # triangle bins `bin_triangles` lays out, and how many integers the
+    # buffer has room for.
     var draw_list: DeviceBuffer[DType.int32]
     var draw_room: Int
     # Every texture the scene can sample, uploaded once rather than per draw.
@@ -9339,11 +9610,12 @@ struct GpuRenderer(Movable):
         self.point_maps = self.context.enqueue_create_buffer[DType.int32](
             STATE_PER_POINT
         )
-        # Three draws' worth: the order a frame with no list of its own
-        # gets, every triangle, then every segment, then every point.
-        self.draw_room = 3
+        # Three draws' worth and an unbinned flag: the order a frame with
+        # no list of its own gets, every triangle, then every segment, then
+        # every point.
+        self.draw_room = 3 * INTS_PER_DRAW + 1
         self.draw_list = self.context.enqueue_create_buffer[DType.int32](
-            self.draw_room * INTS_PER_DRAW
+            self.draw_room
         )
         # One texel's worth, standing in for the blank texture. A zero-length
         # device buffer is not worth the special case, and a width of zero is
@@ -10082,12 +10354,13 @@ struct GpuRenderer(Movable):
             self.capacity = triangles
 
         if triangles > 0:
-            var flat = flatten(corners)
+            # Straight into the mapping, on every core: a frame of strand
+            # hair is gigabytes, and a list of it first doubles the copy.
             with self.corners.map_to_host() as host:
-                unsafe_memcpy(
-                    dest=host.unsafe_ptr(),
-                    src=flat.unsafe_ptr(),
-                    count=len(flat),
+                flatten_into(
+                    corners,
+                    host.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    num_logical_cores(),
                 )
             var state = triangle_state(
                 corners,
@@ -10163,12 +10436,6 @@ struct GpuRenderer(Movable):
                     count=len(dot_state),
                 )
 
-        if len(order) > self.draw_room:
-            self.context.synchronize()
-            self.draw_list = self.context.enqueue_create_buffer[DType.int32](
-                len(order) * INTS_PER_DRAW
-            )
-            self.draw_room = len(order)
         var flat_draws = List[Int32]()
         flat_draws.reserve(len(order) * INTS_PER_DRAW)
         for index in range(len(order)):  # pragma: no branch
@@ -10178,6 +10445,15 @@ struct GpuRenderer(Movable):
                 first = splat_offset + first * (SPLAT_FLOATS + 1)
             flat_draws.append(Int32(first))
             flat_draws.append(Int32(order[index].count))
+        flat_draws.extend(
+            bin_triangles(corners, self.width, self.height, len(flat_draws))
+        )
+        if len(flat_draws) > self.draw_room:
+            self.context.synchronize()
+            self.draw_list = self.context.enqueue_create_buffer[DType.int32](
+                len(flat_draws)
+            )
+            self.draw_room = len(flat_draws)
         with self.draw_list.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(),

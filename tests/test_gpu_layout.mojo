@@ -131,12 +131,16 @@ from render.framebuffer import (
     Color,
     FloatColor,
 )
+from render.fillrule import bias, edge_at, sample, snap
 from render.gpu import (
+    BIN_LIMIT,
+    bin_triangles,
     CASCADE_AT,
     CUBE_PANORAMA,
     CUBE_ROWS,
     DIRECTIONAL_FLOATS,
     flatten,
+    flatten_into,
     flatten_fog,
     flatten_lights,
     flatten_programs,
@@ -322,6 +326,7 @@ from render.texture_store import (
 from renderers.renderer import (
     Renderer,
 )
+from std.math import nan
 from std.memory import (
     bitcast,
 )
@@ -481,6 +486,182 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     assert_equal(flatten(logged)[LANE_LOG_DEPTH], Float32(0.25))
+
+
+def _covers(corners: List[RasterVertex], triangle: Int, x: Int, y: Int) -> Bool:
+    """Return whether the kernel's coverage test accepts pixel (x, y): snap,
+    normalize the winding, then test the sample with the top-left bias."""
+    var sax = snap(corners[triangle * 3].x)
+    var say = snap(corners[triangle * 3].y)
+    var sbx = snap(corners[triangle * 3 + 1].x)
+    var sby = snap(corners[triangle * 3 + 1].y)
+    var scx = snap(corners[triangle * 3 + 2].x)
+    var scy = snap(corners[triangle * 3 + 2].y)
+    var area = edge_at(sax, say, sbx, sby, scx, scy)
+    if area == 0:
+        return False
+    if area < 0:
+        var tx = sbx
+        var ty = sby
+        sbx = scx
+        sby = scy
+        scx = tx
+        scy = ty
+    var px = sample(x)
+    var py = sample(y)
+    return not (
+        edge_at(sax, say, sbx, sby, px, py) + bias(sax, say, sbx, sby) < 0
+        or edge_at(sbx, sby, scx, scy, px, py) + bias(sbx, sby, scx, scy) < 0
+        or edge_at(scx, scy, sax, say, px, py) + bias(scx, scy, sax, say) < 0
+    )
+
+
+def _binned(bins: List[Int32], base: Int, tile: Int, triangle: Int) -> Bool:
+    """Return whether `tile`'s run in `bins`, laid out from `base`, holds
+    `triangle`."""
+    for at in range(Int(bins[1 + tile]), Int(bins[2 + tile])):
+        if Int(bins[at - base]) == triangle:
+            return True
+    return False
+
+
+def _red(x: Float32, y: Float32) -> RasterVertex:
+    """Return a corner of an opaque red test triangle."""
+    return corner(x, y, 0.5, 1, Color(255, 0, 0))
+
+
+def _field() -> List[RasterVertex]:
+    """Return small, thin and large triangles of both windings around the
+    seams of a 37 x 21 image, some partly or wholly off it."""
+    var corners = List[RasterVertex]()
+    var seed = UInt64(729)
+    for triangle in range(240):
+        var draws = SIMD[DType.float32, 8]()
+        for lane in range(6):
+            seed = seed * 6364136223846793005 + 1442695040888963407
+            draws[lane] = Float32(Int((seed >> 33) % 100000)) / 100000
+        var size = Float32(0.4)
+        if triangle % 3 == 1:
+            size = 3
+        elif triangle % 3 == 2:
+            size = 30
+        var x = draws[0] * 49 - 6
+        var y = draws[1] * 33 - 6
+        corners.append(_red(x, y))
+        corners.append(
+            _red(x + (draws[2] - 0.5) * size, y + draws[3] * size * 0.2)
+        )
+        corners.append(
+            _red(x + (draws[4] - 0.5) * size, y + (draws[5] - 0.5) * size)
+        )
+    # Exactly on the seams, on sample points and between them.
+    corners.append(_red(15.5, 0))
+    corners.append(_red(16.5, 0))
+    corners.append(_red(16, 20.5))
+    corners.append(_red(0, 15.5))
+    corners.append(_red(36.5, 16.5))
+    corners.append(_red(0, 16.5))
+    return corners^
+
+
+def test_bins_hold_every_triangle_that_covers_a_pixel() raises:
+    # The bins replace the kernel's walk over every triangle, so a covered
+    # pixel whose triangle is missing from its tile would be drawn wrong.
+    # Every pixel of every triangle is checked against the kernel's own
+    # coverage test, with the bins laid out after a five-entry table.
+    var corners = _field()
+    var across = 3
+    var tiles = across * 2
+    var bins = bin_triangles(corners, 37, 21, 5)
+    assert_equal(bins[0], Int32(1))
+    assert_equal(Int(bins[1]), 5 + 1 + tiles + 1)
+    assert_equal(Int(bins[1 + tiles]), 5 + len(bins))
+    for tile in range(tiles):
+        assert_true(bins[1 + tile] <= bins[2 + tile])
+        # In increasing order, which is the frame's order.
+        for at in range(Int(bins[1 + tile]) + 1, Int(bins[2 + tile])):
+            assert_true(bins[at - 5 - 1] < bins[at - 5])
+    var covered = 0
+    for triangle in range(len(corners) // 3):
+        for y in range(21):
+            for x in range(37):
+                if not _covers(corners, triangle, x, y):
+                    continue
+                covered += 1
+                var tile = (y // 16) * across + x // 16
+                assert_true(_binned(bins, 5, tile, triangle))
+    # The field does cover pixels, in every tile.
+    assert_true(covered > 1000)
+
+
+def test_bins_keep_unsnappable_triangles_and_drop_offscreen_ones() raises:
+    var corners = List[RasterVertex]()
+    # Wholly left of the image's first sample, at x = 0.5.
+    corners.append(_red(-9, 1))
+    corners.append(_red(0.4, 1))
+    corners.append(_red(-3, 9))
+    # A corner that is not a number, and one too large to snap exactly.
+    corners.append(_red(nan[DType.float32](), 1))
+    corners.append(_red(3, 1))
+    corners.append(_red(3, 4))
+    corners.append(_red(1, 1))
+    corners.append(_red(4.0e7, 1))
+    corners.append(_red(1, 4))
+    # Inside the first tile only.
+    corners.append(_red(1, 1))
+    corners.append(_red(6, 1))
+    corners.append(_red(1, 6))
+    var bins = bin_triangles(corners, 40, 20, 0)
+    assert_equal(bins[0], Int32(1))
+    # Three by two tiles.
+    for tile in range(6):
+        assert_false(_binned(bins, 0, tile, 0))
+        assert_true(_binned(bins, 0, tile, 1))
+        assert_true(_binned(bins, 0, tile, 2))
+        assert_equal(_binned(bins, 0, tile, 3), tile == 0)
+
+
+def test_bins_fall_back_to_every_triangle_past_their_limit() raises:
+    var bins = bin_triangles(_field(), 37, 21, 3, limit=10)
+    assert_equal(len(bins), 1)
+    assert_equal(bins[0], Int32(0))
+    # A frame with no triangles still has a binned header, with empty runs.
+    var none = bin_triangles(List[RasterVertex](), 37, 21, 3)
+    assert_equal(len(none), 1 + 6 + 1)
+    assert_equal(none[0], Int32(1))
+    for tile in range(7):
+        assert_equal(Int(none[1 + tile]), 3 + 8)
+    assert_true(BIN_LIMIT > 1 << 20)
+
+
+def test_flattening_on_many_threads_matches_one() raises:
+    # Past the per-worker grain, so the copy really is split, with lanes
+    # that differ from vertex to vertex.
+    var corners = List[RasterVertex]()
+    for index in range(3 * 3001):
+        var vertex = corner(
+            Float32(index),
+            Float32(index) * 0.5,
+            0.25,
+            1,
+            Color(UInt8(index % 256), 7, 9),
+        )
+        vertex.u = Float32(index % 97)
+        vertex.custom[3] = Float32(index) * 2
+        corners.append(vertex^)
+    var expected = flatten(corners)
+    var split = List[Float32](length=len(expected), fill=-1)
+    flatten_into(
+        corners, split.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](), 4
+    )
+    var serial = List[Float32](length=len(expected), fill=-1)
+    flatten_into(
+        corners, serial.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](), 1
+    )
+    for at in range(len(expected)):
+        var bits = bitcast[DType.uint32](expected[at])
+        assert_equal(bitcast[DType.uint32](split[at]), bits)
+        assert_equal(bitcast[DType.uint32](serial[at]), bits)
 
 
 def test_the_point_state_table_has_an_entry_per_map_and_policy() raises:

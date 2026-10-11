@@ -5358,6 +5358,36 @@ async def _emit_pieces(
         ends[unsafe_offset=index] = len(corners[])
 
 
+# The fewest corners a join worker takes: below this, starting a task costs
+# more than the joins it saves.
+comptime _JOIN_GRAIN = 4096
+
+
+async def _join_band(
+    corners: Pointer[Corner, ImmutAnyOrigin],
+    surfaces: Pointer[Surface, ImmutAnyOrigin],
+    whole: MutPointer[RasterVertex, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Join corners `first` to `past` to their surfaces, into `whole`.
+
+    Args:
+        corners: The frame's corners.
+        surfaces: The frame's surfaces.
+        whole: The whole corners, one slot a corner.
+        first: The first corner to join.
+        past: One past the last corner to join.
+    """
+    var index = first
+    while index < past:
+        ref corner = corners[unsafe_offset=index]
+        whole[unsafe_offset=index] = joined(
+            corner, surfaces[unsafe_offset=corner.surface]
+        )
+        index += 1
+
+
 async def _place_corners(
     source: MutPointer[Corner, MutAnyOrigin],
     destination: MutPointer[Corner, MutAnyOrigin],
@@ -5648,17 +5678,43 @@ struct Frame(Movable):
         self.programs = programs^
         self.items = items^
 
-    def whole_corners(self) -> List[RasterVertex]:
+    def whole_corners(self, workers: Int = 0) -> List[RasterVertex]:
         """Return the triangles' corners whole, three each: what `prepare`
         returns, and what `render.gpu.GpuRenderer.draw` takes.
+
+        A frame of strand hair joins millions of corners, so the joins run
+        on `workers` threads. Each thread writes its own run of the list.
+
+        Args:
+            workers: How many threads to join on; zero or fewer means one
+                for each logical core.
 
         Returns:
             Each corner joined to its surface.
         """
-        var out = List[RasterVertex](capacity=len(self.corners))
-        for index in range(len(self.corners)):
-            ref corner = self.corners[index]
-            out.append(joined(corner, self.surfaces[corner.surface]))
+        var count = len(self.corners)
+        var out = List[RasterVertex]()
+        # Every slot is written below. A vertex holds no heap storage, so
+        # writing over an unset slot runs no destructor that matters.
+        out.resize(unsafe_uninit_length=count)
+        var threads = workers if workers > 0 else num_logical_cores()
+        var bands = min(threads, max(1, count // _JOIN_GRAIN))
+        var group = TaskGroup()
+        for band in range(bands):
+            group.create_task(
+                _join_band(
+                    self.corners.unsafe_ptr().unsafe_origin_cast[
+                        ImmutAnyOrigin
+                    ](),
+                    self.surfaces.unsafe_ptr().unsafe_origin_cast[
+                        ImmutAnyOrigin
+                    ](),
+                    out.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                    band * count // bands,
+                    (band + 1) * count // bands,
+                )
+            )
+        group.wait()
         return out^
 
 

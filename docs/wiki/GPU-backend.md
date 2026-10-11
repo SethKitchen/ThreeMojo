@@ -17,6 +17,8 @@ MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | `available() -> Bool` | Whether a GPU is present. |
 | `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, cubes, backdrop, transmission, programs) -> Framebuffer` | One-shot: draw and read back. |
 | `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
+| `flatten_into(corners, dest, workers)` | Write the same lanes to `dest` on `workers` threads. `draw` writes the corner buffer this way, straight into the device buffer's host mapping. |
+| `bin_triangles(corners, width, height, base, limit=BIN_LIMIT) -> List[Int32]` | Each 16 x 16 tile's triangles, in the frame's order. See [Tile binning](#tile-binning). |
 | `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, the light probes, then each directional, point, hemisphere, spot and rect area light, then the LTC tables when there is a rect area light, then the shadow maps, then the spot light maps. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_programs(programs) -> List[Float32]` | Every [node program](Node-materials), end to end, as it follows the fog in the fog buffer. |
@@ -47,6 +49,16 @@ An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors
 Volume and array textures are validated before the upload changes device state. Their dimensions and remapped program addresses must fit Int32 and remain exact in Float32. An address that would round is rejected. Large aligned values can remain exact; the CPU packing tests check these bounds without large allocations.
 
 An antialiased frame is drawn at `Renderer.supersampled()`'s size and shrunk with `render.antialias.downsample`. Pass that renderer's `render_scale` as the draw's `line_width`, or every line thins out when the frame is averaged down. The CPU renderer resolves in linear light instead, which the GPU cannot do while it returns bytes; see [Renderer](Renderer#anti-aliasing). A texture's `anisotropy` crosses in the descriptor table, and the kernel takes the same taps the host takes; see [Textures](Textures#anisotropy).
+
+### Tile binning
+
+The kernel tests a pixel only against the triangles of its 16 x 16 tile. `draw` makes these lists on the host with `bin_triangles` and puts them after the draw table in the draw buffer. The kernel already binds thirty-one arguments, the most Metal allows, so the lists cannot have a buffer of their own.
+
+A triangle covers a pixel only when the pixel's sample is inside the snapped triangle. So a triangle goes in each tile that has a pixel whose sample is inside the triangle's snapped bounds. `bin_triangles` uses the same `snap` and `sample` functions as the kernel. A tile's list keeps the frame's order. So each pixel sees the same covering triangles, in the same order, as a walk over every triangle.
+
+`tests/test_gpu_layout.mojo` checks each covered pixel of a triangle field against the bins. `tests/test_gpu.mojo` compares a field of thin, blended triangles on both backends.
+
+A triangle with a corner that is not finite, or that is larger than 2^24 pixels, goes in every tile. The kernel then decides it as it did before. When the lists would hold more than `BIN_LIMIT` entries, 2^27, `draw` does not bin the frame. Each pixel then tests every triangle. Segments, points and splats are not binned.
 
 ### Multisampled targets on the GPU
 

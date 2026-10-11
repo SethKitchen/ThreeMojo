@@ -83,6 +83,47 @@ def test_surface_cache_keeps_both_facings_and_reuses_each() raises:
         assert_equal(len(slim.surfaces), 3)
 
 
+def test_whole_corners_join_alike_on_one_thread_and_many() raises:
+    # Two materials on a finely split plane give more corners than one
+    # join worker takes, so eight workers really split the list.
+    var scene = Scene()
+    var assets = Assets()
+    var node = scene.add(Object3D())
+    var geometry = assets.geometries.add(
+        plane(Length(4, METER), Length(4, METER), 64, 64)
+    )
+    var shiny = Material(Color(200, 40, 10), kind=PHYSICAL, side=DOUBLE_SIDE)
+    shiny.roughness = 0.25
+    scene.add_mesh(Mesh(geometry, assets.materials.add(shiny^), node))
+    var other = scene.add(Object3D())
+    var dull = Material(Color(10, 40, 200), kind=PHYSICAL)
+    dull.roughness = 0.75
+    scene.add_mesh(Mesh(geometry, assets.materials.add(dull^), other))
+    scene.update()
+    var frame = Renderer(64, 64).prepare_frame(scene, assets, camera())
+    var serial = frame.whole_corners(1)
+    var split = frame.whole_corners(8)
+    assert_true(len(serial) > 2 * 4096)
+    assert_equal(len(split), len(serial))
+    var rough = 0
+    for index in range(len(serial)):
+        ref a = serial[index]
+        ref b = split[index]
+        assert_equal(a.x, b.x)
+        assert_equal(a.y, b.y)
+        assert_equal(a.z, b.z)
+        assert_equal(a.u, b.u)
+        assert_equal(a.color.r, b.color.r)
+        assert_equal(a.roughness, b.roughness)
+        assert_equal(a.kind.value, b.kind.value)
+        assert_equal(a.blend.value, b.blend.value)
+        assert_equal(a.seen_from_behind, b.seen_from_behind)
+        if a.roughness == 0.75:
+            rough += 1
+    # Both materials' surfaces reached the joined corners.
+    assert_true(rough > 0 and rough < len(serial))
+
+
 def test_renderer_selects_surface_for_each_face_in_one_draw() raises:
     var scene = Scene()
     var assets = Assets()
