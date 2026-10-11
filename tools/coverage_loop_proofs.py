@@ -1276,7 +1276,13 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
             return {}
         cleanup_bindings = {}
         from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
-        if any(name in cleanup.SOURCE_PATHS and actual[name] != expected[name]
+        # Only the exact separately verified helper extractions may bypass the
+        # historical admission fallback. Any other changed constructor premise
+        # must retain its failed-operation semantics, including historical Road.
+        if any(actual[name] != expected[name] and not (
+                name in cleanup.shared_helpers.SOURCE_PATHS
+                and expected[name] == cleanup.shared_helpers.BEFORE_SHA256[name]
+                and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name])
                for name in expected):
             cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
             edges = cleanup.verified_edges(root, include_roots=include_roots, **operation_args)
