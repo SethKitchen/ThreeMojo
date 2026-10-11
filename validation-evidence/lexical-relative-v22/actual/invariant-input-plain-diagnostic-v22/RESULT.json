@@ -1,0 +1,35 @@
+{
+  "elapsed_seconds": 13.345143838996592,
+  "failure": null,
+  "finished": "2026-10-11T04:04:41.213328+00:00",
+  "known_process_count": 1,
+  "remaining_owned_descendants": [],
+  "scope": "One separately authorized plain diagnostic after the failed unchanged v22 ten-second qualification. Same exact command body and sealed source; thirty-second diagnostic bound does not replace the original cap. No profiler, no qualification claim.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+      "label": "normal-direct-plain-diagnostic",
+      "leader_reaped": true,
+      "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pgid": 7,
+      "pid": 7,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 10.523972423994564,
+      "single_cpu": 0,
+      "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:04:29.320783+00:00",
+      "timed_out": false
+    }
+  ]
+}

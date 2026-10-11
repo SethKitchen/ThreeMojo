@@ -1,0 +1,142 @@
+{
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phases": [
+    {
+      "config_sha256": "85f28f8d69e9d1e90ba34ceac5537ce118e3a1dbb98c3230c3dee8af08f50e77",
+      "configured_but_unrun_labels": [],
+      "phase": "lexical-relative-focused-controls-v22",
+      "result_sha256": "4621782f9ea97222ca237ff6f250b7595e607eaa71f37ee2c744100a9fb76ce6",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "-c",
+              "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/lexical-relative-implementation-v22/relative_path_equivalence_controls.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4': raise RuntimeError('Lexical harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/lexical-relative-focused-controls-v22/normal-CONTROLS.json','97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+            "label": "normal-lexical-controls",
+            "leader_reaped": true,
+            "log_sha256": "bbd66623458d9e43cffe4ffdcf30d2b471a9da9a32f7eb65917f34c9259cfebb",
+            "pgid": 6,
+            "pid": 6,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 0.5024199160034186,
+            "single_cpu": 0,
+            "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+            "stage_timeout_seconds": 30,
+            "started": "2026-10-11T04:03:02.554587+00:00",
+            "timed_out": false
+          },
+          "stage_result_sha256": "ba9a920fce303be8157ed1209e477621d8651d8e4290192df37b7bc113dd495b",
+          "start_sha256": "00e8a62ea2f7853f016627853c954ee9575aad8e73b91c2a85d6e904139e9e8c"
+        },
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-O",
+              "-B",
+              "-c",
+              "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/lexical-relative-implementation-v22/relative_path_equivalence_controls.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4': raise RuntimeError('Lexical harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/lexical-relative-focused-controls-v22/optimized-CONTROLS.json','97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+            "label": "optimized-lexical-controls",
+            "leader_reaped": true,
+            "log_sha256": "1631116a014fbc9d7a0c49c39db48f4fe4875b04ecd298b405ab9b987cef5672",
+            "pgid": 7,
+            "pid": 7,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 0.5023110550027923,
+            "single_cpu": 0,
+            "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+            "stage_timeout_seconds": 30,
+            "started": "2026-10-11T04:03:04.069424+00:00",
+            "timed_out": false
+          },
+          "stage_result_sha256": "49ff1fe4ab700c7c5344eaddc45e19e15355994c3dfb3db6beef42e5c298bbfa",
+          "start_sha256": "df5a087c444acbe9517422c54ce3a7e1d527511cf8a4b2405dcff494fc186c15"
+        }
+      ]
+    },
+    {
+      "config_sha256": "68be7d37cf05540e8a8de316657bcb7f65f78c6dbbef9db1f8a8dbe50fe0ca20",
+      "configured_but_unrun_labels": [
+        "normal-package",
+        "optimized-direct",
+        "optimized-package"
+      ],
+      "phase": "invariant-input-cold-probes-v22",
+      "result_sha256": "f4f6808ea03a62c31cd1b89cfdf0cc5ebd4d3102e158e9ddb5be5abbf04c421d",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-c",
+              "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+            "label": "normal-direct",
+            "leader_reaped": true,
+            "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pgid": 6,
+            "pid": 6,
+            "remaining_owned_descendants": [],
+            "returncode": -9,
+            "seconds": 10.060284039005637,
+            "single_cpu": 0,
+            "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+            "stage_timeout_seconds": 10,
+            "started": "2026-10-11T04:03:30.023673+00:00",
+            "timed_out": true
+          },
+          "stage_result_sha256": "35541db3707687daef258440a1cbad92a638cd5b3bc4c8bcaaa0c380adb1ecab",
+          "start_sha256": "fdd90ee8c089d71efc7d8091ce3f9f89e6123d208aac685fd823081c596d1fb9"
+        }
+      ]
+    },
+    {
+      "config_sha256": "8f75993e5a2ba65dedf8ee17d75f8621a36f083737effbdcdf6fd01854113b3c",
+      "configured_but_unrun_labels": [],
+      "phase": "invariant-input-plain-diagnostic-v22",
+      "result_sha256": "d176df112b5f315313c9a3cc057e907684f3f06b03f9b8add5779f41dd4a0bdf",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-c",
+              "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+            "label": "normal-direct-plain-diagnostic",
+            "leader_reaped": true,
+            "log_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            "pgid": 7,
+            "pid": 7,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 10.523972423994564,
+            "single_cpu": 0,
+            "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+            "stage_timeout_seconds": 30,
+            "started": "2026-10-11T04:04:29.320783+00:00",
+            "timed_out": false
+          },
+          "stage_result_sha256": "43b9742643fb101b86b3386e9cdd79a9393fbeb99c37b6e33b500e7a078113c8",
+          "start_sha256": "7caf40891236ac86c85577c2340f2bc71509008218b624f4f8e69a265eb07091"
+        }
+      ]
+    }
+  ],
+  "schema": 1,
+  "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3"
+}

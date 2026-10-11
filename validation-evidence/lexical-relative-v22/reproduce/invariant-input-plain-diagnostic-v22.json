@@ -1,0 +1,21 @@
+{
+  "pause_request_file": "invariant-input-plain-diagnostic-v22.pause",
+  "phase": "invariant-input-plain-diagnostic-v22",
+  "scope": "One separately authorized plain diagnostic after the failed unchanged v22 ten-second qualification. Same exact command body and sealed source; thirty-second diagnostic bound does not replace the original cap. No profiler, no qualification claim.",
+  "seal": "CANDIDATE-V22-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+  "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+  "stages": [
+    {
+      "accept_nonzero": true,
+      "command": [
+        "{python}",
+        "-c",
+        "import sys; from pathlib import Path; sys.path = [str(Path.cwd()/\"tools/carla_lane_oracle\")] + [p for p in sys.path if p and Path(p).resolve() != Path.cwd()]; import coverage_invariant_contracts as invariant; result=invariant.verify(Path.cwd()); sys.exit(0 if len(result[\"sources\"]) == 4 else 1)"
+      ],
+      "label": "normal-direct-plain-diagnostic",
+      "seconds": 30
+    }
+  ],
+  "window_seconds": 120
+}

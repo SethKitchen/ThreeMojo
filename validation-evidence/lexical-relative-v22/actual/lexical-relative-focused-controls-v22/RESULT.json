@@ -1,0 +1,60 @@
+{
+  "elapsed_seconds": 5.054698369996913,
+  "failure": null,
+  "finished": "2026-10-11T04:03:05.889728+00:00",
+  "known_process_count": 2,
+  "remaining_owned_descendants": [],
+  "scope": "Always-active normal/optimized helper-only lexical differential controls, exact candidate/pathlib/executed-harness bytes, fresh input/callback fixtures and actual fast/fallback traces. No cold watchdog or operation-level qualification claim.",
+  "sdk_identity_unchanged": true,
+  "sequence_completed": true,
+  "source_seal_unchanged": true,
+  "stages": [
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/lexical-relative-implementation-v22/relative_path_equivalence_controls.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4': raise RuntimeError('Lexical harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/lexical-relative-focused-controls-v22/normal-CONTROLS.json','97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+      "label": "normal-lexical-controls",
+      "leader_reaped": true,
+      "log_sha256": "bbd66623458d9e43cffe4ffdcf30d2b471a9da9a32f7eb65917f34c9259cfebb",
+      "pgid": 6,
+      "pid": 6,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 0.5024199160034186,
+      "single_cpu": 0,
+      "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:03:02.554587+00:00",
+      "timed_out": false
+    },
+    {
+      "adopted_reaped": [],
+      "argv": [
+        "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+        "-O",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/lexical-relative-implementation-v22/relative_path_equivalence_controls.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4': raise RuntimeError('Lexical harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py','/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/lexical-relative-focused-controls-v22/optimized-CONTROLS.json','97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+      "label": "optimized-lexical-controls",
+      "leader_reaped": true,
+      "log_sha256": "1631116a014fbc9d7a0c49c39db48f4fe4875b04ecd298b405ab9b987cef5672",
+      "pgid": 7,
+      "pid": 7,
+      "remaining_owned_descendants": [],
+      "returncode": 0,
+      "seconds": 0.5023110550027923,
+      "single_cpu": 0,
+      "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+      "stage_timeout_seconds": 30,
+      "started": "2026-10-11T04:03:04.069424+00:00",
+      "timed_out": false
+    }
+  ]
+}

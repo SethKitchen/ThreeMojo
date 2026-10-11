@@ -1,0 +1,83 @@
+{
+  "aggregate_console_limit": "No aggregate supervisor console file is fabricated. All persisted stage START/RESULT/log files, final RESULT, process receipts and WINDOW-bound supervisor source remain preserved. Availability of separately persisted aggregate console output is listed per phase.",
+  "aggregate_supervisor_console_logs_available": {
+    "invariant-input-cold-probes-v22": false,
+    "invariant-input-plain-diagnostic-v22": false,
+    "lexical-relative-focused-controls-v22": false
+  },
+  "all_phase_remaining_owned_descendants": [],
+  "all_phase_source_sdk_unchanged": true,
+  "checked_harness_sha256": "97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4",
+  "cold_probe": {
+    "cap_seconds": 10,
+    "executed": "normal-direct",
+    "observed_stage_seconds": 10.060284039005637,
+    "result_sha256": "f4f6808ea03a62c31cd1b89cfdf0cc5ebd4d3102e158e9ddb5be5abbf04c421d",
+    "returncode": -9,
+    "status": "FAILED_ORIGINAL_10_SECOND_BOUND",
+    "timed_out": true,
+    "unrun": [
+      "normal-package",
+      "optimized-direct",
+      "optimized-package"
+    ],
+    "window_cap_seconds": 300
+  },
+  "evidence_policy": "Every file in the three terminal phase directories and exact configs, commands, supervisor source, source/SDK seals, checked harness and bound source bytes is preserved. Any available aggregate supervisor console file is preserved without reconstruction. Derived summaries are separate. No private reviews/design notes, secrets, unrelated source, executable binaries, candidate edits, reruns or uploads.",
+  "exact_frozen_v22_source_paths": 29,
+  "focused_helper_controls": {
+    "harness_binding": "Each original command reads the external harness once, checks its exact SHA-256, and compiles those same bytes. Reports also bind exact helper AST, candidate core and pathlib reference source.",
+    "modes": {
+      "normal": {
+        "always_active_checks": 1563,
+        "branch_counts": {
+          "fallback": 47,
+          "fast": 63
+        },
+        "cases": 110,
+        "filesystem_audit_events": [],
+        "optimize": 0,
+        "report_sha256": "41e14bff87f943d11df07666f0711503880429c16f803b3055e8578dc0ee45f6"
+      },
+      "optimized": {
+        "always_active_checks": 1563,
+        "branch_counts": {
+          "fallback": 47,
+          "fast": 63
+        },
+        "cases": 110,
+        "filesystem_audit_events": [],
+        "optimize": 1,
+        "report_sha256": "4613fe6342bbf740c1af408b708fbc151fdc994dac849185940c35e08df4e080"
+      }
+    },
+    "result_sha256": "4621782f9ea97222ca237ff6f250b7595e607eaa71f37ee2c744100a9fb76ce6",
+    "scope_limit": "Focused helper-only differential fixtures with fresh inputs/callbacks and recorded fast/fallback traces. They do not establish real operation-level source admission, maintained cold-watchdog success or broader qualification.",
+    "stage_cap_seconds": 30,
+    "status": "PASS_HELPER_ONLY",
+    "window_cap_seconds": 180
+  },
+  "helper_ast_sha256": "d02f09663ba33ad79ce4f5025c317f6c7bfad2e0529286b7a31430994754835f",
+  "pathlib_reference_sha256": "10ba48ae8063cfe7589436041d0d4628c05f427c7709cf8e75e486f8930cc32c",
+  "plain_diagnostic": {
+    "argv_and_cwd_exactly_equal_to_failed_cold_command": true,
+    "limit": "The same exact normal-direct body and frozen source complete at 10.523972424 seconds with exit 0 under a separately authorized 30-second diagnostic cap. This remains above the original ten-second limit and does not replace or pass the failed qualification gate.",
+    "observed_stage_seconds": 10.523972423994564,
+    "profiler_or_instrumentation": false,
+    "result_sha256": "d176df112b5f315313c9a3cc057e907684f3f06b03f9b8add5779f41dd4a0bdf",
+    "returncode": 0,
+    "stage_cap_seconds": 30,
+    "status": "COMPLETED_SEPARATE_30_SECOND_DIAGNOSTIC_NOT_10_SECOND_PASS",
+    "timed_out": false,
+    "window_cap_seconds": 120
+  },
+  "proposal_core_sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+  "reproduction_boundary": "All 29 frozen candidate manifest paths, executed harness and supervisor, SDK identity support source and exact pathlib reference source are included. The entire unchanged repository and SDK binaries are not distributed.",
+  "schema": 1,
+  "scope": "Helper-only lexical differential controls pass. Original maintained 10-second real cold gate fails. Separate same-body/source 30-second plain diagnostic completes above ten seconds. No original-cap, operation-level, readiness or broader qualification claim.",
+  "source_manifest_sha256": "e5e35b83cdc8bf25f137ca6feb74450fbc25e6fd4f27d633a2a36ae7da3d1588",
+  "source_manifest_time_boundary": "The original source-only/unqualified manifest remains unchanged. Later receipts retain their distinct helper-control, cold-failure and plain-diagnostic outcomes.",
+  "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+  "status": "V22_HELPER_CONTROLS_PASS_COLD_GATE_FAIL_PLAIN_DIAGNOSTIC_COMPLETES",
+  "stream_capture": "Original stage logs merge stdout and stderr. Empty cold and plain output is preserved; separate streams were not recorded or invented."
+}

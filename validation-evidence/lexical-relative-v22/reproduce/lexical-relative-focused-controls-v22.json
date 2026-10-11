@@ -1,0 +1,32 @@
+{
+  "pause_request_file": "lexical-relative-focused-controls-v22.pause",
+  "phase": "lexical-relative-focused-controls-v22",
+  "scope": "Always-active normal/optimized helper-only lexical differential controls, exact candidate/pathlib/executed-harness bytes, fresh input/callback fixtures and actual fast/fallback traces. No cold watchdog or operation-level qualification claim.",
+  "seal": "CANDIDATE-V22-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+  "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/lexical-relative-implementation-v22/relative_path_equivalence_controls.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4': raise RuntimeError('Lexical harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py','{evidence}/normal-CONTROLS.json','97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "label": "normal-lexical-controls",
+      "seconds": 30
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-c",
+        "import hashlib,sys\nfrom pathlib import Path\np=Path('/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/lexical-relative-implementation-v22/relative_path_equivalence_controls.py');raw=p.read_bytes()\nif hashlib.sha256(raw).hexdigest()!='97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4': raise RuntimeError('Lexical harness source changed')\nsys.argv=[str(p),'/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py','{evidence}/optimized-CONTROLS.json','97eab00022b10243848eac30f556b67b8f21b6e5d2f02ffc5e65e85d1fe037b4']\nexec(compile(raw,str(p),'exec'),{'__name__':'__main__','__file__':str(p)})\n"
+      ],
+      "label": "optimized-lexical-controls",
+      "seconds": 30
+    }
+  ],
+  "window_seconds": 180
+}
