@@ -1,0 +1,10 @@
+{
+  "python_optimize": 0,
+  "runtime_gate_seconds": 5,
+  "sdk_payload_count": 13,
+  "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a",
+  "started": "2026-10-11T04:47:45.308192+00:00",
+  "supervisor_pid": 5,
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+  "whole_window_seconds": 10800
+}

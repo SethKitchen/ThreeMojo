@@ -1,0 +1,42 @@
+{
+  "pause_request_file": "maintained-mechanics-v26.pause",
+  "phase": "maintained-mechanics-v26",
+  "scope": "Three appended maintained mechanics methods normal/optimized. No complete owner or matrix claim. Original caps retained.",
+  "seal": "CANDIDATE-V26-SOURCE-SEAL.json",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v26",
+  "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a",
+  "stages": [
+    {
+      "command": [
+        "{python}",
+        "-B",
+        "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+        "-v",
+        "-f",
+        "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+        "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+        "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+      ],
+      "expected_tests": 3,
+      "label": "normal-maintained-mechanics",
+      "seconds": 1800
+    },
+    {
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+        "-v",
+        "-f",
+        "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+        "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+        "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+      ],
+      "expected_tests": 3,
+      "label": "optimized-maintained-mechanics",
+      "seconds": 1800
+    }
+  ],
+  "window_seconds": 10800
+}

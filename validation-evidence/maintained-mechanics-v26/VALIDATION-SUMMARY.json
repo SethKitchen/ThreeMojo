@@ -1,0 +1,86 @@
+{
+  "all_two_stages_returncode_zero": true,
+  "any_stage_timed_out": false,
+  "console_binding_limit": "Actual supervisor console emitted stage records before adding test_count, expected_tests and skipped_test_count; original final/stage JSON retains the later annotations. No console output is reconstructed.",
+  "evidence_policy": "Only ordinary original receipts/logs/config and bound source bytes. No private review/design notes, unexecuted proposals, prior v25 raw evidence, candidate edits, reruns or uploads.",
+  "exact_frozen_source_manifest_paths": 31,
+  "executed_test_path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+  "executed_test_sha256": "a65207f101084b01f1a764836359df68a7aed605e7fc76b3be8c7478081125f0",
+  "method_executions": 6,
+  "method_level_evidence_limit": "The original logs record three method outcomes per mode. Internal differential cases in method names/source are not separately persisted runtime reports; no new per-case receipts are reconstructed.",
+  "other_thirty_methods_rerun_in_this_phase": false,
+  "phases": [
+    {
+      "all_original_phase_files": 13,
+      "method_executions": 6,
+      "phase": "maintained-mechanics-v26",
+      "result_sha256": "8ddad21c995b9f87dd8923a007727dd1c8d43efd007224564ee2fda06ba3e7a2",
+      "stages": [
+        {
+          "label": "normal-maintained-mechanics",
+          "method_executions": 3,
+          "method_names": [
+            "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+            "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+            "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+          ],
+          "mode": "normal",
+          "returncode": 0,
+          "skips": 0,
+          "stage_seconds": 1.5044609449978452,
+          "timed_out": false
+        },
+        {
+          "label": "optimized-maintained-mechanics",
+          "method_executions": 3,
+          "method_names": [
+            "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+            "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+            "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+          ],
+          "mode": "optimized",
+          "returncode": 0,
+          "skips": 0,
+          "stage_seconds": 1.504155921000347,
+          "timed_out": false
+        }
+      ],
+      "window_elapsed_seconds": 6.750280082000245
+    }
+  ],
+  "remaining_owned_descendants": [],
+  "remaining_qualification": [
+    "dynamic per-site observation sweep",
+    "complete current owner-suite rerun",
+    "full Python matrix",
+    "native controls and maintained coverage",
+    "exact-head hosted CI",
+    "overall issue completion"
+  ],
+  "reproduction_boundary": "Includes all thirteen phase files, actual config/supervisor console, supervisor source, full source/SDK seals, all31 frozen manifest paths and SDK identity helper. Full unchanged repository and SDK/stdlib image are not distributed. The runtime stdlib-source comparison inside a method has no separately saved digest receipt; no such historical hash is invented.",
+  "schema": 1,
+  "scope": "Only three selected maintained mechanics methods in normal and optimized modes: six executions, zero skips. No complete owner-suite, dynamic observation sweep, full Python matrix, native coverage, hosted CI or overall completion claim.",
+  "sdk_receipt_sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207",
+  "selected_method_names": [
+    "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+    "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+    "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+  ],
+  "separate_v25_evidence_reference": {
+    "limit": "Prior v25 focused/owner results remain a distinct packet. This packet contains only the v26 mechanics phase and does not treat v25 as a v26 suite rerun.",
+    "packet_manifest_sha256": "dfd2b0221832d31f2be28fcd4020d85411a30e1d90d1f9416e42bba61e78a13b",
+    "packet_path": "validation-evidence-bounded-owner-v25-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+    "raw_members_included_here": false
+  },
+  "skips": 0,
+  "source_boundary": "The sealed source differs from v25 only at the test file. Production/proof source hashes are unchanged. All thirty pre-existing test-method ASTs are unchanged. The original source-only manifest remains intact.",
+  "source_manifest_sha256": "dfd264e0f0cf159e7df385c54386b20ff1f0215fe0fd99a830c5824200042bae",
+  "source_sdk_unchanged": true,
+  "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a",
+  "source_test_methods": 33,
+  "stage_cap_seconds": 1800,
+  "status": "PASSED_V26_MAINTAINED_MECHANICS_THREE_METHODS_ONLY",
+  "stream_capture": "Original stdout/stderr share the merged stage logs; separate streams are not invented.",
+  "unique_executed_methods": 3,
+  "whole_window_cap_seconds": 10800
+}

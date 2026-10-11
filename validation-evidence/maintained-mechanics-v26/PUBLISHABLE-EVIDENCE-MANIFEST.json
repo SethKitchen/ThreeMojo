@@ -1,0 +1,146 @@
+{
+  "files": [
+    {
+      "bytes": 3893,
+      "kind": "derived-actual-command-and-receipt-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "4dfb8ecdc3807a06711564a7c7ade9903f25c277dc62de7d3c33e506d556d003"
+    },
+    {
+      "bytes": 25240,
+      "kind": "complete-original-path-byte-hash-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "e9b067f900bcb27051d9fc90f6e6f1eed1a1ba82c8d28e07978baeef7d9e8c97"
+    },
+    {
+      "bytes": 2423,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/README.md",
+      "path": "README.md",
+      "sha256": "10cf286aeec3e3ea17e1594021a1fcbe5b4b53d9b257fed449cf078e9b2311c7"
+    },
+    {
+      "bytes": 5097,
+      "kind": "derived-passing-three-method-mechanics-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "b2697b0b3e85ed1912b12a2f9dad1e1b8594ddd0f6194e2de7b4029152d45f13"
+    },
+    {
+      "bytes": 2915,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/actual/maintained-mechanics-v26/RESULT.json",
+      "path": "actual/maintained-mechanics-v26/RESULT.json",
+      "sha256": "8ddad21c995b9f87dd8923a007727dd1c8d43efd007224564ee2fda06ba3e7a2"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/actual/maintained-mechanics-v26/SDK-AFTER.json",
+      "path": "actual/maintained-mechanics-v26/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/actual/maintained-mechanics-v26/SDK-BEFORE.json",
+      "path": "actual/maintained-mechanics-v26/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/actual/maintained-mechanics-v26/WINDOW-START.json",
+      "path": "actual/maintained-mechanics-v26/WINDOW-START.json",
+      "sha256": "3270357ee8232c3c4a9228ddda21ade51712e2bed216081738de0e6d828cce33"
+    },
+    {
+      "bytes": 548,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/actual/maintained-mechanics-v26/normal-maintained-mechanics.log",
+      "path": "actual/maintained-mechanics-v26/normal-maintained-mechanics.log",
+      "sha256": "88e90ee1085d3a32295ab82c038b461e3b34b8f5350e3fca7e081722a03bb692"
+    },
+    {
+      "bytes": 548,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/actual/maintained-mechanics-v26/optimized-maintained-mechanics.log",
+      "path": "actual/maintained-mechanics-v26/optimized-maintained-mechanics.log",
+      "sha256": "8e13e1225e21538b965ac6831eda28c3f81cddfce94f95612bab2b8989376232"
+    },
+    {
+      "bytes": 582825,
+      "kind": "lossless-original-passing-phase-receipts-and-source-bytes",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "24f332c2d45e004e5657fdd430d50e25f848f3635bd90207945e6093f2d1cc62"
+    },
+    {
+      "bytes": 5175,
+      "kind": "safe-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 419528,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/CANDIDATE-V26-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V26-SOURCE-SEAL.json",
+      "sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a"
+    },
+    {
+      "bytes": 16637,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "path": "reproduce/PUBLISHABLE-SOURCE-MANIFEST.json",
+      "sha256": "dfd264e0f0cf159e7df385c54386b20ff1f0215fe0fd99a830c5824200042bae"
+    },
+    {
+      "bytes": 20977,
+      "kind": "packet-builder-no-candidate-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/build_maintained_mechanics_v26_packet.py",
+      "path": "reproduce/build_maintained_mechanics_v26_packet.py",
+      "sha256": "26dd9d687581bb1f8d62e3f0f871da0124ea9a7b33129478152f6a55e3483480"
+    },
+    {
+      "bytes": 1601,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/maintained-mechanics-v26.json",
+      "path": "reproduce/maintained-mechanics-v26.json",
+      "sha256": "3dc35e202824ebd99ae8fb52a20d597121eb43da8939a964f3edf24269803110"
+    },
+    {
+      "bytes": 4449,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/maintained-mechanics-v26.supervisor.log",
+      "path": "reproduce/maintained-mechanics-v26.supervisor.log",
+      "sha256": "faaa6fb3696f05be8c2c1a1ed936130946deab9a28cbd50d123515d29d991c93"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1797,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "path": "reproduce/source/docs/validation/full-audit-721-qualification-policy.md",
+      "sha256": "3363edc63f485ef00a583a8461e4120d7dc614146aca16c146bc5e28786350b2"
+    },
+    {
+      "bytes": 93494,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-maintained-mechanics-v26-packet/reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "path": "reproduce/source/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "a65207f101084b01f1a764836359df68a7aed605e7fc76b3be8c7478081125f0"
+    }
+  ],
+  "schema": 1,
+  "scope": "Only three selected maintained mechanics methods in normal and optimized modes: six executions, zero skips. No complete owner-suite, dynamic observation sweep, full Python matrix, native coverage, hosted CI or overall completion claim."
+}

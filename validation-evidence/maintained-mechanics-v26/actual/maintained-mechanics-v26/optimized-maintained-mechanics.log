@@ -1,0 +1,8 @@
+test_reviewed_exact_guard_projection_and_291_cases (__main__.ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases) ... ok
+test_native_path_fallback_without_layout_requirement (__main__.ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement) ... ok
+test_reviewed_110_cases_on_supported_posix_layout (__main__.ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.438s
+
+OK

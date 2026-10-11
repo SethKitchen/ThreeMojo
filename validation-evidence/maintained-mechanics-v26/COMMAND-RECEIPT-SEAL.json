@@ -1,0 +1,85 @@
+{
+  "kind": "derived-actual-command-and-receipt-binding",
+  "phases": [
+    {
+      "config_sha256": "3dc35e202824ebd99ae8fb52a20d597121eb43da8939a964f3edf24269803110",
+      "configured_but_unrun_labels": [],
+      "phase": "maintained-mechanics-v26",
+      "result_sha256": "8ddad21c995b9f87dd8923a007727dd1c8d43efd007224564ee2fda06ba3e7a2",
+      "stages": [
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-B",
+              "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+              "-v",
+              "-f",
+              "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+              "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+              "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v26",
+            "expected_tests": 3,
+            "label": "normal-maintained-mechanics",
+            "leader_reaped": true,
+            "log_sha256": "88e90ee1085d3a32295ab82c038b461e3b34b8f5350e3fca7e081722a03bb692",
+            "pgid": 8,
+            "pid": 8,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 1.5044609449978452,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a",
+            "stage_timeout_seconds": 1800,
+            "started": "2026-10-11T04:47:45.836393+00:00",
+            "test_count": 3,
+            "timed_out": false
+          },
+          "stage_result_sha256": "2dce5e370ec665b634a9c191144354f9e856e35e90925eb9b456dfb2868230b0",
+          "start_sha256": "d8ce1bf235f14731216445473ad63d4a7b1f085bccf4e39b38e7bc4c85a34375"
+        },
+        {
+          "stage": {
+            "adopted_reaped": [],
+            "argv": [
+              "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+              "-O",
+              "-B",
+              "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+              "-v",
+              "-f",
+              "ReviewedClassifierMechanics.test_reviewed_exact_guard_projection_and_291_cases",
+              "ReviewedRelativePathMechanics.test_native_path_fallback_without_layout_requirement",
+              "ReviewedRelativePathMechanics.test_reviewed_110_cases_on_supported_posix_layout"
+            ],
+            "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v26",
+            "expected_tests": 3,
+            "label": "optimized-maintained-mechanics",
+            "leader_reaped": true,
+            "log_sha256": "8e13e1225e21538b965ac6831eda28c3f81cddfce94f95612bab2b8989376232",
+            "pgid": 9,
+            "pid": 9,
+            "remaining_owned_descendants": [],
+            "returncode": 0,
+            "seconds": 1.504155921000347,
+            "single_cpu": 0,
+            "skipped_test_count": 0,
+            "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a",
+            "stage_timeout_seconds": 1800,
+            "started": "2026-10-11T04:47:48.319563+00:00",
+            "test_count": 3,
+            "timed_out": false
+          },
+          "stage_result_sha256": "bf4f780b1bfa73c7c6ab3bf479d337f3a013686a078686f265ac28d1fa2769ee",
+          "start_sha256": "d50ba08a478709eb7c387e01cbb6fd8c6635da6e8f4e7f642adf903e8fbc6b7d"
+        }
+      ],
+      "supervisor_console_sha256": "faaa6fb3696f05be8c2c1a1ed936130946deab9a28cbd50d123515d29d991c93"
+    }
+  ],
+  "schema": 1,
+  "source_seal_sha256": "22620c7e0e7308c7485d364c355a31c3f43ec58e26198ca673f65daacb34ce1a"
+}
