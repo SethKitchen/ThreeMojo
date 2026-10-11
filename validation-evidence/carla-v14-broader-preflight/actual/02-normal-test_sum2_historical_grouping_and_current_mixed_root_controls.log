@@ -1,0 +1,10 @@
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:599: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  and not callable(getattr(code, name)))
+/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14/tools/carla_lane_oracle/full_audit_cleanup_contracts.py:597: DeprecationWarning: co_lnotab is deprecated, use co_lines instead.
+  return tuple((name, _code_constant(getattr(code, name))) for name in sorted(dir(code))
+test_sum2_historical_grouping_and_current_mixed_root_controls (test_full_audit_cleanup_contracts.FullAuditCleanupContracts.test_sum2_historical_grouping_and_current_mixed_root_controls) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 122.595s
+
+OK

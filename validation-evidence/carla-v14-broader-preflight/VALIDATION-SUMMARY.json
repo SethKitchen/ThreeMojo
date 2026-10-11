@@ -1,0 +1,97 @@
+{
+  "caps": {
+    "configured_window_seconds": 10800,
+    "maintained_consumer_child_seconds": 120,
+    "stage_seconds": 1800
+  },
+  "consumer_method_boundary": "Each completed passing consumer-first stage exercises14 maintained mode/consumer subtests with unchanged120-second subprocess limits. Successful child output/timing is not separately emitted, so stage success is not a new per-child timing receipt.",
+  "earlier_failed_broader_evidence_commit": "26632cf87dbe745f82384c987f10574570eb6e44",
+  "evidence_policy": "Original source/SDK/command/supervisor receipts and raw logs copied byte-for-byte. Summary is derived separately. No internal review notes, private coordination or reconstructed receipts.",
+  "failure": null,
+  "limitations": "No robust timing, full qualification, issue-completion or merge-readiness claim. Later upstream source is not covered by this seal.",
+  "passed": true,
+  "remaining_owned_descendants": [],
+  "result_sha256": "7331edd54a575eef24b043939c27a65d6d176369eae1f20fc4d2c0485601f9e3",
+  "schema": 1,
+  "scope": "Actual terminal eight-stage v14 broader preflight, with each completed stage reported separately. This does not replace the final regression union, paired native controls, coverage, current combined report or hosted CI.",
+  "sdk_identity_unchanged": true,
+  "separate_v14_evidence_commits": [
+    "afe68f54596a3541a27533664acbbf8995687261",
+    "ac00d7d06a1525cd5bbeb22e78c3dff4eb9eb372"
+  ],
+  "sequence_completed": true,
+  "source_base": "d06143b149ba31ab44afaa690c93289b57bc1778",
+  "source_checkpoint_commits": [
+    "bd990f50dd0135b8850789616bfd1e6b7cbd70c0",
+    "3473e6cde5eed93a97a77a5c0e8e1358ef1e1240"
+  ],
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "source_seal_unchanged": true,
+  "stage_results": [
+    {
+      "label": "03-normal-test_consumer_first_import_orders_normal_and_optimized",
+      "returncode": 0,
+      "seconds": 672.8979233850005,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "03-optimized-test_consumer_first_import_orders_normal_and_optimized",
+      "returncode": 0,
+      "seconds": 669.525240944,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls",
+      "returncode": 0,
+      "seconds": 123.46970977599995,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls",
+      "returncode": 0,
+      "seconds": 112.22792670999843,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "00-normal-test_incomplete_consumed_module_import_fails_closed",
+      "returncode": 0,
+      "seconds": 8.521449953001138,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "00-optimized-test_incomplete_consumed_module_import_fails_closed",
+      "returncode": 0,
+      "seconds": 8.520399388999067,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+      "returncode": 0,
+      "seconds": 39.12772304600003,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    },
+    {
+      "label": "01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+      "returncode": 0,
+      "seconds": 37.60330893699938,
+      "skipped_test_count": 0,
+      "test_count": 1,
+      "timed_out": false
+    }
+  ],
+  "window_seconds": 1683.9209042309994
+}

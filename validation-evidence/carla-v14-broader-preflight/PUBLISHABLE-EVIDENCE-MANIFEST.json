@@ -1,0 +1,237 @@
+{
+  "files": [
+    {
+      "bytes": 9988,
+      "kind": "original-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/RESULT.json",
+      "path": "actual/RESULT.json",
+      "sha256": "7331edd54a575eef24b043939c27a65d6d176369eae1f20fc4d2c0485601f9e3"
+    },
+    {
+      "bytes": 419155,
+      "kind": "original-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/SOURCE-SEAL.json",
+      "path": "actual/SOURCE-SEAL.json",
+      "sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/SDK-BEFORE.json",
+      "path": "actual/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "original-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/SDK-AFTER.json",
+      "path": "actual/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 371,
+      "kind": "original-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/WINDOW-START.json",
+      "path": "actual/WINDOW-START.json",
+      "sha256": "5403479e8cf1f68dcbefaf751c9e3300b1feb472e4b532261e4405c0db24804e"
+    },
+    {
+      "bytes": 709,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "path": "actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "sha256": "3a62bfbf95eecfc5eb2d134634c7076b7a728798104eb77f564474954e21e8cd"
+    },
+    {
+      "bytes": 1021,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "path": "actual/03-normal-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "sha256": "bb93ee41bc7b2c29cdd51b184bfbd439554811b414f095f3c7f040c1f191d7c4"
+    },
+    {
+      "bytes": 802,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/03-normal-test_consumer_first_import_orders_normal_and_optimized.log",
+      "path": "actual/03-normal-test_consumer_first_import_orders_normal_and_optimized.log",
+      "sha256": "04bfa80b7ef4a858cfe83bf94f864572d47763c34f8684a53f8cc921f5de389b"
+    },
+    {
+      "bytes": 724,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/03-optimized-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "path": "actual/03-optimized-test_consumer_first_import_orders_normal_and_optimized-START.json",
+      "sha256": "c9afcc866a721130488eb547ef22cfce6b6b6e5af25d7d4932946afc84125fe8"
+    },
+    {
+      "bytes": 1032,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/03-optimized-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "path": "actual/03-optimized-test_consumer_first_import_orders_normal_and_optimized-RESULT.json",
+      "sha256": "1914613246db64dceaf15f4000e674a956db0e5d69441163e3d5d27fc5a01b04"
+    },
+    {
+      "bytes": 802,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/03-optimized-test_consumer_first_import_orders_normal_and_optimized.log",
+      "path": "actual/03-optimized-test_consumer_first_import_orders_normal_and_optimized.log",
+      "sha256": "e4076ca7a61f1723a35b3e293a58b955b83f97e7ce9ec40a7853877f9317cd07"
+    },
+    {
+      "bytes": 725,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls-START.json",
+      "path": "actual/02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls-START.json",
+      "sha256": "f162be3630d506cd5f8976047e54cf6412f5c62ac0fa77227a2f6504cc228e17"
+    },
+    {
+      "bytes": 1038,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls-RESULT.json",
+      "path": "actual/02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls-RESULT.json",
+      "sha256": "d884055431f9b02c7c7b98e82f7c3f36984ba4a7f87143b4ff9d9f7ca3728666"
+    },
+    {
+      "bytes": 816,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls.log",
+      "path": "actual/02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls.log",
+      "sha256": "1913c75f902f0e7b9d81d3a1024abb3acaf901414a314753b8e54e13dac4ac16"
+    },
+    {
+      "bytes": 738,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls-START.json",
+      "path": "actual/02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls-START.json",
+      "sha256": "adda118a38c1deb255c841fd949eda63fbfb0aa1a61b8a60207708a5b75183c1"
+    },
+    {
+      "bytes": 1051,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls-RESULT.json",
+      "path": "actual/02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls-RESULT.json",
+      "sha256": "bee25fae1b644bbf37cc4a46e7bd4c27adbd5201347924ccd290724ee323e51a"
+    },
+    {
+      "bytes": 816,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls.log",
+      "path": "actual/02-optimized-test_sum2_historical_grouping_and_current_mixed_root_controls.log",
+      "sha256": "c09fb3326870165f04914f57244744f8c67aef5967eb19a291dffd56654a5185"
+    },
+    {
+      "bytes": 705,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/00-normal-test_incomplete_consumed_module_import_fails_closed-START.json",
+      "path": "actual/00-normal-test_incomplete_consumed_module_import_fails_closed-START.json",
+      "sha256": "81dbcd47fb23c9ac4f6ff5dba629c71b96e1df37462b015b4020dab8e14c1ac2"
+    },
+    {
+      "bytes": 1017,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/00-normal-test_incomplete_consumed_module_import_fails_closed-RESULT.json",
+      "path": "actual/00-normal-test_incomplete_consumed_module_import_fails_closed-RESULT.json",
+      "sha256": "8445dc7b05173bbe1d45587047b0b7b0fcd19eb5e5562b0b85df6c59d7c79907"
+    },
+    {
+      "bytes": 794,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/00-normal-test_incomplete_consumed_module_import_fails_closed.log",
+      "path": "actual/00-normal-test_incomplete_consumed_module_import_fails_closed.log",
+      "sha256": "3bc031066cba8a6d555212ac2aff20465888a6c8d9b85741b7d203aa24addb1e"
+    },
+    {
+      "bytes": 718,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/00-optimized-test_incomplete_consumed_module_import_fails_closed-START.json",
+      "path": "actual/00-optimized-test_incomplete_consumed_module_import_fails_closed-START.json",
+      "sha256": "f4f56ca95cc7c932791e718a30a744ac456fd576472f9cc473bc5af2956478ef"
+    },
+    {
+      "bytes": 1030,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/00-optimized-test_incomplete_consumed_module_import_fails_closed-RESULT.json",
+      "path": "actual/00-optimized-test_incomplete_consumed_module_import_fails_closed-RESULT.json",
+      "sha256": "4839ae8f9d0d677a9393160e542522ca7f612775e669bd1c82e11fb2104229ea"
+    },
+    {
+      "bytes": 794,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/00-optimized-test_incomplete_consumed_module_import_fails_closed.log",
+      "path": "actual/00-optimized-test_incomplete_consumed_module_import_fails_closed.log",
+      "sha256": "4a23afcfd58a334d1d24a8ac5676c5ac1e663bb79e5350f3dbded58840f01156"
+    },
+    {
+      "bytes": 737,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-START.json",
+      "path": "actual/01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-START.json",
+      "sha256": "ca8887a442727db8e185dfa604ce2b12c97642fbd75638f1cc8125c124a0e0f6"
+    },
+    {
+      "bytes": 1049,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-RESULT.json",
+      "path": "actual/01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-RESULT.json",
+      "sha256": "b3d28cec8e362d94d7d7b2ec52d751f6f47b5f6678fd32ab71b899084f024bbc"
+    },
+    {
+      "bytes": 827,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct.log",
+      "path": "actual/01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct.log",
+      "sha256": "1e67560780a44128bdb3fe63acff563ea7b84c8f70524b9cd9825294534eeeee"
+    },
+    {
+      "bytes": 750,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-START.json",
+      "path": "actual/01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-START.json",
+      "sha256": "108dfa6c5f70cd27631301a4df1500ca928e3b7b7fded653dbee4301a667ab0b"
+    },
+    {
+      "bytes": 1062,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-RESULT.json",
+      "path": "actual/01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct-RESULT.json",
+      "sha256": "83c13f949f2ef58701aa9f99251ec7a918f3335b58a98911492601e2dbaa8d2b"
+    },
+    {
+      "bytes": 827,
+      "kind": "original-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/actual/01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct.log",
+      "path": "actual/01-optimized-test_exact_token_physical_crlf_and_string_spellings_remain_distinct.log",
+      "sha256": "0e0127364ad21ae2cc2c50d48446aeddac482c7c9fc3b07544bd7a7eef6cc09a"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-protocol-harness-or-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 4403,
+      "kind": "executed-protocol-harness-or-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/reproduce/focused-known-failures-v6.json",
+      "path": "reproduce/focused-known-failures-v6.json",
+      "sha256": "ff0f4948fe3ec26c58dfc59fb162d5bd52b0d70e9c4b287c97bac4fa2315e5a3"
+    },
+    {
+      "bytes": 525,
+      "kind": "executed-protocol-harness-or-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/reproduce/PAIRED-PIN-V14-NEXT-GATE-BINDING.json",
+      "path": "reproduce/PAIRED-PIN-V14-NEXT-GATE-BINDING.json",
+      "sha256": "b74c8f2446e5cb68c4b955be4606090d5e51f94d03ecfc2ff8dff66b9b994148"
+    },
+    {
+      "bytes": 3776,
+      "kind": "factual-scope-limited-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-broader-preflight-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "7b732a4429f86c68f995770b433ede97c18c2907ff2bcd9494ac66031d5db48f"
+    }
+  ],
+  "schema": 1,
+  "scope": "Actual terminal eight-stage v14 broader preflight, with each completed stage reported separately. This does not replace the final regression union, paired native controls, coverage, current combined report or hosted CI."
+}

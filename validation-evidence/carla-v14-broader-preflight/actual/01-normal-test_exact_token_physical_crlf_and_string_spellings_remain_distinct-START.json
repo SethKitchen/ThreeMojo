@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_full_audit_cleanup_contracts.py",
+    "-k",
+    "test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "label": "01-normal-test_exact_token_physical_crlf_and_string_spellings_remain_distinct",
+  "pgid": 58,
+  "pid": 58,
+  "single_cpu": 0,
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T00:50:02.154119+00:00"
+}

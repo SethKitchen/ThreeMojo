@@ -1,0 +1,24 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_full_audit_cleanup_contracts.py",
+    "-k",
+    "test_sum2_historical_grouping_and_current_mixed_root_controls",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "label": "02-normal-test_sum2_historical_grouping_and_current_mixed_root_controls",
+  "pgid": 38,
+  "pid": 38,
+  "single_cpu": 0,
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T00:45:44.805073+00:00"
+}

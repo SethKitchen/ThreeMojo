@@ -1,0 +1,25 @@
+{
+  "argv": [
+    "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+    "-O",
+    "-B",
+    "-m",
+    "unittest",
+    "discover",
+    "-s",
+    "tools/carla_lane_oracle",
+    "-p",
+    "test_full_audit_cleanup_contracts.py",
+    "-k",
+    "test_consumer_first_import_orders_normal_and_optimized",
+    "-v"
+  ],
+  "cwd": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "label": "03-optimized-test_consumer_first_import_orders_normal_and_optimized",
+  "pgid": 23,
+  "pid": 23,
+  "single_cpu": 0,
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "stage_timeout_seconds": 1800,
+  "started": "2026-10-11T00:34:33.881417+00:00"
+}
