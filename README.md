@@ -125,10 +125,10 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 ### Project tools
 
-- [ ] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives; a public download of all 47 remains open [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
-
 <details>
-<summary>Implemented: 12</summary>
+<summary>Implemented: 13</summary>
+
+- [x] [Durable CARLA asset hosting](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-assets#publish-the-converted-archives): Google Drive hosts the archives, and a public download of all 47 is verified [#309](https://github.com/SethKitchen/ThreeMojo/issues/309)
 
 - [x] [Wiki link check](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation#check-the-rules): `make docs-check` refuses wiki links to pages or headings that do not exist [#687](https://github.com/SethKitchen/ThreeMojo/issues/687)
 
