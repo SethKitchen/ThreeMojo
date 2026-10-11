@@ -64,6 +64,7 @@ Ordinary `verify` still reports missing and unpinned files without failing.
 Use `--strict` when a complete selected cache is required.
 
 Keep `manifest.json` and `ATTRIBUTION.md` beside backup or downloadable archives.
+`stage-archive` packages them with the archives. See "Stage archives for sharing".
 Keep the applicable attribution with rendered distributions too.
 These files preserve the pinned sums, CARLA release, conversion changes,
 CARLA Team credit, source links and CC BY 4.0 link.
@@ -227,6 +228,56 @@ It does not change archive checksums or create sidecars beside source renders.
 The existing `credits` command is unchanged.
 Staging a distribution does not provide a hosted mirror or close #309.
 
+## Stage archives for sharing
+
+Use `stage-archive` to package the pinned archives of named entries with their metadata:
+
+```sh
+python3 assets/carla/tools/carla_assets.py stage-archive --output /tmp/carla-archives carla.vehicle.audi.a2 carla.vehicle.tesla.model3
+```
+
+The new directory contains these files:
+
+- Each archive of the named entries, at its manifest path. For example, `carla/vehicles/vehicle.audi.a2.zip`.
+- `manifest.json`, with the exact bytes of the selected manifest.
+- `ATTRIBUTION.md`, with the credits of the named entries only.
+
+The attribution uses the same manifest snapshot as `manifest.json`.
+It gives the CARLA Team credit, the source release, the CC BY 4.0 link and the conversion changes.
+
+The command reads each archive from the cache. Use `--cache PATH` before the command to select a different cache root.
+
+The command hashes each archive before it creates the output directory.
+Each archive must have a pinned sum, and its bytes must match that sum.
+The command hashes the bytes again while it copies them.
+If the archive changes during the copy, the command fails.
+The command never pins a sum and never changes the manifest.
+
+A recipient can use the directory as a cache root.
+This command verifies the archives and extracts their members without a download:
+
+```sh
+python3 assets/carla/tools/carla_assets.py --manifest /tmp/carla-archives/manifest.json --cache /tmp/carla-archives fetch --offline carla.vehicle.audi.a2 carla.vehicle.tesla.model3
+```
+
+The rules of `stage-render` also apply:
+
+- The manifest and each archive must be regular files, not symbolic links.
+- The output directory must not exist. Its parent directory must exist.
+- The command checks every input before it creates the output directory.
+- It never replaces an existing output file.
+- If staging fails after directory creation, the command keeps all partial output and reports its path.
+
+The command also refuses these selections:
+
+- An unknown entry id, or an id that you name more than once.
+- An entry that has no archive.
+- An archive with no pinned sum, a missing archive, or an archive with different bytes.
+- Two output paths that differ only in case, and the names `manifest.json` and `ATTRIBUTION.md`.
+
+This command does not download, extract, upload or host files.
+Staging archives does not provide a hosted mirror or close #309.
+
 ## Hosting work still required
 
 Offline recovery does not provide a hosted mirror.
@@ -237,6 +288,8 @@ Before publishing converted archives, the owner must approve these details:
 - The exact source archives and their existing pinned checksums.
 - Measured archive sizes, total transfer size, and permitted storage and bandwidth costs.
 - Public download access and the manifest and attribution packaged with the archives.
+
+Use `stage-archive` to package the manifest and attribution with the approved archives.
 
 The manifest does not record archive sizes.
 The vehicle estimates below do not measure all six town packages.
