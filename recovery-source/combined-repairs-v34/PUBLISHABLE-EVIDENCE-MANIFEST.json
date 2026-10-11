@@ -1,0 +1,125 @@
+{
+  "base_source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "candidate": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34",
+  "cumulative_changes": {
+    "production_python_files": 2,
+    "test_files": 9
+  },
+  "delta_count": 11,
+  "diagnostic_terminal_sha256": "ddcd0576ed61827896eac96a52ae44a7d98cbb9f202137d7a38ecb887838359b",
+  "files": [
+    {
+      "before_sha256": "3291ab50a099183be3c209b5bc2533c02aa3cc597808bb59e57062105735878a",
+      "bytes": 9002,
+      "git_blob": "e26742d372fc2a80c25232dbc9b99819f9fb2c01",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "143ce9c367283e8100c6bc2c7b344fc5d5e54af346266f9f337fc6580eb7026f"
+    },
+    {
+      "before_sha256": "c9f5790f7912b00a708a7ef5c218cc9419439469c1be33e0226d62409b3e91a8",
+      "bytes": 13742,
+      "git_blob": "0c7800f254ccd81ad0902f98e99481d0f4576054",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "sha256": "793445460dc7027ab00a76546cf9c003951fcf766ee5b9a47c8f0bb511cd3be2"
+    },
+    {
+      "before_sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+      "bytes": 180754,
+      "git_blob": "8e620d7ec8ac4aa7544006ec87bf682226a5f6b0",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "6bf4cc71084e6a5f4471f12dc1f6f77719d39d5449617d65d6a2f2a426444351"
+    },
+    {
+      "before_sha256": "113fdf00378019493262fcdc287235449775c79881533c4568a13e3c7e43fd47",
+      "bytes": 55677,
+      "git_blob": "359f9e672f99b0508e409a643da43df9a184ba6e",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_optional_runtime_contracts.py",
+      "sha256": "70418c4e21ddb92ae4278d824e892ebd3d57bd58a415f6489b5b97a9936a7ded"
+    },
+    {
+      "before_sha256": "c581c353a2cfbacec9a012ed8e41bc89529733d22e436555bcb228377703be9d",
+      "bytes": 56096,
+      "git_blob": "868ecb2f40bf01afb09e73544ae0c6af3c65d194",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_paired_pin_contracts.py",
+      "sha256": "aeeaebc260194cb6450b30c533e2c43128ac9aaa2475d105e58c73d4692d21f3"
+    },
+    {
+      "before_sha256": "89b2f18e7d2d9f265de163cbfdd3b09658808920cfe7b77dc5573906ca9e50ba",
+      "bytes": 24221,
+      "git_blob": "0618abdafd0601cc44b13cec04751fd5d577ca04",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "sha256": "01dfa95a659cdafdc8abef7820502707d8cb3a7265e45a37a0d91180e6bcde5a"
+    },
+    {
+      "before_sha256": "a21f8aea5148be3a97b233201782393ee919a142742fcfe5b7aae929d8f281ff",
+      "bytes": 78938,
+      "git_blob": "496c89bfb7c9fae70e2466bfc4f637c93d4b19af",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "sha256": "6dc6cc3e243181047a9659786ca099647d696050c525f533c13065e297482d13"
+    },
+    {
+      "before_sha256": "a63343dfe6e1106140d2a5d5ca155c650c776a87d5be44e8a7d093a8472c673a",
+      "bytes": 18390,
+      "git_blob": "7818ec79838a692e54208d2f684298b32c0c8374",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_sum2_correspondence.py",
+      "sha256": "dd3ca4270118361c1d3d83387232d960aae5e5646bdf79590dc35d98f9273e3e"
+    },
+    {
+      "before_sha256": "2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30",
+      "bytes": 87042,
+      "git_blob": "c7d35aa3f50a11b57a8d2e2ddc7a196f94a18b43",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/coverage_loop_proofs.py",
+      "mode": "100644",
+      "path": "tools/coverage_loop_proofs.py",
+      "sha256": "3679bb0565255c19e9fcbf3af6da6790beb78cf9379197e7264b718444f14532"
+    },
+    {
+      "before_sha256": "af05f38675f34284307f2ee896ff0cd6e2594acd739388436d4690454eb10eb5",
+      "bytes": 142145,
+      "git_blob": "3888bffc7f5dd1059b5fa550d398b7eaa10b01bb",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/test_coverage_loop_proofs.py",
+      "mode": "100644",
+      "path": "tools/test_coverage_loop_proofs.py",
+      "sha256": "132f36fb44d44bd84340ff37f82e44cc3fdd3648f298ea2dcd7198ed964e06a5"
+    },
+    {
+      "before_sha256": "3342b8ebd75d8265f8124f3d9013108f8b5553ca0c2701d2e936860462553ee0",
+      "bytes": 15474,
+      "git_blob": "e41e3cd24117204c7ad63535406c913a75fb7543",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v34/tools/test_sampled_values.py",
+      "mode": "100644",
+      "path": "tools/test_sampled_values.py",
+      "sha256": "17aeb68a26b90e93eaeba51abc5db32090e0852352c137926b42f681c1728a4d"
+    }
+  ],
+  "mojo_and_genuine_report_unchanged": true,
+  "private_predecessor": "published candidate-v28",
+  "proposal_manifest_hashes": {
+    "coverage-loop-endpoint-source-checkpoint/PUBLISHABLE-SOURCE-MANIFEST.json": "1d4f63930b4bc39ec679ccc706667c5d85ed151d38e63ec6862e9818ca26c8e2",
+    "sum2-declaration-source-checkpoint/PUBLISHABLE-SOURCE-MANIFEST.json": "837ec5aac44de15fdf486fb63701e2b5cc901bd43aecfb7e6dbef8ee0a5f1425"
+  },
+  "published_base_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "schema": 1,
+  "source_review_hashes": {
+    "coverage-loop-endpoint-independent-review/FINAL-REVIEW.json": "922b943a239b43228976cc761b52f737955593d1e8db0cb8f843d70e3a8dab72",
+    "sum2-declaration-fixture-independent-review/FINAL-REVIEW.json": "fa81212477f37bd0f25836d619a0cd424d7921cbac7124c482bdee5b2bf77f43"
+  },
+  "source_seal_sha256": "482899bef6550a42cbbf8e63329fa3a9a32feec144640bc74d9a0c117461b796",
+  "status": "Eleven cumulative reviewed repair paths: two production Python files and nine test files. Focused and complete final qualification pending."
+}
