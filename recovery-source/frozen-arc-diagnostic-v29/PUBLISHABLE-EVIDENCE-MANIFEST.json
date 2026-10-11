@@ -1,0 +1,32 @@
+{
+  "all_other_3835_source_files_unchanged": true,
+  "base_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "base_source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "candidate": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29",
+  "delta_count": 2,
+  "files": [
+    {
+      "before_sha256": "3291ab50a099183be3c209b5bc2533c02aa3cc597808bb59e57062105735878a",
+      "bytes": 9002,
+      "git_blob": "e26742d372fc2a80c25232dbc9b99819f9fb2c01",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29/tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/frozen_arc_producer_contracts.py",
+      "sha256": "143ce9c367283e8100c6bc2c7b344fc5d5e54af346266f9f337fc6580eb7026f"
+    },
+    {
+      "before_sha256": "c9f5790f7912b00a708a7ef5c218cc9419439469c1be33e0226d62409b3e91a8",
+      "bytes": 13742,
+      "git_blob": "0c7800f254ccd81ad0902f98e99481d0f4576054",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v29/tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_frozen_arc_producer_contracts.py",
+      "sha256": "793445460dc7027ab00a76546cf9c003951fcf766ee5b9a47c8f0bb511cd3be2"
+    }
+  ],
+  "mojo_and_genuine_report_unchanged": true,
+  "review_sha256": "dde0c27abf26d6e84a13cdf637740440d518bb7772c9befbcc4a7d6564f4e45d",
+  "schema": 1,
+  "source_seal_sha256": "d344962d1b0cf829f3d5cc7ea017ddf8d7abea4c3da4749c5ad04002d8dd2196",
+  "status": "Reviewed source-only repair; fresh focused execution still pending. No fullmatrix or native/coverage claim."
+}
