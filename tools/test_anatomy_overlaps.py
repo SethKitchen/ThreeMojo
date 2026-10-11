@@ -3,10 +3,12 @@
 """Check the #595 overlap evidence, its bindings and its classification."""
 import copy
 import hashlib
+import io
 import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 import anatomy_overlaps as ao
 import anatomy_validity as av
@@ -74,6 +76,49 @@ def check_before(path):
 
 
 class OverlapClassificationTests(unittest.TestCase):
+    def test_tool_changes_during_execution_refuse_publication(self):
+        with tempfile.TemporaryDirectory() as directory:
+            probe = Path(directory) / 'probe'
+            probe.with_suffix('.provenance.json').write_text('{}')
+            output = Path(directory) / 'report.json'
+            for built_digest, observed_digests in (('before', ['before', 'after']),
+                                                   ('during', ['before', 'before'])):
+                with (self.subTest(built_digest=built_digest),
+                      mock.patch.object(av, 'prepare_probe', return_value={}),
+                      mock.patch.object(av, 'source_snapshot', return_value=()),
+                      mock.patch.object(av, 'verify_report_inputs'),
+                      mock.patch.object(ao, 'build', return_value={'tool_sha256': built_digest}),
+                      mock.patch.object(ao, 'tool_sha256', side_effect=observed_digests),
+                      mock.patch('sys.stderr', new_callable=io.StringIO) as error):
+                    self.assertEqual(ao.main(['--probe', str(probe), '--output', str(output)]), 1)
+                self.assertIn('overlap tool changed', error.getvalue())
+                self.assertFalse(output.exists())
+
+    def test_each_grid_requires_the_complete_legacy_pair_inventory(self):
+        template = json.loads((ROOT / 'docs/validation/anatomy-template-report.json').read_text())
+        catalog = av.validate_catalog(copy.deepcopy(template['pair_inventory']['components']))
+        expected = ao.legacy_pair_ids(catalog)
+        self.assertEqual({group: len(pairs) for group, pairs in expected.items()},
+                         {'bones': 435, 'knee': 30, 'spine': 67})
+        diagnostics = {group: [copy.deepcopy(row) for row in template['diagnostics'][group]
+                               if row['record'] == 'pair'] for group in ao.LEGACY_GROUPS}
+
+        def probe(_probe, mode, _part, _step, _spec):
+            return copy.deepcopy(diagnostics[mode])
+
+        with mock.patch.object(ao, 'run_probe', side_effect=probe):
+            self.assertEqual(len(ao.sweep(None, {}, catalog)), 532)
+            # Missing a pair at every grid must fail, including a pair
+            # outside the issue's original 36 and with no sampled overlap.
+            for group in ao.LEGACY_GROUPS:
+                rows = diagnostics[group]
+                index = next(index for index, row in enumerate(rows)
+                             if row['record'] == 'pair' and row['pair_id'] not in ao.ISSUE_595_PAIRS)
+                removed = rows.pop(index)
+                with self.assertRaisesRegex(ValueError, 'pair inventory'):
+                    ao.sweep(None, {}, catalog)
+                rows.insert(index, removed)
+
     def test_every_issue_pair_has_a_rule_and_a_class(self):
         self.assertEqual(len(set(ao.ISSUE_595_PAIRS)), 36)
         groups = [pair.split('/')[1] for pair in ao.ISSUE_595_PAIRS]
