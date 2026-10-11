@@ -1,0 +1,74 @@
+{
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22",
+  "delta_from_v21": [
+    {
+      "after_sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "before_sha256": "8a22685850e469f0d21a1865c41ef70b9e6d8780f2887cf6e99251ba09454c51",
+      "path": "tools/carla_lane_oracle/full_audit_cleanup_contracts.py"
+    },
+    {
+      "after_sha256": "99b947f241fa5459ecfbb890e277519e6735ff6a53e4d97a29e220b69acc78d0",
+      "before_sha256": "886e1a7b195de42a2c517a7493344662e0287f14ed5416381232125b92bc6300",
+      "path": "tools/carla_lane_oracle/cache_key_contracts.py"
+    },
+    {
+      "after_sha256": "9506f15b1c1bea70203ceee978544742b27f5ee4cc9639679a3d23a38d366b35",
+      "before_sha256": "e03387cb3a379f643717d689da70de33292182e64d3655d84ec88314159671cb",
+      "path": "tools/carla_lane_oracle/lane_order_contracts.py"
+    },
+    {
+      "after_sha256": "f87c9eef3bb9204c5dcb0eb4bdbedbc6651b8da26a8d9de7ebfb55cffe5098f5",
+      "before_sha256": "27c11abdec365b9dcbac4417a1f9ee245015355234d9ddabc97e6ce279cad33e",
+      "path": "tools/carla_lane_oracle/seed_count_contracts.py"
+    }
+  ],
+  "files": [
+    {
+      "before_sha256": "42ffb88e9453e2f26a7a510945b787caff40d1e881191c8f2671cc51568f1639",
+      "bytes": 14343,
+      "git_blob": "1f57a70bf3bc24e3118b448fc1ddeeedec700ac7",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/cache_key_contracts.py",
+      "sha256": "99b947f241fa5459ecfbb890e277519e6735ff6a53e4d97a29e220b69acc78d0",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/cache_key_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/cache_key_contracts.py"
+    },
+    {
+      "before_sha256": "9d4563b867872024635a664c6ae53463d60485bfa305abd4f25205cb0c4d2df7",
+      "bytes": 103293,
+      "git_blob": "084cdf02899d682fd339e8bc43c9205b871977c4",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/full_audit_cleanup_contracts.py"
+    },
+    {
+      "before_sha256": "2e43f659a85d50f5121f9f60bacf9458b887ae7d2c923d8c108864b9831de86b",
+      "bytes": 7700,
+      "git_blob": "7d7e08dbe087f1852b2cfccd7ffd869f2afbc8b5",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/lane_order_contracts.py",
+      "sha256": "9506f15b1c1bea70203ceee978544742b27f5ee4cc9639679a3d23a38d366b35",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/lane_order_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/lane_order_contracts.py"
+    },
+    {
+      "before_sha256": "98d720388ec7762623c1ceb1ff2ffd95c92cc07246d3c62573ff3e10affc5c8e",
+      "bytes": 50964,
+      "git_blob": "5236dff74242ca27b95fdcaa511439b714a176c7",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/seed_count_contracts.py",
+      "sha256": "f87c9eef3bb9204c5dcb0eb4bdbedbc6651b8da26a8d9de7ebfb55cffe5098f5",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/seed_count_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v22/tools/carla_lane_oracle/seed_count_contracts.py"
+    }
+  ],
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "Approved exact POSIX lexical path acceleration at seven callsites in four existing checker modules. Complete _CacheInputs, historical records, Mojo, report and all original caps unchanged. Qualification pending.",
+  "source_seal_sha256": "9fcd79a43418f8c8db99b559da8a0d9dfb32154b4ec9d5758d4d3bf73b51fcb3",
+  "status": "source_only_unqualified",
+  "backup_delta_parent": "edc3c492f3a27325ec2b34b70bd8ed7c65a9ce0b"
+}
