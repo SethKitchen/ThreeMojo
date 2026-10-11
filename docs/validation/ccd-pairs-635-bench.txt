@@ -1,0 +1,32 @@
+# Interacting moving spheres under CCD (#635)
+revision: 3b6c271d (the bench and extensions/physics/world.mojo at that commit)
+build: mojo build -I . --Werror -o /tmp/pairbench bench/physics_ccd_pairs_bench.mojo
+run: /tmp/pairbench, three times
+mojo: Mojo 1.1.0 (8189361e)
+cpu: AMD Ryzen 9 5900X, 24 logical cores; the world steps on one thread
+os: Linux 6.18.33.1-microsoft-standard-WSL2, WSL 2
+
+scene,ccd,spheres,mean_step_ms,max_step_ms,impacts_per_step,deepest_m,crossed_groups_per_step
+pairs,False,128,0.05581849999999999,0.076473,0.0,-0.09999923408031464,64.0
+pairs,True,128,0.35696445000000004,0.368526,64.0,-0.20000001043081284,0.0
+chains,False,256,0.11107610000000001,0.144008,0.0,0.20000000298023224,0.0
+chains,True,256,1.9028152999999999,1.930134,128.0,-0.033331677317619324,0.0
+stacks,False,128,0.8377806,0.889907,0.0,0.10000000149011612,0.0
+stacks,True,128,1.28473855,1.339575,192.0,0.0,0.0
+rollback-stacks,True,128,1.0968766000000003,bytes_per_body=100,state_bytes=12900
+scene,ccd,spheres,mean_step_ms,max_step_ms,impacts_per_step,deepest_m,crossed_groups_per_step
+pairs,False,128,0.054143300000000005,0.056295,0.0,-0.09999923408031464,64.0
+pairs,True,128,0.35951245,0.398542,64.0,-0.20000001043081284,0.0
+chains,False,256,0.11075880000000002,0.125955,0.0,0.20000000298023224,0.0
+chains,True,256,1.9239762000000002,2.032885,128.0,-0.033331677317619324,0.0
+stacks,False,128,0.8688263500000002,0.930652,0.0,0.10000000149011612,0.0
+stacks,True,128,1.2928915,1.329065,192.0,0.0,0.0
+rollback-stacks,True,128,1.10104875,bytes_per_body=100,state_bytes=12900
+scene,ccd,spheres,mean_step_ms,max_step_ms,impacts_per_step,deepest_m,crossed_groups_per_step
+pairs,False,128,0.05448750000000002,0.059861,0.0,-0.09999923408031464,64.0
+pairs,True,128,0.3692684999999999,0.486787,64.0,-0.20000001043081284,0.0
+chains,False,256,0.1183384,0.167582,0.0,0.20000000298023224,0.0
+chains,True,256,1.9206486499999997,1.9816,128.0,-0.033331677317619324,0.0
+stacks,False,128,0.84104115,0.887733,0.0,0.10000000149011612,0.0
+stacks,True,128,1.3163277,1.383055,192.0,0.0,0.0
+rollback-stacks,True,128,1.10528665,bytes_per_body=100,state_bytes=12900

@@ -161,7 +161,9 @@ In a group of G spheres, each impact pass sweeps every member against its triang
 
 Rollback storage still scales with mutable body state and reports. Initial discrete contacts and rays retain the existing octree.
 
-The [acceleration report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/continuous-collision-636.md) reports complete steps, build cost, retained memory, requested allocations, small scenes and worst-overlap controls. It reuses the original 2048, 8192 and 32768 triangle workloads. These are synthetic sphere probes. Measured improvement does not establish universal real-time capacity. Ray costs and cold index construction remain additional concerns.
+The [acceleration report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/continuous-collision-636.md) reports complete steps, build cost, retained memory, requested allocations, small scenes and worst-overlap controls. It reuses the original 2048, 8192 and 32768 triangle workloads. These are synthetic sphere probes. Measured improvement does not establish universal real-time capacity.
+
+The [interacting-sphere report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/ccd-pairs-635.md) times head-on pairs, chains and struck stacks, 64 groups each, and a rolled-back step. Each check runs outside the timing. On those scenes a CCD step costs about 1.5 to 17 discrete steps. Ray costs and cold index construction remain additional concerns.
 
 `bench/physics_ccd_bench.mojo` times the steps.
 `bench/physics_ccd_index_bench.mojo` times the triangle index.
