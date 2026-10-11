@@ -1,0 +1,118 @@
+{
+  "files": [
+    {
+      "bytes": 37671,
+      "kind": "derived-command-binding-index",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "c3dcc8d28382123fcdfb684a458e27153509e3457d51a16a895cb2475bad1aa4"
+    },
+    {
+      "bytes": 16979,
+      "kind": "complete-original-member-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "6c9a486133c2bcb2bd7cf57e7fc3d3b0e43a7f1d3b0acd544ece650ee4078466"
+    },
+    {
+      "bytes": 2293,
+      "kind": "scope-and-safe-transport-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/README.md",
+      "path": "README.md",
+      "sha256": "dea3d59ff1e1f2eacfa12811a74a18cb83c3555d5c16bc702fc811f502e2f651"
+    },
+    {
+      "bytes": 285,
+      "kind": "derived-explicit-unrun-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/UNRUN-INVENTORY.json",
+      "path": "UNRUN-INVENTORY.json",
+      "sha256": "d185ce92f06cd878b72f93f82bf00817abda671d91d77503116a3804e01ec501"
+    },
+    {
+      "bytes": 36280,
+      "kind": "derived-diagnostic-only-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "510f0d75e33bd9e4a453217fb0db8d93c4a1f174c131dffab40e45debb0a96d5"
+    },
+    {
+      "bytes": 20421,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/actual/terminal-authority-remainder/RESULT.json",
+      "path": "actual/terminal-authority-remainder/RESULT.json",
+      "sha256": "aba5824c917f93e016ab20d151e2475f54696455a323805aa28e929c81253688"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/actual/terminal-authority-remainder/SDK-AFTER.json",
+      "path": "actual/terminal-authority-remainder/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/actual/terminal-authority-remainder/SDK-BEFORE.json",
+      "path": "actual/terminal-authority-remainder/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 370,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/actual/terminal-authority-remainder/WINDOW-START.json",
+      "path": "actual/terminal-authority-remainder/WINDOW-START.json",
+      "sha256": "c4d0eed49cdd89e60c718d000cb29db199ed976ad8a44229d4f8b8f952f5ff89"
+    },
+    {
+      "bytes": 901757,
+      "kind": "lossless-original-terminal-evidence",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "path": "containers/ORIGINAL-EVIDENCE.json.gz.b64",
+      "sha256": "51bd48cd669ea1d325b897e14914abd330f27ccf78d06dbad3213066bd309836"
+    },
+    {
+      "bytes": 5175,
+      "kind": "reviewed-safe-decoder-no-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "a8c520204f4bcd9f4dc539df05a9d5afda5bb158e139f9077a3c35811ca020a4"
+    },
+    {
+      "bytes": 848,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "path": "reproduce/PUBLISHED-V28-QUALIFICATION-BINDING.json",
+      "sha256": "0df492bd6c870ecb2e8a6d3cb66167c2d5042aa7ba0a70d4b42f02f71eef8bdf"
+    },
+    {
+      "bytes": 42078,
+      "kind": "source-only-packet-builder",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/reproduce/build_authority_remainder_v28_terminal_packet.py",
+      "path": "reproduce/build_authority_remainder_v28_terminal_packet.py",
+      "sha256": "754302849b40418c90c8f3398d18d0acc9ba5bdfabf0f1a11cbaf3b369879591"
+    },
+    {
+      "bytes": 20493,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/reproduce/full-authority-remainder-diagnostic-v28.json",
+      "path": "reproduce/full-authority-remainder-diagnostic-v28.json",
+      "sha256": "da984c94b930ae80ad1ce8fdfc5b0cf488e737648612457c9ad5bfccf4a89712"
+    },
+    {
+      "bytes": 55505,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/reproduce/full-authority-v28-timeout-inventory/INVENTORY.json",
+      "path": "reproduce/full-authority-v28-timeout-inventory/INVENTORY.json",
+      "sha256": "99654f1fd1b274373585a63afd2e058f037963866d5919ac77500384e7151a41"
+    },
+    {
+      "bytes": 20245,
+      "kind": "byte-exact-readable-original",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-authority-remainder-v28-terminal-packet/reproduce/run_authority_remainder_diagnostic_v28.py",
+      "path": "reproduce/run_authority_remainder_diagnostic_v28.py",
+      "sha256": "babd45e70e47e356406a44c22bc9e4cc1174375b580358dcf3ad52cfe97209fa"
+    }
+  ],
+  "schema": 1,
+  "scope": "Terminal evidence for the separate two-stage v28 authority remainder diagnostic only. Collection completion, even with all stages passing, does not establish passing qualification. Both prior failed attempts and later repaired candidates remain separate."
+}

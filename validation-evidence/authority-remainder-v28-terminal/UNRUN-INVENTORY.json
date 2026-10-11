@@ -1,0 +1,8 @@
+{
+  "boundary": "These expected method counts are not executed-test counts. A last incomplete launch is explicitly distinguished from an unlaunched stage.",
+  "expected_methods": 0,
+  "kind": "derived-exact-supervisor-unrun-suffix",
+  "schema": 1,
+  "stage_count": 0,
+  "stages": []
+}
