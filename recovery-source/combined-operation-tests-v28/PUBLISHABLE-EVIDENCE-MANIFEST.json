@@ -1,0 +1,36 @@
+{
+  "backup_delta_parent_manifest": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/test-append-implementation-v27/PUBLISHABLE-SOURCE-MANIFEST.json",
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28",
+  "delta": [
+    {
+      "after_sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+      "before_sha256": "e5b205db38fa5969e1bfee2f18742c8892deaac89c083c6fd0e567955d0939af",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "delta_from_version": 27,
+  "files": [
+    {
+      "before_sha256": null,
+      "bytes": 180754,
+      "git_blob": "8033711797738c47e9df91f4cf1932a48c4e1841",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "7a818ca0b983e66e89ee9faa4c11fda01394517187bbaf1605ca53e3552c3cf9",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v28/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "focused_methods": [
+    "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+  ],
+  "fragment_sha256": "7d4bca4d573f2708b71ce87a09309c83170be93211bd4d188db8887663f79a44",
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "repaired_intermediate_sha256": "e32557f21dc3c6936e8c2ecba4b23273f383bb540d37b72dbba3b48828565f0c",
+  "scope": "Reviewed test-local stream-attribution repair and literal eight-method append. All34 existing test methods and production/proof bytes unchanged. Actual queued comparison replay remains unqualified until focused execution.",
+  "source_seal_sha256": "fb5449c65d6652cff19c087c1d91422597cbc95bd19b2f6a5d3602032a1cd596",
+  "status": "source_only_unqualified",
+  "total_test_methods": 42
+}
