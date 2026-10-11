@@ -1,0 +1,25 @@
+{
+  "all_other_3836_source_files_unchanged": true,
+  "base_source_seal_sha256": "380607704236b12d636cb73a04a2539eaa85275fc8304813451e4b8b5126ffc3",
+  "candidate": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v33",
+  "delta_count": 1,
+  "files": [
+    {
+      "before_sha256": "a21f8aea5148be3a97b233201782393ee919a142742fcfe5b7aae929d8f281ff",
+      "bytes": 78938,
+      "git_blob": "496c89bfb7c9fae70e2466bfc4f637c93d4b19af",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v33/tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_seed_count_contracts.py",
+      "sha256": "6dc6cc3e243181047a9659786ca099647d696050c525f533c13065e297482d13"
+    }
+  ],
+  "mojo_and_genuine_report_unchanged": true,
+  "private_predecessor": "candidate-v32",
+  "published_base_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "review_sha256": "c5978ecc825d547f5306210937704e253ad2cfe2126b2230f1a62c9bde8c43b3",
+  "schema": 1,
+  "source_seal_sha256": "5b34331e984e7abc56840d55e6115851d17e62337b1c6d90abb1b6701f465397",
+  "status": "Reviewed one-file fixture-only source correction; all focused/full execution deferred until bounded v28 diagnostics terminate. No qualification claim.",
+  "test_method_bodies_unchanged": 68
+}
