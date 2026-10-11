@@ -39,6 +39,7 @@ See `docs/wiki/Norm-consumers.md` for the changed operations, retained
 limits, and explicit zero and nonfinite rules.
 """
 
+from render.color_math import floor_channels
 from math.norm import length2
 from cameras.camera import Camera
 from core.assets import Assets
@@ -261,13 +262,6 @@ def previous_window_depth(
     return (view_z + near) / (near - far)
 
 
-def _floor0(color: FloatColor) -> FloatColor:
-    """Return a color with its negative channels raised to zero."""
-    return FloatColor(
-        max(color.r, 0), max(color.g, 0), max(color.b, 0), max(color.a, 0)
-    )
-
-
 def taau_pixel(
     beauty: LightView,
     history: LightView,
@@ -361,7 +355,7 @@ def taau_pixel(
             var ddx = p_x - cx
             var ddy = p_y - cy
             var w = exp_f((ddx * ddx + ddy * ddy) * -2.29)
-            var c = _floor0(
+            var c = floor_channels(
                 beauty.at(
                     min(max(tx, 0), beauty.width - 1),
                     min(max(ty, 0), beauty.height - 1),

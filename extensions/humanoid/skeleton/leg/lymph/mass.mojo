@@ -25,6 +25,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_dimensions,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     lymph_tissue,
@@ -35,7 +36,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from math.vector3 import Vector3
 from std.math import pi
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def lymph_occupancy(
@@ -125,7 +125,4 @@ def lymph_mass_from_dimensions(
             volume += tube_chain_volume(field.chain3)
         if field.chain_count >= 4:
             volume += tube_chain_volume(field.chain4)
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

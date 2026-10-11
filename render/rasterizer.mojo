@@ -72,6 +72,7 @@ from materials.material import (
     OBJECT_SPACE_NORMAL_MAP,
     TANGENT_SPACE_NORMAL_MAP,
     combine_light,
+    _is_unit_fraction,
 )
 from render.cube_texture import (
     Basis3,
@@ -3105,11 +3106,6 @@ def check_transmission(
             " scene: pass a TransmissionTarget, as Renderer.render_into"
             " builds one"
         )
-
-
-def _is_unit_fraction(value: Float32) -> Bool:
-    """Return True if `value` is finite and between zero and one."""
-    return isfinite(value) and value >= 0 and value <= 1
 
 
 def check_output_kinds(

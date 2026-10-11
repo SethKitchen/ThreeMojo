@@ -25,6 +25,7 @@ from extensions.humanoid.skeleton.foot.ligaments.dimensions import (
     ligament_distance,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     ligament_tissue,
@@ -34,7 +35,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
     classify_soft,
 )
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def ligament_occupancy(
@@ -103,7 +103,4 @@ def ligament_mass_from_dimensions(
     tissue.validate()
     var field = FootLigamentField(dimensions, part)
     var volume = segment_volume(field.segments)
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

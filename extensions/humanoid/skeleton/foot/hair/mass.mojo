@@ -23,6 +23,7 @@ from extensions.humanoid.skeleton.foot.muscles.dimensions import (
     foot_muscle_dimensions,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     hair_tissue,
@@ -33,7 +34,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from math.vector3 import Vector3
 from std.math import pi
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def foot_hair_occupancy(
@@ -114,7 +114,4 @@ def foot_hair_mass_from_dimensions(
         pi * radius * radius * length
         + Float32(6) * Float32(4.0 / 3.0) * pi * radius * radius * radius
     )
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

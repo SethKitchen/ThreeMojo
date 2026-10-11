@@ -23,6 +23,7 @@ from extensions.humanoid.skeleton.head.muscles.dimensions import (
     head_muscle_field,
 )
 from extensions.anatomy.soft_tissue import (
+    analytic_soft_mass,
     SoftMass,
     SoftTissue,
     muscle_tissue,
@@ -33,7 +34,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from extensions.humanoid.spec import HumanoidSpec
 from math.vector3 import Vector3
-from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def head_muscle_occupancy(
@@ -97,7 +97,4 @@ def head_muscle_mass_from_dimensions(
     """
     tissue.validate()
     var volume = head_muscle_field(dimensions, part, RIGHT).volume()
-    return SoftMass(
-        Volume(volume, CUBIC_METER),
-        Mass(tissue.wet_density.value * volume, KILOGRAM),
-    )
+    return analytic_soft_mass(tissue, volume)

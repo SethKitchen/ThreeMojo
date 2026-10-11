@@ -59,6 +59,7 @@ These constants are this port's own. They make the town look as CARLA's
 weather looks, and they are not taken from any engine.
 """
 
+from render.color_math import mix_opaque
 from extensions.carla.weather import WeatherParameters
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
@@ -257,7 +258,7 @@ def sun_color(weather: WeatherParameters) raises -> FloatColor:
     var kelvin = SUNRISE_KELVIN + (NOON_KELVIN - SUNRISE_KELVIN) * high
     var warm = kelvin_color(Temperature(kelvin, KELVIN))
     var gray = _percent(weather.cloudiness) * Float32(0.6)
-    return _mix(warm, FloatColor(0.9, 0.92, 1.0), gray)
+    return mix_opaque(warm, FloatColor(0.9, 0.92, 1.0), gray)
 
 
 def direct_normal_illuminance(altitude: Angle) -> Illuminance:
@@ -652,11 +653,4 @@ def rain_settings(weather: WeatherParameters) -> RainSettings:
         RAIN_STREAKS * rain,
         Angle(RAIN_LEAN.to(DEGREE) * _percent(weather.wind_intensity), DEGREE),
         Float32(0.3) + Float32(0.3) * rain,
-    )
-
-
-def _mix(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
-    """Return `a` moved toward `b` by `t`."""
-    return FloatColor(
-        a.r + (b.r - a.r) * t, a.g + (b.g - a.g) * t, a.b + (b.b - a.b) * t
     )
