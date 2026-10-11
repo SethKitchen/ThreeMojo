@@ -19,7 +19,7 @@ The tensor can be anisotropic. Each pair of mirrored off-diagonal elements must 
 
 A capsule whose inverse inertia is zero in every element cannot turn. Its angular velocity and angular push must then be zero, and it only translates, as a character or walker body does. Any other capsule turns, and its inverse inertia must be symmetric and positive definite. A capsule's half height must be finite and at most 10000 meters. Materials keep the existing friction mixing, restitution mixing and bounce threshold.
 
-Each moving body has a reachable region: a ball around its start position, including the contact margin. A capsule's region uses a bounding sphere around its actual world-space segment. The radius includes an outward-rounded length of the Float32-rotated half axis. The same bound selects swept mesh candidates. This includes stretch from accepted near-unit rotations and rotation roundoff.
+Each moving body has a reachable region: a ball around its start position, including the contact margin. A capsule's region uses a bounding sphere around its actual world-space segment. The radius includes an outward-rounded length of the Float32-rotated half axis. The exact sweeps use the same shape bound to select mesh candidates. This includes stretch from accepted near-unit rotations and rotation roundoff.
 
 The bound uses the body's total translational and rotational energy after the force update. The rotational energy uses the inertia tensor at the sphere's orientation at the start of the step. It also includes split-correction travel. This conservative bound covers friction that transfers spin into translation and any number of static-mesh rebounds.
 
@@ -103,6 +103,8 @@ A triangle that the shape touches within the tolerance, at a point that closes o
 The mass center moves at a constant velocity and the body turns at a constant spin between impacts. The pose turns exactly by |ω| t about ω. A turning body always takes its pose and spin from this sweep, and the integrator's torque-free precession resumes on the next step.
 
 The reach bound of a turning body adds |ω| times its farthest segment end from the mass center. |ω| is bounded by its energy, its mass and the trace of its inverse inertia.
+
+Each turning sweep queries triangles for its current velocity, spin and remaining time. The query starts at the current mass center and includes the whole shape and contact margin. After an impact changes velocity or spin, it queries again. Candidate triangles are sorted by insertion order before contact selection.
 
 `ccd_max_substeps` limits the sub-steps of each turning body in each step. The default is 256, and valid limits are 1 through 65536. Exhausting it, or the impact limit, rolls the step back. A shape that turns quickly near a surface, for example a lying capsule spun about the vertical, needs many sub-steps.
 
@@ -194,7 +196,9 @@ The two separation checks query the complete reachable region, including the con
 
 The cached geometry check is O(1). Live-body validation is O(B) for B bodies. Moving-body grouping costs O(B²) for each round in which groups grow, and there are at most B rounds. It adds tree visits and candidate checks.
 
-A body alone does O(T (I + 1)) swept work for T triangle candidates and impact limit I. In a group of G members, each pass sweeps every member against its triangle candidates and every pair once, which is O(G T + G²). Each pass, settling included, ends the step or charges an impact to a dynamic member. So a group makes at most G I + 1 passes. A settled cascade of C contacts tries at most 2^C active sets, and C is at most ten. Overlapping triangle bounds can defeat pruning.
+A centered sphere or centered capsule that cannot turn does O(T (I + 1)) swept work for T triangle candidates and impact limit I. In a group of G members, each pass sweeps every member against its triangle candidates and every pair once, which is O(G T + G²). Each pass, settling included, ends the step or charges an impact to a dynamic member. So a group makes at most G I + 1 passes. A settled cascade of C contacts tries at most 2^C active sets, and C is at most ten. Overlapping triangle bounds can defeat pruning.
+
+A turning sweep also tests its candidates at each conservative-advancement sub-step. Its sub-step and impact limits bound that work. It queries and sorts the candidates at the start and after each impact.
 
 Rollback storage still scales with mutable body state and reports. Initial discrete contacts and rays retain the existing octree.
 
