@@ -43,7 +43,7 @@ from extensions.humanoid.skeleton.leg.fibula.mass import (
     fibula_occupancy,
 )
 from math.vector3 import Vector3
-from std.math import inf, nan
+from std.math import inf, max, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -278,6 +278,7 @@ def test_fibula_gives_way_to_the_tibia() raises:
         var step = Float32(0.001)
         var count = Int(2 * reach / step)
         var removed = 0
+        var exterior_clipped = 0
         for iz in range(count):
             for iy in range(count):
                 for ix in range(count):
@@ -286,11 +287,17 @@ def test_fibula_gives_way_to_the_tibia() raises:
                         -reach + (Float32(iy) + 0.5) * step,
                         -reach + (Float32(iz) + 0.5) * step,
                     )
-                    var shin_inside = tibia.distance(p + offset) < 0
-                    if shin_inside and field.shape_distance(p) < 0:
+                    var shin_value = tibia.distance(p + offset)
+                    var raw = field.shape_distance(p)
+                    var shin_inside = shin_value < 0
+                    if shin_inside and raw < 0:
                         removed += 1
+                    if raw >= 0 and -shin_value > raw:
+                        exterior_clipped += 1
+                    assert_equal(field.distance(p), max(raw, -shin_value))
                     assert_false(shin_inside and field.distance(p) < 0)
         assert_true(removed > 0)
+        assert_true(exterior_clipped > 0)
 
 
 def test_left_and_right_masses_agree() raises:
