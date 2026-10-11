@@ -1,0 +1,58 @@
+{
+  "build": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-prepare/source/coverage/build",
+  "capture": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-capture",
+  "clone": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-prepare/source",
+  "coverage_group_seconds": 9000,
+  "evidence_phases": {
+    "capture": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-capture",
+    "finish": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-finish",
+    "native-o0": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-native-o0",
+    "native-o3": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-native-o3",
+    "prepare": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-prepare"
+  },
+  "flags": "-I .",
+  "helper_sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0",
+  "mojo": "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/mojo",
+  "native_phases": {
+    "o0": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-native-o0",
+    "o3": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-native-o3"
+  },
+  "plan": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/plan.json",
+  "plan_sha256": "ffda9e0e80d5e1317fbaaf9fc0f18ec363459fe5bdd10dddf1a3969044c87954",
+  "platform_scope": {
+    "arm_qualified": false,
+    "machine": "x86_64",
+    "system": "Linux"
+  },
+  "prepare": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/evidence/carla-final-v38-prepare",
+  "prepared_bundle": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38",
+  "prepared_bundle_seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38-SEAL.json",
+  "profile": "aot-hits",
+  "python": "/workspace/scratch/c2bcdb1ca387/restored-toolchain/official-venv/bin/python",
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v38",
+  "source_seal": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/CANDIDATE-V38-SOURCE-SEAL.json",
+  "source_seal_sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+  "suites": [
+    "tests/test_carla_tight_rounding.mojo",
+    "tests/test_carla_sampled_value_bounds.mojo",
+    "tests/test_carla_junction_endpoint_refusals.mojo",
+    "tests/test_carla_chord_endpoint_refusals.mojo",
+    "tests/test_carla_retained_boundary_guards.mojo",
+    "tests/test_carla_width_overflow_admission.mojo",
+    "tests/test_carla_lane_center_bound_phase.mojo",
+    "tests/test_carla_speed_parser_exceptions.mojo",
+    "tests/test_carla_lane_proof_fallback_residuals.mojo",
+    "tests/test_carla_lane_cache_scale_residuals.mojo",
+    "tests/test_carla_lane_search_positive_controls.mojo",
+    "tests/test_carla_lane_search_edge_controls.mojo",
+    "tests/test_carla_goal_directed.mojo",
+    "tests/test_carla_rounded_arc_witness.mojo",
+    "tests/test_spiral_lazy_taylor_paths.mojo",
+    "tests/test_carla_optional_followup.mojo",
+    "tests/test_carla_junction_arithmetic_states.mojo",
+    "tests/test_carla_lane_local_scale_goal.mojo",
+    "tests/test_spiral_domain_map_integration.mojo"
+  ],
+  "supervisor": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_stage.py",
+  "supervisor_sha256": "9418d41fb962d00dbe4bd53107ef476428ba0c591f4478ac08d332ef907927ce"
+}

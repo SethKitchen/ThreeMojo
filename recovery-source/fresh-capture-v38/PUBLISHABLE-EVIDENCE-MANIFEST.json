@@ -1,0 +1,80 @@
+{
+  "bundle_seal_sha256": "5f2958c3fe76b2a383ace2eb026c33dd89bd204b008d2093ed56af58a52f050f",
+  "execution_scope": "Root authorized preparation then O0 only; O3/capture held pending hosted mapping. No protocol or maintained caps changed.",
+  "files": [
+    {
+      "bytes": 1836,
+      "path": "prepared/COMMANDS.txt",
+      "sha256": "8a355d5032f0950db3db5597ecb4a5f24aa12af5b3fcac2d5eb3122149adaad4",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/COMMANDS.txt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/COMMANDS.txt"
+    },
+    {
+      "bytes": 4439,
+      "path": "prepared/capture.json",
+      "sha256": "33f2305f2f7cc869eccb3d2d348340a4b4e8c9592a22eafd8bf1d4036f49212c",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/capture.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/capture.json"
+    },
+    {
+      "bytes": 33527,
+      "path": "prepared/capture_support.py",
+      "sha256": "8e8b4dd662b693843f62a4ea7f3d0260132ee762d085235ba0582d964d1e95b0",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/capture_support.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/capture_support.py"
+    },
+    {
+      "bytes": 2018,
+      "path": "prepared/finish.json",
+      "sha256": "4739fca1637d447d87116cfcc743ea5cf8bb0afddd03dcb891dd995a0c5f0a65",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/finish.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/finish.json"
+    },
+    {
+      "bytes": 48044,
+      "path": "prepared/native-o0.json",
+      "sha256": "e3d931cc3b2a8e1b4f0c5db36fa0d6a92759c2e67797c35926eaf5152900ee88",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/native-o0.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/native-o0.json"
+    },
+    {
+      "bytes": 48044,
+      "path": "prepared/native-o3.json",
+      "sha256": "aeec53eaa386b70cba75993f2dc069a77e678794e683e8995db1c4eefa3dd5a5",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/native-o3.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/native-o3.json"
+    },
+    {
+      "bytes": 86405,
+      "path": "prepared/plan.json",
+      "sha256": "ffda9e0e80d5e1317fbaaf9fc0f18ec363459fe5bdd10dddf1a3969044c87954",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/plan.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/plan.json"
+    },
+    {
+      "bytes": 4488,
+      "path": "prepared/prepare.json",
+      "sha256": "e8779d10462b9ee3bee87ff54bc67f0c6a1ed6eaace330637496c18c12cf4e1a",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/prepare.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/prepare.json"
+    },
+    {
+      "bytes": 3622,
+      "path": "prepared/settings.json",
+      "sha256": "d5eb6b5856efeed526e150b36893a35f9973e5c62472a5566cf7e6f847382cbe",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/settings.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38/settings.json"
+    },
+    {
+      "bytes": 784,
+      "path": "carla-final-v38-SEAL.json",
+      "sha256": "5f2958c3fe76b2a383ace2eb026c33dd89bd204b008d2093ed56af58a52f050f",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38-SEAL.json",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/fresh-capture-plan/prepared/carla-final-v38-SEAL.json"
+    }
+  ],
+  "published_commit": "7b6f7a740208ed1d8d2aa9dd4e359b455188951f",
+  "schema": 1,
+  "source_seal_sha256": "47eb6c57d3d88f116326dfab6bb999d31e909f532a396318b05fd2254dac8537",
+  "status": "REVIEWED_PROTOCOL_SOURCE_ONLY_NO_EXECUTION_CLAIM"
+}
