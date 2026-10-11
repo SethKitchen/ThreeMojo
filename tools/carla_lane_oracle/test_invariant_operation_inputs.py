@@ -2400,7 +2400,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
         'coverage_loop_proofs.py': '2b6dbe7483d3c9ceb2ee9914158d99fcd8c1d87f9298f797edac150a78457f67',
-        'full_audit_cleanup_contracts.py': 'a182c861c55962fb749b2c0aa6b7a5c0466674b474e1c6b67dd6ed621dc44f25',
+        'full_audit_cleanup_contracts.py': '4d04ac37dc7bd0490885880495b6bb02f32690e009bdd008fb00d2151198feaf',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
         'seed_count_contracts.py': 'd5b16ad9ef253250c5cceffe2fe82ca6f013526f574974e5b952c81ee012a4c4',
@@ -2740,7 +2740,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1157,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1170,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -2932,7 +2932,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                                      'guard.production_mojo_paths(root)')
         known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1471,
+        production_catch = self._site(core._operation_production_paths, 1484,
                                       '_operation_fail(_operation, error)')
         known_catch = self._site(loops.construction_boundary_loops, 1326,
                                  'cleanup._operation_fail(_operation, error)')
