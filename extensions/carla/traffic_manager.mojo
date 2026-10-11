@@ -149,11 +149,10 @@ struct ActorSet(Movable):
             actors: The vehicles.
 
         Raises:
-            Error: If an id is not valid.
+            Error: If an id is not valid. The set does not change then.
         """
+        _check_ids(actors)
         for actor in actors:
-            if not actor.is_valid():
-                raise Error("Actor id is not valid")
             if actor.value in self.ids:
                 continue
             var k = len(self.ids)
@@ -162,12 +161,17 @@ struct ActorSet(Movable):
             self.ids.insert(k, actor.value)
         self.state += 1
 
-    def remove(mut self, actors: List[ActorId]):
+    def remove(mut self, actors: List[ActorId]) raises:
         """Remove vehicles, `Remove`. The counter moves once.
 
         Args:
-            actors: The vehicles; unknown ones are ignored.
+            actors: The vehicles; unknown valid ones are ignored.
+
+        Raises:
+            Error: If an id is not valid. The set and the counter do not
+                change then.
         """
+        _check_ids(actors)
         for actor in actors:
             for i in range(len(self.ids)):
                 if self.ids[i] == actor.value:
@@ -184,8 +188,10 @@ struct ActorSet(Movable):
             world: The world.
 
         Raises:
-            Error: If the world fails to destroy it.
+            Error: If the id is not valid, or the world fails to destroy
+                it.
         """
+        _check_ids([actor])
         if actor.value in self.ids:
             _ = world.destroy_actor(actor)
             self.remove([actor])
@@ -212,6 +218,20 @@ struct ActorSet(Movable):
     def clear(mut self):
         """Forget every vehicle, `Clear`. The counter stays."""
         self.ids = List[Int]()
+
+
+def _check_ids(actors: List[ActorId]) raises:
+    """Refuse a list that holds an id `ActorId.is_valid` refuses.
+
+    Args:
+        actors: The ids.
+
+    Raises:
+        Error: If an id is not valid.
+    """
+    for actor in actors:
+        if not actor.is_valid():
+            raise Error("Actor id is not valid")
 
 
 # --- the world adapter ----------------------------------------------------------
@@ -745,8 +765,9 @@ struct ALSM(Movable):
             motion_plan: The motion-planning stage.
 
         Raises:
-            Error: If the id is not valid.
+            Error: If the id is not valid. Nothing changes then.
         """
+        _check_ids([actor])
         var a = actor.value
         # This is runtime state, not the user's per-actor preferences.
         # Re-registering must observe a fresh physics decision.
@@ -1005,8 +1026,13 @@ struct TrafficManagerLocal(Movable):
             actors: The vehicles.
 
         Raises:
-            Error: If an id is not valid or names no living actor.
+            Error: If an id is not valid or names no living actor. Nothing
+                changes then.
         """
+        _check_ids(actors)
+        for actor in actors:
+            if not world.is_alive(actor):
+                raise Error("Actor id names no actor")
         self.registered_vehicles.insert(actors)
         for actor in actors:
             self.alsm.add_actor(world, actor, self.shared)
@@ -1019,8 +1045,9 @@ struct TrafficManagerLocal(Movable):
             actors: The vehicles.
 
         Raises:
-            Error: If an id is not valid.
+            Error: If an id is not valid. Nothing changes then.
         """
+        _check_ids(actors)
         for actor in actors:
             self.alsm.remove_actor(
                 actor,
@@ -1051,8 +1078,9 @@ struct TrafficManagerLocal(Movable):
             Its next road option and where.
 
         Raises:
-            Error: If its path is empty.
+            Error: If the id is not valid or its path is empty.
         """
+        _check_ids([actor])
         return self.localization_stage.compute_next_action(actor, self.shared)
 
     def get_action_buffer(self, actor: ActorId) raises -> List[TrafficAction]:
@@ -1065,8 +1093,9 @@ struct TrafficManagerLocal(Movable):
             The moves.
 
         Raises:
-            Error: If its path is empty.
+            Error: If the id is not valid or its path is empty.
         """
+        _check_ids([actor])
         return self.localization_stage.compute_action_buffer(actor, self.shared)
 
     def check_all_frozen(

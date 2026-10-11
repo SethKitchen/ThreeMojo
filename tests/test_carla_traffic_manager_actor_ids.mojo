@@ -10,6 +10,7 @@ These tests are the evidence for the audit in
 public traffic manager boundary three bad ids: a negative id, the first
 id above CARLA's unsigned 32 bits, and a valid id that names no actor.
 A boundary that checks the id must raise and must not change its state.
+A list with one bad id changes nothing.
 """
 
 from extensions.carla.actor import RED, ActorId, no_rotation
@@ -20,7 +21,11 @@ from extensions.carla.traffic_manager import (
     is_physics_enabled,
     set_simulate_physics,
 )
-from extensions.carla.traffic_manager_map import ROAD_OPTION_LEFT, WaypointId
+from extensions.carla.traffic_manager_map import (
+    ROAD_OPTION_LEFT,
+    ROAD_OPTION_VOID,
+    WaypointId,
+)
 from extensions.carla.traffic_manager_parameters import Parameters
 from extensions.carla.traffic_manager_shared import (
     apply_transform,
@@ -192,6 +197,43 @@ def test_registration_refuses_an_id_that_names_no_actor() raises:
     var tm = _manager(world)
     with assert_raises(contains="names no actor"):
         tm.register_vehicles(world, [ActorId(999)])
+    # The refused id is not left in the registered set.
+    assert_equal(len(tm.get_registered_vehicles_ids()), 0)
+
+
+def test_registration_changes_nothing_when_one_id_is_bad() raises:
+    var world = _world(straight_town())
+    var car = _spawn(world, 20, 1.75)
+    var tm = _manager(world)
+    for bad in [ActorId(-1), ActorId(1 << 32), ActorId(999)]:
+        with assert_raises():
+            tm.register_vehicles(world, [car, bad])
+        assert_equal(len(tm.get_registered_vehicles_ids()), 0)
+        assert_equal(tm.registered_vehicles.state, 0)
+    tm.register_vehicles(world, [car])
+    var state = tm.registered_vehicles.state
+    for bad in _out_of_range():
+        with assert_raises(contains="not valid"):
+            tm.unregister_vehicles([car, bad])
+        assert_true(tm.registered_vehicles.contains(car))
+        assert_equal(tm.registered_vehicles.state, state)
+    tm.unregister_vehicles([car, ActorId(999)])
+    assert_equal(len(tm.get_registered_vehicles_ids()), 0)
+
+
+def test_action_queries_refuse_an_out_of_range_id() raises:
+    var world = _world(straight_town())
+    var tm = _manager(world)
+    for bad in _out_of_range():
+        with assert_raises(contains="not valid"):
+            _ = tm.get_next_action(bad)
+        with assert_raises(contains="not valid"):
+            _ = tm.get_action_buffer(bad)
+    # A valid id without a path keeps the void result.
+    assert_true(
+        tm.get_next_action(ActorId(999)).road_option == ROAD_OPTION_VOID
+    )
+    assert_equal(len(tm.get_action_buffer(ActorId(999))), 0)
 
 
 def test_world_adapters_refuse_a_bad_id() raises:
@@ -216,14 +258,23 @@ def test_world_adapters_refuse_a_bad_id() raises:
     assert_true(is_physics_enabled(world, car))
 
 
-def test_the_actor_set_refuses_an_out_of_range_insert() raises:
+def test_the_actor_set_refuses_an_out_of_range_id() raises:
+    var world = _world(straight_town())
     var set = ActorSet()
     for bad in _out_of_range():
         with assert_raises(contains="not valid"):
-            set.insert([bad])
+            set.insert([ActorId(3), bad])
         assert_equal(set.size(), 0)
         assert_equal(set.state, 0)
         assert_false(set.contains(bad))
+    set.insert([ActorId(3)])
+    for bad in _out_of_range():
+        with assert_raises(contains="not valid"):
+            set.remove([ActorId(3), bad])
+        with assert_raises(contains="not valid"):
+            set.destroy(bad, world)
+        assert_true(set.contains(ActorId(3)))
+        assert_equal(set.state, 1)
 
 
 def test_parameter_cleanup_refuses_an_out_of_range_id() raises:
