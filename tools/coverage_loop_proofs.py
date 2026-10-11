@@ -902,6 +902,63 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             continue
         if digest != expected:
             from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+            if (name in cleanup.shared_helpers.SOURCE_PATHS
+                    and expected == cleanup.shared_helpers.BEFORE_SHA256[name]
+                    and digest == cleanup.shared_helpers.AFTER_SHA256[name]):
+                # This local theorem keeps its original premise scope. The
+                # exact inverse and actual provider prove the same arithmetic;
+                # the complete Map proof separately binds its native test image.
+                executing = cleanup.executing_checker_bindings()
+                helper = cleanup.shared_helpers
+                leaf = 'tools/carla_lane_oracle/shared_helper_contracts.py'
+                leaf_raw = _coverage_observe_bytes(root, leaf,
+                    relative_source(root, leaf, **operation_args).read_bytes(),
+                    _operation=_operation)
+                if sha256(leaf_raw) != executing[leaf]:
+                    return None
+                texts = {name: raw.decode('utf-8')}
+                providers = {}
+                provider_raw = {}
+                for provider in helper.PROVIDER_PATHS[name]:
+                    value = _coverage_observe_bytes(root, provider,
+                        relative_source(root, provider, **operation_args).read_bytes(),
+                        _operation=_operation)
+                    provider_raw[provider] = value
+                    providers[provider] = sha256(value)
+                    texts[provider] = value.decode('utf-8')
+                if helper.verify_correspondence(texts) != (name,):
+                    return None
+                for package, expected_package in helper.package_inputs((name, *providers)).items():
+                    value = _coverage_observe_bytes(root, package,
+                        relative_source(root, package, **operation_args).read_bytes(),
+                        _operation=_operation)
+                    if sha256(value) != expected_package:
+                        return None
+                    provider_raw[package] = value
+                    providers[package] = expected_package
+                resolver_paths = {name, *providers}
+                if not all(cleanup.resolver_unshadowed(location, resolver_paths)
+                           for location in (root, *include_roots)):
+                    return None
+                for provider, value in provider_raw.items():
+                    if _coverage_observe_bytes(root, provider,
+                            relative_source(root, provider, **operation_args).read_bytes(),
+                            _operation=_operation) != value:
+                        return None
+                if _coverage_observe_bytes(root, name, path.read_bytes(),
+                                           _operation=_operation) != raw:
+                    return None
+                if (_coverage_observe_bytes(root, leaf,
+                        relative_source(root, leaf, **operation_args).read_bytes(),
+                        _operation=_operation) != leaf_raw
+                        or cleanup.executing_checker_bindings() != executing
+                        or not all(cleanup.resolver_unshadowed(location, resolver_paths)
+                                   for location in (root, *include_roots))):
+                    return None
+                actual.update(providers)
+                actual[leaf] = executing[leaf]
+                actual[name] = digest
+                continue
             if (name in cleanup.SOURCE_PATHS
                     and expected == cleanup.BEFORE_SHA256[name]
                     and digest == cleanup.AFTER_SHA256[name]):
@@ -1218,16 +1275,29 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         if actual[seed_count_contracts.MODULE] != expected[seed_count_contracts.MODULE]:
             return {}
         cleanup_bindings = {}
-        if actual != expected:
-            from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        if any(name in cleanup.SOURCE_PATHS and actual[name] != expected[name]
+               for name in expected):
             cleanup_bindings = cleanup.proof_bindings(root, include_roots=include_roots, **operation_args)
             edges = cleanup.verified_edges(root, include_roots=include_roots, **operation_args)
             for name, edge in edges.items():
                 if name in expected and expected[name] == edge['before_sha256']:
                     expected[name] = edge['after_sha256']
+        from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+        helper_bindings = cleanup.shared_helper_proof_bindings(
+            root, paths=('extensions/carla/curve_distance.mojo', 'loaders/xml.mojo'),
+            include_roots=include_roots, **operation_args)
+        for name in cleanup.shared_helpers.SOURCE_PATHS:
+            if (name in expected and helper_bindings.get(name)
+                    == cleanup.shared_helpers.AFTER_SHA256[name]):
+                if expected[name] != cleanup.shared_helpers.BEFORE_SHA256[name]:
+                    return {}
+                expected[name] = cleanup.shared_helpers.AFTER_SHA256[name]
         if actual != expected:
             return {}
-        if seed_count_contracts.dependency_inventory(root, **operation_args) != set(actual):
+        helper_closure = ({'loaders/utf8.mojo'} if helper_bindings.get('loaders/xml.mojo')
+                          == cleanup.shared_helpers.AFTER_SHA256['loaders/xml.mojo'] else set())
+        if seed_count_contracts.dependency_inventory(root, **operation_args) != set(actual) | helper_closure:
             return {}
         # Preserve the final endpoint's independently bound source/data edge.
         if score:
@@ -1240,6 +1310,7 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
             seed_count_contracts.verify_frontier(root)
         record = seed_count_contracts.read_record(root, **operation_args)
         actual.update(cleanup_bindings)
+        actual.update(helper_bindings)
         actual[seed_count_contracts.MIGRATION] = seed_count_contracts.MIGRATION_SHA256
         for group in ('historical_records', 'unchanged_correctness_tests',
                       'after_correctness_tests'):
