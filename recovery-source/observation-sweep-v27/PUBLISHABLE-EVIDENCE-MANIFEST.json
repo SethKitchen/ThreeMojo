@@ -1,0 +1,35 @@
+{
+  "backup_delta_parent_manifest": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/maintained-mechanics-implementation-v26/PUBLISHABLE-SOURCE-MANIFEST.json",
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v27",
+  "delta": [
+    {
+      "after_sha256": "e5b205db38fa5969e1bfee2f18742c8892deaac89c083c6fd0e567955d0939af",
+      "before_sha256": "a65207f101084b01f1a764836359df68a7aed605e7fc76b3be8c7478081125f0",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "delta_from_version": 26,
+  "files": [
+    {
+      "before_sha256": null,
+      "bytes": 137058,
+      "git_blob": "5394c590d55ab2c50d473d3468cfe16c3bf2f293",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v27/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "e5b205db38fa5969e1bfee2f18742c8892deaac89c083c6fd0e567955d0939af",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v27/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "focused_methods": [
+    "OperationReachedBindingControls.test_current_cold_routes_preserve_consumed_value_bindings"
+  ],
+  "fragment_sha256": "8467ad153f9fd4c7d24efa0b2acbcccb1a09878c79bafb5469c4e77f18bc1f8c",
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "Exact reviewed append-only maintained test fragment. Every previous method and production/proof byte unchanged. Fresh focused execution pending; no broader qualification inferred.",
+  "source_seal_sha256": "a36731dcc18ee0757482f613ad6d3b5ef96f0b67c0dd96a80d95105ed46ce8e5",
+  "status": "source_only_unqualified",
+  "total_test_methods": 34
+}
