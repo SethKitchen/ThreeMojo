@@ -336,11 +336,18 @@ def test_support_and_finite_failures_are_atomic() raises:
         elif choice == 2:
             world.ccd_max_impacts = 1025
         elif choice == 3:
+            # A turning capsule needs a positive definite tensor.
             world.bodies[1].shape = Shape.capsule(Length(0.1), Length(0.2))
+            var tensor = world.bodies[1].inverse_inertia()
+            tensor.elements[1] = 1
+            world.bodies[1].set_inverse_inertia(tensor)
         elif choice == 4:
-            world.bodies[1].shape_position = Vector3(1, 0, 0)
+            # Offsets turn a body, up to 10000 m.
+            world.bodies[1].shape_position = Vector3(20000, 0, 0)
         elif choice == 5:
+            # A kinematic sphere must stay centered.
             world.bodies[1].center_of_mass = Vector3(1, 0, 0)
+            world.bodies[1].set_kind(KINEMATIC)
         elif choice == 6:
             var inertia = world.bodies[1].inverse_inertia()
             inertia.elements[1] = 1

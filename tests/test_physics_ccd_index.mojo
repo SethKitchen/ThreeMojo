@@ -437,8 +437,8 @@ def test_warm_geometry_cache_still_validates_live_body_state() raises:
             indexed.bodies[0].linear_velocity = Vector3(1, 0, 0)
             brute.bodies[0].linear_velocity = Vector3(1, 0, 0)
         elif choice == 2:
-            indexed.bodies[1].shape = Shape.capsule(Length(0.1), Length(0.2))
-            brute.bodies[1].shape = Shape.capsule(Length(0.1), Length(0.2))
+            indexed.bodies[1].shape.radius = 20000
+            brute.bodies[1].shape.radius = 20000
         else:
             indexed.ccd_max_impacts = 0
             brute.ccd_max_impacts = 0

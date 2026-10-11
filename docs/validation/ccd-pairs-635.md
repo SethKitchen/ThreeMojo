@@ -43,6 +43,19 @@ In the discrete rows, every head-on pair passes through, each chain ends with sp
 
 A rolled-back stack step took 1.10 ms. A step keeps 100 bytes of rollback state for each body: 12,900 bytes for these 129 bodies, with the floor. It also keeps a copy of the previous events and of the primitive order.
 
+## Car-sized boxes
+
+`bench/physics_ccd_box_bench.mojo` times boxes the size of a car body: 4.5 m long, 1.8 m wide and 1.4 m high, 1,500 kg, with every inverse inertia element zero. Each step starts every box 0.1 m above a flat ground of 4 m cells, falling at 30 m/s and sliding forward at 15 m/s, with gravity on. Friction is 0.8 and restitution is 0.1. After each timed step, outside the timing, the bench checks that an event pairs every box with the ground, and that no box's lowest corner is more than 1 mm under the ground. Controls first show that the checks reject a sunk box and a missing contact.
+
+The table gives the median of three runs of the mean step, over twenty steps after one warm-up step.
+
+| Scene | Triangles | Boxes | Discrete step | CCD step | Discrete lowest corner | CCD lowest corner |
+|---|---:|---:|---:|---:|---:|---:|
+| box | 2,048 | 1 | 0.0072 ms | 0.033 ms | −0.201 m | +0.020 m |
+| box-fleet | 8,192 | 64 | 0.813 ms | 2.336 ms | −0.201 m | +0.020 m |
+
+Discrete steps leave each box 20 cm inside the ground. CCD stops each box at the ground, and its small rebound lifts it 2 cm. The output of three runs, with the revision and the hardware, is in [ccd-boxes-635-bench.txt](ccd-boxes-635-bench.txt).
+
 ## Limits
 
-These are synthetic sphere probes. CCD still refuses boxes and convex hulls, so the bench measures no vehicle chassis. The bench measures spheres only. At its revision a rotation-locked capsule had to be alone in its group; later CCD sweeps such capsules with spheres and other capsules, but no row here measures them. The [walker report](ccd-walker-728.md) measures walkers that never meet. The numbers describe this machine. They are not a real-time capacity claim.
+These are synthetic probes. CCD sweeps only boxes and hulls that cannot turn, so the box rows measure a chassis that only translates, not a vehicle that steers or pitches. The pairs bench measures spheres only. At its revision a rotation-locked capsule had to be alone in its group; later CCD sweeps such capsules with spheres and other capsules, but no row here measures them. The [walker report](ccd-walker-728.md) measures walkers that never meet. The numbers describe this machine. They are not a real-time capacity claim.
