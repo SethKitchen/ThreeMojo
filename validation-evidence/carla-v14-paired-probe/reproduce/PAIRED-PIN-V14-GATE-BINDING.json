@@ -1,0 +1,28 @@
+{
+  "builder_sha256": "398c71119f54d46c3d402b7583bb78c68253b6dfe430af2596e5c3dc394b98bc",
+  "configurations": [
+    {
+      "path": "paired-pin-fake-preflight-v14.json",
+      "sha256": "055ce4a20aea00b76c2b89f8d74c65b1861578a228adfa180d5f7ac93c4fcf43"
+    },
+    {
+      "path": "paired-pin-exact-production-v14.json",
+      "sha256": "ce53f9eb8e03742031fd5210b7abe80f97a8d635829e1bf96ec7dcd7fb9b80b2"
+    }
+  ],
+  "exact_probe_binding_sha256": "9fdf1d79062e8430522ad99023880b4d28420924fffba04b45fe13f64595b696",
+  "exact_probe_stage_is_unmodified_selection": true,
+  "fake_expected_tests_per_mode": 16,
+  "real_tests_deferred": 17,
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "static_method_counts": {
+    "PairedPinFakeControls": 13,
+    "PairedPinRealControls": 13,
+    "SelectorOutputFakeControls": 3,
+    "SelectorOutputRealControls": 4
+  },
+  "status": "Prepared only; no project import, discovery, fixture or test execution",
+  "supervisor_sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032",
+  "test_sha256": "c581c353a2cfbacec9a012ed8e41bc89529733d22e436555bcb228377703be9d"
+}

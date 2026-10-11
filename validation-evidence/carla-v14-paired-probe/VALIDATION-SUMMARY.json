@@ -1,0 +1,46 @@
+{
+  "caps": {
+    "exact_child_seconds": 120,
+    "exact_probe_stage_seconds": 180,
+    "exact_probe_window_seconds": 900,
+    "fake_preflight_stage_seconds": 180,
+    "fake_window_seconds": 600
+  },
+  "evidence_policy": "Original raw stdout/stderr, seals and supervisor receipts copied byte-for-byte. No reconstructed receipts, private review notes or internal coordination. Recorded absolute paths and times unchanged.",
+  "exact_children": {
+    "optimized-test-production-inventory-paths": {
+      "limit_seconds": 120,
+      "margin_seconds": 30.090271287997894,
+      "passed": true,
+      "seconds": 89.9097287120021
+    }
+  },
+  "fake_executions": 32,
+  "fake_scope": "Synthetic qualification/owner wiring and output-channel controls only; no real current admission or timing claim.",
+  "maintained_command_sha256": "e5e8921dd23490f57605b35ba05559c0ec71c3c7b3d041643ffce35995ce6f0d",
+  "phases": {
+    "paired-pin-exact-production-v14": {
+      "result_sha256": "ebc953ed2bf7a49867c7bfbcd6200a57b9241c98335b7c980ce5e04d793050a5",
+      "stage_seconds": {
+        "optimized-test-production-inventory-paths": 97.70982720599932
+      }
+    },
+    "paired-pin-fake-preflight-v14": {
+      "result_sha256": "dc9e49151c88ce68e3c3ee1dcd7fca051db2072a9e8ec41991d7f64287950ea6",
+      "stage_seconds": {
+        "fake-preflight-normal": 0.5027886559983017,
+        "fake-preflight-optimized": 1.0033561529999133
+      }
+    }
+  },
+  "prior_failed_evidence_commit": "26632cf87dbe745f82384c987f10574570eb6e44",
+  "schema": 1,
+  "scope": "Fresh32 fake-control executions and one exact optimized production-inventory child only. Real paired mutation controls are ongoing and excluded. Remaining child modes/routes, broader preflight, full regression union, native paired controls, coverage, combined report and hosted CI remain pending.",
+  "source_base": "d06143b149ba31ab44afaa690c93289b57bc1778",
+  "source_checkpoint_commits": [
+    "bd990f50dd0135b8850789616bfd1e6b7cbd70c0",
+    "3473e6cde5eed93a97a77a5c0e8e1358ef1e1240"
+  ],
+  "source_seal_sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda",
+  "timing_limit": "One exact optimized child observation only. Earlier v13 broader optimizedproduction timeout and v11 isolated112.839s pass remain separate evidence. This is not a paired benchmark, robust margin, full qualification, issue-completion or merge-readiness claim."
+}

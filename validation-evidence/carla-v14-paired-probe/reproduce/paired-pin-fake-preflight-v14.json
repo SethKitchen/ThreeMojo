@@ -1,0 +1,49 @@
+{
+  "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v14",
+  "seal": "CANDIDATE-V14-SOURCE-SEAL.json",
+  "phase": "paired-pin-fake-preflight-v14",
+  "window_seconds": 600,
+  "pause_request_file": "native-lane-v14.pause",
+  "scope": "Fresh 16 fake-only paired-pin controls in each mode. Real qualification is replaced in these controls; no real admission or timing claim. Original tighter180s fake stage/600s window, zero skips; does not replace full matrix.",
+  "stages": [
+    {
+      "label": "fake-preflight-normal",
+      "seconds": 180,
+      "expected_tests": 16,
+      "command": [
+        "{python}",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-k",
+        "FakeControls",
+        "-v"
+      ]
+    },
+    {
+      "label": "fake-preflight-optimized",
+      "seconds": 180,
+      "expected_tests": 16,
+      "command": [
+        "{python}",
+        "-O",
+        "-B",
+        "-m",
+        "unittest",
+        "discover",
+        "-s",
+        "tools/carla_lane_oracle",
+        "-p",
+        "test_paired_pin_contracts.py",
+        "-k",
+        "FakeControls",
+        "-v"
+      ]
+    }
+  ]
+}

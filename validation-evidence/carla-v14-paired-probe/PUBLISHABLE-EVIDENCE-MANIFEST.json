@@ -1,0 +1,220 @@
+{
+  "files": [
+    {
+      "bytes": 2682,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/RESULT.json",
+      "path": "paired-pin-fake-preflight-v14/RESULT.json",
+      "sha256": "dc9e49151c88ce68e3c3ee1dcd7fca051db2072a9e8ec41991d7f64287950ea6"
+    },
+    {
+      "bytes": 419155,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/SOURCE-SEAL.json",
+      "path": "paired-pin-fake-preflight-v14/SOURCE-SEAL.json",
+      "sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/SDK-BEFORE.json",
+      "path": "paired-pin-fake-preflight-v14/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/SDK-AFTER.json",
+      "path": "paired-pin-fake-preflight-v14/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/WINDOW-START.json",
+      "path": "paired-pin-fake-preflight-v14/WINDOW-START.json",
+      "sha256": "a4bcdc534ad90eed9a7a4ed13bcc54f7e0f545a7efa87ed5b5ddb08e8d58a065"
+    },
+    {
+      "bytes": 615,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/fake-preflight-normal-START.json",
+      "path": "paired-pin-fake-preflight-v14/fake-preflight-normal-START.json",
+      "sha256": "3582fed0a6be0960c4786840513974857a02baf298d63a14f10a308d1905a4bb"
+    },
+    {
+      "bytes": 930,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/fake-preflight-normal-RESULT.json",
+      "path": "paired-pin-fake-preflight-v14/fake-preflight-normal-RESULT.json",
+      "sha256": "d5929568cce990fe62d8f865ded749db25e2434d306d9057195addeb05d20ac9"
+    },
+    {
+      "bytes": 2938,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/fake-preflight-normal.log",
+      "path": "paired-pin-fake-preflight-v14/fake-preflight-normal.log",
+      "sha256": "745cba2bd52470a1197968c8199e4e50e519c43c3669f4a802f6d8bb2d1f2395"
+    },
+    {
+      "bytes": 628,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/fake-preflight-optimized-START.json",
+      "path": "paired-pin-fake-preflight-v14/fake-preflight-optimized-START.json",
+      "sha256": "cd17debd2296b88d87ccbc8340b3fcc9a4f713860253dcec4070b37ddc675b24"
+    },
+    {
+      "bytes": 943,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/fake-preflight-optimized-RESULT.json",
+      "path": "paired-pin-fake-preflight-v14/fake-preflight-optimized-RESULT.json",
+      "sha256": "a4437432a8ade36020205bf7961db314c35bab2beb89df92ebaa93434a7da5a2"
+    },
+    {
+      "bytes": 2938,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-fake-preflight-v14/fake-preflight-optimized.log",
+      "path": "paired-pin-fake-preflight-v14/fake-preflight-optimized.log",
+      "sha256": "fc1ff0bb88a20e21c434d70816b3c66ac5decb961eabe306700c33b384ac484e"
+    },
+    {
+      "bytes": 1659,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/RESULT.json",
+      "path": "paired-pin-exact-production-v14/RESULT.json",
+      "sha256": "ebc953ed2bf7a49867c7bfbcd6200a57b9241c98335b7c980ce5e04d793050a5"
+    },
+    {
+      "bytes": 419155,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/SOURCE-SEAL.json",
+      "path": "paired-pin-exact-production-v14/SOURCE-SEAL.json",
+      "sha256": "245fe78bb5e122ec6eca663c578d0c01ffa42181a6f92fbaf62d5e6e751a7dda"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/SDK-BEFORE.json",
+      "path": "paired-pin-exact-production-v14/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/SDK-AFTER.json",
+      "path": "paired-pin-exact-production-v14/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 369,
+      "kind": "actual-supervisor-receipt",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/WINDOW-START.json",
+      "path": "paired-pin-exact-production-v14/WINDOW-START.json",
+      "sha256": "16896396932e39fca566336ce3f40187201864b299a7af744ae275bb7be02e71"
+    },
+    {
+      "bytes": 698,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths-START.json",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths-START.json",
+      "sha256": "1d97de00ae16bc82645bc06c27b9d6e53b582cac1a86fd06cf011bdadcb2ad09"
+    },
+    {
+      "bytes": 941,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths-RESULT.json",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths-RESULT.json",
+      "sha256": "037b75282b09c001f697cf6f76651fa139c0ef746d2f0601719d2c4efbbc30ef"
+    },
+    {
+      "bytes": 2153,
+      "kind": "actual-stage-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths.log",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths.log",
+      "sha256": "f772b05117b5c2729df220d1994457557471abbf783e44791292a99ba64c0c71"
+    },
+    {
+      "bytes": 2219,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths/EXACT-CHILD-RESULT.json",
+      "sha256": "ca2bb3806ecd6e0fa3641354248fcc4a0a46c5ffda58ce635ba621fbfc16baec"
+    },
+    {
+      "bytes": 302199,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths/FIXTURE-SOURCE-SEAL.json",
+      "sha256": "3d3084554c606c28b223632003e922b2656c29357f742ce20103ce558bf9c8ab"
+    },
+    {
+      "bytes": 57,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths/CHILD-stdout.log",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths/CHILD-stdout.log",
+      "sha256": "e87964e614659431260e0cc08ff2119bfdaa133122705ac82a13d1bcb9440bbe"
+    },
+    {
+      "bytes": 0,
+      "kind": "actual-child-receipt-or-raw-log",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/paired-pin-exact-production-v14/optimized-test-production-inventory-paths/CHILD-stderr.log",
+      "path": "paired-pin-exact-production-v14/optimized-test-production-inventory-paths/CHILD-stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "bytes": 3643,
+      "kind": "executed-exact-child-driver",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/reproduce/probe_owned_scope_v14_optimized-test-production-inventory-paths.py",
+      "path": "reproduce/probe_owned_scope_v14_optimized-test-production-inventory-paths.py",
+      "sha256": "8ccae89b8c69bb196c3a49822a3df797842890dbe51abc9cd70a14e2718fb8a1"
+    },
+    {
+      "bytes": 10102,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 1267,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/reproduce/paired-pin-fake-preflight-v14.json",
+      "path": "reproduce/paired-pin-fake-preflight-v14.json",
+      "sha256": "055ce4a20aea00b76c2b89f8d74c65b1861578a228adfa180d5f7ac93c4fcf43"
+    },
+    {
+      "bytes": 912,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/reproduce/paired-pin-exact-production-v14.json",
+      "path": "reproduce/paired-pin-exact-production-v14.json",
+      "sha256": "ce53f9eb8e03742031fd5210b7abe80f97a8d635829e1bf96ec7dcd7fb9b80b2"
+    },
+    {
+      "bytes": 1502,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/reproduce/OWNED-INPUT-PROBE-BINDING-V14.json",
+      "path": "reproduce/OWNED-INPUT-PROBE-BINDING-V14.json",
+      "sha256": "9fdf1d79062e8430522ad99023880b4d28420924fffba04b45fe13f64595b696"
+    },
+    {
+      "bytes": 1245,
+      "kind": "executed-harness-or-source-command-binding",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/reproduce/PAIRED-PIN-V14-GATE-BINDING.json",
+      "path": "reproduce/PAIRED-PIN-V14-GATE-BINDING.json",
+      "sha256": "cd390ef07c1a9e939aa894ee2fd80d06c95052824b36235905cafaf0d0ba6a01"
+    },
+    {
+      "bytes": 2401,
+      "kind": "factual-scope-limited-summary",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-v14-paired-probe-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "200482e4d29fb9372f817f76c410da40c39f28a1a71256a7e3f7cbb9f3fb9804"
+    }
+  ],
+  "schema": 1,
+  "scope": "Fresh32 fake-control executions and one exact optimized production-inventory child only. Real paired mutation controls are ongoing and excluded. Remaining child modes/routes, broader preflight, full regression union, native paired controls, coverage, combined report and hosted CI remain pending.",
+  "source_checkpoint_commits": [
+    "bd990f50dd0135b8850789616bfd1e6b7cbd70c0",
+    "3473e6cde5eed93a97a77a5c0e8e1358ef1e1240"
+  ]
+}
