@@ -125,7 +125,8 @@ def head_bone_field(
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, or if `part`
-            is not named.
+            is not named. A C2 through C7 body must be tall enough to
+            contain the authored articular pillar diameter.
     """
     dimensions.validate()
     if not part.is_valid():
@@ -133,6 +134,11 @@ def head_bone_field(
             "A head bone must be a named cervical vertebra, the skull, the"
             " mandible, the teeth or the hyoid"
         )
+    if part.value >= C2.value and part.value <= C7.value:
+        if dimensions.heights[part.value] < 2 * dimensions.cm(0.45):
+            raise Error(
+                "A cervical body must fit the articular pillar diameter"
+            )
     var sweeps = List[Sweep]()
     var domes = List[Dome]()
     var cuts = List[Sweep]()
