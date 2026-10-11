@@ -1606,7 +1606,7 @@ class ReviewedRelativePathMechanics(_rm_unittest.TestCase):
 
 # Exact reviewed consumed-value boundaries only. Source spans are derived at runtime.
 # Tuple: module, original owner, physical expression, expected count, selections.
-# Each selection is (index, legacy site suffix, comparator mode, narrow binding kind).
+# Each selection is (index, stable site suffix, comparator mode, narrow binding kind).
 _OPERATION_REACHED_READ_SPECS = (
     ('tools/carla_lane_oracle/consumer_successor_ledger.py', '_read',
      'audit._regular(root, path).read_bytes()', 1, ((0, '82:1', 'bytes', 'observe'),)),
@@ -1793,7 +1793,23 @@ _OPERATION_REACHED_READ_SPECS = (
     ('tools/coverage_loop_proofs.py', 'file_sha256',
      'stream.read(1 << 20)', 1, ((0, '157:1', 'stream_read', 'stream_read'),)),
     ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
-     'path.read_bytes()', 3, ((0, '798:1', 'bytes', 'observe'), (2, '828:1', 'bytes', 'observe'))),
+     'path.read_bytes()', 4, ((0, '798:1', 'bytes', 'observe'),
+                            (1, 'shared-helper-source-final', 'bytes', 'observe'),
+                            (2, 'cleanup-source-final', 'bytes', 'local_raw_residual'),
+                            (3, '828:1', 'bytes', 'observe'))),
+    # Only the exact shared-helper successor branch added to this owner.
+    # Its checker, provider and package samples retain their physical values.
+    ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
+     'relative_source(root, leaf, **operation_args).read_bytes()', 2,
+     ((0, 'shared-helper-checker-first', 'bytes', 'observe'),
+      (1, 'shared-helper-checker-final', 'bytes', 'observe'))),
+    ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
+     'relative_source(root, provider, **operation_args).read_bytes()', 2,
+     ((0, 'shared-helper-provider-first', 'bytes', 'observe'),
+      (1, 'shared-helper-provider-final', 'bytes', 'observe'))),
+    ('tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes',
+     'relative_source(root, package, **operation_args).read_bytes()', 1,
+     ((0, 'shared-helper-package-first', 'bytes', 'observe'),)),
     ('tools/coverage_loop_proofs.py', '_historical_reviewed_nonempty_loops',
      'relative_source(root, path.as_posix(), **operation_args).read_text()', 1, ((0, '853:1', 'default', 'observe'),)),
     ('tools/coverage_loop_proofs.py', '_construction_boundary_callers',
@@ -1831,6 +1847,18 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
                         and ast.dump(item, include_attributes=False) == key),
                        key=lambda item: (item.lineno, item.col_offset))
         case.assertEqual(len(calls), expected_count, (relative, owner, expression))
+        if (relative, owner, expression) == (
+                'tools/coverage_loop_proofs.py', '_reviewed_dependency_hashes', 'path.read_bytes()'):
+            # The original cleanup reread is an exact local raw comparison,
+            # not an operation observation. Keep it explicit as a residual of
+            # the four current owners, and preserve its rejection predicate.
+            parents = {child: parent for parent in ast.walk(node)
+                       for child in ast.iter_child_nodes(parent)}
+            comparison = parents[calls[2]]
+            statement = parents[comparison]
+            expected = ast.parse('if path.read_bytes() != raw:\n    return None').body[0]
+            case.assertEqual(ast.dump(statement, include_attributes=False),
+                             ast.dump(expected, include_attributes=False))
         for index, suffix, mode, binding in selections:
             call = calls[index]
             if mode == 'default_or_map_supplied':
@@ -2047,6 +2075,8 @@ def _operation_reached_bindings(case, code_root, physical_root, cores):
                 primitive_entries.append(entry)
             value = original(path, *args, **kwargs)
             if operation is not None:
+                case.assertNotEqual(found[3], 'local_raw_residual',
+                    'cleanup local comparator entered an owned route; review its binding')
                 case.assertIn(found[3], ('observe', 'local_s', 'base'))
                 entry['returned'] = True
                 record_read(found, operation, path, value, frame)
@@ -2373,15 +2403,26 @@ class OperationReachedBindingControls(unittest.TestCase):
         )
         owners = []
         for kind, core, run in routes:
-            with self.subTest(owner=kind), self.audit(core) as events, _operation_reached_bindings(
-                    self, code_root, self.root, (cleanup, coverage_core)) as summarize:
-                result = run()
-                self.assertTrue(result)
-                operation = self.assert_one_owner(events, kind, core)
-                self.assertTrue(all(operation is not previous for previous in owners))
-                owners.append(operation)
-                report = summarize(operation, kind)
-            print('OPERATION_REACHED_BINDINGS ' + json.dumps(report, sort_keys=True))
+            with self.subTest(owner=kind):
+                with self.audit(core) as events, _operation_reached_bindings(
+                        self, code_root, self.root, (cleanup, coverage_core)) as summarize:
+                    result = run()
+                    self.assertTrue(result)
+                    operation = self.assert_one_owner(events, kind, core)
+                    self.assertTrue(all(operation is not previous for previous in owners))
+                    owners.append(operation)
+                    report = summarize(operation, kind)
+                    # These local coverage-theorem branches are outside all
+                    # four owned routes. Never report them as exercised owner
+                    # observations merely because their AST addresses exist.
+                    self.assertLessEqual({
+                        'tools/coverage_loop_proofs.py:' + suffix for suffix in (
+                            'cleanup-source-final', 'shared-helper-source-final',
+                            'shared-helper-checker-first', 'shared-helper-checker-final',
+                            'shared-helper-provider-first', 'shared-helper-provider-final',
+                            'shared-helper-package-first')},
+                        set(report['residual_unreached_sites']))
+                print('OPERATION_REACHED_BINDINGS ' + json.dumps(report, sort_keys=True))
 
 
 
@@ -2399,11 +2440,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
         'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '2b6dbe7483d3c9ceb2ee9914158d99fcd8c1d87f9298f797edac150a78457f67',
-        'full_audit_cleanup_contracts.py': '4d04ac37dc7bd0490885880495b6bb02f32690e009bdd008fb00d2151198feaf',
+        'coverage_loop_proofs.py': '5ff27bce19c760ed0fa760e48a99e17a5541c9d90b576502a8a6170d43ed18c2',
+        'full_audit_cleanup_contracts.py': '00fefe78c68f46f2efd39d3d6f367914f666f7036b462e358bd779f067d84076',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': 'd5b16ad9ef253250c5cceffe2fe82ca6f013526f574974e5b952c81ee012a4c4',
+        'seed_count_contracts.py': '2efb1ef199bbc34dca9ac48e817cf17116e2156ead7cd586df2074be1d8abca5',
         'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
     }
 
@@ -2530,6 +2571,68 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                     return checked
                 stack.enter_context(patch.object(module, name, install(original)))
             yield
+
+    def test_shared_helper_local_final_reread_rejects_and_recovers(self):
+        """Exercise the new local theorem seam without fabricating an owner."""
+        from functools import wraps
+        loops, core = self.coverage()
+        module = 'extensions/carla/lane_distance'
+        path = 'extensions/carla/curve_distance.mojo'
+        physical = (self.root/path).read_bytes()
+        site = self._site(loops._reviewed_dependency_hashes, 948, 'path.read_bytes()')
+        baseline = loops.reviewed_nonempty_loops(self.root, module)
+        self.assertEqual(set(baseline), {50})
+        self.assertEqual(baseline[50]['dependency_sha256'][path],
+                         hashlib.sha256(physical).hexdigest())
+        for fault in ('changed', 'io'):
+            with self.subTest(fault=fault):
+                original_read = Path.read_bytes
+                original_observe = loops._coverage_observe_bytes
+                injected, marked, observed = [], [], []
+                failure = PermissionError('shared-helper final reread denied')
+
+                @wraps(original_read)
+                def read(actual, *args, **kwargs):
+                    value = original_read(actual, *args, **kwargs)
+                    frame = sys._getframe(1)
+                    if site(frame) and actual == self.root/path:
+                        self.assertEqual(injected, [])
+                        self.assertIsNone(frame.f_locals['_operation'])
+                        self.assertEqual(frame.f_locals['raw'], physical)
+                        self.assertEqual(value, physical)
+                        injected.append(frame)
+                        if fault == 'io':
+                            raise failure
+                        value += b'\n# changed final helper read\n'
+                        marked.append(value)
+                    return value
+
+                @wraps(original_observe)
+                def observe(root, name, value, *, _operation=None):
+                    if marked and value is marked[0]:
+                        self.assertEqual((root, name), (self.root, path))
+                        self.assertIsNone(_operation)
+                        self.assertIs(sys._getframe(1), injected[0])
+                        observed.append(value)
+                    return original_observe(root, name, value, _operation=_operation)
+
+                with self.audit(core) as events, patch.object(Path, 'read_bytes', read), \
+                        patch.object(loops, '_coverage_observe_bytes', observe):
+                    result = loops.reviewed_nonempty_loops(self.root, module)
+                self.assertEqual(result, {})
+                self.assertEqual(len(injected), 1)
+                self.assertEqual(observed, marked)
+                self.assertEqual(len(observed), 1 if fault == 'changed' else 0)
+                self.assertEqual(events['admissions'], [])
+                self.assertEqual(events['finalizers'], [])
+                self.assertIs(Path.read_bytes, original_read)
+                self.assertEqual((self.root/path).read_bytes(), physical)
+                self.assertEqual(loops.reviewed_nonempty_loops(self.root, module), baseline)
+                print('COVERAGE_HELPER_FINAL_CONTROL ' + json.dumps({
+                    'fault': fault, 'module': module, 'path': path,
+                    'site': 'shared-helper-source-final', 'owned': False,
+                    'reached': len(injected), 'refused': True, 'restored': True},
+                    sort_keys=True))
 
     def test_distinct_pending_observation_reconciles_at_real_publication(self):
         from functools import wraps
@@ -2718,8 +2821,8 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
     def _lease_sites(self, cache, seed):
         return (
             self._site(cache.inventory, 106, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
-            self._site(seed.verify_score, 583, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
-            self._site(seed.verify_score, 612, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(seed.verify_score, 636, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
+            self._site(seed.verify_score, 665, '_inputs.observe_bytes(_input_owner, root, MODULE)'),
             self._site(cache.inventory, 153, '_inputs.observe_bytes(_input_owner, root, rel.as_posix())'),
         )
 
@@ -2740,7 +2843,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1170,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1176,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -2928,13 +3031,13 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         from functools import wraps
         loops, core = self.coverage()
         from carla_lane_oracle import seed_count_contracts as seed
-        production_site = self._site(seed.verify_score_caller_inventory, 486,
+        production_site = self._site(seed.verify_score_caller_inventory, 539,
                                      'guard.production_mojo_paths(root)')
         known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1484,
+        production_catch = self._site(core._operation_production_paths, 1501,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1326,
+        known_catch = self._site(loops.construction_boundary_loops, 1332,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
