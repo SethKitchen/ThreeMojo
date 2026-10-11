@@ -1,0 +1,34 @@
+{
+  "all_other_3835_source_files_unchanged": true,
+  "base_source_seal_sha256": "a6cb4394fecbeefdcb4615b43621c481db32f9dbf72c83e04e64283ac7f83456",
+  "candidate": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v32",
+  "delta_count": 2,
+  "files": [
+    {
+      "before_sha256": "89b2f18e7d2d9f265de163cbfdd3b09658808920cfe7b77dc5573906ca9e50ba",
+      "bytes": 24221,
+      "git_blob": "0618abdafd0601cc44b13cec04751fd5d577ca04",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v32/tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_runtime_correspondence.py",
+      "sha256": "01dfa95a659cdafdc8abef7820502707d8cb3a7265e45a37a0d91180e6bcde5a"
+    },
+    {
+      "before_sha256": "3342b8ebd75d8265f8124f3d9013108f8b5553ca0c2701d2e936860462553ee0",
+      "bytes": 15474,
+      "git_blob": "e41e3cd24117204c7ad63535406c913a75fb7543",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v32/tools/test_sampled_values.py",
+      "mode": "100644",
+      "path": "tools/test_sampled_values.py",
+      "sha256": "17aeb68a26b90e93eaeba51abc5db32090e0852352c137926b42f681c1728a4d"
+    }
+  ],
+  "mojo_and_genuine_report_unchanged": true,
+  "private_predecessor": "candidate-v31",
+  "published_base_commit": "031f9f726edb6e9409853fd777af966c8ebba88d",
+  "review_sha256": "108b6510182b6ac717fc2076fd63d36d8b5657306fa51793a78f597bd3ee1030",
+  "sampled_overlay_status": "Static predicted fixture failure; original diagnostic stage70 not yet reached",
+  "schema": 1,
+  "source_seal_sha256": "380607704236b12d636cb73a04a2539eaa85275fc8304813451e4b8b5126ffc3",
+  "status": "Reviewed test-only source; focused execution deferred until bounded v28 diagnostics terminate. No full-matrix or native/coverage claim."
+}
