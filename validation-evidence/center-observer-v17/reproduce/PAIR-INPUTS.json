@@ -1,0 +1,21 @@
+{
+  "after_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17",
+  "after_seal_sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21",
+  "after_sha256": "13ae6d4658458a7d243597428eee762f9bbc40f8fe3507a47beac9ebd4ac1737",
+  "before_root": "/workspace/scratch/c2bcdb1ca387/final-center-observer-v17/baseline-v17-center-only",
+  "before_sha256": "370dee032a5e126e727c46d0ceb7103359f1ad7fba8151e341b594df0c7d0e30",
+  "before_status": "Materialization pending explicit lane release unless BASELINE-MATERIALIZED.json exists.",
+  "case_executions": 196,
+  "old_receipts": "Lost; cannot be cited as current equivalence evidence.",
+  "only_planned_source_difference": "extensions/carla/lane_refinement.mojo",
+  "pairs": 98,
+  "probe_files": {
+    "PAIR-CONTRACT.json": "621ec3ff55a5944d50ec9cbde416c33fc970463f08fe7c342e6e3576b75ae921",
+    "cases.json": "8995f2402b72126b0e64a3d97769c99c29467d45c2bf117b5a1cd1448c5d5c94",
+    "compare_observations.py": "46a383aae64fc04d90452e6e1286a37b7f0b26b6051553e62c12246e1f288232",
+    "lane_phase_differential.mojo": "e191833eb83efb63655a9a1e4456c677fecaee8a8934a37a620406d693e15443"
+  },
+  "stages": 202,
+  "status": "Source-only prospective plan. No native stage has run.",
+  "supervisor": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/run_checkpoint_matrix.py"
+}

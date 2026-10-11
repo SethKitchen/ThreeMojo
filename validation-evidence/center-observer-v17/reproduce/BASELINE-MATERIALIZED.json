@@ -1,0 +1,8 @@
+{
+  "after_lane_sha256": "13ae6d4658458a7d243597428eee762f9bbc40f8fe3507a47beac9ebd4ac1737",
+  "after_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v17",
+  "before_lane_sha256": "370dee032a5e126e727c46d0ceb7103359f1ad7fba8151e341b594df0c7d0e30",
+  "native_qualification": "Not performed by this script. The fresh supervisor must verify both complete physical roots before execution.",
+  "source": "/workspace/scratch/c2bcdb1ca387/final-center-observer-v17/baseline-v17-center-only",
+  "status": "Exact sealed inventory copied; only reviewed lane replaced."
+}

@@ -1,0 +1,33 @@
+{
+  "files": [
+    {
+      "bytes": 2013672,
+      "hash_receipt": "actual/PAIRS-O3.json",
+      "name": "before-O3-bin",
+      "reason": "Native executable excluded; original post-run hash retained.",
+      "sha256": "e2971d7fb04b11ecd3c2fe43658d0fd691c0bbf5003a1c43712c216de82a7c66"
+    },
+    {
+      "bytes": 1990744,
+      "hash_receipt": "actual/PAIRS-O3.json",
+      "name": "after-O3-bin",
+      "reason": "Native executable excluded; original post-run hash retained.",
+      "sha256": "d7dd73be185f760cd7cb09d02f040495fa1f1110e441fdedcfd8cf1fd5d4476a"
+    },
+    {
+      "bytes": 9440968,
+      "hash_receipt": "actual/PAIRS-O0.json",
+      "name": "before-O0-bin",
+      "reason": "Native executable excluded; original post-run hash retained.",
+      "sha256": "afb621ba9c2b9871a743cfd6babbd3091c09f3e660d7c40c188df1469abd0929"
+    },
+    {
+      "bytes": 9466472,
+      "hash_receipt": "actual/PAIRS-O0.json",
+      "name": "after-O0-bin",
+      "reason": "Native executable excluded; original post-run hash retained.",
+      "sha256": "5ab07e9d06dc848a935b1159ad6cd81d89c0d4087c48025e932affd2a1895ccf"
+    }
+  ],
+  "schema": 1
+}

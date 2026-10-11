@@ -1,0 +1,253 @@
+{
+  "files": [
+    {
+      "bytes": 207188,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/COMMAND-RECEIPT-SEAL.json",
+      "path": "COMMAND-RECEIPT-SEAL.json",
+      "sha256": "d42a65477351cd70792f86c6bccdfd951f186f0477cc593afb8e9b3abcd42d74"
+    },
+    {
+      "bytes": 1141,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/EXCLUDED-EXECUTABLES.json",
+      "path": "EXCLUDED-EXECUTABLES.json",
+      "sha256": "3026d75fb80ac571cb43d529e0d2679d90968e403ceba2f68e9f3f6be09406f0"
+    },
+    {
+      "bytes": 203097,
+      "kind": "complete-original-member-and-storage-inventory",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/INNER-MEMBER-MANIFEST.json",
+      "path": "INNER-MEMBER-MANIFEST.json",
+      "sha256": "c1b751ec56aa5a03f5dd8a9d9d13dd8ce0e359c505a9e240d03235cc437f9f64"
+    },
+    {
+      "bytes": 1687,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/README.md",
+      "path": "README.md",
+      "sha256": "7ca5f978ba9e26fad70b33f46f8948a32fb87115970f15e490a3b6d1e13957f0"
+    },
+    {
+      "bytes": 1982,
+      "kind": "transport-format-and-safe-decoding-guide",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/TRANSPORT-README.md",
+      "path": "TRANSPORT-README.md",
+      "sha256": "17ed21f08f0a8d34a18576ead670c7d7bcb97beb3c0ae0592605524920caa622"
+    },
+    {
+      "bytes": 5014,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/VALIDATION-SUMMARY.json",
+      "path": "VALIDATION-SUMMARY.json",
+      "sha256": "ad1a3b375202c8add105ef7db6c978c9e90bed0766b47ac05087728b05babd76"
+    },
+    {
+      "bytes": 250019,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/actual/RESULT.json",
+      "path": "actual/RESULT.json",
+      "sha256": "e060276e8ccfa1db38e63ce59468c50809fe01ff9b748eedc0fbf37f2f72ebad"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/actual/SDK-AFTER.json",
+      "path": "actual/SDK-AFTER.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 2165,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/actual/SDK-BEFORE.json",
+      "path": "actual/SDK-BEFORE.json",
+      "sha256": "7df7b8ba0859f186a2f372435db4dac19a1d08a6f1c724981158d612581ed207"
+    },
+    {
+      "bytes": 419268,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/actual/SOURCE-SEAL.json",
+      "path": "actual/SOURCE-SEAL.json",
+      "sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21"
+    },
+    {
+      "bytes": 370,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/actual/WINDOW-START.json",
+      "path": "actual/WINDOW-START.json",
+      "sha256": "b708ff10018799d2bdf6a25113f0198a62247fc92877b01cc8e47bd31bf0d43d"
+    },
+    {
+      "bytes": 178753,
+      "kind": "lossless-original-receipt-container",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/containers/RAW-RECEIPTS.json.gz.b64",
+      "path": "containers/RAW-RECEIPTS.json.gz.b64",
+      "sha256": "23c93564eeb4a672c9a99f1119fb91de6cc120b1b10824a76e1f155a6d8123fd"
+    },
+    {
+      "bytes": 6338,
+      "kind": "safe-byte-verifier-and-decoder-no-content-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/decode_verify.py",
+      "path": "decode_verify.py",
+      "sha256": "c0a4a443b74b77eea470490c249559397dbc8dedf0684f87bb6057db044f2b1c"
+    },
+    {
+      "bytes": 588,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/BASELINE-MATERIALIZED.json",
+      "path": "reproduce/BASELINE-MATERIALIZED.json",
+      "sha256": "63a412bb54605ea28f0ba067cc4693f9bdfdfda88a7bba79f38c46f640e381dc"
+    },
+    {
+      "bytes": 419268,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/BEFORE-EXPECTED-SOURCE-SEAL.json",
+      "path": "reproduce/BEFORE-EXPECTED-SOURCE-SEAL.json",
+      "sha256": "b420a6cdb27316a4b012a66cd422b0d85a83ab5dac197caf68be15e404f8afbe"
+    },
+    {
+      "bytes": 419268,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/CANDIDATE-V17-SOURCE-SEAL.json",
+      "path": "reproduce/CANDIDATE-V17-SOURCE-SEAL.json",
+      "sha256": "3e63e8a02b46f1d2d7102b829427448a891fcb0189c445990ac33bafac9f3d21"
+    },
+    {
+      "bytes": 1277,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/CHECKPOINT-SOURCE-MANIFEST.json",
+      "path": "reproduce/CHECKPOINT-SOURCE-MANIFEST.json",
+      "sha256": "090cdf4291de569e40a035514bdf17a45ec6e60427c1071c664f4b80118cc11f"
+    },
+    {
+      "bytes": 121572,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/FRESH-RUN-PLAN.json",
+      "path": "reproduce/FRESH-RUN-PLAN.json",
+      "sha256": "b2c8979823cda4d4159fbececdd7775f67949ba1ad3f997cea1f4a00a93ad16c"
+    },
+    {
+      "bytes": 1354,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/PAIR-INPUTS.json",
+      "path": "reproduce/PAIR-INPUTS.json",
+      "sha256": "1395c43e238443e2d9d421ea501590287b572a4c941a34ac23e07b8847e7ee1b"
+    },
+    {
+      "bytes": 378,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/PROBE-INPUTS-SEAL.json",
+      "path": "reproduce/PROBE-INPUTS-SEAL.json",
+      "sha256": "0027a26f88da407a359fd83b32e23b6af58f4937fec614a82d6e66b87d874a85"
+    },
+    {
+      "bytes": 18006,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/build_center_observer_v17_packet.py",
+      "path": "reproduce/build_center_observer_v17_packet.py",
+      "sha256": "32f77d603a3722899fa2ffb557d5b72ad82e40b39d9fb56e95e202749749fc9e"
+    },
+    {
+      "bytes": 7878,
+      "kind": "local-transport-builder-no-native-execution",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/build_center_observer_v17_transport_packet.py",
+      "path": "reproduce/build_center_observer_v17_transport_packet.py",
+      "sha256": "ec50fd0f9d903390bd6b03d9f0bd6b8ba610112465e4852af6e2721bb146b397"
+    },
+    {
+      "bytes": 420635,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/center-observer-final-v17.supervisor.log",
+      "path": "reproduce/center-observer-final-v17.supervisor.log",
+      "sha256": "124ebc7a8d130f531e4e494c50130cc827228122115d03d3196c2a1c9691de08"
+    },
+    {
+      "bytes": 9006,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/prepare_fresh_run.py",
+      "path": "reproduce/prepare_fresh_run.py",
+      "sha256": "a7c2c54413a5235954cfdb3e8f07d07c6024fdc4323a1d782dc8e3adb1f141a0"
+    },
+    {
+      "bytes": 970,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/probe-inputs/PAIR-CONTRACT.json",
+      "path": "reproduce/probe-inputs/PAIR-CONTRACT.json",
+      "sha256": "621ec3ff55a5944d50ec9cbde416c33fc970463f08fe7c342e6e3576b75ae921"
+    },
+    {
+      "bytes": 1187,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/probe-inputs/cases.json",
+      "path": "reproduce/probe-inputs/cases.json",
+      "sha256": "8995f2402b72126b0e64a3d97769c99c29467d45c2bf117b5a1cd1448c5d5c94"
+    },
+    {
+      "bytes": 13545,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/probe-inputs/compare_observations.py",
+      "path": "reproduce/probe-inputs/compare_observations.py",
+      "sha256": "46a383aae64fc04d90452e6e1286a37b7f0b26b6051553e62c12246e1f288232"
+    },
+    {
+      "bytes": 21466,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/probe-inputs/lane_phase_differential.mojo",
+      "path": "reproduce/probe-inputs/lane_phase_differential.mojo",
+      "sha256": "e191833eb83efb63655a9a1e4456c677fecaee8a8934a37a620406d693e15443"
+    },
+    {
+      "bytes": 10102,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/run_checkpoint_matrix.py",
+      "path": "reproduce/run_checkpoint_matrix.py",
+      "sha256": "6727063772b92efdd559328b302db613626025bc6df5159937af56882f67e032"
+    },
+    {
+      "bytes": 92965,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/source/after/extensions/carla/lane_refinement.mojo",
+      "path": "reproduce/source/after/extensions/carla/lane_refinement.mojo",
+      "sha256": "13ae6d4658458a7d243597428eee762f9bbc40f8fe3507a47beac9ebd4ac1737"
+    },
+    {
+      "bytes": 90759,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/source/before/extensions/carla/lane_refinement.mojo",
+      "path": "reproduce/source/before/extensions/carla/lane_refinement.mojo",
+      "sha256": "370dee032a5e126e727c46d0ceb7103359f1ad7fba8151e341b594df0c7d0e30"
+    },
+    {
+      "bytes": 8205,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/source/support/tools/coverage_toolchain_identity.py",
+      "path": "reproduce/source/support/tools/coverage_toolchain_identity.py",
+      "sha256": "4fe6f947fc6cba35449287ed1398f7a8a37489be1f7aa5120fbe130e0391be22"
+    },
+    {
+      "bytes": 6933,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/source/support/tools/run_suite.py",
+      "path": "reproduce/source/support/tools/run_suite.py",
+      "sha256": "818daa66412185669b56af82eba5c305e3c9163b262696fe2cba5c398274c28b"
+    },
+    {
+      "bytes": 719,
+      "kind": "byte-exact-readable-original-payload",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/reproduce/source/support/tools/test_environment.py",
+      "path": "reproduce/source/support/tools/test_environment.py",
+      "sha256": "eff5cf8ade336acb67a71023e79d5e6c1a0f579c96f2aaa1123547221383f414"
+    },
+    {
+      "bytes": 245930,
+      "kind": "byte-exact-original-packet-manifest",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/validation-evidence-center-observer-v17-transport-packet/source-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "path": "source-packet/PUBLISHABLE-EVIDENCE-MANIFEST.json",
+      "sha256": "154e683afb2eee4de98de73497f4361b78789b918ceb6039ddd2000461314d1a"
+    }
+  ],
+  "schema": 1,
+  "scope": "Fresh center-only paired observer: 49 cases per O3/O0 mode, exact exported words/order/errors/ledgers. Newly reconstructed observer, not recovered old receipts, no exhaustive internal trace or full-search count-refusal reachability claim.",
+  "source_manifest_sha256": "154e683afb2eee4de98de73497f4361b78789b918ceb6039ddd2000461314d1a",
+  "transport": "lossless compact representation of immutable original evidence packet"
+}

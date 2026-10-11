@@ -1,0 +1,17 @@
+{
+  "files": {
+    "BEFORE-EXPECTED-SOURCE-SEAL.json": "b420a6cdb27316a4b012a66cd422b0d85a83ab5dac197caf68be15e404f8afbe",
+    "FRESH-RUN-PLAN.json": "b2c8979823cda4d4159fbececdd7775f67949ba1ad3f997cea1f4a00a93ad16c",
+    "PROBE-INPUTS-SEAL.json": "0027a26f88da407a359fd83b32e23b6af58f4937fec614a82d6e66b87d874a85",
+    "cases.json": "8995f2402b72126b0e64a3d97769c99c29467d45c2bf117b5a1cd1448c5d5c94",
+    "compare_observations.py": "46a383aae64fc04d90452e6e1286a37b7f0b26b6051553e62c12246e1f288232",
+    "lane_phase_differential.mojo": "e191833eb83efb63655a9a1e4456c677fecaee8a8934a37a620406d693e15443",
+    "prepare_fresh_run.py": "a7c2c54413a5235954cfdb3e8f07d07c6024fdc4323a1d782dc8e3adb1f141a0",
+    "probe-inputs/PAIR-CONTRACT.json": "621ec3ff55a5944d50ec9cbde416c33fc970463f08fe7c342e6e3576b75ae921",
+    "probe-inputs/cases.json": "8995f2402b72126b0e64a3d97769c99c29467d45c2bf117b5a1cd1448c5d5c94",
+    "probe-inputs/compare_observations.py": "46a383aae64fc04d90452e6e1286a37b7f0b26b6051553e62c12246e1f288232",
+    "probe-inputs/lane_phase_differential.mojo": "e191833eb83efb63655a9a1e4456c677fecaee8a8934a37a620406d693e15443"
+  },
+  "schema_version": 1,
+  "status": "Source-only v17 rebind; native qualification pending independent review and authorized execution."
+}
