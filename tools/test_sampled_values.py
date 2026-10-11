@@ -102,6 +102,7 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
         # This Map-successor control keeps its exact historical dependencies.
         # Complete current-cleanup admission has a separate test below.
         cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
+        cleanup_fixtures.copy_shared_helper_inputs(self.root, ROOT)
         for name, raw in self.cleanup_sources.items():
             self.assertEqual((self.root/name).read_bytes(), raw)
         self.assertEqual((self.root/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
