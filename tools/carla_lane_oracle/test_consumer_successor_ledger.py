@@ -278,6 +278,88 @@ class LedgerChainControls(LedgerFixture):
             target.unlink(); target.write_bytes(raw)
 
 
+class LedgerJoinDiagnostics(LedgerFixture):
+    def setUp(self):
+        super().setUp()
+        self.path = 'extensions/carla/one.mojo'
+        self.first = edge(self.path, self.BEFORE, self.MIDDLE, self.tests)
+        self.last = edge(self.path, self.MIDDLE, self.AFTER, self.tests)
+        self.known = {key: self.first[key] for key in ledger.ENDPOINT_KEYS}
+        self.known['kind'] = 'earlier'
+        self.use([self.first, self.last])
+        self.write(self.path, self.AFTER)
+
+    def join(self, route, known):
+        if route == 'endpoint':
+            return ledger.endpoint(self.root, self.path, known)
+        return ledger.extend({self.path: known}, self.root)[self.path]
+
+    def test_each_missing_digest_has_a_contract_diagnostic_in_both_routes(self):
+        for route in ('endpoint', 'extend'):
+            for key in ledger.ENDPOINT_KEYS:
+                known = {name: value for name, value in self.known.items() if name != key}
+                with self.subTest(route=route, key=key), self.assertRaises(ValueError) as caught:
+                    self.join(route, known)
+                self.assertEqual(str(caught.exception),
+                    'reviewed consumer successor ledger: '
+                    'known successor is missing required digest key ' + repr(key) + ': ' + self.path)
+                self.assertIs(type(caught.exception.__cause__), KeyError)
+                self.assertEqual(caught.exception.__cause__.args, (key,))
+
+    def test_complete_mapping_joins_keep_original_access_order_and_metadata(self):
+        from collections.abc import Mapping
+        class Descriptor(Mapping):
+            def __init__(self, values):
+                self.values, self.reads = values, []
+            def __getitem__(self, key):
+                self.reads.append(key)
+                return self.values[key]
+            def __iter__(self): return iter(self.values)
+            def __len__(self): return len(self.values)
+            def __contains__(self, key):
+                raise AssertionError('joining must not add membership callbacks')
+        cases = (('overlap', [self.first, self.last],
+                  ['after_sha256', *ledger.ENDPOINT_KEYS]),
+                 ('suffix', [self.last],
+                  ['after_sha256', 'after_token_sha256', 'before_sha256']))
+        for kind, edges, reads in cases:
+            self.use(edges)
+            for route in ('endpoint', 'extend'):
+                known = Descriptor(dict(self.known))
+                with self.subTest(kind=kind, route=route):
+                    joined = self.join(route, known)
+                    self.assertEqual(known.reads, reads + list(self.known))
+                    self.assertEqual(joined, {**self.known,
+                        'after_sha256': self.last['after_sha256'],
+                        'after_token_sha256': self.last['after_token_sha256']})
+                    self.assertEqual(known.values, self.known)
+
+    def test_suffix_keeps_original_overlap_short_circuit(self):
+        self.use([self.last])
+        known = {key: value for key, value in self.known.items()
+                 if key != 'before_token_sha256'}
+        for route in ('endpoint', 'extend'):
+            with self.subTest(route=route):
+                joined = self.join(route, known)
+                self.assertNotIn('before_token_sha256', joined)
+                self.assertEqual(joined['after_sha256'], self.last['after_sha256'])
+                self.assertEqual(joined['after_token_sha256'], self.last['after_token_sha256'])
+                self.assertEqual(known['after_sha256'], self.first['after_sha256'])
+
+    def test_no_chain_keeps_the_original_descriptor_without_join_validation(self):
+        self.path = 'extensions/carla/two.mojo'
+        known = {'kind': 'untouched'}
+        for route in ('endpoint', 'extend'):
+            with self.subTest(route=route):
+                self.assertIs(self.join(route, known), known)
+
+    def test_ledger_validation_still_precedes_missing_endpoint_diagnostics(self):
+        self.write(ledger.LEDGER, (self.root/ledger.LEDGER).read_bytes() + b' ')
+        for route in ('endpoint', 'extend'):
+            with self.subTest(route=route), self.assertRaisesRegex(ValueError, 'unreviewed ledger'):
+                self.join(route, {})
+
+
 class RecordIntegrationTests(unittest.TestCase):
     """Both records consult the real ledger, as they consult earlier edges."""
 
@@ -446,6 +528,29 @@ class LedgerOperationControls(unittest.TestCase):
         with self.audit(callback=consume) as events:
             with self.assertRaises(ValueError): winner.verify(self.root)
         self.assertEqual(len(events['admissions']), 1)
+        self.assert_closed(events['admissions'][0])
+
+    def test_caught_missing_digest_refusal_leaves_the_real_owner_failed_and_closed(self):
+        def consume(operation):
+            path = reuse.MODULES[0]
+            descriptor = json.loads((self.root/reuse.MIGRATION).read_bytes())['edges'][path]
+            missing = {key: value for key, value in descriptor.items()
+                       if key != 'after_token_sha256'}
+            with self.assertRaisesRegex(ValueError, "missing required digest key 'after_token_sha256'") as caught:
+                ledger.endpoint(self.root, path, missing, _operation=operation)
+            self.assertIs(type(caught.exception), audit._OperationCoherenceError)
+            self.assertIs(type(caught.exception.__cause__), ValueError)
+            self.assertIs(type(caught.exception.__cause__.__cause__), KeyError)
+            self.assertTrue(operation._failed)
+            self.assertIn('after_token_sha256', operation._failure_reason)
+            # Restoring the descriptor cannot clear a caught refusal.
+            with self.assertRaises(ValueError):
+                ledger.endpoint(self.root, path, descriptor, _operation=operation)
+        with self.audit(callback=consume) as events:
+            with self.assertRaises(ValueError): winner.verify(self.root)
+        self.assertEqual(len(events['admissions']), 1)
+        self.assertEqual(events['callbacks'], events['admissions'])
+        self.assertTrue(events['admissions'][0]._failed)
         self.assert_closed(events['admissions'][0])
 
     def test_new_reads_bind_to_the_public_owner_before_admission(self):

@@ -100,9 +100,14 @@ def _join(known, chain):
     """Join only an exact suffix or the exact first historical edge."""
     path = chain['path']
     first = chain['first_edge']
-    suffix = all(known['after' + key] == first['before' + key]
-                 for key in ('_sha256', '_token_sha256'))
-    overlap = all(known[key] == first[key] for key in ENDPOINT_KEYS)
+    try:
+        suffix = all(known['after' + key] == first['before' + key]
+                     for key in ('_sha256', '_token_sha256'))
+        overlap = all(known[key] == first[key] for key in ENDPOINT_KEYS)
+    except KeyError as error:
+        raise ValueError('reviewed consumer successor ledger: '
+                         'known successor is missing required digest key ' +
+                         str(error) + ': ' + path) from error
     require(suffix or overlap,
             'ledger edge does not start at the previous successor: ' + path)
     merged = dict(known)

@@ -123,7 +123,7 @@ NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
 DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/map_station_contracts.py': '16396cc2c491b4c47fb929c429bda7ad3de7d93b13281ed76ce9407c3293329c',
- 'tools/carla_lane_oracle/consumer_successor_ledger.py': 'e86b82c4954eba87402c4f3f64f4c19c7299a2fb84cee6c625001311fd429ac6',
+ 'tools/carla_lane_oracle/consumer_successor_ledger.py': '8c18296f05a4a5150fc6ef8b4ae287479096b5bcff6f1047c82e6aae405310a1',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
