@@ -14,12 +14,19 @@ import io
 import json
 import types
 import os
+import pathlib
 from pathlib import Path, PosixPath
 import stat
 import struct
 import sys
 import threading
 import tokenize
+
+
+# Only the genuine original builtin can use the two-candidate expansion.
+# An injected callable retains the original generator and short-circuit protocol.
+_BUILTIN_ALL = (all if type(all) is types.BuiltinFunctionType
+                and all.__name__ == 'all' and all.__module__ == 'builtins' else None)
 
 
 class ContractError(ValueError, RuntimeError):
@@ -697,6 +704,10 @@ def _live_function_code(value):
     return getattr(value, '__code__', None)
 
 
+_LIVE_FUNCTION_CODE = _live_function_code
+_LIVE_FUNCTION_CODE_CODE = _live_function_code.__code__
+
+
 def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
@@ -743,9 +754,21 @@ def _root_unaliased(root):
     return all(not path.is_symlink() for path in (absolute, *absolute.parents))
 
 
+def _canonical_relative_text(text):
+    """Recognize only builtin canonical POSIX relative spellings."""
+    return (type(text) is str and bool(text) and text not in ('.', '..')
+            and not text.startswith(('/', './', '../'))
+            and not text.endswith(('/', '/.', '/..'))
+            and '//' not in text and '/./' not in text and '/../' not in text)
+
+
 def _regular(root, relative):
-    parts = Path(relative).parts
-    require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
+    if os.name == 'posix' and Path is pathlib.Path and _canonical_relative_text(relative):
+        parts = tuple(relative.split('/'))
+        require(parts and not relative.startswith('/') and '..' not in parts, 'unsafe input path')
+    else:
+        parts = Path(relative).parts
+        require(parts and not Path(relative).is_absolute() and '..' not in parts, 'unsafe input path')
     path = Path(root)
     require(_root_unaliased(path), 'symbolic root or ancestor')
     for part in parts:
@@ -1022,6 +1045,22 @@ def _cache_verify_frame(frame, *, include_aliases=False):
     namespace = frame.f_globals if frame is not None else {}
     if include_aliases is True and _different_alias_leaf(namespace.get('__file__'), ('cache_key_contracts.py',)):
         return False
+    # A real helper frame cannot be an unwrapped verify alias. Elide only
+    # lexical path construction; every stack walk and live owner check remains.
+    if (include_aliases is True and type(frame) is types.FrameType
+            and type(namespace) is dict and os.name == 'posix' and Path is pathlib.Path
+            and type(namespace.get('__file__')) is str
+            and namespace['__file__'].startswith('/')
+            and type(__file__) is str and __file__.startswith('/')
+            and __file__.rsplit('/', 1)[-1] not in ('', '.', '..')
+            and _live_function_code is _LIVE_FUNCTION_CODE
+            and _live_function_code.__code__ is _LIVE_FUNCTION_CODE_CODE):
+        candidate = namespace.get('verify')
+        if (candidate is None or (type(candidate) is types.FunctionType
+                and type(candidate.__dict__) is dict
+                and '__wrapped__' not in candidate.__dict__
+                and frame.f_code is not candidate.__code__)):
+            return False
     return (include_aliases and type(namespace.get('__file__')) is str
             and Path(namespace['__file__']).absolute() == Path(__file__).absolute().with_name('cache_key_contracts.py')
             and frame.f_code is _live_function_code(namespace.get('verify')))
@@ -1254,8 +1293,19 @@ def _operation_fail(operation, error):
 def _owner_module(kind):
     if kind in ('map_loops', 'rtree_loops'):
         return None
-    name = {'invariant': 'coverage_invariant_contracts',
-            'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
+    if type(kind) is str:
+        if kind == 'invariant':
+            name = 'coverage_invariant_contracts'
+        elif kind == 'winner':
+            name = 'winner_sign_contracts'
+        elif kind == 'border':
+            name = 'border_parser_contracts'
+        else:
+            name = None
+    else:
+        # Exotic keys retain dictionary hashing and equality behavior.
+        name = {'invariant': 'coverage_invariant_contracts',
+                'winner': 'winner_sign_contracts', 'border': 'border_parser_contracts'}.get(kind)
     return sys.modules.get((__package__ + '.' if __package__ else '') + name) if name else None
 
 
@@ -1269,9 +1319,20 @@ def _operation_frame_kind(frame, *, include_aliases=False):
     if (type(filename) is str and filename.startswith('/')
             and type(__file__) is str and __file__.startswith('/')):
         candidates = (namespace.get('verify'), namespace.get('reviewed_nonempty_loops'))
-        if all(value is None or (type(value) is types.FunctionType
-                and '__wrapped__' not in value.__dict__
-                and frame.f_code is not value.__code__) for value in candidates):
+        candidate_all = all
+        if _BUILTIN_ALL is not None and candidate_all is _BUILTIN_ALL:
+            first, second = candidates
+            negative = (first is None or (type(first) is types.FunctionType
+                        and '__wrapped__' not in first.__dict__
+                        and frame.f_code is not first.__code__)) and (
+                        second is None or (type(second) is types.FunctionType
+                        and '__wrapped__' not in second.__dict__
+                        and frame.f_code is not second.__code__))
+        else:
+            negative = candidate_all(value is None or (type(value) is types.FunctionType
+                       and '__wrapped__' not in value.__dict__
+                       and frame.f_code is not value.__code__) for value in candidates)
+        if negative:
             return None
         # Preserve the original plain branch and exotic-dictionary protocols.
         if type(namespace) is dict:
@@ -1674,8 +1735,10 @@ class _InvariantInputs(_CacheInputs):
     def _observe(self, root, path, value, mode):
         try:
             self._check_owner(root)
-            require(type(path) is str and path and Path(path).as_posix() == path
-                    and not Path(path).is_absolute() and '..' not in Path(path).parts,
+            plain_path = (os.name == 'posix' and Path is pathlib.Path and type(path) is str
+                          and (path == '.' or _canonical_relative_text(path)))
+            require(plain_path or (type(path) is str and path and Path(path).as_posix() == path
+                    and not Path(path).is_absolute() and '..' not in Path(path).parts),
                     'invalid operation observation path')
             require(mode in ('bytes', 'default', 'physical', 'utf8',
                              'supplied_default', 'supplied_physical'),
@@ -2395,8 +2458,8 @@ def _absolute_root_text(root):
         raw = getattr(root, '_raw_paths', None)
         if type(raw) is list and len(raw) == 1 and type(raw[0]) is str:
             text = raw[0]
-            if text == '/' or (text.startswith('/') and all(
-                    part not in ('', '.', '..') for part in text[1:].split('/'))):
+            if text == '/' or (text.startswith('/') and not text.endswith(('/', '/.', '/..'))
+                    and '//' not in text and '/./' not in text and '/../' not in text):
                 return text
     return str(Path(root).absolute())
 
