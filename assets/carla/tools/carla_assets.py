@@ -713,6 +713,16 @@ def _stage_claim(claimed, parts):
         claimed[key] = wanted
 
 
+def _stage_check_folders(folders):
+    """Refuse a staged child directory whose name no longer names its descriptor."""
+    for parts, descriptor in folders.items():
+        if parts:
+            current = os.stat(parts[-1], dir_fd=folders[parts[:-1]],
+                              follow_symlinks=False)
+            if not os.path.samestat(current, os.fstat(descriptor)):
+                raise StageError(f'{"/".join(parts)}: output directory changed while staging it')
+
+
 def stage_archive(manifest_path, cache, output, ids):
     """Copy the pinned archives of named entries, one manifest snapshot and
     their attribution into a new directory.
@@ -778,21 +788,29 @@ def stage_archive(manifest_path, cache, output, ids):
             folders = {(): directory}
             try:
                 for parts, source, expected in sources:
+                    _stage_check_folders(folders)
                     for depth in range(1, len(parts)):
                         if parts[:depth] not in folders:
                             parent = folders[parts[:depth - 1]]
                             os.mkdir(parts[depth - 1], dir_fd=parent)
+                            identity = os.stat(parts[depth - 1], dir_fd=parent,
+                                               follow_symlinks=False)
                             folders[parts[:depth]] = os.open(
                                 parts[depth - 1], os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
                                 dir_fd=parent)
+                            if not os.path.samestat(identity, os.fstat(folders[parts[:depth]])):
+                                raise StageError(f'{"/".join(parts[:depth])}: output changed while opening it')
+                    _stage_check_folders(folders)
                     reader = _HashingReader(source)
                     _stage_write(folders[parts[:-1]], parts[-1], reader)
+                    _stage_check_folders(folders)
                     found = reader.digest.hexdigest()
                     if found != expected:
                         raise StageError(f'{"/".join(parts)}: sha256 {found} changed from the '
                                          f'pinned {expected} while staging it')
                 _stage_write(directory, 'manifest.json', io.BytesIO(manifest_bytes))
                 _stage_write(directory, 'ATTRIBUTION.md', io.BytesIO(attribution))
+                _stage_check_folders(folders)
             finally:
                 for key, descriptor in folders.items():
                     if key:

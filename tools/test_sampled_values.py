@@ -86,13 +86,15 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
             paths.update(record[group])
         physical = (ROOT/seed_count.MODULE).read_bytes().decode('utf-8')
         score_tests = ()
-        if seed_count.sha(physical) == seed_count.SCORE_AFTER_SHA256:
+        if seed_count.sha(physical) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
             # Only the fully verified physical score endpoint can add its
             # separate numerical fixture. Historical mutation setup stays fixed.
             seed_count.verify_score(ROOT)
             self.assertEqual((ROOT/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
             score_tests = tuple(seed_count.SCORE_TESTS)
             paths.update(score_tests)
+            if seed_count.sha(physical) == seed_count.station.AFTER_SHA256:
+                paths.update(seed_count.station.TESTS)
         for name in paths:
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)

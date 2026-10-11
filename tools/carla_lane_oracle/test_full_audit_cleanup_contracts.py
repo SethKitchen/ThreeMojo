@@ -2368,10 +2368,10 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        prior = seed.score_predecessor_source(original.decode('utf-8')).encode('utf-8')
+        prior = seed.score_family_predecessor_source(original.decode('utf-8')).encode('utf-8')
         mutants = (('prior', prior), ('comment', original + b'\n# Retained B.\n'),
                    ('crlf', original.replace(b'\n', b'\r\n')))
-        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_predecessor_source
+        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_family_predecessor_source
         for site in (('inventory', 1), ('verify_score', 1), ('verify_score', 2), ('inventory', 2)):
             for label, changed in mutants:
                 counts, injected, parsed = {}, [], []
@@ -2400,7 +2400,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     return inverse(text)
                 with self.subTest(site=site, mutant=label), patch.object(
                         cleanup._CacheInputs, 'observe_bytes', observed), patch.object(
-                        Path, 'read_bytes', raw), patch.object(seed, 'score_predecessor_source', parsed_map):
+                        Path, 'read_bytes', raw), patch.object(seed, 'score_family_predecessor_source', parsed_map):
                     with self.assertRaisesRegex(ValueError, 'owned input changed: ' + seed.MODULE):
                         cache.verify(self.root)
                 self.assertEqual(injected, [site])
@@ -2535,13 +2535,13 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     observed.append(path)
                     return value + ('\nunreviewed_map_operation()\n' if semantic else '\n# Supplied café comment.\n')
                 return value
-            inverse = seed.score_predecessor_source
+            inverse = seed.score_family_predecessor_source
             @wraps(inverse)
             def projected(text):
                 inverse_inputs.append(text)
                 self.assertNotIn('unreviewed_map_operation()', text)
                 return inverse(text)
-            with self.subTest(semantic=semantic), patch.object(Path, 'read_text', supplied), patch.object(seed, 'score_predecessor_source', projected):
+            with self.subTest(semantic=semantic), patch.object(Path, 'read_text', supplied), patch.object(seed, 'score_family_predecessor_source', projected):
                 if semantic:
                     with self.assertRaisesRegex(ValueError, 'unreviewed supplied score-helper source'):
                         cache.verify(self.root)
@@ -3009,7 +3009,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
         seed = self.seed
         path = self.root/seed.MODULE
         original = path.read_bytes()
-        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_predecessor_source
+        observe, read, inverse = cleanup._CacheInputs.observe_bytes, Path.read_bytes, seed.score_family_predecessor_source
         for site in (('inventory', 1), ('verify_score', 1), ('verify_score', 2), ('inventory', 2)):
             for changed in (EqualBytes(original), bytearray(original), EqualObject()):
                 counts, injected, active, parsed = {}, [], [], []
@@ -3037,7 +3037,7 @@ class CacheInputViewCurrentControls(unittest.TestCase):
                     return inverse(text)
                 with self.subTest(site=site, kind=type(changed).__name__), patch.object(
                         cleanup._CacheInputs, 'observe_bytes', observed), patch.object(
-                        Path, 'read_bytes', raw), patch.object(seed, 'score_predecessor_source', parsed_map):
+                        Path, 'read_bytes', raw), patch.object(seed, 'score_family_predecessor_source', parsed_map):
                     with self.assertRaisesRegex(ValueError, 'owned input changed: ' + seed.MODULE):
                         cache.verify(self.root)
                 self.assertEqual(len(injected), 1)

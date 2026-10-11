@@ -12,11 +12,14 @@ A producer must change its revision when its geometry or mapping changes.
 """
 
 from core.user_data import UserData, user_data_of
-from extensions.humanoid.genome import GENE_COUNT
+from extensions.humanoid.athleticism import Athleticism
+from extensions.humanoid.genome import GENE_COUNT, Genome
+from extensions.humanoid.sex import Sex
 from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
 from loaders.json import parse_json
 from std.math import isfinite
 from std.memory import bitcast
+from units.si import Length, METER
 
 comptime FIDELITY_KEY = "threemojo_humanoid_fidelity"
 # Version 2 adds the transform matrix and the content fingerprints.
@@ -330,11 +333,51 @@ def humanoid_provenance(
     return record^
 
 
+def _template_input(inputs: UserData, key: String) raises -> Int:
+    """Read one named binary template without truncating or overflowing."""
+    var value = inputs.json(key)
+    if value == "0":
+        return 0
+    if value == "1":
+        return 1
+    raise Error(
+        "Humanoid bake canonical inputs are stale or changed; rebuild it"
+    )
+
+
+def _spec_from_canonical(inputs: UserData) raises -> HumanoidSpec:
+    """Read exact input bits and refuse any inconsistent canonical field."""
+    var gene_document = parse_json(inputs.json("gene_float32_bits"))
+    var genes = user_data_of(gene_document, gene_document.root())
+    var genome = Genome()
+    for at in range(GENE_COUNT):  # pragma: no branch
+        genome.expressions[at] = bitcast[DType.float32](
+            UInt32(Int(genes.string(String(at))))
+        )
+    var spec = HumanoidSpec(
+        Length(
+            bitcast[DType.float32](
+                UInt32(Int(inputs.string("stature_float32_bits")))
+            ),
+            METER,
+        ),
+        Sex(_template_input(inputs, "sex")),
+        Athleticism(_template_input(inputs, "athleticism")),
+        genome,
+    )
+    if inputs.to_json() != _normalized(canonical_inputs(spec).to_json()):
+        raise Error(
+            "Humanoid bake canonical inputs are stale or changed; rebuild it"
+        )
+    return spec
+
+
 def stored_provenance(stored: UserData) raises -> UserData:
     """Return a bake's provenance record after checking its fingerprints.
 
-    The check recomputes each fingerprint from the stored recipe. It
-    refuses a record whose recipe was edited without its fingerprints.
+    The check recomputes each fingerprint and the complete schema record.
+    It refuses missing fields, edited capability claims and inconsistent
+    recipes. It does not authenticate a recipe rewritten with its hashes.
 
     Args:
         stored: Extras loaded from the humanoid root or scene.
@@ -366,8 +409,25 @@ def stored_provenance(stored: UserData) raises -> UserData:
             raise Error("Humanoid bake provenance is incomplete; rebuild it")
     var recipe_document = parse_json(record.json("recipe"))
     var recipe = user_data_of(recipe_document, recipe_document.root())
-    if not recipe.has("canonical_inputs") or not recipe.has("visual_settings"):
-        raise Error("Humanoid bake recipe is incomplete; rebuild it")
+    for key in [  # pragma: no branch
+        "schema_version",
+        "canonical_revision",
+        "visual_revision",
+        "asset_revision",
+        "canonical_inputs",
+        "visual_settings",
+        "length_unit",
+        "handedness",
+        "up_axis",
+        "right_axis",
+        "anterior_axis",
+        "origin",
+        "transform_scope",
+        "canonical_to_local_rest",
+        "matrix_layout",
+    ]:
+        if not recipe.has(key):
+            raise Error("Humanoid bake recipe is incomplete; rebuild it")
     var consistent = json_fingerprint(record.json("recipe")) == record.string(
         "recipe_digest"
     )
@@ -381,6 +441,19 @@ def stored_provenance(stored: UserData) raises -> UserData:
         raise Error(
             "Humanoid bake fingerprints do not match its recipe; rebuild it"
         )
+    var input_document = parse_json(recipe.json("canonical_inputs"))
+    var inputs = user_data_of(input_document, input_document.root())
+    var settings_document = parse_json(recipe.json("visual_settings"))
+    var settings = user_data_of(settings_document, settings_document.root())
+    var expected = humanoid_provenance(
+        _spec_from_canonical(inputs),
+        settings,
+        recipe.string("canonical_revision"),
+        recipe.string("visual_revision"),
+        recipe.string("asset_revision"),
+    )
+    if record.to_json() != expected.to_json():
+        raise Error("Humanoid bake provenance is stale or changed; rebuild it")
     return record^
 
 

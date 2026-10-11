@@ -1207,6 +1207,75 @@ class StageArchiveTests(unittest.TestCase):
         self.assertTrue((self.output / 'carla').is_symlink())
 
 
+    def test_replaced_child_directories_fail_without_deleting_replacements(self):
+        original_write = tool._stage_write
+        archive_name = Path(self.carla['files'][0]['path']).name
+        for child in ('carla', 'carla/vehicles'):
+            for moment in ('before archive', 'after archive', 'after metadata'):
+                for replacement in ('directory', 'symlink', 'absent'):
+                    case = f'{child.replace("/", "-")}-{moment.replace(" ", "-")}-{replacement}'
+                    self.output = self.fixture.root / f'package-{case}'
+                    moved = self.fixture.root / f'moved-{case}'
+                    target = self.output / child
+                    touched = False
+
+                    def replace_child():
+                        nonlocal touched
+                        target.rename(moved)
+                        if replacement == 'directory':
+                            target.mkdir()
+                            (target / 'user.txt').write_bytes(b'user replacement')
+                        elif replacement == 'symlink':
+                            target.symlink_to(self.fixture.source)
+                        touched = True
+
+                    def write_and_replace(directory, name, source):
+                        if name == archive_name and moment == 'before archive':
+                            replace_child()
+                        original_write(directory, name, source)
+                        if ((name == archive_name and moment == 'after archive')
+                                or (name == 'ATTRIBUTION.md' and moment == 'after metadata')):
+                            replace_child()
+
+                    with self.subTest(child=child, moment=moment, replacement=replacement), \
+                            patch.object(tool, '_stage_write', write_and_replace), \
+                            patch.object(tool.os, 'unlink', side_effect=AssertionError('must not unlink')), \
+                            patch.object(Path, 'rmdir', side_effect=AssertionError('must not remove directories')):
+                        result, error = self.run_stage('carla.vehicle.audi.a2')
+                    self.assertTrue(touched)
+                    self.assertEqual(result, 1)
+                    self.assertIn('staging incomplete', error)
+                    self.assertIn(str(self.output.absolute()), error)
+                    self.assertTrue(moved.is_dir())
+                    if replacement == 'directory':
+                        self.assertEqual(self.tree(target), {'user.txt': b'user replacement'})
+                    elif replacement == 'symlink':
+                        self.assertTrue(target.is_symlink())
+                        self.assertEqual(list(self.fixture.source.iterdir()), [])
+                    else:
+                        self.assertFalse(target.exists())
+
+    def test_child_replaced_between_stat_and_open_is_refused(self):
+        original_open = tool.os.open
+        target = self.output / 'carla/vehicles'
+        moved = self.fixture.root / 'original-vehicles'
+
+        def replace_before_open(path, *args, **kwargs):
+            if path == 'vehicles' and 'dir_fd' in kwargs:
+                target.rename(moved)
+                target.mkdir()
+                (target / 'user.txt').write_bytes(b'user replacement')
+            return original_open(path, *args, **kwargs)
+
+        with patch.object(tool.os, 'open', replace_before_open):
+            result, error = self.run_stage('carla.vehicle.audi.a2')
+        self.assertEqual(result, 1)
+        self.assertIn('output changed while opening it', error)
+        self.assertIn('staging incomplete', error)
+        self.assertEqual(self.tree(target), {'user.txt': b'user replacement'})
+        self.assertEqual(list(moved.iterdir()), [])
+
+
 class CreditTests(unittest.TestCase):
     def test_committed_attribution_matches_every_manifest_entry(self):
         manifest = tool.load_manifest()

@@ -314,6 +314,162 @@ def test_a_stale_bake_does_not_represent_a_changed_spec() raises:
         require_current_spec(stored, spec)
 
 
+def _rewritten_recipe(record: UserData, recipe: UserData) raises -> UserData:
+    # Model an editor that updates all advertised hashes. Structural schema
+    # checks must still reject missing fields and unsupported capabilities.
+    var edited = record.copy()
+    edited.set_json("recipe", recipe.to_json())
+    edited.set_string("recipe_fingerprint", recipe.to_json())
+    edited.set_string("recipe_digest", json_fingerprint(edited.json("recipe")))
+    for pair in [
+        ("canonical_inputs", "spec_fingerprint"),
+        ("visual_settings", "visual_settings_fingerprint"),
+    ]:
+        if recipe.has(pair[0]):
+            edited.set_string(pair[1], json_fingerprint(recipe.json(pair[0])))
+    return edited^
+
+
+def test_stored_provenance_requires_every_record_field() raises:
+    var record = _provenance(_spec())
+    for at in range(record.count()):
+        var key = record.key(at)
+        var edited = record.copy()
+        _ = edited.remove(key)
+        with assert_raises():
+            _ = stored_provenance(_stored(edited))
+        edited = record.copy()
+        edited.set_null(key)
+        with assert_raises():
+            _ = stored_provenance(_stored(edited))
+    for key in [
+        "engineering_use",
+        "canonical_geometry_embedded",
+        "physical_properties_embedded",
+        "source_manifest_verified",
+    ]:
+        var edited = record.copy()
+        edited.set_boolean(key, True)
+        with assert_raises(contains="stale or changed"):
+            _ = stored_provenance(_stored(edited))
+        with assert_raises(contains="stale or changed"):
+            require_current_spec(_stored(edited), _spec())
+    var edited = record.copy()
+    edited.set_boolean("visual_use", False)
+    with assert_raises(contains="stale or changed"):
+        _ = stored_provenance(_stored(edited))
+    for key in [
+        "fingerprint_algorithm",
+        "recipe_fingerprint",
+        "identity_mapping",
+        "expression_jaw_mapping",
+        "dental_mapping",
+        "skin_weight_mapping",
+        "lod_mapping",
+        "invalidation",
+    ]:
+        edited = record.copy()
+        edited.set_string(key, "foreign claim")
+        with assert_raises(contains="stale or changed"):
+            _ = stored_provenance(_stored(edited))
+    edited = record.copy()
+    edited.set_boolean("unknown_capability", True)
+    with assert_raises(contains="stale or changed"):
+        _ = stored_provenance(_stored(edited))
+
+
+def test_stored_provenance_requires_the_complete_recipe_schema() raises:
+    var record = _provenance(_spec())
+    var recipe = _parsed(record.json("recipe"))
+    for at in range(recipe.count()):
+        var key = recipe.key(at)
+        var changed = recipe.copy()
+        _ = changed.remove(key)
+        with assert_raises(contains="recipe is incomplete"):
+            _ = stored_provenance(_stored(_rewritten_recipe(record, changed)))
+        changed = recipe.copy()
+        changed.set_null(key)
+        with assert_raises():
+            _ = stored_provenance(_stored(_rewritten_recipe(record, changed)))
+    var changed = recipe.copy()
+    changed.set_number("schema_version", 1)
+    with assert_raises(contains="stale or changed"):
+        _ = stored_provenance(_stored(_rewritten_recipe(record, changed)))
+    changed = recipe.copy()
+    changed.set_json(
+        "canonical_to_local_rest", "[2,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]"
+    )
+    with assert_raises(contains="stale or changed"):
+        _ = stored_provenance(_stored(_rewritten_recipe(record, changed)))
+    changed = recipe.copy()
+    changed.set_string("length_unit", "centimeter")
+    with assert_raises(contains="stale or changed"):
+        _ = stored_provenance(_stored(_rewritten_recipe(record, changed)))
+    # Valid producer revisions remain caller assertions. No authentication
+    # claim is made when an editor rewrites a valid recipe and its hashes.
+    var foreign = humanoid_provenance(
+        _spec(), UserData(), "custom canonical", "custom visual", "unknown"
+    )
+    assert_equal(
+        stored_provenance(_stored(foreign)).to_json(), foreign.to_json()
+    )
+
+
+def test_stored_provenance_checks_every_canonical_input() raises:
+    var record = _provenance(_spec())
+    var recipe = _parsed(record.json("recipe"))
+    var inputs = _parsed(recipe.json("canonical_inputs"))
+    for at in range(inputs.count()):
+        var changed = inputs.copy()
+        _ = changed.remove(inputs.key(at))
+        var changed_recipe = recipe.copy()
+        changed_recipe.set_json("canonical_inputs", changed.to_json())
+        with assert_raises():
+            _ = stored_provenance(
+                _stored(_rewritten_recipe(record, changed_recipe))
+            )
+    for key in ["genes", "gene_float32_bits"]:
+        var genes = _parsed(inputs.json(key))
+        _ = genes.remove("42")
+        var changed = inputs.copy()
+        changed.set_json(key, genes.to_json())
+        var changed_recipe = recipe.copy()
+        changed_recipe.set_json("canonical_inputs", changed.to_json())
+        with assert_raises():
+            _ = stored_provenance(
+                _stored(_rewritten_recipe(record, changed_recipe))
+            )
+    for key in ["stature_m", "sex", "athleticism", "schema_version"]:
+        var changed = inputs.copy()
+        changed.set_number(key, changed.number(key) + 0.5)
+        var changed_recipe = recipe.copy()
+        changed_recipe.set_json("canonical_inputs", changed.to_json())
+        with assert_raises(contains="canonical inputs are stale or changed"):
+            _ = stored_provenance(
+                _stored(_rewritten_recipe(record, changed_recipe))
+            )
+    var next = _spec()
+    next.sex = Sex(1)
+    next.athleticism = Athleticism(1)
+    next.stature = Length(1.8287999, METER)
+    next.genome = next.genome.with_gene(FACE_SHAPE_1, Expression(-0.5))
+    next.genome.expressions[0] = bitcast[DType.float32](UInt32(0x80000000))
+    var valid = _provenance(next)
+    assert_equal(stored_provenance(_stored(valid)).to_json(), valid.to_json())
+    require_current_spec(_stored(valid), next)
+    for text in ["-1", "4294967296", "00", "18446744073709551616", ""]:
+        var bits = _parsed(inputs.json("gene_float32_bits"))
+        bits.set_string("0", text)
+        var changed = inputs.copy()
+        changed.set_json("gene_float32_bits", bits.to_json())
+        var changed_recipe = recipe.copy()
+        changed_recipe.set_json("canonical_inputs", changed.to_json())
+        with assert_raises():
+            _ = stored_provenance(
+                _stored(_rewritten_recipe(record, changed_recipe))
+            )
+
+
 def test_gltf_retains_node_and_scene_contracts() raises:
     var assets = Assets()
     var scene = Scene()

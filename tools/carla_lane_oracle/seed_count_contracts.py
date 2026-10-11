@@ -17,10 +17,12 @@ from pathlib import Path
 
 if __package__:
     from . import source_contracts as source
+    from . import map_station_contracts as station
     from . import full_audit_cleanup_contracts as full_audit
     from . import sum2_guard_contracts as guard
 else:
     import source_contracts as source
+    import map_station_contracts as station
     import full_audit_cleanup_contracts as full_audit
     import sum2_guard_contracts as guard
 
@@ -254,6 +256,8 @@ def successor_source(root):
     """Build the exact after fixture; this does not qualify a live root."""
     record = read_record(root)
     text = (Path(root)/MODULE).read_bytes().decode('utf-8')
+    if sha(text) == station.AFTER_SHA256:
+        text = station.predecessor_source(text)
     if sha(text) == SCORE_AFTER_SHA256:
         text = score_predecessor_source(text)
     if sha(text) == FRONTIER_AFTER_SHA256:
@@ -470,7 +474,7 @@ def verify_score_live(text):
                 'live score helper/caller operation graph changed: '+name)
 
 
-def verify_score_caller_inventory(root, *, _inputs=None, _input_owner=None, _operation=None):
+def verify_score_caller_inventory(root, *, station_edge=None, _inputs=None, _input_owner=None, _operation=None):
     """Keep the borrowed helper's caller-supplied FP/scale preconditions closed.
 
     This new name has its own production census; historical protected-name
@@ -483,7 +487,9 @@ def verify_score_caller_inventory(root, *, _inputs=None, _input_owner=None, _ope
              (root / path for path in _inputs.production_paths(_input_owner, root)))
     if _inputs is None and _operation is not None:
         paths = full_audit._operation_production_paths(root, paths, _operation=_operation)
-    found = {}
+    require(station_edge is None or type(station_edge) is bool, 'invalid station census endpoint')
+    found, station_found = {}, {}
+    observed_station = None
     for path in paths:
         rel = (full_audit._relative_path(path, root)
                if _inputs is not None or _operation is not None else path.relative_to(root))
@@ -491,6 +497,21 @@ def verify_score_caller_inventory(root, *, _inputs=None, _input_owner=None, _ope
             continue
         text = ((path.read_text() if _operation is None else full_audit._observe_text(root, rel.as_posix(), path.read_text(), _operation=_operation)) if _inputs is None else
                 _inputs.text_default(_input_owner, root, rel.as_posix()))
+        if rel.as_posix() == MODULE:
+            map_tokens = source.token_sha256(text)
+            observed_station = map_tokens == station.AFTER_TOKEN_SHA256
+            # Standalone callers retain the historical census-only API.
+            # Every authority-bearing verify_score call supplies its actual
+            # endpoint discriminant and must pair this observation exactly.
+            require(station_edge is None or
+                    (map_tokens in {SCORE_AFTER_TOKEN_SHA256, station.AFTER_TOKEN_SHA256}
+                     and observed_station is station_edge),
+                    'station census endpoint differs from physical Map')
+        if '_chord_station_delta' in text:
+            station_count = sum(token.type == tokenize.NAME and token.string == '_chord_station_delta'
+                                for token in source.tokens(text))
+            if station_count:
+                station_found[rel.as_posix()] = station_count
         if '_winner_seed_update_score' not in text:
             continue
         count = sum(token.type == tokenize.NAME and token.string == '_winner_seed_update_score'
@@ -498,6 +519,10 @@ def verify_score_caller_inventory(root, *, _inputs=None, _input_owner=None, _ope
         if count:
             found[rel.as_posix()] = count
     require(found == {MODULE: 2}, 'score helper production caller inventory changed')
+
+    require(observed_station is not None and
+            station_found == ({MODULE: 3} if observed_station else {}),
+            'station helper production caller inventory changed')
 
 
 def score_live_observables(text):
@@ -530,6 +555,14 @@ def score_predecessor_source(text):
     return text
 
 
+def score_family_predecessor_source(text):
+    """Project a verified fifth/sixth endpoint to the fourth, byte for byte."""
+    if sha(text) == station.AFTER_SHA256:
+        text = station.predecessor_source(text)
+    return score_predecessor_source(text)
+
+
+
 def score_successor_source(root):
     """Build the fixed extraction fixture without qualifying a physical root."""
     text = frontier_successor_source(root)
@@ -541,7 +574,7 @@ def score_successor_source(root):
 
 
 def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
-    """Verify all five exact edges and live helper/caller/dependency premises."""
+    """Verify five original edges and, when present, the exact station edge."""
     root = Path(root)
     _check_inputs(root, _inputs, _input_owner, **({} if _operation is None else {'_operation': _operation}))
     record = (read_record(root, **({} if _operation is None else {'_operation': _operation})) if _inputs is None else
@@ -552,7 +585,14 @@ def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
         require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else
                                _inputs.raw(_input_owner, root, path)).hexdigest() == expected,
                 'score-helper numerical fixture changed: '+path)
-    frontier = score_predecessor_source(text)
+    station_edge = sha(text) == station.AFTER_SHA256
+    score_text = station.predecessor_source(text) if station_edge else text
+    if station_edge:
+        for path, expected in station.TESTS.items():
+            require(hashlib.sha256(((root/path).read_bytes() if _operation is None else full_audit._observe_bytes(root, path, (root/path).read_bytes(), _operation=_operation)) if _inputs is None else
+                                   _inputs.raw(_input_owner, root, path)).hexdigest() == expected,
+                    'station correctness fixture changed: '+path)
+    frontier = score_predecessor_source(score_text)
     support = frontier_predecessor_source(frontier)
     optional = support_predecessor_source(support)
     middle = optional_predecessor_source(optional)
@@ -560,12 +600,12 @@ def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
     require(prior_edge is not None, 'score edge must follow all preceding edges')
     if _inputs is None:
         _verify_bound_inputs(root, record, **({} if _operation is None else {'_operation': _operation}))
-        verify_score_caller_inventory(root, **({} if _operation is None else {'_operation': _operation}))
+        verify_score_caller_inventory(root, station_edge=station_edge, **({} if _operation is None else {'_operation': _operation}))
         verify_premises(root, record, after=True, optional=True, support=True,
                         frontier=True, score=True, **({} if _operation is None else {'_operation': _operation}))
     else:
         _verify_bound_inputs(root, record, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
-        verify_score_caller_inventory(root, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
+        verify_score_caller_inventory(root, station_edge=station_edge, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
         verify_premises(root, record, after=True, optional=True, support=True,
                         frontier=True, score=True, _inputs=_inputs, _input_owner=_input_owner, **({} if _operation is None else {'_operation': _operation}))
     final_text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
@@ -582,10 +622,13 @@ def verify_score(root, *, _inputs=None, _input_owner=None, _operation=None):
         edges.append({'path': MODULE, 'before_sha256': before[0],
                       'after_sha256': after[0], 'before_token_sha256': before[1],
                       'after_token_sha256': after[1]})
+    if station_edge:
+        edges.append(station.edge())
     return {'path': MODULE, 'before_sha256': BEFORE_SHA256,
-            'after_sha256': SCORE_AFTER_SHA256,
+            'after_sha256': station.AFTER_SHA256 if station_edge else SCORE_AFTER_SHA256,
             'before_token_sha256': BEFORE_TOKEN_SHA256,
-            'after_token_sha256': SCORE_AFTER_TOKEN_SHA256, 'edges': edges}
+            'after_token_sha256': station.AFTER_TOKEN_SHA256 if station_edge else SCORE_AFTER_TOKEN_SHA256,
+            'edges': edges}
 
 
 def _verify_bound_inputs(root, record, *, _inputs=None, _input_owner=None, _operation=None):
@@ -657,7 +700,11 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
                     _inputs.text_utf8(_input_owner, root, path))
         if score and path == MODULE:
             verify_score_live(text)
-            expected = SCORE_ROUTING_SHA256
+            if sha(text) == station.AFTER_SHA256:
+                station.verify_live(text)
+                expected = station.ROUTING_SHA256
+            else:
+                expected = SCORE_ROUTING_SHA256
         require(sha(guard.declaration_routing(text)) == expected,
                 'live owning-storage or declaration routing changed: '+path)
         snapshots[path] = (text, _function_spans(text))
@@ -697,7 +744,8 @@ def verify_premises(root, record, *, after, optional=False, support=False, front
     text = (((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
             _inputs.text_utf8(_input_owner, root, MODULE))
     actual = guard.declaration(text, '_try_winner_seed', ())
-    previous = score_predecessor_source(text) if score else text
+    previous = station.predecessor_source(text) if sha(text) == station.AFTER_SHA256 else text
+    previous = score_predecessor_source(previous) if score else previous
     previous = frontier_predecessor_source(previous) if frontier else previous
     previous = support_predecessor_source(previous) if support else previous
     previous = optional_predecessor_source(previous) if optional else previous
@@ -715,7 +763,7 @@ def verify(root, *, _operation=None):
     root = Path(root)
     record = read_record(root, **({} if _operation is None else {'_operation': _operation}))
     text = ((root/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation)).decode('utf-8')
-    if sha(text) == SCORE_AFTER_SHA256:
+    if sha(text) in {SCORE_AFTER_SHA256, station.AFTER_SHA256}:
         return verify_score(root, **({} if _operation is None else {'_operation': _operation}))
     if sha(text) == FRONTIER_AFTER_SHA256:
         return verify_frontier(root)
@@ -742,11 +790,12 @@ def historical_source(root, *, _operation=None):
     text = full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8')
     if sha(text) == BEFORE_SHA256:
         return text
-    require(sha(text) in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256},
+    require(sha(text) in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256, station.AFTER_SHA256},
             'unknown Map cannot use a predecessor')
     require(verify(root, **operation_args) is not None, 'after Map did not activate its reviewed edge')
     require(full_audit._observe_bytes(root, MODULE, (root/MODULE).read_bytes(), _operation=_operation).decode('utf-8') == text, 'Map changed during reconstruction')
-    middle = score_predecessor_source(text) if sha(text) == SCORE_AFTER_SHA256 else text
+    middle = station.predecessor_source(text) if sha(text) == station.AFTER_SHA256 else text
+    middle = score_predecessor_source(middle) if sha(middle) == SCORE_AFTER_SHA256 else middle
     middle = frontier_predecessor_source(middle) if sha(middle) == FRONTIER_AFTER_SHA256 else middle
     middle = support_predecessor_source(middle) if sha(middle) == SUPPORT_AFTER_SHA256 else middle
     middle = optional_predecessor_source(middle) if sha(middle) == OPTIONAL_AFTER_SHA256 else middle
@@ -764,9 +813,10 @@ def reviewed_text(root, path, text, *, _operation=None):
     require(str(path) == MODULE, 'wrong supplied Map path')
     physical = ((Path(root)/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), _operation=_operation))
     digest = hashlib.sha256(physical).hexdigest()
-    require(digest in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256},
+    require(digest in {AFTER_SHA256, OPTIONAL_AFTER_SHA256, SUPPORT_AFTER_SHA256, FRONTIER_AFTER_SHA256, SCORE_AFTER_SHA256, station.AFTER_SHA256},
             'supplied after view needs the exact physical after Map')
-    expected_tokens = (SCORE_AFTER_TOKEN_SHA256 if digest == SCORE_AFTER_SHA256
+    expected_tokens = (station.AFTER_TOKEN_SHA256 if digest == station.AFTER_SHA256
+                       else SCORE_AFTER_TOKEN_SHA256 if digest == SCORE_AFTER_SHA256
                        else FRONTIER_AFTER_TOKEN_SHA256 if digest == FRONTIER_AFTER_SHA256
                        else SUPPORT_AFTER_TOKEN_SHA256 if digest == SUPPORT_AFTER_SHA256
                        else OPTIONAL_AFTER_TOKEN_SHA256 if digest == OPTIONAL_AFTER_SHA256
@@ -777,7 +827,9 @@ def reviewed_text(root, path, text, *, _operation=None):
     require(((Path(root)/MODULE).read_bytes() if _operation is None else full_audit._observe_bytes(root, MODULE, (Path(root)/MODULE).read_bytes(), _operation=_operation)) == physical,
             'Map changed during supplied-view verification')
     middle = physical.decode('utf-8')
-    if digest == SCORE_AFTER_SHA256:
+    if digest == station.AFTER_SHA256:
+        middle = station.predecessor_source(middle)
+    if sha(middle) == SCORE_AFTER_SHA256:
         middle = score_predecessor_source(middle)
     if sha(middle) == FRONTIER_AFTER_SHA256:
         middle = frontier_predecessor_source(middle)

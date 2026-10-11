@@ -36,10 +36,12 @@ try:
         from . import source_contracts as source
         from . import sum2_guard_contracts as guard
         from . import consumer_successor_ledger as consumer_ledger
+        from . import map_station_contracts as station
     else:
         import source_contracts as source
         import sum2_guard_contracts as guard
         import consumer_successor_ledger as consumer_ledger
+        import map_station_contracts as station
 except ImportError as error:
     raise ContractError('full-audit cleanup successor: dependency import failed') from error
 
@@ -120,11 +122,12 @@ NATIVE_SUPPORT_INPUTS = ('tools/native_test_support.py', 'tools/fixtures/carla_s
 NATIVE_SUPPORT_MAPPING = {'tests/test_carla_junction_endpoint_refusals.mojo': ['tools/fixtures/carla_sum2_fp_state.c'],
  'tests/test_carla_sum2_environment.mojo': ['tools/fixtures/carla_sum2_fp_state.c']}
 THEOREM_DOCUMENT = 'docs/validation/full-audit-711-invariants.md'
-DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/consumer_successor_ledger.py': 'e86b82c4954eba87402c4f3f64f4c19c7299a2fb84cee6c625001311fd429ac6',
+DEPENDENCY_TOOL_SHA256 = {'tools/carla_lane_oracle/map_station_contracts.py': '16396cc2c491b4c47fb929c429bda7ad3de7d93b13281ed76ce9407c3293329c',
+ 'tools/carla_lane_oracle/consumer_successor_ledger.py': 'e86b82c4954eba87402c4f3f64f4c19c7299a2fb84cee6c625001311fd429ac6',
  'tools/affected.py': 'a56194a3e722ad341a42f3defec282b8154f5e4db8340df855f0199ea9830ebb',
  'tools/cache_key.py': 'ec06247feb8fe079c30b6da19fc655ffec363f1ce8e3372d063bf728e8c804c4',
  'tools/carla_lane_oracle/source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
- 'tools/carla_lane_oracle/sum2_guard_contracts.py': '870073a08ebf9a99c06c8fb618d5576f69d88ffb1dc1dcc2347baddd9cb29afd'}
+ 'tools/carla_lane_oracle/sum2_guard_contracts.py': 'd78221b196b78eabdf2554dd01efef035f089fcedaf14acaaee675a6e4bf84ce'}
 SUM2_CALLER_SHA256 = {'extensions/carla/curve_bounds.mojo': {'_lane_jet_model_proof': ('78af46e5597996ebc42df93d5810dfb53106f0b13ee3f356e4f7881108403083',),
                                         '_spiral_expression': ('ec69aa43b922b41ce5e3640695c1c2658b4e7b57e05cd73b915cef3aa54e54bc',)},
  'extensions/carla/lane_refinement.mojo': {'_continue_lane_certificate': ('b184c43c38c7482351e8979b85976da7a90e707c909d9b37dc9d8e8f8466ec38',),
@@ -141,6 +144,7 @@ INVENTORY_NAMES = frozenset({'_LaneBoundClose',
            '_ObjectiveModel',
            '_RoundedBox',
            '_chord_certificate_impl_with_nodes',
+           '_chord_station_delta',
            '_expansion_center',
            '_global_lower',
            '_insert_break',
@@ -187,7 +191,8 @@ CHECKER_PATHS = ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py',
                  'tools/carla_lane_oracle/source_contracts.py',
                  'tools/carla_lane_oracle/sum2_guard_contracts.py',
                  'tools/affected.py', 'tools/cache_key.py',
-                 'tools/carla_lane_oracle/consumer_successor_ledger.py')
+                 'tools/carla_lane_oracle/consumer_successor_ledger.py',
+                 'tools/carla_lane_oracle/map_station_contracts.py')
 
 
 def _center_require(ok, message):
@@ -654,7 +659,7 @@ _IMPORT_IDENTITIES[str(_SELF_PATH)] = sha(_SELF_RAW)
 _IMPORT_CODE[str(_SELF_PATH)] = _compiled_functions(_SELF_RAW, __file__)
 _IMPORT_MODULE_CODE[str(_SELF_PATH)] = sys._getframe().f_code
 _IMPORT_DEFAULTS[str(_SELF_PATH)] = _compiled_defaults(_SELF_RAW)
-for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger):
+for _module in (source, guard, _sibling('affected'), _sibling('cache_key'), consumer_ledger, station):
     require(type(getattr(_module, '__file__', None)) is str, 'incomplete dependency module identity')
     _path = Path(_module.__file__).resolve()
     require(Path(__file__).resolve().parents[2] in _path.parents, 'dependency module came from another root')
@@ -687,7 +692,7 @@ def _live_function_code(value):
 def executing_checker_bindings(root=None):
     base = Path(__file__).resolve().parents[2]
     modules = (globals(), vars(source), vars(guard), vars(_sibling('affected')),
-               vars(_sibling('cache_key')), vars(consumer_ledger))
+               vars(_sibling('cache_key')), vars(consumer_ledger), vars(station))
     result = {}
     for relative, namespace in zip(CHECKER_PATHS, modules, strict=True):
         path = base / relative
@@ -1735,6 +1740,36 @@ def _cache_lane_inputs(root, supplied_text, owner, *, _operation=None):
         raise
 
 
+
+def _station_bindings(root, *, _snapshots=None, _operation=None):
+    """Admit one supplemental Map edge without replacing any live image bytes."""
+    raw = _observe_bytes(root, station.MODULE,
+        _regular(root, station.MODULE).read_bytes(), _operation=_operation)
+    if _snapshots is not None:
+        require(_snapshots.setdefault(station.MODULE, raw) == raw,
+                'Map changed before station admission')
+    if sha(raw) == station.BEFORE_SHA256:
+        require(source.token_sha256(_physical_text(raw)) == station.BEFORE_TOKEN_SHA256,
+                'historical fifth Map tokens changed')
+        return {}
+    require(sha(raw) == station.AFTER_SHA256, 'unknown complete station Map bytes')
+    station.predecessor_source(raw.decode('utf-8'))
+    result = {station.MODULE: station.AFTER_SHA256}
+    leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
+    for path, expected in {leaf: DEPENDENCY_TOOL_SHA256[leaf], **station.TESTS}.items():
+        value = _observe_bytes(root, path, _regular(root, path).read_bytes(),
+                               _operation=_operation)
+        require(sha(value) == expected, 'station correctness fixture changed: ' + path)
+        if _snapshots is not None:
+            require(_snapshots.setdefault(path, value) == value,
+                    'station fixture changed after consumption: ' + path)
+        result[path] = expected
+    require(_observe_bytes(root, station.MODULE,
+            _regular(root, station.MODULE).read_bytes(), _operation=_operation) == raw,
+            'Map changed during station admission')
+    return result
+
+
 def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _capture=None):
     """Check actual complete current endpoints and all premises without caches."""
     root = Path(root)
@@ -1801,19 +1836,31 @@ def verify(root, *, exact=False, include_roots=(), _expected_lane_raw=None, _cap
         ledger_raw = _regular(root, CONSUMER_LEDGER).read_bytes()
         require(sha(ledger_raw) == CONSUMER_LEDGER_SHA256, 'unreviewed consumer ledger')
         snapshots[CONSUMER_LEDGER] = ledger_raw
+        station_bindings = _station_bindings(root, _snapshots=snapshots)
         bound = {}
         for group in BOUND_GROUPS:
             for path, expected in record[group].items():
                 raw = _regular(root, path).read_bytes()
                 previous = snapshots.setdefault(path, raw)
                 require(previous == raw, 'bound input changed after consumption: ' + path)
+                if path == station.MODULE and station_bindings:
+                    require(group in ('unchanged_inputs', 'native_dependency_inputs')
+                            and expected == station.BEFORE_SHA256,
+                            'station edge does not extend this immutable Map premise')
+                    expected = station_bindings[path]
                 require(sha(raw) == expected, 'unchanged premise, record or fixture changed: ' + path)
                 bound[path] = raw
         require(native_support_mapping(root, raw=bound['tools/native_test_support.py']) == record['native_support_mapping'], 'native fixture mapping changed')
         production = set() if _capture is not None else None
         observed_inventory = (inventory(root, _snapshots=snapshots) if _capture is None else
                               inventory(root, _snapshots=snapshots, _production=production))
-        require(observed_inventory == record['inventory'], 'production caller/use inventory changed')
+        expected_inventory = dict(record['inventory'])
+        if station_bindings:
+            require(expected_inventory.get(station.MODULE) ==
+                    {'tokens_sha256': station.BEFORE_TOKEN_SHA256},
+                    'station inventory does not start at fifth Map endpoint')
+            expected_inventory[station.MODULE] = {'tokens_sha256': station.AFTER_TOKEN_SHA256}
+        require(observed_inventory == expected_inventory, 'production caller/use inventory changed')
         for path, raw in {**bound, **snapshots}.items():
             require(_regular(root, path).read_bytes() == raw, 'input changed during verification: ' + path)
         require({p.as_posix() for p in _sibling('cache_key').input_paths(root) if p.suffix == '.mojo'} == known,
@@ -1980,6 +2027,21 @@ def extends_digest(root, path, before, after, *, include_roots=()):
     return edge['before_sha256'] == before and edge['after_sha256'] == after
 
 
+def station_proof_bindings(root, *, _operation=None):
+    """Bind the same executed leaf even in historical-cleanup compositions."""
+    try:
+        executing = executing_checker_bindings()
+        result = _station_bindings(root, _operation=_operation)
+        leaf = 'tools/carla_lane_oracle/map_station_contracts.py'
+        require(result.get(leaf) == executing[leaf],
+                'station receipt lacks its actual executing leaf')
+        require(executing_checker_bindings() == executing,
+                'station receipt checker changed during verification')
+        return result
+    except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
+        _operation_fail(_operation, error)
+
+
 def proof_bindings(root, *, include_roots=(), _operation=None):
     try:
         executing = executing_checker_bindings(root)
@@ -1990,6 +2052,9 @@ def proof_bindings(root, *, include_roots=(), _operation=None):
         result.update({path: item['after_sha256'] for path, item in record['sources'].items()})
         for group in BOUND_GROUPS:
             result.update(record[group])
+        # Receipts name the actual admitted Map and its bound native inputs.
+        # The immutable record remains a historical premise, never a live hash.
+        result.update(_station_bindings(root, _operation=_operation))
         return result
     except (OSError, UnicodeError, ValueError, TypeError, KeyError, IndexError, AttributeError) as error:
         _operation_fail(_operation, error)

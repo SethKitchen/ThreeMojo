@@ -1,8 +1,10 @@
 # Body triangles and thin strands on the CPU (#298)
 
-This report measures one 1920 x 1080 CPU frame of body triangles and the default groom of one-pixel strands. It uses 1, 2 and 4 workers, as [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298) asks. Before this change, 60 percent of the strand triangles had zero area on the image. Neither rasterizer draws a sample of a zero-area triangle, so the renderer now does not emit them. The image is the same, byte for byte, at every worker count, before and after.
+This report measures one 1920 x 1080 CPU frame of body triangles and the default groom of one-pixel strands. It uses 1, 2 and 4 workers, as [issue 298](https://github.com/SethKitchen/ThreeMojo/issues/298) asks. Before this change, 60 percent of the strand triangles had zero area on the image. Neither rasterizer draws a sample of a zero-area triangle, so the renderer now does not emit them. The warm-up image CRC-32 matches at every worker count, before and after.
 
 On this machine a whole render at 4 workers fell from about 1.8 seconds to about 0.95 seconds. These numbers describe this machine only.
+
+These are the original author's measurements for the #298 increment in [PR 736](https://github.com/SethKitchen/ThreeMojo/pull/736). The report does not pin the measured source trees or binaries and does not retain raw trials. It does not qualify the later combined branch. A new composition needs a new run.
 
 ## Method
 
@@ -15,7 +17,7 @@ For each worker count, the bench renders one warm-up frame. Then it times five f
 
 The difference of the two medians estimates the lighting, rasterization and resolve. It is not a measured stage.
 
-The bench computes the CRC-32 of each worker count's image. It stops with an error when a worker count draws a different image from one worker. It also renders the scene once with the hair hidden, as a control.
+The bench computes the CRC-32 of each worker count's warm-up image. It stops with an error when this checksum differs from one worker. It does not compare pixels or depths directly. The timed frames are checked for nonempty geometry and image width, without checksum or pixel comparison. It also renders the scene with the hair hidden, as a control.
 
 Run it with `mojo run -I . bench/hair_strand_raster_bench.mojo [frames [width height]]`. It needs no GPU.
 
@@ -68,7 +70,7 @@ Each cell is the median of 5 frames, from two runs made in turn: before, after, 
 | Measure | Before | After |
 |---|---:|---:|
 | Corners in the frame | 5,260,611 | 2,111,871 |
-| CRC-32 of the image, at 1, 2 and 4 workers | 2070011580 | 2070011580 |
+| CRC-32 of the warm-up image, at 1, 2 and 4 workers | 2070011580 | 2070011580 |
 | Render with the hair hidden, 4 workers | 60, 78 ms | 62, 74 ms |
 | Whole bench process: user time | 71.7, 69.1 s | 45.3, 46.3 s |
 | Whole bench process: system time | 29.0, 27.5 s | 1.7, 3.0 s |

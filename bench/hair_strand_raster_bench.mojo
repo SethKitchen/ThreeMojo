@@ -23,10 +23,10 @@ renders one warm-up frame and then times `frames` frames of each stage:
 The difference of the two medians estimates the lighting, rasterization
 and resolve. It is not a measured stage.
 
-Each worker count must give the same image, byte for byte, as one
-worker. The bench stops with an error when it does not, so a throughput
-number is never compared across different output. It also renders the
-scene once with the hair hidden, as a control.
+Each worker count's warm-up image must have the same CRC-32 as one
+worker. The bench stops with an error when that checksum differs. It
+does not compare pixels or depths directly, or checksum the timed
+frames. It also renders the scene with the hair hidden, as a control.
 
 The CPU stages need no GPU. The numbers describe the machine that runs
 the bench.

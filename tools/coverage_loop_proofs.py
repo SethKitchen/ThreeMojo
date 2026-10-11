@@ -529,6 +529,15 @@ _MAP_SCORE_SUCCESSOR_LINES = {
 }
 
 
+# The default station edge changes only its helper and two default callers.
+# These sites were mapped individually through unchanged complete loop bodies;
+# the helper's new branches remain measured normally. No blanket line offset.
+_MAP_STATION_SUCCESSOR_LINES = {
+    1491: 1508, 2272: 2287, 2279: 2294, 2301: 2316,
+    2373: 2388, 2378: 2393, 2387: 2402, 2396: 2411,
+}
+
+
 # A separate exact source pair for the HairDensity boundary correction.
 # Historical hashes/rules stay unchanged. The four retained hair theorems were
 # reviewed again: rebuild still validates its positive cube and owned partition;
@@ -716,8 +725,11 @@ def repaired_density_loops(root, *, include_roots=()):
 # Bind the complete producer/consumer and maintained exceptional-value control;
 # fail closed on source changes or local/staged stdlib shadows. The receipt
 # separately binds the exact compiler/SDK and still requires a runtime True hit.
-# Successor for #732: renderer.mojo changed only after `_emit_wide_line`
-# begins; lines 1-3829, with this loop and every cap helper, are identical.
+# The #298 placed-corner successor changes the cap consumer, not this count
+# theorem: its sole steps assignment still calls the same cap_steps expression,
+# and range(1, steps + 1) never reassigns steps. Earlier work can raise, but a
+# reached loop is nonempty. Bind each complete reviewed endpoint separately;
+# new consumer branches remain counted and runtime True is still required.
 STRAND_CAP_SOURCES = {
     'objects/__init__.mojo':
         '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479',
@@ -729,6 +741,12 @@ STRAND_CAP_SOURCES = {
         '5680f188d71c88465be6f7d8173858221a57525663fb4c75d95721fcc2658e79',
     'tests/test_small_loop_witnesses.mojo':
         '8f768e04ecaebdb132cf359819be03cb039d5a546b823674c22ac06a1b790362',
+}
+
+
+STRAND_CAP_RENDERER_ENDPOINTS = {
+    'ad8d3a26292683ba744d20fa05f13491e31019540774002809bfad8ba3ae6bf5': 3757,
+    '08ce4d257874c1107305cc1abf45ec4ebd89a9b183902974085d507974410c45': 3886,
 }
 
 
@@ -771,7 +789,10 @@ def strand_cap_loops(root, *, include_roots=()):
     try:
         actual = {name: file_sha256(relative_source(root, name))
                   for name in STRAND_CAP_SOURCES}
-        if actual != STRAND_CAP_SOURCES:
+        renderer = 'renderers/renderer.mojo'
+        line = STRAND_CAP_RENDERER_ENDPOINTS.get(actual[renderer])
+        expected = {**STRAND_CAP_SOURCES, renderer: actual[renderer]}
+        if line is None or actual != expected:
             return {}
         if not all(
                 _density_stdlib_unshadowed(path)
@@ -780,8 +801,8 @@ def strand_cap_loops(root, *, include_roots=()):
             return {}
     except (OSError, ValueError):
         return {}
-    return {3757: {
-        'line': 3757, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
+    return {line: {
+        'line': line, 'kind': 'reviewed-nonempty-range', 'cardinality': 1,
         'minimum_cardinality': 2, 'maximum_cardinality': 64,
         'required': 'T', 'impossible': 'F',
         'expression': 'range(1, steps + 1)',
@@ -896,12 +917,14 @@ def _reviewed_dependency_hashes(root, bindings, *, include_roots=(), _operation=
             if digest not in {seed_count.AFTER_SHA256, seed_count.OPTIONAL_AFTER_SHA256,
                                       seed_count.SUPPORT_AFTER_SHA256,
                                       seed_count.FRONTIER_AFTER_SHA256,
-                                      seed_count.SCORE_AFTER_SHA256}:
+                                      seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}:
                 return None
             predecessor = seed_count.historical_source(root, **operation_args).encode('utf-8')
             if sha256(predecessor) != expected or _coverage_observe_bytes(
                     root, name, path.read_bytes(), _operation=_operation) != raw:
                 return None
+            if digest == seed_count.station.AFTER_SHA256:
+                actual.update(cleanup.station_proof_bindings(root, **operation_args))
             actual.update(_cleanup_current_bindings(root, include_roots=include_roots, **operation_args))
         actual[name] = digest
     return actual
@@ -984,6 +1007,7 @@ def guarded_loop_proof(root, rule, *, include_roots=(), _operation=None):
                 seed_count.SUPPORT_AFTER_SHA256: _MAP_SUPPORT_SUCCESSOR_LINES,
                 seed_count.FRONTIER_AFTER_SHA256: _MAP_FRONTIER_SUCCESSOR_LINES,
                 seed_count.SCORE_AFTER_SHA256: _MAP_SCORE_SUCCESSOR_LINES,
+                seed_count.station.AFTER_SHA256: _MAP_STATION_SUCCESSOR_LINES,
             }[actual_bindings[module + '.mojo']]
             line = mapping.get(line)
             if line is None:
@@ -1182,11 +1206,13 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         # Preserve the immutable frontier table and verify the complete new
         # source/data edge before admitting its identical constructor theorem.
         expected = dict(CONSTRUCTION_BOUNDARY_SOURCE_SHA256)
-        score = actual[seed_count_contracts.MODULE] == seed_count_contracts.SCORE_AFTER_SHA256
+        station = actual[seed_count_contracts.MODULE] == seed_count_contracts.station.AFTER_SHA256
+        score = station or actual[seed_count_contracts.MODULE] == seed_count_contracts.SCORE_AFTER_SHA256
         line = CONSTRUCTION_BOUNDARY_LINE
         if score:
-            expected[seed_count_contracts.MODULE] = seed_count_contracts.SCORE_AFTER_SHA256
-            line = 4069
+            expected[seed_count_contracts.MODULE] = (seed_count_contracts.station.AFTER_SHA256
+                if station else seed_count_contracts.SCORE_AFTER_SHA256)
+            line = 4099 if station else 4069
         # An inapplicable constructor theorem must not attempt current admission.
         # Historical guarded theorems are still verified independently below.
         if actual[seed_count_contracts.MODULE] != expected[seed_count_contracts.MODULE]:
@@ -1207,6 +1233,9 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         if score:
             seed_count_contracts.verify_score(root, **operation_args)
             actual.update(seed_count_contracts.SCORE_TESTS)
+            if station:
+                from carla_lane_oracle import full_audit_cleanup_contracts as cleanup
+                actual.update(cleanup.station_proof_bindings(root, **operation_args))
         else:
             seed_count_contracts.verify_frontier(root)
         record = seed_count_contracts.read_record(root, **operation_args)

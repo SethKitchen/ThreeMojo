@@ -439,7 +439,7 @@ def verify(root, *, _operation=None):
                     _operation=_operation).decode('utf-8')
                 live_observables = (
                     seed_count.score_live_observables(live_map)
-                    if seed_count.sha(live_map) == seed_count.SCORE_AFTER_SHA256
+                    if seed_count.sha(live_map) in {seed_count.SCORE_AFTER_SHA256, seed_count.station.AFTER_SHA256}
                     else _winner_seed_live_observables(live_seed))
                 require(live_observables ==
                         _winner_seed_live_observables(recorded_seed),
