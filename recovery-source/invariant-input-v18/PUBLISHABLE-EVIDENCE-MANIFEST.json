@@ -1,0 +1,190 @@
+{
+  "status": "independently_source_reviewed_unqualified",
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18",
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "source_seal_sha256": "ae215438b73c2c18334e5ae98ef8d0fca64e6e0d6c0807d87688a80c4ca51e66",
+  "files": [
+    {
+      "path": "tools/carla_lane_oracle/accepted_successor_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/accepted_successor_contracts.py",
+      "sha256": "c8585213ea462f8c600f7d88b80699794306b3798cf49524225d5fae6fcd954c",
+      "bytes": 13548,
+      "mode": "100644",
+      "git_blob": "35d68ac4695277e09368c99a45aae304188c6bcb",
+      "before_sha256": "7b318d252dfdded1a8ec08753d60553e7eecdf112ccf99c2d5d90f0fe8eca8f2",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/accepted_successor_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/cache_key_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/cache_key_contracts.py",
+      "sha256": "886e1a7b195de42a2c517a7493344662e0287f14ed5416381232125b92bc6300",
+      "bytes": 14234,
+      "mode": "100644",
+      "git_blob": "6bbd95e34e03b471cefada7abbff1674f58a671c",
+      "before_sha256": "42ffb88e9453e2f26a7a510945b787caff40d1e881191c8f2671cc51568f1639",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/cache_key_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/coverage_followup_contracts.py",
+      "sha256": "37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0",
+      "bytes": 8956,
+      "mode": "100644",
+      "git_blob": "cff7afcc48d91d704e53762a7e44556259f3e377",
+      "before_sha256": "ca1c053605753e6b60675f74495dad1c36e7cc34e784b4a1fceb47072e09af3b",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/coverage_followup_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/coverage_invariant_contracts.py",
+      "sha256": "9f8ffa4c65f3d2c02a73de5152672381f3ef5e9f462479e084768d701e0017e3",
+      "bytes": 8279,
+      "mode": "100644",
+      "git_blob": "b981d1fdf6c6e74f2160113e7cfe47a9ad967c2a",
+      "before_sha256": "a1aa7b4753c7c55a37581f1a67b67563de40a5bf7b1ddac7c15a7634f9d0a8a3",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/coverage_invariant_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/curve_support_dispatch_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/curve_support_dispatch_contracts.py",
+      "sha256": "a8cd6c22250e1d6e344e92be696fdcbfdc1aedc3610dc2a47371f1c9aa56d544",
+      "bytes": 7144,
+      "mode": "100644",
+      "git_blob": "a68f5f5ef153f57b9d83254c55e2caa406932c3f",
+      "before_sha256": "231a573c21e3ab08c2f6ba99da709c46fefa7cc13bbd64ec101ef883fdd35e66",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/curve_support_dispatch_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/distance_validation_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/distance_validation_contracts.py",
+      "sha256": "9ef55060a56090ce22fe6cb7885da42f9bc3dfdfbd41ff557ce1cc9f48bc5355",
+      "bytes": 1613,
+      "mode": "100644",
+      "git_blob": "0a06d3db80a63398a76c4e59c07ffa294832a73f",
+      "before_sha256": "9a73b97544c1d57383e18d66a20f3e7bb4b46bd6e9f7eddbe79c8ec6b4b8b0e1",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/distance_validation_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/envelope_budget_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/envelope_budget_contracts.py",
+      "sha256": "1a7572fa44663a0ba5e6b7cd43b2a918acad15812fce288a42294f05dbcbf577",
+      "bytes": 3155,
+      "mode": "100644",
+      "git_blob": "d6041213c5c6e3bb9317de2f2a0402042b05eec0",
+      "before_sha256": "48efdfd2345f7e41b88dae6e5526e75b02250da68b22ede86db5271c55d42de8",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/envelope_budget_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "7a4cd2a70009a31a0ca5569b08a9a90e04adbd7a7bb9512be59c338f678c155e",
+      "bytes": 88374,
+      "mode": "100644",
+      "git_blob": "c351ed149b0c1a1f5da3085c0f8322fc0dc9c569",
+      "before_sha256": "9d4563b867872024635a664c6ae53463d60485bfa305abd4f25205cb0c4d2df7",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/full_audit_cleanup_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/grouped_table_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/grouped_table_contracts.py",
+      "sha256": "387e50ed7b5198fbc6ff28ed27cc328db18a3844c506fd6e04b10d05d9757734",
+      "bytes": 2528,
+      "mode": "100644",
+      "git_blob": "566f3a106834bb53b7534c94b1795067b3e7dca3",
+      "before_sha256": "75c93a0afad7cc4b26a3d9b8e5f0b8f52f3d0005e5086c5fa39beb8436f73081",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/grouped_table_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/grouped_y_finiteness_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/grouped_y_finiteness_contracts.py",
+      "sha256": "ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307",
+      "bytes": 4499,
+      "mode": "100644",
+      "git_blob": "510190961afa32a4f1c7547c2ec17e3ceed7de34",
+      "before_sha256": "ef459a7f5081ec992cb32844963031620ec245ebdd5c7e9b31e44a37008a8c63",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/grouped_y_finiteness_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/lane_control_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/lane_control_contracts.py",
+      "sha256": "49c14afe71986a766c1beae8ffc9ae162c7eec2b668478e59191492b5977d4ba",
+      "bytes": 4785,
+      "mode": "100644",
+      "git_blob": "e2a2dc3362beaa89794806f23db3bb5bb3e167af",
+      "before_sha256": "6d4545176f2415cb5ed598b40a7cdbb450b1692406455569083ee3b754808efe",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/lane_control_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/lane_order_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/lane_order_contracts.py",
+      "sha256": "e03387cb3a379f643717d689da70de33292182e64d3655d84ec88314159671cb",
+      "bytes": 7614,
+      "mode": "100644",
+      "git_blob": "1b5a38a0dfeefd3f8b68c82c006392b53d93691d",
+      "before_sha256": "2e43f659a85d50f5121f9f60bacf9458b887ae7d2c923d8c108864b9831de86b",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/lane_order_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/moment_finiteness_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/moment_finiteness_contracts.py",
+      "sha256": "1acbd5e02d05c7d249d3a84526204fe98eb1c7d963da81b8b0d273f9c2868067",
+      "bytes": 2975,
+      "mode": "100644",
+      "git_blob": "f45db5a98e7931c05fa82af4aa206e4a5b50e520",
+      "before_sha256": "8924d4e640adcad15061c5bd13be94d9cf5669e8a3fb6b3dfb039543b8edd74e",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/moment_finiteness_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/raw_cut_inverse_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/raw_cut_inverse_contracts.py",
+      "sha256": "ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5",
+      "bytes": 5339,
+      "mode": "100644",
+      "git_blob": "dc9ba26eccb83e49418f5278d7fba9e7eb80bbb6",
+      "before_sha256": "a1224800b1d3b5eb66ce666b492a1d2f5edb4dbe89edabc2f268cad979e03c63",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/raw_cut_inverse_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/rounded_line_selector_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/rounded_line_selector_contracts.py",
+      "sha256": "57b2a082e75de6cb7acc2d20eed8dd187071f7da29614e84c567431f9b00328a",
+      "bytes": 15245,
+      "mode": "100644",
+      "git_blob": "5065154ea2b22b468f5026ebf78a0c60613075d3",
+      "before_sha256": "e7fec5cb9795310b36c68d97a463e66a5f5efd200d3936cc6ff5ddcdae65b07f",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/rounded_line_selector_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/seed_count_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/seed_count_contracts.py",
+      "sha256": "affce80258ddfd6db30e954f74a80e7262ba0748c36ee6fb1aba07bc9e8c27a8",
+      "bytes": 50508,
+      "mode": "100644",
+      "git_blob": "e703f734346bcfeb1dbabb8d0e66f1005492b39f",
+      "before_sha256": "98d720388ec7762623c1ceb1ff2ffd95c92cc07246d3c62573ff3e10affc5c8e",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/seed_count_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/selection_finiteness_contracts.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/selection_finiteness_contracts.py",
+      "sha256": "2d62d03b9059a207cdb74c2c49d7cb02b863f8b2c34012dc3483a543dd000424",
+      "bytes": 5508,
+      "mode": "100644",
+      "git_blob": "da7bb9335ff7467163fc42d154d560eecf23819b",
+      "before_sha256": "902b9302ecadf6772310f205b93902ae8aff405802ce6325de053b1fbf7c6111",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/selection_finiteness_contracts.py"
+    },
+    {
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "99e7e7cadb5a7d6739ff9d3faa638f240f35002a753cdb64a3bf60d89a2857e9",
+      "bytes": 20371,
+      "mode": "100644",
+      "git_blob": "7a89a7cc3e5334c2b515f271d4975122c51f929c",
+      "before_sha256": null,
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v18/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "count": 18,
+  "notes": "17-checker invariant operation implementation and eight source-only synthetic/AST regression methods. Exact runtime probes and full qualification pending."
+}
