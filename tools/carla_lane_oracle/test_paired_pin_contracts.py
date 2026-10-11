@@ -165,7 +165,10 @@ class PairedPinFakeControls(unittest.TestCase):
                     self.assertEqual(accepted.predecessor_pins(self.root, NAMES[0]), self.outputs['accepted'][0])
                     self.assertEqual(accepted.predecessor_pins(self.root, NAMES[1]), self.outputs['accepted'][1])
                     self.assertEqual(single.call_args_list, [unittest.mock.call(self.root)] * 2)
-        self.assertEqual(tuple(inspect.signature(frozen._verified_pin_pair).parameters), ('root', 'prior_digest'))
+        signature = inspect.signature(frozen._verified_pin_pair)
+        self.assertEqual(tuple(signature.parameters), ('root', 'prior_digest', '_operation'))
+        self.assertIs(signature.parameters['_operation'].kind, inspect.Parameter.KEYWORD_ONLY)
+        self.assertIsNone(signature.parameters['_operation'].default)
         with self.synthetic() as qualify:
             pair = frozen._verified_pin_pair(self.root, self.records['frozen']['runtime_pins_before_sha256'])
             self.assertEqual(pair, self.outputs['frozen'])
@@ -330,18 +333,46 @@ class PairedPinFakeControls(unittest.TestCase):
         }
         for owner, provider, method, output in (
                 (followup, followup, 'predecessor_pin_pair', self.outputs['followup']),
-                (invariant, invariant, 'predecessor_pin_pair', self.outputs['invariant']),
+                (invariant, invariant, '_predecessor_pin_pair', self.outputs['invariant']),
                 (frozen, frozen, '_verified_pin_pair', self.outputs['frozen']),
                 (reviewed, frozen, '_verified_pin_pair', self.outputs['frozen'])):
-            with self.subTest(owner=owner.__name__), patch.object(owner, 'read_record', return_value=records[owner]), \
-                    patch.object(provider, method, return_value=output) as pair, \
-                    patch.object(Path, 'read_text', side_effect=StopAfterPins), \
-                    patch.object(accepted, 'predecessor_pins', side_effect=AssertionError('owner used single')):
+            events = []
+            def record(root):
+                events.append(('record', root))
+                return records[owner]
+            def paired(*args, **kwargs):
+                events.append(('pair', args[0]))
+                if owner is invariant:
+                    self.assertEqual(set(kwargs), {'_operation'})
+                    operation = kwargs['_operation']
+                    self.assertIs(type(operation), cleanup._InvariantInputs)
+                    self.assertEqual(operation._kind, 'invariant')
+                    self.assertEqual(operation._state, 'pending')
+                else:
+                    self.assertEqual(kwargs, {})
+                return output
+            def stop_after_pins(source_path, *args, **kwargs):
+                events.append(('source', source_path))
+                raise StopAfterPins
+            with self.subTest(owner=owner.__name__), patch.object(owner, 'read_record', record), \
+                    patch.object(provider, method, side_effect=paired) as pair, \
+                    patch.object(Path, 'read_text', stop_after_pins), \
+                    patch.object(accepted, 'predecessor_pins', side_effect=AssertionError('owner used single')), \
+                    patch.object(invariant, 'predecessor_pin_pair', side_effect=AssertionError('owner bypassed private invariant pair')), \
+                    patch.object(cleanup, 'verify', side_effect=AssertionError('initial phase admitted source')):
                 for call_index in range(2):
                     with self.assertRaises(StopAfterPins):
                         owner.verify(self.root)
                     self.assertEqual(pair.call_count, call_index + 1)
+                    source_path = frozen.SOURCE_PATH if owner is frozen else path
+                    self.assertEqual(events, [('record', self.root), ('pair', self.root),
+                                              ('source', self.root/source_path)] * (call_index + 1))
+                    if owner is invariant:
+                        self.assertEqual(pair.call_args.kwargs['_operation']._state, 'closed')
                 self.assertEqual(pair.call_args.args[0], self.root)
+                if owner is invariant:
+                    self.assertIsNot(pair.call_args_list[0].kwargs['_operation'],
+                                     pair.call_args_list[1].kwargs['_operation'])
 
     def test_changed_multifault_priorities_are_explicit(self):
         # Synthetic isolated defects prove sequence, not real record admission.

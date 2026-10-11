@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import seed_count_contracts as seed
+import _full_audit_test_fixtures as cleanup_fixtures
 
 ROOT = Path(__file__).resolve().parents[2]
 MAP = seed.MODULE
@@ -16,22 +17,45 @@ BOUNDS = 'extensions/carla/curve_bounds.mojo'
 INTERVAL = 'extensions/carla/curve_interval.mojo'
 
 
+def _historical_cleanup_inputs(after, expected_hash):
+    """Bind one declared Map family before any synthetic filesystem view."""
+    if seed.sha(after) != expected_hash:
+        raise AssertionError('historical Map fixture endpoint changed')
+    return cleanup_fixtures.verified_predecessors(ROOT)
+
+
 class SeedCountSuccessorTests(unittest.TestCase):
+    cleanup_fixture_state = 'historical-count'
     @classmethod
     def setUpClass(cls):
         cls.record = seed.read_record(ROOT)
         cls.after = seed.successor_source(ROOT)
         cls.before = seed.predecessor_source(cls.after, cls.record)
+        cls.cleanup_sources = _historical_cleanup_inputs(cls.after, seed.AFTER_SHA256)
 
     @contextmanager
     def live_after(self, changes=None):
-        values = {MAP: self.after.encode(), **(changes or {})}
-        read = Path.read_bytes
+        self.assertIn(self.cleanup_fixture_state, ('historical-count', 'current-score'))
+        historical = self.cleanup_fixture_state == 'historical-count'
+        if not historical:
+            self.assertEqual(seed.sha(self.after), seed.SCORE_AFTER_SHA256)
+        cleanup_sources = self.cleanup_sources if historical else {}
+        values = {**cleanup_sources, MAP: self.after.encode(), **(changes or {})}
+        read, read_text = Path.read_bytes, Path.read_text
         with patch.object(Path, 'read_bytes', lambda p,*a,**k:
                           values[p.relative_to(ROOT).as_posix()]
                           if p.is_relative_to(ROOT) and p.relative_to(ROOT).as_posix() in values
                           else read(p,*a,**k)):
-            yield
+            if historical:
+                with patch.object(Path, 'read_text', lambda p,*a,**k:
+                                  values[p.relative_to(ROOT).as_posix()].decode('utf-8')
+                                  if p.is_relative_to(ROOT) and p.relative_to(ROOT).as_posix() in values
+                                  else read_text(p,*a,**k)):
+                    yield
+            else:
+                # Finite-score controls keep their existing current byte-only
+                # view and complete current cleanup admission route.
+                yield
 
     def test_exact_relation_and_truthful_actual_state(self):
         self.assertIsNone(seed.verify_source(self.before, self.record))
@@ -407,16 +431,19 @@ class SeedCountSuccessorTests(unittest.TestCase):
 
 
 class OptionalSeedGuardSuccessorTests(unittest.TestCase):
+    cleanup_fixture_state = 'historical-optional'
     @classmethod
     def setUpClass(cls):
         cls.record = seed.read_record(ROOT)
         cls.middle = seed.successor_source(ROOT)
         cls.after = seed.optional_successor_source(ROOT)
         cls.before = seed.predecessor_source(cls.middle, cls.record)
+        cls.cleanup_sources = _historical_cleanup_inputs(cls.after, seed.OPTIONAL_AFTER_SHA256)
 
     @contextmanager
     def live(self, changes=None):
-        values = {MAP: self.after.encode(), **(changes or {})}
+        self.assertEqual(self.cleanup_fixture_state, 'historical-optional')
+        values = {**self.cleanup_sources, MAP: self.after.encode(), **(changes or {})}
         read_bytes, read_text = Path.read_bytes, Path.read_text
         def payload(path):
             return values.get(path.relative_to(ROOT).as_posix()) if path.is_relative_to(ROOT) else None
@@ -554,6 +581,7 @@ class OptionalSeedGuardSuccessorTests(unittest.TestCase):
 
 class SupportSeedGuardSuccessorTests(unittest.TestCase):
     """The new source relation and current-source premises, not native coverage."""
+    cleanup_fixture_state = 'historical-support'
     @classmethod
     def setUpClass(cls):
         cls.record = seed.read_record(ROOT)
@@ -561,10 +589,12 @@ class SupportSeedGuardSuccessorTests(unittest.TestCase):
         cls.optional = seed.optional_successor_source(ROOT)
         cls.after = seed.support_successor_source(ROOT)
         cls.before = seed.predecessor_source(cls.count, cls.record)
+        cls.cleanup_sources = _historical_cleanup_inputs(cls.after, seed.SUPPORT_AFTER_SHA256)
 
     @contextmanager
     def live(self, changes=None):
-        values = {MAP:self.after.encode(), **(changes or {})}
+        self.assertIn(self.cleanup_fixture_state, ('historical-support', 'historical-frontier'))
+        values = {**self.cleanup_sources, MAP:self.after.encode(), **(changes or {})}
         read_bytes, read_text = Path.read_bytes, Path.read_text
         def payload(path):
             return values.get(path.relative_to(ROOT).as_posix()) if path.is_relative_to(ROOT) else None
@@ -794,6 +824,7 @@ class SupportSeedGuardSuccessorTests(unittest.TestCase):
 
 class FrontierReservationSuccessorTests(unittest.TestCase):
     """Result/exception/ledger equivalence, without fictional producer frontiers."""
+    cleanup_fixture_state = 'historical-frontier'
     frontier=True
     live=SupportSeedGuardSuccessorTests.live
     reject_premise=SupportSeedGuardSuccessorTests.reject_premise
@@ -806,6 +837,7 @@ class FrontierReservationSuccessorTests(unittest.TestCase):
         cls.count=seed.successor_source(ROOT)
         cls.before=seed.predecessor_source(cls.count,cls.record)
         cls.after=seed.frontier_successor_source(ROOT)
+        cls.cleanup_sources = _historical_cleanup_inputs(cls.after, seed.FRONTIER_AFTER_SHA256)
 
     def test_separate_frontier_edge_retains_all_four_predecessors(self):
         self.assertEqual(seed.sha(self.after),seed.FRONTIER_AFTER_SHA256)
@@ -932,6 +964,7 @@ class FrontierReservationSuccessorTests(unittest.TestCase):
 
 class FiniteWinnerScoreSuccessorTests(unittest.TestCase):
     """Exact extraction graph and independently live helper/caller controls."""
+    cleanup_fixture_state = 'current-score'
     @classmethod
     def setUpClass(cls):
         cls.record = seed.read_record(ROOT)

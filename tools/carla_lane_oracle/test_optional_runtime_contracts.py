@@ -462,10 +462,49 @@ class OptionalRuntimeContracts(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'routing changed'):
                     guards.verify(ROOT)
         prefix = '# cached_model _restrict_objective_model\n'
+        # The guard's lexical helpers ignore an inert comment. Full admission
+        # must still reject read_text that differs from the physical read_bytes.
+        for helper in (guards.significant, guards.declaration_routing,
+                       guards.protected_source_digest):
+            with self.subTest(helper=helper.__name__):
+                self.assertEqual(helper(prefix + original), helper(original))
         with patch.object(Path, 'read_text',
                 lambda p, *a, **k: prefix + original if p == path else read(p, *a, **k)):
             self.assertEqual(optional.verify(ROOT)['status'], 'PASS')
-            self.assertEqual(guards.verify(ROOT)['status'], 'PASS')
+            with self.assertRaises(cleanup._OperationCoherenceError) as raised:
+                guards.verify(ROOT)
+            message = ('full-audit cleanup successor: consumed operation text changed: '
+                       'extensions/carla/lane_refinement.mojo')
+            self.assertIs(type(raised.exception), cleanup._OperationCoherenceError)
+            self.assertEqual(str(raised.exception), message)
+            self.assertIs(type(raised.exception.__cause__), cleanup.ContractError)
+            self.assertEqual(str(raised.exception.__cause__), message)
+
+    def test_physical_inert_comment_preserves_semantics_but_not_exact_admission(self):
+        root = physical_cleanup_fixture(self, self.cleanup_record)
+        path = root/'extensions/carla/lane_refinement.mojo'
+        original = path.read_bytes()
+        try:
+            path.write_bytes(b'# cached_model _restrict_objective_model\n' + original)
+            self.assertEqual(optional.verify_semantics(root)['status'], 'PASS')
+            cleanup.verify(root)
+            message = ('full-audit cleanup successor: unreviewed complete live endpoint: '
+                       'extensions/carla/lane_refinement.mojo')
+            with self.assertRaises(cleanup.ContractError) as exact:
+                cleanup.verify(root, exact=True)
+            self.assertEqual(str(exact.exception), message)
+            # Complete guard admission reaches the existing score-Map demand
+            # for all four exact raw endpoints, beyond its token-only checks.
+            with self.assertRaises(ValueError) as guarded:
+                guards.verify(root)
+            self.assertIs(type(guarded.exception), ValueError)
+            self.assertEqual(str(guarded.exception),
+                             'Sum2 complete guarded caller changed or routing changed: '
+                             'lane_refinement (' + message + ')')
+            self.assertIs(type(guarded.exception.__cause__), cleanup.ContractError)
+            self.assertEqual(str(guarded.exception.__cause__), message)
+        finally:
+            path.write_bytes(original)
 
     def test_removal_manifest_is_bound_and_retains_historical_controls(self):
         path = ROOT/'tools/carla_lane_oracle/containing-model-removal-migration.json'

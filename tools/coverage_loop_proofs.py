@@ -1187,6 +1187,10 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
         if score:
             expected[seed_count_contracts.MODULE] = seed_count_contracts.SCORE_AFTER_SHA256
             line = 4069
+        # An inapplicable constructor theorem must not attempt current admission.
+        # Historical guarded theorems are still verified independently below.
+        if actual[seed_count_contracts.MODULE] != expected[seed_count_contracts.MODULE]:
+            return {}
         cleanup_bindings = {}
         if actual != expected:
             from carla_lane_oracle import full_audit_cleanup_contracts as cleanup

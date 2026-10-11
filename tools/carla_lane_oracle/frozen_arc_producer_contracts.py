@@ -117,7 +117,24 @@ def verify(root, *, _operation=None):
         _check_operation(root, _operation)
     operation_args = {} if _operation is None else {'_operation': _operation}
     record = read_record(root)
-    _, guard_payload = _verified_pin_pair(root, record['runtime_pins_before_sha256'], **operation_args)
+    try:
+        _, guard_payload = _verified_pin_pair(root, record['runtime_pins_before_sha256'], **operation_args)
+    except ValueError as error:
+        # Preserve this public runtime-pin diagnostic after complete admission
+        # rejects the same fixed input. Never relabel private operation faults.
+        message = ('full-audit cleanup successor: unchanged premise, record or fixture changed: '
+                   'tools/carla_lane_oracle/runtime-source-pins.json')
+        if (_operation is not None or type(error) is not ValueError
+                or error.args != ('unreviewed complete successor: ' + message,)):
+            raise
+        if __package__:
+            from . import full_audit_cleanup_contracts as full_audit
+        else:
+            import full_audit_cleanup_contracts as full_audit
+        cause = error.__cause__
+        if type(cause) is not full_audit.ContractError or cause.args != (message,):
+            raise
+        raise ValueError('frozen ARC producer contract: unreviewed runtime pin successor') from error
     require(hashlib.sha256(guard_payload).hexdigest() ==
             record['guard_pins_unchanged_sha256'], 'guard pin lineage changed')
     require(source.token_sha256(_observe_text(

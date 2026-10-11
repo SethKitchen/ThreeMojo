@@ -1808,23 +1808,132 @@ class MapSuccessorLoopTests(unittest.TestCase):
             self.seed.frontier_successor_source(self.repo),
             self.seed.score_successor_source(self.repo),
         )
+        predecessors = audit_fixtures.verified_predecessors(self.repo)
+        families = (
+            (self.seed.BEFORE_SHA256, True),
+            (self.seed.AFTER_SHA256, True),
+            (self.seed.OPTIONAL_AFTER_SHA256, True),
+            (self.seed.SUPPORT_AFTER_SHA256, True),
+            (self.seed.FRONTIER_AFTER_SHA256, True),
+            (self.seed.SCORE_AFTER_SHA256, False),
+        )
         target = self.repo/self.name
         read_bytes, read_text = Path.read_bytes, Path.read_text
-        for text in variants:
+        for text, (expected, historical) in zip(variants, families, strict=True):
+            self.assertEqual(loops.sha256(text.encode()), expected)
+            dependencies = predecessors if historical else {
+                name: read_bytes(self.repo/name) for name in full_audit.SOURCE_PATHS}
+            for name, raw in dependencies.items():
+                self.assertEqual(loops.sha256(raw),
+                                 (full_audit.BEFORE_SHA256 if historical else
+                                  full_audit.AFTER_SHA256)[name])
             for consumer in (winner, border):
                 for unknown in (False, True):
                     candidate = text + ('\n# unknown consumer source\n' if unknown else '')
+                    views = {self.repo/name: raw for name, raw in predecessors.items()} if historical else {}
+                    views[target] = candidate.encode()
                     with self.subTest(consumer=consumer.__name__,
                                       sha256=loops.sha256(text.encode()), unknown=unknown), \
                          patch.object(Path, 'read_bytes', lambda p, *a, **k:
-                                      candidate.encode() if p == target else read_bytes(p, *a, **k)), \
+                                      views[p] if p in views else read_bytes(p, *a, **k)), \
                          patch.object(Path, 'read_text', lambda p, *a, **k:
-                                      candidate if p == target else read_text(p, *a, **k)):
+                                      views[p].decode('utf-8') if p in views else read_text(p, *a, **k)):
                         if unknown:
                             with self.assertRaises(ValueError):
                                 consumer.verify(self.repo)
                         else:
                             consumer.verify(self.repo)
+
+    def test_eligible_constructor_failure_stays_failed_after_physical_restore(self):
+        from functools import wraps
+        root = audit_fixtures.copy_current_root(self, self.repo)
+        predecessors = audit_fixtures.verified_predecessors(self.repo)
+        current = {name: (root/name).read_bytes() for name in full_audit.SOURCE_PATHS}
+        road = root/'extensions/carla/road.mojo'
+        road_raw = road.read_bytes()
+        constructor = loops.construction_boundary_loops
+        bindings = full_audit.proof_bindings
+        cases = (
+            (self.seed.FRONTIER_AFTER_SHA256, self.seed.frontier_successor_source(self.repo),
+             predecessors, loops._MAP_FRONTIER_SUCCESSOR_LINES, 4055,
+             'unreviewed complete live endpoint: extensions/carla/curve_bounds.mojo'),
+            (self.seed.SCORE_AFTER_SHA256, self.seed.score_successor_source(self.repo),
+             current, loops._MAP_SCORE_SUCCESSOR_LINES, 4069,
+             'unchanged premise, record or fixture changed: extensions/carla/road.mojo'),
+        )
+        for digest, text, dependencies, correspondence, line, reason in cases:
+            with self.subTest(endpoint=digest):
+                self.assertEqual(loops.sha256(text.encode()), digest)
+                for name, raw in dependencies.items():
+                    (root/name).write_bytes(raw)
+                    self.assertEqual(loops.sha256(raw),
+                                     (full_audit.BEFORE_SHA256 if line == 4055 else
+                                      full_audit.AFTER_SHA256)[name])
+                (root/self.name).write_text(text)
+                road.write_bytes(road_raw + b'\n# eligible constructor admission control\n')
+                owners, results, failures = [], [], []
+
+                @wraps(bindings)
+                def checked_bindings(actual_root, **kwargs):
+                    try:
+                        return bindings(actual_root, **kwargs)
+                    except full_audit._OperationCoherenceError as error:
+                        failures.append((kwargs['_operation'], error))
+                        raise
+
+                @wraps(constructor)
+                def checked_constructor(actual_root, **kwargs):
+                    self.assertEqual(actual_root, root)
+                    operation = kwargs['_operation']
+                    owners.append(operation)
+                    result = constructor(actual_root, **kwargs)
+                    results.append(result)
+                    if len(owners) == 1:
+                        self.assertEqual(result, {})
+                        self.assertEqual(len(failures), 1)
+                        self.assertIs(failures[0][0], operation)
+                        error = failures[0][1]
+                        self.assertIs(type(error), full_audit._OperationCoherenceError)
+                        self.assertIs(type(error.__cause__), full_audit.ContractError)
+                        message = 'full-audit cleanup successor: ' + reason
+                        self.assertEqual(str(error), message)
+                        self.assertEqual(str(error.__cause__), message)
+                        frames = []
+                        for failure in (error, error.__cause__):
+                            trace = failure.__traceback__
+                            while trace is not None:
+                                frames.append(trace.tb_frame.f_code)
+                                trace = trace.tb_next
+                        self.assertIn(full_audit._InvariantInputs._admit.__code__, frames)
+                        self.assertIn(full_audit.verify.__code__, frames)
+                        self.assertTrue(operation._failed)
+                        self.assertEqual(operation._failure_reason, message)
+                        road.write_bytes(road_raw)
+                    return result
+
+                try:
+                    with patch.object(full_audit, 'proof_bindings', checked_bindings), \
+                            patch.object(loops, 'construction_boundary_loops', checked_constructor):
+                        self.assertEqual(loops.reviewed_nonempty_loops(root, 'extensions/carla/map'), {})
+                        self.assertEqual(owners[0]._state, 'closed')
+                        self.assertTrue(owners[0]._failed)
+                        self.assertEqual(road.read_bytes(), road_raw)
+                        proof = loops.reviewed_nonempty_loops(root, 'extensions/carla/map')
+                finally:
+                    road.write_bytes(road_raw)
+                self.assertEqual(len(owners), 2)
+                self.assertIsNot(owners[0], owners[1])
+                self.assertEqual(owners[1]._state, 'closed')
+                self.assertFalse(owners[1]._failed)
+                self.assertEqual(len(failures), 1)
+                self.assertEqual(set(results[1]), {line})
+                self.assertEqual(set(proof), {*correspondence.values(), line})
+                self.assertEqual(proof[line]['proof_id'], 'construction-geometry-boundary-list')
+                for rule in self.rules:
+                    row = proof[correspondence[rule[1]]]
+                    self.assertEqual((row['required'], row['impossible'], row['proof_id']),
+                                     ('T', 'F', rule[5]))
+                    self.assertEqual(row['dependency_sha256'][self.name], digest)
 
     def test_current_lines_mask_only_the_false_loop_outcomes(self):
         proofs = self.assert_live_proofs(self.repo)

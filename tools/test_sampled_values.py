@@ -97,6 +97,12 @@ class SampledValueCorrespondenceTests(unittest.TestCase):
             target = self.root/name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(ROOT/name, target)
+        # This Map-successor control keeps its exact historical dependencies.
+        # Complete current-cleanup admission has a separate test below.
+        cleanup_fixtures.write_predecessors(self.root, self.cleanup_sources)
+        for name, raw in self.cleanup_sources.items():
+            self.assertEqual((self.root/name).read_bytes(), raw)
+        self.assertEqual((self.root/seed_count.MODULE).read_bytes().decode('utf-8'), physical)
         return score_tests
 
     def test_live_source_correspondence_and_missing_successor_dependency(self):

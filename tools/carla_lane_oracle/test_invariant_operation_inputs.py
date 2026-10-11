@@ -2391,7 +2391,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
         'cache_key_contracts.py': '99b947f241fa5459ecfbb890e277519e6735ff6a53e4d97a29e220b69acc78d0',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '2561fac1d27ce82aafa4fdf3dcd9654904a3347bc2dd8e5945dfaa6e06fd0c30',
+        'coverage_loop_proofs.py': '3679bb0565255c19e9fcbf3af6da6790beb78cf9379197e7264b718444f14532',
         'full_audit_cleanup_contracts.py': '9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
@@ -2926,7 +2926,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                                 'cache_key.input_paths(Path(root))')
         production_catch = self._site(core._operation_production_paths, 1318,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1222,
+        known_catch = self._site(loops.construction_boundary_loops, 1226,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
