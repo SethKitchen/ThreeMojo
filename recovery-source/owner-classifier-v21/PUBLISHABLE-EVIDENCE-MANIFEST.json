@@ -1,0 +1,22 @@
+{
+  "candidate_root": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21",
+  "files": [
+    {
+      "before_sha256": "9d4563b867872024635a664c6ae53463d60485bfa305abd4f25205cb0c4d2df7",
+      "bytes": 102186,
+      "git_blob": "c8880babed3495bd5b83561625925e9e1d6e2fe1",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "8a22685850e469f0d21a1865c41ef70b9e6d8780f2887cf6e99251ba09454c51",
+      "workspace_path": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v21/tools/carla_lane_oracle/full_audit_cleanup_contracts.py"
+    }
+  ],
+  "historical_record_files_unchanged_from_v17": true,
+  "mojo_and_anatomy_report_unchanged_from_v17": true,
+  "parent_published_commit": "3583300bf47cc52dba7c6b97b77bccc09e0cc56a",
+  "scope": "27 explicit operation-input checker paths and two test paths. Original cold limits and proof premises retained. No new qualification is claimed.",
+  "source_seal_sha256": "5e999090460174e7a57f023a94dbad09d596bcae4414d9785225f428cd1527bc",
+  "status": "source_only_unqualified",
+  "backup_delta_parent": "49fb628554178885890b02a5a59251640bd27bfb"
+}
