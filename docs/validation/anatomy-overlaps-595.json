@@ -3,16 +3,16 @@
   "issue": "https://github.com/SethKitchen/ThreeMojo/issues/595",
   "result_label": "template geometry evidence; not clearance or biomechanical validation",
   "build_provenance": {
-    "source_sha256": "1ab714cc4a310efb68fa457358e1b3085e2f0e43c35a0675fdd63b73854b0add",
+    "source_sha256": "af5c2e25b77ae47d7e5f9bc4b6a5e1f86a9322f98ca18adaaabd89e34b5e40a5",
     "toolchain": "Mojo 1.1.0 (8189361e)",
     "flags": [
       "--Werror",
       "--num-threads",
       "1"
     ],
-    "binary_sha256": "f1dde8d4427000105d0ae91aa88274c7032551a358f3180ff4ffaee76655473a"
+    "binary_sha256": "fd95141207fc410e4c823437d3fcbbce96b57f68486b32c87c1dba525a395941"
   },
-  "tool_sha256": "cf833b4a9f24c11834b7d3dd26136b3ee6bcc1bf0361434c8f8cb756c6c6f549",
+  "tool_sha256": "85917cd0805b96821b486f93462b6b5a78b397a96129d5f0389c04568f60f3da",
   "spec": {
     "stature_m": 1.8288,
     "sex": "male",
@@ -74,27 +74,28 @@
           "samples": 630,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 5.742535e-05,
+          "signed_field_witness_m": 0.00024461933,
           "witness_point_m": [
-            0.016315486,
-            -0.4735956,
+            0.026315486,
+            -0.4635956,
             0.06480944
           ],
           "refined_point_m": [
-            0.016881892,
-            -0.47451356,
-            0.069555536
+            0.025495173,
+            -0.46566594,
+            0.06728991
           ],
-          "refined_field_witness_m": 2.142042e-08,
-          "refined_first_field_m": -2.142042e-08,
-          "refined_second_field_m": 2.142042e-08,
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": -3.7252903e-09,
+          "refined_second_field_m": 3.7252903e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -122,7 +123,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -150,7 +152,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -192,7 +195,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -220,7 +224,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -248,7 +253,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -277,20 +283,21 @@
             0.09196931
           ],
           "refined_point_m": [
-            0.016471736,
-            -0.4591466,
-            0.08857088
+            0.017819393,
+            -0.45740834,
+            0.09144197
           ],
-          "refined_field_witness_m": 5.3085387e-08,
-          "refined_first_field_m": -0.0012873849,
-          "refined_second_field_m": 5.3085387e-08,
+          "refined_field_witness_m": 9.313226e-09,
+          "refined_first_field_m": 9.313226e-09,
+          "refined_second_field_m": -9.313226e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -318,7 +325,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -346,7 +354,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -375,20 +384,21 @@
             0.1680082
           ],
           "refined_point_m": [
-            0.038565844,
-            -0.48186916,
-            0.1668363
+            0.034386158,
+            -0.48503324,
+            0.1670121
           ],
-          "refined_field_witness_m": 2.2118911e-08,
-          "refined_first_field_m": -0.0009901836,
-          "refined_second_field_m": 2.2118911e-08,
+          "refined_field_witness_m": 2.3283064e-09,
+          "refined_first_field_m": -2.3283064e-09,
+          "refined_second_field_m": 2.3283064e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -403,20 +413,21 @@
             0.16800818
           ],
           "refined_point_m": [
-            0.038702563,
-            -0.4818418,
-            0.16694176
+            0.03705022,
+            -0.48480663,
+            0.16784412
           ],
-          "refined_field_witness_m": 3.0267984e-09,
-          "refined_first_field_m": -0.00082514365,
-          "refined_second_field_m": 3.0267984e-09,
+          "refined_field_witness_m": 1.44355e-08,
+          "refined_first_field_m": -1.44355e-08,
+          "refined_second_field_m": 1.44355e-08,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -444,7 +455,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -466,7 +478,7 @@
           "samples": 196,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 6.48424e-05,
+          "signed_field_witness_m": 0.0009544296,
           "witness_point_m": [
             -0.03364261,
             -0.48716158,
@@ -486,7 +498,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -494,27 +507,28 @@
           "samples": 726,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.00022518169,
+          "signed_field_witness_m": 0.00059529115,
           "witness_point_m": [
-            -0.032642607,
-            -0.48016158,
-            0.17247912
+            -0.029642608,
+            -0.48316157,
+            0.17547913
           ],
           "refined_point_m": [
-            -0.02979495,
-            -0.47972798,
-            0.17394397
+            -0.030955108,
+            -0.48564592,
+            0.17471741
           ],
-          "refined_field_witness_m": 6.519258e-09,
-          "refined_first_field_m": 6.519258e-09,
-          "refined_second_field_m": -6.519258e-09,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -542,7 +556,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -564,27 +579,28 @@
           "samples": 384,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.00026859343,
+          "signed_field_witness_m": 0.00034646876,
           "witness_point_m": [
-            -0.023588197,
-            -0.46764037,
-            0.10748955
+            -0.013588197,
+            -0.45264035,
+            0.11748955
           ],
           "refined_point_m": [
-            -0.025971008,
-            -0.4646716,
-            0.10834892
+            -0.012123353,
+            -0.45432004,
+            0.117196575
           ],
-          "refined_field_witness_m": 1.5832484e-08,
-          "refined_first_field_m": -0.0015153559,
-          "refined_second_field_m": 1.5832484e-08,
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": -3.7252903e-09,
+          "refined_second_field_m": 3.7252903e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -592,27 +608,28 @@
           "samples": 1296,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 7.000659e-05,
+          "signed_field_witness_m": 0.00011281531,
           "witness_point_m": [
-            -0.019588198,
-            -0.45164037,
+            -0.010588198,
+            -0.45764035,
             0.11648955
           ],
           "refined_point_m": [
-            -0.018158512,
-            -0.4538083,
-            0.11852861
+            -0.010646792,
+            -0.46047628,
+            0.11638408
           ],
-          "refined_field_witness_m": 6.519258e-09,
-          "refined_first_field_m": -6.519258e-09,
-          "refined_second_field_m": 6.519258e-09,
+          "refined_field_witness_m": 5.6024874e-10,
+          "refined_first_field_m": 5.6024874e-10,
+          "refined_second_field_m": -5.6024874e-10,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -620,27 +637,28 @@
           "samples": 4536,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.1011027e-05,
+          "signed_field_witness_m": 1.7383136e-05,
           "witness_point_m": [
             -0.025088198,
-            -0.45914036,
-            0.10898955
+            -0.46714035,
+            0.11298955
           ],
           "refined_point_m": [
-            -0.025510075,
-            -0.46089038,
-            0.10855205
+            -0.025049135,
+            -0.4668591,
+            0.11332549
           ],
-          "refined_field_witness_m": 1.0244548e-08,
-          "refined_first_field_m": -0.002522416,
-          "refined_second_field_m": 1.0244548e-08,
+          "refined_field_witness_m": 9.313226e-10,
+          "refined_first_field_m": -9.313226e-10,
+          "refined_second_field_m": 9.313226e-10,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -669,20 +687,21 @@
             0.12540999
           ],
           "refined_point_m": [
-            -0.009672208,
-            -0.46258506,
-            0.12519515
+            -0.007308926,
+            -0.462839,
+            0.12249984
           ],
-          "refined_field_witness_m": 4.656613e-09,
-          "refined_first_field_m": -4.656613e-09,
-          "refined_second_field_m": 4.656613e-09,
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": -3.7252903e-09,
+          "refined_second_field_m": 3.7252903e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -690,27 +709,28 @@
           "samples": 3888,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.0002476545,
+          "signed_field_witness_m": 0.0004415363,
           "witness_point_m": [
             -0.009219083,
-            -0.46425694,
+            -0.45825693,
             0.122409984
           ],
           "refined_point_m": [
-            -0.009512052,
-            -0.46351868,
-            0.12323029
+            -0.008211271,
+            -0.45838583,
+            0.11964436
           ],
-          "refined_field_witness_m": 1.44355e-08,
-          "refined_first_field_m": -0.0013086796,
-          "refined_second_field_m": 1.44355e-08,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -738,7 +758,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -767,20 +788,21 @@
             0.18193445
           ],
           "refined_point_m": [
-            0.020541867,
-            -0.48048988,
-            0.18173912
+            0.019565305,
+            -0.48115396,
+            0.1819735
           ],
-          "refined_field_witness_m": 1.1641532e-08,
-          "refined_first_field_m": -0.00045703538,
-          "refined_second_field_m": 1.1641532e-08,
+          "refined_field_witness_m": 4.656613e-10,
+          "refined_first_field_m": 4.656613e-10,
+          "refined_second_field_m": -4.656613e-10,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -808,7 +830,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -836,7 +859,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -858,27 +882,28 @@
           "samples": 144,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.7084647e-05,
+          "signed_field_witness_m": 0.0010730317,
           "witness_point_m": [
-            -0.027466286,
+            -0.037466288,
             -0.48716158,
             0.205701
           ],
           "refined_point_m": [
-            -0.026606912,
-            -0.48708343,
-            0.20659944
+            -0.03559129,
+            -0.4854233,
+            0.20724396
           ],
-          "refined_field_witness_m": 4.656613e-09,
-          "refined_first_field_m": -4.656613e-09,
-          "refined_second_field_m": 4.656613e-09,
+          "refined_field_witness_m": 1.0244548e-08,
+          "refined_first_field_m": -1.0244548e-08,
+          "refined_second_field_m": 1.0244548e-08,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -886,27 +911,28 @@
           "samples": 486,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.6624108e-05,
+          "signed_field_witness_m": 0.0002620304,
           "witness_point_m": [
-            -0.028466288,
+            -0.031466287,
             -0.48316157,
-            0.20570098
+            0.20870099
           ],
           "refined_point_m": [
-            -0.031466287,
-            -0.48435688,
-            0.20851348
+            -0.03293113,
+            -0.48172015,
+            0.20793927
           ],
-          "refined_field_witness_m": 0.0,
-          "refined_first_field_m": 0.0,
-          "refined_second_field_m": -0.0,
+          "refined_field_witness_m": 9.313226e-10,
+          "refined_first_field_m": 9.313226e-10,
+          "refined_second_field_m": -9.313226e-10,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -934,7 +960,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -956,27 +983,28 @@
           "samples": 192,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.00022651276,
+          "signed_field_witness_m": 0.0010312395,
           "witness_point_m": [
             0.0024480017,
-            -0.45433822,
-            0.106212854
+            -0.45933822,
+            0.10121285
           ],
           "refined_point_m": [
-            0.0027409704,
-            -0.4523265,
-            0.10709176
+            0.0050065955,
+            -0.45410386,
+            0.100138634
           ],
-          "refined_field_witness_m": 3.0733645e-08,
-          "refined_first_field_m": -0.0021968102,
-          "refined_second_field_m": 3.0733645e-08,
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": -1.8626451e-09,
+          "refined_second_field_m": 1.8626451e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1004,7 +1032,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1032,7 +1061,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1054,27 +1084,28 @@
           "samples": 216,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.0023435e-06,
+          "signed_field_witness_m": 4.13619e-05,
           "witness_point_m": [
             -0.009877378,
-            -0.45433822,
-            0.09621286
+            -0.4493382,
+            0.11121286
           ],
           "refined_point_m": [
-            -0.010502378,
-            -0.44965073,
-            0.099630825
+            -0.0080414405,
+            -0.45162335,
+            0.10996286
           ],
-          "refined_field_witness_m": 2.4941983e-08,
-          "refined_first_field_m": -0.0010593943,
-          "refined_second_field_m": 2.4941983e-08,
+          "refined_field_witness_m": 5.5879354e-09,
+          "refined_first_field_m": 5.5879354e-09,
+          "refined_second_field_m": -5.5879354e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1089,20 +1120,21 @@
             0.10921285
           ],
           "refined_point_m": [
-            -0.009900816,
-            -0.4536429,
-            0.10867379
+            -0.007041441,
+            -0.4542054,
+            0.10865036
           ],
           "refined_field_witness_m": 0.0,
-          "refined_first_field_m": -0.0026233886,
-          "refined_second_field_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1110,27 +1142,28 @@
           "samples": 3150,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.905435e-05,
+          "signed_field_witness_m": 0.00021033362,
           "witness_point_m": [
-            -0.010377378,
-            -0.44983822,
-            0.09671286
+            -0.008377378,
+            -0.4538382,
+            0.11271285
           ],
           "refined_point_m": [
-            -0.009463316,
-            -0.44923666,
-            0.0966113
+            -0.008002378,
+            -0.4553851,
+            0.112970665
           ],
-          "refined_field_witness_m": 2.7939677e-09,
-          "refined_first_field_m": -2.7939677e-09,
-          "refined_second_field_m": 2.7939677e-09,
+          "refined_field_witness_m": 1.8626451e-09,
+          "refined_first_field_m": -1.8626451e-09,
+          "refined_second_field_m": 1.8626451e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1172,7 +1205,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1187,20 +1221,21 @@
             0.091212854
           ],
           "refined_point_m": [
-            0.00062262174,
-            -0.4492015,
-            0.091212854
+            -0.0035726908,
+            -0.45080698,
+            0.09157614
           ],
-          "refined_field_witness_m": 7.4360287e-09,
-          "refined_first_field_m": -0.00038670003,
-          "refined_second_field_m": 7.4360287e-09,
+          "refined_field_witness_m": 2.3574103e-09,
+          "refined_first_field_m": 2.3574103e-09,
+          "refined_second_field_m": -2.3574103e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1208,27 +1243,28 @@
           "samples": 2295,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.905435e-05,
+          "signed_field_witness_m": 0.00018950924,
           "witness_point_m": [
-            -0.0043773777,
-            -0.44983822,
+            -0.0003773776,
+            -0.4518382,
             0.09071285
           ],
           "refined_point_m": [
-            -0.0029555026,
-            -0.44961947,
-            0.09172067
+            -0.0021273776,
+            -0.45144758,
+            0.091189414
           ],
-          "refined_field_witness_m": 2.3064786e-09,
-          "refined_first_field_m": -2.3064786e-09,
-          "refined_second_field_m": 2.3064786e-09,
+          "refined_field_witness_m": 2.6775524e-09,
+          "refined_first_field_m": -2.6775524e-09,
+          "refined_second_field_m": 2.6775524e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1270,7 +1306,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1278,27 +1315,28 @@
           "samples": 560,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.023764e-06,
+          "signed_field_witness_m": 5.41145e-06,
           "witness_point_m": [
-            -0.0008773783,
-            -0.4503382,
+            0.0021226217,
+            -0.4563382,
             0.11340998
           ],
           "refined_point_m": [
-            -0.0013930033,
-            -0.4505843,
-            0.11258967
+            0.0013960593,
+            -0.45365462,
+            0.11565998
           ],
-          "refined_field_witness_m": 1.8626451e-09,
-          "refined_first_field_m": -0.003937567,
-          "refined_second_field_m": 1.8626451e-09,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1326,7 +1364,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1368,7 +1407,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1376,27 +1416,28 @@
           "samples": 567,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.756808e-05,
+          "signed_field_witness_m": 0.0003092466,
           "witness_point_m": [
-            0.0114480015,
-            -0.4543341,
+            0.014448001,
+            -0.4603341,
             0.11380881
           ],
           "refined_point_m": [
-            0.01089722,
-            -0.45722863,
-            0.11530881
+            0.011401126,
+            -0.4609552,
+            0.1146174
           ],
-          "refined_field_witness_m": 6.6097527e-09,
-          "refined_first_field_m": 6.6097527e-09,
-          "refined_second_field_m": -6.6097527e-09,
+          "refined_field_witness_m": 3.7252903e-09,
+          "refined_first_field_m": 3.7252903e-09,
+          "refined_second_field_m": -3.7252903e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1404,27 +1445,28 @@
           "samples": 1960,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.2343825e-05,
+          "signed_field_witness_m": 0.00012042839,
           "witness_point_m": [
-            0.0039480016,
-            -0.45883408,
-            0.11030881
+            0.013948002,
+            -0.4608341,
+            0.11430881
           ],
           "refined_point_m": [
-            0.0046276893,
-            -0.46032628,
-            0.11146506
+            0.014713626,
+            -0.45993567,
+            0.11418381
           ],
-          "refined_field_witness_m": 9.313226e-10,
-          "refined_first_field_m": 9.313226e-10,
-          "refined_second_field_m": -9.313226e-10,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1453,12 +1495,12 @@
             0.115409985
           ],
           "refined_point_m": [
-            -0.010043302,
-            -0.45760128,
-            0.11183577
+            -0.011058927,
+            -0.45420286,
+            0.11644514
           ],
           "refined_field_witness_m": 1.8626451e-09,
-          "refined_first_field_m": -0.0023209932,
+          "refined_first_field_m": -1.8626451e-09,
           "refined_second_field_m": 1.8626451e-09,
           "refine_half_widths_m": [
             0.0050000004,
@@ -1466,7 +1508,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1474,27 +1517,28 @@
           "samples": 832,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.0003504837,
+          "signed_field_witness_m": 0.0004444318,
           "witness_point_m": [
             -0.009219083,
-            -0.45764035,
-            0.11040998
+            -0.45164037,
+            0.11340998
           ],
           "refined_point_m": [
-            -0.008527677,
-            -0.4576872,
-            0.11029279
+            -0.008867521,
+            -0.4540427,
+            0.11406623
           ],
-          "refined_field_witness_m": 3.7252903e-09,
-          "refined_first_field_m": -0.0014308236,
-          "refined_second_field_m": 3.7252903e-09,
+          "refined_field_witness_m": 7.450581e-09,
+          "refined_first_field_m": 7.450581e-09,
+          "refined_second_field_m": -7.450581e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1502,27 +1546,28 @@
           "samples": 2736,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 7.4984506e-05,
+          "signed_field_witness_m": 0.00020915831,
           "witness_point_m": [
             -0.0077190828,
-            -0.45514035,
-            0.10990998
+            -0.46114036,
+            0.111909985
           ],
           "refined_point_m": [
-            -0.009265958,
-            -0.45645285,
-            0.11094905
+            -0.0083909575,
+            -0.4597107,
+            0.11378498
           ],
-          "refined_field_witness_m": 3.7252903e-09,
-          "refined_first_field_m": -0.0019757801,
-          "refined_second_field_m": 3.7252903e-09,
+          "refined_field_witness_m": 3.4633558e-09,
+          "refined_first_field_m": -3.4633558e-09,
+          "refined_second_field_m": 3.4633558e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1544,27 +1589,28 @@
           "samples": 462,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 4.2789034e-05,
+          "signed_field_witness_m": 0.00039006863,
           "witness_point_m": [
-            -0.004041859,
-            -0.44130915,
-            0.07157747
+            -0.00904186,
+            -0.44630915,
+            0.07657747
           ],
           "refined_point_m": [
-            -0.00203014,
-            -0.43867242,
-            0.07601106
+            -0.006092641,
+            -0.44193414,
+            0.07780794
           ],
-          "refined_field_witness_m": 6.693881e-10,
-          "refined_first_field_m": -0.0004161317,
-          "refined_second_field_m": 6.693881e-10,
+          "refined_field_witness_m": 5.5879354e-09,
+          "refined_first_field_m": -5.5879354e-09,
+          "refined_second_field_m": 5.5879354e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1592,7 +1638,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1620,7 +1667,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1649,20 +1697,21 @@
             0.17865571
           ],
           "refined_point_m": [
-            -0.008593583,
-            -0.48529703,
-            0.177269
+            -0.012597489,
+            -0.48387122,
+            0.17828461
           ],
-          "refined_field_witness_m": 1.3504177e-08,
-          "refined_first_field_m": -0.0016336613,
-          "refined_second_field_m": 1.3504177e-08,
+          "refined_field_witness_m": 7.916242e-09,
+          "refined_first_field_m": 7.916242e-09,
+          "refined_second_field_m": -7.916242e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1690,7 +1739,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1698,27 +1748,28 @@
           "samples": 1092,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.000102337915,
+          "signed_field_witness_m": 0.00010503689,
           "witness_point_m": [
-            -0.010777176,
-            -0.48743764,
+            -0.012777177,
+            -0.48343763,
             0.1781557
           ],
           "refined_point_m": [
-            -0.0122146765,
-            -0.48595324,
-            0.17751507
+            -0.013527177,
+            -0.48382825,
+            0.17778853
           ],
-          "refined_field_witness_m": 4.656613e-09,
-          "refined_first_field_m": -0.0012084879,
-          "refined_second_field_m": 4.656613e-09,
+          "refined_field_witness_m": 4.656613e-10,
+          "refined_first_field_m": 4.656613e-10,
+          "refined_second_field_m": -4.656613e-10,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1740,27 +1791,28 @@
           "samples": 704,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.00041553844,
+          "signed_field_witness_m": 0.001070072,
           "witness_point_m": [
             0.001090301,
             -0.46125695,
             0.12080881
           ],
           "refined_point_m": [
-            0.001168426,
-            -0.4608663,
-            0.11955881
+            0.0026137387,
+            -0.4605929,
+            0.120281465
           ],
-          "refined_field_witness_m": 1.6298145e-08,
-          "refined_first_field_m": -0.0013692272,
-          "refined_second_field_m": 1.6298145e-08,
+          "refined_field_witness_m": 4.656613e-09,
+          "refined_first_field_m": 4.656613e-09,
+          "refined_second_field_m": -4.656613e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1788,7 +1840,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1796,27 +1849,28 @@
           "samples": 9126,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 3.1543896e-06,
+          "signed_field_witness_m": 5.8738515e-05,
           "witness_point_m": [
-            0.00059030077,
-            -0.46175694,
-            0.116308816
+            0.002590301,
+            -0.45975694,
+            0.112308815
           ],
           "refined_point_m": [
-            0.0016840509,
-            -0.4626632,
-            0.11689475
+            0.002434051,
+            -0.45884287,
+            0.11175413
           ],
-          "refined_field_witness_m": 1.3969839e-09,
-          "refined_first_field_m": -1.3969839e-09,
-          "refined_second_field_m": 1.3969839e-09,
+          "refined_field_witness_m": 4.656613e-09,
+          "refined_first_field_m": 4.656613e-09,
+          "refined_second_field_m": -4.656613e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1858,7 +1912,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1873,20 +1928,21 @@
             0.013839519
           ],
           "refined_point_m": [
-            -0.008506704,
-            -0.42889524,
-            0.012843424
+            -0.008541861,
+            -0.42901242,
+            0.013007487
           ],
-          "refined_field_witness_m": 0.0,
-          "refined_first_field_m": -6.107153e-05,
-          "refined_second_field_m": 0.0,
+          "refined_field_witness_m": 1.0547378e-08,
+          "refined_first_field_m": 1.0547378e-08,
+          "refined_second_field_m": -1.0547378e-08,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -1914,7 +1970,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -1956,7 +2013,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -1984,7 +2042,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2012,7 +2071,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2054,7 +2114,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2082,7 +2143,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2110,7 +2172,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2132,27 +2195,28 @@
           "samples": 3640,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.1907045e-05,
+          "signed_field_witness_m": 0.000109404915,
           "witness_point_m": [
-            0.023329388,
+            -0.031670615,
             0.004502016,
-            0.0064266976
+            -0.0035733033
           ],
           "refined_point_m": [
-            0.022860639,
-            0.004502016,
-            0.0061141974
+            -0.02692452,
+            0.0026856097,
+            -0.0018154908
           ],
-          "refined_field_witness_m": 1.3338474e-08,
-          "refined_first_field_m": -0.0015746593,
-          "refined_second_field_m": 1.3338474e-08,
+          "refined_field_witness_m": 5.437467e-09,
+          "refined_first_field_m": -5.437467e-09,
+          "refined_second_field_m": 5.437467e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2180,7 +2244,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2188,27 +2253,28 @@
           "samples": 56595,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.5570142e-06,
+          "signed_field_witness_m": 3.8072467e-06,
           "witness_point_m": [
-            -0.016170615,
-            0.04000202,
+            -0.008170615,
+            0.034002017,
             0.026926698
           ],
           "refined_point_m": [
-            -0.014404991,
-            0.038869206,
-            0.02740326
+            -0.0071940525,
+            0.032681704,
+            0.026317324
           ],
-          "refined_field_witness_m": 7.0776878e-09,
-          "refined_first_field_m": -0.0025555084,
-          "refined_second_field_m": 7.0776878e-09,
+          "refined_field_witness_m": 2.73576e-09,
+          "refined_first_field_m": -2.73576e-09,
+          "refined_second_field_m": 2.73576e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2230,27 +2296,28 @@
           "samples": 594,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.8472903e-05,
+          "signed_field_witness_m": 0.00018150357,
           "witness_point_m": [
-            0.028454771,
+            0.018454771,
             0.004791853,
-            -0.0046612127
+            0.010338788
           ],
           "refined_point_m": [
-            0.02577899,
-            0.0040496658,
-            -0.0014580874
+            0.020759458,
+            0.0047527906,
+            0.011745038
           ],
-          "refined_field_witness_m": 5.005859e-09,
-          "refined_first_field_m": -0.0016029234,
-          "refined_second_field_m": 5.005859e-09,
+          "refined_field_witness_m": 2.8249339e-08,
+          "refined_first_field_m": 2.8249339e-08,
+          "refined_second_field_m": -2.8249339e-08,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2258,27 +2325,28 @@
           "samples": 2268,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.34641305e-05,
+          "signed_field_witness_m": 0.0005348994,
           "witness_point_m": [
-            0.02645477,
+            0.02045477,
             0.0037918522,
-            0.0073387856
+            0.010338786
           ],
           "refined_point_m": [
-            0.02504852,
-            0.004366071,
-            0.006143473
+            0.022318052,
+            0.0043074773,
+            0.0109598795
           ],
-          "refined_field_witness_m": 7.450581e-09,
-          "refined_first_field_m": -0.001310382,
-          "refined_second_field_m": 7.450581e-09,
+          "refined_field_witness_m": 7.0742283e-09,
+          "refined_first_field_m": 7.0742283e-09,
+          "refined_second_field_m": -7.0742283e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2286,27 +2354,28 @@
           "samples": 7098,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 8.836647e-06,
+          "signed_field_witness_m": 9.073186e-06,
           "witness_point_m": [
-            0.025954772,
+            0.023954771,
             0.004291853,
-            0.0018387869
+            -0.012161214
           ],
           "refined_point_m": [
-            0.02561102,
-            0.0025418529,
-            0.0025419118
+            0.022837583,
+            0.0046902904,
+            -0.013215901
           ],
-          "refined_field_witness_m": 1.7490361e-09,
-          "refined_first_field_m": -1.7490361e-09,
-          "refined_second_field_m": 1.7490361e-09,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2328,27 +2397,28 @@
           "samples": 528,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.8444454e-05,
+          "signed_field_witness_m": 0.00080196187,
           "witness_point_m": [
-            0.034128685,
-            0.02447171,
-            -0.0034948073
+            0.039128687,
+            0.009471708,
+            0.0015051931
           ],
           "refined_point_m": [
-            0.031784933,
-            0.024100617,
-            -0.0017369946
+            0.035007592,
+            0.00654202,
+            -0.001600276
           ],
-          "refined_field_witness_m": 1.3969839e-09,
-          "refined_first_field_m": -0.013240073,
-          "refined_second_field_m": 1.3969839e-09,
+          "refined_field_witness_m": 1.13408465e-08,
+          "refined_first_field_m": -1.13408465e-08,
+          "refined_second_field_m": 1.13408465e-08,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2376,7 +2446,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2404,7 +2475,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2426,27 +2498,28 @@
           "samples": 864,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 0.00013590604,
+          "signed_field_witness_m": 0.00028607476,
           "witness_point_m": [
-            -0.042823978,
-            0.02447171,
-            0.011143214
+            -0.037823975,
+            0.009471708,
+            0.0061432132
           ],
           "refined_point_m": [
-            -0.039015383,
-            0.020448271,
-            0.013018214
+            -0.037003662,
+            0.008299833,
+            0.0061822757
           ],
-          "refined_field_witness_m": 1.3969839e-08,
-          "refined_first_field_m": -0.0037430536,
-          "refined_second_field_m": 1.3969839e-08,
+          "refined_field_witness_m": 5.0265863e-09,
+          "refined_first_field_m": -5.0265863e-09,
+          "refined_second_field_m": 5.0265863e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2454,27 +2527,28 @@
           "samples": 3192,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.7858186e-05,
+          "signed_field_witness_m": 6.1262675e-05,
           "witness_point_m": [
-            -0.029823978,
-            0.0064717066,
-            0.008143213
+            -0.038823977,
+            0.009471706,
+            0.0021432124
           ],
           "refined_point_m": [
-            -0.02962476,
-            0.007057644,
-            0.0059049316
+            -0.036714602,
+            0.0075381123,
+            0.0021432124
           ],
-          "refined_field_witness_m": 9.313226e-10,
-          "refined_first_field_m": -0.0030245683,
-          "refined_second_field_m": 9.313226e-10,
+          "refined_field_witness_m": 6.7154025e-09,
+          "refined_first_field_m": 6.7154025e-09,
+          "refined_second_field_m": -6.7154025e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2482,27 +2556,28 @@
           "samples": 10962,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 7.930212e-06,
+          "signed_field_witness_m": 2.6909041e-05,
           "witness_point_m": [
-            -0.030323977,
-            0.015971707,
-            0.007643213
+            -0.040323976,
+            0.013971708,
+            0.011643213
           ],
           "refined_point_m": [
-            -0.030316165,
-            0.01579202,
-            0.0076197754
+            -0.040573977,
+            0.014042021,
+            0.011158838
           ],
-          "refined_field_witness_m": 6.9849193e-09,
-          "refined_first_field_m": -0.00969159,
-          "refined_second_field_m": 6.9849193e-09,
+          "refined_field_witness_m": 1.608641e-09,
+          "refined_first_field_m": -1.608641e-09,
+          "refined_second_field_m": 1.608641e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2531,20 +2606,21 @@
             -0.010270742
           ],
           "refined_point_m": [
-            -0.026798628,
-            0.004061551,
-            -0.009333242
+            -0.02652519,
+            0.0043154573,
+            -0.0102902725
           ],
-          "refined_field_witness_m": 1.2756762e-08,
-          "refined_first_field_m": -1.2756762e-08,
-          "refined_second_field_m": 1.2756762e-08,
+          "refined_field_witness_m": 1.8261254e-09,
+          "refined_first_field_m": -1.8261254e-09,
+          "refined_second_field_m": 1.8261254e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2552,27 +2628,28 @@
           "samples": 2565,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 9.240839e-05,
+          "signed_field_witness_m": 0.0006261231,
           "witness_point_m": [
-            -0.022423629,
-            0.0034717063,
-            -0.008270742
+            -0.02542363,
+            0.0064717066,
+            -0.014270742
           ],
           "refined_point_m": [
-            -0.023771284,
-            0.0059443624,
-            -0.010696524
+            -0.027286911,
+            0.0052060816,
+            -0.012219961
           ],
-          "refined_field_witness_m": 3.137393e-08,
-          "refined_first_field_m": -0.0017058535,
-          "refined_second_field_m": 3.137393e-08,
+          "refined_field_witness_m": 1.46029935e-08,
+          "refined_first_field_m": 1.46029935e-08,
+          "refined_second_field_m": -1.46029935e-08,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2580,27 +2657,28 @@
           "samples": 9338,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 2.6817284e-05,
+          "signed_field_witness_m": 8.206044e-05,
           "witness_point_m": [
-            -0.027923629,
-            0.003971707,
-            0.009229259
+            -0.021923628,
+            0.005971707,
+            -0.0147707425
           ],
           "refined_point_m": [
-            -0.027189255,
-            0.0036670195,
-            0.008862072
+            -0.020829877,
+            0.0058388947,
+            -0.0144816805
           ],
-          "refined_field_witness_m": 3.6332102e-09,
-          "refined_first_field_m": -3.6332102e-09,
-          "refined_second_field_m": 3.6332102e-09,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2642,7 +2720,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2650,27 +2729,28 @@
           "samples": 1560,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.1436176e-05,
+          "signed_field_witness_m": 7.9120226e-05,
           "witness_point_m": [
             0.038128685,
-            -0.02401415,
-            -0.010494809
+            -0.012014152,
+            -0.0044948086
           ],
           "refined_point_m": [
-            0.039066188,
-            -0.024564933,
-            -0.009475278
+            0.035316184,
+            -0.012728996,
+            -0.0061588716
           ],
-          "refined_field_witness_m": 1.3969839e-09,
-          "refined_first_field_m": -0.004527501,
-          "refined_second_field_m": 1.3969839e-09,
+          "refined_field_witness_m": 6.148184e-10,
+          "refined_first_field_m": -6.148184e-10,
+          "refined_second_field_m": 6.148184e-10,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2678,27 +2758,28 @@
           "samples": 5130,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 1.0755844e-05,
+          "signed_field_witness_m": 2.1800915e-05,
           "witness_point_m": [
-            0.034628686,
-            -0.01551415,
-            -0.009994808
+            0.036628686,
+            -0.011514151,
+            -0.007994808
           ],
           "refined_point_m": [
-            0.033448998,
-            -0.013498525,
-            -0.00840887
+            0.034714624,
+            -0.013068839,
+            -0.006861996
           ],
-          "refined_field_witness_m": 2.3283064e-09,
-          "refined_first_field_m": -1.4039688e-07,
-          "refined_second_field_m": 2.3283064e-09,
+          "refined_field_witness_m": 4.7330104e-09,
+          "refined_first_field_m": 4.7330104e-09,
+          "refined_second_field_m": 4.7330104e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2727,20 +2808,21 @@
             0.0064266976
           ],
           "refined_point_m": [
-            -0.025978316,
-            -0.00020501523,
-            0.00287201
+            -0.031857222,
+            0.0004981098,
+            0.009707948
           ],
-          "refined_field_witness_m": 1.0011925e-08,
-          "refined_first_field_m": 1.0011925e-08,
-          "refined_second_field_m": 1.0011925e-08,
+          "refined_field_witness_m": 5.912215e-09,
+          "refined_first_field_m": 5.912215e-09,
+          "refined_second_field_m": -5.912215e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2768,7 +2850,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2796,7 +2879,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2818,27 +2902,28 @@
           "samples": 715,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 6.143448e-05,
+          "signed_field_witness_m": 0.00022366657,
           "witness_point_m": [
-            0.007467036,
-            0.03958611,
+            -0.0075329645,
+            0.029586108,
             0.030457674
           ],
           "refined_point_m": [
-            0.0052404734,
-            0.034664236,
-            0.028563142
+            -0.006771246,
+            0.034488454,
+            0.029832674
           ],
-          "refined_field_witness_m": 3.3178367e-09,
-          "refined_first_field_m": 3.3178367e-09,
-          "refined_second_field_m": -3.3178367e-09,
+          "refined_field_witness_m": 7.6324795e-09,
+          "refined_first_field_m": -7.6324795e-09,
+          "refined_second_field_m": 7.6324795e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2866,7 +2951,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2894,7 +2980,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -2936,7 +3023,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -2944,16 +3032,16 @@
           "samples": 6534,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 3.3227698e-05,
+          "signed_field_witness_m": 0.00027787616,
           "witness_point_m": [
             0.024329383,
             -0.0054979846,
-            -0.0065733045
+            -0.009573305
           ],
           "refined_point_m": [
             0.024247352,
             -0.0047362656,
-            -0.0075108046
+            -0.007510805
           ],
           "refined_field_witness_m": 4.1909516e-09,
           "refined_first_field_m": 4.1909516e-09,
@@ -2964,7 +3052,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -2992,7 +3081,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -3021,20 +3111,21 @@
             -0.0034948073
           ],
           "refined_point_m": [
-            0.033210717,
-            -0.00044252214,
-            -3.77759e-05
+            0.034675557,
+            0.00065122795,
+            0.00070441177
           ],
-          "refined_field_witness_m": 5.5879354e-09,
-          "refined_first_field_m": -0.0016454256,
-          "refined_second_field_m": 5.5879354e-09,
+          "refined_field_witness_m": 7.2759576e-09,
+          "refined_first_field_m": -7.2759576e-09,
+          "refined_second_field_m": 7.2759576e-09,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -3042,27 +3133,28 @@
           "samples": 819,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 3.304705e-05,
+          "signed_field_witness_m": 0.000115332834,
           "witness_point_m": [
-            0.032128684,
+            0.035128687,
             0.0007918521,
-            -0.0044948086
+            -0.0014948084
           ],
           "refined_point_m": [
-            0.034577902,
-            -0.0012120542,
-            -0.00307684
+            0.034941185,
+            0.0011551335,
+            -0.0008854334
           ],
-          "refined_field_witness_m": 1.7462298e-10,
-          "refined_first_field_m": 1.7462298e-10,
-          "refined_second_field_m": -1.7462298e-10,
+          "refined_field_witness_m": 9.138603e-09,
+          "refined_first_field_m": -9.138603e-09,
+          "refined_second_field_m": 9.138603e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -3090,7 +3182,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -3132,7 +3225,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -3160,7 +3254,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -3175,20 +3270,21 @@
             -0.0039948076
           ],
           "refined_point_m": [
-            0.032628685,
-            -0.00763915,
-            -0.0031198077
+            0.033113062,
+            -0.006631338,
+            -0.0042448076
           ],
-          "refined_field_witness_m": 1.3969839e-09,
-          "refined_first_field_m": -0.0011499663,
-          "refined_second_field_m": 1.3969839e-09,
+          "refined_field_witness_m": 1.7462298e-09,
+          "refined_first_field_m": -1.7462298e-09,
+          "refined_second_field_m": 1.7462298e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -3217,20 +3313,21 @@
             0.011143214
           ],
           "refined_point_m": [
-            -0.029103316,
-            -0.00054429285,
-            0.00639712
+            -0.032462694,
+            0.00013930099,
+            0.011065089
           ],
-          "refined_field_witness_m": 4.656613e-09,
-          "refined_first_field_m": -0.00018499464,
-          "refined_second_field_m": 4.656613e-09,
+          "refined_field_witness_m": 0.0,
+          "refined_first_field_m": 0.0,
+          "refined_second_field_m": -0.0,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -3238,27 +3335,28 @@
           "samples": 1320,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 5.1965006e-05,
+          "signed_field_witness_m": 0.0002295908,
           "witness_point_m": [
-            -0.03142363,
+            -0.03742363,
             -0.00026694988,
-            0.011143212
+            0.0021432124
           ],
           "refined_point_m": [
-            -0.032126755,
-            -0.00077085616,
-            0.011565087
+            -0.03741191,
+            -0.0010052312,
+            0.0028346186
           ],
-          "refined_field_witness_m": 4.656613e-09,
-          "refined_first_field_m": 4.656613e-09,
-          "refined_second_field_m": -4.656613e-09,
+          "refined_field_witness_m": 5.820766e-09,
+          "refined_first_field_m": 5.820766e-09,
+          "refined_second_field_m": -5.820766e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -3286,7 +3384,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -3328,7 +3427,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -3343,20 +3443,21 @@
             0.011143212
           ],
           "refined_point_m": [
-            -0.031095,
-            -0.0077966535,
-            0.011037743
+            -0.033098906,
+            -0.00980056,
+            0.009420556
           ],
-          "refined_field_witness_m": 8.8475645e-09,
-          "refined_first_field_m": -0.0024171886,
-          "refined_second_field_m": 8.8475645e-09,
+          "refined_field_witness_m": 4.370122e-09,
+          "refined_first_field_m": 4.370122e-09,
+          "refined_second_field_m": -4.370122e-09,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -3364,27 +3465,28 @@
           "samples": 13284,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 3.911101e-05,
+          "signed_field_witness_m": 5.2904106e-05,
           "witness_point_m": [
-            -0.03167703,
-            -0.0015583694,
-            0.005643213
+            -0.03567703,
+            -0.009558369,
+            0.0036432128
           ],
           "refined_point_m": [
-            -0.03367703,
-            -0.0025583694,
-            0.0076432135
+            -0.03475516,
+            -0.010238057,
+            0.0041666506
           ],
-          "refined_field_witness_m": 3.5455374e-09,
-          "refined_first_field_m": 3.5455374e-09,
-          "refined_second_field_m": -3.5455374e-09,
+          "refined_field_witness_m": 1.717126e-09,
+          "refined_first_field_m": 1.717126e-09,
+          "refined_second_field_m": -1.717126e-09,
           "refine_half_widths_m": [
             0.002,
             0.000125
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -3413,20 +3515,21 @@
             -0.010270742
           ],
           "refined_point_m": [
-            -0.020353317,
-            -0.0029271054,
-            -0.0079074595
+            -0.02523613,
+            -0.0015599179,
+            -0.010348867
           ],
-          "refined_field_witness_m": 1.8946594e-08,
-          "refined_first_field_m": -0.0023812542,
-          "refined_second_field_m": 1.8946594e-08,
+          "refined_field_witness_m": 9.899268e-10,
+          "refined_first_field_m": -9.899268e-10,
+          "refined_second_field_m": 9.899268e-10,
           "refine_half_widths_m": [
             0.0050000004,
             0.00031250002
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -3434,27 +3537,28 @@
           "samples": 2565,
           "overlap_samples": 0,
           "overlap_volume_m3": 0.0,
-          "signed_field_witness_m": 4.1529856e-06,
+          "signed_field_witness_m": 3.832058e-05,
           "witness_point_m": [
-            -0.01942363,
+            -0.02542363,
             -0.00326695,
-            -0.008270742
+            -0.014270742
           ],
           "refined_point_m": [
-            -0.017501755,
-            -0.0017903873,
-            -0.00726293
+            -0.025306443,
+            -0.0039349184,
+            -0.015313711
           ],
-          "refined_field_witness_m": 6.9849193e-09,
-          "refined_first_field_m": -0.0011470856,
-          "refined_second_field_m": 6.9849193e-09,
+          "refined_field_witness_m": 7.860961e-10,
+          "refined_first_field_m": -7.860961e-10,
+          "refined_second_field_m": 7.860961e-10,
           "refine_half_widths_m": [
             0.003,
             0.0001875
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -3482,7 +3586,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
@@ -3524,7 +3629,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.003,
@@ -3552,7 +3658,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         },
         {
           "step_m": 0.002,
@@ -3580,7 +3687,8 @@
           ],
           "refine_samples_per_axis": 33,
           "local_overlap_samples": 0,
-          "local_overlap_volume_m3": 0.0
+          "local_overlap_volume_m3": 0.0,
+          "local_overlap_volume_method": "endpoint-weighted coarse cube samples"
         }
       ],
       "status": "no_common_interior_sampled"
