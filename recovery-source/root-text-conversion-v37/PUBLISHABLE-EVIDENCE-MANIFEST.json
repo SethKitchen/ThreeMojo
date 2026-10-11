@@ -1,0 +1,28 @@
+{
+  "base_commit": "19287a0b1564b9a628f15c96e7675c51413ca1a9",
+  "candidate_source_seal_sha256": "5c36727fbd5393d49b9efa1a25edc8621fb4b308ed6ecf61630c30c4992db448",
+  "files": [
+    {
+      "before_sha256": "9b3848e41376ca31b7399998187b30f1c05519ba263961e16380a780b92f4643",
+      "bytes": 103817,
+      "git_blob": "254eddaeb109ee5c0f640087777399dabecb42ee",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "sha256": "993496a159a84a9515ee3284cb6a36a8f411820ba4d4d4df0fe5e6766cb74498",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle/full_audit_cleanup_contracts.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle/full_audit_cleanup_contracts.py"
+    },
+    {
+      "before_sha256": "6bf4cc71084e6a5f4471f12dc1f6f77719d39d5449617d65d6a2f2a426444351",
+      "bytes": 200161,
+      "git_blob": "e670c26804bf2466628dceac840cab7789dfaf4f",
+      "mode": "100644",
+      "path": "tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "sha256": "214a6354c8a2022e04302da022c3afaa79e63446745049fec5aa37942dcacab2",
+      "source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle/test_invariant_operation_inputs.py",
+      "local_source": "/workspace/scratch/c2bcdb1ca387/pr721-rebuild-20261010/candidate-v37/tools/carla_lane_oracle/test_invariant_operation_inputs.py"
+    }
+  ],
+  "schema": 1,
+  "status": "REVIEWED_SOURCE_CHECKPOINT;8 mechanics executions and1 maintained CLI probe passed; full affected variants ongoing; no integration publication or full qualification"
+}
