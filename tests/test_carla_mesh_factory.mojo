@@ -132,20 +132,20 @@ def _road(
 ) raises -> Int:
     # One straight section east from (0, y); `curve` bends the elevation so
     # the lanes are not straight.
-    var r = b.add_road(
+    var r = b.add_road_si(
         RoadId(id), "r", length, JuncId(junction), RoadId(0), RoadId(0), rht
     )
-    _ = b.add_road_section(r, SectionId(0), 0.0)
+    _ = b.add_road_section_si(r, SectionId(0), 0.0)
     for lane in lanes:
         _ = b.add_road_section_lane(
             r, 0, LaneId(lane[0]), lane[1], False, LaneId(0), LaneId(0)
         )
-        b.create_lane_width(
-            b.lane(RoadId(id), LaneId(lane[0]), 0.0), 0.0, lane[2], 0, 0, 0
+        b.create_lane_width_si(
+            b.lane_si(RoadId(id), LaneId(lane[0]), 0.0), 0.0, lane[2], 0, 0, 0
         )
-    b.create_section_offset(r, 0.0, 0, 0, 0, 0)
-    b.add_road_elevation_profile(r, 0.0, elevation, 0, curve, 0)
-    b.add_road_geometry_line(r, 0.0, 0.0, y, 0.0, length)
+    b.create_section_offset_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 0.0, elevation, 0, curve, 0)
+    b.add_road_geometry_line_si(r, 0.0, 0.0, y, 0.0, length)
     return r
 
 
@@ -316,9 +316,9 @@ def test_walls() raises:
     _near(_normal(g, 0), 0.0, -1.0, 0.0)
     _near(_normal(g, 4), 0.0, 1.0, 0.0)
     assert_equal(g.groups[0].material_index.value, WALL_SURFACE.value)
-    var right = factory.generate_right_wall(road, 0, 1, 1.0, 5.0)
+    var right = factory.generate_right_wall_si(road, 0, 1, 1.0, 5.0)
     assert_equal(right.vertex_count(), 4)
-    var left = factory.generate_left_wall(road, 0, 2, 1.0, 5.0)
+    var left = factory.generate_left_wall_si(road, 0, 2, 1.0, 5.0)
     assert_equal(left.vertex_count(), 0)
     # A curved wall has a row every resolution: 17 rows on lane -1's
     # second edge and 17 on lane -2's first.
@@ -350,10 +350,10 @@ def test_walls() raises:
         factory.generate_walls(small.road(RoadId(3)), 0).vertex_count(), 0
     )
     var empty = MapBuilder()
-    var r = empty.add_road(
+    var r = empty.add_road_si(
         RoadId(1), "", 10, JuncId(-1), RoadId(0), RoadId(0), True
     )
-    _ = empty.add_road_section(r, SectionId(0), 0.0)
+    _ = empty.add_road_section_si(r, SectionId(0), 0.0)
     with assert_raises():
         _ = factory.generate_walls(empty.roads[0], 0)
 
@@ -640,15 +640,15 @@ def test_edges_for_lanemark() raises:
     )
     var map = b.build()
     ref road = map.road(RoadId(1))
-    var e = factory.compute_edges_for_lanemark(road, 0, 1, 5.0, 0.2, 0.0)
+    var e = factory.compute_edges_for_lanemark_si(road, 0, 1, 5.0, 0.2, 0.0)
     _near(e[0], 5.0, 3.5, 0.0)
     _near(e[1], 5.0, 3.3, 0.0)
     # A lane of no width borrows lane -1's direction.
-    e = factory.compute_edges_for_lanemark(road, 0, 0, 5.0, 0.2, 0.0)
+    e = factory.compute_edges_for_lanemark_si(road, 0, 0, 5.0, 0.2, 0.0)
     _near(e[0], 5.0, 3.5, 0.0)
     _near(e[1], 5.0, 3.3, 0.0)
     # With no lane of any width the mark has no width either.
-    e = factory.compute_edges_for_lanemark(
+    e = factory.compute_edges_for_lanemark_si(
         map.road(RoadId(2)), 0, 0, 5.0, 0.2, 0.0
     )
     _near(e[1], 5.0, -20.0, 0.0)
@@ -888,7 +888,9 @@ def test_filters() raises:
     )
     assert_equal(len(some), 3)
     var bare = MapBuilder()
-    _ = bare.add_road(RoadId(1), "", 10, JuncId(-1), RoadId(0), RoadId(0), True)
+    _ = bare.add_road_si(
+        RoadId(1), "", 10, JuncId(-1), RoadId(0), RoadId(0), True
+    )
     with assert_raises():
         _ = filter_roads_by_position(
             bare.build(), Vector3(-1, 1, 0), Vector3(1, -1, 0)
@@ -1043,19 +1045,19 @@ def test_crosswalk_mesh() raises:
         [(-1, LANE_DRIVING, 3.5), (0, LANE_NONE, 0.0)],
     )
     var cw: List[CrosswalkPoint] = [
-        CrosswalkPoint(-1, -1, 0),
-        CrosswalkPoint(-1, 1, 0),
-        CrosswalkPoint(1, 1, 0),
-        CrosswalkPoint(1, -1, 0),
-        CrosswalkPoint(-1, -1, 0),
+        CrosswalkPoint._from_si(-1, -1, 0),
+        CrosswalkPoint._from_si(-1, 1, 0),
+        CrosswalkPoint._from_si(1, 1, 0),
+        CrosswalkPoint._from_si(1, -1, 0),
+        CrosswalkPoint._from_si(-1, -1, 0),
     ]
-    b.add_road_object_crosswalk(r, "cw", 5, 0, 0, 0, 0, 0, "", 2, 2, cw)
+    b.add_road_object_crosswalk_si(r, "cw", 5, 0, 0, 0, 0, 0, "", 2, 2, cw)
     var open: List[CrosswalkPoint] = [
-        CrosswalkPoint(-1, -1, 0),
-        CrosswalkPoint(1, -1, 0),
-        CrosswalkPoint(1, 1, 0),
+        CrosswalkPoint._from_si(-1, -1, 0),
+        CrosswalkPoint._from_si(1, -1, 0),
+        CrosswalkPoint._from_si(1, 1, 0),
     ]
-    b.add_road_object_crosswalk(r, "open", 20, 0, 0, 0, 0, 0, "", 2, 2, open)
+    b.add_road_object_crosswalk_si(r, "open", 20, 0, 0, 0, 0, 0, "", 2, 2, open)
     var small = b.build()
     var turned = all_crosswalk_mesh(small)
     assert_equal(turned.vertex_count(), 4)
@@ -1085,14 +1087,14 @@ def _bare(
 ) raises -> Int:
     # A flat, straight 10 m road with its records and sections that have
     # no lanes.
-    var r = b.add_road(
+    var r = b.add_road_si(
         RoadId(id), "bare", 10.0, JuncId(junction), RoadId(0), RoadId(0), True
     )
     for i in range(len(sections)):
-        _ = b.add_road_section(r, SectionId(i), sections[i])
-    b.create_section_offset(r, 0.0, 0, 0, 0, 0)
-    b.add_road_elevation_profile(r, 0.0, 0, 0, 0, 0)
-    b.add_road_geometry_line(r, 0.0, 0.0, 20.0 * Float64(id), 0.0, 10.0)
+        _ = b.add_road_section_si(r, SectionId(i), sections[i])
+    b.create_section_offset_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_elevation_profile_si(r, 0.0, 0, 0, 0, 0)
+    b.add_road_geometry_line_si(r, 0.0, 0.0, 20.0 * Float64(id), 0.0, 10.0)
     return r
 
 
@@ -1101,19 +1103,19 @@ def test_single_rows() raises:
     var map = load_opendrive_file(TOWN)
     var factory = MeshFactory()
     var straight = map.road(RoadId(1)).copy()
-    var lane = factory.generate_lane(straight, 0, 1, 10.0, 5.0)
+    var lane = factory.generate_lane_si(straight, 0, 1, 10.0, 5.0)
     assert_equal(lane.vertex_count(), 2)
     assert_equal(len(lane.index), 0)
-    var curved = factory.generate_lane(map.road(RoadId(11)), 0, 1, 10.0, 5.0)
+    var curved = factory.generate_lane_si(map.road(RoadId(11)), 0, 1, 10.0, 5.0)
     assert_equal(curved.vertex_count(), 2)
-    var grid = factory.generate_tesselated(straight, 0, 1, 10.0, 5.0)
+    var grid = factory.generate_tesselated_si(straight, 0, 1, 10.0, 5.0)
     assert_equal(grid.vertex_count(), 4)
     assert_equal(len(grid.index), 0)
-    var block = factory.generate_sidewalk(straight, 0, 1, 10.0, 5.0)
+    var block = factory.generate_sidewalk_si(straight, 0, 1, 10.0, 5.0)
     assert_equal(block.vertex_count(), 6)
     assert_equal(len(block.index), 0)
     # Lane 0 has no vertices, in either frame.
-    var none = factory.generate_lane(straight, 0, 2, 0.5, 5.0)
+    var none = factory.generate_lane_si(straight, 0, 2, 0.5, 5.0)
     assert_equal(to_three_frame(none).vertex_count(), 0)
     # Two copies of a lane: each vertex has a twin that weighs nothing,
     # and the flat lane stays flat.
@@ -1187,7 +1189,7 @@ def test_roads_with_no_lanes() raises:
     # lanes; junction 8 connects nothing.
     _ = _bare(b, 1, -1, List[Float64]())
     var r2 = _bare(b, 2, -1, [0.0])
-    b.add_road_object_crosswalk(
+    b.add_road_object_crosswalk_si(
         r2,
         "dot",
         5.0,
@@ -1199,7 +1201,10 @@ def test_roads_with_no_lanes() raises:
         "+",
         1.0,
         1.0,
-        [CrosswalkPoint(1.0, 1.0, 0.0), CrosswalkPoint(1.0, 1.0, 0.0)],
+        [
+            CrosswalkPoint._from_si(1.0, 1.0, 0.0),
+            CrosswalkPoint._from_si(1.0, 1.0, 0.0),
+        ],
     )
     _ = _bare(b, 9, -1, [0.0, 4.0e-15])
     _ = _bare(b, 3, 7, List[Float64]())
@@ -1296,7 +1301,7 @@ def test_placing_roads_with_no_lanes() raises:
         0,
         [(-1, LANE_DRIVING, 3.5), (0, LANE_NONE, 0.0)],
     )
-    _ = b.add_road_section(r5, SectionId(1), 10.0)
+    _ = b.add_road_section_si(r5, SectionId(1), 10.0)
     var map = b.build()
     var low = Vector3(-1000, 1000, 0)
     var high = Vector3(1000, -1000, 0)
@@ -1325,7 +1330,7 @@ def test_junction_edges() raises:
     var r = _road(b, 60, 0, 20, 50, True, 0, 0, [(-1, LANE_DRIVING, 3.5)])
     var starts: List[Float64] = [10.00000001, 10.00000002]
     for i in range(2):
-        var sec = b.add_road_section(r, SectionId(i + 1), starts[i])
+        var sec = b.add_road_section_si(r, SectionId(i + 1), starts[i])
         var ids: List[Int] = [-2, -1] if i == 0 else [-1]
         for id in ids:
             _ = b.add_road_section_lane(
@@ -1337,8 +1342,8 @@ def test_junction_edges() raises:
                 LaneId(0),
                 LaneId(0),
             )
-            b.create_lane_width(
-                b.lane(RoadId(60), LaneId(id), starts[i]),
+            b.create_lane_width_si(
+                b.lane_si(RoadId(60), LaneId(id), starts[i]),
                 starts[i],
                 3.5,
                 0,
