@@ -81,12 +81,66 @@ class TypedNamespaceResolution(unittest.TestCase):
             new = audit._render_lookup_args(self.paths, [*self.entries, 'assets'])
             self.assertFalse(audit.resolver_unshadowed(self.root, self.paths, **new))
 
+    def test_supplied_checker_parent_symlink_is_not_a_regular_receipt_image(self):
+        actual = self.root/'actual-tools'
+        actual.mkdir()
+        (self.root/'tools').symlink_to(actual, target_is_directory=True)
+        with self.assertRaisesRegex(ValueError, 'symlink input: tools/carla_lane_oracle/full_audit_cleanup_contracts.py'):
+            audit.executing_checker_bindings(self.root)
+
 
 class TypedCurrentOwnedOperation(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         owner = type('FixtureOwner', (), {'addCleanup': staticmethod(cls.addClassCleanup)})()
         cls.root = fixtures.copy_current_root(owner, ROOT)
+
+    def test_translated_method_projection_requires_current_map_and_deviation_leaf(self):
+        import ast
+        import hashlib
+        import json
+        import re
+        runner = ROOT/'tools/carla_lane_oracle/translated_parameter_resolution.py'
+        tree = ast.parse(runner.read_text())
+        names = {'_current_bytes', '_historical_text', '_finish_current_graph', 'method_bytes'}
+        functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)
+                     and node.name in names]
+        self.assertEqual({node.name for node in functions}, names)
+        bindings = audit.proof_bindings(self.root)
+        namespace = {'SOURCE': self.root, '_CURRENT_BINDINGS': bindings,
+                     '_OBSERVED': {}, 'hashlib': hashlib, 're': re,
+                     'full_audit': audit, 'typed_boundary': typed}
+        exec(compile(ast.Module(body=functions, type_ignores=[]), str(runner), 'exec'), namespace)
+        pins = json.loads((self.root/'tools/carla_lane_oracle/translated-parameter-source.json').read_text())
+        self.assertEqual(len(pins['methods']), 21)
+        for item in pins['methods']:
+            actual = namespace['method_bytes'](item['path'], item['name'])
+            self.assertEqual(hashlib.sha256(actual).hexdigest(), item['sha256'])
+        namespace['_finish_current_graph']()
+        map_name = 'extensions/carla/map.mojo'
+        leaf_name = 'tools/carla_lane_oracle/map_deviation_contracts.py'
+        for name in (map_name, leaf_name):
+            target = self.root/name
+            raw = target.read_bytes()
+            self.assertEqual(bindings[name], hashlib.sha256(raw).hexdigest())
+            marker = b'                certificate[0],'
+            if name == map_name:
+                self.assertEqual(raw.count(marker), 1)
+                changed = raw.replace(marker, b'                certificate[0] + 1.0,', 1)
+            else:
+                changed = raw + b'\n# unreviewed deviation leaf\n'
+            try:
+                target.write_bytes(changed)
+                with self.subTest(input=name), self.assertRaises(ValueError):
+                    audit.proof_bindings(self.root)
+                with self.subTest(consumed=name), self.assertRaisesRegex(
+                        ValueError, 'Current fixture input changed'):
+                    if name == map_name:
+                        namespace['method_bytes'](map_name, '_subdivide_segment')
+                    else:
+                        namespace['_finish_current_graph']()
+            finally:
+                target.write_bytes(raw)
 
     @contextmanager
     def after_last_consumer(self, action):
