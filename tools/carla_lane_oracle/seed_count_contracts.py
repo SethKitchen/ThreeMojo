@@ -11,6 +11,8 @@ from functools import lru_cache
 import hashlib
 import importlib.util
 import json
+import re
+import types
 import textwrap
 import tokenize
 from pathlib import Path
@@ -39,6 +41,8 @@ def _sibling_tool(name):
 
 affected = _sibling_tool('affected')
 cache_key = _sibling_tool('cache_key')
+_IMPORT_NAME_PARSER = affected.imported_names
+_IMPORT_NAME_PARSER_CODE = _IMPORT_NAME_PARSER.__code__
 
 MODULE = 'extensions/carla/map.mojo'
 MIGRATION = 'tools/carla_lane_oracle/seed-count-successor.json'
@@ -292,6 +296,55 @@ def verify_source(text, record):
             'before_token_sha256': BEFORE_TOKEN_SHA256, 'after_token_sha256': AFTER_TOKEN_SHA256}
 
 
+def _imported_name_lines(text):
+    """Encode only the parser's immutable lexical names, never its admission."""
+    names = affected.imported_names(text)
+    if type(names) is not list:
+        return (names,)
+    for name in names:
+        if type(name) is not str or not name or '\n' in name:
+            return (names,)
+    return '\n'.join(names)
+
+
+_IMPORT_NAME_ENCODER = _imported_name_lines
+_IMPORT_NAME_ENCODER_CODE = _imported_name_lines.__code__
+
+
+def _imported_names(text):
+    """Reuse exact-text lexical names only inside the existing invocation scope."""
+    if type(text) is not str or type(source) is not types.ModuleType:
+        return affected.imported_names(text)
+    active = vars(source).get('_active_lexical_memo')
+    if type(active) is not types.FunctionType or active() is None:
+        return affected.imported_names(text)
+    if type(affected) is not types.ModuleType:
+        return affected.imported_names(text)
+    namespace = vars(affected)
+    parser = namespace.get('imported_names')
+    encoder = _imported_name_lines
+    memoize = vars(source).get('_lexical_string')
+    patterns = tuple(namespace.get(name) for name in ('FROM_IMPORT', 'PLAIN_IMPORT', 'ALIAS'))
+    if (parser is not _IMPORT_NAME_PARSER or type(parser) is not types.FunctionType
+            or parser.__globals__ is not namespace or parser.__code__ is not _IMPORT_NAME_PARSER_CODE
+            or encoder is not _IMPORT_NAME_ENCODER or type(encoder) is not types.FunctionType
+            or encoder.__code__ is not _IMPORT_NAME_ENCODER_CODE
+            or parser.__defaults__ is not None or parser.__kwdefaults__ is not None
+            or encoder.__defaults__ is not None or encoder.__kwdefaults__ is not None
+            or type(memoize) is not types.FunctionType
+            or any(type(value) is not re.Pattern for value in patterns)):
+        return affected.imported_names(text)
+    codes = (encoder.__code__, parser.__code__)
+    result = memoize(encoder, (text,),
+                     (encoder, parser, *codes, *(id(code) for code in codes),
+                      *patterns, *(id(value) for value in patterns)))
+    # Unsupported parser results were deliberately not memoized. Preserve their
+    # original identity and behavior rather than interpreting them as names.
+    if type(result) is not str:
+        return result[0]
+    return result.split('\n') if result else []
+
+
 def dependency_inventory(root, *, _inputs=None, _input_owner=None, _operation=None):
     """Resolve the actual maintained import closure, including package files."""
     root = Path(root)
@@ -311,7 +364,7 @@ def dependency_inventory(root, *, _inputs=None, _input_owner=None, _operation=No
         found.add(name)
         text = (((root/name).read_bytes() if _operation is None else full_audit._observe_bytes(root, name, (root/name).read_bytes(), _operation=_operation)).decode('utf-8') if _inputs is None else
                 _inputs.text_utf8(_input_owner, root, name))
-        for imported in affected.imported_names(text):
+        for imported in _imported_names(text):
             pending.extend(affected.resolve(imported, name, known))
     return found
 
