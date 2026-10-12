@@ -22,6 +22,8 @@ output to minus one to one, as CARLA's `PID` does. The measured
 acceleration is smoothed: four parts the last value to one part the new.
 """
 
+from extensions.carla.quantity_boundary import _finite_si, _positive_si
+
 from extensions.carla.physics.quantities import Jerk
 from units.si import (
     Acceleration,
@@ -241,7 +243,32 @@ struct PID(ImplicitlyCopyable):
         self.integral = 0
         self.last_input = 0
 
-    def run(mut self, input: Float32, dt: Float32) -> Float32:
+    def run(mut self, input: Float32, dt: Duration) raises -> Float32:
+        """Checked typed boundary. Run one step, `PID::Run`.
+
+        Args:
+            input: The measurement.
+            dt: The step, in seconds. It must be more than zero.
+
+        Returns:
+            The output, from minus one to one.
+        """
+        return self.run_seconds(input, dt.value)
+
+    def run_seconds(mut self, input: Float32, dt: Float32) raises -> Float32:
+        """Explicit source-unit compatibility adapter. Run one step, `PID::Run`.
+
+        Args:
+            input: The measurement.
+            dt: The step, in seconds. It must be more than zero.
+
+        Returns:
+            The output, from minus one to one.
+        """
+        _ = _positive_si(Float64(dt))
+        return self._run_si(input, dt)
+
+    def _run_si(mut self, input: Float32, dt: Float32) -> Float32:
         """Run one step, `PID::Run`.
 
         Args:
@@ -490,7 +517,7 @@ struct AckermannController(ImplicitlyCopyable):
 
     def _run_control_speed(mut self):
         self.speed_controller.set_point = self.target_speed
-        self.speed_control_accel_delta = self.speed_controller.run(
+        self.speed_control_accel_delta = self.speed_controller._run_si(
             self.vehicle_speed, self.delta_time
         )
         var low = -abs(self.target_acceleration)
@@ -506,7 +533,7 @@ struct AckermannController(ImplicitlyCopyable):
 
     def _run_control_acceleration(mut self):
         self.acceleration_controller.set_point = self.speed_control_accel_target
-        self.accel_control_pedal_delta = self.acceleration_controller.run(
+        self.accel_control_pedal_delta = self.acceleration_controller._run_si(
             self.vehicle_acceleration, self.delta_time
         )
         self.accel_control_pedal_target = _clamp(
