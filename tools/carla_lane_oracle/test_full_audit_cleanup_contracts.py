@@ -461,7 +461,12 @@ class FullAuditCleanupContracts(unittest.TestCase):
             runtime.MIGRATION: runtime.MIGRATION_SHA256,
             **runtime_record['correctness_tests'],
         }
-        for leaf in ('map_station_contracts.py', 'map_deviation_contracts.py', 'runtime_view_contracts.py'):
+        supplemental.update(cleanup.scaled_float32.AFTER_SHA256)
+        supplemental.update(cleanup.scaled_float32.PACKAGE_INPUTS)
+        supplemental.update(cleanup.scaled_float32.PROVIDER_INPUTS)
+        supplemental.update(cleanup.scaled_float32.TESTS)
+        for leaf in ('map_station_contracts.py', 'map_deviation_contracts.py',
+                     'runtime_view_contracts.py', 'scaled_float32_contracts.py'):
             path = 'tools/carla_lane_oracle/' + leaf
             supplemental[path] = cleanup.DEPENDENCY_TOOL_SHA256[path]
         supplemental.update(cleanup._witness_format_bindings(self.root))
