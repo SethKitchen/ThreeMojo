@@ -62,6 +62,9 @@ CarlaRecorder.h`, `CarlaRecorderHelpers.cpp`, `CarlaRecorderInfo.h`,
 `recorder_physics`.
 """
 
+from extensions.carla.quantity_boundary import _nonnegative_si
+from units.si import Duration64
+
 from extensions.carla.actor import ActorId, ActorKind, TrafficLightState
 from extensions.carla.blueprint import ActorAttributeType
 from extensions.carla.physics.vehicle_control import Gear
@@ -568,7 +571,18 @@ struct RecorderFrames(Movable):
         self.frame = RecorderFrame(0, 0, 0)
         self.offset_previous_frame = 0
 
-    def set_frame(mut self, delta_seconds: Float64):
+    def set_frame(mut self, delta_seconds: Duration64) raises:
+        """Count a frame with a finite nonnegative duration.
+
+        Args:
+            delta_seconds: The tick's duration.
+
+        Raises:
+            Error: If the duration or new elapsed time is invalid.
+        """
+        self.set_frame_seconds(delta_seconds.value)
+
+    def set_frame_seconds(mut self, delta_seconds: Float64) raises:
         """Count a frame, `SetFrame`.
 
         The first frame has no duration and starts at zero. Each later
@@ -577,12 +591,16 @@ struct RecorderFrames(Movable):
         Args:
             delta_seconds: The tick's duration in seconds.
         """
+        _ = _nonnegative_si(delta_seconds)
+        var elapsed = Float64(0)
+        if self.frame.id != 0:
+            elapsed = _nonnegative_si(self.frame.elapsed + delta_seconds)
         if self.frame.id == 0:
             self.frame.elapsed = 0
             self.frame.duration_this = 0
         else:
             self.frame.duration_this = delta_seconds
-            self.frame.elapsed += delta_seconds
+            self.frame.elapsed = elapsed
         self.frame.id += 1
 
     def write_start(mut self, mut w: ByteWriter) raises:
@@ -1892,7 +1910,25 @@ def weathers_packet(mut w: ByteWriter, records: List[RecordedWeather]) raises:
     write_packet(w, PACKET_WEATHER, body^.finish())
 
 
-def time_packet(mut w: ByteWriter, id: RecorderPacketId, time: Float64) raises:
+def time_packet(
+    mut w: ByteWriter, id: RecorderPacketId, time: Duration64
+) raises:
+    """Write a checked physical visual or platform time.
+
+    Args:
+        w: The destination byte stream.
+        id: The packet id.
+        time: The finite nonnegative time.
+
+    Raises:
+        Error: If the time or packet id is invalid.
+    """
+    time_packet_seconds(w, id, time.value)
+
+
+def time_packet_seconds(
+    mut w: ByteWriter, id: RecorderPacketId, time: Float64
+) raises:
     """Write a packet of one `double`: `PlatformTime` or `VisualTime`.
 
     Args:
@@ -1903,6 +1939,7 @@ def time_packet(mut w: ByteWriter, id: RecorderPacketId, time: Float64) raises:
     Raises:
         Error: If the id is not valid.
     """
+    _ = _nonnegative_si(time)
     var body = ByteWriter()
     body.f64(time)
     write_packet(w, id, body^.finish())
