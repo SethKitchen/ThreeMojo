@@ -4982,11 +4982,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
         'cache_key_contracts.py': '4dd8d16b6d7f1d415631cde453f9270cfe58fd6cdf1cd382e4e7cdde4ea076e2',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': 'c70c73fad4702cd41eeed5273dec6382c7be6111cd28d47daba195c2dd10c4be',
-        'full_audit_cleanup_contracts.py': '091df2a89a23f27b411477e61cb4532673baa1e8280c276cd6440a29af6ccca1',
+        'coverage_loop_proofs.py': 'cfcf2f9e741b5c2b34c2159745879e2ff59644ad28e114d6100e18a32e784222',
+        'full_audit_cleanup_contracts.py': '7dce3825ad86db18520e87a9716968e883995025105121eed77065ec54acee34',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': '099269aecd67f590ddee6a10e7ebddb83541401559312112b129b0aa2abece18',
+        'seed_count_contracts.py': 'b452184437c1ca5dc2f75b6b12509b1f2939219af4d22e56a135123fefee34d8',
         'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
     }
 
@@ -5432,7 +5432,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1205,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1226,
                                '_regular(root, path).read_bytes()')
         sequence = (1, 2, 5, 3, 4)
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth', 'census'):
@@ -5625,9 +5625,9 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                                      'guard.production_mojo_paths(root)')
         known_site = self._site(loops._construction_boundary_callers, 1220,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1541,
+        production_catch = self._site(core._operation_production_paths, 1568,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1349,
+        known_catch = self._site(loops.construction_boundary_loops, 1360,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
