@@ -352,7 +352,7 @@ def _carla_physics(id: Int) -> RecordedPhysicsControl:
 def _full_log() raises -> List[UInt8]:
     """The `full` recording of the reference program."""
     var r = Recorder()
-    _ = r.begin("", "Town10HD_Opt", True, DATE)
+    _ = r.begin_unix_seconds("", "Town10HD_Opt", True, DATE)
     # Frame 1.
     r.events_add.append(_add(1, OTHER_ACTOR, _zero(), _zero(), 0, "spectator"))
     r.events_add.append(
@@ -496,7 +496,7 @@ def _full_log() raises -> List[UInt8]:
             ],
         )
     )
-    r.write_frame(0.05, 0.0, 0.001234)
+    r.write_frame_seconds(0.05, 0.0, 0.001234)
     # Frame 2.
     r.collisions.append(
         RecordedCollision(0, ActorId(2), NOT_AN_ACTOR, True, False)
@@ -519,7 +519,7 @@ def _full_log() raises -> List[UInt8]:
     r.kinematics.append(
         RecordedKinematics(ActorId(2), LogVector(10, 0, 0), _zero())
     )
-    r.write_frame(0.05, 0.05, 0.5)
+    r.write_frame_seconds(0.05, 0.05, 0.5)
     # Frame 3.
     r.events_del.append(RecordedEventDel(ActorId(3)))
     r.collisions.append(
@@ -539,14 +539,14 @@ def _full_log() raises -> List[UInt8]:
             80, 60, 40, 30, 300, -10.5, 20, 2.5, 0.2, 55, 0.5, 0.1, 0.2, 1234567
         )
     )
-    r.write_frame(0.1, 0.1, 1e-7)
+    r.write_frame_seconds(0.1, 0.1, 1e-7)
     return r.bytes()
 
 
 def _collisions_log() raises -> List[UInt8]:
     """The `collisions` recording of the reference program."""
     var r = Recorder()
-    _ = r.begin("", "Town01", False, DATE + 3600 * 13 + 61)
+    _ = r.begin_unix_seconds("", "Town01", False, DATE + 3600 * 13 + 61)
     var hero: List[RecordedAttribute] = [
         RecordedAttribute(ATTRIBUTE_STRING, "role_name", "hero")
     ]
@@ -562,7 +562,7 @@ def _collisions_log() raises -> List[UInt8]:
         _add(8, TRAFFIC_SIGN_ACTOR, _zero(), _zero(), 5, "traffic.stop"),
         _add(9, SENSOR_ACTOR, _zero(), _zero(), 6, "sensor.other.collision"),
     ]
-    r.write_frame(0, 0, 0)
+    r.write_frame_seconds(0, 0, 0)
     var deltas: List[Float64] = [2.5, 1.0, 0.25, 0.25, 0.5, 1.0]
     var none = NOT_AN_ACTOR
     var frames: List[List[RecordedCollision]] = [
@@ -589,14 +589,14 @@ def _collisions_log() raises -> List[UInt8]:
         r.collisions = frames[k].copy()
         if k == 2:
             r.events_del.append(RecordedEventDel(ActorId(3)))
-        r.write_frame(deltas[k], 0, 0)
+        r.write_frame_seconds(deltas[k], 0, 0)
     return r.bytes()
 
 
 def _blocked_log() raises -> List[UInt8]:
     """The `blocked` recording of the reference program."""
     var r = Recorder()
-    _ = r.begin("", "Town02", False, DATE)
+    _ = r.begin_unix_seconds("", "Town02", False, DATE)
     r.events_add = [
         _add(2, VEHICLE_ACTOR, _zero(), _zero(), 1, "vehicle.lincoln.mkz"),
         _add(3, WALKER_ACTOR, _zero(), _zero(), 2, "walker.pedestrian.0002"),
@@ -608,7 +608,7 @@ def _blocked_log() raises -> List[UInt8]:
         _pos(6, LogVector(3, 4, 0), _zero()),
         _pos(7, _zero(), _zero()),
     ]
-    r.write_frame(0, 0, 0)
+    r.write_frame_seconds(0, 0, 0)
     for k in range(1, 11):
         var x2 = 1100.0 if k < 8 else 1100.0 + 50.0 * Float64(k - 7)
         var y3 = 500.0 + 4.0 * Float64(k)
@@ -621,7 +621,7 @@ def _blocked_log() raises -> List[UInt8]:
         ]
         if k == 6:
             r.events_del.append(RecordedEventDel(ActorId(3)))
-        r.write_frame(12.5, 0, 0)
+        r.write_frame_seconds(12.5, 0, 0)
     return r.bytes()
 
 
@@ -663,7 +663,7 @@ def test_collision_and_blocked_recordings_are_carlas_bytes() raises:
 def test_header_and_frame_layout_by_hand() raises:
     # Worked by hand from CarlaRecorderInfo.h and CarlaRecorderFrames.cpp.
     var r = Recorder()
-    _ = r.begin("", "M", False, 258)
+    _ = r.begin_unix_seconds("", "M", False, 258)
     var head = r.bytes()
     # Version 1, "CARLA_RECORDER" (14 bytes), the date 258, "M".
     assert_equal(len(head), 2 + 2 + 14 + 8 + 2 + 1)
@@ -671,8 +671,8 @@ def test_header_and_frame_layout_by_hand() raises:
     assert_equal(Int(head[2]), 14)
     assert_equal(Int(head[18]), 2)
     assert_equal(Int(head[19]), 1)
-    r.write_frame(0.25, 0, 0)
-    r.write_frame(0.25, 0, 0)
+    r.write_frame_seconds(0.25, 0, 0)
+    r.write_frame_seconds(0.25, 0, 0)
     var reader = LogReader(r.bytes())
     reader.skip(len(head))
     # Frame 1: id 0, size 24, frame 1, duration 0.25 written back, time 0.
@@ -834,8 +834,8 @@ def test_a_log_cut_short() raises:
 def _edge_log() raises -> List[UInt8]:
     """The `edge` recording: empty packets, every door and repeats."""
     var r = Recorder()
-    _ = r.begin("", "M", True, DATE)
-    r.frames.set_frame(0)
+    _ = r.begin_unix_seconds("", "M", True, DATE)
+    r.frames.set_frame_seconds(0)
     r.frames.write_start(r.out)
     events_add_packet(
         r.out,
@@ -874,8 +874,8 @@ def _edge_log() raises -> List[UInt8]:
 
 def _bare_log() raises -> List[UInt8]:
     var r = Recorder()
-    _ = r.begin("", "M", False, DATE)
-    r.write_frame(0, 0, 0)
+    _ = r.begin_unix_seconds("", "M", False, DATE)
+    r.write_frame_seconds(0, 0, 0)
     return r.bytes()
 
 
@@ -1256,9 +1256,9 @@ def test_ids_and_kinds_check_their_range() raises:
 def test_packets_carla_does_not_read_are_skipped() raises:
     # A FrameCounter and a platform time the queries skip.
     var r = Recorder()
-    _ = r.begin("", "M", False, 0)
+    _ = r.begin_unix_seconds("", "M", False, 0)
     frame_counter_packet(r.out, 7)
-    r.write_frame(0, 0, 0)
+    r.write_frame_seconds(0, 0, 0)
     var text = query_info(r.bytes(), True)
     assert_true("Frames: 1" in text)
 
