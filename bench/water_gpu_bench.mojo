@@ -45,7 +45,7 @@ from render.framebuffer import Color
 from render.jpeg import decode
 from renderers.renderer import Renderer
 from std.pathlib import Path
-from std.sys import argv, has_nvidia_gpu_accelerator
+from std.sys import argv, has_accelerator
 from std.time import perf_counter_ns
 from units.si import DEGREE, METER, RADIAN, SECOND, Angle, Duration, Length
 
@@ -302,8 +302,8 @@ def _composed(
 
 
 def main() raises:
-    if not has_nvidia_gpu_accelerator():
-        print("No NVIDIA GPU: nothing to measure.")
+    if not has_accelerator():
+        print("No GPU: nothing to measure.")
         return
     var frames = 10
     var args = argv()
