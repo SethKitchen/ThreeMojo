@@ -323,7 +323,7 @@ def test_sparse_associations_have_exact_hits_and_readonly_misses() raises:
 
 def test_query_rejects_missing_counts_bad_errors_and_stale_record_index() raises:
     var road = _road(_geometry())
-    road.info.geometries.append(RoadInfoGeometry(2.0, _geometry()))
+    road.info.geometries.append(RoadInfoGeometry._from_si(2.0, _geometry()))
     var proof = _proof(road, 2.125, 2.25)
     assert_equal(proof.record_at, 1)
     var original = _lane_jet(road, 0, 0, 2.1875, 2.1875)
