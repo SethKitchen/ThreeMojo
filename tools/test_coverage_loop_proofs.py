@@ -2518,7 +2518,7 @@ class ConstructionBoundaryLoopTests(unittest.TestCase):
             self.assertEqual(row['dependency_sha256'][name],
                              loops.file_sha256(self.root/name) if (self.score and name == self.map)
                              or name in helpers.SOURCE_PATHS
-                             or name == audit_fixtures.cleanup.scaled_float32.MATH else expected)
+                             or name in audit_fixtures.cleanup.scaled_float32.SOURCE_PATHS else expected)
         for name, expected in row['dependency_sha256'].items():
             self.assertEqual(loops.file_sha256(self.root/name), expected)
         self.assertEqual((self.root/self.map).read_text().splitlines()[self.line-1].strip(),

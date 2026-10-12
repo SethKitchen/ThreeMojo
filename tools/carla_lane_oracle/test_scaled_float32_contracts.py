@@ -65,6 +65,20 @@ class ScaledFloat32LeafControls(unittest.TestCase):
                 scaled.predecessor_source(scaled.MATH, text.replace(old, new, 1))
         scaled.verify_float64_domain(self.before[scaled.MATH], text)
 
+    def test_apple_inverse_guard_rename_and_host_body_mutations_reject(self):
+        text = self.after[scaled.INVERSE]
+        for old, new in (
+                ('if is_apple_gpu() else', 'if not is_apple_gpu() else'),
+                ('else _inverse_exact_cofactors[size]', 'else _inverse_scaled_float32[size]'),
+                ('def _inverse_exact_cofactors[', 'def _inverse_cofactors['),
+                ('from std.sys.info import is_apple_gpu', 'from other import is_apple_gpu'),
+                ('    if determinant == 0:\n        return False, result^',
+                 '    if determinant == 1:\n        return False, result^')):
+            self.assertEqual(text.count(old), 1, old)
+            with self.subTest(new=new), self.assertRaises(ValueError):
+                scaled.predecessor_source(scaled.INVERSE, text.replace(old, new, 1))
+        scaled.verify_host_inverse_domain(self.before[scaled.INVERSE], text)
+
     def test_inverse_inventory_cannot_drop_reorder_or_change_a_span(self):
         for name, spans in scaled.EDITS.items():
             label, old, new = spans[0]
@@ -513,12 +527,15 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
             yield fired
 
     def test_exact_partial_root_needs_only_the_math_edge_proof_inputs(self):
-        self.assertEqual(scaled.SOURCE_PATHS, (scaled.MATH,))
+        self.assertEqual(scaled.SOURCE_PATHS, (scaled.MATH, scaled.INVERSE))
         self.assertEqual(scaled.NATIVE_TESTS,
-                         ('tests/test_scaled_products_subnormal.mojo',))
+                         ('tests/test_scaled_products_subnormal.mojo',
+                          'tests/test_matrix_inverse_float32.mojo'))
         self.assertEqual(scaled.NATIVE_CLOSURE, frozenset((
             scaled.MATH, 'math/norm.mojo', 'math/__init__.mojo',
+            scaled.INVERSE, 'math/matrix_determinant.mojo',
             'tests/test_scaled_products_subnormal.mojo',
+            'tests/test_matrix_inverse_float32.mojo',
         )))
         self.assertEqual(
             {path.relative_to(self.root).as_posix()
@@ -928,9 +945,11 @@ class ScaledFloat32ResolverControls(unittest.TestCase):
         seen = []
         original = affected.entry_directories
 
+        witnesses = {name: self.original[name].decode('utf-8') for name in scaled.NATIVE_TESTS}
+
         @wraps(original)
         def inspect_entry_sources(sources):
-            self.assertEqual(sources, {witness: text})
+            self.assertEqual(sources, witnesses)
             result = original(sources)
             seen.append(tuple(result))
             return result

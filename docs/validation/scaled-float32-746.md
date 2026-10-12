@@ -1,6 +1,6 @@
 # Float32 subnormal successor (#746)
 
-This supplemental source edge admits one exact arithmetic-provider change.
+This supplemental source edge admits two exact arithmetic-provider changes: the scaled-product subnormal split and the Apple GPU matrix inverse.
 It preserves the earlier historical records and their original owner guards.
 Source admission does not grant native qualification or change coverage obligations.
 
@@ -30,6 +30,36 @@ The private `_split` contract accepts finite values.
 Pinned `frexp` does not promise nonfinite output classes.
 Nonfinite replay therefore compares returned fraction bits and exponent against the exact prior fallback.
 It creates no new NaN or infinity contract for `_split`.
+
+## Apple GPU matrix inverse boundary
+
+The second production endpoint is `math/matrix_inverse.mojo`.
+Its complete SHA256 is `a3f1a562a22b5101f69a2a8df0d3a5560cabc9e3ab87d40437e7eb9093257897`.
+The predecessor SHA256 is `34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee`.
+The leaf seals two ordered inverse spans that reconstruct every predecessor byte.
+
+`verify_host_inverse_domain` makes a separate whole-source comparison.
+It removes the complete Apple-only block and the two support imports, `std.memory/bitcast` and `std.sys.info/is_apple_gpu`.
+It then renames `_inverse_exact_cofactors` back to `_inverse_wide`.
+The resulting source must equal the complete predecessor.
+
+The new `_inverse_wide` has one statement that chooses a function at compile time.
+Off an Apple GPU it chooses `_inverse_exact_cofactors`, which is the predecessor's `_inverse_wide` byte for byte.
+So the host and CUDA execute the predecessor's exact cofactors, and no Float64 statement, signature or fallback changes.
+On an Apple GPU, which has no Float64, the block's `_inverse_scaled_float32` scales rows and columns by exact powers of two.
+It then inverts by Float32 Gauss-Jordan elimination with partial pivoting.
+
+The pinned native entry `tests/test_matrix_inverse_float32.mojo` compares the two inverses on the host.
+It covers extreme scales, row exchanges, singular inputs and nonfinite inputs.
+Its exact project import closure contains only:
+
+- `tests/test_matrix_inverse_float32.mojo`
+- `math/matrix_inverse.mojo`
+- `math/matrix_determinant.mojo`
+- `math/__init__.mojo`
+
+The determinant provider and the math package initializer remain byte-identical to the composed source base.
+`math/matrix_determinant.mojo` is sealed as a provider input.
 
 ## Independent formatting authority
 
@@ -88,7 +118,7 @@ Edge descriptors are not cached verification results.
 Established full-audit owners retain their complete dependency inventories, compiled-entry census, whole-source observations, caller checks, and final physical sweeps.
 Their protected closure already includes the legitimate `extensions/carla/math.mojo` provider.
 The supplementary witness context does not replace or narrow those established guards.
-Standalone math admission accepts that legitimate CARLA file without adding it to the four-file native closure.
+Standalone math admission accepts that legitimate CARLA file without adding it to the seven-file native closure.
 
 Historical seed and construction owners retain their original dependency, caller, and standard-namespace checks.
 Their original guards do not promise the current full gate's complete compiled-entry census.
@@ -114,7 +144,7 @@ Cover truthful receipts, inverse mutations, unknown endpoints, source-read failu
 Verify that narrow historical math admission does not classify all-source entries or consume unrelated repository source bytes.
 
 Use the pinned compiler and ordinary native-support build route, compiling outside the timed execution window.
-Run `tests/test_scaled_products_subnormal.mojo` and the four PR744 formatted suites through the original five-second runner gate.
+Run `tests/test_scaled_products_subnormal.mojo`, `tests/test_matrix_inverse_float32.mojo` and the four PR744 formatted suites through the original five-second runner gate.
 Retain junction's native C support fixture and the original FENV checks.
 Run the affected existing scaled-product and OpenDRIVE Float64 consumers, then the required CPU and coverage gates.
 Do not increase timeouts, remove guards, or substitute earlier candidate results.

@@ -1525,7 +1525,7 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
                 name in cleanup.shared_helpers.SOURCE_PATHS
                 and expected[name] == cleanup.shared_helpers.BEFORE_SHA256[name]
                 and actual[name] == cleanup.shared_helpers.AFTER_SHA256[name]) and not (
-                name == cleanup.scaled_float32.MATH
+                name in cleanup.scaled_float32.SOURCE_PATHS
                 and expected[name] == cleanup.scaled_float32.BEFORE_SHA256[name]
                 and actual[name] == cleanup.scaled_float32.AFTER_SHA256[name])
                for name in expected):
@@ -1546,11 +1546,11 @@ def construction_boundary_loops(root, *, include_roots=(), _operation=None):
                 expected[name] = cleanup.shared_helpers.AFTER_SHA256[name]
         scaled_bindings = cleanup.scaled_float32_proof_bindings(
             root, include_roots=include_roots, **operation_args)
-        name = cleanup.scaled_float32.MATH
-        if scaled_bindings.get(name) == cleanup.scaled_float32.AFTER_SHA256[name]:
-            if expected.get(name) != cleanup.scaled_float32.BEFORE_SHA256[name]:
-                return {}
-            expected[name] = cleanup.scaled_float32.AFTER_SHA256[name]
+        for name in cleanup.scaled_float32.SOURCE_PATHS:
+            if scaled_bindings.get(name) == cleanup.scaled_float32.AFTER_SHA256[name]:
+                if expected.get(name) != cleanup.scaled_float32.BEFORE_SHA256[name]:
+                    return {}
+                expected[name] = cleanup.scaled_float32.AFTER_SHA256[name]
         if actual != expected:
             return {}
         helper_closure = ({'loaders/utf8.mojo'} if helper_bindings.get('loaders/xml.mojo')

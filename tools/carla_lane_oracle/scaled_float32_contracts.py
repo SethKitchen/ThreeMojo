@@ -1,8 +1,11 @@
 # Copyright (c) 2026 Seth Kitchen, PE
 # SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
-"""One exact Float32-only arithmetic-provider edge, below source admission.
+"""Two exact Float32-only arithmetic-provider edges, below source admission.
 
-The complete inverse and dtype projection preserve every predecessor byte.
+The complete inverses and their projections preserve every predecessor byte.
+The scaled-products edge adds a compile-time Float32 branch. The matrix
+inverse edge adds an Apple-GPU-only compile-time choice; the host and CUDA
+still run the predecessor's exact cofactors.
 The independent PR744 leaf owns the four formatter-only witness edges.
 This module neither reads a root nor grants a receipt. Owners bind the
 executed leaf, proof inputs and the new native witness's actual context.
@@ -15,10 +18,187 @@ _EXECUTED_MODULE_CODE = sys._getframe().f_code
 
 LEAF = 'tools/carla_lane_oracle/scaled_float32_contracts.py'
 MATH = 'math/scaled_products.mojo'
-SOURCE_PATHS = ('math/scaled_products.mojo',)
-BEFORE_SHA256 = {'math/scaled_products.mojo': 'b504f18cff7df27bff4fbf92fbed7aa4868518f1b1507ea1331540d7e6f0afbb'}
-AFTER_SHA256 = {'math/scaled_products.mojo': '632438eb32acc53e5d4b10e8aa0ca9049a0fc2c5cd7e3d815039626ff3409c86'}
-EDITS = {'math/scaled_products.mojo': (('1',
+INVERSE = 'math/matrix_inverse.mojo'
+SOURCE_PATHS = ('math/scaled_products.mojo', 'math/matrix_inverse.mojo')
+BEFORE_SHA256 = {'math/scaled_products.mojo': 'b504f18cff7df27bff4fbf92fbed7aa4868518f1b1507ea1331540d7e6f0afbb',
+ 'math/matrix_inverse.mojo': '34dd50cb00f3efe560ae73b1f0be8d2a399d045e1f9db699ce507b6da6ec09ee'}
+AFTER_SHA256 = {'math/scaled_products.mojo': '632438eb32acc53e5d4b10e8aa0ca9049a0fc2c5cd7e3d815039626ff3409c86',
+ 'math/matrix_inverse.mojo': 'a3f1a562a22b5101f69a2a8df0d3a5560cabc9e3ab87d40437e7eb9093257897'}
+EDITS = {'math/matrix_inverse.mojo': (('1',
+                               '\n'
+                               'from std.math import isfinite\n'
+                               'from math.matrix_determinant import _determinant_f32\n'
+                               '\n',
+                               '\n'
+                               'from std.math import isfinite\n'
+                               'from std.memory import bitcast\n'
+                               'from std.sys.info import is_apple_gpu\n'
+                               'from math.matrix_determinant import _determinant_f32\n'
+                               '\n'),
+                              ('2',
+                               '    Bool, Array[Float32, size * size]\n'
+                               ']:\n'
+                               '    """Use exact-sign cofactors for finite inputs; return zeros if '
+                               'singular.\n'
+                               '\n',
+                               '    Bool, Array[Float32, size * size]\n'
+                               ']:\n'
+                               '    """Invert a matrix whose entries are out of the fast path\'s '
+                               'range.\n'
+                               '\n'
+                               '    The host and CUDA use exact-sign cofactors in Float64. Apple '
+                               'GPUs have\n'
+                               '    no Float64, so a kernel for one uses '
+                               '`_inverse_scaled_float32`.\n'
+                               '    """\n'
+                               '    comptime chosen = _inverse_scaled_float32[\n'
+                               '        size\n'
+                               '    ] if is_apple_gpu() else _inverse_exact_cofactors[size]\n'
+                               '    return chosen(entries)\n'
+                               '\n'
+                               '\n'
+                               'def _power_of_two(exponent: Int) -> Float32:\n'
+                               '    """Return two to a power from -126 through 127, from its '
+                               'bits."""\n'
+                               '    return bitcast[DType.float32](UInt32(exponent + 127) << 23)\n'
+                               '\n'
+                               '\n'
+                               'def _binade(value: Float32) -> Int:\n'
+                               '    """Return floor(log2(abs(value))) for a nonzero value, or -126 '
+                               'for a\n'
+                               '    subnormal one, from the exponent bits."""\n'
+                               '    return max(-126, Int((bitcast[DType.uint32](value) >> 23) & '
+                               '0xFF) - 127)\n'
+                               '\n'
+                               '\n'
+                               'def _inverse_scaled_float32[\n'
+                               '    size: Int\n'
+                               '](entries: Array[Float32, size * size]) -> Tuple[\n'
+                               '    Bool, Array[Float32, size * size]\n'
+                               ']:\n'
+                               '    """Invert with Float32 alone; return zeros if elimination '
+                               'finds the\n'
+                               '    matrix singular.\n'
+                               '\n'
+                               '    Each row, then each column, is divided by a power of two near '
+                               'its\n'
+                               '    largest entry. Those divisions are exact, so the scaled matrix '
+                               'has the\n'
+                               '    same inverse up to the same powers. Gauss-Jordan elimination '
+                               'with\n'
+                               '    partial pivoting inverts it, and the powers are multiplied '
+                               'back. A\n'
+                               '    nonfinite entry skips the scaling and propagates as '
+                               'elimination does.\n'
+                               '\n'
+                               '    Unlike the exact cofactors, this decides singularity by a zero '
+                               'pivot,\n'
+                               '    so a matrix within rounding of singular can go either way. '
+                               'Apple GPUs\n'
+                               '    use it because they have no Float64.\n'
+                               '\n'
+                               '    Parameters:\n'
+                               "        size: The matrix's side, two through four.\n"
+                               '\n'
+                               '    Args:\n'
+                               '        entries: The matrix, column-major.\n'
+                               '\n'
+                               '    Returns:\n'
+                               '        Whether it is invertible, and its inverse or zeros.\n'
+                               '    """\n'
+                               '    comptime assert 2 <= size <= 4\n'
+                               '    var matrix = entries.copy()\n'
+                               '    var inverse = Array[Float32, size * size](fill=0)\n'
+                               '    var result = Array[Float32, size * size](fill=0)\n'
+                               '    var row_shift = Array[Int, size](fill=0)\n'
+                               '    var column_shift = Array[Int, size](fill=0)\n'
+                               '    var finite = True\n'
+                               '    for index in range(size * size):  # pragma: no branch\n'
+                               '        finite = finite and isfinite(entries[index])\n'
+                               '    if finite:\n'
+                               '        for row in range(size):  # pragma: no branch\n'
+                               '            var largest = Float32(0)\n'
+                               '            for column in range(size):  # pragma: no branch\n'
+                               '                largest = max(largest, abs(matrix[column * size + '
+                               'row]))\n'
+                               '            if largest == 0:\n'
+                               '                return False, result^\n'
+                               '            row_shift[row] = _binade(largest)\n'
+                               '            var scale = _power_of_two(-row_shift[row])\n'
+                               '            for column in range(size):  # pragma: no branch\n'
+                               '                matrix[column * size + row] *= scale\n'
+                               '        for column in range(size):  # pragma: no branch\n'
+                               '            var largest = Float32(0)\n'
+                               '            for row in range(size):  # pragma: no branch\n'
+                               '                largest = max(largest, abs(matrix[column * size + '
+                               'row]))\n'
+                               '            if largest == 0:\n'
+                               '                return False, result^\n'
+                               '            column_shift[column] = _binade(largest)\n'
+                               '            var scale = _power_of_two(-column_shift[column])\n'
+                               '            for row in range(size):  # pragma: no branch\n'
+                               '                matrix[column * size + row] *= scale\n'
+                               '    for index in range(size):  # pragma: no branch\n'
+                               '        inverse[index * size + index] = 1\n'
+                               '    for column in range(size):  # pragma: no branch\n'
+                               '        var pivot_row = column\n'
+                               '        var pivot_magnitude = abs(matrix[column * size + column])\n'
+                               '        for row in range(column + 1, size):\n'
+                               '            var magnitude = abs(matrix[column * size + row])\n'
+                               '            if magnitude > pivot_magnitude:\n'
+                               '                pivot_row = row\n'
+                               '                pivot_magnitude = magnitude\n'
+                               '        if pivot_magnitude == 0:\n'
+                               '            return False, result^\n'
+                               '        if pivot_row != column:\n'
+                               '            for at in range(size):  # pragma: no branch\n'
+                               '                var first = at * size + column\n'
+                               '                var second = at * size + pivot_row\n'
+                               '                var saved = matrix[first]\n'
+                               '                matrix[first] = matrix[second]\n'
+                               '                matrix[second] = saved\n'
+                               '                saved = inverse[first]\n'
+                               '                inverse[first] = inverse[second]\n'
+                               '                inverse[second] = saved\n'
+                               '        var pivot = matrix[column * size + column]\n'
+                               '        for row in range(size):  # pragma: no branch\n'
+                               '            if row == column:\n'
+                               '                continue\n'
+                               '            var factor = matrix[column * size + row] / pivot\n'
+                               '            for at in range(size):  # pragma: no branch\n'
+                               '                matrix[at * size + row] -= factor * matrix[at * '
+                               'size + column]\n'
+                               '                inverse[at * size + row] -= factor * inverse[at * '
+                               'size + column]\n'
+                               '        for at in range(size):  # pragma: no branch\n'
+                               '            matrix[at * size + column] /= pivot\n'
+                               '            inverse[at * size + column] /= pivot\n'
+                               "    # M = R M' C with R and C diagonal powers of two, so M's "
+                               'inverse is\n'
+                               "    # C^-1 M'^-1 R^-1: entry (i, j) is M'^-1 (i, j) over 2 ** (c_i "
+                               '+ r_j).\n'
+                               '    # The shift is at most 252, so two halves keep each power in '
+                               'range.\n'
+                               '    for column in range(size):  # pragma: no branch\n'
+                               '        for row in range(size):  # pragma: no branch\n'
+                               '            var shift = -(column_shift[row] + row_shift[column])\n'
+                               '            var half = shift // 2\n'
+                               '            result[column * size + row] = (\n'
+                               '                inverse[column * size + row] * '
+                               '_power_of_two(half)\n'
+                               '            ) * _power_of_two(shift - half)\n'
+                               '    return True, result^\n'
+                               '\n'
+                               '\n'
+                               'def _inverse_exact_cofactors[\n'
+                               '    size: Int\n'
+                               '](entries: Array[Float32, size * size]) -> Tuple[\n'
+                               '    Bool, Array[Float32, size * size]\n'
+                               ']:\n'
+                               '    """Use exact-sign cofactors for finite inputs; return zeros if '
+                               'singular.\n'
+                               '\n')),
+ 'math/scaled_products.mojo': (('1',
                                 'large terms cancel. The Float32 specialization is '
                                 'device-compatible.\n'
                                 '"""\n'
@@ -75,7 +255,7 @@ EDITS = {'math/scaled_products.mojo': (('1',
                                 'Int32(shift)))\n'
                                 '        return _Scaled(parts[0], exponent + Int(parts[1]) - '
                                 'shift)\n'))}
-EDITS_SHA256 = '540f344db34128317861c868403d519dbe6047f8fa8997f597c1d3053c2a29cd'
+EDITS_SHA256 = 'd0f9ffbe566bc03edf92896c4e8a2efa9ea637b48ad6a172c77cb9addb414e04'
 FLOAT32_BRANCH = ('    comptime if dtype == DType.float32:\n'
  '        # A subnormal Float32 is split from its bits. Apple GPUs flush\n'
  '        # subnormal operands to zero, so scaling one up first reads zero\n'
@@ -91,16 +271,153 @@ FLOAT32_BRANCH = ('    comptime if dtype == DType.float32:\n'
  '            )\n'
  '            return _Scaled(bitcast[dtype](fraction), exponent + top - 148)\n')
 ADDED_IMPORTS = ('from std.bit import count_leading_zeros\n', 'from std.memory import bitcast\n')
+APPLE_INVERSE_BLOCK = ('def _inverse_wide[\n'
+ '    size: Int\n'
+ '](entries: Array[Float32, size * size]) -> Tuple[\n'
+ '    Bool, Array[Float32, size * size]\n'
+ ']:\n'
+ '    """Invert a matrix whose entries are out of the fast path\'s range.\n'
+ '\n'
+ '    The host and CUDA use exact-sign cofactors in Float64. Apple GPUs have\n'
+ '    no Float64, so a kernel for one uses `_inverse_scaled_float32`.\n'
+ '    """\n'
+ '    comptime chosen = _inverse_scaled_float32[\n'
+ '        size\n'
+ '    ] if is_apple_gpu() else _inverse_exact_cofactors[size]\n'
+ '    return chosen(entries)\n'
+ '\n'
+ '\n'
+ 'def _power_of_two(exponent: Int) -> Float32:\n'
+ '    """Return two to a power from -126 through 127, from its bits."""\n'
+ '    return bitcast[DType.float32](UInt32(exponent + 127) << 23)\n'
+ '\n'
+ '\n'
+ 'def _binade(value: Float32) -> Int:\n'
+ '    """Return floor(log2(abs(value))) for a nonzero value, or -126 for a\n'
+ '    subnormal one, from the exponent bits."""\n'
+ '    return max(-126, Int((bitcast[DType.uint32](value) >> 23) & 0xFF) - 127)\n'
+ '\n'
+ '\n'
+ 'def _inverse_scaled_float32[\n'
+ '    size: Int\n'
+ '](entries: Array[Float32, size * size]) -> Tuple[\n'
+ '    Bool, Array[Float32, size * size]\n'
+ ']:\n'
+ '    """Invert with Float32 alone; return zeros if elimination finds the\n'
+ '    matrix singular.\n'
+ '\n'
+ '    Each row, then each column, is divided by a power of two near its\n'
+ '    largest entry. Those divisions are exact, so the scaled matrix has the\n'
+ '    same inverse up to the same powers. Gauss-Jordan elimination with\n'
+ '    partial pivoting inverts it, and the powers are multiplied back. A\n'
+ '    nonfinite entry skips the scaling and propagates as elimination does.\n'
+ '\n'
+ '    Unlike the exact cofactors, this decides singularity by a zero pivot,\n'
+ '    so a matrix within rounding of singular can go either way. Apple GPUs\n'
+ '    use it because they have no Float64.\n'
+ '\n'
+ '    Parameters:\n'
+ "        size: The matrix's side, two through four.\n"
+ '\n'
+ '    Args:\n'
+ '        entries: The matrix, column-major.\n'
+ '\n'
+ '    Returns:\n'
+ '        Whether it is invertible, and its inverse or zeros.\n'
+ '    """\n'
+ '    comptime assert 2 <= size <= 4\n'
+ '    var matrix = entries.copy()\n'
+ '    var inverse = Array[Float32, size * size](fill=0)\n'
+ '    var result = Array[Float32, size * size](fill=0)\n'
+ '    var row_shift = Array[Int, size](fill=0)\n'
+ '    var column_shift = Array[Int, size](fill=0)\n'
+ '    var finite = True\n'
+ '    for index in range(size * size):  # pragma: no branch\n'
+ '        finite = finite and isfinite(entries[index])\n'
+ '    if finite:\n'
+ '        for row in range(size):  # pragma: no branch\n'
+ '            var largest = Float32(0)\n'
+ '            for column in range(size):  # pragma: no branch\n'
+ '                largest = max(largest, abs(matrix[column * size + row]))\n'
+ '            if largest == 0:\n'
+ '                return False, result^\n'
+ '            row_shift[row] = _binade(largest)\n'
+ '            var scale = _power_of_two(-row_shift[row])\n'
+ '            for column in range(size):  # pragma: no branch\n'
+ '                matrix[column * size + row] *= scale\n'
+ '        for column in range(size):  # pragma: no branch\n'
+ '            var largest = Float32(0)\n'
+ '            for row in range(size):  # pragma: no branch\n'
+ '                largest = max(largest, abs(matrix[column * size + row]))\n'
+ '            if largest == 0:\n'
+ '                return False, result^\n'
+ '            column_shift[column] = _binade(largest)\n'
+ '            var scale = _power_of_two(-column_shift[column])\n'
+ '            for row in range(size):  # pragma: no branch\n'
+ '                matrix[column * size + row] *= scale\n'
+ '    for index in range(size):  # pragma: no branch\n'
+ '        inverse[index * size + index] = 1\n'
+ '    for column in range(size):  # pragma: no branch\n'
+ '        var pivot_row = column\n'
+ '        var pivot_magnitude = abs(matrix[column * size + column])\n'
+ '        for row in range(column + 1, size):\n'
+ '            var magnitude = abs(matrix[column * size + row])\n'
+ '            if magnitude > pivot_magnitude:\n'
+ '                pivot_row = row\n'
+ '                pivot_magnitude = magnitude\n'
+ '        if pivot_magnitude == 0:\n'
+ '            return False, result^\n'
+ '        if pivot_row != column:\n'
+ '            for at in range(size):  # pragma: no branch\n'
+ '                var first = at * size + column\n'
+ '                var second = at * size + pivot_row\n'
+ '                var saved = matrix[first]\n'
+ '                matrix[first] = matrix[second]\n'
+ '                matrix[second] = saved\n'
+ '                saved = inverse[first]\n'
+ '                inverse[first] = inverse[second]\n'
+ '                inverse[second] = saved\n'
+ '        var pivot = matrix[column * size + column]\n'
+ '        for row in range(size):  # pragma: no branch\n'
+ '            if row == column:\n'
+ '                continue\n'
+ '            var factor = matrix[column * size + row] / pivot\n'
+ '            for at in range(size):  # pragma: no branch\n'
+ '                matrix[at * size + row] -= factor * matrix[at * size + column]\n'
+ '                inverse[at * size + row] -= factor * inverse[at * size + column]\n'
+ '        for at in range(size):  # pragma: no branch\n'
+ '            matrix[at * size + column] /= pivot\n'
+ '            inverse[at * size + column] /= pivot\n'
+ "    # M = R M' C with R and C diagonal powers of two, so M's inverse is\n"
+ "    # C^-1 M'^-1 R^-1: entry (i, j) is M'^-1 (i, j) over 2 ** (c_i + r_j).\n"
+ '    # The shift is at most 252, so two halves keep each power in range.\n'
+ '    for column in range(size):  # pragma: no branch\n'
+ '        for row in range(size):  # pragma: no branch\n'
+ '            var shift = -(column_shift[row] + row_shift[column])\n'
+ '            var half = shift // 2\n'
+ '            result[column * size + row] = (\n'
+ '                inverse[column * size + row] * _power_of_two(half)\n'
+ '            ) * _power_of_two(shift - half)\n'
+ '    return True, result^\n'
+ '\n'
+ '\n')
+APPLE_DISPATCH = '    ] if is_apple_gpu() else _inverse_exact_cofactors[size]\n'
+INVERSE_IMPORTS = ('from std.memory import bitcast\n', 'from std.sys.info import is_apple_gpu\n')
 PACKAGE_INPUTS = {'math/__init__.mojo': '5f3ace6c2d6162c4a542666c21a966d54d5b98b8d4982794ea5bfbbcc4f52479'}
-PROVIDER_INPUTS = {'math/norm.mojo': '5275636f99048885fcc308bfa92fde3d52c5a8eefb48f616f59f8f31a0b5cbb1'}
-NATIVE_TESTS = ('tests/test_scaled_products_subnormal.mojo',)
+PROVIDER_INPUTS = {'math/norm.mojo': '5275636f99048885fcc308bfa92fde3d52c5a8eefb48f616f59f8f31a0b5cbb1',
+ 'math/matrix_determinant.mojo': 'c5b25179893fd2903dbda5de68914a50e662e3428107ef2c3424ef42cafcde19'}
+NATIVE_TESTS = ('tests/test_scaled_products_subnormal.mojo', 'tests/test_matrix_inverse_float32.mojo')
 NATIVE_CLOSURE = frozenset({'math/__init__.mojo',
+           'math/matrix_determinant.mojo',
+           'math/matrix_inverse.mojo',
            'math/norm.mojo',
            'math/scaled_products.mojo',
+           'tests/test_matrix_inverse_float32.mojo',
            'tests/test_scaled_products_subnormal.mojo'})
 TESTS = {'tests/test_scaled_products_subnormal.mojo': '9025041d39d6f2586d5baaa85ef043c17eaea0215f77ecf3ddc5be901bd423e8',
- 'tools/carla_lane_oracle/test_scaled_float32_contracts.py': 'be7b72191ada5dcb0123e93491db6777dff24003d14cd858d5f5dffd4e61a2bd',
- 'docs/validation/scaled-float32-746.md': '43d615855d3cae77db601d5be333475bc31819677137a7a40822d249d4ea669f'}
+ 'tests/test_matrix_inverse_float32.mojo': '7256f7e43138b881e46f481227041ff9b8b07f7fd6cca07cf01142e23ded295c',
+ 'tools/carla_lane_oracle/test_scaled_float32_contracts.py': 'd06b9558ab87dc6542760a1ae54418b2827ebbc11df3d09e0a621b38ea1c68d9',
+ 'docs/validation/scaled-float32-746.md': 'bf367fc6bcfd3111f29da548ead2d3bf668f9df772060cf7cecc5e3408d97187'}
 
 def require(ok, message):
     if not ok:
@@ -130,6 +447,27 @@ def verify_float64_domain(before, after):
     require(projected == before, 'non-Float32 provider changed')
 
 
+def verify_host_inverse_domain(before, after):
+    """Project the whole predecessor outside one Apple-GPU-only addition.
+
+    The addition is a new `_inverse_wide` that chooses at compile time, and
+    the Apple helpers. Off an Apple GPU it chooses `_inverse_exact_cofactors`,
+    which is the predecessor's `_inverse_wide` under a new name, unchanged.
+    """
+    require(sha(before) == BEFORE_SHA256[INVERSE] and sha(after) == AFTER_SHA256[INVERSE],
+            'unsealed inverse domain')
+    require(APPLE_INVERSE_BLOCK.startswith('def _inverse_wide[\n')
+            and APPLE_INVERSE_BLOCK.count(APPLE_DISPATCH) == 1
+            and after.count(APPLE_INVERSE_BLOCK + 'def _inverse_exact_cofactors[\n') == 1,
+            'Apple guard or block changed')
+    projected = after.replace(APPLE_INVERSE_BLOCK + 'def _inverse_exact_cofactors[\n',
+                              'def _inverse_wide[\n', 1)
+    for added in INVERSE_IMPORTS:
+        require(projected.count(added) == 1, 'Apple support import changed')
+        projected = projected.replace(added, '', 1)
+    require(projected == before, 'host inverse provider changed')
+
+
 def predecessor_source(path, text):
     """Recover every historical byte through unique, sealed inverse spans."""
     require(path in SOURCE_PATHS and type(text) is str, 'unknown source')
@@ -142,7 +480,10 @@ def predecessor_source(path, text):
                 'missing or ambiguous inverse: ' + path + ':' + name)
         current = current.replace(after, before, 1)
     require(sha(current) == BEFORE_SHA256[path], 'inverse endpoint changed: ' + path)
-    verify_float64_domain(current, text)
+    if path == MATH:
+        verify_float64_domain(current, text)
+    else:
+        verify_host_inverse_domain(current, text)
     return current
 
 

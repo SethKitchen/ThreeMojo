@@ -141,6 +141,8 @@ overflow, underflow or cancel. The ordinary-range screen bounds all determinant
 products, including cancellation inside cofactors. Nonfinite inputs retain
 the previous propagation behavior.
 
+A kernel for an Apple GPU cannot use the fallback, because Apple GPUs have no Float64. It uses `_inverse_scaled_float32` instead. That function divides each row and each column by a power of two near its largest entry, which is exact. It inverts the result by Gauss-Jordan elimination with partial pivoting, then multiplies the powers back. It decides singularity by a zero pivot. So a matrix within rounding of singular can go either way, where the fallback is exact.
+
 The singular contracts stay the same: `Matrix2.inverse` raises, and `Matrix3`
 and `Matrix4` invert to zeros. An inverse entry outside the Float32 range
 becomes signed infinity. It does not make the matrix singular.
