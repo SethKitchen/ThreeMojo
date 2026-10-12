@@ -10,6 +10,7 @@ part of that limit. No device or external service is used.
 import argparse
 from collections import defaultdict
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -2548,6 +2549,181 @@ def check_optional_lifecycles(work, native, rewritten, build, mojo):
             '48 same-depth Optional[Optional[String]] controls; exact main decision traces/vectors')
 
 
+# The operator check evaluates these runtime helpers at compile time.
+# Pinned Mojo 1.1.0 can deadlock a single-threaded build that evaluates
+# `startswith` or `find` there: the instrumented `materials/nodes.mojo`
+# waited forever on one `flag or mask.reduce_or()` check.
+COMPILE_TIME_HELPERS = ('node', '_pure', '_starts', '_bracket', '_optional', '_borrowed',
+                        '_standard_string_optional', '_optional_lifecycle')
+COMPILE_TIME_FORBIDDEN = ('.startswith(', '.find(')
+# A bound on one single-threaded build of the reduced fixture. It builds in
+# seconds; the deadlock never finishes.
+COMPILE_TIME_BOUND = 120
+
+COMPILE_TIME_NAMES = '''from coverage.runtime import _bracket, _optional, _pure, _scalar, _starts
+from std.reflection import reflect
+
+def names() -> List[StaticString]:
+    var result = List[StaticString]()
+    result.append("")
+    result.append("[")
+    result.append("L")
+    result.append("List[")
+    result.append("List[Int]")
+    result.append("Lis")
+    result.append("Optional[")
+    result.append("Optional[Int]")
+    result.append("Optional")
+    result.append("std.collections.optional.Optional[Int]")
+    result.append("std.collections.optional.Optional[")
+    result.append("Bool")
+    result.append("SIMD[DType.bool, 1]")
+    result.append("a[b[c")
+    result.append("é[x")
+    result.append("é")
+    return result^
+
+# The compile-time results must agree with the runtime results.
+comptime FIXED = (
+    _starts("List[Int]", "List[")
+    and not _starts("Lis", "List[")
+    and _starts("x", "")
+    and _bracket("a[b[c") == 2
+    and _bracket("abc") == 0
+)
+
+
+def kind[T: AnyType](label: StaticString):
+    comptime name = reflect[T].name()
+    print("TYPE", label, _scalar[T], _pure(name), _optional(name))
+
+
+def main():
+    print("FIXED", FIXED)
+    var all = names()
+    for name in all:
+        print("BRACKET", _bracket(name), name.find("[") + 1)
+        for prefix in all:
+            print("STARTS", _starts(name, prefix), name.startswith(prefix))
+    kind[Bool]("Bool")
+    kind[Scalar[DType.bool]]("Scalar[bool]")
+    kind[Int]("Int")
+    kind[String]("String")
+    kind[Int32]("Int32")
+    kind[Float64]("Float64")
+    kind[StaticString]("StaticString")
+    kind[SIMD[DType.bool, 4]]("SIMD[bool,4]")
+    kind[List[Int]]("List[Int]")
+    kind[Optional[Int]]("Optional[Int]")
+    kind[Optional[Bool]]("Optional[Bool]")
+'''
+
+COMPILE_TIME_SCALARS = {'Bool', 'Scalar[bool]', 'Int', 'String'}
+
+# Mixed pure operands, including the `Bool or SIMD[DType.bool, 1]` operator
+# that hung the coverage build of `materials/nodes.mojo`.
+COMPILE_TIME_FIXTURE = '''comptime READS = SIMD[DType.int32, 4](1, 2, 3, 4)
+
+
+def flag(value: Int) -> Bool:
+    return value == 7 or value == 9
+
+
+def check(
+    value: Int, items: List[Int], text: String, maybe: Optional[Int]
+) -> Int:
+    var total = 0
+    if flag(value) or READS.eq(Int32(value)).reduce_or():
+        total += 1
+    if READS.eq(Int32(value)).reduce_or() and value:
+        total += 2
+    if text or value and flag(value):
+        total += 4
+    if items or maybe and flag(value):
+        total += 8
+    if not flag(value) and READS.eq(Int32(value)).reduce_or() or text:
+        total += 16
+    return total
+
+
+def main():
+    for value in range(12):
+        var items = [value] if value % 2 == 1 else List[Int]()
+        var text = String("x") if value % 3 == 1 else String("")
+        var maybe = Optional(value) if value % 4 != 0 else Optional[Int](None)
+        print(value, check(value, items, text, maybe))
+'''
+
+
+def helper_bodies(text):
+    """Return each compile-time helper's code without docstrings or comments."""
+    bodies = {}
+    lines = text.splitlines()
+    for name in COMPILE_TIME_HELPERS:
+        starts = [index for index, line in enumerate(lines)
+                  if line.startswith((f'def {name}[', f'def {name}('))]
+        assert len(starts) == 1, (name, starts)
+        end = starts[0] + 1
+        while end < len(lines) and (not lines[end] or lines[end][0] in ' )'):
+            end += 1
+        body = '\n'.join(lines[starts[0]:end])
+        body = re.sub(r'"""(.|\n)*?"""', '', body)
+        bodies[name] = '\n'.join(line.split('#')[0] for line in body.splitlines())
+    return bodies
+
+
+def check_compile_time_names(work, native, rewritten, build, mojo):
+    """Keep the operator check's compile-time name tests off deadlocking calls."""
+    bodies = helper_bodies((ROOT / 'coverage/runtime.mojo').read_text())
+    for name, body in bodies.items():
+        for call in COMPILE_TIME_FORBIDDEN:
+            assert call not in body, f'{name} evaluates {call} at compile time'
+    # The replacements must give exactly the standard results.
+    (native / 'names.mojo').write_text(COMPILE_TIME_NAMES)
+    run([mojo, 'build', '-Werror', '-I', str(native), str(native / 'names.mojo'),
+         '-o', str(work / 'names')], timeout=COMPILE_TIME_BOUND)
+    output = run([str(work / 'names')], timeout=5).stdout
+    (work / 'names-native.txt').write_text(output)
+    rows = output.splitlines()
+    assert rows[0] == 'FIXED True', rows[0]
+    starts = [row.split()[1:] for row in rows if row.startswith('STARTS ')]
+    brackets = [row.split()[1:] for row in rows if row.startswith('BRACKET ')]
+    assert (len(starts), len(brackets)) == (16 * 16, 16), (len(starts), len(brackets))
+    for left, right in starts + brackets:
+        assert left == right, (left, right, rows)
+    assert {left for left, _ in starts} == {'True', 'False'}, starts
+    types = [row.split() for row in rows if row.startswith('TYPE ')]
+    assert len(types) == 11, types
+    for _, label, scalar, pure, optional in types:
+        # Type identity answers only what the pure-name branch also answers.
+        assert (scalar == 'True') == (label in COMPILE_TIME_SCALARS), (label, scalar)
+        if scalar == 'True':
+            assert (pure, optional) == ('True', 'False'), (label, pure, optional)
+    # A one-thread build of the instrumented operators must finish in bounds
+    # and keep the native output.
+    (native / 'names_fixture.mojo').write_text(COMPILE_TIME_FIXTURE)
+    run([str(build), str(rewritten), 'names_fixture.mojo'], cwd=native)
+    instrumented = (rewritten / 'names_fixture.mojo').read_text()
+    assert instrumented.count('_cov_eval_node[') == 8, instrumented.count('_cov_eval_node[')
+    outputs = []
+    for label, folder in (('native', native), ('instrumented', rewritten)):
+        binary = work / f'names-fixture-{label}'
+        try:
+            run([mojo, 'build', '--num-threads', '1', '-Werror', '-I', str(folder),
+                 str(folder / 'names_fixture.mojo'), '-o', str(binary)],
+                timeout=COMPILE_TIME_BOUND)
+        except subprocess.TimeoutExpired:
+            raise AssertionError(f'{label} names fixture build exceeded '
+                                 f'{COMPILE_TIME_BOUND} s on one compiler thread') from None
+        result = run([str(binary)], timeout=5)
+        (work / f'names-fixture-{label}.txt').write_text(result.stdout)
+        outputs.append(result.stdout)
+    assert outputs[0] == outputs[1], outputs
+    assert len(outputs[0].splitlines()) == 12, outputs[0]
+    return (f'{len(starts) + len(brackets)} byte-exact name-test results, {len(types)} scalar identities, '
+            'and a bounded one-thread build of 5 mixed pure decisions')
+
+
 def run(command, **kwargs):
     result = subprocess.run(command, text=True, capture_output=True, **kwargs)
     if result.returncode:
@@ -2699,6 +2875,7 @@ def main() raises:
         (work / 'branch-report.txt').write_text(branch_report.stdout)
         assert 'condition 1:' in result.stdout and 'condition 2:' in result.stdout, result.stdout
         (work / 'negative-report.txt').write_text(result.stdout + result.stderr)
+        names_summary = check_compile_time_names(work, native, rewritten, build, mojo)
         try:
             truth_summary = check_custom_truth(work, native, rewritten, build, mojo)
         finally:
@@ -2753,7 +2930,8 @@ def main() raises:
             (args.output / 'manifest.txt').write_text('\n'.join(manifest) + '\n')
         print(f'PASS: {len(CASES)} native/instrumented cases, 64 truth assignments, normal and 6 throwing positions; '
               'exact order/count/outcomes, manifest C/M, raw/reduced Mojo vectors, and negative report; '
-              f'{len(lifetime_cases)} container destructor-order cases; {truth_summary}; {optional_summary}')
+              f'{len(lifetime_cases)} container destructor-order cases; {names_summary}; {truth_summary}; '
+              f'{optional_summary}')
 
 
 if __name__ == '__main__':

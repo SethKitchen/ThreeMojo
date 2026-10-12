@@ -333,6 +333,22 @@ See [Benchmarks](Benchmarks#pmrem-and-the-coverage-run) for the numbers.
 
 A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrumenter emits an `Int` counter instead. See [The Mojo compiler hang](The-Mojo-compiler-hang).
 
+### Compile-time name tests
+
+The operator check must not call `startswith` or `find` at compile time. Pinned Mojo 1.1.0 can deadlock a build that evaluates these methods at compile time. The compiler then waits on a semaphore and uses no CPU. The build does not fail and does not stop. The capture reports "waiting for probes (compile/startup)" until the shard budget stops it.
+
+The instrumented `materials/nodes.mojo` caused this deadlock in `test_glsl614_reference_refusals`. One operator in that module, `flag or mask.reduce_or()`, joins a `Bool` and a `SIMD[DType.bool, 1]`. Its check got to the reflected-name tests and their `startswith` calls. With one compiler thread, the build did not stop in 900 seconds. Without that one check, the build took 45 seconds.
+
+The deadlock depends on the build. A different instrumented form of the same module can build, so a passing build does not prove that a helper is safe.
+
+The runtime obeys these rules:
+
+- `node` answers the fixed scalar types by type identity before it reflects names. These types are `Bool`, `SIMD[DType.bool, 1]`, `Int` and `String`. The pure-type branch gives the same answer for them.
+- `_starts` and `_bracket` compare bytes. They give the results of `startswith` and `find`. The compile-time helpers use them, not the methods.
+- The `Bool` identity check stays first in `node`.
+
+`make test-coverage-tool` checks these rules. `check_coverage_grouping.py` fails if a compile-time helper of `node` calls `startswith` or `find`. It compares `_starts` and `_bracket` with `startswith` and `find` on 272 name pairs. It also builds a fixture of mixed pure operators with one compiler thread. The build must stop in 120 seconds, and the native and instrumented output must agree.
+
 ## Capture storage
 
 The Makefile reduces each suite's stderr as it arrives, and compresses what is left. The report reads two things: the set of distinct probe payloads, and each decision's distinct MC/DC evaluations. A probe in a loop repeats both millions of times. `tools/coverage_io.py`'s `Reducer` keeps each payload once, as a `COVLINE:` record, and each distinct complete `COVEVAL2` record once.
