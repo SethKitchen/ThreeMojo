@@ -20,6 +20,43 @@ PACKAGE = Path(__file__).resolve().parent
 SOURCE = PACKAGE.parents[1]
 HERE = Path(os.environ.get('CARLA_LANE_ORACLE_OUTPUT', str(SOURCE/'out/carla-lane-oracle')))
 HERE.mkdir(parents=True, exist_ok=True)
+# A fresh complete current graph is required before consulting the immutable
+# historical pins below. Their method/source identities are provenance only;
+# the #333 local-polynomial theorem supplies the current numerical semantics.
+import full_audit_cleanup_contracts as full_audit
+import typed_boundary_contracts as typed_boundary
+_CURRENT_BINDINGS = full_audit.proof_bindings(SOURCE)
+_OBSERVED = {}
+
+
+def _current_bytes(name):
+    raw = (SOURCE/name).read_bytes()
+    digest = hashlib.sha256(raw).hexdigest()
+    if name in _CURRENT_BINDINGS and digest != _CURRENT_BINDINGS[name]:
+        raise ValueError(('Current fixture input changed', name))
+    if _OBSERVED.setdefault(name, raw) != raw:
+        raise ValueError(('Fixture input changed after consumption', name))
+    return raw
+
+
+def _historical_text(name):
+    text = _current_bytes(name).decode('utf-8')
+    return (typed_boundary.historical_source(name, text)
+            if typed_boundary.is_current(name, text) else text)
+
+
+def _finish_current_graph():
+    for name, expected in _CURRENT_BINDINGS.items():
+        if hashlib.sha256(_current_bytes(name)).hexdigest() != expected:
+            raise ValueError(('Current fixture receipt changed', name))
+    for name, raw in tuple(_OBSERVED.items()):
+        if _current_bytes(name) != raw:
+            raise ValueError(('Fixture final observation changed', name))
+    # Recheck resolution, the complete caller census, and all owned proof
+    # providers after arithmetic. There is no reused verification result.
+    if full_audit.proof_bindings(SOURCE) != _CURRENT_BINDINGS:
+        raise ValueError('Current fixture graph changed during proof')
+
 B = 100_000_000_000_000_000_000
 U = 16384
 base = float(B)
@@ -177,10 +214,24 @@ for reverse in (False, True):
     sampling.append({'reverse':reverse,'before_bits':f'0x{bits(before):016x}',
                      'remaining':left,'delta':delta,'after_bits':f'0x{bits(after):016x}'})
 
+# The current retained fixture assigns a constant polynomial after moving
+# the geometry/section origins, then changes only c in its non-affine case.
+# Inspect its exact admitted declaration rather than infer an origin from the
+# enclosing road record. The conditioned theorem distinguishes those origins.
+from seed_count_contracts import declaration as _declaration
+_fixture_name = 'tests/test_carla_axis_translated_map_blocker.mojo'
+_fixture_text = _current_bytes(_fixture_name).decode('utf-8')
+_fixture = _declaration(_fixture_text, '_flat_map')
+if typed_boundary.is_current(_fixture_name, _fixture_text):
+    if ('].polynomial = CubicPolynomial._constant_si(0.0002)' not in _fixture
+            or '.polynomial.c = 1e-40' not in _fixture
+            or '.polynomial.s =' in _fixture):
+        raise ValueError('Current translated fixture local-origin premise changed')
+
 # Pin the relevant source methods. Do not silently update this after a
 # scalar graph change: review the proof and each fixture first.
 def method_bytes(path, name):
-    text=(SOURCE/path).read_text()
+    text=_historical_text(path)
     matches=list(re.finditer(r'(?m)^(?:    )?def '+re.escape(name)+r'[\[(]',text))
     if len(matches) != 1:
         raise ValueError(('Translated method is missing or ambiguous', path, name))
@@ -189,9 +240,9 @@ def method_bytes(path, name):
     following=re.search(r'(?m)^(?:    def |def |struct |comptime )',rest[1:])
     return (rest[:following.start()+1] if following else rest).encode()
 
-pin=json.loads((PACKAGE/'translated-parameter-source.json').read_text())
+pin=json.loads(_current_bytes('tools/carla_lane_oracle/translated-parameter-source.json'))
 for path, expected in pin['dependency_sha256'].items():
-    if hashlib.sha256((SOURCE/path).read_bytes()).hexdigest() != expected:
+    if hashlib.sha256(_historical_text(path).encode('utf-8')).hexdigest() != expected:
         raise ValueError(('Review translated build dependency after source change', path))
 for method in pin['methods']:
     actual=hashlib.sha256(method_bytes(method['path'],method['name'])).hexdigest()
@@ -200,7 +251,7 @@ for method in pin['methods']:
 
 report={
     'status':'Source-only exact arithmetic proof; no Mojo build or run',
-    'source_pin_sha256':hashlib.sha256((PACKAGE/'translated-parameter-source.json').read_bytes()).hexdigest(),
+    'source_pin_sha256':hashlib.sha256(_current_bytes('tools/carla_lane_oracle/translated-parameter-source.json')).hexdigest(),
     'fixture':{'base_decimal':str(B),'base_bits':f'0x{bits(base):016x}',
                'end_decimal':str(int(end)),'end_bits':f'0x{bits(end):016x}',
                'length':81920,'length_bits':f'0x{bits(81920.0):016x}',
@@ -219,6 +270,13 @@ report={
                                  'quadratic_width_bits':f'0x{bits(1e-40):016x}',
                                  'positive_nonterminal_steps':sampling},
 }
+report['current_semantic_scope'] = (
+    'Reviewed #333 translated fixture only: geometry and section stations '
+    'move to 1e20 while each tested width polynomial origin stays zero, '
+    'including the c=1e-40 nonprogress mutation. Historical method identity '
+    'is provenance, not expanded/local polynomial equivalence.')
+report['current_graph_sha256'] = dict(_CURRENT_BINDINGS)
+_finish_current_graph()
 result=HERE/'translated-parameter-resolution.json'
 result.write_text(json.dumps(report,indent=2)+'\n')
 print(json.dumps({'result':'PASS','subintervals':15,'impossible_partitions':16,
