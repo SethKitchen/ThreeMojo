@@ -11,6 +11,20 @@ import winner_sign_contracts as contracts
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# This module's fixed byte/line/body assertions describe the historical main
+# graph. The #333 current graph has separate physical admission/mutation tests.
+_CURRENT_SOURCE_ROOT = ROOT
+
+
+def setUpModule():
+    global ROOT
+    import _full_audit_test_fixtures as historical_fixtures
+    owner = type('HistoricalModuleFixture', (), {
+        'addCleanup': staticmethod(unittest.addModuleCleanup)})()
+    ROOT = historical_fixtures.copy_historical_boundary_root(owner, _CURRENT_SOURCE_ROOT)
+    unittest.addModuleCleanup(globals().__setitem__, 'ROOT', _CURRENT_SOURCE_ROOT)
+
+
 class WinnerSignContracts(unittest.TestCase):
     def test_source_correspondence_and_distinct_lexical_owners(self):
         result = contracts.verify(ROOT)
