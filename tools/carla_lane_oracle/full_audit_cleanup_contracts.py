@@ -2362,6 +2362,18 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
     if edge is None:
         return text
     try:
+        if _inputs is not None:
+            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs),
+                    'invalid typed source owner')
+            if type(_inputs) is _BorrowedCacheInputs:
+                # Authenticate the lease before using its operation. Its
+                # canonical check poisons the consumed owner for bad tokens.
+                _BorrowedCacheInputs._check(_inputs, _input_owner, root)
+                explicit_operation = _operation
+                _operation = _inputs._operation
+                require(explicit_operation is None or explicit_operation is _operation,
+                        'typed source operation differs from borrowed owner')
+        require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
         if not (typed_boundary.is_current(path, text) or
                 source.token_sha256(text) == edge['after_token_sha256']):
             return text
@@ -2374,9 +2386,7 @@ def reviewed_typed_text(root, path, text, *, _operation=None, _inputs=None, _inp
                 'supplied typed source differs from physical input: ' + path)
         _observe_text(root, path, text, _operation=_operation, mode='physical',
                       supplied=True, _checked_raw=raw)
-        require((_inputs is None) == (_input_owner is None), 'incomplete typed input owner')
         if _inputs is not None:
-            require(type(_inputs) in (_CacheInputs, _BorrowedCacheInputs), 'invalid typed source owner')
             require(_inputs.raw(_input_owner, root, path) == raw, 'typed owner image changed: ' + path)
         elif _operation is None:
             verify(root, exact=True)
