@@ -98,14 +98,14 @@ Other `Boolable` operands, which include custom types, go into a recording proxy
 - A temporary operand with a user-defined move constructor does not move. The probe converts it once in place, records it and returns its `Bool`. A two-type operator and `not` also convert a temporary once at that point, and then destroy it.
 - A retained operand whose copy, move and destruction are bitwise is copied into a proxy that owns it. These operations run no source code. Its proxy type is the proxy type of a temporary of the same type, so a one-type operator stays one-type.
 - Another retained operand goes into a proxy that borrows it with its origin. Examples are a variable, a field and a conditional expression with two retained arms. A two-type operator converts the borrowed operand once and does not copy it, for example in `copied or flag`.
-- The probe of a right operand also gets the native result type of its operator. If the operand has that type, the probe takes the operand as an owned argument. Mojo then copies a retained operand, or moves it at its last use, at the same point as the native operator.
+- The probe of a right operand also gets the native result type of its operator. If the operand has that type, the probe takes the operand as an owned argument. Mojo then copies a retained operand, or moves it at its last use, at the same point as the native operator. The probe repeats the text of its operator, so an operator text longer than 256 bytes gets the plain probe.
 - Each conversion calls the operand's `__bool__` once. The first conversion records the condition. A later conversion of the same selected operand with a different truth records that hit too, and marks the condition `?`.
 
 Each `and` and `or` operator also gets an unevaluated `type_of` check. It compares the original subexpression with the instrumented one when Mojo instantiates the function, also in generic code. The check fails compilation when the probes would change the semantics of the operator.
 
 These operands fail compilation with a coverage diagnostic:
 
-- A one-type operator whose left operand is retained, and whose copy, move or destruction runs source code. Examples are `copied or other`, `copied or copied` and `copied or Copied(False)`. A retained `Optional` of such an element is also in this group.
+- A one-type operator whose left operand is retained, and whose copy, move or destruction runs source code. Examples are `copied or other`, `copied or copied` and `copied or Copied(False)`. A retained `Optional` of such an element is also in this group. So is such a right operand of an operator text longer than 256 bytes.
 - A one-type operator over a type with a user-defined move constructor, for example `Moving(False) or Moving(True)`.
 - An operator that joins two operand types through an implicit conversion. An `Optional` wrap of a pure operand also fails, because it replaces the value with its presence. This includes a wrap from an empty `Optional[T]` into a present `Optional[Optional[T]]`.
 

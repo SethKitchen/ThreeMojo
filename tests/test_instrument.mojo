@@ -244,6 +244,27 @@ def test_a_right_operand_gets_its_operator_result_type() raises:
     )
 
 
+def test_a_long_operator_text_keeps_the_plain_right_probe() raises:
+    # A right probe repeats its operator's text. Operator 42 has 253 bytes of
+    # text and gets one; operator 43 has 259 bytes and keeps the plain probe.
+    var result = instrument(
+        "def f():\n    if " + "a and " * 60 + "a:\n        pass\n", "m"
+    )
+    assert_equal(result.conditions, [61])
+    assert_true(
+        "_cov_eval_right[type_of("
+        + "a and " * 42
+        + 'a)]().of(a, _cov_eval_state0, "m:2.42", 42)'
+        in result.text
+    )
+    assert_true(
+        '_cov_eval_leaf(a, _cov_eval_state0, "m:2.43", 43)' in result.text
+    )
+    assert_true(
+        "_cov_eval_right[type_of(" + "a and " * 43 + "a)]" not in result.text
+    )
+
+
 def test_single_condition_gets_no_inner_probe() raises:
     var source = String("def f(a: Int):\n    if a > 0:\n        return 1\n")
     var result = instrument(source, String("m"))

@@ -367,6 +367,10 @@ def _node_check(
     )
 
 
+# The longest operator text that a right probe repeats.
+comptime _RIGHT_TEXT_BYTES = 256
+
+
 def _direct(wrapped: String, added: Int, stem: String) -> Bool:
     """Return True if an instrumented operand is one leaf probe.
 
@@ -423,7 +427,12 @@ def _fold_operators(
     for index in range(1, len(operands)):
         var next_native = native + separator + operands[index]
         var right = wrapped[index].copy()
-        if direct[index]:
+        # A right probe repeats the operator's text, and each later operator
+        # check repeats the probe. A long chain would grow by its cube, so
+        # only an operator of at most `_RIGHT_TEXT_BYTES` gets a right probe.
+        # A later operand keeps the plain probe: a one-type operator then
+        # refuses a retained right operand instead of copying it falsely.
+        if direct[index] and next_native.byte_length() <= _RIGHT_TEXT_BYTES:
             right = _as_right(right, next_native, stem)
         var next_rewritten = rewritten + separator + right
         checks.append(
