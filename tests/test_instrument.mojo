@@ -161,9 +161,11 @@ def test_compound_condition_wraps_the_decision_and_each_operand() raises:
         " _cov_eval_finish(_cov_eval_truth[_cov_eval_node[type_of(a > 0),"
         " type_of(a < 9), type_of(a > 0 and a < 9),"
         ' type_of(_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1))]()]'
+        " _cov_eval_right[type_of(a > 0 and a < 9)]().of(a < 9,"
+        ' _cov_eval_state0, "m:2.1", 1))]()]'
         '(_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1)),'
+        " _cov_eval_right[type_of(a > 0 and a < 9)]().of(a < 9,"
+        ' _cov_eval_state0, "m:2.1", 1)),'
         ' _cov_eval_state0, "m:2"):'
         in result.text
     )
@@ -180,9 +182,16 @@ def test_each_operator_gets_a_native_type_check_in_mojo_grouping() raises:
     )
     assert_equal(result.conditions, [5])
     var leaf_a = String('_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0)')
-    var leaf_b = String('_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1)')
+    # A right operand gets the native result type of its operator.
+    var leaf_b = String(
+        "_cov_eval_right[type_of(a and b)]().of("
+        + 'b, _cov_eval_state0, "m:2.1", 1)'
+    )
     var leaf_c = String('_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2)')
-    var leaf_d = String('_cov_eval_leaf(d, _cov_eval_state0, "m:2.3", 3)')
+    var leaf_d = String(
+        "_cov_eval_right[type_of(c or d)]().of("
+        + 'd, _cov_eval_state0, "m:2.3", 3)'
+    )
     var leaf_e = String('_cov_eval_leaf(e, _cov_eval_state0, "m:2.4", 4)')
     var group = "(" + leaf_c + " or " + leaf_d + ")"
     var right = group + " and not " + leaf_e
@@ -216,6 +225,25 @@ def test_each_operator_gets_a_native_type_check_in_mojo_grouping() raises:
     )
 
 
+def test_a_right_operand_gets_its_operator_result_type() raises:
+    # A grouped leaf is still the right operand. A negated one is not: `not`
+    # converts it once and does not select it.
+    var result = instrument(
+        String("def f():\n    if a or (b) or not c:\n        pass\n"), "m"
+    )
+    assert_equal(result.conditions, [3])
+    assert_true(
+        '_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) or'
+        " (_cov_eval_right[type_of(a or (b))]().of("
+        'b, _cov_eval_state0, "m:2.1", 1)) or not'
+        ' _cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2)'
+        in result.text
+    )
+    assert_true(
+        "buffer as _cov_eval_buffer, right as _cov_eval_right," in result.text
+    )
+
+
 def test_single_condition_gets_no_inner_probe() raises:
     var source = String("def f(a: Int):\n    if a > 0:\n        return 1\n")
     var result = instrument(source, String("m"))
@@ -233,8 +261,10 @@ def test_mixed_and_or_keeps_precedence_by_wrapping_only_operands() raises:
     # `and` still binds tighter than `or`, because only the leaves are wrapped.
     assert_true(
         '_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(b > 0, _cov_eval_state0, "m:2.1", 1) or'
-        ' _cov_eval_leaf(a < 0, _cov_eval_state0, "m:2.2", 2)'
+        " _cov_eval_right[type_of(a > 0 and b > 0)]().of("
+        'b > 0, _cov_eval_state0, "m:2.1", 1) or'
+        " _cov_eval_right[type_of(a > 0 and b > 0 or a < 0)]().of("
+        'a < 0, _cov_eval_state0, "m:2.2", 2)'
         in result.text
     )
 
@@ -253,7 +283,8 @@ def test_negated_group_measures_its_leaves() raises:
     )
     assert_true(
         ']()](not (_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1))), _cov_eval_state0,'
+        " _cov_eval_right[type_of(a and b)]().of("
+        'b, _cov_eval_state0, "m:2.1", 1))), _cov_eval_state0,'
         ' "m:2"):'
         in result.text
     )
@@ -279,7 +310,9 @@ def test_identifiers_containing_and_or_are_not_split() raises:
         '_cov_eval_leaf(android, _cov_eval_state0, "m:2.0", 0)' in result.text
     )
     assert_true(
-        '_cov_eval_leaf(original, _cov_eval_state0, "m:2.1", 1)' in result.text
+        "_cov_eval_right[type_of(android or original)]().of("
+        + 'original, _cov_eval_state0, "m:2.1", 1)'
+        in result.text
     )
 
 
@@ -336,7 +369,8 @@ def test_multi_line_condition_spanning_several_operands() raises:
     assert_equal(result.conditions, [2])
     assert_true(
         ']()]((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1))),'
+        " _cov_eval_right[type_of(a > 0 and a < 9)]().of("
+        'a < 9, _cov_eval_state0, "m:2.1", 1))),'
         ' _cov_eval_state0, "m:2")'
         in result.text
     )
@@ -352,7 +386,8 @@ def test_comments_inside_a_multi_line_condition_do_not_swallow_code() raises:
     assert_equal(result.conditions, [2])
     assert_true(
         ']()]((_cov_eval_leaf(a > 0, _cov_eval_state0, "m:2.0", 0) and'
-        ' _cov_eval_leaf(a < 9, _cov_eval_state0, "m:2.1", 1))),'
+        " _cov_eval_right[type_of(a > 0 and a < 9)]().of("
+        'a < 9, _cov_eval_state0, "m:2.1", 1))),'
         ' _cov_eval_state0, "m:2")'
         in result.text
     )
@@ -806,11 +841,15 @@ def test_call_index_and_comparison_are_atomic_leaves() raises:
         in result.text
     )
     assert_true(
-        '_cov_eval_leaf(items[index(a and b)], _cov_eval_state0, "m:2.1", 1)'
+        '_cov_eval_right[type_of(call(a or b, "and") and'
+        " items[index(a and b)])]().of("
+        + 'items[index(a and b)], _cov_eval_state0, "m:2.1", 1)'
         in result.text
     )
     assert_true(
-        '_cov_eval_leaf((a or b) == c, _cov_eval_state0, "m:2.2", 2)'
+        '_cov_eval_right[type_of(call(a or b, "and") and'
+        " items[index(a and b)] or (a or b) == c)]().of("
+        + '(a or b) == c, _cov_eval_state0, "m:2.2", 2)'
         in result.text
     )
 
@@ -823,7 +862,8 @@ def test_tabs_and_adjacent_groups_delimit_logical_keywords() raises:
     assert_equal(result.conditions, [3])
     assert_true(
         '((_cov_eval_leaf(a, _cov_eval_state0, "m:2.0", 0)) and'
-        ' (_cov_eval_leaf(b, _cov_eval_state0, "m:2.1", 1))) or not'
+        " (_cov_eval_right[type_of((a) and (b))]().of("
+        'b, _cov_eval_state0, "m:2.1", 1))) or not'
         ' (_cov_eval_leaf(c, _cov_eval_state0, "m:2.2", 2))'
         in result.text
     )
@@ -850,10 +890,14 @@ def test_multiline_elif_and_while_keep_all_grouped_leaves() raises:
     assert_equal(result.branches, [2, 4, 8])
     assert_equal(result.conditions, [0, 3, 3])
     assert_true(
-        '_cov_eval_leaf(c, _cov_eval_state0, "m:4.2", 2)' in result.text
+        "_cov_eval_right[type_of(b and c)]().of("
+        + 'c, _cov_eval_state0, "m:4.2", 2)'
+        in result.text
     )
     assert_true(
-        '_cov_eval_leaf(c, _cov_eval_state0, "m:8.2", 2)' in result.text
+        "_cov_eval_right[type_of((a and b) or c)]().of("
+        + 'c, _cov_eval_state0, "m:8.2", 2)'
+        in result.text
     )
 
 
@@ -959,8 +1003,8 @@ def test_triple_quoted_operands_preserve_internal_quotes() raises:
     assert_equal(result.conditions, [2])
     assert_equal(result.lines, [2, 3, 4])
     assert_true(
-        '_cov_eval_leaf(text == """hello" and )#[word""", _cov_eval_state0,'
-        ' "m:2.1", 1)'
+        '_cov_eval_right[type_of(a or text == """hello" and )#[word""")]().of('
+        'text == """hello" and )#[word""", _cov_eval_state0, "m:2.1", 1)'
         in result.text
     )
 
@@ -977,7 +1021,11 @@ def test_multiline_literal_bytes_survive_header_rewriting() raises:
     assert_equal(result.lines, [2, 5, 6])
     assert_true(literal in result.text)
     assert_true(
-        "_cov_eval_leaf(text == " + literal + ', _cov_eval_state0, "m:2.1", 1)'
+        "_cov_eval_right[type_of(a or text == "
+        + literal
+        + ")]().of(text == "
+        + literal
+        + ', _cov_eval_state0, "m:2.1", 1)'
         in result.text
     )
 
@@ -1071,7 +1119,9 @@ def test_nested_definitions_get_separate_invocation_buffers() raises:
         "        var _cov_eval_state1 = _cov_eval_buffer()" in result.text
     )
     assert_true(
-        '_cov_eval_leaf(inner(), _cov_eval_state0, "m:5.1", 1)' in result.text
+        "_cov_eval_right[type_of(c and inner())]().of("
+        + 'inner(), _cov_eval_state0, "m:5.1", 1)'
+        in result.text
     )
 
 

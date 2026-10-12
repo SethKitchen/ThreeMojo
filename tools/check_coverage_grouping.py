@@ -296,9 +296,13 @@ def case_{number}():
 
 # Custom Boolable compound operands (issue #560). Leaves: ('S', i) a temporary
 # Probe, ('D', i) a temporary Other, ('B', i) a Bool, ('X', i) a retained
-# move-only Probe, ('C', i) a retained implicitly copyable Shared, and
-# ('choose', condition, then, else) an opaque conditional expression. A
-# Shared is only in two-type operators: a one-type operator is refused. Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one
+# move-only Probe, ('C', i) a retained implicitly copyable Shared, ('M', i) a
+# temporary Moving with a user-defined move constructor, ('P', i) a retained
+# and ('Q', i) a temporary Bits whose copy, move and destruction are bitwise,
+# ('T', i) a temporary Shared, and ('choose', condition, then, else) an
+# opaque conditional expression. A Moving is only in two-type operators. A
+# retained Shared is in a one-type operator only as the right operand: the
+# operator copies it. A Bits is in both, also twice as one retained variable. Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one
 # type, it tests the left operand, then returns it or the right operand
 # unconverted, and the enclosing operator or truth context tests the selected
 # object again. With two types, it converts each evaluated operand once.
@@ -327,7 +331,38 @@ TRUTH_CASES = [
     ('or', ('C', 0), ('or', ('X', 1), ('and', ('C', 2), ('B', 3)))),
     ('and', ('C', 0), ('D', 1)),
     ('or', ('choose', ('B', 1), ('C', 2), ('C', 3)), ('S', 0)),
+    ('or', ('M', 0), ('B', 1)),
+    ('and', ('B', 0), ('M', 1)),
+    ('or', ('not', ('M', 0)), ('and', ('S', 1), ('M', 2))),
+    ('and', ('or', ('M', 0), ('D', 1)), ('or', ('S', 2), ('S', 3))),
+    ('and', ('M', 0), ('C', 1)),
+    ('or', ('choose', ('B', 1), ('M', 2), ('M', 3)), ('C', 0)),
+    ('and', ('or', ('P', 0), ('P', 1)), ('B', 2)),
+    ('and', ('P', 0), ('or', ('P', 1), ('Q', 2))),
+    ('or', ('or', ('Q', 0), ('P', 1)), ('B', 2)),
+    ('and', ('not', ('P', 0)), ('or', ('P', 1), ('or', ('P', 2), ('Q', 3)))),
+    ('or', ('choose', ('B', 1), ('P', 2), ('P', 3)), ('P', 0)),
+    ('or', ('and', ('P', 0), ('P', 0)), ('B', 1)),
+    ('and', ('or', ('P', 0), ('S', 1)), ('or', ('Q', 2), ('P', 3))),
+    ('or', ('T', 0), ('C', 1)),
+    ('and', ('or', ('T', 0), ('C', 1)), ('B', 2)),
+    ('or', ('or', ('T', 0), ('C', 1)), ('C', 2)),
+    ('and', ('T', 0), ('or', ('B', 1), ('C', 2))),
+    ('or', ('T', 0), ('choose', ('B', 1), ('C', 2), ('C', 3))),
+    ('and', ('T', 0), ('not', ('C', 1))),
 ]
+
+
+
+def fresh(tree):
+    """Rebuild a tree so each leaf is its own object.
+
+    Python can share equal tuple constants, and the slots are keyed by object.
+    """
+    return tuple(fresh(child) if isinstance(child, tuple) else child for child in tree)
+
+
+TRUTH_CASES = [fresh(tree) for tree in TRUTH_CASES]
 
 
 def truth_type(tree):
@@ -335,7 +370,11 @@ def truth_type(tree):
     kind = tree[0]
     if kind in ('S', 'X'):
         return 'S'
-    if kind in ('D', 'B', 'C'):
+    if kind in ('P', 'Q'):
+        return 'P'
+    if kind == 'T':
+        return 'C'
+    if kind in ('D', 'B', 'C', 'M'):
         return kind
     if kind == 'choose':
         return truth_type(tree[2])
@@ -347,11 +386,14 @@ def truth_type(tree):
 
 # The fixture's own names. COLLISION_NAMES renders the same trees with names
 # that shadow caller-scope types and take the instrumenter's default prefixes.
-TRUTH_NAMES = {'probe': 'probe', 'other': 'other', 'flag': 'flag',
+TRUTH_NAMES = {'probe': 'probe', 'other': 'other', 'flag': 'flag', 'moving': 'moving',
+               'bits': 'bits', 'shared': 'shared',
                'state': 'state', 'cell': 'cell',
                'retained': ['retained0', 'retained1', 'retained2', 'retained3']}
 COLLISION_NAMES = {'probe': '_cov_eval_leaf', 'other': '_cov_eval_node',
-                   'flag': '_cov_branch', 'state': '_cov_eval_state0',
+                   'flag': '_cov_branch', 'moving': '_cov_eval_buffer',
+                   'bits': '_cov_eval_truth', 'shared': '_cov_eval_right',
+                   'state': '_cov_eval_state0',
                    'cell': '_cov_hit',
                    'retained': ['List', 'Int', 'Bool', '_cov_eval_finish']}
 
@@ -366,7 +408,13 @@ def truth_text(tree, top=True, names=TRUTH_NAMES):
         return f'{names["other"]}({tree[1]}, {state})'
     if kind == 'B':
         return f'{names["flag"]}({tree[1]}, {state})'
-    if kind in ('X', 'C'):
+    if kind == 'M':
+        return f'{names["moving"]}({tree[1]}, {state})'
+    if kind == 'Q':
+        return f'{names["bits"]}({tree[1]}, {state})'
+    if kind == 'T':
+        return f'{names["shared"]}({tree[1]}, {state})'
+    if kind in ('X', 'C', 'P'):
         return names['retained'][tree[1]]
     if kind == 'choose':
         return (f'({truth_text(tree[2], False, names)} if '
@@ -382,7 +430,7 @@ def truth_text(tree, top=True, names=TRUTH_NAMES):
 def truth_slots(tree, slots=None):
     """Number the instrumented leaves left to right; a conditional is one."""
     slots = {} if slots is None else slots
-    if tree[0] in ('S', 'D', 'B', 'X', 'C', 'choose'):
+    if tree[0] in ('S', 'D', 'B', 'X', 'C', 'M', 'P', 'Q', 'T', 'choose'):
         slots[id(tree)] = len(slots)
     else:
         for child in tree[1:]:
@@ -434,16 +482,23 @@ class TruthModel:
 
     def drop(self, item):
         kind, name, _, retained = item
-        if kind != 'B' and not retained:
+        # A Bits destruction is bitwise and logs nothing.
+        if kind not in ('B', 'Q') and not retained:
             self.log.append(f'~{name}')
 
-    def evaluate(self, tree):
+    def evaluate(self, tree, owned=False):
+        """Evaluate a subtree. `owned` marks the right operand of a one-type
+        operator: the operator copies a retained Shared when it evaluates it.
+        The fixture keeps every retained value alive, so it is never moved."""
         kind = tree[0]
         slot = self.slots.get(id(tree))
-        if kind in ('S', 'D'):
+        if kind in ('S', 'D', 'M', 'Q', 'T'):
             self.enter(tree[1])
             return (kind, tree[1], slot, False)
-        if kind in ('X', 'C'):
+        if kind == 'C' and owned:
+            self.log.append(f'={tree[1]}')
+            return ('S', tree[1], slot, False)
+        if kind in ('X', 'C', 'P'):
             return ('S', tree[1], slot, True)
         if kind == 'B':
             self.enter(tree[1])
@@ -453,11 +508,16 @@ class TruthModel:
         if kind == 'choose':
             self.enter(tree[1][1])
             chosen = tree[2] if self.bit(tree[1][1]) else tree[3]
-            if chosen[0] == 'C':
+            if chosen[0] in ('C', 'P'):
                 # Two retained arms give a reference to the selected one:
-                # the conditional neither copies nor destroys it.
-                return ('S', chosen[1], slot, True)
+                # the conditional neither copies nor destroys it. A one-type
+                # operator then copies a selected Shared, as a variable.
+                kind, name, _, retained = self.evaluate(chosen, owned)
+                return (kind, name, slot, retained)
             self.enter(chosen[1])
+            if chosen[0] == 'M':
+                # The selected temporary moves into the conditional's result.
+                self.log.append(f'>{chosen[1]}')
             return ('S', chosen[1], slot, False)
         if kind == 'not':
             item = self.evaluate(tree[1])
@@ -465,16 +525,18 @@ class TruthModel:
             self.drop(item)
             return ('B', not value, None, False)
         same = truth_type(tree[1]) == truth_type(tree[2])
-        # A one-type operator over a retained Shared copies it; it is refused.
-        assert not (same and truth_type(tree[1]) == 'C'), tree
+        # A one-type operator moves a selected Moving after it converts it,
+        # and copies a selected retained left Shared. Both are refused.
+        assert not (same and truth_type(tree[1]) == 'M'), tree
         left = self.evaluate(tree[1])
+        assert not (same and truth_type(tree[1]) == 'C' and left[3]), tree
         value = self.convert(left)
         short = value if kind == 'or' else not value
         if same:
             if short:
                 return left
             self.drop(left)
-            return self.evaluate(tree[2])
+            return self.evaluate(tree[2], owned=tree[2][0] in ('C', 'choose'))
         self.drop(left)
         if short:
             return ('B', value, None, False)
@@ -503,7 +565,7 @@ class TruthModel:
 
 
 def truth_leaves(tree):
-    if tree[0] in ('S', 'D', 'B', 'X', 'C'):
+    if tree[0] in ('S', 'D', 'B', 'X', 'C', 'M', 'P', 'Q', 'T'):
         return [tree]
     return [leaf for child in tree[1:] for leaf in truth_leaves(child)]
 
@@ -606,6 +668,54 @@ struct Shared(ImplicitlyCopyable, Boolable):
         self.state[].log += "~" + String(self.index)
 
 
+struct Moving(Made):
+    var index: Int
+    var state: Cell
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    def __init__(out self, *, deinit move: Self):
+        self.index = move.index
+        self.state = move.state
+        self.state[].log += ">" + String(self.index)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+@fieldwise_init
+struct Bits(ImplicitlyCopyable, Boolable):
+    var index: Int
+    var state: Cell
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+
+def bits(index: Int, state: Cell) raises -> Bits:
+    state[].enter(index)
+    return Bits(index, state)
+
+
+def shared(index: Int, state: Cell) raises -> Shared:
+    state[].enter(index)
+    return Shared(index, state)
+
+
+def moving(index: Int, state: Cell) raises -> Moving:
+    state[].enter(index)
+    return Moving(index, state)
+
+
 def probe(index: Int, state: Cell) raises -> Probe:
     state[].enter(index)
     return Probe(index, state)
@@ -625,15 +735,16 @@ def flag(index: Int, state: Cell) raises -> Bool:
 def truth_source(names=TRUTH_NAMES):
     """Generate one function per reference tree; return the decision lines."""
     text = TRUTH_PRELUDE
-    for name in ('probe', 'other', 'flag'):
+    for name in ('probe', 'other', 'flag', 'moving', 'bits', 'shared'):
         text = text.replace(f'\ndef {name}(', f'\ndef {names[name]}(')
     state, cell, retained_names = names['state'], names['cell'], names['retained']
     lines = []
     for number, tree in enumerate(TRUTH_CASES):
-        kept = [leaf for leaf in truth_leaves(tree) if leaf[0] in ('X', 'C')]
+        kept = list({leaf[1]: leaf for leaf in truth_leaves(tree)
+                     if leaf[0] in ('X', 'C', 'P')}.values())
         retained = ''.join(
             f'    var {retained_names[leaf[1]]} = '
-            f'{"Probe" if leaf[0] == "X" else "Shared"}({leaf[1]}, {state})\n'
+            f'{dict(X="Probe", C="Shared", P="Bits")[leaf[0]]}({leaf[1]}, {state})\n'
             for leaf in kept)
         released = ''.join(f'    _ = {retained_names[leaf[1]]}^\n' for leaf in kept)
         text += f'''
@@ -751,8 +862,8 @@ def controls(mask: Int, changing: Bool) raises:
     state[].log += "|"
     # Retained Shared operands in two-type operators, without a pinned
     # lifetime. The log records every copy, conversion and destruction.
-    var shared = Shared(3, state)
-    if flag(0, state) and not shared or probe(1, state):
+    var held = Shared(3, state)
+    if flag(0, state) and not held or probe(1, state):
         state[].log += "|V"
     state[].log += "|"
     var kept = Shared(2, state)
@@ -763,6 +874,15 @@ def controls(mask: Int, changing: Bool) raises:
     state[].log += "|" + String(generic_retained(kept, state))
     state[].log += "|" + String(generic_retained(mask % 2 == 0, state))
     state[].log += "|"
+    # A one-type operator copies a live retained right operand and moves it
+    # at its last use.
+    var live = Shared(2, state)
+    if shared(0, state) and live:
+        state[].log += "|L"
+    var last = Shared(1, state)
+    if shared(0, state) or last:
+        state[].log += "|M"
+    state[].log += "|" + String(Bool(live)) + "|"
     if Pinned(1, state) or flag(2, state) and Pinned(3, state):
         state[].log += "|P"
     state[].log += "|"
@@ -786,6 +906,7 @@ def controls(mask: Int, changing: Bool) raises:
     state[].log += "|" + String(depth(mask % 4, state))
     state[].log += "|" + String(generic_pair[Probe, Probe](state))
     state[].log += "|" + String(generic_pair[Probe, Other](state))
+    state[].log += "|" + String(generic_pair[Probe, Moving](state))
     print("CONTROL", mask, changing, state[].log)
     _ = cell^
 
@@ -902,7 +1023,7 @@ def main():
         print("T")
     else:
         print("F")
-''', 'a same-type operator that selects a retained custom Boolable'),
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
     'copyable-retained-self': ('''struct Copied(ImplicitlyCopyable, Boolable):
     var value: Bool
 
@@ -925,7 +1046,7 @@ def main():
     else:
         print("F")
     print(copied.value)
-''', 'a same-type operator that selects a retained custom Boolable'),
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
     'copyable-retained-temporary': ('''struct Copied(ImplicitlyCopyable, Boolable):
     var value: Bool
 
@@ -948,26 +1069,49 @@ def main():
     else:
         print("F")
     print(copied.value)
-''', 'a same-type operator that selects a retained custom Boolable'),
-    'custom-move': ('''@fieldwise_init
-struct Moving(Boolable):
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
+    # Before issue #560, a retained Optional became Bool and lost this copy.
+    'optional-copied-element': ('''struct Logged(ImplicitlyCopyable):
+    var name: Int
+
+    def __init__(out self, name: Int):
+        self.name = name
+
+    def __init__(out self, *, copy: Self):
+        self.name = copy.name
+        print("COPY")
+
+
+def main():
+    var empty = Optional[Logged](None)
+    var full = Optional[Logged](Logged(1))
+    if empty or full:
+        print("T")
+    else:
+        print("F")
+    print(full.value().name)
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
+    'custom-move-same': ('''struct Moving(Boolable, Movable):
     var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
 
     def __init__(out self, *, deinit move: Self):
         self.value = move.value
         print("MOVE")
 
     def __bool__(self) -> Bool:
+        print("CONVERT")
         return self.value
 
 
 def main():
-    var flag = True
-    if Moving(False) or flag:
+    if Moving(False) or Moving(True):
         print("T")
     else:
         print("F")
-''', 'user-defined move constructor'),
+''', 'a one-type operator over a type with a user-defined move'),
     'optional-join': ('''struct Probe(Movable, Boolable):
     var value: Bool
 
@@ -1022,11 +1166,14 @@ def main():
 }
 
 
-# Native output of refused one-type operators over retained operands. The copy
-# of the selected retained operand is what a borrowing proxy cannot make.
+# Native output of refused one-type operators. A borrowing proxy cannot make
+# the copy of a selected retained operand. A temporary with a user-defined
+# move constructor is converted once in place, so it cannot make the move.
 NATIVE_REJECTED_OUTPUT = {
     'copyable-retained-self': 'CONVERT\nCOPY\nCONVERT\nF\nFalse\n',
     'copyable-retained-temporary': 'CONVERT\nCOPY\nCONVERT\nT\nTrue\n',
+    'custom-move-same': 'CONVERT\nMOVE\nCONVERT\nT\n',
+    'optional-copied-element': 'COPY\nT\n1\n',
 }
 
 
@@ -1052,7 +1199,9 @@ def check_truth_module(work, native, rewritten, build, mojo, module, names):
         assert frames, header
         for name in aliases + frames:
             assert name not in source, (name, header)
-        for name in ('_cov_eval_leaf', '_cov_eval_state0', 'List', 'Int', 'Bool'):
+        for name in ('_cov_eval_leaf', '_cov_eval_buffer', '_cov_eval_truth', '_cov_eval_right',
+                     '_cov_eval_state0',
+                     'List', 'Int', 'Bool'):
             assert f'var {name} = ' in source or f'def {name}(' in source, name
     binaries = []
     for label, folder in (('native', native), ('instrumented', rewritten)):
