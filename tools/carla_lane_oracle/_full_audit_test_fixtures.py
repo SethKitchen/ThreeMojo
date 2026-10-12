@@ -68,6 +68,10 @@ def copy_current_root(case, source, *, destination=None):
     paths.add('tools/carla_lane_oracle/grouped-y-proof.md')
     # Supplemental witness-format proof inputs are physically copied too.
     paths.update(cleanup.witness_format.BOUND_INPUTS)
+    paths.update(cleanup.typed_boundary.NEW_INPUTS)
+    paths.update(cleanup.typed_boundary.TESTS)
+    paths.update(cleanup.typed_boundary.BINDING_INPUTS)
+    paths.update(cleanup.conditioned_cubic.BINDING_INPUTS)
     for group in cleanup.BOUND_GROUPS:
         paths.update(record[group])
     # Entry-point/import/caller discovery scans all Mojo sources, including
@@ -90,9 +94,30 @@ def copy_current_root(case, source, *, destination=None):
     return destination
 
 
+def copy_historical_boundary_root(case, source, *, destination=None):
+    """Admit current bytes, then create the complete historical main2d81 graph.
+
+    This is physical test data, never a production root adapter. Old tests
+    retain their old byte/line and method-identity claims on this named root.
+    Current source acceptance and mutation controls use copy_current_root.
+    """
+    root = copy_current_root(case, source, destination=destination)
+    typed = cleanup.typed_boundary
+    for name in typed.SOURCE_PATHS:
+        path = root/name
+        text = path.read_text(encoding='utf-8')
+        if typed.is_current(name, text):
+            path.write_text(typed.historical_source(name, text), encoding='utf-8')
+    for name in typed.NEW_INPUTS:
+        if name.endswith('.mojo'):
+            (root/name).unlink(missing_ok=True)
+    cleanup.verify(root, exact=True)
+    return root
+
+
 def historical_root(case, source):
     predecessors = verified_predecessors(source)
-    root = copy_current_root(case, source)
+    root = copy_historical_boundary_root(case, source)
     write_predecessors(root, predecessors)
     return root
 
