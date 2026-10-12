@@ -32,7 +32,11 @@ from extensions.carla.curve_trig import (
     _sincos_branch_expression,
     _sincos_expression,
 )
-from extensions.carla.geometry import SPIRAL, RoadGeometry, with_spiral
+from extensions.carla.geometry import (
+    SPIRAL,
+    RoadGeometry,
+    with_spiral_si as with_spiral,
+)
 from math.vector3 import Vector3
 from std.math import inf, isfinite
 from std.memory import bitcast
@@ -316,7 +320,7 @@ def _fixed_count(
 
 def test_both_gauss_counts_keep_all_fields_before_the_final_hull() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 8.0), 0.01, 0.2
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 8.0), 0.01, 0.2
     )
     for interval in [
         _Interval(-0.0, 0.0),
@@ -353,14 +357,14 @@ def test_both_gauss_counts_keep_all_fields_before_the_final_hull() raises:
     _fixed_count(geometry, inherited, 3, Vector3(0, 0, 0))
     var tiny = bitcast[DType.float64](UInt64(1))
     geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, -0.0, 8.0), tiny, tiny
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, -0.0, 8.0), tiny, tiny
     )
     _fixed_count(geometry, _Jet.variable(tiny, 2.0 * tiny), 2, Vector3(0, 0, 0))
 
 
 def test_count_selection_clamping_and_union_match_full_jet_reference() raises:
     var geometry = with_spiral(
-        RoadGeometry(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.01
+        RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 0.0, 0.0, 4.0), 0.01, 0.01
     )
     var threshold = 1.0 / 1.01
     var crossing = _Jet.variable(threshold - 1e-8, threshold + 1e-8)
