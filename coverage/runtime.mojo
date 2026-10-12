@@ -21,6 +21,11 @@ from std.memory import stack_allocation
 from std.sys._libc_errno import ErrNo, get_errno, set_errno
 from std.reflection import reflect
 from std.sys import is_defined
+from std.traits import (
+    IsTriviallyCopyable,
+    IsTriviallyDeinitable,
+    IsTriviallyMovable,
+)
 
 comptime LINE_PREFIX = "COVLINE:"
 comptime BRANCH_PREFIX = "COVBRANCH:"
@@ -347,8 +352,9 @@ struct _BorrowedLeaf[
     """A borrowed retained operand that records each native truth conversion.
 
     The type keeps the operand origin, so Mojo keeps the operand alive. Only
-    non-implicitly-copyable operands use it. Native same-type `and` or `or`
-    must copy a retained operand, so these operands can only be mixed-type.
+    non-implicitly-copyable operands use it. A surrounding `not` can convert
+    it before an `and` or `or` node. A raw retained operand requires native
+    mixed-type semantics, which the node guard conservatively refuses.
     """
 
     var value: Pointer[Self.T, Self.value_origin]
@@ -445,7 +451,8 @@ def leaf[
 
     Native same-type `and` or `or` copies a retained operand into its result.
     A borrowing proxy cannot reproduce that copy, so an implicitly copyable
-    retained operand is rejected. Other retained operands are always mixed-type.
+    retained operand is rejected. Other retained operands can pass through
+    `not`; the node guard refuses their raw mixed-type `and` or `or` uses.
 
     Args:
         value: The retained operand, borrowed without a copy.
@@ -491,14 +498,54 @@ def _optional(name: StaticString) -> Bool:
     )
 
 
+def _standard_string_optional[
+    T: AnyType, Candidate: Movable & Deinitable = String
+]() -> Bool:
+    """Recognize only standard String and its standard Optional wrappers.
+
+    Standard String copy and destruction manage storage without invoking
+    user payload methods. Keep this existing standard-value case separate
+    from arbitrary custom payloads with observable lifecycle methods.
+    """
+    comptime if T == Candidate:
+        return True
+    # Each canonical Optional wrapper lengthens its reflected name. Length
+    # only stops the search; admission always requires exact type identity.
+    comptime if (
+        reflect[Candidate].name().byte_length()
+        >= reflect[T].name().byte_length()
+    ):
+        return False
+    return _standard_string_optional[T, Optional[Candidate]]()
+
+
+def _optional_lifecycle[T: AnyType]() -> Bool:
+    """Check the operations omitted by an Optional-valued selection.
+
+    A move-only value can retain its original destructor. A selected retained
+    copy creates another object, so both its copy and destruction must have
+    no user-visible effects. String uses the fixed standard-value rule.
+    """
+    comptime if not IsTriviallyMovable[T]:
+        return False
+    comptime if not conforms_to(T, ImplicitlyCopyable):
+        return True
+    return (
+        IsTriviallyCopyable[T] and IsTriviallyDeinitable[T]
+    ) or _standard_string_optional[T]()
+
+
 def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     """Check that probes keep one `and`/`or` operator's native semantics.
 
-    Mojo tests a same-type operand again in the enclosing context and converts
-    mixed-type operands once. An implicit conversion can also join two operand
-    types. The probes keep the native operator, so it must choose the same
-    semantics for the proxies. Fixed pure operands become `Bool`. They are
-    exact unless an implicit `Optional` wrap replaces a value with presence.
+    Mojo tests a same-type operand again in the enclosing context. Without a
+    type join, it converts each evaluated mixed-type operand once. An implicit
+    conversion can join two operand types. The probes keep the native operator,
+    so its proxy types must select the same semantics. Fixed pure operands
+    become `Bool`. An implicit `Optional` wrap can replace a value with
+    presence. An Optional-valued selection also needs the lifecycle check.
+    A custom type merge can itself return `Bool`, so a native `Bool` result
+    alone cannot prove that the operator used mixed-type Boolean fallback.
 
     Parameters:
         L: The native left operand type.
@@ -509,6 +556,11 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
     Returns:
         True if the instrumented operator keeps the native truth semantics.
     """
+    # Fixed Bool operands and results already pass the pure-type branch.
+    # Check actual type identity before reflected-name classification. This
+    # keeps all four query arguments relevant without reflecting this tuple.
+    comptime if L == Bool and R == Bool and N == Bool and I == Bool:
+        return True
     comptime left = reflect[L].name()
     comptime right = reflect[R].name()
     comptime native = reflect[N].name()
@@ -517,9 +569,18 @@ def node[L: AnyType, R: AnyType, N: AnyType, I: AnyType]() -> Bool:
         # An Optional can itself be an Optional's element. Both operands
         # being Optional does not rule out a wrap that changes emptiness to
         # presence. Preserve only the same Optional type on both sides.
-        return not _optional(native) or (left == native and right == native)
+        comptime if _optional(native):
+            return (
+                left == native and right == native and _optional_lifecycle[N]()
+            )
+        return True
     comptime if native == "Bool":
-        return rewritten == "Bool"
+        # A custom __merge_with__ may return Bool and run source-visible
+        # code after the left truth test. Proxies erase that merge and use
+        # Boolean fallback instead, with the same reflected result type.
+        # The pinned reflection API cannot inspect applicable overloads.
+        # Refuse this ambiguity rather than silently change execution.
+        return False
     # Same-type: one native type, kept by one recording proxy type.
     return rewritten != "Bool" and left == right and left == native
 
@@ -543,9 +604,12 @@ def truth[T: Boolable, //, kept: Bool](value: T) -> Bool:
     comptime assert kept, (
         "Coverage cannot yet preserve this compound condition: the probes"
         " would change how an and/or operator joins its operand types. The"
-        " cause is an implicit conversion between operand types or a retained"
-        " implicitly copyable custom Boolable operand. Do not exclude the"
-        " source; see the coverage truth-conversion limit."
+        " cause is an implicit conversion between operand types, a retained"
+        " implicitly copyable custom Boolable operand, or a custom mixed-type"
+        " operator whose Bool result cannot distinguish a user-defined merge"
+        " from Boolean fallback, or an Optional result with observable copy,"
+        " move, or destructor effects. Do not exclude the source; see the"
+        " coverage truth-conversion limit."
     )
     return value.__bool__()
 
