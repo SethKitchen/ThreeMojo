@@ -7,9 +7,22 @@
 
 from extensions.carla.road_info import RoadInfoMarkRecord
 
+from units.si import Length64
+
 
 def main() raises:
     var mark = RoadInfoMarkRecord(
-        0.0, 0, "solid", "", "white", "", 0.15, 1, 0.0, "", 0.0, True
+        Length64(0),
+        0,
+        "solid",
+        "",
+        "white",
+        "",
+        Length64(0.15),
+        1,
+        Length64(0),
+        "",
+        Length64(0),
+        True,
     )
     print(mark.width)
