@@ -83,7 +83,9 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 - [ ] [Canonical-to-visual humanoid fidelity](https://github.com/SethKitchen/ThreeMojo/wiki/Humanoid-fidelity): typed capability gate, versioned game-bake recipes and independent canonical snapshot boundary; validated physical correspondence remains open [#297](https://github.com/SethKitchen/ThreeMojo/issues/297)
 
 <details>
-<summary>Implemented: 7</summary>
+<summary>Implemented: 8</summary>
+
+- [x] [CCD walker benchmark](https://github.com/SethKitchen/ThreeMojo/wiki/Continuous-collision#performance-and-verification): 1 and 64 walkers or spinning spheres on 2,048 and 8,192 triangles, with per-body checks [#728](https://github.com/SethKitchen/ThreeMojo/issues/728)
 
 - [x] [Owned physics query snapshots](https://github.com/SethKitchen/ThreeMojo/wiki/Physics-query-snapshots): frozen geometry, materials and capture-scoped historical owners, with unchanged live-world raycasts [#633](https://github.com/SethKitchen/ThreeMojo/issues/633)
 
@@ -487,7 +489,7 @@ A checked box records implemented scope. It does not establish engineering or cl
 The anatomy combines measured inputs with authored templates. See the [bounded validity report](https://github.com/SethKitchen/ThreeMojo/wiki/Anatomy-validity) for template estimates, numerical evidence and unsupported uses.
 
 <details>
-<summary>Implemented: 43</summary>
+<summary>Implemented: 44</summary>
 
 - [x] [Audio-aligned game faces](https://github.com/SethKitchen/ThreeMojo/wiki/Audio-aligned-game-faces): caller-provided phonemes or visemes, audio-clock transport, preserved facial LOD and validated glTF bakes [#299](https://github.com/SethKitchen/ThreeMojo/issues/299)
 
@@ -524,6 +526,7 @@ The anatomy combines measured inputs with authored templates. See the [bounded v
 - [x] [CARLA map budgets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-map-budgets): typed construction and certified-query work limits, checked before the work, with exhaustion kept apart from no lane [#580](https://github.com/SethKitchen/ThreeMojo/issues/580)
 - [x] [Geometric CARLA lane orientation](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-lane-orientation): heading and pitch from all five supported offset-plus-width centerline derivatives [#485](https://github.com/SethKitchen/ThreeMojo/issues/485)
 - [x] [Fixed-s CARLA lane precision](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-fixed-s-nearest): exact wide stored-center ordering and scale-safe Float64 distances [#604](https://github.com/SethKitchen/ThreeMojo/issues/604)
+- [x] [Offset-lane CARLA stations](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-maps#differences-from-carla): curved and sloped lane offsets and widths keep the exact-center station and lane on both lane signs [#302](https://github.com/SethKitchen/ThreeMojo/issues/302)
 - [x] [Direction-independent junction bounds](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-maps#junction-bounds): complete connecting-lane sections, record boundaries and bounded curved-interior approximation [#487](https://github.com/SethKitchen/ThreeMojo/issues/487)
 - [x] [Traffic-direction trigger offsets](https://github.com/SethKitchen/ThreeMojo/wiki/CARLA-world#trigger-offset-direction): light, stop, yield and speed-limit boxes follow right-hand and left-hand lane travel [#486](https://github.com/SethKitchen/ThreeMojo/issues/486)
 - [x] [Animals](https://github.com/SethKitchen/ThreeMojo/wiki/Animals): 24 procedural-animals species sculpted as distance fields, posed by re-meshing, with painted coats, baked occlusion and a walk [#605](https://github.com/SethKitchen/ThreeMojo/issues/605)

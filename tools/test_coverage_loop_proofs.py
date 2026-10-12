@@ -1842,6 +1842,13 @@ class MapSuccessorLoopTests(unittest.TestCase):
                     'unchanged_correctness_tests', 'after_correctness_tests'):
             names.update(record[key])
         names.update(loops.REVIEWED_LOOP_RULES['extensions/carla/rtree'][0])
+        # The shared-helper binding reads its contract and its package inputs,
+        # providers and tests, as the construction fixture does.
+        from carla_lane_oracle import shared_helper_contracts as helpers
+        names.update((
+            'tools/carla_lane_oracle/shared_helper_contracts.py',
+            'loaders/utf8.mojo', *helpers.PACKAGE_INPUTS, *helpers.PROVIDERS,
+            *helpers.TESTS))
         for name in names:
             path = root/name
             path.parent.mkdir(parents=True, exist_ok=True)
