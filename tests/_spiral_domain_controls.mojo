@@ -69,14 +69,14 @@ def _encloses(bound: _Interval, low: UInt64, high: UInt64) raises:
 
 
 def _geometry() raises -> RoadGeometry:
-    var geometry = RoadGeometry(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
+    var geometry = RoadGeometry.from_meters(SPIRAL, 0.0, 0.0, 100.0, 0.0, 20.0)
     geometry.curvature_end = 0.05
     return geometry^
 
 
 def _road(var geometry: RoadGeometry, record_s: Float64 = 0.0) raises -> Road:
     geometry.s = record_s
-    var road = Road(
+    var road = Road._from_si(
         RoadId(5),
         "SPIRAL proof control",
         record_s + geometry.length,
@@ -85,18 +85,20 @@ def _road(var geometry: RoadGeometry, record_s: Float64 = 0.0) raises -> Road:
         RoadId(0),
         True,
     )
-    _ = road.add_section(SectionId(0), 0.0)
+    _ = road.add_section_meters(SectionId(0), 0.0)
     _ = road.sections[0].add_lane(LaneId(-1))
     road.sections[0].lanes[0].type = LANE_DRIVING
     road.sections[0].lanes[0].info.widths.append(
-        RoadInfoLaneWidth(0.0, CubicPolynomial.constant(3.5))
+        RoadInfoLaneWidth._from_si(0.0, CubicPolynomial._constant_si(3.5))
     )
-    road.info.geometries.append(RoadInfoGeometry(record_s, geometry^))
+    road.info.geometries.append(RoadInfoGeometry._from_si(record_s, geometry^))
     road.info.elevations.append(
-        RoadInfoElevation(0.0, CubicPolynomial(1.0, 0.02, 0.0, 0.0, 0.0))
+        RoadInfoElevation._from_si(
+            0.0, CubicPolynomial._from_coefficients(1.0, 0.02, 0.0, 0.0, 0.0)
+        )
     )
     road.info.lane_offsets.append(
-        RoadInfoLaneOffset(0.0, CubicPolynomial.constant(0.5))
+        RoadInfoLaneOffset._from_si(0.0, CubicPolynomial._constant_si(0.5))
     )
     return road^
 
