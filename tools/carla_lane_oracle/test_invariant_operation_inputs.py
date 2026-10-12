@@ -1723,6 +1723,10 @@ class ReviewedRelativePathMechanics(_rm_unittest.TestCase):
 # Tuple: module, original owner, physical expression, expected count, selections.
 # Each selection is (index, stable site suffix, comparator mode, narrow binding kind).
 _OPERATION_REACHED_READ_SPECS = (
+    ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', '_scaled_float32_bindings',
+     '_regular(root, path).read_bytes()', 1, ((0, 'scaled-source-and-witness-observation', 'bytes', 'observe'),)),
+    ('tools/carla_lane_oracle/full_audit_cleanup_contracts.py', 'scaled_float32_proof_bindings',
+     '_regular(root, name).read_bytes()', 1, ((0, 'scaled-receipt-final-observation', 'bytes', 'observe'),)),
     ('tools/carla_lane_oracle/consumer_successor_ledger.py', '_read',
      'audit._regular(root, path).read_bytes()', 1, ((0, '82:1', 'bytes', 'observe'),)),
     ('tools/carla_lane_oracle/runtime_boundary_contracts.py', 'verify',
@@ -2555,11 +2559,11 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         'accepted_successor_contracts.py': '7a3accef16e213e0c68f366e0349ba7010c997ddf4559817d775269e0278cf18',
         'cache_key_contracts.py': '43d93ab4b21c9b1e9ca542fd78ba0911cf4dc1e9a170d3850ff3a345edd55e2e',
         'coverage_followup_contracts.py': '37258b36b2a1d2c5b0e5959efb764f7ba4c0c3271467345c229f302dc7c192a0',
-        'coverage_loop_proofs.py': '5ff27bce19c760ed0fa760e48a99e17a5541c9d90b576502a8a6170d43ed18c2',
-        'full_audit_cleanup_contracts.py': '895e6e4c607ca8b0f579ef760f6a7b0c410e8443f03c101b1cd11c4fec40cc5f',
+        'coverage_loop_proofs.py': '32bd56fa3e3dcd23a1b032771a1b52a0a6fc5d319ec396ce2b479b7c11bf5105',
+        'full_audit_cleanup_contracts.py': 'c0bf7f3a43cbd0c2e95b09dfe9a038684d0760a49f7ae3fcf82516694f3c15de',
         'grouped_y_finiteness_contracts.py': 'ebb2b381263ffde628fda521393cbdc115e3f39db070d42e4790b75cd4e31307',
         'raw_cut_inverse_contracts.py': 'ca1cb6bbba485f994a15a4771774383fc8a7f0d4673e028f7785aca109df73e5',
-        'seed_count_contracts.py': '2efb1ef199bbc34dca9ac48e817cf17116e2156ead7cd586df2074be1d8abca5',
+        'seed_count_contracts.py': '7394fde9cd3eeba1598ef562b9194bbcacac8cec3898da16e2e7f6b4a344d973',
         'source_contracts.py': '857dd399291611dd35e11adbbdde0fca03ed4ff4277eec54ed3ec5815bbaf791',
     }
 
@@ -2958,7 +2962,7 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
         path = 'extensions/carla/map.mojo'
         physical = (self.root/path).read_bytes()
         sites = self._lease_sites(cache, seed)
-        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1201,
+        primitive = self._site(cleanup._CacheInputs.observe_bytes, 1222,
                                '_regular(root, path).read_bytes()')
         for fault in ('changed', 'foreign_bytes', 'io', 'context', 'fourth'):
             with self.subTest(fault=fault):
@@ -3150,9 +3154,9 @@ class BoundedOwnerDistinctMechanismControls(unittest.TestCase):
                                      'guard.production_mojo_paths(root)')
         known_site = self._site(loops._construction_boundary_callers, 1207,
                                 'cache_key.input_paths(Path(root))')
-        production_catch = self._site(core._operation_production_paths, 1537,
+        production_catch = self._site(core._operation_production_paths, 1564,
                                       '_operation_fail(_operation, error)')
-        known_catch = self._site(loops.construction_boundary_loops, 1332,
+        known_catch = self._site(loops.construction_boundary_loops, 1343,
                                  'cleanup._operation_fail(_operation, error)')
         omitted = 'extensions/carla/cameras.mojo'
         added = 'extensions/carla/distinct_unlisted_discovery.mojo'
