@@ -1616,6 +1616,9 @@ struct PedestrianParameters(Copyable, Movable):
             generation: The source generation.
             speeds: Nonnegative still, walking and running speeds.
 
+        Returns:
+            The initialized PedestrianParameters record.
+
         Raises:
             Error: If an enumeration or speed is invalid.
         """
