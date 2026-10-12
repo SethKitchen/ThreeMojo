@@ -164,7 +164,9 @@ The sciatic and femoral nerves end where the leg's nerves begin.
 
 ## Skin
 
-The pelvic skin uses the leg's method. See [Integument](Integument#envelope). The loft runs from just below the pubic arch to a little above the crest. It fits both hip bones, the sacrum and the coccyx, the pelvic muscles, and the top of each leg. The cover is 11 mm of fat for a male and 20 mm for a female, plus 1.8 mm of dermis.
+The pelvic skin uses the leg's method. See [Integument](Integument#envelope). The loft runs from just below the pubic arch to a little above the crest. It fits both hip bones, the sacrum and three coccygeal segments, the pelvic muscles, and the top of each leg. The cover is 11 mm of fat for a male and 20 mm for a female, plus 1.8 mm of dermis.
+
+The natal cleft is a narrow slot between the buttocks, below the sacral apex. Its front stays 0.6% of stature behind the back surface of the most posterior coccygeal segment. The coccyx curves forward to its tip, so the tip alone does not set the front.
 
 Below the pubic arch the thighs part, and each leg's own skin covers its thigh. `lower_body_skin_mesh` meshes the smooth union of the pelvic skin and both limbs' skins. The lower body then has one surface.
 
