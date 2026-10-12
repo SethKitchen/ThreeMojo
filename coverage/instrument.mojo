@@ -367,9 +367,44 @@ def _node_check(
     )
 
 
+# The longest operator text that a right probe repeats.
+comptime _RIGHT_TEXT_BYTES = 256
+
+
+def _direct(wrapped: String, added: Int, stem: String) -> Bool:
+    """Return True if an instrumented operand is one leaf probe.
+
+    Grouping parentheses can enclose it. A negation or an operator cannot.
+    """
+    if added != 1:
+        return False
+    var text = String(wrapped.lstrip("("))
+    return text.startswith(stem + "leaf(")
+
+
+def _as_right(wrapped: String, native: String, stem: String) -> String:
+    """Probe a right operand with the operator's native result type.
+
+    A one-type operator owns its right operand. The `right` probe gets that
+    copy or move from Mojo, when Mojo evaluates the operand. `type_of` does not
+    evaluate the operator.
+    """
+    var text = wrapped.copy()
+    var at = text.find(stem + "leaf(")
+    return (
+        String(text[byte=:at])
+        + stem
+        + "right[type_of("
+        + native
+        + ")]().of("
+        + String(text[byte = at + (stem + "leaf(").byte_length() :])
+    )
+
+
 def _fold_operators(
     operands: List[String],
     wrapped: List[String],
+    direct: List[Bool],
     separator: String,
     stem: String,
     mut checks: List[String],
@@ -379,6 +414,7 @@ def _fold_operators(
     Args:
         operands: The original operand texts at this level.
         wrapped: The instrumented operand texts, in step with `operands`.
+        direct: Whether each instrumented operand is one leaf probe.
         separator: The operator with its surrounding spaces.
         stem: An evaluation-helper prefix absent from the source.
         checks: Receives one type check per operator.
@@ -390,7 +426,15 @@ def _fold_operators(
     var rewritten = wrapped[0].copy()
     for index in range(1, len(operands)):
         var next_native = native + separator + operands[index]
-        var next_rewritten = rewritten + separator + wrapped[index]
+        var right = wrapped[index].copy()
+        # A right probe repeats the operator's text, and each later operator
+        # check repeats the probe. A long chain would grow by its cube, so
+        # only an operator of at most `_RIGHT_TEXT_BYTES` gets a right probe.
+        # A later operand keeps the plain probe: a one-type operator then
+        # refuses a retained right operand instead of copying it falsely.
+        if direct[index] and next_native.byte_length() <= _RIGHT_TEXT_BYTES:
+            right = _as_right(right, next_native, stem)
+        var next_rewritten = rewritten + separator + right
         checks.append(
             _node_check(
                 native, operands[index], next_native, next_rewritten, stem
@@ -428,23 +472,30 @@ def _wrap_leaves(
         # `and` binds more tightly than `or`; each level groups left to right.
         var terms = List[String]()
         var wrapped_terms = List[String]()
+        var direct_terms = List[Bool]()
         var operands = List[String]()
         var wrapped = List[String]()
+        var direct = List[Bool]()
         for index in range(0, len(parts), 2):
             operands.append(parts[index].copy())
-            wrapped.append(
-                _wrap_leaves(parts[index], id, count, frame, stem, checks)
+            var before = count
+            var probe = _wrap_leaves(
+                parts[index], id, count, frame, stem, checks
             )
+            direct.append(_direct(probe, count - before, stem))
+            wrapped.append(probe^)
             if index + 1 == len(parts) or parts[index + 1] == " or ":
                 var term = _fold_operators(
-                    operands, wrapped, String(" and "), stem, checks
+                    operands, wrapped, direct, String(" and "), stem, checks
                 )
                 terms.append(term[0].copy())
                 wrapped_terms.append(term[1].copy())
+                direct_terms.append(len(operands) == 1 and direct[0])
                 operands.clear()
                 wrapped.clear()
+                direct.clear()
         var whole = _fold_operators(
-            terms, wrapped_terms, String(" or "), stem, checks
+            terms, wrapped_terms, direct_terms, String(" or "), stem, checks
         )
         return whole[1].copy()
     var text = parts[0].copy()
@@ -775,7 +826,9 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     + stem
                     + "finish, buffer as "
                     + stem
-                    + "buffer, truth as "
+                    + "buffer, right as "
+                    + stem
+                    + "right, truth as "
                     + stem
                     + "truth, node as "
                     + stem

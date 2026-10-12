@@ -158,7 +158,7 @@ Some portable features remain partial, including [GLSL shaders](https://github.c
 
 - [x] [Full-audit CARLA coverage](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#platform-specific-witnesses): witness tests and reviewed loop proofs bring the five failing CARLA modules to 100 percent [#721](https://github.com/SethKitchen/ThreeMojo/issues/721)
 
-- [ ] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): proven same-type custom operands keep native conversions and lifetimes. Copies, custom moves, implicit joins, mixed custom operators and observable Optional payload lifecycle changes remain refused [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
+- [x] [Custom compound truth tests](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#truth-conversion-limit): same-type custom operands keep their native conversions, copies, moves and lifetimes. Forms that pinned Mojo 1.1.0 cannot probe, including mixed custom operators, fail compilation, with [a note to retry them](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool#retry-the-refused-forms-on-a-new-mojo) on a new Mojo [#560](https://github.com/SethKitchen/ThreeMojo/issues/560)
 
 </details>
 

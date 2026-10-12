@@ -296,14 +296,20 @@ def case_{number}():
 
 # Custom Boolable compound operands (issue #560). Leaves: ('S', i) a temporary
 # Probe, ('D', i) a temporary Other, ('B', i) a Bool, ('X', i) a retained
-# move-only Probe, and ('choose', condition, then, else) an opaque conditional
-# expression. Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one
-# type, it tests the left operand, then returns it or the right operand
-# unconverted, and the enclosing operator or truth context tests the selected
-# object again. These two-type fixtures use the ordinary Bool fallback, which
-# converts each evaluated operand once. They still have native/model checks,
-# but instrumentation must refuse them: a user-defined Bool-valued merge has
-# the same result type and requires different observable behavior.
+# move-only Probe, ('C', i) a retained implicitly copyable Shared, ('M', i) a
+# temporary Moving with a user-defined move constructor, ('P', i) a retained
+# and ('Q', i) a temporary Bits whose copy, move and destruction are bitwise,
+# ('T', i) a temporary Shared, and ('choose', condition, then, else) an
+# opaque conditional expression. A Moving is only in two-type operators. A
+# retained Shared is in a one-type operator only as the right operand: the
+# operator copies it. A Bits is in both, also twice as one retained variable.
+# Pinned Mojo 1.1.0 lowers `and`/`or` by operand type. With one type, it tests
+# the left operand, then returns it or the right operand unconverted, and the
+# enclosing operator or truth context tests the selected object again. These
+# two-type fixtures use the ordinary Bool fallback, which converts each
+# evaluated operand once. They still have native/model checks, but
+# instrumentation must refuse them: a user-defined Bool-valued merge has the
+# same result type and requires different observable behavior.
 TRUTH_CASES = [
     ('or', ('S', 0), ('S', 1)),
     ('and', ('S', 0), ('S', 1)),
@@ -322,20 +328,81 @@ TRUTH_CASES = [
     ('or', ('and', ('X', 0), ('D', 1)), ('S', 2)),
     ('or', ('choose', ('B', 1), ('S', 2), ('S', 3)), ('S', 0)),
     ('and', ('or', ('D', 0), ('D', 1)), ('S', 2)),
+    ('or', ('C', 0), ('B', 1)),
+    ('and', ('B', 0), ('C', 1)),
+    ('or', ('and', ('C', 0), ('S', 1)), ('S', 2)),
+    ('and', ('or', ('S', 0), ('S', 1)), ('not', ('C', 2))),
+    ('or', ('C', 0), ('or', ('X', 1), ('and', ('C', 2), ('B', 3)))),
+    ('and', ('C', 0), ('D', 1)),
+    ('or', ('choose', ('B', 1), ('C', 2), ('C', 3)), ('S', 0)),
+    ('or', ('M', 0), ('B', 1)),
+    ('and', ('B', 0), ('M', 1)),
+    ('or', ('not', ('M', 0)), ('and', ('S', 1), ('M', 2))),
+    ('and', ('or', ('M', 0), ('D', 1)), ('or', ('S', 2), ('S', 3))),
+    ('and', ('M', 0), ('C', 1)),
+    ('or', ('choose', ('B', 1), ('M', 2), ('M', 3)), ('C', 0)),
+    ('and', ('or', ('P', 0), ('P', 1)), ('B', 2)),
+    ('and', ('P', 0), ('or', ('P', 1), ('Q', 2))),
+    ('or', ('or', ('Q', 0), ('P', 1)), ('B', 2)),
+    ('and', ('not', ('P', 0)), ('or', ('P', 1), ('or', ('P', 2), ('Q', 3)))),
+    ('or', ('choose', ('B', 1), ('P', 2), ('P', 3)), ('P', 0)),
+    ('or', ('and', ('P', 0), ('P', 0)), ('B', 1)),
+    ('and', ('or', ('P', 0), ('S', 1)), ('or', ('Q', 2), ('P', 3))),
+    ('or', ('T', 0), ('C', 1)),
+    ('and', ('or', ('T', 0), ('C', 1)), ('B', 2)),
+    ('or', ('or', ('T', 0), ('C', 1)), ('C', 2)),
+    ('and', ('T', 0), ('or', ('B', 1), ('C', 2))),
+    ('or', ('T', 0), ('choose', ('B', 1), ('C', 2), ('C', 3))),
+    ('and', ('T', 0), ('not', ('C', 1))),
 ]
 
-TRUTH_ACCEPTED = (0, 1, 2, 3, 4, 5, 9, 15)
-TRUTH_MIXED_REJECTED = (6, 7, 8, 10, 11, 12, 13, 14, 16)
+TRUTH_ACCEPTED = (0, 1, 2, 3, 4, 5, 9, 15, 31, 34, 37, 39, 41)
+TRUTH_MIXED_REJECTED = (6, 7, 8, 10, 11, 12, 13, 14, 16, 17, 18, 19, 20, 21, 22, 23,
+                        24, 25, 26, 27, 28, 29, 30, 32, 33, 35, 36, 38, 40, 42)
 COMPOUND_REFUSAL = 'Coverage cannot yet preserve this compound condition'
 BOOL_MERGE_REFUSAL = 'custom mixed-type operator whose Bool result'
 
 
+
+def fresh(tree):
+    """Rebuild a tree so each leaf is its own object.
+
+    Python can share equal tuple constants, and the slots are keyed by object.
+    """
+    return tuple(fresh(child) if isinstance(child, tuple) else child for child in tree)
+
+
+TRUTH_CASES = [fresh(tree) for tree in TRUTH_CASES]
+
+
+def truth_supported(tree):
+    """Return True if the operator check admits every operator of a tree.
+
+    Two operand types use Boolean fallback here, but a custom merge can have
+    the same `Bool` result, so each two-type operator is refused. A one-type
+    operator is refused over a Moving, whose move the probe cannot make, and
+    with a retained Shared on the left, whose copy a borrow cannot make.
+    """
+    kind = tree[0]
+    if kind in ('and', 'or'):
+        left, right = truth_type(tree[1]), truth_type(tree[2])
+        # A conditional of two retained values selects a reference.
+        retained = tree[1][0] == 'C' or (tree[1][0] == 'choose' and tree[1][2][0] == 'C')
+        if left != right or left == 'M' or (left == 'C' and retained):
+            return False
+    return all(truth_supported(child) for child in tree[1:] if isinstance(child, tuple))
+
+
 def truth_type(tree):
-    """Return the native static type of a subexpression: S, D or Bool (B)."""
+    """Return the native static type of a subexpression: S, D, C or Bool (B)."""
     kind = tree[0]
     if kind in ('S', 'X'):
         return 'S'
-    if kind in ('D', 'B'):
+    if kind in ('P', 'Q'):
+        return 'P'
+    if kind == 'T':
+        return 'C'
+    if kind in ('D', 'B', 'C', 'M'):
         return kind
     if kind == 'choose':
         return truth_type(tree[2])
@@ -345,30 +412,53 @@ def truth_type(tree):
     return left if left == right else 'B'
 
 
-def truth_text(tree, top=True):
+# The fixture's own names. COLLISION_NAMES renders the same trees with names
+# that shadow caller-scope types and take the instrumenter's default prefixes.
+TRUTH_NAMES = {'probe': 'probe', 'other': 'other', 'flag': 'flag', 'moving': 'moving',
+               'bits': 'bits', 'shared': 'shared',
+               'state': 'state', 'cell': 'cell',
+               'retained': ['retained0', 'retained1', 'retained2', 'retained3']}
+COLLISION_NAMES = {'probe': '_cov_eval_leaf', 'other': '_cov_eval_node',
+                   'flag': '_cov_branch', 'moving': '_cov_eval_buffer',
+                   'bits': '_cov_eval_truth', 'shared': '_cov_eval_right',
+                   'state': '_cov_eval_state0',
+                   'cell': '_cov_hit',
+                   'retained': ['List', 'Int', 'Bool', '_cov_eval_finish']}
+
+
+def truth_text(tree, top=True, names=TRUTH_NAMES):
     """Render a reference tree as fixture source text."""
     kind = tree[0]
+    state = names['state']
     if kind == 'S':
-        return f'probe({tree[1]}, state)'
+        return f'{names["probe"]}({tree[1]}, {state})'
     if kind == 'D':
-        return f'other({tree[1]}, state)'
+        return f'{names["other"]}({tree[1]}, {state})'
     if kind == 'B':
-        return f'flag({tree[1]}, state)'
-    if kind == 'X':
-        return f'retained{tree[1]}'
+        return f'{names["flag"]}({tree[1]}, {state})'
+    if kind == 'M':
+        return f'{names["moving"]}({tree[1]}, {state})'
+    if kind == 'Q':
+        return f'{names["bits"]}({tree[1]}, {state})'
+    if kind == 'T':
+        return f'{names["shared"]}({tree[1]}, {state})'
+    if kind in ('X', 'C', 'P'):
+        return names['retained'][tree[1]]
     if kind == 'choose':
-        return (f'({truth_text(tree[2], False)} if {truth_text(tree[1], False)}'
-                f' else {truth_text(tree[3], False)})')
+        return (f'({truth_text(tree[2], False, names)} if '
+                f'{truth_text(tree[1], False, names)}'
+                f' else {truth_text(tree[3], False, names)})')
     if kind == 'not':
-        return f'not {truth_text(tree[1], False)}'
-    text = f'{truth_text(tree[1], False)} {kind} {truth_text(tree[2], False)}'
+        return f'not {truth_text(tree[1], False, names)}'
+    text = (f'{truth_text(tree[1], False, names)} {kind} '
+            f'{truth_text(tree[2], False, names)}')
     return text if top else f'({text})'
 
 
 def truth_slots(tree, slots=None):
     """Number the instrumented leaves left to right; a conditional is one."""
     slots = {} if slots is None else slots
-    if tree[0] in ('S', 'D', 'B', 'X', 'choose'):
+    if tree[0] in ('S', 'D', 'B', 'X', 'C', 'M', 'P', 'Q', 'T', 'choose'):
         slots[id(tree)] = len(slots)
     else:
         for child in tree[1:]:
@@ -383,9 +473,9 @@ class TruthFailure(Exception):
 class TruthModel:
     """Evaluate one decision as native Mojo does and as the probes record it."""
 
-    def __init__(self, tree, mask, fail, changing, line):
+    def __init__(self, tree, mask, fail, changing, line, module='truth'):
         self.tree, self.mask, self.fail, self.changing = tree, mask, fail, changing
-        self.line, self.slots = line, truth_slots(tree)
+        self.line, self.slots, self.module = line, truth_slots(tree), module
         self.log, self.records, self.states = [], [], {}
         self.counts = defaultdict(int)
 
@@ -404,7 +494,8 @@ class TruthModel:
         if state == int(value):
             return
         self.states[slot] = int(value) if state < 0 else 2
-        self.records.append(f'COVLINE:truth:{self.line}.{slot}:{"T" if value else "F"}')
+        self.records.append(
+            f'COVLINE:{self.module}:{self.line}.{slot}:{"T" if value else "F"}')
 
     def convert(self, item):
         kind, name, slot, _ = item
@@ -419,16 +510,23 @@ class TruthModel:
 
     def drop(self, item):
         kind, name, _, retained = item
-        if kind != 'B' and not retained:
+        # A Bits destruction is bitwise and logs nothing.
+        if kind not in ('B', 'Q') and not retained:
             self.log.append(f'~{name}')
 
-    def evaluate(self, tree):
+    def evaluate(self, tree, owned=False):
+        """Evaluate a subtree. `owned` marks the right operand of a one-type
+        operator: the operator copies a retained Shared when it evaluates it.
+        The fixture keeps every retained value alive, so it is never moved."""
         kind = tree[0]
         slot = self.slots.get(id(tree))
-        if kind in ('S', 'D'):
+        if kind in ('S', 'D', 'M', 'Q', 'T'):
             self.enter(tree[1])
             return (kind, tree[1], slot, False)
-        if kind == 'X':
+        if kind == 'C' and owned:
+            self.log.append(f'={tree[1]}')
+            return ('S', tree[1], slot, False)
+        if kind in ('X', 'C', 'P'):
             return ('S', tree[1], slot, True)
         if kind == 'B':
             self.enter(tree[1])
@@ -438,7 +536,16 @@ class TruthModel:
         if kind == 'choose':
             self.enter(tree[1][1])
             chosen = tree[2] if self.bit(tree[1][1]) else tree[3]
+            if chosen[0] in ('C', 'P'):
+                # Two retained arms give a reference to the selected one:
+                # the conditional neither copies nor destroys it. A one-type
+                # operator then copies a selected Shared, as a variable.
+                kind, name, _, retained = self.evaluate(chosen, owned)
+                return (kind, name, slot, retained)
             self.enter(chosen[1])
+            if chosen[0] == 'M':
+                # The selected temporary moves into the conditional's result.
+                self.log.append(f'>{chosen[1]}')
             return ('S', chosen[1], slot, False)
         if kind == 'not':
             item = self.evaluate(tree[1])
@@ -446,14 +553,18 @@ class TruthModel:
             self.drop(item)
             return ('B', not value, None, False)
         same = truth_type(tree[1]) == truth_type(tree[2])
+        # A one-type operator moves a selected Moving after it converts it,
+        # and copies a selected retained left Shared. Both are refused.
+        assert not (same and truth_type(tree[1]) == 'M'), tree
         left = self.evaluate(tree[1])
+        assert not (same and truth_type(tree[1]) == 'C' and left[3]), tree
         value = self.convert(left)
         short = value if kind == 'or' else not value
         if same:
             if short:
                 return left
             self.drop(left)
-            return self.evaluate(tree[2])
+            return self.evaluate(tree[2], owned=tree[2][0] in ('C', 'choose'))
         self.drop(left)
         if short:
             return ('B', value, None, False)
@@ -463,7 +574,7 @@ class TruthModel:
         return ('B', value, None, False)
 
     def run(self):
-        retained = [leaf for leaf in truth_leaves(self.tree) if leaf[0] == 'X']
+        retained = [leaf for leaf in truth_leaves(self.tree) if leaf[0] in ('X', 'C')]
         try:
             item = self.evaluate(self.tree)
             outcome = self.convert(item)
@@ -474,15 +585,15 @@ class TruthModel:
         self.log.extend(f'~{leaf[1]}' for leaf in retained)
         vector = None
         if outcome is not None:
-            self.records.append(f'COVLINE:truth:{self.line}:{"T" if outcome else "F"}')
+            self.records.append(f'COVLINE:{self.module}:{self.line}:{"T" if outcome else "F"}')
             vector = ''.join('FT?'[self.states[slot]] if slot in self.states else '-'
                              for slot in range(len(self.slots)))
-            vector = f'COVEVAL2:truth:{self.line}:{"T" if outcome else "F"}:{vector};'
+            vector = f'COVEVAL2:{self.module}:{self.line}:{"T" if outcome else "F"}:{vector};'
         return ''.join(self.log), self.records, vector
 
 
 def truth_leaves(tree):
-    if tree[0] in ('S', 'D', 'B', 'X'):
+    if tree[0] in ('S', 'D', 'B', 'X', 'C', 'M', 'P', 'Q', 'T'):
         return [tree]
     return [leaf for child in tree[1:] for leaf in truth_leaves(child)]
 
@@ -565,6 +676,74 @@ struct Other(Made):
         self.state[].log += "~" + String(self.index)
 
 
+struct Shared(ImplicitlyCopyable, Boolable):
+    var index: Int
+    var state: Cell
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    def __init__(out self, *, copy: Self):
+        self.index = copy.index
+        self.state = copy.state
+        self.state[].log += "=" + String(self.index)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+struct Moving(Made):
+    var index: Int
+    var state: Cell
+
+    @staticmethod
+    def make(index: Int, state: Cell) -> Self:
+        return Self(index, state)
+
+    def __init__(out self, index: Int, state: Cell):
+        self.index = index
+        self.state = state
+
+    def __init__(out self, *, deinit move: Self):
+        self.index = move.index
+        self.state = move.state
+        self.state[].log += ">" + String(self.index)
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+    def __deinit__(deinit self):
+        self.state[].log += "~" + String(self.index)
+
+
+@fieldwise_init
+struct Bits(ImplicitlyCopyable, Boolable):
+    var index: Int
+    var state: Cell
+
+    def __bool__(self) -> Bool:
+        return self.state[].convert(self.index)
+
+
+def bits(index: Int, state: Cell) raises -> Bits:
+    state[].enter(index)
+    return Bits(index, state)
+
+
+def shared(index: Int, state: Cell) raises -> Shared:
+    state[].enter(index)
+    return Shared(index, state)
+
+
+def moving(index: Int, state: Cell) raises -> Moving:
+    state[].enter(index)
+    return Moving(index, state)
+
+
 def probe(index: Int, state: Cell) raises -> Probe:
     state[].enter(index)
     return Probe(index, state)
@@ -581,33 +760,39 @@ def flag(index: Int, state: Cell) raises -> Bool:
 '''
 
 
-def truth_source(numbers=None):
+def truth_source(numbers=None, names=TRUTH_NAMES):
     """Generate one function per reference tree; return the decision lines."""
     numbers = tuple(range(len(TRUTH_CASES))) if numbers is None else tuple(numbers)
     text = TRUTH_PRELUDE
+    for name in ('probe', 'other', 'flag', 'moving', 'bits', 'shared'):
+        text = text.replace(f'\ndef {name}(', f'\ndef {names[name]}(')
+    state, cell, retained_names = names['state'], names['cell'], names['retained']
     lines = {}
     for number in numbers:
         tree = TRUTH_CASES[number]
-        retained = ''.join(f'    var retained{leaf[1]} = Probe({leaf[1]}, state)\n'
-                           for leaf in truth_leaves(tree) if leaf[0] == 'X')
-        released = ''.join(f'    _ = retained{leaf[1]}^\n'
-                           for leaf in truth_leaves(tree) if leaf[0] == 'X')
+        kept = list({leaf[1]: leaf for leaf in truth_leaves(tree)
+                     if leaf[0] in ('X', 'C', 'P')}.values())
+        retained = ''.join(
+            f'    var {retained_names[leaf[1]]} = '
+            f'{dict(X="Probe", C="Shared", P="Bits")[leaf[0]]}({leaf[1]}, {state})\n'
+            for leaf in kept)
+        released = ''.join(f'    _ = {retained_names[leaf[1]]}^\n' for leaf in kept)
         text += f'''
 
 def truth_{number}(mask: Int, fail: Int, changing: Bool):
-    var cell = State(mask, fail, changing)
-    var state = Pointer(to=cell).unsafe_origin_cast[MutUntrackedOrigin]()
+    var {cell} = State(mask, fail, changing)
+    var {state} = Pointer(to={cell}).unsafe_origin_cast[MutUntrackedOrigin]()
 {retained}    try:
 '''
         lines[number] = len(text.splitlines()) + 1
-        text += f'''        if {truth_text(tree)}:
-            state[].log += "|T"
+        text += f'''        if {truth_text(tree, names=names)}:
+            {state}[].log += "|T"
         else:
-            state[].log += "|F"
+            {state}[].log += "|F"
     except error:
-        state[].log += "|E"
-{released}    print("TRUTH", {number}, mask, fail, changing, state[].log)
-    _ = cell^
+        {state}[].log += "|E"
+{released}    print("TRUTH", {number}, mask, fail, changing, {state}[].log)
+    _ = {cell}^
 '''
     text += '''
 
@@ -672,9 +857,23 @@ def depth(count: Int, state: Cell) raises -> Int:
     return 0
 
 
+def generic_retained[A: Boolable & ImplicitlyCopyable](value: A, state: Cell) raises -> Bool:
+    # One instantiation borrows a retained Shared; one has two Bool operands.
+    if value or flag(1, state):
+        return True
+    return False
+
+
 def generic_pair[A: Made, B: Made](state: Cell) -> Bool:
     # The operator checks run per instantiation: one type, then two types.
     if A.make(0, state) or B.make(1, state) and A.make(2, state):
+        return True
+    return False
+
+
+def generic_negated[A: Made, B: Made](state: Cell) -> Bool:
+    # `not` converts each operand once, also a Moving, before Bool operators.
+    if not A.make(0, state) or not B.make(1, state) and not A.make(2, state):
         return True
     return False
 
@@ -698,6 +897,29 @@ def controls(mask: Int, changing: Bool) raises:
     if flag(0, state) and not unpinned or probe(1, state):
         state[].log += "|U"
     state[].log += "|"
+    # Retained Shared operands in two-type operators, without a pinned
+    # lifetime. The log records every copy, conversion and destruction.
+    var held = Shared(3, state)
+    if flag(0, state) and not held or probe(1, state):
+        state[].log += "|V"
+    state[].log += "|"
+    var kept = Shared(2, state)
+    if kept or flag(1, state):
+        state[].log += "|Y"
+    elif probe(0, state) and kept:
+        state[].log += "|Z"
+    state[].log += "|" + String(generic_retained(kept, state))
+    state[].log += "|" + String(generic_retained(mask % 2 == 0, state))
+    state[].log += "|"
+    # A one-type operator copies a live retained right operand and moves it
+    # at its last use.
+    var live = Shared(2, state)
+    if shared(0, state) and live:
+        state[].log += "|L"
+    var last = Shared(1, state)
+    if shared(0, state) or last:
+        state[].log += "|M"
+    state[].log += "|" + String(Bool(live)) + "|"
     if Pinned(1, state) or flag(2, state) and Pinned(3, state):
         state[].log += "|P"
     state[].log += "|"
@@ -721,6 +943,7 @@ def controls(mask: Int, changing: Bool) raises:
     state[].log += "|" + String(depth(mask % 4, state))
     state[].log += "|" + String(generic_pair[Probe, Probe](state))
     state[].log += "|" + String(generic_pair[Probe, Other](state))
+    state[].log += "|" + String(generic_pair[Probe, Moving](state))
     print("CONTROL", mask, changing, state[].log)
     _ = cell^
 
@@ -778,6 +1001,14 @@ CONTROL_REPLACEMENTS = {
     'generic_pair[Probe, Other](state)': 'generic_pair[Other, Other](state)',
     'Probe(0, state) or Probe(1, state) and Other(2, state)':
         'Probe(0, state) or Probe(1, state) and Probe(2, state)',
+    'flag(0, state) and not held or probe(1, state)':
+        'flag(0, state) and not held or not probe(1, state)',
+    'if kept or flag(1, state):': 'if not not kept or flag(1, state):',
+    'probe(0, state) and kept:': 'not probe(0, state) and not kept:',
+    'value or flag(1, state)': 'not not value or flag(1, state)',
+    '# One instantiation borrows a retained Shared; one has two Bool operands.':
+        '# `not` converts a borrowed retained Shared or a Bool operand once.',
+    'generic_pair[Probe, Moving](state)': 'generic_negated[Probe, Moving](state)',
     '# The operator checks run per instantiation: one type, then two types.':
         '# The operator checks run per instantiation: Probe, then Other.',
 }
@@ -818,6 +1049,13 @@ MIXED_CONTROL_WIDTHS = {
     'if nested_optional(mask % 2 == 0) or nested_optional(mask % 3 == 0):': 2,
     'if nested_optional(mask % 2 == 0) and nested_optional(mask % 3 == 0):': 2,
     'if Probe(0, state) or Probe(1, state) and Other(2, state):': 3,
+    'if not A.make(0, state) or not B.make(1, state) and not A.make(2, state):': 3,
+    'if value or flag(1, state):': 2,
+    'if flag(0, state) and not held or probe(1, state):': 3,
+    'if kept or flag(1, state):': 2,
+    'elif probe(0, state) and kept:': 2,
+    'if shared(0, state) and live:': 2,
+    'if shared(0, state) or last:': 2,
 }
 TWO_PARAMETER_CONTROL_WIDTHS = {}
 CONTROL_WIDTHS = {}
@@ -1104,13 +1342,100 @@ def main():
 }
 
 
-# Unsupported operands must fail compilation with the coverage diagnostic.
-TRUTH_REJECTED = {
-    'copyable-retained': ('''@fieldwise_init
-struct Copied(ImplicitlyCopyable, Boolable):
+# A merge can apply to some operand types and not to others. Gated merges
+# only with Bool, so `Gated(x) or flag` calls the merge and `Gated(x) or
+# Plain(y)` uses Boolean fallback. No probe type can stand in for the other
+# operand, and both forms must be refused. The model is independent of
+# TruthModel: Mojo tests Gated once, then merges it only when it selects it.
+GATED_MERGE_PRELUDE = '''struct Gated(Movable, Boolable):
     var value: Bool
 
+    def __init__(out self, value: Bool):
+        self.value = value
+        print("MAKE G", value)
+
     def __bool__(self) -> Bool:
+        print("BOOL G", self.value)
+        return self.value
+
+    def __merge_with__[other_type: AnyType](self) -> Bool where other_type == Bool:
+        print("MERGE G", self.value)
+        return not self.value
+
+
+struct Plain(Movable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+        print("MAKE P", value)
+
+    def __bool__(self) -> Bool:
+        print("BOOL P", self.value)
+        return self.value
+
+
+def flag(value: Bool) -> Bool:
+    print("FLAG", value)
+    return value
+'''
+
+
+def gated_merge_expected(right):
+    """Model one `Gated(first) or <right>(second)` decision per assignment."""
+    lines = []
+    for first in (False, True):
+        for second in (False, True):
+            lines += [f'CASE {first} {second}', f'MAKE G {first}', f'BOOL G {first}']
+            if first:
+                # Boolean fallback keeps True. The merge returns its negation.
+                outcome = right == 'Plain'
+                if right == 'flag':
+                    lines.append(f'MERGE G {first}')
+            elif right == 'flag':
+                lines.append(f'FLAG {second}')
+                outcome = second
+            else:
+                lines += [f'MAKE P {second}', f'BOOL P {second}']
+                outcome = second
+            lines.append('BODY T' if outcome else 'BODY F')
+    return '\n'.join(lines) + '\n'
+
+
+GATED_MERGE_REJECTIONS = {
+    f'gated-merge-{right.lower()}': (GATED_MERGE_PRELUDE + f'''
+
+def main():
+    for first in [False, True]:
+        for second in [False, True]:
+            print("CASE", first, second)
+            if Gated(first) or {right}(second):
+                print("BODY T")
+            else:
+                print("BODY F")
+''', gated_merge_expected(right))
+    for right in ('flag', 'Plain')
+}
+
+
+# Unsupported operands must fail compilation with the coverage diagnostic.
+TRUTH_REJECTED = {
+    # A one-type operator selects an owned copy or move of a retained
+    # operand. 'copyable-retained-self' proves the native copy: two
+    # borrowing proxies of one origin have one type and would pass a
+    # type comparison alone.
+    'copyable-retained': ('''struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+
+    def __init__(out self, *, copy: Self):
+        self.value = copy.value
+        print("COPY")
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
         return self.value
 
 
@@ -1121,7 +1446,55 @@ def main():
         print("T")
     else:
         print("F")
-''', 'retained implicitly copyable custom Boolable'),
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
+    'copyable-retained-self': ('''struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+
+    def __init__(out self, *, copy: Self):
+        self.value = copy.value
+        print("COPY")
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def main():
+    var copied = Copied(False)
+    if copied or copied:
+        print("T")
+    else:
+        print("F")
+    print(copied.value)
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
+    'copyable-retained-temporary': ('''struct Copied(ImplicitlyCopyable, Boolable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+
+    def __init__(out self, *, copy: Self):
+        self.value = copy.value
+        print("COPY")
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def main():
+    var copied = Copied(True)
+    if copied or Copied(False):
+        print("T")
+    else:
+        print("F")
+    print(copied.value)
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
+    # Mixed-type sources: native Mojo converts each operand once, but the
+    # operator check cannot tell this Boolean fallback from a custom merge.
     'copyable-retained-mixed': ('''@fieldwise_init
 struct Copied(ImplicitlyCopyable, Boolable):
     var value: Bool
@@ -1137,7 +1510,7 @@ def main():
         print("T")
     else:
         print("F")
-''', 'Coverage cannot yet preserve a retained implicitly copyable custom'),
+''', BOOL_MERGE_REFUSAL),
     'custom-move': ('''@fieldwise_init
 struct Moving(Boolable):
     var value: Bool
@@ -1156,7 +1529,49 @@ def main():
         print("T")
     else:
         print("F")
-''', 'user-defined move constructor'),
+''', BOOL_MERGE_REFUSAL),
+    # Before issue #560, a retained Optional became Bool and lost this copy.
+    'optional-copied-element': ('''struct Logged(ImplicitlyCopyable):
+    var name: Int
+
+    def __init__(out self, name: Int):
+        self.name = name
+
+    def __init__(out self, *, copy: Self):
+        self.name = copy.name
+        print("COPY")
+
+
+def main():
+    var empty = Optional[Logged](None)
+    var full = Optional[Logged](Logged(1))
+    if empty or full:
+        print("T")
+    else:
+        print("F")
+    print(full.value().name)
+''', 'a one-type operator that selects a retained operand whose copy runs source'),
+    'custom-move-same': ('''struct Moving(Boolable, Movable):
+    var value: Bool
+
+    def __init__(out self, value: Bool):
+        self.value = value
+
+    def __init__(out self, *, deinit move: Self):
+        self.value = move.value
+        print("MOVE")
+
+    def __bool__(self) -> Bool:
+        print("CONVERT")
+        return self.value
+
+
+def main():
+    if Moving(False) or Moving(True):
+        print("T")
+    else:
+        print("F")
+''', 'a one-type operator over a type with a user-defined move'),
     'optional-join': ('''struct Probe(Movable, Boolable):
     var value: Bool
 
@@ -1211,21 +1626,32 @@ def main():
 }
 
 
-# The node guard can run before a leaf body is instantiated. Keep every old
-# mixed-source refusal, and separately require each exact leaf diagnostic.
-# Reusing one retained origin lets the copy control pass the node type check.
+# Native output of refused one-type operators. A borrowing proxy cannot make
+# the copy of a selected retained operand. A temporary with a user-defined
+# move constructor is converted once in place, so it cannot make the move.
+NATIVE_REJECTED_OUTPUT = {
+    'copyable-retained-self': 'CONVERT\nCOPY\nCONVERT\nF\nFalse\n',
+    'copyable-retained-temporary': 'CONVERT\nCOPY\nCONVERT\nT\nTrue\n',
+    'custom-move-same': 'CONVERT\nMOVE\nCONVERT\nT\n',
+    'optional-copied-element': 'COPY\nT\n1\n',
+}
+
+
+# Same-type forms of the old mixed sources. The node guard refuses each one
+# with the specific one-type diagnostic. Reusing one retained origin makes
+# both borrowing proxies one type, so only the borrow check can refuse it.
 LEAF_GUARD_REJECTIONS = {
     'copyable-retained-same-origin': (
         TRUTH_REJECTED['copyable-retained'][0]
         .replace('    var other = Copied(False)\n', '')
         .replace('if copied or other:', 'if copied or copied:')
         + '    print("RETAINED", copied.value)\n',
-        'Coverage cannot yet preserve a retained implicitly copyable custom'),
+        'a one-type operator that selects a retained operand whose copy runs source'),
     'custom-move-same-type': (
         TRUTH_REJECTED['custom-move'][0]
         .replace('    var flag = True\n', '')
         .replace('Moving(False) or flag', 'Moving(False) or Moving(True)'),
-        'Coverage cannot yet preserve a temporary custom Boolable compound operand with a user-defined move constructor'),
+        'a one-type operator over a type with a user-defined move'),
 }
 
 
@@ -1252,37 +1678,58 @@ def check_refusal(work, native, rewritten, build, mojo, name, source, widths, me
         assert message in rejected.stderr, (name, message, rejected.stderr[-4000:])
 
 
-def truth_widths(numbers):
-    return {f'if {truth_text(TRUTH_CASES[number])}:': len(truth_slots(TRUTH_CASES[number]))
-            for number in numbers}
+def truth_widths(numbers, names=TRUTH_NAMES):
+    return {f'if {truth_text(TRUTH_CASES[number], names=names)}:':
+            len(truth_slots(TRUTH_CASES[number])) for number in numbers}
 
 
-def check_custom_truth(work, native, rewritten, build, mojo):
-    """Compare all native trees and only the explicitly supported instruments."""
-    assert set(TRUTH_ACCEPTED).isdisjoint(TRUTH_MIXED_REJECTED)
-    assert sorted(TRUTH_ACCEPTED + TRUTH_MIXED_REJECTED) == list(range(len(TRUTH_CASES)))
-    source, native_lines = truth_source()
-    (native / 'truth.mojo').write_text(source)
-    (work / 'truth-native.mojo').write_text(source)
-    native_binary = work / 'truth-native'
+def check_truth_module(work, native, rewritten, build, mojo, module, names):
+    """Compare all native trees and the supported instrumented trees with the model.
+
+    Returns:
+        The inconsistent vectors that the reducer and report refused, the
+        complete native source, and the native rows of each tree.
+    """
+    source, native_lines = truth_source(names=names)
+    (native / f'{module}.mojo').write_text(source)
+    (work / f'{module}-native.mojo').write_text(source)
+    native_binary = work / f'{module}-native'
     run([mojo, 'build', '-Werror', '-I', str(native),
-         str(native / 'truth.mojo'), '-o', str(native_binary)])
+         str(native / f'{module}.mojo'), '-o', str(native_binary)])
 
-    accepted, lines = truth_source(TRUTH_ACCEPTED)
-    accepted_source = work / 'truth-accepted-source'
+    accepted, lines = truth_source(TRUTH_ACCEPTED, names)
+    accepted_source = work / f'{module}-accepted-source'
     accepted_source.mkdir()
-    (accepted_source / 'truth.mojo').write_text(accepted)
-    (work / 'truth-accepted-native.mojo').write_text(accepted)
-    run([str(build), str(rewritten), 'truth.mojo'], cwd=accepted_source)
+    (accepted_source / f'{module}.mojo').write_text(accepted)
+    (work / f'{module}-accepted-native.mojo').write_text(accepted)
+    run([str(build), str(rewritten), f'{module}.mojo'], cwd=accepted_source)
     manifest = assert_obligations(
-        rewritten, 'truth', single_line_obligations(accepted, truth_widths(TRUTH_ACCEPTED)))
+        rewritten, module,
+        single_line_obligations(accepted, truth_widths(TRUTH_ACCEPTED, names)))
     assert len([entry for entry in manifest if entry.startswith('M ')]) == sum(
         len(truth_slots(TRUTH_CASES[number])) for number in TRUTH_ACCEPTED)
-    (work / 'truth-manifest.txt').write_text('\n'.join(manifest) + '\n')
-    shutil.copy(rewritten / 'truth.mojo', work / 'truth-instrumented.mojo')
-    instrumented_binary = work / 'truth-instrumented'
+    (work / f'{module}-manifest.txt').write_text('\n'.join(manifest) + '\n')
+    instrumented = (rewritten / f'{module}.mojo').read_text()
+    (work / f'{module}-instrumented.mojo').write_text(instrumented)
+    if names is COLLISION_NAMES:
+        # Each generated alias and frame must avoid every source identifier,
+        # also the default prefixes, which the fixture takes as its own names.
+        header = next(line for line in instrumented.splitlines()
+                      if line.startswith('from coverage.runtime import '))
+        aliases = [part.split(' as ')[1] for part in
+                   header.removeprefix('from coverage.runtime import ').split(', ')]
+        frames = sorted(set(word for word in instrumented.replace('(', ' ').replace(',', ' ').split()
+                            if word.startswith(aliases[2].removesuffix('begin') + 'state')))
+        assert frames, header
+        for name in aliases + frames:
+            assert name not in accepted, (name, header)
+        for name in ('_cov_eval_leaf', '_cov_eval_buffer', '_cov_eval_truth', '_cov_eval_right',
+                     '_cov_eval_state0',
+                     'List', 'Int', 'Bool'):
+            assert f'var {name} = ' in accepted or f'def {name}(' in accepted, name
+    instrumented_binary = work / f'{module}-instrumented'
     run([mojo, 'build', '-Werror', '-I', str(rewritten),
-         str(rewritten / 'truth.mojo'), '-o', str(instrumented_binary)])
+         str(rewritten / f'{module}.mojo'), '-o', str(instrumented_binary)])
     binaries = [('native', native_binary), ('instrumented', instrumented_binary)]
     inconsistent, native_rows = 0, defaultdict(list)
     for changing in (False, True):
@@ -1292,7 +1739,8 @@ def check_custom_truth(work, native, rewritten, build, mojo):
             for mask in range(16):
                 for number, tree in enumerate(TRUTH_CASES):
                     log, hits, vector = TruthModel(
-                        tree, mask, fail, changing, lines.get(number, native_lines[number])).run()
+                        tree, mask, fail, changing, lines.get(number, native_lines[number]),
+                        module).run()
                     row = f'TRUTH {number} {mask} {fail} {changing} {log}'
                     expected_rows['native'].append(row)
                     if number in TRUTH_ACCEPTED:
@@ -1310,21 +1758,21 @@ def check_custom_truth(work, native, rewritten, build, mojo):
             assert not slow_tests(result.stdout, 5), result.stdout
             rows = [line for line in result.stdout.splitlines() if line.startswith('TRUTH ')]
             mismatch = next((pair for pair in zip(rows, expected_rows[kind]) if pair[0] != pair[1]), None)
-            assert rows == expected_rows[kind], (binary.name, changing, mismatch, len(rows))
+            assert rows == expected_rows[kind], (module, binary.name, changing, mismatch, len(rows))
             if kind == 'native':
                 for row in rows:
                     native_rows[int(row.split()[1])].append(row)
-            (work / f'truth-{kind}-{label}.txt').write_text(result.stdout)
+            (work / f'{module}-{kind}-{label}.txt').write_text(result.stdout)
             outputs.append(result)
         raw = outputs[1].stderr
-        (work / f'truth-raw-{label}.txt').write_text(raw)
+        (work / f'{module}-raw-{label}.txt').write_text(raw)
         for number, line in lines.items():
             hits = [record for record in raw.splitlines()
-                    if record.startswith((f'COVLINE:truth:{line}:', f'COVLINE:truth:{line}.'))]
-            assert hits == expected_records[number], (number, changing, hits[:4])
+                    if record.startswith((f'COVLINE:{module}:{line}:', f'COVLINE:{module}:{line}.'))]
+            assert hits == expected_records[number], (module, number, changing, hits[:4])
             actual = [record for record in raw.splitlines()
-                      if record.startswith(f'COVEVAL2:truth:{line}:')]
-            assert actual == expected_vectors[number], (number, changing, actual[:3])
+                      if record.startswith(f'COVEVAL2:{module}:{line}:')]
+            assert actual == expected_vectors[number], (module, number, changing, actual[:3])
         marked = sum('?' in record.rpartition(':')[2]
                      for record in raw.splitlines() if record.startswith('COVEVAL2:'))
         reduced = []
@@ -1333,10 +1781,10 @@ def check_custom_truth(work, native, rewritten, build, mojo):
             assert marked == 0
             for record in raw.encode().splitlines(keepends=True):
                 reducer.feed(record)
-            (work / 'truth-reduced-stable.txt').write_bytes(b''.join(reduced))
+            (work / f'{module}-reduced-stable.txt').write_bytes(b''.join(reduced))
             reports = [run([str(work / 'analyze'), str(work / name)]).stdout
-                       for name in ('truth-raw-stable.txt', 'truth-reduced-stable.txt')]
-            assert reports[0] == reports[1], 'raw/reduced custom truth traces differ'
+                       for name in (f'{module}-raw-stable.txt', f'{module}-reduced-stable.txt')]
+            assert reports[0] == reports[1], f'raw/reduced custom {module} traces differ'
             continue
         # A repeated conversion that disagrees must refuse MC-DC evidence.
         assert marked > 0
@@ -1347,12 +1795,29 @@ def check_custom_truth(work, native, rewritten, build, mojo):
             raise AssertionError('the reducer accepted an inconsistent vector')
         except ValueError as error:
             assert 'Inconsistent repeated truth conversion' in str(error), error
-        refused = subprocess.run([str(work / 'report'), str(work / 'truth-manifest.txt'),
-                                  str(work / 'truth-raw-changing.txt')],
+        refused = subprocess.run([str(work / 'report'), str(work / f'{module}-manifest.txt'),
+                                  str(work / f'{module}-raw-changing.txt')],
                                  text=True, capture_output=True)
         assert refused.returncode != 0, refused.stdout
         assert 'Inconsistent repeated truth conversion' in refused.stdout + refused.stderr, refused
-        (work / 'truth-refused-report.txt').write_text(refused.stdout + refused.stderr)
+        (work / f'{module}-refused-report.txt').write_text(refused.stdout + refused.stderr)
+    return inconsistent, source, native_rows
+
+
+def check_custom_truth(work, native, rewritten, build, mojo):
+    """Compare all native trees and only the explicitly supported instruments."""
+    assert set(TRUTH_ACCEPTED).isdisjoint(TRUTH_MIXED_REJECTED)
+    assert sorted(TRUTH_ACCEPTED + TRUTH_MIXED_REJECTED) == list(range(len(TRUTH_CASES)))
+    # The hand-kept lists must agree with the independent operator model.
+    assert TRUTH_ACCEPTED == tuple(number for number, tree in enumerate(TRUTH_CASES)
+                                   if truth_supported(tree))
+    inconsistent = 0
+    for module, names in (('truth', TRUTH_NAMES), ('collision', COLLISION_NAMES)):
+        marked, module_source, module_rows = check_truth_module(
+            work, native, rewritten, build, mojo, module, names)
+        inconsistent += marked
+        if module == 'truth':
+            source, native_rows = module_source, module_rows
 
     for number in TRUTH_MIXED_REJECTED:
         rejected_source, _ = truth_source((number,))
@@ -1425,14 +1890,15 @@ def check_custom_truth(work, native, rewritten, build, mojo):
 
     check_custom_refusals(work, native, rewritten, build, mojo)
     return (f'{len(TRUTH_CASES)} native/model custom truth trees x 16 masks x 5 failure positions, '
-            f'stable and changing; {len(TRUTH_ACCEPTED)} exact instrumented/model trees; '
+            f'stable and changing; {len(TRUTH_ACCEPTED)} exact instrumented/model trees, '
+            'with own and caller-scope collision names; '
             f'{len(TRUTH_MIXED_REJECTED)} mixed trees, original mixed controls and exact two-parameter controls refused; '
             '64 single-parameter generic native/model/trace cases; '
             f'{inconsistent} inconsistent vectors refused; '
             f'{len(TRUTH_REJECTED)} existing rejections; '
-            f'{len(LEAF_GUARD_REJECTIONS)} exact leaf-guard rejections; '
-            f'{len(BOOL_MERGE_REJECTIONS)} Bool-merge rejections x 4 native masks')
-
+            f'{len(LEAF_GUARD_REJECTIONS)} same-type rejections of old mixed sources; '
+            f'{len(BOOL_MERGE_REJECTIONS)} Bool-merge rejections x 4 native masks; '
+            f'{len(GATED_MERGE_REJECTIONS)} type-gated merge rejections x 4 native masks')
 
 
 # Optional selection can run payload lifecycle operations that a Bool collapse
@@ -1498,11 +1964,13 @@ struct Trivial(ImplicitlyCopyable):
 
 
 def check_custom_refusals(work, native, rewritten, build, mojo):
-    """Run every original and direct-leaf negative control without omissions."""
+    """Run every original and same-type negative control without omissions."""
     refused_sources = dict(TRUTH_REJECTED)
     refused_sources.update(LEAF_GUARD_REJECTIONS)
     refused_sources.update({name: (text, BOOL_MERGE_REFUSAL)
                             for name, (text, _) in BOOL_MERGE_REJECTIONS.items()})
+    refused_sources.update({name: (text, BOOL_MERGE_REFUSAL)
+                            for name, (text, _) in GATED_MERGE_REJECTIONS.items()})
     for name, (text, message) in refused_sources.items():
         (native / f'{name}.mojo').write_text(text)
         (work / f'truth-{name}-native.mojo').write_text(text)
@@ -1512,6 +1980,8 @@ def check_custom_refusals(work, native, rewritten, build, mojo):
         native_output = optional_capture(
             work, f'truth-{name}-native-run', [str(work / name)], timeout=5).stdout
         (work / f'truth-{name}-native.txt').write_text(native_output)
+        if name in NATIVE_REJECTED_OUTPUT:
+            assert native_output == NATIVE_REJECTED_OUTPUT[name], (name, native_output)
         if name in NESTED_OPTIONAL_REJECTIONS:
             assert native_output == NESTED_OPTIONAL_REJECTIONS[name][1], (
                 name, native_output, NESTED_OPTIONAL_REJECTIONS[name][1])
@@ -1519,21 +1989,19 @@ def check_custom_refusals(work, native, rewritten, build, mojo):
             assert native_output == BOOL_MERGE_REJECTIONS[name][1], (
                 name, native_output, BOOL_MERGE_REJECTIONS[name][1])
             assert 'BOOL R' not in native_output, (name, native_output)
+        if name in GATED_MERGE_REJECTIONS:
+            assert native_output == GATED_MERGE_REJECTIONS[name][1], (
+                name, native_output, GATED_MERGE_REJECTIONS[name][1])
+            assert ('MERGE G' in native_output) == name.endswith('-flag'), (name, native_output)
         # These negative fixtures each have one two-operand decision. Scalar
         # decisions in their constructors/helpers remain obligations as well.
         compound = [line.strip() for line in text.splitlines()
                     if line.strip().startswith('if ') and (' and ' in line or ' or ' in line)]
         assert len(compound) == 1, (name, compound)
-        # These exact old sources now reach the earlier node guard. Require
-        # its intended semantic diagnostic, never an arbitrary compiler error.
-        if name in ('copyable-retained-mixed', 'custom-move'):
-            messages = (COMPOUND_REFUSAL, BOOL_MERGE_REFUSAL)
-        elif name == 'copyable-retained' or name in BOOL_MERGE_REJECTIONS:
-            messages = (COMPOUND_REFUSAL, message)
-        else:
-            messages = (message,)
+        # Every source reaches the operator check. Require its intended
+        # semantic diagnostic, never an arbitrary compiler error.
         check_refusal(work, native, rewritten, build, mojo, name, text,
-                      {compound[0]: 2}, messages)
+                      {compound[0]: 2}, (COMPOUND_REFUSAL, message))
 
 
 def optional_factory(payload, name='optional'):
