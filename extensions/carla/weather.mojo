@@ -20,6 +20,7 @@ scattering values are plain factors. A preset's -1 means "keep what the
 town has", as in CARLA's `Default` preset.
 """
 
+from extensions.carla.sensor_attributes import validate_sensor_float
 from units.si import DEGREE, METER, Angle, Length
 
 
@@ -49,12 +50,83 @@ struct WeatherParameters(Equatable, ImplicitlyCopyable, Writable):
 
     def __init__(out self):
         """Create CARLA's field defaults: all zero but the Rayleigh scale."""
-        self = WeatherParameters(
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, Float32(0.0331), 0
-        )
+        self.cloudiness = 0
+        self.precipitation = 0
+        self.precipitation_deposits = 0
+        self.wind_intensity = 0
+        self.sun_azimuth_angle = Angle(0, DEGREE)
+        self.sun_altitude_angle = Angle(0, DEGREE)
+        self.fog_density = 0
+        self.fog_distance = Length(0, METER)
+        self.fog_falloff = 0
+        self.wetness = 0
+        self.scattering_intensity = 0
+        self.mie_scattering_scale = 0
+        self.rayleigh_scattering_scale = 0.0331
+        self.dust_storm = 0
 
     def __init__(
         out self,
+        cloudiness: Float32,
+        precipitation: Float32,
+        precipitation_deposits: Float32,
+        wind_intensity: Float32,
+        sun_azimuth: Angle,
+        sun_altitude: Angle,
+        fog_density: Float32,
+        fog_distance: Length,
+        fog_falloff: Float32,
+        wetness: Float32,
+        scattering_intensity: Float32,
+        mie_scattering_scale: Float32,
+        rayleigh_scattering_scale: Float32,
+        dust_storm: Float32,
+    ) raises:
+        """Create finite weather in CARLA's argument order.
+
+        Finite values outside the town's ranges remain valid inputs to
+        `clamped`. This includes CARLA's -1 preset sentinel.
+
+        Args:
+            cloudiness: Percent of the sky covered.
+            precipitation: Percent of rain.
+            precipitation_deposits: Percent of the road under puddles.
+            wind_intensity: Percent of wind.
+            sun_azimuth: The sun's bearing.
+            sun_altitude: The sun's height.
+            fog_density: Percent of fog.
+            fog_distance: Where the fog starts.
+            fog_falloff: How fast the fog thins with height.
+            wetness: Percent of wetness on the camera's view.
+            scattering_intensity: How much light the fog scatters.
+            mie_scattering_scale: The scattering by large particles.
+            rayleigh_scattering_scale: The scattering by the air.
+            dust_storm: Percent of dust.
+
+        Returns:
+            The initialized weather.
+
+        Raises:
+            Error: If any field is nonfinite.
+        """
+        self.cloudiness = cloudiness
+        self.precipitation = precipitation
+        self.precipitation_deposits = precipitation_deposits
+        self.wind_intensity = wind_intensity
+        self.sun_azimuth_angle = sun_azimuth
+        self.sun_altitude_angle = sun_altitude
+        self.fog_density = fog_density
+        self.fog_distance = fog_distance
+        self.fog_falloff = fog_falloff
+        self.wetness = wetness
+        self.scattering_intensity = scattering_intensity
+        self.mie_scattering_scale = mie_scattering_scale
+        self.rayleigh_scattering_scale = rayleigh_scattering_scale
+        self.dust_storm = dust_storm
+        self.validate()
+
+    @staticmethod
+    def from_carla(
         cloudiness: Float32,
         precipitation: Float32,
         precipitation_deposits: Float32,
@@ -69,39 +141,78 @@ struct WeatherParameters(Equatable, ImplicitlyCopyable, Writable):
         mie_scattering_scale: Float32,
         rayleigh_scattering_scale: Float32,
         dust_storm: Float32,
-    ):
-        """Create a weather in CARLA's argument order.
+    ) raises -> WeatherParameters:
+        """Read CARLA's raw weather record without changing its units.
 
         Args:
             cloudiness: Percent of the sky covered.
             precipitation: Percent of rain.
-            precipitation_deposits: Percent of the road under puddles.
+            precipitation_deposits: Percent of puddles.
             wind_intensity: Percent of wind.
-            sun_azimuth_degrees: The sun's bearing, in degrees.
-            sun_altitude_degrees: The sun's height, in degrees.
+            sun_azimuth_degrees: The sun's bearing in degrees.
+            sun_altitude_degrees: The sun's height in degrees.
             fog_density: Percent of fog.
-            fog_distance_meters: Where the fog starts, in meters.
-            fog_falloff: How fast the fog thins with height.
-            wetness: Percent of wetness on the camera's view.
-            scattering_intensity: How much light the fog scatters.
-            mie_scattering_scale: The scattering by large particles.
-            rayleigh_scattering_scale: The scattering by the air.
+            fog_distance_meters: Where fog starts in meters.
+            fog_falloff: The fog's height factor.
+            wetness: Percent of wetness.
+            scattering_intensity: The fog's scattering factor.
+            mie_scattering_scale: The large-particle scattering factor.
+            rayleigh_scattering_scale: The air scattering factor.
             dust_storm: Percent of dust.
+
+        Returns:
+            Finite weather, including preset sentinels and clamp inputs.
+
+        Raises:
+            Error: If any field is nonfinite.
         """
-        self.cloudiness = cloudiness
-        self.precipitation = precipitation
-        self.precipitation_deposits = precipitation_deposits
-        self.wind_intensity = wind_intensity
-        self.sun_azimuth_angle = Angle(sun_azimuth_degrees, DEGREE)
-        self.sun_altitude_angle = Angle(sun_altitude_degrees, DEGREE)
-        self.fog_density = fog_density
-        self.fog_distance = Length(fog_distance_meters, METER)
-        self.fog_falloff = fog_falloff
-        self.wetness = wetness
-        self.scattering_intensity = scattering_intensity
-        self.mie_scattering_scale = mie_scattering_scale
-        self.rayleigh_scattering_scale = rayleigh_scattering_scale
-        self.dust_storm = dust_storm
+        return WeatherParameters(
+            cloudiness,
+            precipitation,
+            precipitation_deposits,
+            wind_intensity,
+            Angle(sun_azimuth_degrees, DEGREE),
+            Angle(sun_altitude_degrees, DEGREE),
+            fog_density,
+            Length(fog_distance_meters, METER),
+            fog_falloff,
+            wetness,
+            scattering_intensity,
+            mie_scattering_scale,
+            rayleigh_scattering_scale,
+            dust_storm,
+        )
+
+    def validate(self) raises:
+        """Check weather before use without applying the town's clamps.
+
+        Args:
+            self: The weather to inspect.
+
+        Returns:
+            Nothing; the weather is unchanged.
+
+        Raises:
+            Error: If any field is nonfinite.
+        """
+        # The fixed record contains fourteen fields.
+        for value in [  # pragma: no branch
+            self.cloudiness,
+            self.precipitation,
+            self.precipitation_deposits,
+            self.wind_intensity,
+            self.sun_azimuth_angle.value,
+            self.sun_altitude_angle.value,
+            self.fog_density,
+            self.fog_distance.value,
+            self.fog_falloff,
+            self.wetness,
+            self.scattering_intensity,
+            self.mie_scattering_scale,
+            self.rayleigh_scattering_scale,
+            self.dust_storm,
+        ]:
+            validate_sensor_float(value, "A weather field")
 
     def __eq__(self, other: Self) -> Bool:
         """Return True if every field is equal, as CARLA compares.
@@ -237,9 +348,9 @@ def _preset(
     fog_distance: Float32,
     fog_falloff: Float32,
     wetness: Float32,
-) -> WeatherParameters:
+) raises -> WeatherParameters:
     """A preset: the azimuth is -1 and the scattering is 1, 0.03, 0.0331."""
-    return WeatherParameters(
+    return WeatherParameters.from_carla(
         cloudiness,
         precipitation,
         deposits,
@@ -304,7 +415,7 @@ def weather_preset(name: String) raises -> WeatherParameters:
     """
     var t = (Float32(0.75), Float32(0.1))
     if name == "Default":
-        return WeatherParameters(
+        return WeatherParameters.from_carla(
             -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 1, 0.03, 0.0331, 0
         )
     if name == "ClearNoon":
