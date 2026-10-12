@@ -96,6 +96,10 @@ def distance_squared_2d(a: Vector3, b: Vector3) raises -> Area:
 
     Returns:
         The squared distance, in square meters.
+
+    Raises:
+        Error: If an x or y coordinate or the squared-distance result is
+            nonfinite.
     """
     return Area(distance_squared_2d_si(a, b))
 
@@ -109,6 +113,10 @@ def distance_squared_2d_si(a: Vector3, b: Vector3) raises -> Float32:
 
     Returns:
         The squared distance, in square meters.
+
+    Raises:
+        Error: If an x or y coordinate or the squared-distance result is
+            nonfinite.
     """
     for point in [a, b]:
         _ = _finite_si(Float64(point.x))
