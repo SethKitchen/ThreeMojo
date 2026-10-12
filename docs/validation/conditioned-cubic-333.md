@@ -20,9 +20,11 @@ The successor stores each input coefficient and the record start unchanged.
 It first computes `local = x - s`. It then computes
 `a + local * (b + local * (c + local * d))`.
 The tangent is `b + local * (2*c + local*3*d)`.
+
 The public coefficient fields now mean local coefficients. Code that read
 expanded coefficients must change. They were never a serialized byte format.
 OpenDRIVE input still supplies the same local coefficients and record start.
+
 Typed adapters are a separate source edge. They must keep the Float64 input
 bits and check the documented finite-value conditions.
 
@@ -93,6 +95,7 @@ callers admit stations only in `[-2^400, 2^400]`. `_rounded_constant` now
 requires its polynomial origin to meet the same supported-operand check.
 Their difference has magnitude at most `2^401`, so it is finite. Every
 variable product in a constant local polynomial is then exact zero.
+
 NaN, infinity, and an origin outside the supported range return an unknown
 box. The old check of zero `b`, `c`, and `d` alone was no longer sufficient.
 
@@ -119,8 +122,10 @@ the stored midpoint, `m = center - s`, and `delta = x - center`. Then
 
 Every operation in this reconstruction uses an outward interval. The
 identity holds for any stored midpoint. It does not require the midpoint
-to equal the exact average. Each interval may lose correlation and widen;
-it cannot exclude the exact expression. Adding the original scalar error
+to equal the exact average.
+
+Each interval can lose correlation and widen; it cannot exclude the exact
+expression. Adding the original scalar error
 then encloses the same new scalar. Intersecting this enclosure with the
 original enclosure is safe because both enclose that scalar. Subtracting
 `m` from world station `x` instead of subtracting `center` is incorrect.
@@ -170,15 +175,19 @@ The pose controls at road 5 stations 40 and 50 already use the original
 local offset `.5 + .01*(s-20)` and elevation derivative `.002*(s-30)`.
 Those formulas match the new exact local model. They do not assert equality
 to the old rounded expanded coefficients. Native pose checks remain needed.
+
 The shoulder oracle's other-record lower bound also survives the changed
 nonzero-origin offset. On road 5's later pieces, the new local offset is
-`.5 + .01*(s-20)` for `20 <= s <= 57`, hence it stays between `.5` and `.88` (the upper endpoint is
-loose enough for the stored binary64 `.01` coefficient).
+`.5 + .01*(s-20)` for `20 <= s <= 57`. It stays between `.5` and `.88`.
+The upper endpoint is loose enough for the stored binary64 `.01` coefficient.
+
 The selected shoulder's total half-width is `4.25`, so its lateral distance
 from the reference curve is at most `3.75`. The later plan pieces have
 nonnegative local x and y, headings in the first quadrant, and reference
 origins with y at least `105`. Their smooth center y is therefore at least
-`101.25`. Against query y `-105`, its squared y residual alone is at least
+`101.25`.
+
+Against query y `-105`, its squared y residual alone is at least
 `206.25^2 = 42539.0625`; the changed elevation cannot lower that bound.
 This is a fixture-specific geometric inequality, not old scalar parity.
 The rounding allowance and native-execution requirements remain separate.
@@ -214,15 +223,17 @@ historical byte match alone cannot justify a current coverage mask.
 
 ## Controls and qualification
 
-The Python test suite checks complete old and new source graphs, each
-changed expression, missing and mixed endpoints, same-token byte drift,
-mutated inverse data, a hash-only repin, and optimized-Python refusal.
+The Python test suite checks complete old and new source graphs and each
+changed expression. It checks missing and mixed endpoints, same-token byte
+drift, mutated inverse data, a hash-only repin, and optimized-Python refusal.
 
 Its mathematical controls use exact fractions and a separate forward-error
 model. They check the original cancellation defect, all eight Horner FMA
-choices, adjacent stations on both sides of a large origin, negative
-origins, constants, zero-width intervals, subnormal coefficients, extreme
-finite scales, and local-subtraction overflow. Sparse symbolic algebra
+choices, and adjacent stations on both sides of a large origin. They also
+check negative origins, constants, zero-width intervals, subnormal
+coefficients, extreme finite scales, and local-subtraction overflow.
+
+Sparse symbolic algebra
 proves the derivative and centered identities for arbitrary coefficients
 and origins. It also rejects the incorrect world/local delta identity.
 
@@ -234,8 +245,10 @@ before writing results. Their retained native numbers remain explicitly
 historical observations. A source-only report is not new native evidence.
 
 The native suite `test_carla_conditioned_polynomial.mojo` exercises the
-actual evaluator and certificate consumers, including the new constant
-origin guard at its supported boundary and one ULP outside it. The Python suite does not
+actual evaluator and certificate consumers. It checks the new constant
+origin guard at its supported boundary and one ULP outside it.
+
+The Python suite does not
 execute Mojo or establish native compilation, contraction choices,
 coverage, search cost, or whole-map acceptance. Those remain separate
 qualification gates. No budget, tolerance, or coverage requirement is
