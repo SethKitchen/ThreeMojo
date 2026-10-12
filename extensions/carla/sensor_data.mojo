@@ -522,6 +522,9 @@ def dvs_data_degrees(
 
     Returns:
         The 12-byte header, then 13 packed bytes an event.
+
+    Raises:
+        Error: If the field of view is nonfinite or negative.
     """
     _ = _nonnegative_si(Float64(fov))
     var w = ByteWriter()
