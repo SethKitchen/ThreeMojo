@@ -353,8 +353,12 @@ def test_changed_grid_stations_preserve_public_pose_words() raises:
         (UInt64(0x4033FFFFFFFFFFCA), UInt64(0x4033FFFFFFFFFFD3)),
         (UInt64(0x4033FFFFFFFFFFDA), UInt64(0x4033FFFFFFFFFFD9)),
     ]:
-        var before = road.lane_transform(0, 0, bitcast[DType.float64](pair[0]))
-        var after = road.lane_transform(0, 0, bitcast[DType.float64](pair[1]))
+        var before = road.lane_transform_meters(
+            0, 0, bitcast[DType.float64](pair[0])
+        )
+        var after = road.lane_transform_meters(
+            0, 0, bitcast[DType.float64](pair[1])
+        )
         for component in [
             (before.location.x, after.location.x),
             (before.location.y, after.location.y),
