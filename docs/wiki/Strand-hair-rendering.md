@@ -109,7 +109,9 @@ On that machine a whole render at 4 workers fell from about 1.8 seconds to about
 
 ## Hardware qualification
 
-`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU. The GPU rasterizer is slower for this scene.
+`bench/hair_frame_bench.mojo` times a whole 1920 by 1080 frame by stage. The [frame report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/hair-frame-729.md) finds that the simulation and the shading take about 7 milliseconds. Preparing and drawing the strand triangles takes about 0.78 seconds on the CPU.
+
+The GPU rasterizer is slower for this scene. Its kernel bins the triangles by tile and takes about 38 milliseconds at 1920 by 1080. Packing 2.1 million corners on the host takes about 1.4 seconds. See [the GPU report](https://github.com/SethKitchen/ThreeMojo/blob/main/docs/validation/gpu-strands-298.md).
 
 A 1920 by 1080 frame at 60 frames per second has a 16.667 millisecond budget. A claim must name the CPU, GPU, driver, compiler, image size, visible strand count, points per strand, coverage width, opacity, density resolution and worker count. It must include warm-up, simulation, density and shading, geometry preparation, GPU submission and transfer, rasterization and readback costs where those stages apply. Count allocations separately from uninstrumented timings.
 
