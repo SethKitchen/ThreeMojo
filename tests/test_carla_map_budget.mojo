@@ -5,7 +5,12 @@
 
 """Pre-admission and sufficient-budget controls for spatial map work."""
 
-from extensions.carla.geometry import ARC, LINE, RoadGeometry, with_arc
+from extensions.carla.geometry import (
+    ARC,
+    LINE,
+    RoadGeometry,
+    with_arc_si as with_arc,
+)
 from extensions.carla.map import Controller, Junction, Map, Signal
 from extensions.carla.map_builder import (
     MapBuilder,
@@ -306,7 +311,9 @@ def test_many_short_width_records_are_bounded_before_boundary_allocation() raise
     var road = _road()
     for i in range(1, 80):
         road.sections[0].lanes[0].info.widths.append(
-            RoadInfoLaneWidth(Float64(i) * 0.05, CubicPolynomial.constant(2.0))
+            RoadInfoLaneWidth._from_si(
+                Float64(i) * 0.05, CubicPolynomial._constant_si(2.0)
+            )
         )
     var roads = List[Road]()
     roads.append(road.copy())
@@ -332,9 +339,9 @@ def test_many_short_width_records_are_bounded_before_boundary_allocation() raise
 
 def test_curved_width_and_high_turn_exhaust_before_unbounded_subdivision() raises:
     var road = _road()
-    road.sections[0].lanes[0].info.widths[0].polynomial = CubicPolynomial(
-        2, 0, 1, 0, 0
-    )
+    road.sections[0].lanes[0].info.widths[
+        0
+    ].polynomial = CubicPolynomial._from_coefficients(2, 0, 1, 0, 0)
     var roads = List[Road]()
     roads.append(road^)
     with assert_raises(contains="step budget"):
@@ -347,7 +354,7 @@ def test_curved_width_and_high_turn_exhaust_before_unbounded_subdivision() raise
         )
     var turning = _road()
     turning.info.geometries[0].geometry = with_arc(
-        RoadGeometry(ARC, 0, 0, 0, 0, 4), 100.0
+        RoadGeometry.from_meters(ARC, 0, 0, 0, 0, 4), 100.0
     )
     roads = List[Road]()
     roads.append(turning^)
@@ -373,7 +380,7 @@ def test_invalid_mutated_geometry_domain_fails_before_any_sampling() raises:
 def _junction_builder() raises -> MapBuilder:
     var builder = MapBuilder()
     var r = _junction_road(builder, 1, 4.0, -1)
-    builder.add_road_geometry_line(r, 0, 0, 0, 0, 4)
+    builder.add_road_geometry_line_si(r, 0, 0, 0, 0, 4)
     _connect(builder, [1])
     return builder^
 
@@ -433,7 +440,7 @@ def test_builder_sign_queries_share_global_combined_step_and_term_budget() raise
 def test_sign_relocation_has_no_independent_budget_reset() raises:
     var map = _map()
     map.signals.append(
-        Signal(
+        Signal._from_si(
             RoadId(1),
             SignalId("budget"),
             2,
@@ -521,7 +528,9 @@ def test_resumption_uses_global_remainder_without_resetting_candidate_caps() rai
 
 def test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() raises:
     var road = _road()
-    road.info.elevations[0].polynomial = CubicPolynomial(0, 0, 0, 1, 100000)
+    road.info.elevations[0].polynomial = CubicPolynomial._from_coefficients(
+        0, 0, 0, 1, 100000
+    )
     var point = _lane_jet(road, 0, 0, 100000.0, 100001.0)
     var original = point[2].rounded_value()
     var work = _MapBuildWork(MapBuildBudget())
@@ -535,7 +544,7 @@ def test_centered_junction_elevation_keeps_global_coefficients_and_roundoff() ra
         var station = 100000.0 + delta
         assert_true(
             bounded.contains(
-                road.info.elevations[0].polynomial.evaluate(station)
+                road.info.elevations[0].polynomial.evaluate_meters(station)
             )
         )
         # All stored coefficients and these dyadic parameters are exact.
