@@ -837,7 +837,7 @@ def report(args):
               'source_file_sha256': {path: snapshot[1][path] for path in source_files},
               'report_logic_sha256': snapshot[1]['tools/anatomy_validity.py'],
               'inventory_sha256': snapshot[1]['docs/validation/anatomy-provenance.json'],
-              'follow_ups': ['https://github.com/SethKitchen/ThreeMojo/issues/595', 'https://github.com/SethKitchen/ThreeMojo/issues/297'],
+              'follow_ups': ['https://github.com/SethKitchen/ThreeMojo/issues/297'],
               'spec': {'stature_m': args.stature_m, 'sex': args.sex, 'side': args.side, 'athleticism': args.athleticism, 'genome': 'template'},
               'frame': {'origin': 'tibiofemoral joint line', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'},
               'diagnostic_frames': {PAIR_FRAME: {'origin': 'tibiofemoral joint line', 'x': 'body-right', 'y': 'proximal', 'z': 'anterior'},
